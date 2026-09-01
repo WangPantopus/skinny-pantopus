@@ -10,11 +10,16 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -23,7 +28,19 @@ import kotlin.coroutines.resume
  * Per-user biometric app-lock preference + lock lifecycle.
  *
  * Preference storage is intentionally separate from [app.pantopus.android.data.auth.TokenStorage]
- * — these are non-secret booleans/timestamps, not session tokens.
+ * — these are non-secret booleans/timestamps, not session tokens. Since the
+ * persistent-login work they live in an `EncryptedSharedPreferences` file
+ * (design §9: "app-lock pref → encrypted prefs, consistent with iOS", where
+ * the pref moved to the Keychain) with a one-time migration from the legacy
+ * plain file; a device whose Keystore refuses the master key silently keeps
+ * the plain file so the lock never becomes unusable.
+ *
+ * Besides the app lock itself this is the app's single `BiometricPrompt`
+ * wrapper: [verifySensitiveAction] (Tier-2 gate, passes through with no OS
+ * credential), [verifyPresence] (strict presence check — never passes
+ * through) and [promptWithCrypto] (a `CryptoObject`-backed prompt that
+ * signs with the biometry-bound step-up key, see
+ * `data/auth/StepUpKeyStore`).
  */
 @Singleton
 class AppLockManager
@@ -84,8 +101,61 @@ class AppLockManager
                     }
         }
 
-        private val prefs: SharedPreferences =
-            context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+        /**
+         * Test seam — a plain in-memory `SharedPreferences` stands in for the
+         * encrypted file on the JVM.
+         */
+        @androidx.annotation.VisibleForTesting
+        internal var prefsOverride: SharedPreferences? = null
+
+        /**
+         * Encrypted preference file (falls back to the legacy plain file when
+         * the Keystore-backed master key cannot be created). Opened lazily on
+         * first use — [configure] — and migrated once from the plain file.
+         */
+        private val prefs: SharedPreferences by lazy { prefsOverride ?: openPrefs() }
+
+        private fun openPrefs(): SharedPreferences {
+            val legacy = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+            val secure =
+                runCatching {
+                    val masterKey =
+                        MasterKey
+                            .Builder(context)
+                            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                            .build()
+                    EncryptedSharedPreferences.create(
+                        context,
+                        SECURE_PREFS_FILE,
+                        masterKey,
+                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+                    )
+                }.onFailure { Timber.w(it, "app-lock: encrypted prefs unavailable, keeping the plain file") }
+                    .getOrNull() ?: return legacy
+            migrateLegacyPrefs(from = legacy, to = secure)
+            return secure
+        }
+
+        /** One-shot copy of every `appLock.*` entry from the plain file, then wipe it. */
+        private fun migrateLegacyPrefs(
+            from: SharedPreferences,
+            to: SharedPreferences,
+        ) {
+            if (to.getBoolean(MIGRATED_KEY, false)) return
+            val editor = to.edit()
+            from.all.forEach { (key, value) ->
+                when (value) {
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is String -> editor.putString(key, value)
+                    else -> Unit
+                }
+            }
+            editor.putBoolean(MIGRATED_KEY, true).apply()
+            from.edit().clear().apply()
+        }
 
         private val _isLocked = MutableStateFlow(false)
         val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
@@ -382,6 +452,137 @@ class AppLockManager
         }
 
         /**
+         * Outcome of [verifyPresence] — the strict variant of
+         * [verifySensitiveAction] used where "no OS lock" must NOT pass
+         * through (the L2 "Continue as …" gate, design §2.2).
+         */
+        sealed interface PresenceOutcome {
+            data object Verified : PresenceOutcome
+
+            /** The user dismissed the sheet. */
+            data object Cancelled : PresenceOutcome
+
+            /** No screen lock / biometrics enrolled — the caller degrades (L3). */
+            data object Unavailable : PresenceOutcome
+
+            data class Failed(
+                val message: String,
+            ) : PresenceOutcome
+        }
+
+        /**
+         * Strict presence check: `BiometricPrompt(BIOMETRIC_STRONG or
+         * DEVICE_CREDENTIAL)` titled [reason]. Unlike [verifySensitiveAction]
+         * a device without any credential yields [PresenceOutcome.Unavailable]
+         * instead of passing. Independent of the app-lock preference and of
+         * whether a user is configured, so it is usable before sign-in.
+         */
+        suspend fun verifyPresence(
+            activity: FragmentActivity,
+            reason: String,
+        ): PresenceOutcome {
+            refreshCapability()
+            when (_capability.value) {
+                Capability.NotAvailable,
+                Capability.NotEnrolled,
+                Capability.PasscodeNotSet,
+                -> return PresenceOutcome.Unavailable
+                Capability.InvalidContext -> return PresenceOutcome.Failed(_capability.value.statusText)
+                Capability.Available -> Unit
+            }
+            _lastError.value = null
+            if (authenticate(activity, reason)) return PresenceOutcome.Verified
+            val message = _lastError.value ?: DEFAULT_VERIFY_FAILURE
+            return when {
+                message == CANCELLED_MESSAGE -> PresenceOutcome.Cancelled
+                _capability.value != Capability.Available -> PresenceOutcome.Unavailable
+                else -> PresenceOutcome.Failed(message)
+            }
+        }
+
+        /**
+         * `CryptoObject`-backed prompt (class-3 biometrics ONLY — a
+         * `CryptoObject` cannot be unlocked by the device credential on our
+         * min SDK, and the step-up key is biometric-per-use anyway). Returns
+         * the *authenticated* `CryptoObject` — its `Signature` is now allowed
+         * exactly one operation — or `null` when the user cancelled / failed.
+         * Shares the app-lock bookkeeping ([isPrompting] /
+         * [backgroundedWhilePrompting]) so the OS sheet never re-locks the
+         * app behind itself. This is the `StepUpKeyStore.PromptLauncher`
+         * the UI hands to `AuthRepository.stepUpWithDeviceKey`.
+         */
+        suspend fun promptWithCrypto(
+            activity: FragmentActivity,
+            cryptoObject: BiometricPrompt.CryptoObject,
+            reason: String,
+            subtitle: String? = null,
+        ): BiometricPrompt.CryptoObject? {
+            val manager = BiometricManager.from(context)
+            if (manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
+                _lastError.value = Capability.NotEnrolled.statusText
+                return null
+            }
+            isPrompting = true
+            backgroundedWhilePrompting = false
+            val result =
+                try {
+                    withContext(Dispatchers.Main.immediate) { cryptoPrompt(activity, cryptoObject, reason, subtitle) }
+                } finally {
+                    isPrompting = false
+                }
+            if (backgroundedWhilePrompting) {
+                backgroundedWhilePrompting = false
+                if (result == null) armBackground()
+            }
+            if (result != null) lastSensitiveAuthAtMs = System.currentTimeMillis()
+            return result
+        }
+
+        private suspend fun cryptoPrompt(
+            activity: FragmentActivity,
+            cryptoObject: BiometricPrompt.CryptoObject,
+            reason: String,
+            subtitle: String?,
+        ): BiometricPrompt.CryptoObject? =
+            suspendCancellableCoroutine { cont ->
+                val executor = ContextCompat.getMainExecutor(activity)
+                val biometricPrompt =
+                    BiometricPrompt(
+                        activity,
+                        executor,
+                        object : BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationError(
+                                errorCode: Int,
+                                errString: CharSequence,
+                            ) {
+                                _lastError.value = messageFor(errorCode, errString.toString())
+                                if (cont.isActive) cont.resume(null)
+                            }
+
+                            override fun onAuthenticationFailed() {
+                                _lastError.value = "Authentication failed. Try again."
+                            }
+
+                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                if (cont.isActive) cont.resume(result.cryptoObject)
+                            }
+                        },
+                    )
+                cont.invokeOnCancellation {
+                    runCatching { biometricPrompt.cancelAuthentication() }
+                }
+                val info =
+                    BiometricPrompt.PromptInfo
+                        .Builder()
+                        .setTitle(reason)
+                        .apply { if (!subtitle.isNullOrBlank()) setSubtitle(subtitle) }
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .setNegativeButtonText("Cancel")
+                        .build()
+                biometricPrompt.authenticate(info, cryptoObject)
+            }
+
+        /**
          * `true` when a successful sensitive-action check happened inside the
          * grace window. Mirrors RN `AppLockContext.isWithinGracePeriod` and
          * iOS `AppLockManager.isWithinSensitiveGracePeriod`.
@@ -610,7 +811,12 @@ class AppLockManager
             }
 
         companion object {
+            /** Legacy plain file — drained into [SECURE_PREFS_FILE] on first open. */
             private const val PREFS_FILE = "app_lock_prefs"
+
+            /** `EncryptedSharedPreferences` file holding the per-user app-lock prefs. */
+            private const val SECURE_PREFS_FILE = "app_lock_prefs_secure"
+            private const val MIGRATED_KEY = "appLock.migratedFromPlain"
 
             /**
              * The single string [messageFor] produces for every user- /

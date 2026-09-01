@@ -50,29 +50,40 @@ public enum NotificationEndpoints {
 /// Endpoints under `/api/users/*` relevant to Settings.
 public enum AuthMethodsEndpoints {
     /// `GET /api/users/auth-methods` — what sign-in methods are
-    /// connected. Route `backend/routes/users.js:1739`.
+    /// connected. Route `backend/routes/users.js:1887`.
     public static let methods = Endpoint(method: .get, path: "/api/users/auth-methods")
 
     /// `POST /api/users/password` — change the password (rate-limited
-    /// by `reauthLimiter`). Route `backend/routes/users.js:1771`. The
+    /// by `reauthLimiter`). Route `backend/routes/users.js:1919`. The
     /// Joi schema accepts camelCase keys, so the body uses them too.
     public static func updatePassword(_ body: PasswordUpdateBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/users/password", body: body)
     }
 
     /// `POST /api/users/resend-verification` — re-send the email
-    /// verification link. Route `backend/routes/users.js:3049`.
+    /// verification link. Route `backend/routes/users.js:3322`.
     /// Schema: `{ email: string }`.
     public static func resendVerification(_ body: ResendVerificationBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/users/resend-verification", body: body, authenticated: false)
     }
 
     /// `DELETE /api/users/account` — permanently delete the signed-in
-    /// user and every cascading row. Route `backend/routes/users.js:3945`.
+    /// user and every cascading row. Route `backend/routes/users.js:4394`.
     /// Takes **no body**. `200 { message }` on success; `409 { error }`
     /// when the account still has in-progress gigs or escrowed payments
-    /// (`users.js:3958 / :3972 / :3986`).
+    /// (`users.js:4408 / :4422 / :4436`). Persistent login: requires
+    /// `X-Step-Up` (purpose `delete_account`, or the wildcard from
+    /// `/reauthenticate`) — see `deleteAccount(stepUpToken:)`.
     public static let deleteAccount = Endpoint(method: .delete, path: "/api/users/account")
+
+    /// `DELETE /api/users/account` with the step-up token attached
+    /// (`X-Step-Up`). `nil` sends the bare request — the server then
+    /// answers 403 `STEP_UP_REQUIRED`, which `APIClient` tries to satisfy
+    /// once through `AuthManager.stepUp` before surfacing `.forbidden`.
+    public static func deleteAccount(stepUpToken: String?) -> Endpoint {
+        guard let stepUpToken else { return deleteAccount }
+        return Endpoint(method: .delete, path: "/api/users/account", headers: [APIClient.stepUpHeader: stepUpToken])
+    }
 }
 
 // MARK: - Bodies
@@ -141,7 +152,7 @@ public struct PushTokenBody: Encodable, Sendable {
 }
 
 /// Body for `POST /api/users/password` — the backend's
-/// `updatePasswordSchema` (users.js:736) accepts camelCase
+/// `updatePasswordSchema` (users.js:847) accepts camelCase
 /// `currentPassword` + `newPassword`. `currentPassword` is optional
 /// (omit for OAuth-only accounts setting an initial password).
 public struct PasswordUpdateBody: Encodable, Sendable {

@@ -97,9 +97,16 @@ data class FeedResponse(
     val pagination: FeedPagination? = null,
 )
 
-/** Push-token registration request (kept from legacy ApiService). */
+/**
+ * Push-token registration request (kept from legacy ApiService).
+ * [deviceId] (persistent login, CONTRACT §"Device descriptor") links the
+ * `PushToken` row to the trusted-device row so a device revoke / local
+ * logout can delete exactly this device's tokens; the backend also reads
+ * the `X-Device-Id` header when the body omits it.
+ */
 @JsonClass(generateAdapter = true)
 data class RegisterPushTokenRequest(
     val token: String,
     val platform: String,
+    val deviceId: String? = null,
 )

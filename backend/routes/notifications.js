@@ -263,10 +263,26 @@ router.post('/no-bid-nudge-mark-read', verifyToken, async (req, res) => {
 });
 
 /**
+ * Persistent login (migration 160): the client device UUID that owns a push
+ * token — body `deviceId`, else the `X-Device-Id` header native clients send
+ * on every request. Stored on PushToken.device_id so device revoke / local
+ * logout with proof can delete exactly that device's tokens. Optional and
+ * validated loosely (UUID); anything else is ignored rather than rejected so
+ * legacy clients keep registering.
+ */
+const DEVICE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function deviceIdFromRequest(req) {
+  const raw = req.body?.deviceId ?? (typeof req.get === 'function' ? req.get('x-device-id') : req.headers?.['x-device-id']);
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return DEVICE_ID_RE.test(value) ? value.toLowerCase() : undefined;
+}
+
+/**
  * POST /api/notifications/register
  * Unified device-token registration for native push (APNs/FCM) and the
  * legacy Expo path. The iOS and Android clients both POST here.
- * Body: { token: string, platform?: "ios"|"android", provider?: "apns"|"fcm"|"expo" }
+ * Body: { token: string, platform?: "ios"|"android", provider?: "apns"|"fcm"|"expo", deviceId?: uuid }
+ * Header: X-Device-Id (used when body.deviceId is absent)
  *
  * `platform`/`provider` are persisted so the send path can route the
  * token to the right transport; either may be omitted and is derived
@@ -287,7 +303,7 @@ router.post('/register', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid provider' });
     }
 
-    const saved = await pushService.saveToken(userId, token, { platform, provider });
+    const saved = await pushService.saveToken(userId, token, { platform, provider, deviceId: deviceIdFromRequest(req) });
     if (!saved) {
       return res.status(400).json({ error: 'Invalid push token' });
     }
@@ -326,7 +342,7 @@ router.post('/push-token', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Push token is required' });
     }
 
-    const saved = await pushService.saveToken(userId, token);
+    const saved = await pushService.saveToken(userId, token, { deviceId: deviceIdFromRequest(req) });
     if (!saved) {
       return res.status(400).json({ error: 'Invalid push token format' });
     }

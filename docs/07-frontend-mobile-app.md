@@ -370,6 +370,36 @@ isLoading? → Show splash screen (Pantopus logo + spinner)
 
 ## 5. Authentication & Session Management
 
+> **SUPERSEDED (2026-08-18) — reinstall policy.** The RN-era "install
+> sentinel" below (Layer 3: wipe the Keychain/SecureStore session when the
+> AsyncStorage sentinel is missing) is **no longer the product decision** and
+> was never ported to the native apps. The persistent-login design
+> (`docs/persistent-login/persistent-login-design-2026-08-18.md`, §2 principle 1
+> and §3) replaces it with *"keep the credential, gate it"*:
+>
+> - **Reinstall is never a silent auto-login and never a wipe.** iOS keeps the
+>   refresh token + Secure Enclave device key in the Keychain across uninstall;
+>   an install marker (`Library/Application Support/.pantopus-install`, mirrored
+>   in the Keychain) detects the reinstall and the user sees *"Continue as
+>   Ying"* behind Face ID / Touch ID / passcode (`LAContext
+>   .deviceOwnerAuthentication`) — one gesture, never a password. Android keeps
+>   nothing in app storage; a single-use, hashed, hardware-key-redeemable
+>   *resume grant* in Block Store (no cloud copy) is redeemed behind
+>   `BiometricPrompt` into a `restored` session. No OS lock ⇒ full sign-in with
+>   the OS-remembered account (AutoFill / Credential Manager).
+> - **Why the wipe went away:** the sentinel only ever protected against a
+>   token that the *server* could not revoke. Sessions are now server-side
+>   rows (`AuthSession`) bound to a hardware key (DPoP proof on `/refresh`) and
+>   revocable per device from `/app/settings/security` on web and the Devices
+>   screen on both apps, so a stale token on a reinstalled device is useless
+>   without the device's own key + the owner's OS lock.
+> - The 5-minute refresh window below is now **120 s proactive refresh** on
+>   `expiresAt` (contract: `docs/persistent-login/CONTRACT.md` "Client
+>   behaviour"), and the sign-out reasons are the structured 401 codes in
+>   `docs/01-authentication-authorization.md` §1.3.
+>
+> The diagrams that follow are kept as history of the RN client only.
+
 ### Three-Layer Token Storage
 
 ```

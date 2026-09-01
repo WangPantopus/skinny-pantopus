@@ -1,5 +1,6 @@
 package app.pantopus.android.data.auth
 
+import app.pantopus.android.data.api.models.auth.AuthErrorBodyParser
 import app.pantopus.android.data.api.net.NonRetriableIOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
@@ -25,6 +26,13 @@ import javax.inject.Singleton
  * can 401 at once (token just expired), so we serialize on a monitor and
  * double-check the stored token: only the first caller actually hits the
  * refresh endpoint; the rest pick up the freshly-rotated token and retry.
+ *
+ * Persistent login (CONTRACT §"Error envelope"): when the refresh itself is
+ * refused, the backend `code` (`TOKEN_REUSE`, `DEVICE_MISMATCH`,
+ * `SESSION_REVOKED`, …) rides on [AuthRepository.RefreshOutcome.AuthRejected]
+ * and is handed to [AuthRepository.signOut] as a [SessionEndReason] so the
+ * UI can show the *"signed out for security"* banner instead of a generic
+ * expiry. The give-up branch peeks the 401 body for the same reason.
  */
 @Singleton
 class TokenAuthenticator
@@ -52,9 +60,11 @@ class TokenAuthenticator
             synchronized(lock) {
                 // Bail out of pathological loops: if we've already retried this
                 // request twice and it still 401s, the (just-refreshed) token is
-                // being rejected too — the session is dead.
+                // being rejected too — the session is dead. Carry the backend
+                // code (e.g. SESSION_REVOKED from verifyToken) into the sign-out.
                 if (responseCount(response) >= MAX_ATTEMPTS) {
-                    runBlocking { authRepositoryProvider.get().signOut() }
+                    val reason = SessionEndReason.fromCode(peekErrorCode(response))
+                    runBlocking { authRepositoryProvider.get().signOut(reason = reason) }
                     return null
                 }
 
@@ -68,9 +78,10 @@ class TokenAuthenticator
                 return when (val outcome = runBlocking { authRepositoryProvider.get().refreshTokens() }) {
                     is AuthRepository.RefreshOutcome.Rotated ->
                         response.request.withBearer(outcome.accessToken)
-                    AuthRepository.RefreshOutcome.AuthRejected -> {
-                        // Refresh token expired/revoked/replayed — sign out.
-                        runBlocking { authRepositoryProvider.get().signOut() }
+                    is AuthRepository.RefreshOutcome.AuthRejected -> {
+                        // Refresh token expired/revoked/replayed — sign out with
+                        // the backend's code so the UI can explain why.
+                        runBlocking { authRepositoryProvider.get().signOut(reason = outcome.reason) }
                         null
                     }
                     AuthRepository.RefreshOutcome.Transient ->
@@ -97,9 +108,19 @@ class TokenAuthenticator
             return count
         }
 
+        /**
+         * `code` from the 401 `{ error, code }` envelope, read via `peekBody`
+         * so the body stays consumable by the caller. `null` when absent.
+         */
+        private fun peekErrorCode(response: Response): String? =
+            runCatching { AuthErrorBodyParser.code(response.peekBody(MAX_PEEK_BYTES).string()) }.getOrNull()
+
         private companion object {
             /** Original + one refreshed replay = 2. A third 401 means give up. */
             const val MAX_ATTEMPTS = 2
+
+            /** Error envelopes are tiny; never buffer more than this. */
+            const val MAX_PEEK_BYTES = 4_096L
             val lock = Any()
         }
     }

@@ -11,6 +11,7 @@
 
 const supabase = require('../config/supabase');
 const logger = require('../utils/logger');
+const authSessionService = require('../services/authSessionService');
 
 // ── Token → user cache (15 s TTL) ──────────────────────────────
 const TOKEN_CACHE_TTL = 15_000;
@@ -66,6 +67,18 @@ async function optionalAuth(req, _res, next) {
     if (error || !data?.user) {
       setCache(token, null);
       return next();
+    }
+
+    // Persistent login (design §6.4): a revoked AuthSession reads as
+    // anonymous on soft-auth routes too (same 15-s cache as verifyToken).
+    const claims = authSessionService.sessionClaimsFromAccessToken(token);
+    if (claims?.id) {
+      const state = await authSessionService.getSessionStateCached(claims.id);
+      if (state.known && state.revoked) {
+        logger.debug('optionalAuth: session revoked, treating as anonymous', { session_id: claims.id });
+        setCache(token, null);
+        return next();
+      }
     }
 
     const user = { id: data.user.id, email: data.user.email };

@@ -18,8 +18,8 @@ extension AuthManager {
     private static let hexDigits: [Character] = Array("0123456789abcdef")
 
     /// Browser OAuth through `GET /api/users/oauth/:provider` (route
-    /// `backend/routes/users.js:3715`) and `POST /api/users/oauth/callback`
-    /// (route `backend/routes/users.js:3862`). Legacy fragment tokens fall
+    /// `backend/routes/users.js:4006`) and `POST /api/users/oauth/callback`
+    /// (route `backend/routes/users.js:4186`). Legacy fragment tokens fall
     /// back to `POST /api/users/oauth/token` (`:3792`).
     func signIn(with provider: OAuthProvider) async throws {
         do {
@@ -54,7 +54,7 @@ extension AuthManager {
             }
 
             let loginResponse = try await exchangeOAuthCallback(callbackURL)
-            try persistLoginResponse(loginResponse)
+            try persistLoginResponse(loginResponse, method: provider == .apple ? .apple : .google)
         } catch OAuthWebAuthenticationError.cancelled {
             throw OAuthWebAuthenticationError.cancelled
         } catch OAuthWebAuthenticationError.rejectedCallback {
@@ -110,18 +110,21 @@ extension AuthManager {
     }
 
     /// Exchange either `?code=` or legacy `#access_token&refresh_token`.
+    /// Both carry the device descriptor (+ DPoP) so the new session is bound
+    /// at issue, exactly like `/login`.
     private func exchangeOAuthCallback(_ callbackURL: URL) async throws -> LoginResponse {
         let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
+        let device = makeDeviceDescriptor()
         if let code = components?.queryItems?.first(where: { $0.name == "code" })?.value,
            !code.isEmpty {
-            return try await apiClient.request(AuthEndpoints.exchangeOAuthCode(code))
+            return try await apiClient.request(AuthEndpoints.exchangeOAuthCode(code, device: device))
         }
 
         let access = Self.fragmentParam(callbackURL.fragment, name: "access_token")
         let refresh = Self.fragmentParam(callbackURL.fragment, name: "refresh_token")
         if let access, !access.isEmpty, let refresh, !refresh.isEmpty {
             return try await apiClient.request(
-                AuthEndpoints.exchangeOAuthToken(accessToken: access, refreshToken: refresh)
+                AuthEndpoints.exchangeOAuthToken(accessToken: access, refreshToken: refresh, device: device)
             )
         }
         throw OAuthWebAuthenticationError.invalidCallback

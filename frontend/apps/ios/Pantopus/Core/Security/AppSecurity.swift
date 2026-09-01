@@ -86,6 +86,13 @@ public final class AppLockManager {
     }
 
     private let defaults: UserDefaults
+    /// Home of the `enabled` preference (`SecureStoreKey.appLockEnabled(uid)`).
+    /// The Keychain survives an app delete + reinstall, `UserDefaults` does
+    /// not — and the design requires a locked account to come back locked
+    /// (design §8 "AppLockManager pref → Keychain"). The other, cosmetic
+    /// fields (`setupPrompt`, `lockAfterMs`, `backgroundAt`, `unlockedAt`)
+    /// stay in `UserDefaults`.
+    private let secureStore: any SecureStore
     private var userID: String?
     private var attemptedCurrentLock = false
 
@@ -112,6 +119,14 @@ public final class AppLockManager {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        secureStore = KeychainStore()
+        refreshCapability()
+    }
+
+    /// Test / preview initialiser with an injectable secure store.
+    init(defaults: UserDefaults, secureStore: any SecureStore) {
+        self.defaults = defaults
+        self.secureStore = secureStore
         refreshCapability()
     }
 
@@ -126,7 +141,7 @@ public final class AppLockManager {
             setupPromptState = nil
             return
         }
-        preferenceEnabled = defaults.bool(forKey: key("enabled", userID))
+        preferenceEnabled = readEnabledPreference(userID: userID)
         setupPromptState = AppLockSetupPromptState(
             rawValue: defaults.string(forKey: key("setupPrompt", userID)) ?? ""
         ) ?? .pending
@@ -210,7 +225,7 @@ public final class AppLockManager {
     public func setEnabled(_ enabled: Bool, source: AppLockEnableSource = .settings) async -> Bool {
         guard let userID else { return false }
         if !enabled {
-            defaults.set(false, forKey: key("enabled", userID))
+            writeEnabledPreference(false, userID: userID)
             preferenceEnabled = false
             isLocked = false
             lastError = nil
@@ -228,7 +243,7 @@ public final class AppLockManager {
             if source == .postLoginPrompt { persistSetupPromptState(.declined) }
             return false
         }
-        defaults.set(true, forKey: key("enabled", userID))
+        writeEnabledPreference(true, userID: userID)
         defaults.set(0, forKey: key("lockAfterMs", userID))
         preferenceEnabled = true
         isLocked = false
@@ -364,7 +379,7 @@ public final class AppLockManager {
 
     private func autoDisableForUnavailableCapability() {
         guard capability != .available, let userID else { return }
-        defaults.set(false, forKey: key("enabled", userID))
+        writeEnabledPreference(false, userID: userID)
         preferenceEnabled = false
         isLocked = false
     }
@@ -376,6 +391,75 @@ public final class AppLockManager {
 
     private func key(_ field: String, _ userID: String) -> String {
         "appLock.\(userID).\(field)"
+    }
+
+    // MARK: - `enabled` preference (Keychain-backed)
+
+    /// Read the per-user `enabled` flag from the Keychain. One-time
+    /// migration: a value that only exists in `UserDefaults` (written by a
+    /// build that pre-dates persistent login) is copied into the Keychain
+    /// and then removed from `UserDefaults`, so the Keychain is the single
+    /// source of truth from then on.
+    private func readEnabledPreference(userID: String) -> Bool {
+        let keychainKey = SecureStoreKey.appLockEnabled(userID)
+        if let stored = secureStore.get(keychainKey) {
+            return stored == "1"
+        }
+        let legacyKey = key("enabled", userID)
+        guard defaults.object(forKey: legacyKey) != nil else { return false }
+        let legacy = defaults.bool(forKey: legacyKey)
+        try? secureStore.set(legacy ? "1" : "0", for: keychainKey)
+        defaults.removeObject(forKey: legacyKey)
+        return legacy
+    }
+
+    private func writeEnabledPreference(_ enabled: Bool, userID: String) {
+        try? secureStore.set(enabled ? "1" : "0", for: SecureStoreKey.appLockEnabled(userID))
+        // Never leave a stale legacy copy behind.
+        defaults.removeObject(forKey: key("enabled", userID))
+    }
+
+    /// Whether app lock is turned on for `userID` — readable *before*
+    /// `configure(userID:)` runs (e.g. to decide the reinstall gate copy).
+    public func isEnabled(forUserID userID: String) -> Bool {
+        readEnabledPreference(userID: userID)
+    }
+
+    /// Forget the per-user preference (account deletion / "Not you? Remove").
+    public func clearPreference(forUserID userID: String) {
+        try? secureStore.delete(SecureStoreKey.appLockEnabled(userID))
+        defaults.removeObject(forKey: key("enabled", userID))
+    }
+
+    // MARK: - Presence (persistent login L2 gate)
+
+    /// One-shot `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` in
+    /// front of "Continue as X" (design §3 / CONTRACT "L2 gate"). Unlike
+    /// `verifySensitiveAction`, a device with no passcode and no biometrics
+    /// does **not** pass through — it reports `.unavailable` so the caller
+    /// falls back to the login screen (no OS lock ⇒ L3). Independent of the
+    /// app-lock preference and of the signed-in user.
+    public func verifyPresence(reason: String) async -> PresenceOutcome {
+        refreshCapability()
+        switch capability {
+        case .notAvailable, .notEnrolled, .passcodeNotSet:
+            return .unavailable
+        case .invalidContext:
+            return .failed(capability.statusText)
+        case .available:
+            break
+        }
+        lastError = nil
+        if await authenticate(reason: reason) {
+            lastSensitiveAuthAt = Date()
+            return .verified
+        }
+        let message = lastError ?? "We couldn't verify your identity. Please try again."
+        if message == Self.cancelledMessage { return .cancelled }
+        // The prompt itself discovered the OS lock is gone (passcode removed
+        // while the app was suspended) — same fallback as up front.
+        if capability != .available { return .unavailable }
+        return .failed(message)
     }
 
     private static func capability(for error: NSError?) -> AppLockCapability {

@@ -22,6 +22,10 @@ public enum SettingsStackRoute: Hashable {
     case beaconsFeed
     case blockedUsers
     case password
+    /// Persistent login — Settings → Security & devices (trusted-device
+    /// registry, sign out other devices, Lockdown, security preferences,
+    /// recent security events). `Features/Settings/Security/DevicesView`.
+    case securityDevices
     case verification
     case help
     case legal
@@ -117,7 +121,7 @@ public struct SettingsView: View {
             LegalContentView(document: doc) { popLast() }
         case let .placeholder(label):
             NotYetAvailableView(tabName: label, icon: .info)
-        case .blockedUsers, .password, .verification, .help, .about, .payments, .dataExport:
+        case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport:
             settingsDestination(for: route)
         }
     }
@@ -128,6 +132,8 @@ public struct SettingsView: View {
             BlockedUsersView { popLast() }
         case .password:
             PasswordChangeView { popLast() }
+        case .securityDevices:
+            DevicesView { popLast() }
         case .verification:
             VerificationCenterView { popLast() }
         case .help:
@@ -177,6 +183,7 @@ public struct SettingsView: View {
         case .privacy: .identityCenter // Profiles & Privacy is the unified destination.
         case .blocks: .blockedUsers
         case .password: .password
+        case .securityDevices: .securityDevices
         case .verification: .verification
         // Parked until P8.5 — see docs/t6-open-questions-decisions.md Q7.
         case .dataExport: .dataExport

@@ -70,8 +70,9 @@ class NotificationsRepository
         suspend fun registerPushToken(
             token: String,
             platform: String,
+            deviceId: String? = null,
         ): NetworkResult<Unit> =
             safeApiCall {
-                legacyApi.registerPushToken(RegisterPushTokenRequest(token = token, platform = platform))
+                legacyApi.registerPushToken(RegisterPushTokenRequest(token = token, platform = platform, deviceId = deviceId))
             }
     }

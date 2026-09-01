@@ -13,6 +13,16 @@ cookie` clients (web). All endpoints are unauthenticated (no `Bearer`
 header), with the exception of `/refresh` which can read the
 `pantopus_refresh` cookie if no body is supplied.
 
+> **2026-08 — persistent login & trusted devices.** §1 (`/login`) and §7
+> (`/refresh`) gained *additive* fields (`device`, `DPoP`, `sessionId`,
+> `session`), and a new router `/api/auth/*` (devices, sessions, step-up,
+> resume, security prefs/events) is documented in **§8** below. The pinned
+> wire contract lives in `docs/persistent-login/CONTRACT.md` and **wins over
+> this file** if they ever disagree; the rationale is in
+> `docs/persistent-login/persistent-login-design-2026-08-18.md`. Every
+> pre-existing field keeps its name and meaning; old clients (no `device`,
+> no `DPoP`) keep working while the backend runs `AUTH_DEVICE_BINDING=optional`.
+
 ---
 
 ## 1. `POST /api/users/login`
@@ -55,6 +65,32 @@ Route: `backend/routes/users.js:1492`. Validation: `loginSchema`
 
 Token fields are absent in cookie-transport mode. The `user` envelope is
 the same shape returned by `/register` (see §2).
+
+**Additive since 2026-08 (persistent login).** Native clients MAY add a
+`device` descriptor to the request body and a `DPoP` header (see §8.1);
+the response then also carries the server-side session and device
+registry echo. Web (cookie transport) gets only `sessionId`.
+
+```json
+// request (native, optional extras)
+{ "email": "…", "password": "…",
+  "device": { "deviceId": "uuidv4", "platform": "ios", "installId": "hex32",
+              "name": "Ying's iPhone", "model": "iPhone16,2", "osVersion": "18.5",
+              "appVersion": "1.4.0 (312)", "hasOsLock": true,
+              "keyBacking": "secure_enclave", "attestation": null } }
+// response extras (all existing fields unchanged)
+{ "sessionId": "<uuid>",
+  "session": { "id": "<uuid>", "context": "interactive" },
+  "device": { "id": "<uuid>", "deviceId": "<client uuid>", "isNew": true, "trustLevel": "unverified" } }
+```
+
+`device` is `null` in the response when the client sent no descriptor.
+The same additions apply to `POST /oauth/callback`, `POST /oauth/token`
+and the new `POST /api/users/oauth/native`
+(`{ provider:"apple"|"google", idToken, nonce?, accessToken?, device? }`).
+Binding of the device key to the session happens **only** in these
+credential-issuing routes (and `/api/auth/resume`) — never on a
+bearer-only endpoint.
 
 ### Errors
 
@@ -286,16 +322,34 @@ missing or already verified, to prevent enumeration.
 
 ## 7. `POST /api/users/refresh`
 
-Route: `backend/routes/users.js:1910`. Rate-limited via `refreshLimiter`.
+Route: `backend/routes/users.js` (`router.post('/refresh', …)`). Rate-limited via `refreshLimiter`.
 
 ### Request
 
 ```json
-{ "refreshToken": "<jwt>" }
+{ "refreshToken": "<jwt>", "deviceId": "<uuid, optional>", "sessionId": "<uuid, optional>" }
 ```
 
 Mobile clients send the stored refresh token in the body. Web clients
 can omit the body and the backend reads `pantopus_refresh` from cookies.
+
+**Additive since 2026-08:** native clients that hold a device key also send
+`deviceId` + `sessionId` and a `DPoP` header whose payload carries
+`rth = base64url(sha256(refreshToken))` (§8.1). Native clients refresh
+**proactively** when `expiresAt − now < 120 s` (never on the refresh
+endpoint itself) and keep the existing single-flight mutex — Supabase
+treats a parallel replay as reuse.
+
+Server order (design §6.3, contract): **(1) resolve the session** by
+`sha256(refreshToken)` → `AuthSession.refresh_token_hash`, else the
+previous hash, else `sessionId`; refuse if revoked; enforce the inactivity
+ceiling (90 d `trusted` / 30 d `unverified`); **(2) if the session is
+bound to a device key**, verify the DPoP proof against *that* key (`rth`
+must match); **(3)** `refreshSession` (GoTrue rotates); **(4)** persist
+the new hashes / `last_refresh_at` / `last_seen_at` / IP. Unbound legacy
+sessions are accepted while `AUTH_DEVICE_BINDING=optional`; a legacy
+session is adopted onto the presenting key only if `bound_at_issue=false`
+and it was issued before `DPOP_CUTOVER`.
 
 ### Response — 200
 
@@ -305,26 +359,148 @@ can omit the body and the backend reads `pantopus_refresh` from cookies.
   "accessToken": "<new_jwt>",
   "refreshToken": "<rotated_jwt>",
   "expiresIn": 3600,
-  "expiresAt": 1800000000
+  "expiresAt": 1800000000,
+  "sessionId": "<uuid>",
+  "session": { "id": "<uuid>", "context": "interactive" }
 }
 ```
 
 Token fields are absent in cookie-transport mode (server sets fresh
-cookies and returns `{ ok: true }`). Mobile clients should detect
-absence and re-prompt.
+cookies and returns `{ ok: true, sessionId }`). Mobile clients should detect
+absence and re-prompt. Persist `expiresAt`, `sessionId` and
+`session.context` next to the tokens.
 
 ### Errors
 
 | Status | Body | Mobile mapping |
 |---|---|---|
 | 400 | `{ "error": "refreshToken is required" }` | `.serverError(msg)` |
-| 401 | `{ "error": "Session expired. Please sign in again." }` | `.invalidCredentials` (signs out) |
-| 401 | `{ "error": "Session invalidated. Please sign in again.", "code": "TOKEN_REUSE" }` | `.invalidCredentials` (signs out) — refresh-token reuse detected, all sessions terminated server-side |
-| 5xx | `{ "error": "Failed to refresh session" }` | `.serverError(msg)` (signs out) |
+| 401 | `{ "error": "Session expired. Please sign in again." }` (no `code`, or `code: "UNAUTHORIZED"`) | plain expiry: wipe tokens, keep the display hint, login prefilled |
+| 401 | `{ "error": "Session invalidated. Please sign in again.", "code": "TOKEN_REUSE" }` | **security sign-out** ¹ — refresh-token reuse detected; *that* session is revoked, the bound device gets `require_step_up=true`, a security event + email/push go out. (Earlier text said "all sessions terminated" — that was Supabase's token-family revocation, not a Pantopus-wide revoke.) |
+| 401 | `code: "DEVICE_MISMATCH"` | security sign-out ¹ — proof did not match the key bound to that session; session revoked |
+| 401 | `code: "DEVICE_REVOKED"` / `"SESSION_REVOKED"` | security sign-out ¹ — removed from another device / Lockdown / password reset watermark |
+| 401 | `code: "SESSION_EXPIRED_INACTIVE"` | security sign-out ¹ — idle > 90 d (trusted) / 30 d (unverified) |
+| 401 | `code: "DPOP_REQUIRED"` | security sign-out ¹ — binding enforced and no proof (`AUTH_DEVICE_BINDING=required`) |
+| 401 | `code: "DPOP_INVALID"` / `"DPOP_REPLAY"` | rebuild the proof once (fresh `jti`/`iat`), then treat as invalid |
+| 5xx | `{ "error": "Failed to refresh session" }` | `.serverError(msg)` — **transient**: keep tokens, stay on the cached identity (offline-first) |
 
-Mobile `AuthRepository.refreshSession()` / `AuthManager.refreshSession()`
-always `signOut()` on failure regardless of mapping, so the UI returns
-to the login screen.
+¹ *Security sign-out* (contract): wipe tokens / `expiresAt` / `sessionId`,
+**keep** the non-secret account hint, show *"You were signed out for
+security. Sign in again."* — never a generic "session expired".
+
+Mobile `AuthRepository.refreshTokens()` / `AuthManager.performRefresh()`
+map `code` → `SessionEndReason`; only definitive 401s sign the user out,
+transient failures keep the cached session (see design §7.2).
+
+---
+
+## 8. Persistent login — `/api/auth/*` and additive contracts (2026-08)
+
+Source of truth: `docs/persistent-login/CONTRACT.md` (this section
+mirrors it; if they disagree the contract file wins). Backend:
+`backend/routes/authDevices.js` (mounted at `/api/auth`),
+`backend/middleware/dpop.js`, `backend/middleware/stepUp.js`,
+`backend/services/authDeviceService.js`, `authSessionService.js`.
+
+### 8.1 Headers
+
+| Header | Who sends it | Meaning |
+|---|---|---|
+| `Authorization: Bearer <access>` | native (unchanged) | access JWT |
+| `X-Client-Platform` | unchanged | |
+| `X-Device-Id: <deviceId uuid>` | native, every request once a device identity exists | correlates requests with the `AuthDevice` row |
+| `DPoP: <jwt>` | native, on `/login`, `/oauth/*`, `/refresh`, `/logout`, `/api/auth/resume`, `/devices/register`, `/step-up-key` | ES256 `dpop+jwt`, embedded JWK `{kty:"EC",crv:"P-256",x,y}` (base64url, no padding); payload `{ jti: uuid, htm: "POST", htu: "<scheme>://<host>[:port]<path>" (no query), iat: unix s, rth?: b64url(sha256(refreshToken)) }`; signature raw `r‖s` (64 B) base64url. `rth` REQUIRED on `/refresh` and `/logout` when a `refreshToken` is sent. Server compares `htu` with `PUBLIC_API_BASE_URL + path` (or `<proto>://<host>` from the request), accepts `iat` within ±300 s, `jti` single-use for 10 min. |
+| `X-Step-Up: <stepUpToken>` | any client | opaque token from `POST /api/auth/step-up` or `POST /api/users/reauthenticate` |
+
+### 8.2 Error envelope and codes
+
+`{ "error": "<human message>", "code": "<CODE>" }`.
+
+401: `TOKEN_REUSE`, `DEVICE_MISMATCH`, `DEVICE_REVOKED`, `SESSION_REVOKED`,
+`SESSION_EXPIRED_INACTIVE`, `DPOP_REQUIRED`, `DPOP_INVALID`, `DPOP_REPLAY`,
+`RESUME_GRANT_INVALID`, `UNAUTHORIZED` (generic).
+403: `STEP_UP_REQUIRED` with `{ "purpose": "…", "methods": ["password","device_key"] }`.
+409: `DEVICE_NOT_BOUND` (from `/devices/register` on an unbound session).
+
+Clients treat `TOKEN_REUSE | DEVICE_MISMATCH | DEVICE_REVOKED |
+SESSION_REVOKED | SESSION_EXPIRED_INACTIVE | DPOP_REQUIRED` as *security
+sign-out* (see §7 footnote). On 403 `STEP_UP_REQUIRED` the client runs the
+step-up UI (`device_key` if a step-up key is enrolled and the session is
+`interactive`, else password), then retries **once** with `X-Step-Up`.
+
+### 8.3 Existing routes — additive changes
+
+| Route | Change |
+|---|---|
+| `POST /api/users/login`, `/oauth/callback`, `/oauth/token`, `POST /api/users/oauth/native` (new) | optional `device` + `DPoP`; response adds `sessionId`, `session:{id,context}`, `device` (§1). Web (cookie transport): backend still inserts an `AuthSession` row (platform `web`); response adds `sessionId` only. |
+| `POST /api/users/refresh` | §7 above. |
+| `POST /api/users/logout` | body `{ scope: "local"\|"others"\|"global", deviceId?, refreshToken? }`, optional Bearer, optional `DPoP`. `local` (default; unauthenticated allowed): cookie clearing + revoke the presented access JWT **always**; row side effects (revoke that `AuthSession`, clear the binding, delete `PushToken` rows for `deviceId`, revoke that device's resume grants) **only with proof** — a valid Bearer whose session is bound to `deviceId`, OR `refreshToken` whose hash resolves to a session bound to a device whose key verifies the `DPoP` (with `rth`). `others` / `global`: require verifyToken (+CSRF on cookies) AND `X-Step-Up` (purpose `revoke_sessions`). Response `{ success:true, revoked?: n }`. Both native apps now call this on sign-out (they used to be local-only). |
+| `POST /api/users/reauthenticate` | response adds `{ stepUpToken, expiresAt, purpose:"generic" }` — i.e. reauthenticate == step-up method `password` with wildcard purpose. |
+| `POST /api/users/password` | after the update, all *other* sessions/devices/grants are revoked and an email is sent. |
+| `POST /api/users/reset-password` | after the update, *all* sessions revoked + `sessions_valid_after` watermark + all devices/grants revoked, then the recovery session is revoked as before. |
+| `DELETE /api/users/account` | requires `X-Step-Up` (purpose `delete_account`, or wildcard from reauthenticate). OAuth-only accounts (no password) may use `device_key` step-up from an *interactive* session. |
+
+### 8.4 New router `/api/auth`
+
+| Method / path | Auth | Body → Response |
+|---|---|---|
+| `POST /api/auth/challenge` | none (30 / 15 min / IP) | `{ purpose:"step_up"\|"resume"\|"attestation" }` → `{ challengeId, challenge (b64url 32 B), expiresAt }` |
+| `POST /api/auth/devices/register` | Bearer + DPoP (thumbprint == the session's bound key; unbound sessions → 409 `DEVICE_NOT_BOUND`) | `{ device, pushToken?, pushProvider?:"fcm"\|"apns" }` → `{ device:{ id, deviceId, trustLevel, trustedAt }, resumeGrant?: "<b64url>" (Android only, when `allowRestoreGrants`) }`. Metadata + push-token linkage only — **never creates or rotates a binding**. Idempotent; call after login / resume / app update / push-token change. |
+| `GET /api/auth/devices` | Bearer | → `{ devices:[{ id, deviceId, platform, name, model, osVersion, appVersion, isCurrent, trustLevel, trustedAt, lastSeenAt, lastIp?, createdAt }], sessions:[{ id, platform:"web"\|…, userAgent, isCurrent, lastSeenAt, issuedAt }], events:[{ id, type, createdAt, deviceId?, meta }] }` |
+| `DELETE /api/auth/devices/:id` | Bearer + `X-Step-Up` (`revoke_device`) | → `{ ok:true }` — device + its sessions revoked, push tokens deleted, grants revoked, sockets kicked, "device removed" email |
+| `POST /api/auth/sessions/revoke-others` | Bearer + `X-Step-Up` (`revoke_sessions`) | → `{ revoked:n }` |
+| `POST /api/auth/sessions/revoke-all` ("Lockdown") | Bearer + `X-Step-Up` (`revoke_sessions`) | → `{ ok:true }`; global sign-out + `sessions_valid_after=now()` + all grants revoked — the caller signs itself out afterwards |
+| `POST /api/auth/resume` | none (5 / 15 min / IP + per grant) + DPoP required | `{ grant, device }` → login-shaped `{ accessToken, refreshToken, expiresIn, expiresAt, user, sessionId, session:{ id, context:"restored" }, device, resumeGrant:"<new>" }`; 401 `RESUME_GRANT_INVALID` when used / expired / revoked / `allowRestoreGrants=false` |
+| `POST /api/auth/step-up` | Bearer (10 / 15 min / user) | `{ purpose, method:"password", password }` or `{ purpose, method:"device_key", challengeId, signature }` → `{ stepUpToken, expiresAt, purpose }`; 403 `STEP_UP_REQUIRED`-style `{ methods }` when the method is not available for this account/session |
+| `POST /api/auth/step-up-key` | Bearer + DPoP (bound key); session must be `interactive` | `{ publicKeyJwk, keyBacking }` → `{ ok:true }` (stores `step_key_jwk`, `step_key_enrolled_via:'interactive'`) |
+| `GET /api/auth/security-prefs` / `PATCH …` | Bearer (PATCH + `X-Step-Up` `change_security_prefs`) | `{ allowRestoreGrants:bool, newDeviceEmail:bool }` (defaults `true`/`true`) |
+| `GET /api/auth/security-events` | Bearer | `?limit=50` → `{ events }` |
+
+**Step-up tokens.** Purposes: `delete_account`, `revoke_device`,
+`revoke_sessions`, `change_security_prefs`, `generic` (wildcard, from
+reauthenticate). Token = `base64url(payloadJson) + "." +
+base64url(HMAC-SHA256(STEP_UP_SECRET, payloadJson))`, payload
+`{ uid, sid, purpose, method, jti, exp }`, 5 min, one-shot for
+`delete_account | revoke_device | revoke_sessions`. `device_key` step-up:
+the server verifies an ES256 signature over the raw challenge bytes with
+`AuthDevice.step_key_jwk`; requires `step_key_enrolled_via='interactive'`
+**and** current session `context='interactive'` (a `restored` session must
+present a password). The DPoP device key is never biometry-gated; the
+step-up key IS biometry-gated.
+
+**Session context.** `interactive` = a real credential was shown
+(password / OAuth / native IdP); `restored` = minted from an Android resume
+grant. Restored sessions can browse and chat but cannot delete the
+account, revoke devices/sessions or change security prefs until a password
+is presented once (which flips the session to `interactive`).
+
+### 8.5 Client storage keys (for the parity checklist)
+
+- iOS Keychain (`KeychainStore`, same service): `deviceId`, `deviceKey`
+  (Secure Enclave `dataRepresentation`), `stepUpKey`, `installId`,
+  `expiresAt`, `sessionId`, `sessionContext`, `accountHints` (JSON array,
+  most-recent-first, max 3: `{userId, displayName, avatarUrl, maskedEmail,
+  lastMethod, lastSeenAt}`), `appLockEnabled.<uid>`. Install marker file
+  `Library/Application Support/.pantopus-install` (contains `installId`,
+  excluded from backup).
+- Android: `TokenStorage` adds `expires_at`, `session_id`,
+  `session_context`; `device_identity` prefs (`device_id`, `install_id`)
+  excluded from backup; Block Store entry `pantopus.account_hint` JSON
+  `{ v:1, accounts:[…max 3…], resumeGrant?, grantUserId?, issuedAt }` with
+  `setShouldBackupToCloud(false)`.
+
+### 8.6 Client behaviour (both platforms)
+
+- Proactive refresh when `expiresAt − now < 120 s`; single-flight preserved.
+- Cold start: L1 (still logged in) → L2 ("Continue as X" + OS biometric /
+  passcode) → L3 (OS remembers the account: AutoFill / passkey / SIWA /
+  Credential Manager) — design §3. Reinstall is ALWAYS L2 (one gesture) —
+  never silent, never a wipe. No OS lock ⇒ L3.
+- Explicit local sign-out calls `/logout` with proof, wipes tokens /
+  `expiresAt` / `sessionId`, keeps the account hint; "Not you? Remove"
+  wipes hints (+ Block Store `deleteBytes` on Android).
+- After login / resume / app update / push-token change:
+  `POST /api/auth/devices/register`.
 
 ---
 

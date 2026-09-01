@@ -286,6 +286,11 @@ dependencies {
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
 
+    // Block Store — persistent login across delete + reinstall (account hint
+    // + single-use resume grant; see data/auth/AccountHintStore.kt). No-op
+    // on GMS-less devices.
+    implementation(libs.play.services.auth.blockstore)
+
     // Firebase Cloud Messaging — declared via BoM so the messaging
     // artifact picks up a compatible version automatically. Adding more
     // firebase-* deps in the future should NOT carry a version.

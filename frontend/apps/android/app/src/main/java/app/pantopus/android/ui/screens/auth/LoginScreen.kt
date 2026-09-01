@@ -54,9 +54,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.auth.AccountHint
 import app.pantopus.android.data.auth.OAuthBrowserCommand
 import app.pantopus.android.data.auth.OAuthProvider
 import app.pantopus.android.data.auth.OAuthSessionStore
+import app.pantopus.android.ui.components.AvatarWithIdentityRing
+import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
 import app.pantopus.android.ui.theme.PantopusColors
@@ -81,6 +84,14 @@ object LoginScreenTags {
     const val GOOGLE_BUTTON = "loginGoogleButton"
     const val APPLE_BUTTON = "loginAppleButton"
     const val LEGAL_TERMS_LINE = "loginLegalTermsLine"
+
+    /** Persistent login — the security / expiry sign-out banner. */
+    const val SESSION_END_BANNER = "loginSessionEndBanner"
+    const val SESSION_END_BANNER_DISMISS = "loginSessionEndBannerDismiss"
+
+    /** Persistent login — remembered-account header ("Welcome back, Ying · y•••@…") + "Not you?". */
+    const val REMEMBERED_ACCOUNT = "loginRememberedAccount"
+    const val REMEMBERED_ACCOUNT_FORGET = "loginRememberedAccountForget"
 }
 
 /**
@@ -169,6 +180,28 @@ fun LoginScreen(
 
         Box(modifier = Modifier.height(Spacing.s5))
 
+        // Persistent login — "You were signed out for security. Sign in
+        // again." (or plain expiry) shown once; dismiss / sign-in consumes it.
+        state.sessionEndReason?.let { reason ->
+            SessionEndBanner(
+                reason = reason,
+                onDismiss = viewModel::dismissSessionEndBanner,
+                modifier = Modifier.fillMaxWidth().testTag(LoginScreenTags.SESSION_END_BANNER),
+                dismissTag = LoginScreenTags.SESSION_END_BANNER_DISMISS,
+            )
+            Box(modifier = Modifier.height(Spacing.s3))
+        }
+
+        // Persistent login — L3 prefill from the most recent remembered
+        // account (display hint only: the real address comes from autofill).
+        state.rememberedAccount?.let { hint ->
+            RememberedAccountHeader(
+                hint = hint,
+                onForget = viewModel::forgetRememberedAccount,
+            )
+            Box(modifier = Modifier.height(Spacing.s3))
+        }
+
         state.errorMessage?.let { error ->
             ErrorBanner(
                 error = error,
@@ -212,6 +245,7 @@ fun LoginScreen(
             onApple = { viewModel.signInWithOAuth(OAuthProvider.Apple) },
             googleTag = LoginScreenTags.GOOGLE_BUTTON,
             appleTag = LoginScreenTags.APPLE_BUTTON,
+            lastUsed = state.lastUsedOAuthProvider,
         )
         Box(modifier = Modifier.height(Spacing.s3))
 
@@ -359,6 +393,8 @@ fun OAuthButtonGroup(
     googleTag: String,
     appleTag: String,
     modifier: Modifier = Modifier,
+    /** Persistent login — the remembered account's last OAuth method gets a "Last used" pill. */
+    lastUsed: OAuthProvider? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -369,12 +405,14 @@ fun OAuthButtonGroup(
             enabled = !isLoading,
             onClick = onGoogle,
             testTag = googleTag,
+            lastUsed = lastUsed == OAuthProvider.Google,
         )
         OAuthButton(
             title = "Continue with Apple",
             enabled = !isLoading,
             onClick = onApple,
             testTag = appleTag,
+            lastUsed = lastUsed == OAuthProvider.Apple,
         )
     }
 }
@@ -385,6 +423,7 @@ private fun OAuthButton(
     enabled: Boolean,
     onClick: () -> Unit,
     testTag: String,
+    lastUsed: Boolean = false,
 ) {
     Box(
         modifier =
@@ -393,16 +432,91 @@ private fun OAuthButton(
                 .height(48.dp)
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.lg))
-                .clickable(enabled = enabled, onClick = onClick)
+                .border(
+                    1.dp,
+                    if (lastUsed) PantopusColors.primary600 else PantopusColors.appBorderStrong,
+                    RoundedCornerShape(Radii.lg),
+                ).clickable(enabled = enabled, onClick = onClick)
                 .testTag(testTag)
-                .semantics { contentDescription = title },
+                .semantics { contentDescription = if (lastUsed) "$title, last used" else title },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = title,
             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
+        )
+        if (lastUsed) {
+            Text(
+                text = "Last used",
+                style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.primary600,
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = Spacing.s3)
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(PantopusColors.primary100)
+                        .padding(horizontal = Spacing.s2, vertical = Spacing.s1),
+            )
+        }
+    }
+}
+
+/**
+ * Persistent login — the remembered-account strip above the form: avatar,
+ * "Welcome back, Ying", masked email, and "Not you?" which forgets the
+ * account on this device. Mirrors iOS `LoginView`'s remembered-account
+ * header.
+ */
+@Composable
+private fun RememberedAccountHeader(
+    hint: AccountHint,
+    onForget: () -> Unit,
+) {
+    val name = hint.displayName?.takeIf { it.isNotBlank() } ?: "you"
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurfaceMuted)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
+                .padding(Spacing.s3)
+                .testTag(LoginScreenTags.REMEMBERED_ACCOUNT),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        AvatarWithIdentityRing(
+            name = name,
+            identity = IdentityPillar.Personal,
+            ringProgress = 0f,
+            imageUrl = hint.avatarUrl,
+            size = Spacing.s10,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Welcome back, $name",
+                style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.appText,
+            )
+            hint.maskedEmail?.let { masked ->
+                Text(
+                    text = masked,
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
+        }
+        Text(
+            text = "Not you?",
+            style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.primary600,
+            modifier =
+                Modifier
+                    .clickable(onClick = onForget)
+                    .testTag(LoginScreenTags.REMEMBERED_ACCOUNT_FORGET)
+                    .semantics { contentDescription = "Not you? Forget this account on this device" },
         )
     }
 }
@@ -507,6 +621,7 @@ private fun EmailField(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .authAutofill(listOf(AuthAutofillKind.EmailAddress, AuthAutofillKind.Username), onChange)
                         .testTag(LoginScreenTags.EMAIL_FIELD)
                         .semantics { contentDescription = "Email address" },
                 decorationBox = { inner ->
@@ -585,6 +700,7 @@ private fun PasswordFieldWithForgot(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .authAutofill(listOf(AuthAutofillKind.Password), onChange)
                         .testTag(LoginScreenTags.PASSWORD_FIELD)
                         .semantics { contentDescription = "Password" },
                 decorationBox = { inner ->

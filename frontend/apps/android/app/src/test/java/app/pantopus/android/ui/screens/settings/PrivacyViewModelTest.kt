@@ -3,7 +3,10 @@
 package app.pantopus.android.ui.screens.settings
 
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.core.security.StepUpCoordinator
 import app.pantopus.android.data.account.AccountDeletionRepository
+import app.pantopus.android.data.account.AccountRepository
+import app.pantopus.android.data.api.models.settings.AuthMethodsResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsDto
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
@@ -51,10 +54,16 @@ import org.junit.Test
 class PrivacyViewModelTest {
     private val privacy: PrivacyRepository = mockk()
     private val accountDeletion: AccountDeletionRepository = mockk()
+    private val stepUp: StepUpCoordinator = mockk()
+    private val account: AccountRepository = mockk()
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         coEvery { privacy.settings() } returns NetworkResult.Success(settingsResponse())
+        coEvery { account.authMethods() } returns NetworkResult.Success(AuthMethodsResponse(hasPassword = true))
+        // Mirrors the real coordinator: no host Activity → nothing can be verified.
+        coEvery { stepUp.obtainToken(any(), any(), isNull(), any()) } returns
+            StepUpCoordinator.Outcome.Failed(StepUpCoordinator.NO_ACTIVITY_MESSAGE)
     }
 
     @After fun tearDown() {
@@ -238,7 +247,7 @@ class PrivacyViewModelTest {
         vm.confirmDeleteAccount(hostActivity = null)
         assertNotNull(vm.deleteAccountError.value)
         assertTrue(vm.deleteSheetVisible.value)
-        coVerify(exactly = 0) { accountDeletion.deleteAccount() }
+        coVerify(exactly = 0) { accountDeletion.deleteAccount(any()) }
     }
 
     @Test fun dismiss_clears_the_error_and_closes_the_sheet() {
@@ -249,6 +258,77 @@ class PrivacyViewModelTest {
         vm.dismissDeleteSheet()
         assertFalse(vm.deleteSheetVisible.value)
         assertNull(vm.deleteAccountError.value)
+    }
+
+    // ---- Persistent login: DELETE /account carries X-Step-Up ----
+
+    @Test fun delete_uses_the_password_step_up_when_the_account_has_one_and_sends_the_token() {
+        val activity = mockk<androidx.fragment.app.FragmentActivity>(relaxed = true)
+        coEvery { stepUp.obtainToken(StepUpCoordinator.PURPOSE_DELETE_ACCOUNT, listOf("password"), activity, any()) } returns
+            StepUpCoordinator.Outcome.Token("tok-1", "password")
+        coEvery { accountDeletion.deleteAccount("tok-1") } returns NetworkResult.Success(Unit)
+        val auth =
+            mockk<AuthRepository>(relaxed = true) {
+                every { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+            }
+        val vm = privacyVm(auth)
+        vm.load()
+        vm.onTapRow("deleteAccount")
+        vm.confirmDeleteAccount(hostActivity = activity)
+
+        coVerify(exactly = 1) { accountDeletion.deleteAccount("tok-1") }
+        coVerify(exactly = 1) { auth.eraseAllLocalState() }
+        assertTrue(vm.accountDeleted.value)
+        assertFalse(vm.deleteSheetVisible.value)
+    }
+
+    @Test fun delete_for_an_oauth_only_account_asks_for_the_device_key_method() {
+        val activity = mockk<androidx.fragment.app.FragmentActivity>(relaxed = true)
+        coEvery { account.authMethods() } returns NetworkResult.Success(AuthMethodsResponse(hasPassword = false))
+        coEvery { stepUp.obtainToken(StepUpCoordinator.PURPOSE_DELETE_ACCOUNT, listOf("device_key"), activity, any()) } returns
+            StepUpCoordinator.Outcome.Failed(StepUpCoordinator.NO_METHOD_MESSAGE)
+        val vm = privacyVm()
+        vm.load()
+        vm.onTapRow("deleteAccount")
+        vm.confirmDeleteAccount(hostActivity = activity)
+
+        coVerify(exactly = 0) { accountDeletion.deleteAccount(any()) }
+        assertEquals(PASSWORDLESS_DELETE_HELP, vm.deleteAccountError.value)
+        assertTrue(vm.deleteSheetVisible.value)
+    }
+
+    @Test fun cancelled_step_up_is_silent_and_keeps_the_sheet() {
+        val activity = mockk<androidx.fragment.app.FragmentActivity>(relaxed = true)
+        coEvery { stepUp.obtainToken(any(), any(), activity, any()) } returns StepUpCoordinator.Outcome.Cancelled
+        val vm = privacyVm()
+        vm.load()
+        vm.onTapRow("deleteAccount")
+        vm.confirmDeleteAccount(hostActivity = activity)
+
+        coVerify(exactly = 0) { accountDeletion.deleteAccount(any()) }
+        assertNull(vm.deleteAccountError.value)
+        assertTrue(vm.deleteSheetVisible.value)
+        assertFalse(vm.deletingAccount.value)
+    }
+
+    @Test fun backend_409_copy_is_surfaced_verbatim_and_nothing_is_erased() {
+        val activity = mockk<androidx.fragment.app.FragmentActivity>(relaxed = true)
+        coEvery { stepUp.obtainToken(any(), any(), activity, any()) } returns
+            StepUpCoordinator.Outcome.Token("tok-2", "password")
+        coEvery { accountDeletion.deleteAccount("tok-2") } returns
+            NetworkResult.Failure(NetworkError.ClientError(409, "{\"error\":\"Finish your gigs first.\"}"))
+        val auth =
+            mockk<AuthRepository>(relaxed = true) {
+                every { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+            }
+        val vm = privacyVm(auth)
+        vm.load()
+        vm.onTapRow("deleteAccount")
+        vm.confirmDeleteAccount(hostActivity = activity)
+
+        assertEquals("Finish your gigs first.", vm.deleteAccountError.value)
+        coVerify(exactly = 0) { auth.eraseAllLocalState() }
+        assertFalse(vm.accountDeleted.value)
     }
 
     @Test fun stealth_shows_banner_and_strictest_controls() {
@@ -309,7 +389,12 @@ class PrivacyViewModelTest {
 
     // MARK: - Helpers
 
-    private fun privacyVm(): PrivacySettingsViewModel {
+    private fun privacyVm(
+        auth: AuthRepository =
+            mockk<AuthRepository>(relaxed = true) {
+                every { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+            },
+    ): PrivacySettingsViewModel {
         val appLock =
             mockk<AppLockManager>(relaxed = true) {
                 every { preferenceEnabled } returns MutableStateFlow(false)
@@ -318,11 +403,7 @@ class PrivacyViewModelTest {
                 every { lastError } returns MutableStateFlow(null)
                 every { isLocked } returns MutableStateFlow(false)
             }
-        val auth =
-            mockk<AuthRepository>(relaxed = true) {
-                every { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
-            }
-        return PrivacySettingsViewModel(appLock, auth, privacy, accountDeletion)
+        return PrivacySettingsViewModel(appLock, auth, privacy, accountDeletion, stepUp, account)
     }
 
     private fun PrivacySettingsViewModel.loadedGroups(): List<GroupedListGroup> {

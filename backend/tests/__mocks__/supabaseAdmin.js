@@ -80,6 +80,11 @@ let _authMocks = {
     error: null,
   }),
   adminSignOut: async () => ({ data: null, error: null }),
+  adminGetUserById: async (id) => ({
+    data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [] } },
+    error: null,
+  }),
+  adminUpdateUserById: async (id, attrs) => ({ data: { user: { id, ...attrs } }, error: null }),
 };
 
 function resetTables() {
@@ -159,6 +164,11 @@ function resetTables() {
       error: null,
     }),
     adminSignOut: async () => ({ data: null, error: null }),
+    adminGetUserById: async (id) => ({
+      data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [] } },
+      error: null,
+    }),
+    adminUpdateUserById: async (id, attrs) => ({ data: { user: { id, ...attrs } }, error: null }),
   };
 }
 
@@ -175,6 +185,16 @@ function resetTables() {
 // internally redirected to 'PersonaMembership' with column projection so
 // existing tests that seed/inspect 'PersonaFollow' keep working unchanged.
 // ---------------------------------------------------------------------------
+// Persistent-login registry tables (backend/database/migrations/160): the
+// unique keys the code depends on for single-use semantics.
+const AUTH_UNIQUE_KEYS = {
+  AuthDpopJti: [['jti']],
+  AuthChallenge: [['id']],
+  AuthResumeGrant: [['id'], ['grant_hash']],
+  AuthSession: [['id']],
+  AuthDevice: [['id'], ['user_id', 'device_id']],
+};
+
 const PERSONA_FOLLOW_VIEW = 'PersonaFollow';
 const PERSONA_MEMBERSHIP_TABLE = 'PersonaMembership';
 const PERSONA_FOLLOW_COLUMN_MAP = { follower_user_id: 'user_id' };
@@ -592,6 +612,22 @@ function createQueryBuilder(tableName) {
             }
           }
 
+          // Persistent-login tables (migration 160) rely on PK / UNIQUE
+          // conflicts for single-use semantics (DPoP jti replay cache,
+          // one-shot step-up jtis, resume-grant hashes). Mirror those
+          // constraints so the 23505 branches are exercised in tests.
+          const authUnique = AUTH_UNIQUE_KEYS[storageTable];
+          if (authUnique) {
+            const collision = table.find((existing) =>
+              authUnique.some((cols) => cols.every((col) => existing[col] !== undefined && existing[col] === row[col])));
+            if (collision) {
+              return { data: null, error: {
+                code: '23505',
+                message: `duplicate key value violates unique constraint "${storageTable}_key"`,
+              } };
+            }
+          }
+
           // Both fresh inserts AND upserts that resolved as inserts
           // (no matching conflict row) must respect the persona-scoped
           // fan_handle uniqueness constraint.
@@ -695,6 +731,8 @@ const supabaseAdmin = {
       deleteUser: jest.fn().mockResolvedValue({ data: {}, error: null }),
       generateLink: (...args) => _authMocks.adminGenerateLink(...args),
       signOut: (...args) => _authMocks.adminSignOut(...args),
+      getUserById: (...args) => _authMocks.adminGetUserById(...args),
+      updateUserById: (...args) => _authMocks.adminUpdateUserById(...args),
     },
   },
 };

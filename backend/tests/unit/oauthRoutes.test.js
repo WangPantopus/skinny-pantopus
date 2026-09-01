@@ -251,19 +251,30 @@ describe('POST /refresh', () => {
 });
 
 describe('POST /oauth/token', () => {
-  test('returns access token and refresh token when provided', async () => {
-    setAuthMocks({
-      getUser: jest.fn().mockResolvedValue({
-        data: {
-          user: {
-            id: 'oauth-user-1',
-            email: 'apple-user@example.com',
-            user_metadata: { provider: 'apple' },
-          },
+  const oauthUser = {
+    id: 'oauth-user-1',
+    email: 'apple-user@example.com',
+    user_metadata: { provider: 'apple' },
+  };
+
+  test('refreshes the supplied pair and returns the NEW access/refresh tokens', async () => {
+    setAuthMocks({ getUser: jest.fn().mockResolvedValue({ data: { user: oauthUser }, error: null }) });
+    // Persistent login: the client pair is only accepted once GoTrue confirms it
+    // pairs with the verified access token (refreshSession), and the rotated
+    // pair is what the client keeps.
+    const refreshSession = jest.fn().mockResolvedValue({
+      data: {
+        session: {
+          access_token: 'rotated-access-token',
+          refresh_token: 'rotated-refresh-token',
+          expires_in: 3600,
+          expires_at: 1_700_000_000,
         },
-        error: null,
-      }),
+        user: { id: 'oauth-user-1' },
+      },
+      error: null,
     });
+    mockCreateClient.mockReturnValue({ auth: { refreshSession } });
 
     const req = mockReq({
       body: {
@@ -274,10 +285,51 @@ describe('POST /oauth/token', () => {
     const res = mockRes();
     await oauthTokenHandler(req, res);
 
+    expect(refreshSession).toHaveBeenCalledWith({ refresh_token: 'refresh-token-xyz' });
     expect(res._status).toBe(200);
-    expect(res._json.accessToken).toBe('access-token-abc');
-    expect(res._json.refreshToken).toBe('refresh-token-xyz');
+    expect(res._json.accessToken).toBe('rotated-access-token');
+    expect(res._json.refreshToken).toBe('rotated-refresh-token');
+    expect(res._json.expiresIn).toBe(3600);
+    expect(res._json.user).toMatchObject({ id: 'oauth-user-1', email: 'apple-user@example.com' });
     expect(getTable('User')).toHaveLength(1);
+  });
+
+  test('rejects a refresh token GoTrue cannot rotate', async () => {
+    setAuthMocks({ getUser: jest.fn().mockResolvedValue({ data: { user: oauthUser }, error: null }) });
+    const refreshSession = jest.fn().mockResolvedValue({ data: { session: null, user: null }, error: { message: 'Invalid Refresh Token: Refresh Token Not Found' } });
+    mockCreateClient.mockReturnValue({ auth: { refreshSession } });
+
+    const req = mockReq({ body: { accessToken: 'access-token-abc', refreshToken: 'stale-refresh-token' } });
+    const res = mockRes();
+    await oauthTokenHandler(req, res);
+
+    expect(res._status).toBe(401);
+    expect(res._json.error).toContain('Invalid or expired refresh token');
+    expect(getTable('User')).toHaveLength(0);
+  });
+
+  test('rejects a refresh token that belongs to a different user than the access token', async () => {
+    setAuthMocks({
+      getUser: jest.fn().mockResolvedValue({ data: { user: oauthUser }, error: null }),
+      adminSignOut: jest.fn().mockResolvedValue({ data: null, error: null }),
+    });
+    const refreshSession = jest.fn().mockResolvedValue({
+      data: {
+        session: { access_token: 'victim-access', refresh_token: 'victim-refresh', expires_in: 3600, expires_at: 1 },
+        user: { id: 'victim-user' },
+      },
+      error: null,
+    });
+    mockCreateClient.mockReturnValue({ auth: { refreshSession } });
+
+    const req = mockReq({ body: { accessToken: 'access-token-abc', refreshToken: 'stolen-refresh-token' } });
+    const res = mockRes();
+    await oauthTokenHandler(req, res);
+
+    expect(res._status).toBe(401);
+    // the pair GoTrue minted for the victim is not left usable
+    expect(res._json.accessToken).toBeUndefined();
+    expect(getTable('User')).toHaveLength(0);
   });
 
   test('rejects missing access token', async () => {

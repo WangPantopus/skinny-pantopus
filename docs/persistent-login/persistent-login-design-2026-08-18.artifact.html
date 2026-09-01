@@ -1,0 +1,813 @@
+<title>Pantopus Persistent Login</title>
+<style>
+:root{
+  --bg:#F5F7F5; --surface:#FFFFFF; --surface-2:#EDF1EF; --line:#D5DDDA; --line-strong:#B9C5C0;
+  --ink:#172129; --ink-2:#3E4C55; --muted:#66757D;
+  --accent:#0E7C86; --accent-ink:#0B5F67; --accent-soft:#DDEFF0;
+  --brass:#9A6B12; --brass-soft:#F5EAD1;
+  --code-bg:#EEF2F0; --code-ink:#1F2A30; --diagram-bg:#F0F4F2;
+  --th-bg:#E7EEEC;
+  --shadow: 0 1px 0 rgba(23,33,41,.04), 0 8px 24px -16px rgba(23,33,41,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1518; --surface:#141C20; --surface-2:#1A2428; --line:#26333A; --line-strong:#34454D;
+    --ink:#E4EBE9; --ink-2:#B9C6C2; --muted:#87969D;
+    --accent:#45BFC8; --accent-ink:#7ED4DA; --accent-soft:#12343A;
+    --brass:#D9A441; --brass-soft:#2E2510;
+    --code-bg:#121A1E; --code-ink:#D8E1DE; --diagram-bg:#101719;
+    --th-bg:#1C272C;
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1518; --surface:#141C20; --surface-2:#1A2428; --line:#26333A; --line-strong:#34454D;
+  --ink:#E4EBE9; --ink-2:#B9C6C2; --muted:#87969D;
+  --accent:#45BFC8; --accent-ink:#7ED4DA; --accent-soft:#12343A;
+  --brass:#D9A441; --brass-soft:#2E2510;
+  --code-bg:#121A1E; --code-ink:#D8E1DE; --diagram-bg:#101719;
+  --th-bg:#1C272C;
+  --shadow: 0 1px 0 rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  font-size:16px;line-height:1.6;}
+.page{max-width:60rem;margin:0 auto;padding:2.5rem 1.25rem 6rem}
+.masthead{border-bottom:1px solid var(--line);padding-bottom:1.5rem;margin-bottom:2rem}
+.eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600}
+h1.title{font-family:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600;
+  font-size:clamp(1.9rem,4vw,2.75rem);line-height:1.15;margin:.35rem 0 .75rem;text-wrap:balance;letter-spacing:-.01em}
+.meta{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;color:var(--muted);font-size:.9rem}
+.meta b{color:var(--ink-2);font-weight:600}
+.pill{display:inline-block;padding:.1rem .55rem;border-radius:999px;background:var(--brass-soft);color:var(--brass);font-size:.75rem;font-weight:600;letter-spacing:.04em;vertical-align:middle}
+.toc{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1rem 1.25rem;margin:0 0 2.5rem;box-shadow:var(--shadow)}
+.toc-label{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:.35rem}
+.toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:2rem}
+@media (max-width:640px){.toc ol{columns:1}}
+.toc li{break-inside:avoid;margin:.15rem 0;font-size:.92rem}
+.toc a{color:var(--ink-2);text-decoration:none}
+.toc a:hover,.toc a:focus-visible{color:var(--accent-ink);text-decoration:underline}
+h2{font-family:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600;font-size:1.6rem;line-height:1.25;
+  margin:3rem 0 1rem;padding-top:1.25rem;border-top:1px solid var(--line);text-wrap:balance;letter-spacing:-.005em}
+h3{font-size:1.1rem;font-weight:700;margin:2rem 0 .6rem;color:var(--ink);text-wrap:balance}
+h4{font-size:.95rem;font-weight:700;margin:1.5rem 0 .5rem}
+p,li{max-width:70ch}
+p{margin:.75rem 0}
+ul,ol{padding-left:1.4rem}
+li{margin:.3rem 0}
+li>p{margin:.25rem 0}
+strong{font-weight:650}
+em{color:var(--ink-2)}
+a{color:var(--accent-ink);text-underline-offset:.15em}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0}
+code{font-family:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:.86em;background:var(--code-bg);color:var(--code-ink);
+  padding:.08em .35em;border-radius:4px}
+.scroll{overflow-x:auto;max-width:100%;margin:1rem 0}
+pre{margin:0;background:var(--code-bg);color:var(--code-ink);border:1px solid var(--line);border-radius:8px;padding:1rem 1.1rem;
+  font-family:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:.8rem;line-height:1.5;min-width:max-content}
+pre code{background:none;padding:0;font-size:inherit;color:inherit}
+pre.diagram{background:var(--diagram-bg);color:var(--ink);letter-spacing:0}
+table{border-collapse:collapse;width:100%;min-width:40rem;font-size:.9rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{padding:.6rem .8rem;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{background:var(--th-bg);font-weight:650;font-size:.8rem;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td code,th code{white-space:nowrap}
+td{font-variant-numeric:tabular-nums}
+blockquote{margin:1rem 0;padding:.6rem 1rem;border-left:3px solid var(--brass);background:var(--brass-soft);color:var(--ink);border-radius:0 6px 6px 0}
+.tldr{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:.25rem 1.25rem .5rem;margin:1rem 0 1.5rem;box-shadow:var(--shadow)}
+.tldr h2{border-top:0;margin-top:1rem;padding-top:0}
+.foot{margin-top:4rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
+@media (prefers-reduced-motion:no-preference){a{transition:color .12s ease}}
+</style>
+<div class="page">
+  <header class="masthead">
+    <div class="eyebrow">Design · Identity &amp; Sessions</div>
+    <h1 class="title">Persistent Login &amp; Trusted Devices for Pantopus</h1>
+    <div class="meta"><span><b>Date</b> 2026-08-18</span><span><b>Status</b> <span class="pill">Proposed · design only</span></span><span><b>Scope</b> native iOS · native Android · Express/Supabase backend · web where it must stay consistent</span></div>
+  </header>
+  <nav class="toc" aria-label="Contents"><div class="toc-label">Contents</div><ol><li><a href="#0-tl-dr-the-direct-answers">0. TL;DR</a></li><li><a href="#1-where-pantopus-is-today-verified-by-reading-the-code">1. Where Pantopus is today</a></li><li><a href="#2-principles-and-policy-decisions">2. Principles and policy decisions</a></li><li><a href="#3-the-three-ux-levels-and-the-first-launch-state-machine">3. The three UX levels and the first-launch state machine</a></li><li><a href="#4-architecture">4. Architecture</a></li><li><a href="#5-data-model-backend-database-migrations-160-auth-devices-sql-mirrored-under-supabase-migrations-rls-service-role-only-same-pattern-as-086-push-tokens-sql">5. Data model</a></li><li><a href="#6-wire-contracts">6. Wire contracts</a></li><li><a href="#7-flows">7. Flows</a></li><li><a href="#8-ios-changes-frontend-apps-ios-pantopus">8. iOS changes</a></li><li><a href="#9-android-changes-frontend-apps-android-app-src-main-java-app-pantopus-android">9. Android changes</a></li><li><a href="#10-backend-changes-backend">10. Backend changes</a></li><li><a href="#11-web-association-file-prerequisites-phase-0">11. Web + association-file prerequisites</a></li><li><a href="#12-threat-model">12. Threat model</a></li><li><a href="#13-trust-levels-amp-policy-constants">13. Trust levels &amp; policy constants</a></li><li><a href="#14-rollout-each-phase-independently-shippable-phase-0-1-are-the-committed-deliverable-later-phases-flag-gated">14. Rollout</a></li><li><a href="#15-verification-status-tradeoffs-decisions-needed">15. Verification status, tradeoffs, decisions needed</a></li><li><a href="#appendix-how-this-maps-to-what-big-apps-do">Appendix</a></li></ol></nav>
+  <main><hr>
+<section class="tldr"><h2 id="0-tl-dr-the-direct-answers">0. TL;DR — the direct answers</h2>
+<p><strong>&quot;Secure OS storage + cloud credentials + server-side sessions — is that correct?&quot;</strong>
+Yes, those are the right three pillars, and they map to three UX levels that look identical to the user but are very different technically. What is missing from that trio — and what actually separates Uber/Instagram-class auth from a naive &quot;keep the refresh token in Keychain&quot; — is a <strong>fourth pillar: device binding + a trusted-device registry</strong>. Concretely:</p>
+<div class="scroll"><table><thead><tr>
+<th>Pillar</th>
+<th>What it gives you</th>
+<th>Pantopus implementation</th>
+</tr>
+</thead><tbody><tr>
+<td>1. Secure OS storage</td>
+<td>Session survives (iOS) / a resume hint survives (Android) on the same device</td>
+<td>Keychain (<code>afterFirstUnlockThisDeviceOnly</code>, already in place) + Secure Enclave key; Android Block Store (single-use, hashed resume grant, no cloud copy)</td>
+</tr>
+<tr>
+<td>2. OS / cloud credentials</td>
+<td>Zero-app-state recovery, phishing-resistant</td>
+<td><code>webcredentials:</code> + Password AutoFill, native Sign in with Apple, Android Credential Manager (Sign in with Google, saved passwords), passkeys (Supabase passkeys now primary-factor beta)</td>
+</tr>
+<tr>
+<td>3. Server-side sessions</td>
+<td>Something the server can list, time out and revoke</td>
+<td>Supabase sessions (already rotating) <strong>plus</strong> our own <code>AuthDevice</code> / <code>AuthSession</code> registry, <code>sessions_valid_after</code> watermark, sign-out-everywhere, per-device revoke</td>
+</tr>
+<tr>
+<td>4. Device binding + attestation</td>
+<td>A stolen token is useless off the device that minted it</td>
+<td>ES256 DPoP proof (RFC 9449) from a Secure Enclave / Android Keystore key required on <code>/refresh</code>; App Attest / Play Integrity / key attestation as graded trust signals</td>
+</tr>
+</tbody></table></div>
+<p><strong>The design in one paragraph.</strong> Keep Supabase Auth as the only session authority. Add one thin Pantopus-owned layer: a device registry keyed by a hardware key whose signed proof is required to refresh, a per-session table so sessions are listable/revocable, and a resume path for reinstall. <strong>Reinstall is never a silent auto-login and never a forced wipe</strong>: on iOS the refresh token and Secure Enclave key survive the uninstall (an install marker detects the reinstall) and the user sees <em>&quot;Continue as Ying&quot;</em> behind Face ID / passcode; on Android nothing survives, so a single-use, hashed, hardware-key-redeemable resume grant lives in Block Store and is redeemed behind BiometricPrompt into a <em>restored</em> session that cannot move money until a real credential is shown once; when even that is gone, the OS remembers the account (AutoFill / passkey / Sign in with Apple / Sign in with Google). Every phase reuses the existing <code>KeychainStore</code>, <code>TokenStorage</code>, <code>TokenAuthenticator</code>, <code>/refresh</code> and <code>/logout</code>, ships behind a flag, and keeps old clients working until an enforcement date.</p>
+<p><strong>Three things to fix regardless of this design</strong> (found while auditing):</p>
+<ol>
+<li>Both native apps&#39; <code>signOut()</code> are local-only — they never call <code>POST /api/users/logout</code>, so the Supabase session stays valid server-side.</li>
+<li>The hosted <code>apple-app-site-association</code> and <code>assetlinks.json</code> still name the old Expo identifiers (<code>6UYZBA546R.com.pantopus.app</code>, <code>com.pantopus.app</code>), not <code>app.pantopus.ios</code> / <code>app.pantopus.android</code> — Universal Links, App Links, Password AutoFill, passkeys and Credential Manager cannot work for the shipping native apps until they are regenerated.</li>
+<li><code>make bootstrap</code> (<code>xcodegen generate</code>) regenerates <code>Pantopus.entitlements</code> from <code>project.yml</code>, which still lacks the <code>pantopus.com</code> applinks — it silently reverts commit 435c8fac.</li>
+</ol>
+</section><hr>
+<h2 id="1-where-pantopus-is-today-verified-by-reading-the-code">1. Where Pantopus is today (verified by reading the code)</h2>
+<div class="scroll"><table><thead><tr>
+<th>Area</th>
+<th>Today</th>
+<th>Consequence</th>
+</tr>
+</thead><tbody><tr>
+<td>Backend auth</td>
+<td>Express over Supabase Auth; mobile = Bearer JSON, web = httpOnly cookies. <code>/refresh</code> calls <code>refreshSession</code>, rotation on (<code>enable_refresh_token_rotation=true</code>, 10 s reuse interval, <code>jwt_expiry=3600</code>); reuse detected by regexing GoTrue&#39;s error → 401 <code>TOKEN_REUSE</code>.</td>
+<td>Good base. Refresh tokens are still pure bearer secrets; mobile refresh tokens never expire (no inactivity timeout).</td>
+</tr>
+<tr>
+<td>Server-side sessions</td>
+<td>None of our own. <code>/logout</code> revokes only the presented JWT (<code>admin.signOut(token,&#39;local&#39;)</code>), is unauthenticated. No session list, no sign-out-everywhere. Password change/reset don&#39;t invalidate other sessions. <code>/reauthenticate</code> returns <code>{verified:true}</code> only — no step-up assertion. Only device-ish table is <code>PushToken</code> (no device id, no session link).</td>
+<td>Cannot revoke a stolen phone, cannot show &quot;Where you&#39;re logged in&quot;.</td>
+</tr>
+<tr>
+<td>iOS</td>
+<td>Tokens + <code>cachedUser</code> in Keychain (<code>afterFirstUnlockThisDeviceOnly</code>, non-sync). <code>restoreSession()</code> has no first-launch marker. <code>signOut()</code> local-only. Refresh 401-reactive (expiresAt ignored). No SE key, App Attest, device id, native SIWA, <code>webcredentials:</code>.</td>
+<td><strong>Reinstall already silently restores a full session by accident</strong>, and the app-lock preference (UserDefaults) is wiped, so a locked account comes back unlocked.</td>
+</tr>
+<tr>
+<td>Android</td>
+<td>Tokens in <code>EncryptedSharedPreferences</code> (Keystore master key), excluded from backup/D2D, <code>allowBackup=false</code>. <code>signOut()</code> local-only. No Block Store, Credential Manager, Play Integrity, device id, autofill hints.</td>
+<td><strong>Nothing survives reinstall</strong>; the user retypes everything.</td>
+</tr>
+<tr>
+<td>Web / association files</td>
+<td>AASA + assetlinks target Expo identifiers; no <code>get_login_creds</code>; Next middleware clears cookies before attempting refresh.</td>
+<td>OS-credential layer is dead for native today; web persistence weaker than its 7-day cookie implies.</td>
+</tr>
+<tr>
+<td>Prior decision</td>
+<td>RN-era app <em>wiped</em> the Keychain session on reinstall via an install sentinel (docs/07 §381-418). Native has no sentinel.</td>
+<td>This design explicitly supersedes that: <strong>keep the credential, gate it</strong>.</td>
+</tr>
+</tbody></table></div>
+<p>Full evidence with file:line references: <a href="WORKFLOW-RESULTS.md">WORKFLOW-RESULTS.md §1</a>.</p>
+<hr>
+<h2 id="2-principles-and-policy-decisions">2. Principles and policy decisions</h2>
+<ol>
+<li><strong>Reinstall is never Level 1 (silent) and never a wipe.</strong> Uninstall is a weak signal that ownership or intent changed; we require presence (one gesture) but never a password. Supersedes the RN sentinel-wipe.</li>
+<li><strong>No OS lock ⇒ no one-tap resume.</strong> If <code>LAContext.canEvaluatePolicy(.deviceOwnerAuthentication)</code> is false / <code>BiometricManager.canAuthenticate(...) != SUCCESS</code>, the device gets Level 3 only.</li>
+<li><strong>Bind at issuance only.</strong> A device key is bound to a session only inside credential-issuing flows (login, OAuth, resume). No bearer-only endpoint may create or rotate a binding (closes the &quot;stolen 1-hour token enrols an attacker device&quot; hole).</li>
+<li><strong>Refresh proof is checked against the key bound to <em>that session</em>,</strong> resolved server-side from the session — never &quot;find a device by a client-supplied id, then check the user afterwards&quot;.</li>
+<li><strong>The DPoP device key is not biometry-gated</strong> (background refresh, push-triggered fetch and socket reconnect must keep working). Presence for <em>&quot;Continue as X&quot;</em> is a client gate (Tier-1 UX); server-verifiable presence for sensitive actions comes from a <strong>separate biometry-bound step-up key</strong> with a passcode-gated fallback key for devices without strong biometrics.</li>
+<li><strong>Anything minted from a non-interactive path is a <code>restored</code> session:</strong> it can browse and chat but cannot move money, change credentials, revoke devices, add passkeys or delete the account until a password / passkey / native IdP credential is presented once (which flips it to <code>interactive</code>).</li>
+<li><strong>Attestation is a graded trust signal, never a hard block on login</strong> (App Attest cannot see jailbreaks; Play Integrity is quota-limited and absent on GMS-less devices).</li>
+<li><strong>Never rely contractually on Keychain surviving uninstall.</strong> It is an accelerator with an install-marker detector and a Level-3 fallback; if a future iOS wipes it, nothing breaks.</li>
+<li><strong>Explicit sign-out revokes server-side and deletes tokens/grants, but keeps a non-secret display hint</strong> so the login screen can pre-fill <em>&quot;Continue as X →&quot;</em> (Level 3). <em>&quot;Not you? Remove&quot;</em> wipes the hint.</li>
+<li><strong>Immediate revocation without new infrastructure:</strong> <code>verifyToken</code> already calls <code>getUser</code> per request; we add a registry check on the JWT <code>session_id</code> and a <code>sessions_valid_after</code> watermark. Deleting <code>auth.sessions</code> rows directly is optional belt-and-braces to be tested on the hosted project, not a dependency.</li>
+</ol>
+<hr>
+<h2 id="3-the-three-ux-levels-and-the-first-launch-state-machine">3. The three UX levels and the first-launch state machine</h2>
+<div class="scroll"><table><thead><tr>
+<th>Level</th>
+<th>What survives on the device</th>
+<th>Gesture</th>
+<th>When</th>
+</tr>
+</thead><tbody><tr>
+<td><strong>L1 &quot;Still logged in&quot;</strong></td>
+<td>tokens + device key + install marker all agree</td>
+<td>none</td>
+<td>normal cold start / foreground on the same install</td>
+</tr>
+<tr>
+<td><strong>L2 &quot;App remembers my account&quot;</strong></td>
+<td>iOS: refresh token + SE key + hint in Keychain, marker missing · Android: Block Store <code>{hint, resumeGrant}</code></td>
+<td>tap <em>Continue</em> + Face ID / Touch ID / passcode / BiometricPrompt(STRONG or DEVICE_CREDENTIAL)</td>
+<td>reinstall on the same device; also L1 when App Lock is on, when dormant &gt; 30 d, or when the server set <code>require_step_up</code></td>
+</tr>
+<tr>
+<td><strong>L3 &quot;The phone remembers my account&quot;</strong></td>
+<td>only an optional non-secret display hint</td>
+<td>one tap in a system sheet + OS biometric</td>
+<td>Android reinstall without Backup on, new device, Keychain wiped, after explicit sign-out, &quot;Use a different account&quot;</td>
+</tr>
+</tbody></table></div>
+<p>Decision order at cold start: <strong>L1 → L2 → L3 → manual login</strong>; each level degrades to the next without a dead end, and each level&#39;s UI is a <em>card</em>, not a form.</p>
+<div class="scroll"><pre class="diagram"><code>                          app launch
+                              │
+                 ┌────────────▼─────────────┐
+                 │ tokens in secure store?  │
+                 └──────┬───────────┬───────┘
+                      yes           no ──────────────────────────────┐
+                       │                                             │
+          ┌────────────▼──────────────┐                 ┌────────────▼────────────┐
+          │ install marker present &amp;  │                 │ account hint?           │
+          │ matches Keychain copy?    │                 │ iOS: Keychain hint      │
+          │ (iOS; Android n/a — tokens│                 │ Android: Block Store    │
+          │  never survive uninstall) │                 └────┬───────────────┬────┘
+          └────┬────────────────┬─────┘                    yes               no
+             yes                no (reinstall)               │                │
+              │                 │                 ┌──────────▼────────┐  ┌────▼───────────────────┐
+     ┌────────▼───────┐  ┌──────▼──────────────┐  │ Android &amp; grant   │  │ L3: LoginView/Screen   │
+     │ app-lock on, or│  │ B: ContinueAs card  │  │ present?          │  │ AutoFill / passkey /   │
+     │ dormant &gt;30 d, │  │ + Face ID/passcode  │  └───┬───────────┬───┘  │ SIWA / Google sheet    │
+     │ require_step_up│  │ → DPoP /refresh     │    yes           no     └────────────────────────┘
+     └──┬─────────┬───┘  └──────┬──────────────┘     │             │
+       yes        no            │            ┌───────▼────────┐ ┌──▼──────────────────────────┐
+        │         │             │            │ B: ContinueAs +│ │ C: ContinueAs hint-only:    │
+   ContinueAs     │             │            │ BiometricPrompt│ │ passkey / SIWA / Google /   │
+   + biometric    │             │            │ → POST /resume │ │ password (email prefilled)  │
+        │         │             │            └───────┬────────┘ └─────────────────────────────┘
+        └────┬────┘             │                    │  401/403 → C
+             ▼                  ▼                    ▼
+   L1: proactive DPoP refresh if expiresAt−now &lt; 120 s → GET /profile → home ("Welcome back, Ying" toast on B)</code></pre></div>
+<p><strong>First-launch-after-reinstall UI states</strong></p>
+<p><em>iOS</em> — <strong>A</strong> (same install): Splash → home. <strong>B</strong> (reinstall, tokens+key survived): <code>ContinueAsView</code> — avatar, &quot;Continue as Ying&quot;, <code>y•••@gmail.com</code>, primary <em>Continue</em> (LAContext <code>.deviceOwnerAuthentication</code>, so passcode works when Face ID isn&#39;t enrolled), secondary <em>Use a different account</em>, tertiary <em>Not you? Remove</em>. <strong>C</strong> (hint only — session revoked/expired/removed): same card, buttons chosen from <code>lastMethod</code>: passkey (AutoFill-assisted request armed) / <em>Continue with Apple</em> (native SIWA) / <em>Continue with Google</em> / password field prefilled + AutoFill. <strong>D</strong> (fresh): PlaceLaunch → LoginView with <code>.username</code> content type, <code>performAutoFillAssistedRequests()</code> armed, native SIWA button.</p>
+<p><em>Android</em> — <strong>A</strong> (same install): Splash → home. <strong>B</strong> (Block Store hint + grant): <code>ContinueAsScreen</code>, BiometricPrompt auto-shown → <code>POST /api/auth/resume</code> → home. <strong>C</strong> (hint present, grant rejected / step-up required / no screen lock): same card; Credential Manager sheet auto-launched (passkey → Google → saved password), email prefilled; <em>Not you?</em> clears Block Store. <strong>D</strong> (fresh): LoginScreen opens the Credential Manager sheet once; fields carry autofill <code>ContentType</code>. <strong>E</strong> (new device via D2D/cloud restore, later phase): Credential Manager Restore Credentials → silent sign-in → toast.</p>
+<hr>
+<h2 id="4-architecture">4. Architecture</h2>
+<div class="scroll"><pre class="diagram"><code>                iOS app                                        Android app
+  +---------------------------------------+      +-----------------------------------------+
+  | AuthManager (state machine)           |      | AuthRepository (state machine)          |
+  |  .unknown/.signedOut/.resumable/      |      |  Unknown/SignedOut/Resumable/SignedIn   |
+  |  .signedIn (+ session.context)        |      | DeviceKeyStore (Keystore EC P-256,      |
+  | DeviceKey (SE P-256, blob in Keychain,|      |   StrongBox if avail; dies w/ uninstall)|
+  |   survives reinstall)                 |      | StepUpKey (biometric-bound, CryptoObject)|
+  | StepUpKey (SE, .biometryCurrentSet)   |      | DeviceIdentity (deviceId, installId)    |
+  | InstallMarker (sandbox file+Keychain) |      | AccountHintStore (Block Store: hint +   |
+  | KeychainStore (+deviceId, deviceKey,  |      |   single-use resumeGrant, no cloud)     |
+  |   installId, expiresAt, sessionId,    |      | TokenStorage (+expires_at, session_id)  |
+  |   accountHint, appLockEnabled)        |      | DPoPProofBuilder (ES256 JWT)            |
+  | DPoPProofBuilder (ES256 JWT)          |      | AuthInterceptor: X-Device-Id, pre-flight|
+  | APIClient: X-Device-Id, DPoP on auth  |      |   refresh; TokenAuthenticator: DPoP     |
+  |   endpoints, proactive refresh        |      | AppLockManager (BiometricPrompt)        |
+  | AppLockManager (pref → Keychain)      |      +---------------------+-------------------+
+  +-------------------+-------------------+                            |
+                      |  Bearer + X-Device-Id  (+ DPoP on /login /oauth/* /refresh /resume /step-up)
+                      v                                                v
+  +------------------------------------------------------------------------------------------+
+  | Express backend                                                                          |
+  |  routes/users.js      /login /oauth/* /oauth/native /refresh /logout /password           |
+  |                       /reset-password /reauthenticate DELETE /account (hooks; contracts kept)|
+  |  routes/authDevices.js /api/auth/devices /sessions /resume /step-up /challenge /events    |
+  |  middleware/verifyToken.js  getUser (unchanged) + JWT claims decode (session_id, iat)     |
+  |                       + AuthSession revoked? + sessions_valid_after watermark             |
+  |  middleware/dpop.js   ES256 proof, htu/htm, iat window, jti replay                        |
+  |  middleware/stepUp.js X-Step-Up token (purpose-bound, one-shot for destructive actions)   |
+  |  services/authDeviceService.js  bind-at-issue, refresh pre/post-check, trust levels       |
+  |  services/authSessionService.js revoke (registry + admin.signOut scopes), mint session    |
+  |                       via generateLink+verifyOtp, resume grants                           |
+  |  services/authNotifyService.js  new-device / device-removed / reuse / lockdown emails+push|
+  |  socket/chatSocketio.js  auth:session_revoked → disconnect sockets of that session_id     |
+  +----------------------------+-------------------------------------+-----------------------+
+                               |                                     |
+                               v                                     v
+  +-----------------------------------------+   +--------------------------------------------+
+  | Supabase Auth (GoTrue) — unchanged      |   | Postgres public schema (service role)      |
+  |  signInWithPassword, exchangeCode,      |   |  AuthDevice, AuthSession, AuthResumeGrant, |
+  |  signInWithIdToken (native SIWA/Google),|   |  AuthChallenge, AuthDpopJti,               |
+  |  refreshSession (rotation on),          |   |  AuthSecurityEvent, User.sessions_valid_   |
+  |  admin.signOut(jwt,'local|others|       |   |  after, User.security_prefs,               |
+  |  global'), admin.generateLink+verifyOtp,|   |  PushToken.device_id                       |
+  |  getUser (session_not_found once the    |   |  (optional) fn revoke_auth_session over    |
+  |  session row is gone), passkeys (beta)  |   |  auth.sessions — SECURITY DEFINER          |
+  +-----------------------------------------+   +--------------------------------------------+</code></pre></div>
+<p><strong>Where Supabase forces a custom layer, and how we stay thin</strong></p>
+<div class="scroll"><table><thead><tr>
+<th>Supabase limit</th>
+<th>Our layer</th>
+</tr>
+</thead><tbody><tr>
+<td>No admin &quot;list / revoke a user&#39;s sessions&quot; endpoint</td>
+<td><code>AuthSession</code> rows keyed by the JWT <code>session_id</code>; revocation = row flag checked in <code>verifyToken</code> + refused at our <code>/refresh</code>; `admin.signOut(jwt,&#39;others&#39;</td>
+</tr>
+<tr>
+<td>Refresh tokens are pure bearer secrets</td>
+<td>DPoP proof verified at <em>our</em> <code>/refresh</code> proxy against the key bound to that session; GoTrue never sees the proof</td>
+</tr>
+<tr>
+<td>No way to mint a session from a custom credential (resume grant, later passkeys on Android)</td>
+<td><code>admin.generateLink({type:&#39;magiclink&#39;})</code> → <code>verifyOtp({type:&#39;magiclink&#39;, token_hash})</code> on a per-request anon client — the exact pattern <code>users.js</code> already uses for verification/recovery links</td>
+</tr>
+<tr>
+<td>No inactivity timeout on the current plan</td>
+<td>enforced at <code>/refresh</code> from <code>AuthSession.last_refresh_at</code> (90 d trusted / 30 d unverified)</td>
+</tr>
+<tr>
+<td>Reuse detection = error-string regex</td>
+<td><code>refresh_token_hash</code> + <code>prev_refresh_token_hash</code> on <code>AuthSession</code> (tolerates fail-to-save), fall back to <code>sessionId</code>; log <code>sb-auth-refresh-token-reuse*</code> headers if the project runs the v2 algorithm</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-data-model-backend-database-migrations-160-auth-devices-sql-mirrored-under-supabase-migrations-rls-service-role-only-same-pattern-as-086-push-tokens-sql">5. Data model (<code>backend/database/migrations/160_auth_devices.sql</code>, mirrored under <code>supabase/migrations/</code>; RLS service_role only, same pattern as <code>086_push_tokens.sql</code>)</h2>
+<div class="scroll"><pre class="lang-sql"><code>-- One row per (user, hardware key). iOS keeps the row across reinstall (SE key survives);
+-- Android gets a new row per install (Keystore key dies with uninstall).
+CREATE TABLE "AuthDevice" (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id            uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_id          text NOT NULL,                       -- client UUIDv4, generated together with the key
+  platform           text NOT NULL CHECK (platform IN ('ios','android','web')),
+  public_key_jwk     jsonb,                               -- {kty:'EC',crv:'P-256',x,y}; NULL for web
+  key_thumbprint     text,                                -- RFC 7638 SHA-256 of the JWK
+  key_backing        text NOT NULL DEFAULT 'none'
+                     CHECK (key_backing IN ('none','software','tee','strongbox','secure_enclave')),
+  attestation_level  text NOT NULL DEFAULT 'none'
+                     CHECK (attestation_level IN ('none','key_attest','app_attest','play_basic','play_device','play_strong')),
+  attestation        jsonb,                               -- App Attest keyId+receipt digest / Keystore chain summary / Play verdict
+  trust_level        text NOT NULL DEFAULT 'unverified'
+                     CHECK (trust_level IN ('trusted','unverified','suspect')),
+  step_key_jwk       jsonb, step_key_enrolled_via text,   -- biometry-bound step-up key; 'interactive' | 'restored'
+  require_step_up    boolean NOT NULL DEFAULT false,      -- server-forced L2 on next launch
+  install_id         text,                                -- per-install random; rotates on reinstall
+  name text, model text, os_version text, app_version text,
+  trusted_at         timestamptz,                         -- first interactive login on this key
+  last_seen_at timestamptz, last_ip inet, last_user_agent text,
+  last_resumed_at    timestamptz,
+  resumed_from_device uuid REFERENCES "AuthDevice"(id),   -- Android: previous row (proves lineage)
+  revoked_at timestamptz, revoked_reason text,            -- user|password_change|reuse|mismatch|inactivity|account_deleted|superseded
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, device_id)
+);
+CREATE UNIQUE INDEX authdevice_key_idx ON "AuthDevice"(device_id, key_thumbprint) WHERE key_thumbprint IS NOT NULL;
+CREATE INDEX authdevice_user_active_idx ON "AuthDevice"(user_id) WHERE revoked_at IS NULL;
+
+-- One row per Supabase session (JWT session_id). device_id NULL for web. Makes web sessions
+-- visible in "Where you're logged in" from Phase 1 and gives per-session revoke reasons.
+CREATE TABLE "AuthSession" (
+  id                        uuid PRIMARY KEY,             -- = JWT session_id claim
+  user_id                   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_id                 uuid REFERENCES "AuthDevice"(id) ON DELETE SET NULL,
+  context                   text NOT NULL DEFAULT 'interactive' CHECK (context IN ('interactive','restored','oauth')),
+  auth_method               text,                        -- password|oauth_google|oauth_apple|siwa_native|google_native|passkey|resume_grant
+  bound_at_issue            boolean NOT NULL DEFAULT false,
+  refresh_token_hash        text, prev_refresh_token_hash text,   -- sha256; tolerate fail-to-save
+  issued_at                 timestamptz NOT NULL DEFAULT now(),
+  last_refresh_at           timestamptz, last_seen_at timestamptz, last_ip inet, user_agent text,
+  revoked_at timestamptz, revoked_reason text
+);
+CREATE INDEX authsession_user_idx ON "AuthSession"(user_id) WHERE revoked_at IS NULL;
+CREATE INDEX authsession_rth_idx  ON "AuthSession"(refresh_token_hash);
+
+-- Android reinstall resume (Block Store). Single-use, hashed, 90-day, revocable.
+CREATE TABLE "AuthResumeGrant" (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_id uuid REFERENCES "AuthDevice"(id) ON DELETE SET NULL,   -- issuing device
+  grant_hash text NOT NULL UNIQUE,                                  -- sha256(grant); grant = 32 random bytes b64url
+  created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
+  used_at timestamptz, revoked_at timestamptz
+);
+
+CREATE TABLE "AuthChallenge" (id text PRIMARY KEY, purpose text NOT NULL, expires_at timestamptz NOT NULL); -- attestation / step-up nonces, 10-min TTL
+CREATE TABLE "AuthDpopJti"   (jti text PRIMARY KEY, expires_at timestamptz NOT NULL);                       -- DPoP replay cache (10-min TTL, cron-pruned)
+
+CREATE TABLE "AuthSecurityEvent" (
+  id bigserial PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_id uuid REFERENCES "AuthDevice"(id) ON DELETE SET NULL,
+  session_id uuid,
+  type text NOT NULL,   -- login|oauth_login|resume|refresh_reuse|device_mismatch|device_revoked|revoke_others|revoke_all|lockdown|password_changed|password_reset|logout|inactivity_expired|account_deleted|step_up|new_device_email_sent
+  ip inet, user_agent text, meta jsonb, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX authsecurityevent_user_idx ON "AuthSecurityEvent"(user_id, created_at DESC);
+
+ALTER TABLE "User" ADD COLUMN sessions_valid_after timestamptz;   -- JWT iat &lt; this ⇒ 401 SESSION_REVOKED
+ALTER TABLE "User" ADD COLUMN security_prefs jsonb NOT NULL DEFAULT '{}'::jsonb;
+   -- {requireUnlockOnReinstall:bool, allowRestoreGrants:bool, newDeviceEmail:bool}
+ALTER TABLE "PushToken" ADD COLUMN device_id text;                 -- links APNs/FCM token to AuthDevice.device_id
+
+-- OPTIONAL belt-and-braces (verify permissions on the hosted project first; the design does not depend on it):
+-- CREATE FUNCTION public.revoke_auth_session(p_session_id uuid) RETURNS void
+--   LANGUAGE sql SECURITY DEFINER SET search_path = auth, public AS $$ DELETE FROM auth.sessions WHERE id = p_session_id; $$;</code></pre></div>
+<p>Retention: <code>AuthSecurityEvent</code> 180 d; revoked <code>AuthSession</code>/<code>AuthDevice</code> rows 90 d after revocation; <code>AuthDpopJti</code>/<code>AuthChallenge</code> pruned by the existing jobs runner.</p>
+<hr>
+<h2 id="6-wire-contracts">6. Wire contracts</h2>
+<h3 id="6-1-dpop-proof-dpop-lt-jwt-gt-header-on-post-api-users-login-oauth-callback-oauth-token-oauth-native-refresh-api-auth-resume-api-auth-step-up-api-auth-devices-register">6.1 DPoP proof (<code>DPoP: &lt;jwt&gt;</code> header) — on <code>POST /api/users/login</code>, <code>/oauth/callback</code>, <code>/oauth/token</code>, <code>/oauth/native</code>, <code>/refresh</code>, <code>/api/auth/resume</code>, <code>/api/auth/step-up</code>, <code>/api/auth/devices/register</code></h3>
+<div class="scroll"><pre class="diagram"><code>header : {"typ":"dpop+jwt","alg":"ES256","jwk":{"kty":"EC","crv":"P-256","x":"…","y":"…"}}
+payload: {"jti":"&lt;uuid&gt;","htm":"POST","htu":"https://api.pantopus.com/api/users/refresh","iat":1755500000,
+          "rth":"&lt;b64url sha256(refreshToken)&gt;"}          // on /refresh only: binds the proof to this refresh token</code></pre></div>
+<p>Server (<code>middleware/dpop.js</code>): verify signature with the embedded JWK (<code>jose</code> <code>jwtVerify</code> + <code>EmbeddedJWK</code>), <code>htm</code>/<code>htu</code> (compared against <code>PUBLIC_API_BASE_URL + req.originalUrl</code> sans query so proxies don&#39;t matter), <code>|now − iat| ≤ 300 s</code>, <code>jti</code> unseen (insert into <code>AuthDpopJti</code>, PK conflict ⇒ 401 <code>DPOP_REPLAY</code>), compute thumbprint → <code>req.dpop = {jwk, thumbprint}</code>. Missing header allowed while <code>AUTH_DEVICE_BINDING=optional</code>; 401 <code>DPOP_REQUIRED</code> once <code>required</code>.</p>
+<h3 id="6-2-device-descriptor-device-object-in-login-oauth-resume-register-bodies">6.2 Device descriptor (<code>device</code> object in login / oauth / resume / register bodies)</h3>
+<div class="scroll"><pre class="lang-json"><code>{"deviceId":"uuidv4","platform":"ios","installId":"hex32","name":"Ying's iPhone","model":"iPhone16,2",
+ "osVersion":"18.5","appVersion":"1.4.0 (312)","hasOsLock":true,
+ "keyBacking":"secure_enclave|strongbox|tee|software",
+ "attestation":{"type":"app_attest","keyId":"…","attestation":"b64cbor","challenge":"…"}
+             | {"type":"android_key_attest","chain":["b64der",…]}
+             | {"type":"play_integrity","token":"…"} }</code></pre></div>
+<p>Login/OAuth/resume responses gain <code>&quot;device&quot;:{&quot;id&quot;,&quot;deviceId&quot;,&quot;isNew&quot;,&quot;trustLevel&quot;}, &quot;sessionId&quot;:&quot;uuid&quot;, &quot;session&quot;:{&quot;context&quot;:&quot;interactive|restored&quot;}</code>. All existing fields unchanged.</p>
+<h3 id="6-3-endpoints">6.3 Endpoints</h3>
+<p>Existing routes (<code>backend/routes/users.js</code>) — behaviour added, contracts backward compatible:</p>
+<div class="scroll"><table><thead><tr>
+<th>Route</th>
+<th>Added</th>
+</tr>
+</thead><tbody><tr>
+<td><code>POST /login</code></td>
+<td>optional <code>device</code> + <code>DPoP</code>. After the profile checks and before <code>applyAuthTransport</code> (~L1603): <code>authDeviceService.bindAtIssue(userId, session, device, req.dpop)</code> → upsert <code>AuthDevice</code>, insert <code>AuthSession{id=jwt.session_id, device_id, context:&#39;interactive&#39;, bound_at_issue:true, refresh_token_hash}</code>; new key ⇒ new-device email/push. Response adds <code>device</code>, <code>sessionId</code>.</td>
+</tr>
+<tr>
+<td><code>POST /oauth/callback</code>, <code>/oauth/token</code></td>
+<td>same hook (~L3925 / ~L3857). <code>/oauth/token</code> now refreshes the supplied pair and returns the <em>new</em> pair only when the user id matches the verified access token (closes the unpaired-refresh-token gap).</td>
+</tr>
+<tr>
+<td><code>POST /oauth/native</code> (new)</td>
+<td>`{provider:&#39;apple&#39;</td>
+</tr>
+<tr>
+<td><code>POST /refresh</code></td>
+<td>body <code>{refreshToken, deviceId?, sessionId?, accessToken?(expired ok)}</code> + <code>DPoP</code>. Order: <strong>(1) resolve session</strong> by <code>sha256(refreshToken)</code> → <code>refresh_token_hash</code> or <code>prev_refresh_token_hash</code>, else by <code>sessionId</code>/expired-JWT <code>session_id</code>; must be unrevoked; inactivity check (<code>last_refresh_at</code> within 90 d trusted / 30 d unverified) else revoke + 401 <code>SESSION_EXPIRED_INACTIVE</code>. <strong>(2) if session is bound:</strong> verify DPoP against <em>that</em> device&#39;s stored key (<code>rth</code> must match) else 401 <code>DEVICE_MISMATCH</code> + revoke session + event + email; if unbound and mode=optional: legacy path (adoption allowed only for sessions issued before the client shipped DPoP, i.e. <code>bound_at_issue=false &amp;&amp; issued_at &lt; DPOP_CUTOVER</code>), if mode=required: 401 <code>DPOP_REQUIRED</code>. <strong>(3)</strong> <code>refreshSession</code> (GoTrue rotates); on `refresh_token_already_used</td>
+</tr>
+<tr>
+<td><code>POST /logout</code></td>
+<td>body `{scope:&#39;local&#39;</td>
+</tr>
+<tr>
+<td><code>POST /password</code></td>
+<td>after <code>updateUserById</code> (~L1869): revoke all <em>other</em> sessions (<code>admin.signOut(bearer,&#39;others&#39;)</code> + rows), revoke other devices (<code>password_change</code>), revoke all grants, event, email &quot;password changed, other devices signed out&quot;.</td>
+</tr>
+<tr>
+<td><code>POST /reset-password</code></td>
+<td>after update: revoke <em>all</em> sessions + <code>sessions_valid_after=now()</code> + all devices/grants revoked, then revoke the recovery session as today.</td>
+</tr>
+<tr>
+<td><code>POST /reauthenticate</code></td>
+<td>returns <code>{verified:true, stepUpToken, expiresAt}</code> — `stepUpToken = HMAC-SHA256(STEP_UP_SECRET, userId</td>
+</tr>
+<tr>
+<td><code>DELETE /account</code></td>
+<td>requires <code>X-Step-Up</code> (purpose <code>delete_account</code>); before <code>admin.deleteUser</code> (~L4140): revoke all sessions, delete <code>PushToken</code> by user, event <code>account_deleted</code>.</td>
+</tr>
+</tbody></table></div>
+<p>New router <code>backend/routes/authDevices.js</code>, mounted <code>app.use(&#39;/api/auth&#39;, …)</code> next to <code>app.js:~306</code>:</p>
+<div class="scroll"><table><thead><tr>
+<th>Method / path</th>
+<th>Auth</th>
+<th>Request → Response</th>
+</tr>
+</thead><tbody><tr>
+<td><code>POST /api/auth/challenge</code></td>
+<td>none, 30/15 m/IP</td>
+<td><code>{purpose}</code> → <code>{challenge, expiresAt}</code> (attestation / step-up nonce, 10-min TTL)</td>
+</tr>
+<tr>
+<td><code>POST /api/auth/devices/register</code></td>
+<td>verifyToken + DPoP whose thumbprint <strong>equals the session&#39;s bound key</strong></td>
+<td><code>{device, pushToken?, provider?}</code> → <code>{device, resumeGrant?(android)}</code> — metadata + push-token linkage + attestation update + (Android) mint/re-issue resume grant. <strong>May not create a binding or change <code>current</code> session.</strong> Idempotent; called after login/resume, on app update, on FCM/APNs rotation.</td>
+</tr>
+<tr>
+<td><code>GET /api/auth/devices</code></td>
+<td>verifyToken</td>
+<td>→ <code>{devices:[{id, deviceId, platform, name, model, osVersion, appVersion, isCurrent, trustLevel, trustedAt, lastSeenAt, lastLocation?{city,country}}], sessions:[web sessions], events:[last 20]}</code></td>
+</tr>
+<tr>
+<td><code>DELETE /api/auth/devices/:id</code></td>
+<td>verifyToken + step-up</td>
+<td>→ <code>{ok}</code>; revoke device + its sessions, delete its <code>PushToken</code> rows, revoke grants, socket kick, event, email &quot;device removed&quot;</td>
+</tr>
+<tr>
+<td><code>POST /api/auth/sessions/revoke-others</code></td>
+<td>verifyToken + step-up</td>
+<td>→ <code>{revoked:n}</code></td>
+</tr>
+<tr>
+<td><code>POST /api/auth/sessions/revoke-all</code> (a.k.a. <strong>Lockdown</strong>)</td>
+<td>verifyToken + step-up</td>
+<td>→ <code>{ok}</code>; global + <code>sessions_valid_after=now()</code> + all grants revoked + require interactive login everywhere; client signs itself out</td>
+</tr>
+<tr>
+<td><code>POST /api/auth/resume</code></td>
+<td>none, 5/15 m/IP + per-grant + per-thumbprint, DPoP required</td>
+<td><code>{grant, device}</code> → login-shaped <code>{accessToken, refreshToken, expiresIn, expiresAt, user, device, sessionId, session:{context:&#39;restored&#39;}, resumeGrant:&#39;&lt;new&gt;&#39;}</code>. Steps: hash+lookup (unused, unexpired, unrevoked; user not banned; <code>security_prefs.allowRestoreGrants≠false</code>), require <code>keyBacking ∈ {tee,strongbox}</code> <strong>and</strong> a verified Android key-attestation chain (cheap, arrives with the key) — until attestation ships every redemption is <code>restored</code>; mint session via <code>generateLink(magiclink)+verifyOtp</code>; new <code>AuthDevice{resumed_from_device}</code> (old row <code>superseded</code>, its sessions revoked); grant <code>used_at</code>; issue new grant; event <code>resume</code>; new-device email only if <code>installId</code>/model differ from the issuing device (dedupe on proven lineage only)</td>
+</tr>
+<tr>
+<td><code>POST /api/auth/step-up</code></td>
+<td>verifyToken, 10/15 m</td>
+<td><code>{method:&#39;password&#39;, password}</code> or <code>{method:&#39;device_key&#39;, challenge, signature}</code> (biometry-bound step-up key enrolled in an <em>interactive</em> session) or <code>{method:&#39;passkey&#39;, …}</code> → <code>{stepUpToken, expiresAt}</code></td>
+</tr>
+<tr>
+<td><code>GET /api/auth/security-events</code></td>
+<td>verifyToken</td>
+<td><code>?limit</code> → <code>{events}</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>Error codes clients must distinguish</strong> (401 JSON <code>{error, code}</code>): <code>TOKEN_REUSE</code>, <code>DEVICE_MISMATCH</code>, <code>DEVICE_REVOKED</code>, <code>SESSION_REVOKED</code>, <code>SESSION_EXPIRED_INACTIVE</code>, <code>DPOP_REQUIRED</code>, <code>DPOP_INVALID</code>, <code>DPOP_REPLAY</code>, <code>RESUME_GRANT_INVALID</code>; 403 <code>STEP_UP_REQUIRED {purpose, methods:[…]}</code>. Clients wipe local session state on the first six, keep the display hint, and show <em>&quot;You were signed out for security. Sign in again.&quot;</em> — never a generic expiry.</p>
+<h3 id="6-4-verifytoken-changes">6.4 <code>verifyToken</code> changes</h3>
+<p>After <code>supabase.auth.getUser(token)</code> succeeds (kept — it is the immediate-revocation authority for GoTrue-side events and bans): base64url-decode the payload → <code>req.session = {id: session_id, iat, aal}</code>; look up <code>AuthSession</code> by id (15-s in-process cache; per-instance lag accepted for soft reads) → 401 <code>SESSION_REVOKED</code> if revoked; fold <code>User.sessions_valid_after</code> into the existing 60-s role cache → 401 if <code>iat</code> older; attach <code>req.session.context</code>. <code>middleware/stepUp.js</code> reads <code>context===&#39;restored&#39;</code> and refuses <code>X-Step-Up</code> from restored sessions unless the step-up method was password/passkey/native-IdP. Same decode helper is reused by <code>socket/chatSocketio.js</code>; on revoke the service emits <code>auth:session_revoked {sessionId}</code> and the socket server disconnects matching sockets.</p>
+<hr>
+<h2 id="7-flows">7. Flows</h2>
+<h3 id="7-1-first-interactive-login-email-password-oauth-identical-after-code-exchange-native-siwa-google-via-oauth-native">7.1 First interactive login (email/password; OAuth identical after code exchange; native SIWA/Google via <code>/oauth/native</code>)</h3>
+<div class="scroll"><pre class="diagram"><code> client                                        backend /api/users/login                       Supabase
+  | ensure deviceId + device key (create once)  |                                              |
+  | POST {email,password,device} + DPoP(/login) -&gt;| verify DPoP -&gt; thumbprint                    |
+  |                                             | signInWithPassword -------------------------&gt;|
+  |                                             |&lt;------ session(access, refresh) -------------|
+  |                                             | email confirmed? User row? (unchanged)       |
+  |                                             | sid = jwt.session_id                         |
+  |                                             | AuthDevice upsert (user, deviceId, jwk…)     |
+  |                                             | AuthSession insert (sid, device, interactive,|
+  |                                             |   bound_at_issue, refresh_token_hash)        |
+  |                                             | new key? -&gt; email/push "New sign-in on X"    |
+  |&lt;-- {tokens, expiresAt, user, device, sessionId}                                            |
+  | persist tokens+expiresAt+sessionId+hint     |                                              |
+  | iOS: write install marker (file + Keychain) |                                              |
+  | POST /api/auth/devices/register {device,pushToken} (Bearer+DPoP same key) -&gt; link PushToken |
+  |&lt;-- {device, resumeGrant (Android)}  -&gt; Android writes Block Store {hint, grant}            |</code></pre></div>
+<h3 id="7-2-cold-start-same-install-l1">7.2 Cold start, same install (L1)</h3>
+<div class="scroll"><pre class="diagram"><code> restore(): tokens present, marker matches (iOS) -&gt;
+   if expiresAt - now &lt; 120 s: refreshIfPossible() with DPoP        &lt;- proactive, no 401 tax
+   GET /api/users/profile -&gt; signedIn(user); AppLock arms if enabled (pref now in Keychain / encrypted prefs)
+   .unauthorized (refresh already failed): read code
+      TOKEN_REUSE / DEVICE_* / SESSION_* -&gt; wipe tokens, keep hint, security banner
+      plain expiry / SESSION_EXPIRED_INACTIVE -&gt; wipe tokens, keep hint, login prefilled (C)
+   transient -&gt; stay signedIn on cachedUser (unchanged offline-first behaviour)
+ scenePhase .active / ON_START: refresh if &lt; 120 s left; socket auth error -&gt; refreshIfPossible() then reconnect
+ iOS with lastMethod=apple: ASAuthorizationAppleIDProvider.getCredentialState -&gt; .revoked =&gt; sign out</code></pre></div>
+<h3 id="7-3-reinstall-on-the-same-device-ios-l2">7.3 Reinstall on the same device — iOS (L2)</h3>
+<div class="scroll"><pre class="diagram"><code> launch: Keychain has refreshToken + deviceKey + accountHint; install marker MISSING
+   -&gt; state .resumable(hint) -&gt; ContinueAsView "Continue as Ying"
+        [Continue] -&gt; LAContext.evaluatePolicy(.deviceOwnerAuthentication)
+                      (canEvaluatePolicy false -&gt; LoginView prefilled, L3)
+                   -&gt; POST /refresh {refreshToken, deviceId, sessionId} + DPoP(rth)
+                      server: session by hash -&gt; bound device -&gt; verify proof against ITS key
+                              unrevoked, &lt; 90 d idle -&gt; refreshSession -&gt; ok; last_resumed_at, install_id updated
+                   -&gt; GET /profile -&gt; POST /devices/register {installId new, App Attest re-attest (Phase 3)}
+                   -&gt; write new install marker; re-arm AppLock from Keychain pref
+        [Use a different account] -&gt; LoginView (old tokens kept until the new login succeeds, then old session logged out scope local)
+        [Not you? Remove]         -&gt; POST /logout {scope:'local', refreshToken}+DPoP + wipe Keychain incl. hint
+   Keychain wiped by a future iOS / restored to a new iPhone -&gt; nothing found -&gt; LoginView (L3: AutoFill/passkey/SIWA)</code></pre></div>
+<h3 id="7-4-reinstall-on-the-same-device-android-l2-via-block-store">7.4 Reinstall on the same device — Android (L2 via Block Store)</h3>
+<div class="scroll"><pre class="diagram"><code> restore(): TokenStorage empty -&gt; AccountHintStore.read()  (Block Store; no-op when GMS absent)
+   hint with resumeGrant -&gt; State.Resumable(hint) -&gt; ContinueAsScreen
+      [Continue] -&gt; BiometricPrompt(BIOMETRIC_STRONG | DEVICE_CREDENTIAL)  (canAuthenticate != SUCCESS -&gt; LoginScreen prefilled, L3)
+                 -&gt; POST /api/auth/challenge -&gt; DeviceKeyStore.getOrCreate(challenge) (new key + attestation chain)
+                 -&gt; POST /api/auth/resume {grant, device} + DPoP
+                    server: sha256(grant) single-use/unexpired/unrevoked; keyBacking tee|strongbox + chain verified;
+                            generateLink(magiclink) -&gt; verifyOtp -&gt; session (context 'restored');
+                            AuthDevice new row (resumed_from_device), old row superseded; grant used; new grant issued
+                 &lt;- login-shaped response + resumeGrant'
+                 -&gt; persist tokens; Block Store rewritten with grant'; toast "Welcome back, Ying"
+                    (restored: first payout / password change / device revoke asks for password or passkey once)
+   hint without grant (explicit sign-out) -&gt; LoginScreen prefilled (L3: Credential Manager sheet)
+   no hint (Backup services off / new device)  -&gt; LoginScreen (L3)</code></pre></div>
+<h3 id="7-5-token-refresh-rotation-steady-state">7.5 Token refresh + rotation (steady state)</h3>
+<div class="scroll"><pre class="diagram"><code> 401 on an authed call (or proactive) -&gt; single-flight refresh:
+   POST /refresh {refreshToken, deviceId, sessionId} + DPoP(htu=/refresh, jti, iat, rth)
+   server: (1) session by hash/prev-hash/sessionId; unrevoked; not idle
+           (2) bound? verify DPoP against that key   -&gt; mismatch: 401 DEVICE_MISMATCH, revoke session, event, email
+           (3) refreshSession -&gt; GoTrue rotates (10 s reuse grace, parent-token grace)
+               already used / not found -&gt; TOKEN_REUSE: revoke session, device.require_step_up=true, event, email+push
+           (4) update hashes/last_refresh/last_seen/ip; return new pair (+sessionId)
+   client: persist pair+expiresAt; replay once; reconnect socket</code></pre></div>
+<h3 id="7-6-logout">7.6 Logout</h3>
+<div class="scroll"><pre class="diagram"><code> this device:   POST /logout {scope:'local', deviceId, refreshToken} + DPoP  (Bearer too if we have it)
+                server: admin.signOut(access,'local'); AuthSession revoked (logout); PushToken(device_id) deleted; Android grants revoked
+                client: wipe tokens/expiresAt/sessionId, keep accountHint (display only); Android clears the grant in Block Store
+                        + CredentialManager.clearCredentialState; purge URLCache / OkHttp cache
+ other devices: Settings &gt; Security &gt; Devices &gt; "Sign out of all other devices" -&gt; step-up -&gt; POST /api/auth/sessions/revoke-others
+ everywhere:    "Lockdown" -&gt; POST /api/auth/sessions/revoke-all -&gt; global signOut + watermark -&gt; client signs itself out</code></pre></div>
+<h3 id="7-7-stolen-device-remote-revoke">7.7 Stolen device / remote revoke</h3>
+<div class="scroll"><pre class="diagram"><code> owner (web or other phone) -&gt; Settings &gt; Security &gt; Devices -&gt; "Ying's iPhone" &gt; Remove
+   -&gt; step-up (password / biometric device key) -&gt; DELETE /api/auth/devices/:id
+   -&gt; AuthSession(s) revoked, AuthDevice.revoked_at, PushToken rows deleted, grants revoked, socket kicked, email
+   -&gt; best-effort silent push {type:'session_revoked'} to the device BEFORE its push tokens are deleted;
+      client honours it only after a 401 SESSION_REVOKED confirms (push is never the authority)
+ stolen phone, next request: Bearer -&gt; verifyToken -&gt; AuthSession revoked -&gt; 401 SESSION_REVOKED
+   -&gt; refresh with DPoP -&gt; session revoked -&gt; 401 -&gt; app wipes tokens + hint, "Signed out for security";
+      App Lock (Keychain pref) still gates any cached UI
+   -&gt; reinstall on stolen phone: iOS Keychain refresh token dead server-side; Android grant revoked
+ owner can also: change password (revokes others) or Lockdown; account compromised -&gt; reset password (global + watermark)</code></pre></div>
+<h3 id="7-8-password-change-reset-see-endpoint-table-others-revoked-on-change-everything-watermark-on-reset-user-signs-in-fresh-new-binding">7.8 Password change / reset — see endpoint table (others revoked on change; everything + watermark on reset; user signs in fresh, new binding).</h3>
+<h3 id="7-9-account-deletion">7.9 Account deletion</h3>
+<div class="scroll"><pre class="diagram"><code> client: Tier-2 biometric -&gt; POST /step-up (device_key or password) -&gt; stepUpToken(purpose delete_account, one-shot)
+      -&gt; DELETE /api/users/account (X-Step-Up)   [restored sessions must use password/passkey]
+ server: existing escrow/gig guards -&gt; revoke all sessions -&gt; delete PushToken(user) -&gt; event -&gt; delete User row -&gt; admin.deleteUser
+ client: wipe Keychain/TokenStorage incl. hint + install marker; Android Block Store deleteBytes + clearCredentialState</code></pre></div>
+<h3 id="7-10-restored-interactive">7.10 Restored → interactive</h3>
+<p>A <code>restored</code> session flips to <code>interactive</code> the first time the user presents a password, passkey, or native SIWA/Google credential (<code>POST /api/auth/step-up</code> with one of those methods, or a fresh login on the same device). Until then <code>middleware/stepUp.js</code> refuses <code>X-Step-Up</code> obtained via <code>device_key</code>, and clients show the Tier-2 sheet with password/passkey options only.</p>
+<hr>
+<h2 id="8-ios-changes-frontend-apps-ios-pantopus">8. iOS changes (<code>frontend/apps/ios/Pantopus/…</code>)</h2>
+<ul>
+<li><strong>New <code>Core/Auth/DeviceKey.swift</code></strong> — <code>SecureEnclave.P256.Signing.PrivateKey()</code> created once; <code>dataRepresentation</code> in Keychain (<code>SecureStoreKey.deviceKey</code>, <code>.afterFirstUnlockThisDeviceOnly</code>, non-sync, no biometry). Software <code>P256</code> fallback on Simulator (<code>keyBacking:&#39;software&#39;</code>). Exposes <code>jwk</code>, <code>thumbprint</code>, <code>sign(Data)</code>. Missing/undecodable ⇒ regenerate + fall back to L3.</li>
+<li><strong>New <code>Core/Auth/StepUpKey.swift</code></strong> (Phase 3) — SE key with <code>SecAccessControl(.privateKeyUsage | .biometryCurrentSet)</code>; fallback key with <code>.userPresence</code> for passcode-only devices; used by <code>POST /api/auth/step-up {device_key}</code>.</li>
+<li><strong>New <code>Core/Auth/DPoPProofBuilder.swift</code></strong> — ES256 <code>dpop+jwt</code> (jti, htm, htu = <code>APIClient.baseURL + path</code>, iat, rth).</li>
+<li><strong>New <code>Core/Auth/InstallMarker.swift</code></strong> — random <code>installId</code> in <code>Library/Application Support/.pantopus-install</code> (<code>isExcludedFromBackup</code>) mirrored in Keychain; <code>isReinstall = Keychain has refreshToken &amp;&amp; (file missing || mismatch)</code>.</li>
+<li><strong>New <code>Core/Auth/DeviceDescriptor.swift</code></strong>; <strong><code>Core/Security/AppAttestClient.swift</code></strong> (Phase 3: <code>DCAppAttestService</code> generateKey/attestKey with server challenge; keyId persisted; regenerated after reinstall).</li>
+<li><strong><code>Core/Auth/KeychainStore.swift</code></strong> — add keys <code>deviceId, deviceKey, installId, expiresAt, sessionId, accountHint, appLockEnabled.&lt;uid&gt;</code>; Data-capable get/set; optional second <code>.synchronizable(true)</code> item for the display-only hint (Phase 3, privacy review).</li>
+<li><strong><code>Core/Auth/AuthManager.swift</code></strong> — <code>State</code> gains <code>.resumable(AccountHint)</code>; <code>restoreSession()</code> (L152-195) checks <code>InstallMarker</code> first, attempts refresh when only a refresh token exists, honours <code>security_prefs.requireUnlockOnReinstall</code> / dormant &gt; 30 d / <code>require_step_up</code>; new <code>resume()</code>; <code>persistLoginResponse</code> (L257-276) stores expiresAt/sessionId/hint/context and calls <code>/devices/register</code>; <code>performRefresh</code> (L427-466) sends deviceId/sessionId + DPoP and maps <code>AuthErrorBody.code</code> → <code>SessionEndReason</code>; <code>refreshIfExpiringSoon()</code>; <code>signOut(scope:)</code> calls the backend; <code>removeRememberedAccount()</code>.</li>
+<li><strong><code>Core/Networking/APIClient.swift</code></strong> — <code>X-Device-Id</code> header; pre-flight refresh when <code>expiresAt − now &lt; 120 s</code>; <code>DPoP</code> header for endpoints flagged <code>requiresDPoP</code>; <code>X-Step-Up</code> plumbing + a 403 <code>STEP_UP_REQUIRED</code> interceptor that runs step-up and retries once; purge URLCache on sign-out. <code>MultipartUploader</code> mirrors.</li>
+<li><strong><code>AuthEndpoints.swift</code> / <code>AuthDTOs.swift</code></strong> — <code>device</code> on login, <code>deviceId/sessionId</code> on refresh, <code>sessionId/device/session.context</code> on responses; new endpoints (logout scopes, registerDevice, devices, revokeDevice, revokeOthers, revokeAll, stepUp, resume n/a on iOS, oauthNative, securityEvents); <code>SessionEndReason</code> enum.</li>
+<li><strong><code>Core/Realtime/SocketClient.swift</code></strong> — on auth error call <code>refreshIfPossible()</code> then reconnect; stop reconnecting on <code>DEVICE_REVOKED/SESSION_REVOKED</code>.</li>
+<li><strong><code>App/PantopusApp.swift</code></strong> — <code>RootView</code> adds <code>.resumable → ContinueAsView</code>; <code>.active</code> triggers <code>refreshIfExpiringSoon()</code>; App-Lock seal reads the Keychain-backed pref. <strong><code>AppDelegate.swift</code></strong> — send <code>deviceId</code> with <code>/notifications/register</code>; re-register on APNs token change.</li>
+<li><strong>New <code>Features/Auth/ContinueAsView.swift</code></strong> (+VM); <strong><code>LoginView.swift</code></strong> — prefill from hint, <code>.username</code> content type, <code>performAutoFillAssistedRequests()</code>, native <code>SignInWithAppleButton</code> → <code>/oauth/native</code> (Phase 3), passkey AutoFill (Phase 4).</li>
+<li><strong>New <code>Features/Settings/Security/DevicesView.swift</code></strong> (+VM) — devices list (current pinned, trust badge), swipe/Remove → Tier-2 guard → step-up → <code>DELETE</code>; &quot;Sign out of all other devices&quot;; Lockdown; events timeline; Security prefs toggles. <code>PrivacyViewModel</code> sends <code>X-Step-Up</code> on delete.</li>
+<li><strong><code>Core/Security/AppSecurity.swift</code></strong> — <code>AppLockManager</code> pref → Keychain (one-time migration); expose <code>verifyPresence(reason:)</code> reused by ContinueAs; restore <code>SensitiveScreenGuard</code> on Wallet/Payments (parity gap).</li>
+<li><strong>Entitlements</strong> — add <code>webcredentials:pantopus.com</code> (+www, +.app) and re-add <code>applinks:pantopus.com</code> to <strong>both</strong> <code>Pantopus.entitlements</code> and <code>project.yml</code> (L140-152, the regen source of truth); Phase 3: <code>com.apple.developer.applesignin</code>, <code>com.apple.developer.devicecheck.appattest-environment</code>. <code>NSFaceIDUsageDescription</code> mentions &quot;continue signed in&quot;.</li>
+<li><strong>Tests</strong> — <code>AuthManagerResumeTests</code> (reinstall → <code>.resumable</code>; resume ok / 401 codes / no-passcode fallback; hint kept on local sign-out, wiped on remove), <code>DPoPProofBuilderTests</code>, <code>DeviceKeyTests</code> (software fallback), extend <code>AuthManagerRefreshTests</code> (proactive refresh, DPoP presence) and <code>AuthManagerTests</code> (logout network call). <code>InMemorySecureStore</code> gains Data support.</li>
+</ul>
+<h2 id="9-android-changes-frontend-apps-android-app-src-main-java-app-pantopus-android">9. Android changes (<code>frontend/apps/android/app/src/main/java/app/pantopus/android/…</code>)</h2>
+<ul>
+<li><strong>Gradle</strong> — <code>play-services-auth-blockstore:16.4.0</code> (Phase 2); <code>androidx.credentials</code> 1.5+, <code>credentials-play-services-auth</code>, <code>googleid</code> (Phase 3); <code>com.google.android.play:integrity</code> (Phase 3). Keep <code>security-crypto</code> for <code>TokenStorage</code>; do <strong>not</strong> extend <code>MasterKey</code> for the device key.</li>
+<li><strong>New <code>data/auth/DeviceKeyStore.kt</code></strong> — Keystore EC P-256 <code>pantopus_device_key</code> (<code>PURPOSE_SIGN</code>, SHA-256, <code>setAttestationChallenge</code>), <code>setIsStrongBoxBacked(true)</code> with fallback; exports JWK/thumbprint/attestation chain; regenerates (new deviceId) when gone.</li>
+<li><strong>New <code>data/auth/StepUpKeyStore.kt</code></strong> (Phase 3) — <code>pantopus_stepup_key</code> with <code>setUserAuthenticationRequired(true)</code> + <code>setInvalidatedByBiometricEnrollment(true)</code> (API 30 <code>setUserAuthenticationParameters</code>, legacy validity-duration path for minSdk 26), signed through <code>BiometricPrompt</code> <code>CryptoObject</code>.</li>
+<li><strong>New <code>data/auth/DPoPProofBuilder.kt</code>, <code>data/auth/DeviceIdentity.kt</code></strong> (deviceId/installId in <code>device_identity</code> prefs — <strong>backup-excluded</strong>; regenerated with the key).</li>
+<li><strong>New <code>data/auth/AccountHintStore.kt</code></strong> (Phase 2) — Block Store key <code>pantopus.account_hint</code> (≤ 4 KB JSON <code>{v, userId, displayName, avatarUrl, maskedEmail, lastMethod, resumeGrant, deviceIdHint, issuedAt}</code>), <code>setShouldBackupToCloud(false)</code> (same-device + D2D only; cloud is an explicit later opt-in); write after login/register/resume; <code>clearGrant()</code> on local sign-out; <code>delete()</code> on remove/account deletion; no-op without GMS.</li>
+<li><strong><code>data/auth/TokenStorage.kt</code></strong> — persist <code>expires_at</code>, <code>session_id</code>, <code>session_context</code>.</li>
+<li><strong><code>data/auth/AuthRepository.kt</code></strong> — <code>State.Resumable(AccountHint)</code>; <code>restore()</code> (L175-217) consults <code>AccountHintStore</code> when no token; <code>resume(activity)</code>; <code>refreshTokens()</code> (L448-481) sends deviceId/sessionId + DPoP, maps codes → <code>SessionEndReason</code>; <code>refreshIfExpiringSoon()</code>; <code>persistLoginResponse</code> (L312-328) stores expiresAt/sessionId/context and calls <code>/devices/register</code> (with FCM token), stores the returned grant; <code>signOut(scope)</code> calls <code>/logout</code> (+ clears grant, keeps hint, <code>clearCredentialState</code>); <code>removeRememberedAccount()</code>.</li>
+<li><strong><code>data/auth/TokenAuthenticator.kt</code></strong> — parse the <code>/refresh</code> error body code in the <code>AuthRejected</code> branch (L71-75) → <code>signOut(reason)</code>; <strong><code>AuthInterceptor.kt</code></strong> — <code>X-Device-Id</code>, pre-flight refresh when <code>expiresAt</code> within 120 s (never for the refresh endpoint); a 403 <code>STEP_UP_REQUIRED</code> interceptor. <strong><code>di/NetworkModule.kt</code></strong> — identity interceptor on both the main and <code>@Named(&quot;authRefresh&quot;)</code> clients.</li>
+<li><strong><code>AuthApi.kt</code> / <code>AuthDtos.kt</code></strong> — new fields and endpoints (logout scopes, oauthNative, challenge, resume, registerDevice, devices, revokeDevice, revokeOthers, revokeAll, stepUp, reauthenticate w/ stepUpToken, securityEvents).</li>
+<li><strong><code>ui/navigation/PantopusNavHost.kt</code></strong> (L57-78) — <code>Resumable → ContinueAsScreen</code>; <strong>new <code>ui/screens/auth/ContinueAsScreen.kt</code></strong> (+VM); <strong><code>LoginScreen.kt</code></strong> — prefill from hint, autofill <code>ContentType</code> semantics, Sign in with Google via <code>CredentialManager.getCredential(GetGoogleIdOption(serverClientId, nonce))</code> → <code>/oauth/native</code> (Phase 3), passkeys via <code>GetPublicKeyCredentialOption</code> (Phase 4). <code>RootViewModel</code> calls <code>refreshIfExpiringSoon()</code> on ON_START.</li>
+<li><strong>New <code>ui/screens/settings/security/DevicesScreen.kt</code></strong> (+VM); <code>AccountDeleteSheet.kt</code> sends <code>X-Step-Up</code>.</li>
+<li><strong><code>core/security/AppLockManager.kt</code></strong> — <code>promptWithCrypto(CryptoObject)</code> variant; <code>verifyPresence()</code> reused by ContinueAs; app-lock pref → encrypted prefs (consistent with iOS); restore SensitiveScreenGuard on Wallet/Payments.</li>
+<li><strong><code>push/PushTokenSyncer.kt</code>, <code>PantopusMessagingService.kt</code></strong> — include deviceId; re-run <code>/devices/register</code> on FCM rotation; handle silent <code>session_revoked</code> push (confirm with 401 before wiping).</li>
+<li><strong>Manifest / backup rules</strong> — exclude <code>sharedpref/device_identity.xml</code> from backup/transfer; Phase 3 <code>&lt;meta-data android:name=&quot;asset_statements&quot;&gt;</code> → <code>https://pantopus.com/.well-known/assetlinks.json</code>; keep <code>allowBackup=false</code> and token exclusions.</li>
+<li><strong>Phase 3 <code>data/auth/PlayIntegrityClient.kt</code></strong> — <code>StandardIntegrityManager</code> warm-up at app start; <code>requestHash = sha256(challenge)</code> token attached to login/resume; server maps verdicts to <code>attestation_level</code>/<code>trust_level</code>.</li>
+<li><strong>Tests</strong> — <code>DPoPProofBuilderTest</code>, <code>DeviceIdentityTest</code>, <code>AuthRepositoryResumeTest</code> (Resumable, resume ok, grant invalid → SignedOut w/ prefill, no screen lock → login), extend <code>TokenAuthenticatorTest</code> (code propagation, pre-flight), <code>AuthRepositoryTest</code> (logout network call, hint retention); instrumented <code>DeviceKeyStoreTest</code>, <code>AccountHintStoreTest</code> (GMS-guarded).</li>
+</ul>
+<h2 id="10-backend-changes-backend">10. Backend changes (<code>backend/…</code>)</h2>
+<ul>
+<li>Migration <code>160_auth_devices.sql</code> (+ <code>supabase/migrations/…</code>) — §5.</li>
+<li><code>middleware/dpop.js</code>, <code>middleware/stepUp.js</code>; <code>services/authDeviceService.js</code> (bindAtIssue, resolveSessionForRefresh, verifyProofAgainstBoundKey, trust evaluation, attestation verifiers in Phase 3: Android key-attestation chain vs Google roots + CRL, App Attest, Play Integrity <code>decodeIntegrityToken</code>), <code>services/authSessionService.js</code> (revoke registry + <code>admin.signOut</code> scopes + optional RPC, <code>mintSessionForUser</code> via generateLink+verifyOtp, resume-grant mint/redeem), <code>services/authNotifyService.js</code> (emails via existing SMTP + push; deep link <code>https://pantopus.com/app/settings/security</code>).</li>
+<li><code>routes/authDevices.js</code> mounted at <code>/api/auth</code>; rate limiters (<code>challengeLimiter</code>, <code>resumeLimiter</code>, <code>stepUpLimiter</code>, per-thumbprint keys) — <strong>move express-rate-limit and the jti/challenge stores to a shared store (Redis or Postgres) before flipping enforcement</strong> if the backend runs &gt; 1 instance.</li>
+<li><code>routes/users.js</code> hooks per §6.3; <code>middleware/verifyToken.js</code> per §6.4; <code>socket/chatSocketio.js</code> decode + kick; <code>routes/notifications.js</code> + <code>services/pushService.js</code> accept <code>deviceId</code>, add <code>removeTokensForDevice</code>.</li>
+<li>Config/env: <code>PUBLIC_API_BASE_URL</code>, <code>STEP_UP_SECRET</code> (required in prod like <code>CSRF_SECRET</code>), <code>AUTH_DEVICE_BINDING=off|optional|required</code>, <code>AUTH_RESUME_GRANTS=on|off</code>, <code>AUTH_ATTESTATION=log|enforce</code>, <code>DPOP_CUTOVER</code> (timestamp), <code>APPLE_TEAM_ID</code>, <code>IOS_BUNDLE_ID</code>, <code>ANDROID_PACKAGE_NAME</code>, Play Integrity service account; GoTrue: enable Apple/Google native audiences for <code>signInWithIdToken</code>; consider <code>[auth.sessions] inactivity_timeout</code> on Pro as defence in depth.</li>
+<li><strong>CI invariant:</strong> grep that the Supabase anon key never appears in the iOS/Android bundles or the web JS bundle (otherwise <code>/auth/v1/token</code> bypasses our DPoP proxy; hosted Supabase cannot network-restrict GoTrue).</li>
+<li>Tests: <code>dpop.js</code> (valid / wrong htu / skewed iat / replayed jti / rth mismatch), refresh binding matrix (unbound-legacy / bound-match / mismatch / revoked / inactive / TOKEN_REUSE side effects / fail-to-save double), resume-grant lifecycle, logout scopes + proof, password change revoking others, devices <code>isCurrent</code>, step-up purposes and restored-context refusal, <code>DELETE /account</code> step-up.</li>
+</ul>
+<h2 id="11-web-association-file-prerequisites-phase-0">11. Web + association-file prerequisites (Phase 0)</h2>
+<ul>
+<li>Regenerate <code>frontend/apps/web/public/.well-known/apple-app-site-association</code> for <code>&lt;TEAMID&gt;.app.pantopus.ios</code> (applinks + <code>webcredentials</code>) and <code>assetlinks.json</code> for <code>app.pantopus.android</code> with <code>delegate_permission/common.handle_all_urls</code> <strong>and</strong> <code>common.get_login_creds</code>, using the Play App Signing + upload SHA-256s (keep the legacy Expo entries during transition). Serve on apex + www, no redirects, <code>application/json</code> (already forced in <code>next.config.js</code>).</li>
+<li>Web <code>/app/settings/security</code> page (cookie transport + CSRF): devices/sessions list, per-device Remove, Sign out everywhere, security prefs — same phase as the mobile screens so &quot;everywhere&quot; is true.</li>
+<li>Fix Next middleware clearing cookies before attempting refresh; align web session policy (sliding window) with mobile or document the asymmetry.</li>
+<li>Docs: update <code>docs/01-authentication-authorization.md</code> §1, <code>docs/mobile/auth-backend-contracts.md</code> §7 (+ new contracts/codes), supersede <code>docs/07</code> install-sentinel + deep-dive §7 with this reinstall policy; register device id / public key / account hint / Block Store item in <code>docs/compliance/privacy-data-inventory.md</code> and regenerate App Store privacy labels + Play Data safety (<strong>before</strong> the Phase 1 store submission).</li>
+</ul>
+<hr>
+<h2 id="12-threat-model">12. Threat model</h2>
+<div class="scroll"><table><thead><tr>
+<th>Threat</th>
+<th>Mitigation</th>
+</tr>
+</thead><tbody><tr>
+<td>Refresh token exfiltrated (backup, malware, log leak, cleartext dev traffic) and replayed elsewhere</td>
+<td><code>/refresh</code> requires an ES256 DPoP proof (with <code>rth</code>) from the SE/Keystore key bound to <em>that</em> session; wrong/no key ⇒ 401 <code>DEVICE_MISMATCH</code>, session revoked, event, email. Enforced once <code>AUTH_DEVICE_BINDING=required</code>.</td>
+</tr>
+<tr>
+<td>Stolen 1-hour access token used to enrol an attacker device</td>
+<td>Bind-at-issue-only; <code>/devices/register</code> cannot create/rotate bindings and requires a DPoP thumbprint equal to the session&#39;s bound key.</td>
+</tr>
+<tr>
+<td>Refresh replay race / cloned client</td>
+<td>Supabase rotation + 10 s reuse window (unchanged) + our TOKEN_REUSE handler revokes the session, forces <code>require_step_up</code> on the legit device (one-gesture recovery for the owner), emails + pushes.</td>
+</tr>
+<tr>
+<td>Stolen unlocked device</td>
+<td>App Lock pref survives reinstall (Keychain / encrypted prefs); Tier-2 guard on money surfaces (restored on native); owner revokes from web/other phone; revocation immediate (<code>AuthSession</code> check per request); push tokens deleted; socket kicked.</td>
+</tr>
+<tr>
+<td>Stolen locked device + reinstall</td>
+<td>L2 needs the device passcode/biometric; no OS lock ⇒ no L2; Android grant is E2EE, single-use, hardware-key-redeemable; owner can revoke any time.</td>
+</tr>
+<tr>
+<td>Attacker restores victim&#39;s Google backup elsewhere</td>
+<td>Grants not cloud-backed by default; redemption needs a hardware key + verified attestation chain; result is a <code>restored</code> session that cannot move money or change credentials; single-use so the legit device notices; new-device email when install/model differ.</td>
+</tr>
+<tr>
+<td>Future iOS wipes Keychain / new iPhone</td>
+<td><em>ThisDeviceOnly</em> items unusable ⇒ L3 (AutoFill / passkeys / SIWA); no hard dependency.</td>
+</tr>
+<tr>
+<td>Repackaged app / emulator farm abusing <code>/login</code> or <code>/resume</code></td>
+<td>App Attest (re-attested after reinstall), Play Integrity + key attestation ⇒ <code>trust_level</code>; <code>unverified</code> gets no grants and 30 d inactivity; <code>suspect</code> revoked; per-IP + per-grant + per-thumbprint limits.</td>
+</tr>
+<tr>
+<td>Jailbroken / rooted device</td>
+<td>Not fully preventable; DPoP key still non-exportable so off-device theft fails; low integrity ⇒ no grants, shorter inactivity, extra notifications.</td>
+</tr>
+<tr>
+<td>Password change / reset after compromise</td>
+<td>Change revokes all <em>others</em>; reset revokes <em>all</em> + <code>sessions_valid_after</code> watermark rejects even unexpired JWTs; devices/grants revoked.</td>
+</tr>
+<tr>
+<td>Account deletion leaving live sessions</td>
+<td><code>DELETE /account</code> needs one-shot step-up (password/passkey for restored sessions); all sessions + push tokens revoked before <code>deleteUser</code>.</td>
+</tr>
+<tr>
+<td>CSRF / abuse of logout scopes from web</td>
+<td><code>local</code> unauthenticated = cookie clearing only; row side effects need proof; <code>others</code>/<code>global</code> need verifyToken (+CSRF) + step-up.</td>
+</tr>
+<tr>
+<td>DPoP proof replay / clock skew</td>
+<td><code>jti</code> cache (10 min), <code>iat</code> ±300 s, <code>htu/htm</code> bound, <code>rth</code> bound; proof useless without the refresh token and vice versa.</td>
+</tr>
+<tr>
+<td>Backend DB leak</td>
+<td>Grants stored as sha256; devices store public keys only; step-up tokens HMAC with separate secret; refresh tokens stay in <code>auth.refresh_tokens</code> as today (hashes only in our table).</td>
+</tr>
+<tr>
+<td>Legacy clients during the optional window</td>
+<td>Refresh without DPoP accepted only for sessions issued before <code>DPOP_CUTOVER</code>; adoption never for post-cutover sessions; enforcement flips per platform once ≥ 95 % of active installs send DPoP; inactivity rule ages the rest out.</td>
+</tr>
+<tr>
+<td>Device-key loss (SE blob undecodable, Keystore invalidated, biometric re-enrolment)</td>
+<td>DPoP key not biometry-gated ⇒ re-enrolment cannot brick sessions; missing key ⇒ regenerate + L3; step-up key invalidation ⇒ password/passkey step-up.</td>
+</tr>
+<tr>
+<td>Multi-instance backend</td>
+<td>Rate limits, jti and challenge stores in a shared store before enforcement.</td>
+</tr>
+</tbody></table></div>
+<h2 id="13-trust-levels-amp-policy-constants">13. Trust levels &amp; policy constants</h2>
+<div class="scroll"><table><thead><tr>
+<th><code>trust_level</code></th>
+<th>Obtained by</th>
+<th>Effects</th>
+</tr>
+</thead><tbody><tr>
+<td><code>trusted</code></td>
+<td>valid App Attest / Play Integrity <code>MEETS_DEVICE_INTEGRITY</code> + <code>PLAY_RECOGNIZED</code> / valid key-attestation chain (TEE/StrongBox)</td>
+<td>resume grants issued; 90 d inactivity; device-key step-up accepted (if enrolled interactively)</td>
+</tr>
+<tr>
+<td><code>unverified</code></td>
+<td>no attestation (old client, Simulator, GMS-less, outage)</td>
+<td>session works; no grants; 30 d inactivity; step-up = password/passkey only</td>
+</tr>
+<tr>
+<td><code>suspect</code></td>
+<td>proof failures ×2, TOKEN_REUSE, <code>UNRECOGNIZED_VERSION</code>, <code>appAccessRisk</code></td>
+<td>session revoked; fresh interactive login + new-device email; grants revoked</td>
+</tr>
+</tbody></table></div>
+<p>Constants: access JWT 3600 s (unchanged); proactive refresh at &lt; 120 s; inactivity 90 d trusted / 30 d unverified; grants 90 d, single-use, re-issued on every resume/register; DPoP <code>iat</code> ±300 s, <code>jti</code> TTL 10 min; step-up token 5 min, purpose-bound, one-shot for destructive purposes; dormant &gt; 30 d ⇒ L2 on next launch; new-device email on first login/resume on a key or when install/model differ (never deduped on model alone).</p>
+<h2 id="14-rollout-each-phase-independently-shippable-phase-0-1-are-the-committed-deliverable-later-phases-flag-gated">14. Rollout (each phase independently shippable; Phase 0 + 1 are the committed deliverable, later phases flag-gated)</h2>
+<div class="scroll"><table><thead><tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Exit criteria</th>
+</tr>
+</thead><tbody><tr>
+<td><strong>0 — Prerequisites &amp; hygiene</strong> (~1 wk, no schema)</td>
+<td>Regenerate AASA/assetlinks for native identifiers; <code>webcredentials</code> + <code>applinks:pantopus.com</code> into <code>project.yml</code>; both clients call <code>/logout</code> on sign-out + purge caches; persist <code>expiresAt</code> + proactive refresh + socket auth-error → refresh; structured 401 codes surfaced (&quot;signed out for security&quot;); <code>/oauth/token</code> pairs refresh with access; autofill hints (<code>.username</code>, Compose <code>ContentType</code>); privacy inventory + labels updated</td>
+<td>no 401 tax on cold start; logout revokes server-side; Universal/App Links verify on device</td>
+</tr>
+<tr>
+<td><strong>1 — Registry + DPoP (optional) + iOS Continue-as</strong> (2–3 wk)</td>
+<td>Migration 160; <code>dpop.js</code>; device/session services; hooks in <code>/login /oauth/* /refresh /logout</code>; <code>/devices/register</code> (metadata only), <code>GET /devices</code> (read-only) incl. web sessions; <code>verifyToken</code> session check + watermark; iOS <code>DeviceKey</code>/<code>InstallMarker</code>/<code>ContinueAsView</code>/<code>.resumable</code>, App-Lock pref → Keychain; Android <code>DeviceKeyStore</code> + DPoP on refresh (reinstall still full login)</td>
+<td>backend binding matrix green; iOS reinstall → one gesture; dashboard &quot;% refreshes with DPoP&quot;; kill switch <code>AUTH_DEVICE_BINDING=off</code></td>
+</tr>
+<tr>
+<td><strong>2 — Device management, Android resume, notifications</strong> (2–3 wk)</td>
+<td><code>DELETE /devices/:id</code>, revoke-others/all (Lockdown), step-up middleware + <code>/reauthenticate</code> token, password change/reset revocation, socket kick, security events + emails/push, iOS/Android Devices screens, web security page + middleware fix, Android <code>AccountHintStore</code> + <code>/resume</code> (restored context) + <code>ContinueAsScreen</code>, <code>DELETE /account</code> step-up, security prefs</td>
+<td>revoke-from-web kills phone within one request; Android delete+reinstall on a Backup-enabled device resumes behind BiometricPrompt; e2e email snapshots</td>
+</tr>
+<tr>
+<td><strong>3 — Enforcement, attestation, crypto step-up, native OS credentials</strong> (3–4 wk, staged)</td>
+<td>Flip <code>required</code> per platform at ≥ 95 % DPoP; Android key-attestation + Play Integrity, iOS App Attest (ramped); <code>trust_level</code> gates grants; biometry-bound step-up keys + <code>/step-up {device_key}</code> (with passcode fallback key); native SIWA + Credential Manager Sign in with Google → <code>/oauth/native</code>; SensitiveScreenGuard restored on money surfaces</td>
+<td>attestation verifiers with recorded fixtures; enforcement canary by app version; PROOF_INVALID rate SLO</td>
+</tr>
+<tr>
+<td><strong>4 — Passkeys &amp; hardening</strong> (opportunistic)</td>
+<td>Supabase passkeys (beta) — iOS via supabase-swift/AutoFill + <code>.conditional</code> upgrades, Android proxied <code>/auth/v1/passkeys/*</code> until supabase-kt supports sign-in; DPoP <code>ath</code> on high-value routes; web device cookie so browsers appear as devices; Redis-backed limiters/jti; Android Restore Credentials for new-device transfer; optional iCloud-synced display hint</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<p>Telemetry (names already reserved in docs/07 + new): <code>session_restore_ok{path,reinstall}</code>, <code>session_resume_prompt/ok/cancel</code>, <code>session_invalidated{code}</code>, <code>auth.device.bind/mismatch/revoked</code>, <code>auth.resume.ok/invalid</code>, <code>auth.dpop.invalid/replay</code>, <code>auth.refresh.inactive</code>, <code>auth.stepup.ok/fail</code>; SLOs: resume success ≥ 98 %, PROOF_INVALID &lt; 0.1 % of refreshes, revocation p99 &lt; 1 request.</p>
+<h2 id="15-verification-status-tradeoffs-decisions-needed">15. Verification status, tradeoffs, decisions needed</h2>
+<p><strong>Verified</strong> (details in <a href="WORKFLOW-RESULTS.md">WORKFLOW-RESULTS.md §2, §4</a>): Keychain/SE persistence across reinstall (Apple DTS, non-contractual); App Attest keys don&#39;t survive reinstall; Android Keystore wiped on uninstall; Block Store persists only with Backup on; Restore Credentials ≠ same-device reinstall; Supabase <code>session_not_found</code> on deleted session rows (docs); <code>generateLink→verifyOtp</code> mints a session (already used in <code>users.js</code>); Supabase passkeys primary-factor beta; DPoP RFC 9449.</p>
+<p><strong>Unverified / to test on the hosted project before Phase 1:</strong> whether the <code>postgres</code> role may <code>DELETE FROM auth.sessions</code> (design does not depend on it); which refresh-token algorithm (v1/v2) the project runs and whether <code>sb-auth-refresh-token-reuse*</code> headers are present; <code>admin.signOut(jwt,&#39;others&#39;)</code> behaviour with expired JWTs; Play Integrity quota vs enrolment volume; StrongBox/attestation variance on the OEM fleet; Apple Team ID (<code>project.yml</code> <code>DEVELOPMENT_TEAM</code> blank) and Play App Signing fingerprints for the association files.</p>
+<p><strong>Tradeoffs accepted:</strong> reinstall costs one gesture even on iOS (Instagram-on-iOS is silent) in exchange for requiring an OS lock and superseding the wipe policy; DPoP key not biometry-gated (background refresh) with a separate step-up key for server-verified presence; binding enforced at our proxy, not inside GoTrue (mitigated by the anon-key invariant); Android resume grant is a second hashed, single-use, hardware-redeemable secret held by Block Store (weaker than &quot;nothing survives&quot;, far stronger than storing the refresh token); immediate revocation keeps the per-request <code>getUser</code> round trip already paid today; attestation is a signal, not a gate.</p>
+<p><strong>Decisions for the product owner:</strong></p>
+<ol>
+<li>Reinstall = L2 (one gesture) rather than silent L1 on iOS — confirm.</li>
+<li><code>security_prefs</code> defaults: <code>requireUnlockOnReinstall=false</code>, <code>allowRestoreGrants=true</code>, <code>newDeviceEmail=true</code> — confirm.</li>
+<li>Block Store cloud backup stays off (same-device + D2D only) — confirm, or opt in later behind attestation + restored context.</li>
+<li>Multi-account on one device: one hint per device (this design) vs Instagram-style switcher (per-account keys/hints) — defer?</li>
+<li>Step-up for account deletion: password/passkey only, or also biometric device key (this design: device key allowed only for interactive-enrolled keys, never for restored sessions).</li>
+<li>Inactivity windows 90 d / 30 d and web alignment.</li>
+<li>iCloud-synced display-only hint (privacy inventory change-control) — Phase 4 opt-in?</li>
+</ol>
+<hr>
+<h2 id="appendix-how-this-maps-to-what-big-apps-do">Appendix — how this maps to what big apps do</h2>
+<ul>
+<li><strong>Instagram / Facebook</strong>: silent reinstall restore on iOS + &quot;Where you&#39;re logged in&quot; with per-session logout + login alerts → this design&#39;s L1/L2, <code>GET /devices</code>, security events/emails, Lockdown.</li>
+<li><strong>Uber</strong>: passkeys, 2-step verification, close-other-sessions from Account → Security; Play Integrity user (Google, Oct 2025) → Phase 3/4.</li>
+<li><strong>Google</strong>: device-bound session credentials (DBSC, GA in Chrome 146) and google.com/devices → DPoP-bound refresh at our proxy is the native analogue; web device cookie in Phase 4.</li>
+<li><strong>YouTube / Gmail</strong>: never sign you out over a flaky network → offline-first restore is preserved unchanged.</li>
+<li><strong>Banks / ChatGPT</strong>: cryptographic biometric step-up (not a boolean) for money/credential changes → step-up key with <code>.biometryCurrentSet</code> / <code>setUserAuthenticationRequired</code>, restored-context downgrade.</li>
+</ul>
+</main>
+  <footer class="foot">Source of truth: <code>docs/persistent-login/persistent-login-design-2026-08-18.md</code>. Evidence, alternatives and verification status: <code>docs/persistent-login/WORKFLOW-RESULTS.md</code>. Progress log: <code>docs/persistent-login/WORKLOG.md</code>.</footer>
+</div>

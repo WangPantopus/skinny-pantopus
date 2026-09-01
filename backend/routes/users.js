@@ -18,7 +18,16 @@ const { isConnected, isSearchable, isScopedBlocked } = require('../utils/visibil
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
+<<<<<<< ours
 const { recordFunnelEvent } = require('../services/funnelEvents');
+=======
+// Persistent login & trusted devices (docs/persistent-login/CONTRACT.md)
+const authPolicy = require('../config/authPolicy');
+const { verifyDpop } = require('../middleware/dpop');
+const { requireStepUp, mintStepUpToken } = require('../middleware/stepUp');
+const authDeviceService = require('../services/authDeviceService');
+const authSessionService = require('../services/authSessionService');
+>>>>>>> theirs
 
 async function getOrCreateMailPreferences(userId) {
   let { data: prefs, error } = await supabaseAdmin
@@ -528,6 +537,134 @@ async function revokeSessionByAccessToken(accessToken, context = {}) {
   }
 }
 
+// ── Persistent login helpers (CONTRACT.md "Existing routes") ─────────────
+
+/**
+ * DPoP on the credential routes. Native clients prove key possession with a
+ * `DPoP` header (verified when present; mandatory once
+ * AUTH_DEVICE_BINDING=required). Web uses httpOnly cookies and never sends a
+ * proof, so cookie transport without a header is exempt in every mode.
+ * `getOpts(req)` supplies `{ refreshToken }` on /refresh and /logout so the
+ * proof's `rth` is required and checked against the presented token.
+ */
+async function verifyAuthRouteDpop(req, opts = {}) {
+  if (isCookieTransport(req) && !getHeader(req, 'dpop')) {
+    req.dpop = null;
+    return { ok: true, dpop: null };
+  }
+  return verifyDpop(req, opts);
+}
+
+function authRouteDpop(getOpts) {
+  return async (req, res, next) => {
+    try {
+      const opts = typeof getOpts === 'function' ? getOpts(req) : (getOpts || {});
+      const result = await verifyAuthRouteDpop(req, opts);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error, code: result.code });
+      }
+      return next();
+    } catch (err) {
+      logger.error('auth.dpop.middleware_error', { error: err.message, path: req.originalUrl });
+      return res.status(401).json({ error: 'Invalid DPoP proof', code: 'DPOP_INVALID' });
+    }
+  };
+}
+
+/** The `device` descriptor from the body when it looks like one (service normalises). */
+function deviceFromBody(req) {
+  const device = req.body?.device;
+  return device && typeof device === 'object' && !Array.isArray(device) ? device : undefined;
+}
+
+/** The access token that authenticated the request (Bearer, else cookie). */
+function accessTokenFromRequest(req) {
+  return getBearerToken(req) || req.cookies?.pantopus_access || null;
+}
+
+/** session_id claim of the token that authenticated the request (verifyToken sets req.session). */
+function currentSessionId(req) {
+  if (req.session?.id) return req.session.id;
+  return authSessionService.sessionClaimsFromAccessToken(accessTokenFromRequest(req))?.id || null;
+}
+
+/**
+ * Add the persistent-login fields to a login-shaped response: bearer
+ * transport gets `sessionId`, `session`, `device`; cookie transport (web)
+ * gets `sessionId` only (CONTRACT "Cookie transport").
+ */
+function sessionFields(req, bind) {
+  if (!bind) return {};
+  if (isCookieTransport(req)) return { sessionId: bind.sessionId };
+  return { sessionId: bind.sessionId, session: bind.session, device: bind.device || null };
+}
+
+// GoTrue records how a session was authenticated in the JWT's `amr` claim
+// (`[{method, timestamp}]`). Anything below is a normal sign-in, never a
+// password-recovery credential.
+const NON_RECOVERY_AMR_METHODS = new Set([
+  'password', 'oauth', 'id_token', 'totp', 'mfa/totp', 'sso/saml',
+  'anonymous', 'web3', 'webauthn', 'passkey', 'invite', 'signup', 'email_change',
+]);
+
+function amrMethods(claims) {
+  const amr = claims?.amr;
+  if (!Array.isArray(amr)) return [];
+  return amr
+    .map((entry) => (typeof entry === 'string' ? entry : (entry && typeof entry.method === 'string' ? entry.method : null)))
+    .filter(Boolean);
+}
+
+/**
+ * Is this access token the one a recovery link minted, rather than an ordinary
+ * application session token? Two independent signals, both fail-closed:
+ *   1. `amr` — reject as soon as it names a normal sign-in method. (Absent on
+ *      very old GoTrue releases, hence signal 2.)
+ *   2. the session registry — every session we hand to a client (login, OAuth,
+ *      resume grant) gets an AuthSession row; the short-lived session behind a
+ *      recovery link never does. A `session_id` we know is therefore an app
+ *      session, whatever its `amr` says.
+ * Only call with a token `auth.getUser` has already accepted.
+ * @returns {Promise<{ok:true}|{ok:false, reason:string}>}
+ */
+async function isRecoveryAccessToken(token) {
+  const claims = authSessionService.decodeJwtPayload(token) || {};
+  const methods = amrMethods(claims);
+  const signIn = methods.find((m) => NON_RECOVERY_AMR_METHODS.has(m));
+  if (signIn) return { ok: false, reason: `amr:${signIn}` };
+  const sessionId = typeof claims.session_id === 'string' ? claims.session_id : null;
+  if (authSessionService.isUuid(sessionId)) {
+    const row = await authSessionService.getSessionById(sessionId);
+    if (row) return { ok: false, reason: 'registered_session' };
+  }
+  return { ok: true };
+}
+
+/** Best-effort persistent-login hook: registry failures never fail the auth route. */
+async function safeHook(name, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    logger.error(`auth.hook.${name}_failed`, { error: err.message, stack: err.stack });
+    return null;
+  }
+}
+
+const LOGOUT_SCOPES = ['local', 'others', 'global'];
+function logoutScope(req) {
+  const raw = req.body?.scope;
+  if (raw === undefined || raw === null || raw === '') return 'local';
+  return typeof raw === 'string' && LOGOUT_SCOPES.includes(raw) ? raw : null;
+}
+function isRemoteLogoutScope(req) {
+  const scope = logoutScope(req);
+  return scope === 'others' || scope === 'global';
+}
+/** Run `mw` only for /logout scope others|global (they need verifyToken + step-up). */
+function whenRemoteLogout(mw) {
+  return (req, res, next) => (isRemoteLogoutScope(req) ? mw(req, res, next) : next());
+}
+
 // ============ RATE LIMITERS ============
 
 const loginLimiter = rateLimit({
@@ -572,10 +709,31 @@ const reauthLimiter = rateLimit({
   message: 'Too many re-authentication attempts. Please try again later.',
 });
 
+// `reauthLimiter` alone is keyed by IP, so a distributed attacker holding a
+// stolen access token could guess an account's password without limit. The
+// step-up router already caps per account (`stepUpLimiter`); mirror that on the
+// two password-verifying routes of this router. Runs after verifyToken, so
+// req.user.id is set (falls back to the IP if it somehow is not).
+const reauthAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: 'Too many re-authentication attempts. Please try again later.',
+});
+
 const logoutLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
   message: { error: 'Too many logout requests. Please try again later.' },
+});
+
+// /reset-password consumes a recovery credential and, since the persistent-login
+// hooks landed, signs every device out and moves `sessions_valid_after` — i.e. a
+// successful call is a full account lockout. It had no limiter of its own.
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Too many password reset attempts. Please try again later.' },
 });
 
 const OAUTH_USER_SELECT = 'id, username, name, first_name, last_name, email, verified, role';
@@ -750,9 +908,25 @@ const registerSchema = Joi.object({
   anon_id: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).max(64).optional(),
 });
 
+// Persistent login: optional device descriptor (CONTRACT "Device descriptor").
+// Kept permissive here — authDeviceService.normalizeDeviceDescriptor validates
+// it and an unusable descriptor yields `device: null` in the response instead
+// of failing the credential exchange (binding is optional until
+// AUTH_DEVICE_BINDING=required).
+const deviceDescriptorSchema = Joi.object().unknown(true).allow(null);
+
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
+  device: deviceDescriptorSchema.optional(),
+});
+
+const oauthNativeSchema = Joi.object({
+  provider: Joi.string().valid('apple', 'google').required(),
+  idToken: Joi.string().min(10).max(8192).required(),
+  nonce: Joi.string().max(512).allow('', null).optional(),
+  accessToken: Joi.string().max(8192).allow('', null).optional(),
+  device: deviceDescriptorSchema.optional(),
 });
 
 const reauthenticateSchema = Joi.object({
@@ -1533,7 +1707,7 @@ router.post(
  * POST /api/users/login
  * Login user
  */
-router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
+router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), async (req, res) => {
   const { email, password } = req.body;
 
   logger.info('Login attempt', { email });
@@ -1642,6 +1816,19 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
       username: userData.username,
     });
 
+    // Persistent login: register the session (and bind it to the presenting
+    // device key when `device` + a verified DPoP proof are present). Web
+    // (cookie transport) gets an unbound AuthSession row.
+    const bind = await safeHook('login_bind', () => authDeviceService.bindAtIssue({
+      userId,
+      session: authData.session,
+      device: deviceFromBody(req),
+      dpop: req.dpop || null,
+      req,
+      authMethod: 'password',
+      context: 'interactive',
+    }));
+
     applyAuthTransport(req, res, authData.session.access_token, authData.session.refresh_token, userId);
 
     // Web clients get tokens via httpOnly cookies; omit from body to reduce XSS exposure.
@@ -1655,6 +1842,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
     res.status(200).json({
       message: 'Login successful',
       ...tokenFields,
+      ...sessionFields(req, bind),
       user: {
         id: userData.id,
         email: userData.email,
@@ -1688,7 +1876,7 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   }
 });
 
-router.post('/reauthenticate', verifyToken, reauthLimiter, validate(reauthenticateSchema), async (req, res) => {
+router.post('/reauthenticate', verifyToken, reauthLimiter, reauthAccountLimiter, validate(reauthenticateSchema), async (req, res) => {
   const userId = req.user?.id;
   const email = req.user?.email;
   const { password } = req.body;
@@ -1762,9 +1950,32 @@ router.post('/reauthenticate', verifyToken, reauthLimiter, validate(reauthentica
     }
 
     logger.info('Re-authentication successful', { userId, email, sessionRevoked });
+
+    // Persistent login: /reauthenticate == step-up method `password`, purpose
+    // wildcard (CONTRACT). Bound to the caller's session; a restored session
+    // that just showed its password becomes interactive (design §7.10).
+    const sid = currentSessionId(req);
+    const stepUp = await safeHook('reauthenticate_step_up', async () => {
+      const sessionRow = await authDeviceService.sessionRowFromRequest(req);
+      if (sessionRow?.context === 'restored') {
+        await authDeviceService.promoteSessionToInteractive(sessionRow);
+      }
+      const minted = mintStepUpToken({ uid: userId, sid, purpose: 'generic', method: 'password' });
+      await authSessionService.recordSecurityEvent({
+        userId,
+        sessionId: sid,
+        deviceRowId: sessionRow?.device_id || null,
+        type: 'step_up',
+        req,
+        meta: { purpose: 'generic', method: 'password', via: 'reauthenticate' },
+      });
+      return minted;
+    });
+
     return res.status(200).json({
       verified: true,
       message: 'Password verified',
+      ...(stepUp ? { stepUpToken: stepUp.token, expiresAt: stepUp.expiresAt, purpose: 'generic' } : {}),
     });
   } catch (err) {
     logger.error('Re-authentication error', {
@@ -1812,7 +2023,7 @@ router.get('/auth-methods', verifyToken, async (req, res) => {
   }
 });
 
-router.post('/password', verifyToken, reauthLimiter, validate(updatePasswordSchema), async (req, res) => {
+router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, validate(updatePasswordSchema), async (req, res) => {
   const userId = req.user?.id;
   const email = req.user?.email;
   const currentPassword = req.body?.currentPassword || null;
@@ -1927,6 +2138,16 @@ router.post('/password', verifyToken, reauthLimiter, validate(updatePasswordSche
       mode: hasPassword ? 'change' : 'set',
     });
 
+    // Persistent login (design §6.3 /password): every OTHER session/device is
+    // signed out (GoTrue scope 'others' + registry rows + grants) and the user
+    // is told; the current session stays.
+    await safeHook('password_changed', () => authDeviceService.onPasswordChanged({
+      userId,
+      currentSessionId: currentSessionId(req),
+      accessToken: accessTokenFromRequest(req),
+      req,
+    }));
+
     return res.status(200).json({
       message: hasPassword ? 'Password updated successfully' : 'Password set successfully',
       hasPassword: true,
@@ -1951,37 +2172,151 @@ router.post('/password', verifyToken, reauthLimiter, validate(updatePasswordSche
  * Exchange a refresh token for a new access token (and new refresh token).
  * Enables persistent sessions: clients store refresh_token and call this when access token expires.
  */
-router.post('/refresh', refreshLimiter, async (req, res) => {
+/**
+ * Persistent login: pre-check the session registry before GoTrue rotates
+ * (CONTRACT "/refresh" order: resolve session → revoked? → inactivity → bound:
+ * verify DPoP against the bound key → legacy rules). A crash inside the
+ * registry never fails open in `required` mode and never fails closed in the
+ * others (getUser/GoTrue stay the authority for the pair itself).
+ */
+async function preCheckRefresh(req, refreshToken) {
+  try {
+    return await authDeviceService.checkRefresh({
+      refreshToken,
+      sessionId: req.body?.sessionId,
+      accessToken: getBearerToken(req) || req.body?.accessToken || req.body?.access_token || req.cookies?.pantopus_access || null,
+      dpop: req.dpop || null,
+      cookieTransport: isCookieTransport(req),
+      req,
+    });
+  } catch (err) {
+    logger.error('auth.refresh.precheck_error', { error: err.message, stack: err.stack });
+    if (authPolicy.deviceBindingMode() === 'required' && !isCookieTransport(req)) {
+      return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
+    }
+    return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null };
+  }
+}
+
+// GoTrue refresh-token reuse/expiry. Prefer the structured `code` (GoTrue
+// ≥ 2.150 sends `refresh_token_already_used` / `refresh_token_not_found`), and
+// keep the message regex as the fallback for older releases: the regex alone is
+// both fragile (a wording change silently disables reuse detection) and too
+// broad (any unrelated "... not found" would revoke a live session).
+const REFRESH_REUSE_CODES = new Set(['refresh_token_already_used', 'refresh_token_not_found']);
+function isRefreshReuseError(error) {
+  if (!error) return false;
+  const code = typeof error.code === 'string' ? error.code : null;
+  if (code) return REFRESH_REUSE_CODES.has(code);
+  return /already used|not found/i.test(String(error.message || ''));
+}
+
+// DPoP on /refresh: verified when present (mandatory in `required` mode for
+// bearer transport); `rth` must equal sha256(refreshToken) whenever a refresh
+// token is presented (CONTRACT "Headers").
+const refreshDpop = authRouteDpop((req) => {
+  const rt = getRefreshTokenFromRequest(req);
+  return rt && typeof rt === 'string' ? { refreshToken: rt } : {};
+});
+
+router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
   const refreshToken = getRefreshTokenFromRequest(req);
   if (!refreshToken || typeof refreshToken !== 'string') {
     return res.status(400).json({ error: 'refreshToken is required' });
   }
 
   try {
+    // (1)+(2) registry: session resolve, revocation, inactivity, device binding.
+    const check = await preCheckRefresh(req, refreshToken);
+    if (!check.ok) {
+      // Security codes terminate the session on the client; 503 = retry.
+      if (check.status === 401) clearAuthCookies(res);
+      logger.warn('auth.refresh_refused', { code: check.code, sessionId: check.session?.id || null, ip: req.ip });
+      return res.status(check.status || 401).json({ error: check.error, code: check.code });
+    }
+
+    // (3) GoTrue rotates the pair.
     const scopedClient = createAuthClient();
     const { data, error } = await scopedClient.auth.refreshSession({ refresh_token: refreshToken });
 
     if (error) {
-      const isReuse = /already used|not found/i.test(error.message);
+      const isReuse = isRefreshReuseError(error);
       if (isReuse) {
         logger.warn('auth.refresh_token_reuse', {
           error: error.message,
           ip: req.ip,
           ua: req.get('user-agent'),
+          sessionId: check.session?.id || null,
+          tokenResolved: Boolean(check.tokenResolved),
         });
         // Reuse detected — potential token theft. Clear all auth cookies
-        // to terminate the session and force re-authentication.
+        // to terminate the session and force re-authentication; the registry
+        // row is revoked, the bound device flagged, the user notified.
+        //
+        // Only when the presented token really hashes to that row: `sessionId`
+        // (body) and the access-token claim are unauthenticated hints, so
+        // acting on them would let anyone who learns a session UUID revoke it
+        // and forge a "suspicious activity" alert (see checkRefresh SECURITY).
+        if (check.tokenResolved) {
+          await safeHook('refresh_reuse', () => authDeviceService.markReuse({ session: check.session, req }));
+        }
         clearAuthCookies(res);
         return res.status(401).json({ error: 'Session invalidated. Please sign in again.', code: 'TOKEN_REUSE' });
       }
       logger.warn('Token refresh failed', { error: error.message });
-      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+      return res.status(401).json({ error: 'Session expired. Please sign in again.', code: 'UNAUTHORIZED' });
     }
 
     const session = data?.session;
     if (!session?.access_token || !session?.refresh_token) {
       return res.status(401).json({ error: 'Invalid session' });
     }
+
+    // The rotated pair must belong to the session the proof was verified
+    // against: a refresh token planted under another user's/session's row
+    // (body sessionId, foreign hash) would otherwise let a bound key refresh a
+    // stolen token. GoTrue keeps session_id stable across rotation.
+    if (check.session) {
+      const newClaims = authSessionService.sessionClaimsFromAccessToken(session.access_token);
+      const refreshedUserId = data.user?.id || newClaims?.sub || null;
+      const foreignUser = Boolean(refreshedUserId && refreshedUserId !== check.session.user_id);
+      const foreignSession = Boolean(authSessionService.isUuid(newClaims?.id) && newClaims.id !== check.session.id);
+      if (foreignUser || foreignSession) {
+        logger.warn('auth.refresh_foreign_token', {
+          sessionId: check.session.id,
+          matchedBy: check.matchedBy,
+          foreignUser,
+          foreignSession,
+          ip: req.ip,
+        });
+        if (foreignUser && check.tokenResolved) {
+          // Same rule as the reuse branch: never punish a row that was only
+          // resolved through the unauthenticated `sessionId` / access-token hint.
+          await safeHook('refresh_foreign', () => authDeviceService.markMismatch({
+            session: check.session,
+            device: check.device,
+            req,
+            reason: 'foreign_refresh_token',
+          }));
+        }
+        // Never hand out (or leave usable) the pair GoTrue just minted.
+        await revokeSessionByAccessToken(session.access_token, { source: 'refresh_foreign_token' });
+        clearAuthCookies(res);
+        return res.status(401).json({ error: authDeviceService.SECURITY_MESSAGES.DEVICE_MISMATCH, code: 'DEVICE_MISMATCH' });
+      }
+    }
+
+    // (4) persist hashes / last_refresh / last_seen / ip (+ legacy adoption).
+    const rec = await safeHook('record_refresh', () => authDeviceService.recordRefresh({
+      session: check.session,
+      newSession: session,
+      oldRefreshToken: refreshToken,
+      dpop: req.dpop || null,
+      adopt: Boolean(check.adopt),
+      deviceId: req.body?.deviceId || getHeader(req, 'x-device-id') || undefined,
+      device: deviceFromBody(req),
+      req,
+    }));
 
     applyAuthTransport(req, res, session.access_token, session.refresh_token, data.user?.id);
 
@@ -1991,8 +2326,9 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
       expiresIn: session.expires_in,
       expiresAt: session.expires_at,
     };
+    const registryFields = rec?.sessionId ? { sessionId: rec.sessionId, session: rec.session } : {};
 
-    res.status(200).json({ ok: true, ...tokenFields });
+    res.status(200).json({ ok: true, ...tokenFields, ...registryFields });
   } catch (err) {
     logger.error('Refresh token error', { error: err.message });
     res.status(500).json({ error: 'Failed to refresh session' });
@@ -3311,7 +3647,7 @@ router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSc
  * POST /api/users/reset-password
  * Reset password using recovery token (token_hash) or access token
  */
-router.post('/reset-password', validate(resetPasswordSchema), async (req, res) => {
+router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchema), async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     const isJwtAccessToken = token.split('.').length === 3;
@@ -3324,6 +3660,22 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
         return res.status(400).json({ error: 'Invalid or expired reset token' });
       }
 
+      // SECURITY: this branch exists for the JWT a recovery link mints. It must
+      // NOT accept an ordinary application access token: /password demands the
+      // current password, so a bearer-only path to "set a new password" would
+      // turn any stolen access token into a full account takeover — and, since
+      // the reset hook below signs every device out and moves
+      // `sessions_valid_after`, into a lockout of the real owner too.
+      const recovery = await isRecoveryAccessToken(token);
+      if (!recovery.ok) {
+        logger.warn('Reset password refused - not a recovery session', {
+          userId: userData.user.id,
+          reason: recovery.reason,
+          ip: req.ip,
+        });
+        return res.status(400).json({ error: 'Invalid or expired reset token' });
+      }
+
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
         userData.user.id,
         { password: newPassword }
@@ -3333,6 +3685,15 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
         logger.error('Reset password failed - admin update failed', { error: updateError.message });
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+
+      // Persistent login (design §6.3 /reset-password): everything is signed
+      // out — GoTrue global sign-out, registry rows, devices, grants, push
+      // tokens — and sessions_valid_after=now refuses older JWTs.
+      await safeHook('password_reset', () => authDeviceService.onPasswordReset({
+        userId: userData.user.id,
+        accessToken: token,
+        req,
+      }));
     } else {
       // Supabase verifyOtp for recovery + token_hash accepts only { type, token_hash }.
       // Including email causes: "Only the token_hash and type should be provided".
@@ -3372,6 +3733,15 @@ router.post('/reset-password', validate(resetPasswordSchema), async (req, res) =
         logger.error('Reset password failed - update user failed', { error: updateError.message });
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+
+      // Persistent login: revoke ALL sessions/devices/grants + watermark
+      // (global sign-out through the recovery session's JWT), then drop the
+      // recovery session itself as before.
+      await safeHook('password_reset', () => authDeviceService.onPasswordReset({
+        userId: verifyData?.user?.id,
+        accessToken: session.access_token,
+        req,
+      }));
 
       await revokeSessionByAccessToken(session.access_token, {
         source: 'reset_password',
@@ -3856,7 +4226,7 @@ router.get('/oauth/:provider', oauthLimiter, async (req, res) => {
  * POST /api/users/oauth/token
  * Handle implicit flow — verify Supabase access token, create profile if needed
  */
-router.post('/oauth/token', oauthLimiter, async (req, res) => {
+router.post('/oauth/token', oauthLimiter, authRouteDpop(), async (req, res) => {
   const { accessToken, refreshToken } = req.body;
 
   if (!accessToken) {
@@ -3887,6 +4257,25 @@ router.post('/oauth/token', oauthLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Email address is required. Please allow email access during sign-in.' });
     }
 
+    // Persistent login (design §6.3 /oauth/token): the client-supplied refresh
+    // token is only accepted when GoTrue confirms it pairs with the verified
+    // access token — we refresh it and hand back the NEW pair. Without this a
+    // stolen refresh token could be registered under the caller's own bound
+    // session and rotated later with the caller's device key.
+    const pairClient = createAuthClient();
+    const { data: pairData, error: pairError } = await pairClient.auth.refreshSession({ refresh_token: refreshToken });
+    const pairSession = pairData?.session;
+    const pairUserId = pairData?.user?.id || authSessionService.sessionClaimsFromAccessToken(pairSession?.access_token)?.sub || null;
+    if (pairError || !pairSession?.access_token || !pairSession?.refresh_token) {
+      logger.warn('OAuth token login failed — refresh token rejected', { userId, error: pairError?.message });
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+    if (pairUserId && pairUserId !== userId) {
+      logger.warn('OAuth token login failed — refresh token belongs to another user', { userId, pairUserId });
+      await revokeSessionByAccessToken(pairSession.access_token, { source: 'oauth_token_pair_mismatch' });
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
     const userData = await ensureOAuthUserProfile({
       userId,
       email,
@@ -3896,16 +4285,56 @@ router.post('/oauth/token', oauthLimiter, async (req, res) => {
 
     logger.info('OAuth token login successful', { userId, email });
 
-    applyAuthTransport(req, res, accessToken, refreshToken, userId);
+    const oauthProvider = getAuthProviders(user).find((p) => p === 'apple' || p === 'google') || null;
+    // `credential:false` — unlike /login, /oauth/callback and /oauth/native,
+    // the only thing this route was shown is an access+refresh pair, which is
+    // exactly what a token thief holds. It may register a brand-new session,
+    // but it must never re-point an already-bound session at another key nor
+    // rotate an existing device row (that would retire the real device's
+    // sessions and wipe its enrolled step-up key from a bearer-only path).
+    const bind = await safeHook('oauth_token_bind', () => authDeviceService.bindAtIssue({
+      userId,
+      session: pairSession,
+      device: deviceFromBody(req),
+      dpop: req.dpop || null,
+      req,
+      authMethod: oauthProvider ? `oauth_${oauthProvider}` : 'oauth',
+      context: 'interactive',
+      credential: false,
+    }));
+
+    if (bind?.rebindRefused) {
+      // The pair belongs to a session that is bound to a device key the caller
+      // could not prove — the same signal /refresh treats as DEVICE_MISMATCH.
+      logger.warn('auth.oauth_token.rebind_refused', { userId, sessionId: bind.sessionId, ip: req.ip });
+      await safeHook('oauth_token_mismatch', () => authDeviceService.markMismatch({
+        session: bind.sessionRow,
+        device: bind.boundDevice,
+        req,
+        reason: 'oauth_token_without_device_key',
+      }));
+      // Never leave the pair GoTrue just minted usable.
+      await revokeSessionByAccessToken(pairSession.access_token, { source: 'oauth_token_rebind_refused', userId });
+      clearAuthCookies(res);
+      return res.status(401).json({
+        error: authDeviceService.SECURITY_MESSAGES.DEVICE_MISMATCH,
+        code: 'DEVICE_MISMATCH',
+      });
+    }
+
+    applyAuthTransport(req, res, pairSession.access_token, pairSession.refresh_token, userId);
 
     const tokenFields = isCookieTransport(req) ? {} : {
-      accessToken,
-      refreshToken,
+      accessToken: pairSession.access_token,
+      refreshToken: pairSession.refresh_token,
+      expiresIn: pairSession.expires_in,
+      expiresAt: pairSession.expires_at,
     };
 
     res.json({
       message: 'Login successful',
       ...tokenFields,
+      ...sessionFields(req, bind),
       user: userData
         ? {
             id: userData.id,
@@ -3926,7 +4355,7 @@ router.post('/oauth/token', oauthLimiter, async (req, res) => {
 });
 
 // Retained for backwards compatibility with clients using authorization-code flow.
-router.post('/oauth/callback', oauthLimiter, async (req, res) => {
+router.post('/oauth/callback', oauthLimiter, authRouteDpop(), async (req, res) => {
   const { code } = req.body;
 
   if (!code) {
@@ -3964,6 +4393,17 @@ router.post('/oauth/callback', oauthLimiter, async (req, res) => {
 
     logger.info('OAuth login successful', { userId, email });
 
+    const oauthProvider = getAuthProviders(user).find((p) => p === 'apple' || p === 'google') || null;
+    const bind = await safeHook('oauth_callback_bind', () => authDeviceService.bindAtIssue({
+      userId,
+      session,
+      device: deviceFromBody(req),
+      dpop: req.dpop || null,
+      req,
+      authMethod: oauthProvider ? `oauth_${oauthProvider}` : 'oauth',
+      context: 'interactive',
+    }));
+
     applyAuthTransport(req, res, session.access_token, session.refresh_token, userId);
 
     const tokenFields = isCookieTransport(req) ? {} : {
@@ -3976,6 +4416,7 @@ router.post('/oauth/callback', oauthLimiter, async (req, res) => {
     res.json({
       message: 'Login successful',
       ...tokenFields,
+      ...sessionFields(req, bind),
       user: userData
         ? {
             id: userData.id,
@@ -3995,6 +4436,90 @@ router.post('/oauth/callback', oauthLimiter, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/users/oauth/native
+ * Native identity-token sign-in (Sign in with Apple / Google Credential
+ * Manager): `{ provider:'apple'|'google', idToken, nonce?, accessToken?, device? }`
+ * → Supabase `signInWithIdToken`, same profile bootstrap + persistent-login
+ * binding as /oauth/callback (CONTRACT "Existing routes").
+ */
+router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRouteDpop(), async (req, res) => {
+  const { provider, idToken, nonce, accessToken } = req.body;
+
+  try {
+    const authClient = createAuthClient();
+    const credentials = { provider, token: idToken };
+    if (nonce) credentials.nonce = nonce;
+    if (accessToken) credentials.access_token = accessToken;
+    const { data: sessionData, error: sessionError } = await authClient.auth.signInWithIdToken(credentials);
+
+    if (sessionError || !sessionData?.session || !sessionData?.user) {
+      logger.warn('OAuth native sign-in failed', { provider, error: sessionError?.message });
+      return res.status(401).json({ error: 'Invalid or expired identity token' });
+    }
+
+    const { session, user } = sessionData;
+    const userId = user.id;
+    const email = user.email || user.user_metadata?.email || null;
+    const meta = user.user_metadata || {};
+
+    if (!email) {
+      logger.error('OAuth native sign-in failed — no email available', { userId, provider });
+      await revokeSessionByAccessToken(session.access_token, { source: 'oauth_native_no_email', userId });
+      return res.status(400).json({ error: 'Email address is required. Please allow email access during sign-in.' });
+    }
+
+    const userData = await ensureOAuthUserProfile({
+      userId,
+      email,
+      meta,
+      source: 'native',
+    });
+
+    logger.info('OAuth native sign-in successful', { userId, email, provider });
+
+    const bind = await safeHook('oauth_native_bind', () => authDeviceService.bindAtIssue({
+      userId,
+      session,
+      device: deviceFromBody(req),
+      dpop: req.dpop || null,
+      req,
+      authMethod: provider === 'apple' ? 'siwa_native' : 'google_native',
+      context: 'interactive',
+    }));
+
+    applyAuthTransport(req, res, session.access_token, session.refresh_token, userId);
+
+    const tokenFields = isCookieTransport(req) ? {} : {
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      expiresIn: session.expires_in,
+      expiresAt: session.expires_at,
+    };
+
+    res.json({
+      message: 'Login successful',
+      ...tokenFields,
+      ...sessionFields(req, bind),
+      user: userData
+        ? {
+            id: userData.id,
+            email: userData.email,
+            username: userData.username,
+            name: userData.name,
+            firstName: userData.first_name,
+            lastName: userData.last_name,
+            role: userData.role,
+            verified: true,
+          }
+        : { id: userId, email },
+    });
+  } catch (err) {
+    logger.error('OAuth native sign-in error', { provider, error: err.message, stack: err.stack });
+    res.status(500).json({ error: 'OAuth login failed. Please try again.' });
+  }
+});
+
 // ============ DELETE ACCOUNT ============
 
 /**
@@ -4009,9 +4534,38 @@ router.post('/oauth/callback', oauthLimiter, async (req, res) => {
  *   4. Delete the User row (CASCADE handles ~70+ related tables automatically)
  *   5. Delete the Supabase Auth user
  */
-router.delete('/account', verifyToken, async (req, res) => {
+/**
+ * Persistent login: DELETE /account needs `X-Step-Up` (purpose delete_account
+ * or the wildcard from /reauthenticate). The strongest method the account has
+ * is required: password when the account has one; `device_key` (biometric
+ * step-up key enrolled in an interactive session) only for OAuth-only
+ * accounts (CONTRACT, WORKLOG decision 5). requireStepUp already refuses
+ * device_key tokens from restored sessions.
+ */
+async function requireStrongestStepUpForDeletion(req, res, next) {
+  if (req.stepUp?.method !== 'device_key') return next();
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+    if (!error && data?.user && hasPasswordProvider(data.user)) {
+      logger.info('auth.stepup.required', { purpose: 'delete_account', reason: 'password_required', userId: req.user.id });
+      return res.status(403).json({
+        error: 'Please verify your password to delete your account.',
+        code: 'STEP_UP_REQUIRED',
+        purpose: 'delete_account',
+        methods: ['password'],
+        reason: 'password_required',
+      });
+    }
+    return next();
+  } catch (err) {
+    logger.error('auth.stepup.strongest_check_failed', { userId: req.user?.id, error: err.message });
+    return res.status(500).json({ error: 'Step-up verification failed' });
+  }
+}
+
+router.delete('/account', verifyToken, requireStepUp('delete_account'), requireStrongestStepUpForDeletion, async (req, res) => {
   const userId = req.user.id;
-  logger.info('Account deletion requested', { userId });
+  logger.info('Account deletion requested', { userId, stepUpMethod: req.stepUp?.method || null });
 
   try {
     // ── 1. Pre-checks ────────────────────────────────────────────
@@ -4164,6 +4718,17 @@ router.delete('/account', verifyToken, async (req, res) => {
     // Delete regional seeder config where this user is the curator (RESTRICT on curator_user_id)
     await supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId);
 
+    // ── 3b. Persistent login: sign out everywhere first ──────────
+    // Revoke every session/device/grant, delete all PushToken rows, kick
+    // sockets, record `account_deleted` (rows are FK'd to auth.users, so this
+    // must run before admin.deleteUser; done here so it also happens while
+    // the User row still exists).
+    await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
+      userId,
+      accessToken: accessTokenFromRequest(req),
+      req,
+    }));
+
     // ── 4. Delete User row ───────────────────────────────────────
     // This triggers ON DELETE CASCADE for ~70+ tables (Posts, Gigs,
     // Wallet, Listings, Notifications, Chat participants, etc.)
@@ -4302,21 +4867,115 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
 // access token has expired or the CSRF cookie is stale. Clearing cookies is
 // safe regardless of auth state; the worst an attacker can do via CSRF is
 // log the user out, which is low-severity.
-router.post('/logout', logoutLimiter, async (req, res) => {
-  clearAuthCookies(res);
+//
+// Persistent login (CONTRACT "/logout"): body { scope:'local'|'others'|'global',
+// deviceId?, refreshToken? }, optional Bearer, optional DPoP.
+//   local  — cookie clearing + revoke the presented access JWT ALWAYS (as
+//            before); registry side effects (revoke that session row, device
+//            push tokens, that device's grants) ONLY with proof: a valid Bearer
+//            whose session is bound to `deviceId`, or a `refreshToken` whose
+//            session's bound key verifies the DPoP (rth checked).
+//   others / global — verifyToken (+CSRF for cookies) + X-Step-Up
+//            (`revoke_sessions`), then revokeOthers / revokeAll (lockdown).
+router.post(
+  '/logout',
+  logoutLimiter,
+  whenRemoteLogout(verifyToken),
+  whenRemoteLogout(requireStepUp('revoke_sessions')),
+  async (req, res) => {
+    const scope = logoutScope(req);
+    if (!scope) {
+      return res.status(400).json({ error: 'scope must be one of: local, others, global', code: 'BAD_REQUEST' });
+    }
 
-  const accessToken = getLogoutAccessToken(req);
-  const sessionRevoked = await revokeSessionByAccessToken(accessToken, {
-    source: 'logout',
-    transport: getBearerToken(req) ? 'bearer' : accessToken ? 'cookie_or_body' : 'none',
-  });
+    if (scope === 'others' || scope === 'global') {
+      // Direct handler calls (tests) skip the conditional middleware.
+      if (!req.user?.id) {
+        return res.status(401).json({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      }
+      const userId = req.user.id;
+      const accessToken = accessTokenFromRequest(req);
+      const sid = currentSessionId(req);
+      try {
+        if (scope === 'others') {
+          const result = await authDeviceService.revokeOthers({ userId, currentSessionId: sid, accessToken, req });
+          logger.info('Logout (others) completed', { userId, revoked: result.revoked });
+          return res.json({ success: true, revoked: result.revoked });
+        }
+        const result = await authDeviceService.revokeAll({
+          userId,
+          accessToken,
+          req,
+          reason: 'lockdown',
+          eventType: 'lockdown',
+        });
+        clearAuthCookies(res);
+        logger.info('Logout (global) completed', { userId, revoked: result.revoked });
+        return res.json({ success: true, revoked: result.revoked });
+      } catch (err) {
+        logger.error('Logout scope error', { userId, scope, error: err.message, stack: err.stack });
+        return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+      }
+    }
 
-  logger.info('Logout completed', {
-    hasAccessToken: Boolean(accessToken),
-    sessionRevoked,
-  });
+    // scope === 'local'
+    clearAuthCookies(res);
 
-  res.json({ success: true });
-});
+    const accessToken = getLogoutAccessToken(req);
+
+    // Proof (a) MUST be established BEFORE the JWT is revoked. GoTrue's
+    // `admin.signOut(jwt,'local')` deletes the session row, after which
+    // `auth.getUser(jwt)` answers 403 session_not_found — so resolving the
+    // caller afterwards would silently forfeit every registry side effect
+    // (session row revoke, that device's push tokens, its resume grants) for
+    // web and for any session without a DPoP proof.
+    let proofUserId = null;
+    let proofSessionId = null;
+    if (accessToken && typeof accessToken === 'string') {
+      const { data, error } = await supabase.auth.getUser(accessToken);
+      if (!error && data?.user?.id) {
+        proofUserId = data.user.id;
+        proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
+      }
+    }
+
+    const sessionRevoked = await revokeSessionByAccessToken(accessToken, {
+      source: 'logout',
+      transport: getBearerToken(req) ? 'bearer' : accessToken ? 'cookie_or_body' : 'none',
+    });
+
+    // Registry side effects only with proof (best effort; never fails the logout).
+    await safeHook('logout_local', async () => {
+      const refreshToken = req.body?.refreshToken || req.body?.refresh_token || null;
+      const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
+
+      // Proof (b): DPoP (rth over the refresh token) — verified when present,
+      // never required (a missing/invalid proof only forfeits the side effects).
+      let dpop = null;
+      if (getHeader(req, 'dpop')) {
+        const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
+        if (result.ok) dpop = result.dpop;
+        else logger.warn('auth.logout.dpop_invalid', { code: result.code, ip: req.ip });
+      }
+
+      if (!proofUserId && !(refreshToken && dpop)) return null;
+      return authDeviceService.logoutLocal({
+        userId: proofUserId,
+        bearerSessionId: proofSessionId,
+        deviceId,
+        refreshToken,
+        dpop,
+        req,
+      });
+    });
+
+    logger.info('Logout completed', {
+      hasAccessToken: Boolean(accessToken),
+      sessionRevoked,
+    });
+
+    res.json({ success: true });
+  }
+);
 
 module.exports = router;

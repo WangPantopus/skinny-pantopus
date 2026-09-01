@@ -3,17 +3,22 @@
 //  Pantopus
 //
 //  Holds auth state, persists tokens to the Keychain, and coordinates
-//  login / logout / session restore.
+//  login / logout / session restore. The persistent-login pieces (device
+//  identity + DPoP, reinstall gate, "Continue as", logout scopes, step-up)
+//  live in `AuthManager+Session.swift` and `AuthManager+Devices.swift`;
+//  design: docs/persistent-login/persistent-login-design-2026-08-18.md §8,
+//  wire contract: docs/persistent-login/CONTRACT.md.
 //
 
 // swiftlint:disable file_length
 
+import CryptoKit
 import Foundation
 import Logging
 
 /// Account type chosen at registration. Maps to the backend's
 /// `account_type` column. Persisted as `"individual"` (personal) or
-/// `"business"` per `registerSchema` at `backend/routes/users.js:723`.
+/// `"business"` per `registerSchema` at `backend/routes/users.js:803`.
 public enum AccountType: String, Sendable, Hashable, CaseIterable {
     case personal
     case business
@@ -77,12 +82,25 @@ public struct SignUpResult: Sendable, Hashable {
     public let requiresEmailVerification: Bool
 }
 
+/// `AuthSession.context` — a `restored` session (minted from a resume grant,
+/// Android) cannot use the device-key step-up path or move money until a
+/// real credential is presented once. iOS sessions are `interactive`; the
+/// value is still tracked because the server may downgrade it.
+public enum SessionContext: String, Sendable, Hashable {
+    case interactive
+    case restored
+}
+
 @Observable
 @MainActor
 final class AuthManager {
     enum State: Equatable {
         case unknown
         case signedOut
+        /// Tokens survived a reinstall (or the account went dormant): the
+        /// user must confirm presence (Face ID / passcode) before the
+        /// session is resumed. Carries the display hint for the card.
+        case resumable(AccountHint)
         case signedIn(UserDTO)
     }
 
@@ -104,6 +122,12 @@ final class AuthManager {
         return manager
     }()
 
+    /// Proactive refresh threshold (CONTRACT "Client behaviour").
+    static let proactiveRefreshWindow: TimeInterval = 120
+    /// A session idle longer than this is re-gated behind presence on the
+    /// next cold start (design §3, "dormant > 30 d").
+    static let dormancyWindow: TimeInterval = 30 * 24 * 60 * 60
+
     private(set) var state: State = .unknown
     private(set) var accessToken: String?
 
@@ -114,9 +138,35 @@ final class AuthManager {
     /// `AuthContext.lastInteractiveSignInAt` (`AuthContext.tsx:28`).
     private(set) var lastInteractiveSignInAt: Date?
 
+    /// Why the last session ended (401 code from `/refresh`, or a plain
+    /// expiry). The auth screens read it to show "You were signed out for
+    /// security" instead of a generic message; cleared on the next
+    /// successful sign-in / resume. `nil` after a user-initiated sign-out.
+    private(set) var sessionEndReason: SessionEndReason?
+
+    /// Server session id (`AuthSession.id`) of the live session.
+    private(set) var sessionId: String?
+    /// `interactive` | `restored` for the live session.
+    private(set) var sessionContext: SessionContext?
+    /// Absolute access-token expiry from the last login / refresh.
+    private(set) var expiresAt: Date?
+
+    /// UI hook for the password step-up method: asked for the account
+    /// password when a `device_key` step-up is unavailable or refused. Set
+    /// by the root UI (stage 2); nil ⇒ password step-up is unavailable and
+    /// the interceptor lets the 403 through.
+    var stepUpPasswordPrompt: (@MainActor (StepUpPurpose) async -> String?)?
+
     let store: any SecureStore
     let apiClient: APIClient
-    private let logger = Logger(label: "app.pantopus.ios.AuthManager")
+    let installMarker: InstallMarker
+    let presenceGate: any PresenceGate
+    /// Whether `DeviceKey.create` may use the Secure Enclave. Tests pass
+    /// `false` so keys are plain software P-256 keys.
+    let allowSecureEnclave: Bool
+    /// Injectable clock for the expiry / dormancy rules.
+    let now: @Sendable () -> Date
+    let logger = Logger(label: "app.pantopus.ios.AuthManager")
     /// Retained for the lifetime of an in-flight ASWebAuthenticationSession.
     private(set) var oauthCoordinator: OAuthWebAuthenticationCoordinator?
 
@@ -125,6 +175,24 @@ final class AuthManager {
     /// token as theft (`TOKEN_REUSE`), so two simultaneous refreshes would
     /// force a logout — we must coalesce them into one round-trip.
     private var refreshTask: Task<RefreshOutcome, Never>?
+
+    /// The `code` of the last 401 from `/refresh`, consumed by
+    /// `handleUnauthorized()` to end the session with the right reason.
+    var lastRefreshRejection: SessionEndReason?
+
+    /// Cached device identity (`deviceId` + DPoP key). Loaded lazily from
+    /// the Keychain; created only by the credential-issuing / restore paths.
+    @ObservationIgnored
+    var deviceIdentity: DeviceIdentity?
+    /// Install id chosen for the descriptor of an in-flight login; committed
+    /// to file + Keychain only once that login succeeds.
+    var pendingInstallId: String?
+    /// Last APNs token seen; sent with `/api/auth/devices/register`.
+    var pendingPushToken: String?
+    /// Fire-and-forget follow-ups (device registration, local logout) —
+    /// awaited by tests via `awaitBackgroundWork()`.
+    var registerDeviceTask: Task<Void, Never>?
+    var logoutTask: Task<Void, Never>?
 
     /// Outcome of a token refresh. Only `.authRejected` should sign the user
     /// out — a `.transient` failure (offline/timeout/5xx) must keep the
@@ -137,61 +205,54 @@ final class AuthManager {
 
     init(
         store: any SecureStore = KeychainStore(),
-        apiClient: APIClient = .shared
+        apiClient: APIClient = .shared,
+        installMarker: InstallMarker = .default,
+        presenceGate: any PresenceGate = LocalAuthenticationPresenceGate(),
+        allowSecureEnclave: Bool = SecureEnclave.isAvailable,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.store = store
         self.apiClient = apiClient
+        self.installMarker = installMarker
+        self.presenceGate = presenceGate
+        self.allowSecureEnclave = allowSecureEnclave
+        self.now = now
+        // Wire the client back to this manager for tokens / DPoP / refresh /
+        // step-up. The shared client always resolves to `AuthManager.shared`
+        // (its fallback), so only a dedicated client — a test's or a
+        // preview's — is pointed at the manager that owns it; a preview
+        // manager built on the shared client can never hijack the app.
+        if apiClient !== APIClient.shared {
+            apiClient.authProvider = self
+        }
     }
 
     func retainOAuthCoordinator(_ coordinator: OAuthWebAuthenticationCoordinator?) {
         oauthCoordinator = coordinator
     }
 
-    // MARK: - Session restore
+    // MARK: - State mutation (used by the extensions)
 
-    func restoreSession() async {
-        guard let token = store.get(SecureStoreKey.accessToken), !token.isEmpty else {
-            state = .signedOut
-            return
-        }
+    func setState(_ newState: State) {
+        state = newState
+    }
+
+    func setAccessToken(_ token: String?) {
         accessToken = token
-        let cached = loadCachedUser()
-        // Best-effort hydration of the current user. A 401 here is recovered
-        // transparently by APIClient's silent refresh; if even the refresh
-        // fails it surfaces as `.unauthorized` and we sign out for real.
-        do {
-            let response: ProfileResponse = try await apiClient.request(UsersEndpoints.profile())
-            let user = UserDTO(from: response.user)
-            persistCachedUser(user)
-            finishSignedIn(user, token: accessToken ?? token)
-            logger.info("Session restored", metadata: ["userId": .string(user.id)])
-        } catch let error as APIError {
-            switch error {
-            case .unauthorized:
-                // The token is genuinely stale and refresh could not renew it.
-                logger.info("Session restore unauthorized — signing out")
-                await signOut()
-            default:
-                // Transient failure (offline, timeout, 5xx). Do NOT wipe the
-                // session — keep the user signed in against their cached
-                // identity and let each screen retry. Matches YouTube/Gmail,
-                // which never sign you out over a flaky connection.
-                if let cached {
-                    logger.info("Session restore deferred (offline) — using cached identity")
-                    finishSignedIn(cached, token: token)
-                } else {
-                    logger.info("Session restore deferred (offline) — no cached identity, tokens preserved")
-                    state = .signedOut
-                }
-            }
-        } catch {
-            // Non-APIError (e.g. decoding) — treat as transient, never wipe.
-            if let cached {
-                finishSignedIn(cached, token: token)
-            } else {
-                state = .signedOut
-            }
-        }
+    }
+
+    func setSessionEndReason(_ reason: SessionEndReason?) {
+        sessionEndReason = reason
+    }
+
+    func setSessionMetadata(id: String?, context: SessionContext?, expiresAt: Date?) {
+        sessionId = id
+        sessionContext = context
+        self.expiresAt = expiresAt
+    }
+
+    func stampInteractiveSignIn(_ date: Date?) {
+        lastInteractiveSignInAt = date
     }
 
     /// Re-fetch `GET /api/users/profile` and re-publish the session user so
@@ -219,7 +280,7 @@ final class AuthManager {
 
     /// Apply the side effects of a confirmed signed-in session: publish
     /// state, identify analytics, and (re)connect the realtime socket.
-    private func finishSignedIn(_ user: UserDTO, token: String) {
+    func finishSignedIn(_ user: UserDTO, token: String) {
         state = .signedIn(user)
         Observability.shared.identify(userId: user.id, email: user.email)
         Analytics.identify(userId: user.id)
@@ -228,14 +289,14 @@ final class AuthManager {
 
     /// Persist a JSON snapshot of the session user so a future cold launch
     /// can render the signed-in shell before (or without) a network round-trip.
-    private func persistCachedUser(_ user: UserDTO) {
+    func persistCachedUser(_ user: UserDTO) {
         guard let data = try? JSONEncoder().encode(user),
               let json = String(data: data, encoding: .utf8) else { return }
         try? store.set(json, for: SecureStoreKey.cachedUser)
     }
 
     /// Load the cached session user, if any.
-    private func loadCachedUser() -> UserDTO? {
+    func loadCachedUser() -> UserDTO? {
         guard let json = store.get(SecureStoreKey.cachedUser),
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(UserDTO.self, from: data)
@@ -246,39 +307,63 @@ final class AuthManager {
     func signIn(email: String, password: String) async throws {
         do {
             let response: LoginResponse = try await apiClient.request(
-                AuthEndpoints.login(email: email, password: password)
+                AuthEndpoints.login(email: email, password: password, device: makeDeviceDescriptor())
             )
-            try persistLoginResponse(response)
+            try persistLoginResponse(response, method: .password)
         } catch let apiError as APIError {
             throw Self.mapSignInError(apiError)
         }
     }
 
-    func persistLoginResponse(_ response: LoginResponse) throws {
+    /// Persist a credential-issuing response (login / OAuth) and enter the
+    /// signed-in state. `method` is remembered on the display hint so the
+    /// L3 card can offer the right affordance next time.
+    func persistLoginResponse(_ response: LoginResponse, method: AccountHintMethod = .password) throws {
         guard let access = response.accessToken, !access.isEmpty else {
             throw AuthError.unknown
         }
+        // A session left over from before this login (e.g. "Use a different
+        // account" on the Continue-as card) is superseded: revoke it
+        // server-side with proof once the new one is safely persisted.
+        let supersededRefresh = store.get(SecureStoreKey.refreshToken)
+        let supersededAccess = store.get(SecureStoreKey.accessToken)
+
         try store.set(access, for: SecureStoreKey.accessToken)
         accessToken = access
         if let refresh = response.refreshToken, !refresh.isEmpty {
             try store.set(refresh, for: SecureStoreKey.refreshToken)
         }
         try store.set(response.user.id, for: SecureStoreKey.userId)
+        persistSessionMetadata(
+            expiresAt: response.expiresAt,
+            expiresIn: response.expiresIn,
+            sessionId: response.sessionId ?? response.session?.id,
+            context: response.session?.context
+        )
 
         let user = UserDTO(from: response.user)
         persistCachedUser(user)
+        AccountHintStore.remember(AccountHint(user: user, lastMethod: method, lastSeenAt: now()), in: store)
+        installMarker.commit(installId: pendingInstallId ?? installMarker.installIdForDescriptor(store: store), store: store)
+        pendingInstallId = nil
+        sessionEndReason = nil
         // Both interactive entry points (email/password + OAuth callback)
         // funnel through here; `restoreSession()` deliberately does not.
-        lastInteractiveSignInAt = Date()
+        lastInteractiveSignInAt = now()
         finishSignedIn(user, token: access)
         Observability.shared.track("auth.signed_in")
         logger.info("Signed in", metadata: ["userId": .string(response.user.id)])
+
+        if let supersededRefresh, !supersededRefresh.isEmpty, supersededRefresh != response.refreshToken {
+            scheduleLocalLogout(accessToken: supersededAccess, refreshToken: supersededRefresh)
+        }
+        scheduleDeviceRegistration(enrolStepUpKey: true)
     }
 
     // MARK: - Sign up
 
     // swiftlint:disable function_parameter_count
-    /// `POST /api/users/register` (route `backend/routes/users.js:1177`).
+    /// `POST /api/users/register` (route `backend/routes/users.js:1288`).
     ///
     /// On 201, returns a `SignUpResult` with the freshly-created user. The
     /// backend always sets `requiresEmailVerification: true` for new
@@ -338,7 +423,7 @@ final class AuthManager {
 
     // MARK: - Forgot / reset password
 
-    /// `POST /api/users/forgot-password` (route `backend/routes/users.js:3197`).
+    /// `POST /api/users/forgot-password` (route `backend/routes/users.js:3470`).
     /// Backend always replies 200 with a generic message to prevent email
     /// enumeration — there's no distinction between "sent" and "no such
     /// account" at this layer.
@@ -354,7 +439,7 @@ final class AuthManager {
         }
     }
 
-    /// `POST /api/users/reset-password` (route `backend/routes/users.js:3247`).
+    /// `POST /api/users/reset-password` (route `backend/routes/users.js:3520`).
     /// `token` is the hashed recovery token carried by the email link.
     func resetPassword(token: String, newPassword: String) async throws {
         do {
@@ -370,7 +455,7 @@ final class AuthManager {
 
     // MARK: - Verify email
 
-    /// `POST /api/users/verify-email` (route `backend/routes/users.js:3115`).
+    /// `POST /api/users/verify-email` (route `backend/routes/users.js:3388`).
     /// Sends the hashed Supabase OTP carried by the verification link.
     /// Backend revokes the just-issued session, so verifying does NOT
     /// sign the user in; the caller routes to login after success.
@@ -386,7 +471,7 @@ final class AuthManager {
         }
     }
 
-    /// `POST /api/users/resend-verification` (route `backend/routes/users.js:3049`).
+    /// `POST /api/users/resend-verification` (route `backend/routes/users.js:3322`).
     /// Like forgot-password, always returns 200 with a generic message.
     func resendVerification(email: String) async throws {
         do {
@@ -419,52 +504,6 @@ final class AuthManager {
         return await task.value
     }
 
-    /// `POST /api/users/refresh` (route `backend/routes/users.js:1910`). On
-    /// success, persists the rotated access + refresh tokens and reconnects
-    /// the socket. Classifies failures: a 401/4xx from the refresh endpoint is
-    /// `.authRejected` (refresh token expired/replayed); anything else
-    /// (offline, timeout, 5xx) is `.transient` and must not sign the user out.
-    private func performRefresh() async -> RefreshOutcome {
-        guard let stored = store.get(SecureStoreKey.refreshToken), !stored.isEmpty else {
-            return .authRejected
-        }
-        do {
-            let response: RefreshResponse = try await apiClient.request(
-                AuthEndpoints.refresh(refreshToken: stored)
-            )
-            guard let access = response.accessToken, !access.isEmpty else { return .authRejected }
-            try store.set(access, for: SecureStoreKey.accessToken)
-            accessToken = access
-            if let refresh = response.refreshToken, !refresh.isEmpty {
-                try store.set(refresh, for: SecureStoreKey.refreshToken)
-            }
-            SocketClient.shared.connect(token: access)
-            logger.info("Access token refreshed")
-            return .rotated
-        } catch let error as APIError {
-            switch error {
-            case .unauthorized:
-                // Refresh token expired / replayed (TOKEN_REUSE) — sign out.
-                logger.warning("Refresh rejected by server")
-                return .authRejected
-            case let .clientError(status, _):
-                // 400 = malformed/missing refresh token → unrecoverable. 429
-                // (rate-limited) and any other 4xx → transient, keep session.
-                return status == 400 ? .authRejected : .transient
-            default:
-                // .forbidden, .server (5xx), .transport, decoding, etc.
-                logger.warning("Refresh failed transiently", metadata: ["error": .string("\(error)")])
-                return .transient
-            }
-        } catch {
-            // Genuinely unexpected (e.g. decoding) — log + report, but keep the
-            // session (transient) rather than punishing the user for our bug.
-            logger.warning("Refresh failed unexpectedly", metadata: ["error": .string("\(error)")])
-            Observability.shared.capture(error)
-            return .transient
-        }
-    }
-
     /// Imperative refresh used by call sites that want to force a token
     /// rotation and treat failure as a hard sign-out (e.g. tests, explicit
     /// "reconnect" affordances). Routes through the single-flight path.
@@ -479,39 +518,23 @@ final class AuthManager {
 
     // MARK: - Sign out
 
+    /// User-initiated sign-out of this device (`scope: local`): the local
+    /// session is wiped immediately and the server is told with proof
+    /// (Bearer + refresh token + DPoP `rth`) in the background. The display
+    /// hint is kept so the login card can offer "Continue as X".
     func signOut() async {
-        // Whether a real session existed before this call. Several concurrent
-        // 401s can each reach here after one coalesced refresh fails; only the
-        // first should fire the disconnect/analytics side effects. (signOut has
-        // no suspension points, so the @MainActor serializes these reads/writes
-        // — the second caller sees `hadSession == false`.)
-        let hadSession = accessToken != nil || store.get(SecureStoreKey.accessToken) != nil
-        try? store.delete(SecureStoreKey.accessToken)
-        try? store.delete(SecureStoreKey.refreshToken)
-        try? store.delete(SecureStoreKey.userId)
-        try? store.delete(SecureStoreKey.cachedUser)
-        accessToken = nil
-        lastInteractiveSignInAt = nil
-        state = .signedOut
-        // Workstream 1.4 — never resume a prior user's deferred destination.
-        PendingDeepLinkStore.clear()
-        DeepLinkRouter.shared.clearPending()
-        // One account's client-side mutes / hides must never filter the
-        // next account's feed (RN drops the provider state on sign-out).
-        FeedModerationStore.shared.clear()
-        guard hadSession else { return }
-        SocketClient.shared.disconnect()
-        Observability.shared.identify(userId: nil)
-        Analytics.identify(userId: nil)
-        Observability.shared.track("auth.signed_out")
+        _ = try? await signOut(scope: .local)
     }
 
     // MARK: - 401 handling
 
     /// Terminal 401 handler: invoked by the networking layer only after a
-    /// silent refresh has already failed. Clears the session.
+    /// silent refresh has already failed. Clears the session, keeping the
+    /// display hint, and publishes the reason the refresh reported.
     func handleUnauthorized() async {
-        logger.warning("Handling 401 after failed refresh — signing out")
-        await signOut()
+        let reason = lastRefreshRejection ?? .expired
+        lastRefreshRejection = nil
+        logger.warning("Handling 401 after failed refresh — ending session", metadata: ["code": .string(reason.rawValue)])
+        endSession(reason: reason)
     }
 }

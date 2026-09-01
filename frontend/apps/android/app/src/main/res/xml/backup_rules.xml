@@ -5,4 +5,13 @@
          until the one-shot migration in TokenStorage drains and clears it. -->
     <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
     <exclude domain="file" path="datastore/auth_tokens.preferences_pb" />
+    <!-- Persistent login: the per-install device identity (deviceId /
+         installId, data/auth/DeviceIdentity.kt) must never travel with a
+         backup — a restored app on another phone must present as a NEW
+         device, not impersonate this one. -->
+    <exclude domain="sharedpref" path="device_identity.xml" />
+    <!-- App-lock preference (core/security/AppLockManager.kt) lives in an
+         EncryptedSharedPreferences file whose Keystore master key never
+         leaves this device; a restored copy would be undecryptable. -->
+    <exclude domain="sharedpref" path="app_lock_prefs_secure.xml" />
 </full-backup-content>

@@ -32,6 +32,21 @@ export type { TokenStorage, AuthSessionUpdate, AuthRefreshResult, AuthClientEven
 
 // Export all endpoints as namespaces
 export * as auth from './endpoints/auth';
+export type { LogoutScope, LogoutOptions, ReauthenticateResponse } from './endpoints/auth';
+export * as authDevices from './endpoints/authDevices';   // Persistent login — devices / sessions / step-up (/api/auth)
+export type {
+  AuthDeviceSummary,
+  AuthSessionSummary,
+  AuthSecurityEvent,
+  AuthDevicesResponse,
+  SecurityPrefs,
+  StepUpPurpose,
+  StepUpMethod,
+  StepUpResponse,
+  StepUpRequiredBody,
+  DeviceTrustLevel,
+  SessionContext,
+} from './endpoints/authDevices';
 export * as users from './endpoints/users';
 export * as gigs from './endpoints/gigs';
 export * as homes from './endpoints/homes';

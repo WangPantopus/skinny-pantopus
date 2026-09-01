@@ -9,7 +9,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import app.pantopus.android.data.api.models.users.UserDto
+import app.pantopus.android.data.auth.AccountHint
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.SessionEndReason
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,12 +21,24 @@ import org.junit.Test
 class LoginScreenTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun viewModelWith(signInResult: Result<UserDto> = Result.success(sampleUser)): LoginViewModel {
+    /**
+     * A relaxed mock is not enough for the flows `LoginViewModel` collects:
+     * `StateFlow.collect` is declared to return `Nothing`, so a relaxed stub
+     * that returns normally trips Kotlin's check with
+     * `KotlinNothingValueException` inside `viewModelScope`, which crashes the
+     * instrumentation process. Every collected flow must be stubbed explicitly.
+     */
+    private fun repoMock(signInResult: Result<UserDto> = Result.success(sampleUser)): AuthRepository {
         val repo = mockk<AuthRepository>(relaxed = true)
         coEvery { repo.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+        coEvery { repo.rememberedAccounts } returns MutableStateFlow(emptyList<AccountHint>())
+        coEvery { repo.sessionEndReason } returns MutableStateFlow<SessionEndReason?>(null)
         coEvery { repo.signIn(any(), any()) } returns signInResult
-        return LoginViewModel(repo)
+        return repo
     }
+
+    private fun viewModelWith(signInResult: Result<UserDto> = Result.success(sampleUser)): LoginViewModel =
+        LoginViewModel(repoMock(signInResult))
 
     @Test
     fun submit_button_is_disabled_initially() {
@@ -51,9 +65,7 @@ class LoginScreenTest {
 
     @Test
     fun submit_button_triggers_sign_in() {
-        val repo = mockk<AuthRepository>(relaxed = true)
-        coEvery { repo.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
-        coEvery { repo.signIn(any(), any()) } returns Result.success(sampleUser)
+        val repo = repoMock()
         val vm = LoginViewModel(repo)
 
         compose.setContent { LoginScreen(viewModel = vm) }

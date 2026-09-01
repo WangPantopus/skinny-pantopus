@@ -124,3 +124,34 @@ export const professional = {
 };
 
 export const getAuthToken = jest.fn();
+export const clearAuthToken = jest.fn();
+export const refreshAuthSession = jest.fn();
+
+// Persistent login — /api/users auth helpers used by settings/security + session refresh.
+export const auth = {
+  logout: jest.fn(),
+  getAuthMethods: jest.fn(),
+  reauthenticate: jest.fn(),
+};
+
+// Persistent login — /api/auth devices / sessions / step-up (packages/api/src/endpoints/authDevices.ts).
+export const authDevices = {
+  getDevices: jest.fn(),
+  revokeDevice: jest.fn(),
+  revokeOtherSessions: jest.fn(),
+  revokeAllSessions: jest.fn(),
+  stepUpWithPassword: jest.fn(),
+  stepUpWithDeviceKey: jest.fn(),
+  createChallenge: jest.fn(),
+  getSecurityPrefs: jest.fn(),
+  updateSecurityPrefs: jest.fn(),
+  getSecurityEvents: jest.fn(),
+  isStepUpRequired: (err: unknown) => {
+    const e = err as { statusCode?: number; data?: { code?: string } } | null | undefined;
+    return e?.statusCode === 403 && e?.data?.code === 'STEP_UP_REQUIRED';
+  },
+  getApiErrorCode: (err: unknown) => (err as { data?: { code?: string } } | null | undefined)?.data?.code,
+  isSecuritySignOutCode: (code: string | undefined | null) =>
+    Boolean(code && ['TOKEN_REUSE', 'DEVICE_MISMATCH', 'DEVICE_REVOKED', 'SESSION_REVOKED', 'SESSION_EXPIRED_INACTIVE', 'DPOP_REQUIRED'].includes(code)),
+  STEP_UP_HEADER: 'X-Step-Up',
+};

@@ -33,19 +33,82 @@ All authentication is managed by **Supabase Auth**, which provides JWT-based aut
 
 ### Token Lifecycle
 
-1. **Issued by**: Supabase Auth on signup/signin
-2. **Format**: Standard JWT with Supabase claims (`sub`, `email`, `role`, `exp`)
-3. **Verification**: `supabase.auth.getUser(token)` on every request
-4. **Refresh**: Via `pantopus_refresh` cookie (web) or refresh token (mobile)
-5. **Expiry**: Managed by Supabase (configurable per project)
+1. **Issued by**: Supabase Auth on signup/signin (`/api/users/login`, `/oauth/callback`, `/oauth/token`, `/oauth/native`, `/api/auth/resume`)
+2. **Format**: Standard JWT with Supabase claims (`sub`, `email`, `role`, `exp`, `session_id`, `iat`)
+3. **Verification**: `supabase.auth.getUser(token)` on every request **plus** (persistent-login layer, §1.1) an `AuthSession` registry check on the JWT `session_id` and a per-user `sessions_valid_after` watermark
+4. **Refresh**: Via `pantopus_refresh` cookie (web) or refresh token in the JSON body (mobile). Access JWT lifetime 3600 s; rotation on (`enable_refresh_token_rotation=true`, 10 s reuse interval). Native clients refresh proactively when `expiresAt − now < 120 s`.
+5. **Expiry**: access token per Supabase config; **refresh tokens now have an inactivity ceiling enforced at our `/refresh`** — 90 d for `trusted` devices, 30 d for `unverified` (401 `SESSION_EXPIRED_INACTIVE`). Web refresh cookie stays 7 d (sliding: every successful refresh re-issues it).
+
+### 1.1 Sessions, trusted devices and device binding (persistent login, 2026-08)
+
+> Design: `docs/persistent-login/persistent-login-design-2026-08-18.md`; pinned wire contract (wins over prose): `docs/persistent-login/CONTRACT.md`; new-endpoint reference: `docs/mobile/auth-backend-contracts.md` §8.
+
+Supabase Auth remains the only session authority. On top of it the backend keeps a thin **Pantopus-owned registry** (migration `160_auth_devices.sql`):
+
+| Table | One row per | Why |
+|---|---|---|
+| `AuthSession` | Supabase session (`id` = JWT `session_id`), incl. **web** sessions (platform `web`, `device_id NULL`) | list / revoke individual sessions, "Where you're logged in", per-session `revoked_reason`, refresh-token hash + previous hash for reuse detection, `last_seen_at/ip/user_agent`, inactivity clock |
+| `AuthDevice` | (user, hardware key) — iOS Secure Enclave / Android Keystore P-256 key | device-bound refresh, trust level, per-device revoke, push-token linkage |
+| `AuthResumeGrant` | single-use, sha256-hashed Android reinstall grant (Block Store) | "Continue as X" after reinstall on Android |
+| `AuthSecurityEvent` | login / logout / reuse / revoke / password change / step-up … | user-visible security activity + emails |
+| `AuthChallenge`, `AuthDpopJti` | short-lived nonces / DPoP replay cache | step-up + proof replay protection |
+| `User.sessions_valid_after`, `User.security_prefs` | watermark + `{allowRestoreGrants, newDeviceEmail}` | instant global revoke; user prefs |
+
+**Device binding (native only).** At *credential issuance* (`/login`, `/oauth/*`, `/api/auth/resume`) a native client sends a `device` descriptor and a `DPoP: <ES256 dpop+jwt>` proof (RFC 9449, embedded JWK, `jti/htm/htu/iat`, plus `rth = b64url(sha256(refreshToken))` on `/refresh` and `/logout`). The server binds the session to that key. On `/refresh` it **first resolves the session** (refresh-token hash → previous hash → `sessionId`) and only then verifies the proof against *that* session's bound key — never "find a device by client-supplied id". A wrong/absent proof on a bound session ⇒ 401 `DEVICE_MISMATCH` and the session is revoked. **No bearer-only endpoint may create or rotate a binding** (`/api/auth/devices/register` requires a proof whose thumbprint equals the session's bound key and only updates metadata). The DPoP key is *not* biometry-gated (background refresh must work); a separate biometry-bound **step-up key** provides server-verifiable presence. Feature flag `AUTH_DEVICE_BINDING=off|optional|required` (default `optional`; legacy clients keep working until `required`, and unbound sessions may be adopted only if issued before `DPOP_CUTOVER`).
+
+**Session context.** `AuthSession.context` is `interactive` (password / OAuth / native IdP shown) or `restored` (minted from a resume grant). Restored sessions can browse and chat but cannot delete the account, revoke devices/sessions or change security prefs until a password (or, later, passkey/native IdP) is presented once.
+
+**Web sessions.** Cookie transport is unchanged for the browser; the backend still inserts an `AuthSession` row (platform `web`) so browsers appear in "Where you're logged in" (`/app/settings/security`) and can be revoked from any device.
+
+**Step-up (`X-Step-Up`).** Sensitive actions require an opaque, purpose-bound, 5-minute token from `POST /api/auth/step-up` (`method: password` — or `device_key` for interactive-enrolled biometric keys on interactive native sessions) or from `POST /api/users/reauthenticate` (wildcard purpose). Purposes: `delete_account`, `revoke_device`, `revoke_sessions`, `change_security_prefs`, `generic`; one-shot for the destructive three. Missing/expired ⇒ 403 `STEP_UP_REQUIRED {purpose, methods}`. Web only offers `password` (no hardware key in a browser); OAuth-only web accounts must set a password first or confirm from the app.
+
+### 1.2 Revocation semantics
+
+| Trigger | Effect |
+|---|---|
+| `POST /api/users/logout` `scope:local` (default; unauthenticated allowed) | **always**: clear cookies + revoke the presented access JWT (`admin.signOut(jwt,'local')`). Row side effects (revoke that `AuthSession`, clear the binding, delete that device's `PushToken`s, revoke its resume grants) **only with proof**: a valid Bearer whose session is bound to `deviceId`, or `refreshToken` + `DPoP(rth)`. |
+| `logout` `scope:others` / `global`, `POST /api/auth/sessions/revoke-others` / `revoke-all` | verifyToken (+CSRF on cookies) **and** `X-Step-Up` (`revoke_sessions`) → `admin.signOut(bearer, scope)` + rows revoked + devices/grants revoked + event; `global` also sets `sessions_valid_after = now()` (rejects even unexpired JWTs). |
+| `DELETE /api/auth/devices/:id` | verifyToken + `X-Step-Up` (`revoke_device`) → device + its sessions revoked, push tokens deleted, grants revoked, sockets kicked, "device removed" email. |
+| `POST /api/users/password` | after the update: all **other** sessions/devices/grants revoked, email sent. |
+| `POST /api/users/reset-password` | **all** sessions revoked + watermark + all devices/grants revoked. |
+| Refresh-token reuse (`TOKEN_REUSE`), `DEVICE_MISMATCH` | session revoked, bound device `require_step_up=true`, event, email/push to other devices. |
+| `DELETE /api/users/account` | requires `X-Step-Up` (`delete_account`); revokes all sessions and push tokens before `admin.deleteUser`. |
+
+Revocation is checked on every request (`verifyToken` → `AuthSession.revoked_at` with a 15 s in-process cache, plus the watermark folded into the existing 60 s role cache) and refused at `/refresh`; the socket server disconnects sockets of a revoked `session_id`.
+
+### 1.3 Error codes (JSON `{ error, code }`)
+
+| Status | `code` | Meaning | Client action |
+|---|---|---|---|
+| 401 | `TOKEN_REUSE` | refresh token replayed / rotated away | security sign-out ¹ |
+| 401 | `DEVICE_MISMATCH` | DPoP proof does not match the key bound to that session | security sign-out ¹ |
+| 401 | `DEVICE_REVOKED` | device removed by the user / server | security sign-out ¹ |
+| 401 | `SESSION_REVOKED` | session revoked (per-session, others/global, watermark) | security sign-out ¹ |
+| 401 | `SESSION_EXPIRED_INACTIVE` | idle beyond 90 d (trusted) / 30 d (unverified) | security sign-out ¹ |
+| 401 | `DPOP_REQUIRED` | binding enforced (`AUTH_DEVICE_BINDING=required`) and no proof | security sign-out ¹ |
+| 401 | `DPOP_INVALID` / `DPOP_REPLAY` | malformed / wrong `htu`/`htm`/`iat` / replayed `jti` | retry once with a fresh proof, then treat as invalid |
+| 401 | `RESUME_GRANT_INVALID` | Android resume grant used/expired/revoked | fall back to L3 (login prefilled) |
+| 401 | `UNAUTHORIZED` | generic | existing refresh-then-login flow |
+| 403 | `STEP_UP_REQUIRED` `{purpose, methods}` | sensitive action needs `X-Step-Up` | run step-up UI, retry once |
+
+¹ *Security sign-out*: wipe tokens/`expiresAt`/`sessionId`, keep the non-secret display hint, show "You were signed out for security. Sign in again." — never a generic "session expired".
+
+### 1.4 Backend feature flags / env
+
+`AUTH_DEVICE_BINDING` (`off|optional|required`, default `optional`), `AUTH_RESUME_GRANTS` (`on|off`), `DPOP_CUTOVER` (ISO date; default far future), `PUBLIC_API_BASE_URL` (DPoP `htu` comparison), `STEP_UP_SECRET` (required in production; falls back to `CSRF_SECRET` with a warning), `AUTH_INACTIVITY_DAYS_TRUSTED=90`, `AUTH_INACTIVITY_DAYS_UNVERIFIED=30`, `AUTH_RESUME_GRANT_DAYS=90`.
+
+### 1.5 Web session recovery (Next middleware)
+
+The Next.js middleware (`frontend/apps/web/src/middleware.ts`) can only see the 1-hour `pantopus_access` cookie and the 30-day `pantopus_session=1` flag — the 7-day `pantopus_refresh` cookie is path-scoped to `/api/users/refresh` and invisible to it. Historically "flag present, access missing" cleared **all** cookies before any refresh attempt, so web persistence was weaker than the 7-day cookie implied. Since 2026-08 that state is treated as *maybe signed in*: `/app/*` (and `/`) are redirected to the same-origin route **`/session/refresh?redirectTo=…`** which calls `POST /api/users/refresh` through `refreshAuthSession()` (the single-flight mutex in `frontend/packages/api/src/client.ts`, so a page-level 401 retry and the middleware hand-off can never race into `TOKEN_REUSE`). Success ⇒ full navigation back to `redirectTo`; a definitive 401 ⇒ `POST /api/users/logout` (which clears the path-scoped refresh cookie too) then `/login?redirectTo=…` (or the public twin, e.g. `/gigs/:id`); a transient failure keeps the cookies and offers Retry. A sessionStorage guard stops a redirect loop if a "successful" refresh does not produce an access cookie. Auth pages (`/login`, …) simply render with the stale cookies (a fresh login overwrites them). Web still has no device binding: browsers appear as `AuthSession` rows and can be revoked, but the refresh cookie remains a bearer secret protected by httpOnly + SameSite + CSRF (device cookies are a Phase-4 item).
 
 ### Cookie Configuration
 
 | Cookie | Purpose | Flags |
 |--------|---------|-------|
-| `pantopus_access` | JWT access token | httpOnly, Secure (prod), SameSite |
-| `pantopus_refresh` | Refresh token | httpOnly, Secure (prod), SameSite |
-| `pantopus_csrf` | CSRF double-submit token | Secure (prod), SameSite |
+| `pantopus_access` | JWT access token (1 h) | httpOnly, Secure (prod), SameSite=Lax, path `/` |
+| `pantopus_refresh` | Refresh token (7 d, re-issued on every refresh) | httpOnly, Secure (prod), SameSite=Lax, path `/api/users/refresh` |
+| `pantopus_csrf` | CSRF double-submit token (24 h, HMAC(userId)) | Secure (prod), SameSite=Lax, JS-readable |
+| `pantopus_session` | `1` — JS-readable "was signed in" hint (30 d); never authority | Secure (prod), SameSite=Lax |
 
 ### Auth Config Functions (`config/auth.js`)
 

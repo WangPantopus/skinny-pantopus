@@ -3,6 +3,8 @@
 package app.pantopus.android.push
 
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.DeviceIdentity
 import app.pantopus.android.data.notifications.NotificationsRepository
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.Binds
@@ -51,6 +53,12 @@ abstract class PushTokenSyncerModule {
  *
  * The [PantopusMessagingService.onNewToken] callback handles the live
  * path; this syncer is the safety net.
+ *
+ * Persistent login (design §9, CONTRACT §"Client behaviour"): the
+ * registration carries this device's `deviceId` so the `PushToken` row is
+ * linked to the trusted-device row, and a (re)registered token is also
+ * re-linked through `POST /api/auth/devices/register` (fingerprint-gated
+ * inside [AuthRepository.registerDevice]; no-op when signed out).
  */
 @Singleton
 class PushTokenSyncer
@@ -59,6 +67,9 @@ class PushTokenSyncer
         private val tokenProvider: FcmTokenProvider,
         private val repository: NotificationsRepository,
         private val ackStore: PushTokenAckStore,
+        private val deviceIdentity: DeviceIdentity,
+        // Lazy: the auth graph is heavy; only touched after a successful registration.
+        private val authRepository: dagger.Lazy<AuthRepository>,
     ) {
         /**
          * Reads the current FCM token, compares to the last ACK'd value,
@@ -70,9 +81,17 @@ class PushTokenSyncer
             if (token.isNullOrBlank()) return Outcome.NoToken
             val lastAck = ackStore.lastAckedToken()
             if (lastAck == token) return Outcome.AlreadyAcked
-            return when (val result = repository.registerPushToken(token = token, platform = "android")) {
+            val result =
+                repository.registerPushToken(
+                    token = token,
+                    platform = "android",
+                    deviceId = deviceIdentity.deviceId(),
+                )
+            return when (result) {
                 is NetworkResult.Success -> {
                     ackStore.markAcked(token)
+                    runCatching { authRepository.get().registerDevice() }
+                        .onFailure { Timber.w(it, "device re-registration after push token sync failed") }
                     Outcome.Registered
                 }
                 is NetworkResult.Failure -> Outcome.Failed(result.error.message)

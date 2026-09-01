@@ -128,7 +128,7 @@ targets:
         NSPhotoLibraryUsageDescription: "Pantopus uses your photo library to upload profile photos, listing images, and mail."
         NSPhotoLibraryAddUsageDescription: "Pantopus saves images you export, like your booking QR code, to your photo library."
         NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat."
-        NSFaceIDUsageDescription: "Pantopus uses Face ID to lock sensitive actions like payments."
+        NSFaceIDUsageDescription: "Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices."
         UIBackgroundModes:
           - remote-notification
         LSApplicationQueriesSchemes:
@@ -151,11 +151,24 @@ targets:
         # serves .well-known/apple-app-site-association. The .app entries are
         # kept so any link already in circulation still resolves; iOS verifies
         # each domain independently, so an unserved one costs nothing.
+        #
+        # `webcredentials:` (persistent login, design §8 / §11): associates
+        # the app with the web origins for Password AutoFill + passkeys, so
+        # the `.username` login field offers the credential saved for
+        # pantopus.com. Served from each host's
+        # `.well-known/apple-app-site-association` (`webcredentials` key).
+        #
+        # This list is the regen source of truth for
+        # Pantopus/Resources/Pantopus.entitlements — keep both in sync.
         com.apple.developer.associated-domains:
           - applinks:pantopus.com
           - applinks:www.pantopus.com
           - applinks:pantopus.app
           - applinks:www.pantopus.app
+          - webcredentials:pantopus.com
+          - webcredentials:www.pantopus.com
+          - webcredentials:pantopus.app
+          - webcredentials:www.pantopus.app
         # Phase 6c — shared UserDefaults suite feeding the Tasks-near-me
         # widget snapshot (also declared on PantopusWidgets).
         com.apple.security.application-groups:

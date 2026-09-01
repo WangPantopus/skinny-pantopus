@@ -7,9 +7,11 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -28,6 +30,7 @@ class TokenAuthenticatorTest {
         url: String,
         bearer: String?,
         prior: Response? = null,
+        body: String? = null,
     ): Response {
         val request =
             Request
@@ -44,6 +47,7 @@ class TokenAuthenticatorTest {
             .code(401)
             .message("Unauthorized")
             .apply { if (prior != null) priorResponse(prior) }
+            .apply { if (body != null) body(body.toResponseBody("application/json".toMediaTypeOrNull())) }
             .build()
     }
 
@@ -72,12 +76,24 @@ class TokenAuthenticatorTest {
     @Test
     fun `signs out and gives up when refresh is auth-rejected`() {
         coEvery { storage.accessToken() } returns "old-at"
-        coEvery { repo.refreshTokens() } returns AuthRepository.RefreshOutcome.AuthRejected
+        coEvery { repo.refreshTokens() } returns AuthRepository.RefreshOutcome.AuthRejected()
 
         val retry = authenticator().authenticate(null, response401("https://x/api/hub", "old-at"))
 
         assertNull(retry)
-        coVerify { repo.signOut() }
+        coVerify { repo.signOut(match { !it.isSecurity && it.code == null }) }
+    }
+
+    @Test
+    fun `propagates the backend code from a rejected refresh into the sign-out reason`() {
+        coEvery { storage.accessToken() } returns "old-at"
+        coEvery { repo.refreshTokens() } returns
+            AuthRepository.RefreshOutcome.AuthRejected(SessionEndReason.fromCode("TOKEN_REUSE"))
+
+        val retry = authenticator().authenticate(null, response401("https://x/api/hub", "old-at"))
+
+        assertNull(retry)
+        coVerify { repo.signOut(match { it.code == "TOKEN_REUSE" && it.isSecurity }) }
     }
 
     @Test
@@ -91,7 +107,7 @@ class TokenAuthenticatorTest {
         assertThrows(NonRetriableIOException::class.java) {
             authenticator().authenticate(null, response401("https://x/api/hub", "old-at"))
         }
-        coVerify(exactly = 0) { repo.signOut() }
+        coVerify(exactly = 0) { repo.signOut(any()) }
     }
 
     @Test
@@ -100,7 +116,7 @@ class TokenAuthenticatorTest {
 
         assertNull(retry)
         coVerify(exactly = 0) { repo.refreshTokens() }
-        coVerify(exactly = 0) { repo.signOut() }
+        coVerify(exactly = 0) { repo.signOut(any()) }
     }
 
     @Test
@@ -109,7 +125,7 @@ class TokenAuthenticatorTest {
 
         assertNull(retry)
         coVerify(exactly = 0) { repo.refreshTokens() }
-        coVerify(exactly = 0) { repo.signOut() }
+        coVerify(exactly = 0) { repo.signOut(any()) }
     }
 
     @Test
@@ -121,7 +137,27 @@ class TokenAuthenticatorTest {
         val retry = authenticator().authenticate(null, second)
 
         assertNull(retry)
-        coVerify { repo.signOut() }
+        coVerify { repo.signOut(match { it.code == null }) }
         coVerify(exactly = 0) { repo.refreshTokens() }
+    }
+
+    @Test
+    fun `give-up branch reads the 401 body code so a revoked session shows the security banner`() {
+        coEvery { storage.accessToken() } returns "old-at"
+        val first = response401("https://x/api/hub", "old-at")
+        val second =
+            response401(
+                "https://x/api/hub",
+                "new-at",
+                prior = first,
+                body = "{\"error\":\"Session revoked\",\"code\":\"SESSION_REVOKED\"}",
+            )
+
+        val retry = authenticator().authenticate(null, second)
+
+        assertNull(retry)
+        coVerify { repo.signOut(match { it.code == "SESSION_REVOKED" && it.isSecurity }) }
+        // peekBody must leave the body readable for the caller.
+        assertEquals(true, second.body?.string()?.contains("SESSION_REVOKED"))
     }
 }

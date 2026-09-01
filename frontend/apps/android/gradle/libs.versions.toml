@@ -46,6 +46,9 @@ stripe = "21.2.0"
 mapsCompose = "6.2.1"
 playServicesMaps = "19.0.0"
 playServicesLocation = "21.3.0"
+# Block Store — persistent-login "account hint + resume grant" that survives
+# delete + reinstall on the same device (design docs/persistent-login §9).
+playServicesBlockstore = "16.4.0"
 
 # Firebase (FCM push notifications)
 firebaseBom = "33.7.0"
@@ -153,6 +156,9 @@ stripe-android = { group = "com.stripe", name = "stripe-android", version.ref = 
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+# Block Store: `AccountHintStore` (data/auth) keeps a non-secret account hint
+# + a single-use resume grant across delete/reinstall (never cloud-backed).
+play-services-auth-blockstore = { group = "com.google.android.gms", name = "play-services-auth-blockstore", version.ref = "playServicesBlockstore" }
 
 # Firebase (FCM push notifications). The BoM pins compatible versions for
 # every firebase-* artifact — declare each artifact without a version so

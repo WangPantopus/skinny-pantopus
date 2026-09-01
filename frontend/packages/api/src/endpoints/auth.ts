@@ -23,16 +23,53 @@ export interface AuthResponse {
   expires_at?: number;
   user: User;
   requiresEmailVerification?: boolean;
+  /**
+   * Legacy nested session (older backends) OR, per
+   * docs/persistent-login/CONTRACT.md, `{ id, context }` for the new
+   * server-side session registry. Both shapes are optional/additive.
+   */
   session?: {
-    accessToken: string;
+    accessToken?: string;
     refreshToken?: string;
     expiresAt?: number;
+    id?: string;
+    context?: 'interactive' | 'restored' | 'oauth';
   };
+  /** Server-side session id (JWT `session_id`) — persistent-login contract. */
+  sessionId?: string;
+  /** Device registry echo for native clients that sent a `device` descriptor. */
+  device?: {
+    id: string;
+    deviceId: string;
+    isNew: boolean;
+    trustLevel: 'trusted' | 'unverified' | 'suspect';
+  } | null;
 }
 
 export interface AuthMethodsResponse {
   providers: string[];
   hasPassword: boolean;
+}
+
+/** Scopes for POST /api/users/logout (docs/persistent-login/CONTRACT.md). */
+export type LogoutScope = 'local' | 'others' | 'global';
+
+export interface LogoutOptions {
+  /** `local` (default) signs out this session only; `others`/`global` need a step-up token. */
+  scope?: LogoutScope;
+  /** Opaque token from /api/auth/step-up or /api/users/reauthenticate (purpose `revoke_sessions`). */
+  stepUpToken?: string;
+}
+
+/**
+ * POST /api/users/reauthenticate — verifies the password and (persistent-login
+ * contract) returns a wildcard-purpose step-up token usable as `X-Step-Up`.
+ */
+export interface ReauthenticateResponse extends ApiResponse {
+  verified: boolean;
+  stepUpToken?: string;
+  expiresAt?: string | number;
+  purpose?: 'generic' | string;
 }
 
 async function persistAuthResponse(response: AuthResponse): Promise<void> {
@@ -85,12 +122,24 @@ export async function registerSimple(data: SimpleRegisterForm & { invite_code?: 
 }
 
 /**
- * Logout user
+ * Logout user.
+ *
+ * Default (`scope: 'local'`) keeps today's behaviour: POST first so the
+ * backend can clear cookies / revoke the presented JWT, then clear local
+ * state. `others` / `global` require a step-up token (sent as `X-Step-Up`);
+ * `global` also signs THIS client out (server revokes everything).
  */
-export async function logout(): Promise<ApiResponse> {
-  // POST first so the backend can clear cookies, then clear local state.
-  const result = await post<ApiResponse>('/api/users/logout');
-  await clearAuthSession();
+export async function logout(options: LogoutOptions = {}): Promise<ApiResponse & { revoked?: number }> {
+  const scope: LogoutScope = options.scope ?? 'local';
+  // `local` keeps the exact legacy request (no body) so old backends are unaffected.
+  const body: Record<string, unknown> | undefined = scope === 'local' ? undefined : { scope };
+  const config = options.stepUpToken
+    ? { headers: { 'X-Step-Up': options.stepUpToken } }
+    : undefined;
+  const result = await post<ApiResponse & { revoked?: number }>('/api/users/logout', body, config);
+  if (scope !== 'others') {
+    await clearAuthSession();
+  }
   return result;
 }
 
@@ -101,8 +150,8 @@ export async function requestPasswordReset(email: string): Promise<ApiResponse> 
   return post<ApiResponse>('/api/users/forgot-password', { email });
 }
 
-export async function reauthenticate(password: string): Promise<ApiResponse & { verified: boolean }> {
-  return post<ApiResponse & { verified: boolean }>('/api/users/reauthenticate', { password });
+export async function reauthenticate(password: string): Promise<ReauthenticateResponse> {
+  return post<ReauthenticateResponse>('/api/users/reauthenticate', { password });
 }
 
 export async function getAuthMethods(): Promise<AuthMethodsResponse> {

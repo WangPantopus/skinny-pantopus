@@ -6,6 +6,14 @@
 //  (default) and frame 6 (inline error banner on submit failure). Per Q3
 //  the v1 surface is email-only, plus browser-based OAuth.
 //
+//  Persistent login (design §3 state C / D, §8): the screen reads the most
+//  recent remembered account (`AuthManager.rememberedAccounts`) — a
+//  non-secret display hint that survives sign-out — and shows a "Welcome
+//  back" card with the masked email as the field placeholder; the email
+//  field carries `.username` so Password AutoFill / passkeys (associated
+//  `webcredentials:` domains) fill the real address. A session that ended
+//  with a security code shows the "signed out for security" banner.
+//
 
 // swiftlint:disable file_length
 
@@ -43,6 +51,21 @@ struct LoginView: View {
                     .padding(.horizontal, Spacing.s5)
                     .padding(.bottom, Spacing.s5)
 
+                    if let security = viewModel.securityMessage {
+                        SecuritySignOutBanner(message: security, onDismiss: viewModel.dismissSecurityMessage)
+                            .padding(.horizontal, Spacing.s5)
+                            .padding(.bottom, Spacing.s3)
+                            .accessibilityIdentifier("loginSessionEndBanner")
+                    }
+
+                    if let remembered = viewModel.rememberedAccount {
+                        RememberedAccountCard(hint: remembered) {
+                            Task { await viewModel.forgetRememberedAccount(using: auth) }
+                        }
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.bottom, Spacing.s3)
+                    }
+
                     if let error = viewModel.errorMessage {
                         ErrorBanner(error: error, onDismiss: viewModel.clearError)
                             .padding(.horizontal, Spacing.s5)
@@ -73,7 +96,8 @@ struct LoginView: View {
                         onGoogle: { signIn(with: .google) },
                         onApple: { signIn(with: .apple) },
                         googleIdentifier: "loginGoogleButton",
-                        appleIdentifier: "loginAppleButton"
+                        appleIdentifier: "loginAppleButton",
+                        lastUsed: viewModel.lastUsedOAuthProvider
                     )
                     .padding(.horizontal, Spacing.s5)
                     .padding(.bottom, Spacing.s3)
@@ -85,13 +109,16 @@ struct LoginView: View {
                     .padding(.bottom, Spacing.s5)
 
                     VStack(spacing: Spacing.s3) {
+                        // `.username` (not `.emailAddress`) so Password AutoFill
+                        // and passkeys associated via `webcredentials:` offer the
+                        // saved credential for the remembered account.
                         PantopusTextField(
                             "Email",
                             text: $viewModel.email,
-                            placeholder: "you@email.com",
+                            placeholder: viewModel.emailPlaceholder,
                             state: viewModel.emailFieldState,
                             keyboardType: .emailAddress,
-                            contentType: .emailAddress,
+                            contentType: .username,
                             identifier: "loginEmailField"
                         )
                         .textInputAutocapitalization(.never)
@@ -138,7 +165,7 @@ struct LoginView: View {
 
                     // Unverified sign-in is a dead end without this: the
                     // backend 403s with "Please verify your email before
-                    // signing in." (`backend/routes/users.js:1528`) and RN
+                    // signing in." (`backend/routes/users.js:1639`) and RN
                     // reveals the same link on that error
                     // (`(auth)/login.tsx:190`).
                     if viewModel.canResendVerification {
@@ -252,7 +279,10 @@ struct LoginView: View {
                     ) { if !path.isEmpty { path.removeLast() } }
                 }
             }
-            .onAppear { consumeAuthDeepLinkIfNeeded() }
+            .onAppear {
+                viewModel.prepare(using: auth)
+                consumeAuthDeepLinkIfNeeded()
+            }
             .onChange(of: deepLink.pending) { _, _ in consumeAuthDeepLinkIfNeeded() }
         }
     }
@@ -406,6 +436,117 @@ struct PasswordField: View {
     }
 }
 
+/// "Welcome back, Ying · y•••@gmail.com" card above the sign-in controls
+/// when a remembered account exists (design §3 state C). Display-only —
+/// nothing here authenticates; "Not you?" forgets the hint on this device.
+struct RememberedAccountCard: View {
+    let hint: AccountHint
+    let onForget: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.s3) {
+            ZStack {
+                Circle().fill(Theme.Color.personalBg)
+                if let url = hint.avatarUrl {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case let .success(image): image.resizable().scaledToFill()
+                        default: initialsLabel
+                        }
+                    }
+                } else {
+                    initialsLabel
+                }
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: Spacing.s0) {
+                Text(greeting)
+                    .pantopusTextStyle(.small)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("loginRememberedAccountName")
+                if let email = hint.maskedEmail, !email.isEmpty {
+                    Text(email)
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("loginRememberedAccountEmail")
+                }
+            }
+            Spacer(minLength: Spacing.s2)
+            Button(action: onForget) {
+                Text("Not you?")
+                    .pantopusTextStyle(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.Color.primary600)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("loginRememberedAccountForget")
+        }
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s2)
+        .background(Theme.Color.primary25)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                .stroke(Theme.Color.primary100, lineWidth: 1)
+        )
+        .accessibilityIdentifier("loginRememberedAccount")
+    }
+
+    private var greeting: String {
+        if let name = ContinueAsViewModel.firstName(of: hint.displayName) {
+            return "Welcome back, \(name)"
+        }
+        return "Welcome back"
+    }
+
+    private var initialsLabel: some View {
+        Text(initials)
+            .pantopusTextStyle(.small)
+            .foregroundStyle(Theme.Color.personal)
+    }
+
+    private var initials: String {
+        let parts = (hint.displayName ?? "").split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }
+        if !parts.isEmpty { return parts.joined().uppercased() }
+        return hint.maskedEmail?.first.map { String($0).uppercased() } ?? "?"
+    }
+}
+
+/// "You were signed out for security. Sign in again." — shown when the
+/// previous session ended with one of the contract's security codes
+/// (`SessionEndReason.isSecurity`), or the plain-expiry copy otherwise.
+struct SecuritySignOutBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Icon(.shieldAlert, size: 18, color: Theme.Color.warning)
+            Text(message)
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.s0)
+            Button(action: onDismiss) {
+                Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
+            }
+            .accessibilityLabel("Dismiss")
+            .accessibilityIdentifier("loginSessionEndBannerDismiss")
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.warningBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+    }
+}
+
 /// Trust footer used at the bottom of every auth surface — mirrors
 /// `auth-frames.jsx:247-260`.
 struct AuthTrustFooter: View {
@@ -426,29 +567,49 @@ struct OAuthButtonGroup: View {
     let onApple: () -> Void
     let googleIdentifier: String
     let appleIdentifier: String
+    /// The provider the remembered account last signed in with — its
+    /// button gets a "Last used" marker (design §3 state C).
+    var lastUsed: OAuthProvider?
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
             oauthButton(
                 title: "Continue with Google",
                 identifier: googleIdentifier,
+                isLastUsed: lastUsed == .google,
                 action: onGoogle
             )
             oauthButton(
                 title: "Continue with Apple",
                 identifier: appleIdentifier,
+                isLastUsed: lastUsed == .apple,
                 action: onApple
             )
         }
     }
 
-    private func oauthButton(title: String, identifier: String, action: @escaping () -> Void) -> some View {
+    private func oauthButton(
+        title: String,
+        identifier: String,
+        isLastUsed: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            Text(title)
-                .pantopusTextStyle(.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(Theme.Color.appText)
-                .frame(maxWidth: .infinity, minHeight: 48)
+            ZStack {
+                Text(title)
+                    .pantopusTextStyle(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.Color.appText)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                if isLastUsed {
+                    HStack {
+                        Spacer()
+                        StatusChip("Last used", variant: .info)
+                            .padding(.trailing, Spacing.s3)
+                            .accessibilityIdentifier("\(identifier)LastUsed")
+                    }
+                }
+            }
         }
         .background(Theme.Color.appSurface)
         .overlay(
@@ -472,17 +633,72 @@ final class LoginViewModel {
     /// `errorMessage?.errorDescription` for the legacy stringy form.
     private(set) var errorMessage: AuthError?
     /// Neutral confirmation shown after a successful resend — the backend's
-    /// anti-enumeration message (`backend/routes/users.js:3060`).
+    /// anti-enumeration message (`backend/routes/users.js:3322`).
     private(set) var infoMessage: String?
     /// True while `POST /api/users/resend-verification` is in flight.
     private(set) var isResendingVerification: Bool = false
+
+    /// The most recent remembered account on this device (display hint —
+    /// masked email only). Drives the "Welcome back" card, the placeholder
+    /// and the "Last used" OAuth marker.
+    private(set) var rememberedAccount: AccountHint?
+    /// "You were signed out for security…" when the last session ended
+    /// with a security code; dismissable.
+    private(set) var securityMessage: String?
+    /// The banner is dismissed per screen instance: `AuthManager
+    /// .sessionEndReason` outlives it (it is only cleared by the next
+    /// successful sign-in), so `prepare` must not resurrect it on the next
+    /// `onAppear`.
+    private var didDismissSecurityMessage = false
 
     var canSubmit: Bool {
         !isLoading && AuthValidation.email(email) == nil && password.count >= 6
     }
 
+    /// Read the remembered account + the reason the last session ended.
+    /// Idempotent; called from `onAppear`.
+    func prepare(using auth: AuthManager) {
+        rememberedAccount = auth.rememberedAccounts.first
+        if let reason = auth.sessionEndReason, securityMessage == nil, !didDismissSecurityMessage {
+            securityMessage = reason.message
+        }
+    }
+
+    /// The hint never stores the full address (CONTRACT: `maskedEmail`),
+    /// so the "prefill" is the masked address as the placeholder — the
+    /// real value comes from Password AutoFill via `.username`.
+    var emailPlaceholder: String {
+        if let masked = rememberedAccount?.maskedEmail, !masked.isEmpty {
+            return masked
+        }
+        return "you@email.com"
+    }
+
+    /// OAuth provider the remembered account last used, if any.
+    var lastUsedOAuthProvider: OAuthProvider? {
+        switch rememberedAccount?.lastMethod {
+        case .apple: .apple
+        case .google: .google
+        default: nil
+        }
+    }
+
+    /// "Not you?" on the remembered-account card: forget the hint (and any
+    /// stored tokens for that user) on this device.
+    func forgetRememberedAccount(using auth: AuthManager) async {
+        guard let remembered = rememberedAccount else { return }
+        await auth.removeRememberedAccount(userId: remembered.userId)
+        // Whatever the user already typed stays; only the hint goes.
+        rememberedAccount = auth.rememberedAccounts.first
+    }
+
+    func dismissSecurityMessage() {
+        securityMessage = nil
+        didDismissSecurityMessage = true
+    }
+
     /// The backend blocks an unverified sign-in with 403 "Please verify your
-    /// email before signing in." (`backend/routes/users.js:1528`), which maps
+    /// email before signing in." (`backend/routes/users.js:1639`), which maps
     /// to `.serverError(_)`. RN reveals its resend link on the same signal —
     /// any login error whose copy mentions "verify"
     /// (`pantopus/frontend/apps/mobile/src/app/(auth)/login.tsx:58`).
@@ -492,7 +708,7 @@ final class LoginViewModel {
     }
 
     /// `POST /api/users/resend-verification` (route
-    /// `backend/routes/users.js:3049`) — mirrors RN
+    /// `backend/routes/users.js:3322`) — mirrors RN
     /// `login.tsx:60`. Requires an email in the field; the response is
     /// always the same generic message whether or not the account exists.
     func resendVerification(using auth: AuthManager) async {

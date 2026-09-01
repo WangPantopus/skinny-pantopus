@@ -4,6 +4,8 @@ package app.pantopus.android.push
 
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.DeviceIdentity
 import app.pantopus.android.data.notifications.NotificationsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -25,11 +27,13 @@ class PushTokenSyncerTest {
     private val tokenProvider: FcmTokenProvider = mockk()
     private val repository: NotificationsRepository = mockk()
     private val ackStore: PushTokenAckStore = mockk(relaxed = true)
+    private val deviceIdentity: DeviceIdentity = mockk { every { deviceId() } returns DEVICE_ID }
+    private val authRepository: AuthRepository = mockk { coEvery { registerDevice(any()) } returns true }
     private lateinit var syncer: PushTokenSyncer
 
     @Before
     fun setUp() {
-        syncer = PushTokenSyncer(tokenProvider, repository, ackStore)
+        syncer = PushTokenSyncer(tokenProvider, repository, ackStore, deviceIdentity, dagger.Lazy { authRepository })
     }
 
     @Test
@@ -40,7 +44,7 @@ class PushTokenSyncerTest {
             val outcome = syncer.syncIfNeeded()
 
             assertEquals(PushTokenSyncer.Outcome.NoToken, outcome)
-            coVerify(exactly = 0) { repository.registerPushToken(any(), any()) }
+            coVerify(exactly = 0) { repository.registerPushToken(any(), any(), any()) }
             verify(exactly = 0) { ackStore.markAcked(any()) }
         }
 
@@ -53,7 +57,7 @@ class PushTokenSyncerTest {
             val outcome = syncer.syncIfNeeded()
 
             assertEquals(PushTokenSyncer.Outcome.AlreadyAcked, outcome)
-            coVerify(exactly = 0) { repository.registerPushToken(any(), any()) }
+            coVerify(exactly = 0) { repository.registerPushToken(any(), any(), any()) }
             verify(exactly = 0) { ackStore.markAcked(any()) }
         }
 
@@ -62,13 +66,14 @@ class PushTokenSyncerTest {
         runTest {
             coEvery { tokenProvider.currentToken() } returns "fcm-token-a"
             every { ackStore.lastAckedToken() } returns null
-            coEvery { repository.registerPushToken("fcm-token-a", "android") } returns
+            coEvery { repository.registerPushToken("fcm-token-a", "android", DEVICE_ID) } returns
                 NetworkResult.Success(Unit)
 
             val outcome = syncer.syncIfNeeded()
 
             assertEquals(PushTokenSyncer.Outcome.Registered, outcome)
-            coVerify(exactly = 1) { repository.registerPushToken("fcm-token-a", "android") }
+            coVerify(exactly = 1) { repository.registerPushToken("fcm-token-a", "android", DEVICE_ID) }
+            coVerify(exactly = 1) { authRepository.registerDevice(any()) }
             verify(exactly = 1) { ackStore.markAcked("fcm-token-a") }
         }
 
@@ -80,13 +85,14 @@ class PushTokenSyncerTest {
             // must re-register the new value.
             coEvery { tokenProvider.currentToken() } returns "fcm-token-b"
             every { ackStore.lastAckedToken() } returns "fcm-token-a"
-            coEvery { repository.registerPushToken("fcm-token-b", "android") } returns
+            coEvery { repository.registerPushToken("fcm-token-b", "android", DEVICE_ID) } returns
                 NetworkResult.Success(Unit)
 
             val outcome = syncer.syncIfNeeded()
 
             assertEquals(PushTokenSyncer.Outcome.Registered, outcome)
-            coVerify(exactly = 1) { repository.registerPushToken("fcm-token-b", "android") }
+            coVerify(exactly = 1) { repository.registerPushToken("fcm-token-b", "android", DEVICE_ID) }
+            coVerify(exactly = 1) { authRepository.registerDevice(any()) }
             verify(exactly = 1) { ackStore.markAcked("fcm-token-b") }
         }
 
@@ -95,12 +101,17 @@ class PushTokenSyncerTest {
         runTest {
             coEvery { tokenProvider.currentToken() } returns "fcm-token-c"
             every { ackStore.lastAckedToken() } returns null
-            coEvery { repository.registerPushToken("fcm-token-c", "android") } returns
+            coEvery { repository.registerPushToken("fcm-token-c", "android", DEVICE_ID) } returns
                 NetworkResult.Failure(NetworkError.Server(503, "down"))
 
             val outcome = syncer.syncIfNeeded()
 
             assertTrue(outcome is PushTokenSyncer.Outcome.Failed)
             verify(exactly = 0) { ackStore.markAcked(any()) }
+            coVerify(exactly = 0) { authRepository.registerDevice(any()) }
         }
+
+    private companion object {
+        const val DEVICE_ID = "0f9e8d7c-6b5a-4321-8765-4321fedcba98"
+    }
 }

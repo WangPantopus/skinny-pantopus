@@ -20,10 +20,11 @@ class AccountDeletionRepository
         /**
          * `DELETE /api/users/account` — route `backend/routes/users.js:3945`.
          *
-         * Callers must have re-authenticated first (see
-         * `AppLockManager.verifySensitiveAction`) and must sign out on
-         * success. A `NetworkError.ClientError(409, …)` carries the
-         * backend's "finish your gigs / settle your payments" copy.
+         * Callers must have obtained a `delete_account` step-up token first
+         * (see `core/security/StepUpCoordinator`) — it rides on `X-Step-Up`
+         * — and must erase local state on success. A
+         * `NetworkError.ClientError(409, …)` carries the backend's "finish
+         * your gigs / settle your payments" copy.
          */
-        suspend fun deleteAccount(): NetworkResult<Unit> = safeApiCall { api.deleteAccount() }
+        suspend fun deleteAccount(stepUpToken: String? = null): NetworkResult<Unit> = safeApiCall { api.deleteAccount(stepUpToken) }
     }

@@ -405,6 +405,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalEmptyState
 import app.pantopus.android.ui.screens.settings.legal.LegalIndexScreen
 import app.pantopus.android.ui.screens.settings.password.PasswordChangeScreen
 import app.pantopus.android.ui.screens.settings.payments.PaymentsScreen
+import app.pantopus.android.ui.screens.settings.security.DevicesScreen
 import app.pantopus.android.ui.screens.settings.verification.VerificationCenterScreen
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import app.pantopus.android.ui.screens.status.StatusWaitingScreen
@@ -990,6 +991,9 @@ private object ChildRoutes {
 
     /** P8 / T6.2c — Settings → Verification (status grid). */
     const val SETTINGS_VERIFICATION = "settings/verification"
+
+    /** Persistent login — Settings → Security → Devices & sessions. */
+    const val SETTINGS_DEVICES = "settings/devices"
 
     /** P8 / T6.2c — Settings → Help (static FAQ + contact CTA). */
     const val SETTINGS_HELP = "settings/help"
@@ -4747,6 +4751,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 SettingsRoute.EditProfile -> navController.navigate(ChildRoutes.EDIT_PROFILE)
                                 SettingsRoute.Password -> navController.navigate(ChildRoutes.SETTINGS_PASSWORD)
                                 SettingsRoute.Verification -> navController.navigate(ChildRoutes.SETTINGS_VERIFICATION)
+                                SettingsRoute.Devices -> navController.navigate(ChildRoutes.SETTINGS_DEVICES)
                                 SettingsRoute.Blocks -> navController.navigate(ChildRoutes.SETTINGS_BLOCKED_USERS)
                                 // Parked until P8.5 — see docs/t6-open-questions-decisions.md Q7.
                                 SettingsRoute.DataExport -> navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT)
@@ -4786,6 +4791,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_VERIFICATION) {
                     VerificationCenterScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_DEVICES) {
+                    DevicesScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_DATA_EXPORT) {
                     val context = androidx.compose.ui.platform.LocalContext.current

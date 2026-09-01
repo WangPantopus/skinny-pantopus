@@ -950,15 +950,47 @@ requests.
 
 ### 7. Mobile reinstall guard
 
-Mobile session storage includes an install sentinel/guard:
+> **Superseded 2026-08-18** by the persistent-login design
+> (`docs/persistent-login/persistent-login-design-2026-08-18.md` §2 principle 1,
+> §3, §7.3–7.4; wire contract `docs/persistent-login/CONTRACT.md`). The
+> RN-era wipe-on-reinstall sentinel described below was never ported to the
+> native apps and is no longer the product decision. New policy — **keep the
+> credential, gate it**:
+>
+> - iOS: refresh token + Secure Enclave device key survive uninstall in the
+>   Keychain (`afterFirstUnlockThisDeviceOnly`, non-sync); an install marker
+>   (sandbox file + Keychain mirror) detects the reinstall and the app shows
+>   *"Continue as X"* behind Face ID / passcode, then refreshes with a DPoP
+>   proof bound to *that* session. Never silent, never a wipe.
+> - Android: nothing survives in app storage; a single-use hashed *resume
+>   grant* in Block Store (no cloud backup) is redeemed behind BiometricPrompt
+>   into a `restored` session (cannot move money / change credentials until a
+>   real credential is shown once).
+> - Server side: sessions are rows (`AuthSession`) bound to hardware keys,
+>   listable and revocable per device (`GET/DELETE /api/auth/devices`,
+>   revoke-others / revoke-all, `sessions_valid_after` watermark), so a stale
+>   token on a reinstalled or stolen device is revocable and useless without
+>   the device key + OS lock. Structured 401 codes (`TOKEN_REUSE`,
+>   `DEVICE_MISMATCH`, `DEVICE_REVOKED`, `SESSION_REVOKED`,
+>   `SESSION_EXPIRED_INACTIVE`, `DPOP_REQUIRED`) drive a "signed out for
+>   security" UX that keeps a non-secret account hint.
+>
+> Interview answer, updated: *"We used to wipe on reinstall because the server
+> could not revoke a leaked refresh token. Now the refresh token alone is not
+> enough — the server needs a proof from the device's hardware key bound to
+> that session, and the user can see and revoke every device — so we keep the
+> credential and require one OS-lock gesture instead."*
+
+Historical (RN client) behaviour, kept for context:
 
 - iOS keychain/SecureStore can survive app uninstall.
 - AsyncStorage typically does not.
-- If the app sees the durable secure marker without the volatile install
-  sentinel, it wipes persisted auth data.
+- If the app saw the durable secure marker without the volatile install
+  sentinel, it wiped persisted auth data.
 
-This prevents old sessions from silently surviving reinstall in cases where that
-would surprise users.
+That prevented old sessions from silently surviving reinstall in cases where
+that would surprise users — at the cost of a full re-login after every
+reinstall.
 
 ### 8. Logout token precedence
 
@@ -1128,6 +1160,19 @@ Recommendation:
 
 - Add a web refresh recovery handoff before clearing cookies.
 - Avoid clearing refresh state until refresh is attempted and fails.
+
+**Status 2026-08-18: FIXED.** `frontend/apps/web/src/middleware.ts` no longer
+clears cookies on a stale session. `/app/*` (and `/`) with
+`pantopus_session=1` but no `pantopus_access` are redirected to the
+same-origin client route `/session/refresh?redirectTo=…[&onFail=<public twin>]`
+(`frontend/apps/web/src/app/session/refresh/page.tsx`), which calls
+`POST /api/users/refresh` through `refreshAuthSession()` — the single-flight
+mutex in `frontend/packages/api/src/client.ts` — so it can never race an
+in-page 401 retry into `TOKEN_REUSE`. Success ⇒ full navigation back;
+definitive 401 ⇒ `POST /api/users/logout` (clears the path-scoped refresh
+cookie) then `/login?redirectTo=…` or the public twin; transient failure ⇒
+cookies kept, Retry offered; a 15-s sessionStorage guard breaks redirect
+loops. Details: `docs/01-authentication-authorization.md` §1.5.
 
 ### Finding 2: Role/account cache is process-local and stale for up to 60 seconds
 

@@ -116,7 +116,7 @@ class SettingsViewModelsTest {
             vm.load()
             val state = vm.state.value as GroupedListUiState.Loaded
             assertEquals(
-                listOf("account", "privacy", "notifications", "payments", "support", "session"),
+                listOf("account", "security", "privacy", "notifications", "payments", "support", "session"),
                 state.groups.map { it.id },
             )
             assertNull(state.groups.last().overline)

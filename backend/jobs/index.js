@@ -17,6 +17,7 @@
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
 //   - billBenchmarkRefresh       → every 6 hours at :05 (Home Intelligence)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
+//   - authRegistryPrune          → hourly at :50 (persistent login)
 // ============================================================
 
 const cron = require('node-cron');
@@ -78,6 +79,8 @@ const neighborhoodPreviewRefresh = require('./neighborhoodPreviewRefresh');
 const autoRemindWorker = require('./autoRemindWorker');
 // Payment bid expiry
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
+// Persistent login registry housekeeping
+const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
 const { runSupportTrainReminders } = require('./supportTrainReminders');
 const { runBookingReminders } = require('./bookingReminders');
@@ -375,6 +378,13 @@ function startJobs() {
     timezone: 'UTC',
   });
 
+  // ─── Auth registry prune (persistent login) ───
+  // Runs hourly at :50. Drops expired DPoP jtis and challenges.
+  cron.schedule('50 * * * *', wrapJob('authRegistryPrune', authRegistryPrune), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Cleanup Ghost Businesses ───
   // Runs daily at 2:30 AM UTC.
   // Removes orphaned business accounts created by the old wizard flow
@@ -507,6 +517,7 @@ function startJobs() {
       { name: 'expireInitiatedHomeClaims', schedule: 'hourly at :11' },
       { name: 'reconcileHomeHouseholdResolution', schedule: 'every 30 minutes at :14/:44' },
       { name: 'chatRedactionJob', schedule: 'hourly at :30' },
+      { name: 'authRegistryPrune', schedule: 'hourly at :50' },
       { name: 'cleanupGhostBusinesses', schedule: 'daily at 2:30 AM UTC' },
       { name: 'expirePopupBusinesses', schedule: 'hourly at :45' },
       { name: 'draftBusinessReminder', schedule: 'daily at 10:00 AM UTC' },

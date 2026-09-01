@@ -1,7 +1,6 @@
 package app.pantopus.android.data.auth
 
 import android.content.Context
-import android.content.SharedPreferences
 import app.cash.turbine.test
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,19 +12,19 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Drives [TokenStorage] against an in-memory fake [SharedPreferences] so
+ * Drives [TokenStorage] against an in-memory fake `SharedPreferences` so
  * the test can run on the JVM without Robolectric or a device. The real
  * `EncryptedSharedPreferences` is exercised by
  * `androidTest/data/auth/TokenStoragePersistenceTest.kt`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TokenStorageTest {
-    private lateinit var fake: FakeSharedPreferences
+    private lateinit var fake: InMemorySharedPreferences
     private lateinit var storage: TokenStorage
 
     @Before
     fun setUp() {
-        fake = FakeSharedPreferences()
+        fake = InMemorySharedPreferences()
         // Hilt's @Inject contract is `(@ApplicationContext context: Context)`.
         // We pass a relaxed mock — TokenStorage never touches the Context
         // once `prefsOverride` is set and `migrationCompleted` is true.
@@ -128,114 +127,58 @@ class TokenStorageTest {
             assertEquals("rt-x", reborn.refreshToken())
             assertNotNull(fake.getString("user_id", null))
         }
-}
 
-/**
- * Bare-bones [SharedPreferences] for unit tests. Implements only the
- * subset of methods that [TokenStorage] reaches for (getString /
- * getBoolean / edit) — the rest throw to keep accidental reliance
- * out of test code.
- */
-private class FakeSharedPreferences : SharedPreferences {
-    private val data = linkedMapOf<String, Any?>()
+    // ── Persistent login: expires_at / session_id / session_context ──
 
-    override fun getString(
-        key: String?,
-        defValue: String?,
-    ): String? = (data[key] as? String) ?: defValue
+    @Test
+    fun `save persists expiresAt sessionId and sessionContext and clear wipes them`() =
+        runTest {
+            storage.save(
+                accessToken = "at-1",
+                refreshToken = "rt-1",
+                userId = "u-1",
+                expiresAt = 1_800_000_000L,
+                sessionId = "sid-1",
+                sessionContext = "interactive",
+            )
 
-    override fun getBoolean(
-        key: String?,
-        defValue: Boolean,
-    ): Boolean = (data[key] as? Boolean) ?: defValue
+            assertEquals(1_800_000_000L, storage.expiresAt())
+            assertEquals("sid-1", storage.sessionId())
+            assertEquals("interactive", storage.sessionContext())
+            assertEquals("u-1", storage.userId())
 
-    override fun contains(key: String?): Boolean = data.containsKey(key)
+            storage.clear()
 
-    override fun getAll(): MutableMap<String, *> = data.toMutableMap()
-
-    override fun getStringSet(
-        key: String?,
-        defValues: MutableSet<String>?,
-    ): MutableSet<String>? = throw UnsupportedOperationException()
-
-    override fun getInt(
-        key: String?,
-        defValue: Int,
-    ): Int = throw UnsupportedOperationException()
-
-    override fun getLong(
-        key: String?,
-        defValue: Long,
-    ): Long = throw UnsupportedOperationException()
-
-    override fun getFloat(
-        key: String?,
-        defValue: Float,
-    ): Float = throw UnsupportedOperationException()
-
-    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
-
-    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
-
-    override fun edit(): SharedPreferences.Editor = FakeEditor()
-
-    private inner class FakeEditor : SharedPreferences.Editor {
-        private val ops = mutableListOf<() -> Unit>()
-
-        override fun putString(
-            key: String?,
-            value: String?,
-        ): SharedPreferences.Editor {
-            ops += { data[key!!] = value }
-            return this
+            assertNull(storage.expiresAt())
+            assertNull(storage.sessionId())
+            assertNull(storage.sessionContext())
+            assertNull(storage.userId())
         }
 
-        override fun putBoolean(
-            key: String?,
-            value: Boolean,
-        ): SharedPreferences.Editor {
-            ops += { data[key!!] = value }
-            return this
+    @Test
+    fun `save without the persistent-login fields resets them (older backend)`() =
+        runTest {
+            storage.save("at-1", "rt-1", "u-1", expiresAt = 1L, sessionId = "sid-1", sessionContext = "restored")
+            storage.save("at-2", "rt-2", "u-1")
+
+            assertNull(storage.expiresAt())
+            assertNull(storage.sessionId())
+            assertNull(storage.sessionContext())
         }
 
-        override fun remove(key: String?): SharedPreferences.Editor {
-            ops += { data.remove(key) }
-            return this
+    @Test
+    fun `updateTokens refreshes expiresAt and sessionId when given, keeps them otherwise`() =
+        runTest {
+            storage.save("at-1", "rt-1", "u-1", expiresAt = 100L, sessionId = "sid-1", sessionContext = "interactive")
+
+            storage.updateTokens(accessToken = "at-2", refreshToken = null)
+            assertEquals(100L, storage.expiresAt())
+            assertEquals("sid-1", storage.sessionId())
+
+            storage.updateTokens(accessToken = "at-3", refreshToken = "rt-3", expiresAt = 200L, sessionId = "sid-2")
+            assertEquals(200L, storage.expiresAt())
+            assertEquals("sid-2", storage.sessionId())
+            // Context is never rewritten by a rotation.
+            assertEquals("interactive", storage.sessionContext())
         }
-
-        override fun clear(): SharedPreferences.Editor {
-            ops += { data.clear() }
-            return this
-        }
-
-        override fun commit(): Boolean {
-            ops.forEach { it() }
-            ops.clear()
-            return true
-        }
-
-        override fun apply() {
-            commit()
-        }
-
-        override fun putStringSet(
-            key: String?,
-            values: MutableSet<String>?,
-        ): SharedPreferences.Editor = throw UnsupportedOperationException()
-
-        override fun putInt(
-            key: String?,
-            value: Int,
-        ): SharedPreferences.Editor = throw UnsupportedOperationException()
-
-        override fun putLong(
-            key: String?,
-            value: Long,
-        ): SharedPreferences.Editor = throw UnsupportedOperationException()
-
-        override fun putFloat(
-            key: String?,
-            value: Float,
-        ): SharedPreferences.Editor = throw UnsupportedOperationException()
-    }
 }

@@ -12,7 +12,7 @@
 //  front of `DELETE /api/users/account`.
 //
 
-// swiftlint:disable type_body_length
+// swiftlint:disable type_body_length file_length
 
 import XCTest
 @testable import Pantopus
@@ -334,6 +334,119 @@ final class PrivacyViewModelTests: XCTestCase {
             "Cannot delete account while you have gigs in progress. Please complete or cancel them first."
         )
         XCTAssertTrue(vm.isDeleteSheetPresented, "the sheet stays up so the 409 stays readable")
+    }
+
+    // MARK: - Account deletion: step-up (persistent login)
+
+    func testDeleteWithPasswordAccountUsesPasswordStepUpAndSendsHeader() async throws {
+        stubSettings()
+        SequencedURLProtocol.routeResponses["/api/users/auth-methods"] = [
+            .status(200, body: "{\"providers\":[\"email\"],\"hasPassword\":true}")
+        ]
+        SequencedURLProtocol.routeResponses["/api/users/account"] = [
+            .status(200, body: "{\"message\":\"Account deleted successfully\"}")
+        ]
+        let vm = makeViewModel()
+        _ = await loadedGroups(vm)
+        var asked: [(StepUpPurpose, [String])] = []
+        vm.stepUpProvider = { purpose, methods in
+            asked.append((purpose, methods))
+            return "su-delete"
+        }
+        vm.sensitiveActionGate = { _ in
+            XCTFail("local gate must not run when a server step-up is available")
+            return .cancelled
+        }
+        await vm.tapRow("deleteAccount")
+        await vm.confirmDeleteAccount()
+
+        XCTAssertEqual(asked.count, 1)
+        XCTAssertEqual(asked.first?.0, .deleteAccount)
+        XCTAssertEqual(asked.first?.1, ["password"], "password-first when the account has one")
+        XCTAssertFalse(vm.isDeleteSheetPresented)
+        XCTAssertNil(vm.deleteAccountError)
+        let deleteRequest = try XCTUnwrap(SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/users/account" })
+        XCTAssertEqual(deleteRequest.httpMethod, "DELETE")
+        XCTAssertEqual(deleteRequest.value(forHTTPHeaderField: "X-Step-Up"), "su-delete")
+    }
+
+    func testDeleteWithoutPasswordLetsAuthManagerPickTheMethod() async throws {
+        stubSettings()
+        SequencedURLProtocol.routeResponses["/api/users/auth-methods"] = [
+            .status(200, body: "{\"providers\":[\"google\"],\"hasPassword\":false}")
+        ]
+        SequencedURLProtocol.routeResponses["/api/users/account"] = [
+            .status(200, body: "{\"message\":\"Account deleted successfully\"}")
+        ]
+        let vm = makeViewModel()
+        _ = await loadedGroups(vm)
+        var askedMethods: [[String]] = []
+        vm.stepUpProvider = { _, methods in
+            askedMethods.append(methods)
+            return "su-device"
+        }
+        await vm.tapRow("deleteAccount")
+        await vm.confirmDeleteAccount()
+
+        XCTAssertEqual(askedMethods, [[]], "no restriction ⇒ device key if enrolled, else password")
+        let deleteRequest = try XCTUnwrap(SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/users/account" })
+        XCTAssertEqual(deleteRequest.value(forHTTPHeaderField: "X-Step-Up"), "su-device")
+    }
+
+    func testDeleteStepUpCancelledSendsNothingAndKeepsSheet() async {
+        stubSettings()
+        SequencedURLProtocol.routeResponses["/api/users/account"] = [
+            .status(200, body: "{\"message\":\"Account deleted successfully\"}")
+        ]
+        let vm = makeViewModel()
+        _ = await loadedGroups(vm)
+        vm.stepUpProvider = { _, _ in throw StepUpError.cancelled }
+        vm.sensitiveActionGate = { _ in
+            XCTFail("cancel ends the flow")
+            return .verified
+        }
+        await vm.tapRow("deleteAccount")
+        await vm.confirmDeleteAccount()
+
+        XCTAssertTrue(vm.isDeleteSheetPresented)
+        XCTAssertNil(vm.deleteAccountError, "a user cancel is silent")
+        XCTAssertFalse(vm.isDeletingAccount)
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.url?.path != "/api/users/account" })
+    }
+
+    func testDeleteWrongPasswordShowsErrorInSheet() async {
+        stubSettings()
+        let vm = makeViewModel()
+        _ = await loadedGroups(vm)
+        vm.stepUpProvider = { _, _ in throw StepUpError.invalidPassword }
+        await vm.tapRow("deleteAccount")
+        await vm.confirmDeleteAccount()
+
+        XCTAssertEqual(vm.deleteAccountError, "Incorrect password. Try again.")
+        XCTAssertTrue(vm.isDeleteSheetPresented)
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.url?.path != "/api/users/account" })
+    }
+
+    func testDeleteFallsBackToLocalGateWhenStepUpUnavailable() async throws {
+        stubSettings()
+        SequencedURLProtocol.routeResponses["/api/users/account"] = [
+            .status(200, body: "{\"message\":\"Account deleted successfully\"}")
+        ]
+        let vm = makeViewModel()
+        _ = await loadedGroups(vm)
+        vm.stepUpProvider = { _, _ in throw StepUpError.unavailable }
+        var gateRan = false
+        vm.sensitiveActionGate = { _ in
+            gateRan = true
+            return .verified
+        }
+        await vm.tapRow("deleteAccount")
+        await vm.confirmDeleteAccount()
+
+        XCTAssertTrue(gateRan)
+        let deleteRequest = try XCTUnwrap(SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/users/account" })
+        XCTAssertNil(deleteRequest.value(forHTTPHeaderField: "X-Step-Up"), "bare request — the server decides")
+        XCTAssertFalse(vm.isDeleteSheetPresented)
     }
 
     // MARK: - Stealth frame

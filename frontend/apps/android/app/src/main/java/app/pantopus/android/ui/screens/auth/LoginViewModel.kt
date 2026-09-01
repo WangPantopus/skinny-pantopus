@@ -4,11 +4,13 @@ package app.pantopus.android.ui.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.auth.AccountHint
 import app.pantopus.android.data.auth.AuthError
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthBrowserCommand
 import app.pantopus.android.data.auth.OAuthProvider
 import app.pantopus.android.data.auth.OAuthSessionStore
+import app.pantopus.android.data.auth.SessionEndReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -49,9 +51,32 @@ class LoginViewModel
             val infoMessage: String? = null,
             /** True while `POST /api/users/resend-verification` is in flight. */
             val isResendingVerification: Boolean = false,
+            /**
+             * Persistent login (design §3 state **C**, §9): the most recent
+             * remembered account — non-secret display hint only (name,
+             * avatar, *masked* email, last method). Drives the "Welcome back"
+             * header + "Not you?"; the real address comes from autofill, so
+             * the email field itself is never prefilled with the mask.
+             */
+            val rememberedAccount: AccountHint? = null,
+            /**
+             * Why the previous session ended without the user asking
+             * (security code / expiry). Rendered once as a banner and
+             * consumed on dismiss or successful sign-in.
+             */
+            val sessionEndReason: SessionEndReason? = null,
         ) {
             val canSubmit: Boolean
                 get() = !isLoading && AuthValidation.email(email) == null && password.length >= 6
+
+            /** "Continue with Google" / "Apple" carries a "Last used" hint when that was the last method. */
+            val lastUsedOAuthProvider: OAuthProvider?
+                get() =
+                    when (rememberedAccount?.lastMethod) {
+                        AccountHint.METHOD_GOOGLE -> OAuthProvider.Google
+                        AccountHint.METHOD_APPLE -> OAuthProvider.Apple
+                        else -> null
+                    }
 
             /**
              * The backend blocks an unverified sign-in with 403 "Please verify
@@ -86,6 +111,33 @@ class LoginViewModel
          */
         private var hostLeftForeground: Boolean = false
         private var cancelJob: Job? = null
+
+        init {
+            // Persistent login — mirror the repository's remembered-account
+            // hint + session-end banner into the screen state.
+            viewModelScope.launch {
+                authRepository.rememberedAccounts.collect { accounts ->
+                    _uiState.update { it.copy(rememberedAccount = accounts.firstOrNull()) }
+                }
+            }
+            viewModelScope.launch {
+                authRepository.sessionEndReason.collect { reason ->
+                    _uiState.update { it.copy(sessionEndReason = reason) }
+                }
+            }
+        }
+
+        /** The session-end banner's dismiss affordance. */
+        fun dismissSessionEndBanner() = authRepository.consumeSessionEndReason()
+
+        /**
+         * "Not you?" on the remembered-account header — forget that account
+         * on this device (Block Store hint + resume grant).
+         */
+        fun forgetRememberedAccount() {
+            val userId = _uiState.value.rememberedAccount?.userId ?: return
+            viewModelScope.launch { authRepository.removeRememberedAccount(userId) }
+        }
 
         fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, errorMessage = null, infoMessage = null) }
 
@@ -145,6 +197,7 @@ class LoginViewModel
                     .onFailure { e ->
                         _uiState.update { it.copy(isLoading = false, errorMessage = mapLoginError(e)) }
                     }.onSuccess {
+                        authRepository.consumeSessionEndReason()
                         _uiState.update { it.copy(isLoading = false) }
                     }
             }
@@ -190,6 +243,9 @@ class LoginViewModel
                                 accessToken = callback.accessToken,
                                 refreshToken = callback.refreshToken,
                             )
+                    }
+                    if (authRepository.state.value is AuthRepository.State.SignedIn) {
+                        authRepository.consumeSessionEndReason()
                     }
                     _uiState.update { it.copy(isLoading = false) }
                 } catch (e: CancellationException) {

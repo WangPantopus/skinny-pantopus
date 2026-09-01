@@ -3,7 +3,7 @@
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Mirrors:** `frontend/apps/ios/Pantopus/PrivacyInfo.xcprivacy`
 **Bundle:** `app.pantopus.ios`
-**Last reviewed:** 2026-06-05
+**Last reviewed:** 2026-08-18 (persistent login & trusted devices — Identifiers / Other Data rows updated; no new data *type*)
 
 These are the answers to enter in **App Store Connect → your app → App
 Privacy**. This is human/console work; this file is the script for it. Every
@@ -73,7 +73,17 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 | User ID | Yes | App Functionality | Yes | No |
 | Device ID | Yes | App Functionality | Yes | No |
 
-> Device ID = APNs push token registered for notifications.
+> Device ID = APNs push token registered for notifications **and, since
+> 2026-08 (persistent login), the app-generated device id, install id and
+> the device's public key** used to bind the sign-in session to this device,
+> list it under Settings → Security → *Where you're logged in*, and let the
+> user remove it. Purpose remains **App Functionality** — Apple's definition
+> covers "authenticate the user … prevent fraud, implement security
+> measures". Not IDFV/IDFA; never shared; never used for tracking. The
+> private keys live in the Secure Enclave and never leave the device
+> (inventory §2.6, §2.9).
+>
+> User ID also covers the server session id returned at login (`sessionId`).
 
 ### Usage Data
 | Type | Collected | Purpose(s) | Linked | Tracking |
@@ -89,7 +99,23 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 ### Other Data
 | Type | Collected | Purpose(s) | Linked | Tracking |
 |------|-----------|------------|--------|----------|
-| Other Data Types (date of birth) | Yes | App Functionality | Yes | No |
+| Other Data Types (date of birth; security-log metadata) | Yes | App Functionality | Yes | No |
+
+> *2026-08:* "security-log metadata" = the IP address and browser/app
+> user-agent the server records per session and per security event
+> (sign-in, sign-out, device removed, refresh-token reuse, password change…)
+> and shows back to the user under Settings → Security. Apple has no
+> dedicated IP-address type; it is declared here rather than relying on the
+> optional-disclosure exemption because it is recorded on every session.
+> Compliance owner: confirm wording at submission.
+
+### Not a new data type — biometrics
+Face ID / Touch ID / passcode are used to gate "Continue as X" after a
+reinstall and for the biometry-bound step-up key. The app receives only a
+yes/no from `LocalAuthentication` and a signature from the Secure Enclave;
+**no biometric data is collected**, so nothing is declared under Health &
+Fitness / Sensitive Info. `NSFaceIDUsageDescription` mentions both app-lock
+and "continue signed in".
 
 ---
 
@@ -112,7 +138,8 @@ sexual orientation, etc.), Gameplay Content, Advertising Data.
 | Financial Info | ✔ Payment Info | PaymentInfo |
 | Location | ✔ Precise + Coarse | PreciseLocation, CoarseLocation |
 | User Content | ✔ Photos/Audio/Other | PhotosorVideos, AudioData, EmailsOrTextMessages, OtherUserContent |
-| Identifiers | ✔ User ID + Device ID | UserID, DeviceID |
+| Identifiers (incl. 2026-08 device id / install id / device public key / session id) | ✔ User ID + Device ID | UserID, DeviceID |
+| Security & session records (§2.9: IP + UA, security events) | ✔ Other Data Types (note) | OtherDataTypes |
 | Diagnostics | ✔ Crash + Performance | CrashData, PerformanceData |
 | Usage Data | ✔ Product Interaction | ProductInteraction |
 | Tracking | ✔ No (everywhere) | `NSPrivacyTracking = false` |

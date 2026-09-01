@@ -68,6 +68,14 @@ class TokenStorage
             const val USER_ID = "user_id"
             const val USER_JSON = "user_json"
             const val V2_MIGRATED = "v2_migrated"
+
+            // Persistent login (CONTRACT §"Client storage keys"): absolute
+            // access-token expiry (Unix seconds) for proactive refresh, the
+            // server session id (JWT `session_id`) and its context
+            // (`interactive` | `restored`).
+            const val EXPIRES_AT = "expires_at"
+            const val SESSION_ID = "session_id"
+            const val SESSION_CONTEXT = "session_context"
         }
 
         private object LegacyKeys {
@@ -151,6 +159,9 @@ class TokenStorage
 
         suspend fun refreshToken(): String? = withPrefs { it.getString(Keys.REFRESH, null) }
 
+        /** Id of the user whose tokens are stored (set by [save]). */
+        suspend fun userId(): String? = withPrefs { it.getString(Keys.USER_ID, null) }
+
         /**
          * JSON snapshot of the last-known session user. Lets a cold launch
          * render the signed-in shell when the network is unreachable instead
@@ -164,10 +175,36 @@ class TokenStorage
             }
         }
 
+        /**
+         * Absolute access-token expiry (Unix epoch **seconds**) as returned
+         * by login / refresh, or `null` for sessions persisted before this
+         * field existed (treated as "unknown — no proactive refresh").
+         */
+        suspend fun expiresAt(): Long? =
+            withPrefs { prefs ->
+                if (prefs.contains(Keys.EXPIRES_AT)) prefs.getLong(Keys.EXPIRES_AT, 0L).takeIf { it > 0L } else null
+            }
+
+        /** Server session id (JWT `session_id`) — sent on `/refresh` and `/logout`. */
+        suspend fun sessionId(): String? = withPrefs { it.getString(Keys.SESSION_ID, null) }
+
+        /** `interactive` | `restored` — gates client-side step-up affordances. */
+        suspend fun sessionContext(): String? = withPrefs { it.getString(Keys.SESSION_CONTEXT, null) }
+
+        /**
+         * Persist a freshly-issued credential set. [expiresAt] / [sessionId]
+         * / [sessionContext] are the persistent-login additions — `null`
+         * leaves the previous value in place for [expiresAt] / [sessionId]
+         * only when the server omitted them (older backend), while a fresh
+         * login always resets the context.
+         */
         suspend fun save(
             accessToken: String,
             refreshToken: String?,
             userId: String,
+            expiresAt: Long? = null,
+            sessionId: String? = null,
+            sessionContext: String? = null,
         ) {
             withPrefs { prefs ->
                 prefs
@@ -176,6 +213,9 @@ class TokenStorage
                         putString(Keys.ACCESS, accessToken)
                         if (refreshToken != null) putString(Keys.REFRESH, refreshToken)
                         putString(Keys.USER_ID, userId)
+                        if (expiresAt != null) putLong(Keys.EXPIRES_AT, expiresAt) else remove(Keys.EXPIRES_AT)
+                        if (sessionId != null) putString(Keys.SESSION_ID, sessionId) else remove(Keys.SESSION_ID)
+                        if (sessionContext != null) putString(Keys.SESSION_CONTEXT, sessionContext) else remove(Keys.SESSION_CONTEXT)
                     }.commit()
             }
             _accessTokenFlow.value = accessToken
@@ -185,11 +225,14 @@ class TokenStorage
          * Refresh-only update — overwrites the access (and optionally
          * refresh) token without touching the stored userId. Used by
          * `AuthRepository.refreshSession` to mirror iOS, which never
-         * rewrites the user identity on a token rotation.
+         * rewrites the user identity on a token rotation. [expiresAt] and
+         * [sessionId] are updated when provided and left untouched otherwise.
          */
         suspend fun updateTokens(
             accessToken: String,
             refreshToken: String?,
+            expiresAt: Long? = null,
+            sessionId: String? = null,
         ) {
             withPrefs { prefs ->
                 prefs
@@ -197,6 +240,8 @@ class TokenStorage
                     .apply {
                         putString(Keys.ACCESS, accessToken)
                         if (refreshToken != null) putString(Keys.REFRESH, refreshToken)
+                        if (expiresAt != null) putLong(Keys.EXPIRES_AT, expiresAt)
+                        if (sessionId != null) putString(Keys.SESSION_ID, sessionId)
                     }.commit()
             }
             _accessTokenFlow.value = accessToken
@@ -214,6 +259,9 @@ class TokenStorage
                         remove(Keys.REFRESH)
                         remove(Keys.USER_ID)
                         remove(Keys.USER_JSON)
+                        remove(Keys.EXPIRES_AT)
+                        remove(Keys.SESSION_ID)
+                        remove(Keys.SESSION_CONTEXT)
                     }.commit()
             }
             _accessTokenFlow.value = null

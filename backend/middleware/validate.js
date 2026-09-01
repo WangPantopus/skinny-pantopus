@@ -62,6 +62,24 @@ function friendlyMessage(detail) {
   }
 }
 
+// Never echo (or log) the value of a field that carries a credential: a
+// password that is one character too long, an over-length resume grant, an OAuth
+// code or a DPoP/step-up signature would otherwise land verbatim in the 400
+// body AND in the warn-level log line. Matched against the LAST path segment so
+// `device.keyBacking` stays visible while `password` / `grant` / `idToken` do not.
+const SENSITIVE_FIELD_RE = /^(?:.*(?:password|passcode|token|secret|signature|credential|authorization)|code|otp|pin|grant|challenge)$/i;
+
+function isSensitiveField(path) {
+  const leaf = String(path[path.length - 1] ?? '');
+  return SENSITIVE_FIELD_RE.test(leaf);
+}
+
+/** A few Joi defaults quote the offending value inside the message text. */
+function scrubValue(message, value) {
+  if (typeof value !== 'string' || value.length < 3) return message;
+  return message.split(value).join('[redacted]');
+}
+
 module.exports = (schema) => (req, res, next) => {
   const { error, value } = schema.validate(req.body, {
     abortEarly: false,
@@ -70,12 +88,16 @@ module.exports = (schema) => (req, res, next) => {
   });
 
   if (error) {
-    const details = error.details.map((detail) => ({
-      field: detail.path.join('.'),
-      message: friendlyMessage(detail),
-      code: detail.type,
-      rejectedValue: detail.context?.value,
-    }));
+    const details = error.details.map((detail) => {
+      const sensitive = isSensitiveField(detail.path);
+      const message = friendlyMessage(detail);
+      return {
+        field: detail.path.join('.'),
+        message: sensitive ? scrubValue(message, detail.context?.value) : message,
+        code: detail.type,
+        rejectedValue: sensitive ? '[redacted]' : detail.context?.value,
+      };
+    });
 
     logger.warn('Request validation failed', {
       method: req.method,

@@ -39,7 +39,12 @@ final class SettingsViewModelTests: XCTestCase {
             return
         }
         let ids = groups.map(\.id)
-        XCTAssertEqual(ids, ["account", "privacy", "notifications", "payments", "support", "session"])
+        XCTAssertEqual(ids, ["account", "security", "privacy", "notifications", "payments", "support", "session"])
+        // Persistent login — the trusted-device registry sits in its own
+        // Security group, mirroring Android's `settings.devices.row`.
+        let security = groups.first { $0.id == "security" }
+        XCTAssertEqual(security?.rows.map(\.id), ["devices"])
+        XCTAssertEqual(security?.rows.first?.accessibilityIdentifier, "settings.devices.row")
         // Verify destructive row sits in its own group with no overline.
         XCTAssertNil(groups.last?.overline)
         XCTAssertEqual(groups.last?.rows.first?.id, "signOut")
@@ -61,7 +66,7 @@ final class SettingsViewModelTests: XCTestCase {
         let allRowIds = Set(groups.flatMap { $0.rows.map(\.id) })
         // Six sub-routes wired in P8; two stay placeholders (export +
         // paymentsPayouts).
-        let wired: Set<String> = ["blocks", "password", "verification", "help", "legal", "about"]
+        let wired: Set<String> = ["blocks", "password", "verification", "help", "legal", "about", "devices"]
         XCTAssertTrue(wired.isSubset(of: allRowIds), "Missing wired row ids: \(wired.subtracting(allRowIds))")
         let placeheld: Set<String> = ["export", "paymentsPayouts"]
         XCTAssertTrue(placeheld.isSubset(of: allRowIds), "Placeholder routes must still surface in the index.")

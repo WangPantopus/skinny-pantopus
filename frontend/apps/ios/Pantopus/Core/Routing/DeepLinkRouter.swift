@@ -207,6 +207,15 @@ final class DeepLinkRouter {
         prefersLoginPresentation = false
     }
 
+    /// Ask the signed-out front door to open the Sign-in cover on its next
+    /// appearance — used by the persistent-login card ("Use a different
+    /// account", "Not you? Remove", a refused resume) so the user lands on
+    /// the login form with the remembered account / security banner rather
+    /// than on the Place funnel. Same flag the deep-link path sets.
+    func requestLoginPresentation() {
+        prefersLoginPresentation = true
+    }
+
     // MARK: - Classification + persistence (Workstream 1.4)
 
     private func apply(destination: Destination, persistencePath: String) {

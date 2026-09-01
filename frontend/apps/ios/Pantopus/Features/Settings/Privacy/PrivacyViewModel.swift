@@ -14,9 +14,11 @@
 //      `GET /api/privacy/settings` and optimistically PATCH the same
 //      route, rolling back and toasting on failure — RN
 //      `src/app/settings/privacy.tsx:151-191`.
-//    · "Delete account" opens `AccountDeleteSheet`, gates on a
-//      device-credential re-auth, then `DELETE /api/users/account` and a
-//      full sign-out — RN `src/app/settings.tsx:103-119`.
+//    · "Delete account" opens `AccountDeleteSheet`, obtains a step-up
+//      token (password if the account has one, else the biometry-bound
+//      device key — design §7.9 / CONTRACT `DELETE /api/users/account`),
+//      then `DELETE /api/users/account` with `X-Step-Up` and a full
+//      sign-out — RN `src/app/settings.tsx:103-119`.
 //
 //  The design's own control set (Profile visibility · Address on profile
 //  · Map location fuzz · Activity) has no column in
@@ -82,9 +84,16 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
 
     /// The re-auth gate in front of the DELETE. Defaults to the shared
     /// `AppLockManager` device-credential check; unit tests substitute a
-    /// closure so they don't depend on a provisioned enrolment.
+    /// closure so they don't depend on a provisioned enrolment. Used only
+    /// when no server-verifiable step-up is available on this device.
     @ObservationIgnored
     var sensitiveActionGate: @MainActor (String) async -> SensitiveActionOutcome
+
+    /// Obtains the `X-Step-Up` token for `delete_account`. Defaults to
+    /// `AuthManager.stepUp(purpose:methods:)` (password sheet / device
+    /// key); unit tests substitute a closure.
+    @ObservationIgnored
+    var stepUpProvider: @MainActor (StepUpPurpose, [String]) async throws -> String
 
     public enum Variant: Sendable, Hashable { case populated, stealth }
 
@@ -105,6 +114,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         self.api = api
         sensitiveActionGate = { reason in
             await appLock.verifySensitiveAction(reason: reason)
+        }
+        stepUpProvider = { [auth] purpose, methods in
+            try await auth.stepUp(purpose: purpose, methods: methods)
         }
     }
 
@@ -267,37 +279,86 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     /// The sheet's "Delete My Account" CTA.
     ///
     /// Order matches RN `settings.tsx:103-119`: re-auth **first**, then
-    /// `DELETE /api/users/account` (`backend/routes/users.js:3945`), then
+    /// `DELETE /api/users/account` (`backend/routes/users.js:4394`), then
     /// a full sign-out that drops the app back to the auth root. The
     /// backend answers 409 when the account still has in-progress gigs or
     /// escrowed payments — that message is surfaced verbatim and nothing
     /// is deleted.
+    ///
+    /// Persistent login: the re-auth is a server-verifiable step-up
+    /// (`X-Step-Up`, purpose `delete_account`) — the password when the
+    /// account has one (`GET /api/users/auth-methods` → `hasPassword`),
+    /// otherwise the biometry-bound device key of an interactive session.
+    /// When neither is available on this device the local device-credential
+    /// gate runs instead and the request goes out without the header (the
+    /// server then decides; a 403 is surfaced in the sheet).
     public func confirmDeleteAccount() async {
         guard !isDeletingAccount else { return }
         deleteAccountError = nil
-        switch await sensitiveActionGate("Approve account deletion") {
-        case .cancelled:
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        let stepUpToken: String?
+        do {
+            stepUpToken = try await obtainDeleteStepUp()
+        } catch let error as StepUpError {
+            if let message = Self.message(forStepUp: error) {
+                deleteAccountError = message
+            }
             return
-        case let .failed(message):
-            deleteAccountError = message
+        } catch {
+            deleteAccountError = Self.message(for: error, fallback: "We couldn't verify it's you. Please try again.")
             return
-        case .verified:
-            break
+        }
+        if stepUpToken == nil {
+            switch await sensitiveActionGate("Approve account deletion") {
+            case .cancelled:
+                return
+            case let .failed(message):
+                deleteAccountError = message
+                return
+            case .verified:
+                break
+            }
         }
 
-        isDeletingAccount = true
         do {
-            _ = try await api.request(AuthMethodsEndpoints.deleteAccount)
-            isDeletingAccount = false
+            _ = try await api.request(AuthMethodsEndpoints.deleteAccount(stepUpToken: stepUpToken))
             isDeleteSheetPresented = false
             await auth.signOut()
             appLock.clearTransientState()
         } catch {
-            isDeletingAccount = false
             deleteAccountError = Self.message(
                 for: error,
                 fallback: "Failed to delete account. Please try again."
             )
+        }
+    }
+
+    /// Password-first step-up for `delete_account`; `nil` when no
+    /// server-verifiable method exists on this device (`.unavailable`).
+    /// Throws `.cancelled` / `.invalidPassword` / … for the caller to show.
+    private func obtainDeleteStepUp() async throws -> String? {
+        let methods: AuthMethodsResponse? = try? await api.request(AuthMethodsEndpoints.methods)
+        // Unknown ⇒ let `AuthManager` pick (device key if enrolled, else
+        // password); known password ⇒ password only (WORKLOG decision 5).
+        let allowed: [String] = methods?.hasPassword == true ? [StepUpMethod.password.rawValue] : []
+        do {
+            return try await stepUpProvider(.deleteAccount, allowed)
+        } catch StepUpError.unavailable {
+            return nil
+        }
+    }
+
+    /// Copy for a failed step-up; `nil` for a user cancel (nothing to say).
+    static func message(forStepUp error: StepUpError) -> String? {
+        switch error {
+        case .cancelled: nil
+        case .invalidPassword: "Incorrect password. Try again."
+        case .rateLimited: "Too many attempts. Try again in a few minutes."
+        case .unavailable: "We couldn't verify it's you on this device. Set a password and try again."
+        case .network: "Can't reach Pantopus. Check your connection and try again."
+        case let .server(message): message
         }
     }
 
@@ -496,7 +557,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                     id: "deleteAccount",
                     label: "Delete account",
                     // The design frame reads "Permanent. 30-day grace
-                    // period." — `users.js:3945` has no grace window, it
+                    // period." — `users.js:4394` has no grace window, it
                     // hard-deletes on the spot, so the row can't promise
                     // one. Mirrored on Android; flagged for design review.
                     subtext: "Permanent. This can't be undone.",

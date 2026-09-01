@@ -88,6 +88,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     private func rebuild() {
         var groups: [GroupedListGroup] = [
             accountGroup(),
+            securityGroup(),
             privacyGroup(),
             notificationsGroup(),
             paymentsGroup(),
@@ -113,6 +114,25 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
                 GroupedListRow(id: "editProfile", label: "Edit profile", control: .chevron),
                 GroupedListRow(id: "password", label: "Password", control: .chevron),
                 GroupedListRow(id: "verification", label: "Verification", control: verificationChip)
+            ]
+        )
+    }
+
+    /// Persistent login — trusted devices, sign out everywhere, security
+    /// preferences and the security-event timeline (design §7.6 / §7.7).
+    /// Mirrors Android's `security` group / `settings.devices.row`.
+    private func securityGroup() -> GroupedListGroup {
+        GroupedListGroup(
+            id: "security",
+            overline: "Security",
+            rows: [
+                GroupedListRow(
+                    id: "devices",
+                    label: "Devices & sessions",
+                    subtext: "Trusted devices, sign out everywhere, security activity",
+                    control: .chevron,
+                    accessibilityIdentifier: "settings.devices.row"
+                )
             ]
         )
     }
@@ -216,6 +236,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         switch rowId {
         case "editProfile": onNavigate(.editProfile)
         case "password": onNavigate(.password)
+        case "devices": onNavigate(.securityDevices)
         case "verification": onNavigate(.verification)
         case "blocks": onNavigate(.blocks)
         case "visibility": onNavigate(.privacy)
@@ -261,6 +282,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
 public enum SettingsRoute: Sendable, Hashable {
     case editProfile
     case password
+    /// Settings → Security & devices (persistent login).
+    case securityDevices
     case verification
     case blocks
     case notifications

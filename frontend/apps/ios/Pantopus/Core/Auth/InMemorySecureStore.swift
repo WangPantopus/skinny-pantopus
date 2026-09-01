@@ -12,6 +12,7 @@ import Foundation
 final class InMemoryStore: SecureStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String] = [:]
+    private var dataStorage: [String: Data] = [:]
 
     func set(_ value: String, for key: String) throws {
         lock.lock()
@@ -29,5 +30,18 @@ final class InMemoryStore: SecureStore, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         storage.removeValue(forKey: key)
+        dataStorage.removeValue(forKey: key)
+    }
+
+    func setData(_ value: Data, for key: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        dataStorage[key] = value
+    }
+
+    func getData(_ key: String) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return dataStorage[key]
     }
 }

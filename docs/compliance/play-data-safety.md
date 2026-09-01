@@ -2,7 +2,7 @@
 
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Package:** `app.pantopus.android`
-**Last reviewed:** 2026-06-05
+**Last reviewed:** 2026-08-18 (persistent login & trusted devices — *Device or other IDs* row updated, security purpose added; no new data type)
 
 Answers to enter in **Play Console → App content → Data safety**. Play's
 taxonomy differs from Apple's, so the same inventory is re-expressed in
@@ -89,7 +89,36 @@ purpose is **App functionality / Account management**; analytics where noted.
 ### Device or other IDs
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
-| Device or other IDs | Yes | No | App functionality | FCM registration token (push); account/user id |
+| Device or other IDs | Yes | No | App functionality, **Fraud prevention, security, and compliance** | FCM registration token (push); account/user id; **since 2026-08 (persistent login):** app-generated device id + install id (`device_identity` prefs, backup-excluded), the device's **public** key (Android Keystore P-256; private half never leaves the device), server session id, and the per-session IP address / user-agent the server records and shows back under Settings → Security → *Where you're logged in*. Not the Advertising ID / AAID; first-party, per-app; never shared. |
+
+> **Purpose wording (2026-08).** Tick **both** *App functionality* (sign the
+> user in, keep them signed in on this device, list/remove devices) and
+> *Fraud prevention, security, and compliance* (bind the refresh token to the
+> device key, detect refresh-token reuse, security-event log, new-device
+> emails). Play has no separate "IP address" type — it falls under *Device or
+> other IDs* here, and the security-event log (sign-in / sign-out / device
+> removed / refresh reuse / password change with timestamp, device, IP, UA) is
+> the same row. Inventory §2.6 / §2.9 are the source.
+>
+> **Ephemeral?** No — `AuthDevice` / `AuthSession` / `AuthSecurityEvent` rows
+> persist server-side (retention in inventory §5). **Required?** Yes — the
+> device id / key are created on first sign-in and cannot be opted out of
+> (the security preferences only govern resume grants and new-device email).
+
+### Not new data types — biometrics and Block Store
+- **Biometrics / device credential** (`USE_BIOMETRIC`, `BiometricPrompt` with
+  `BIOMETRIC_STRONG or DEVICE_CREDENTIAL`) gate "Continue as X" after a
+  reinstall and unlock the biometry-bound step-up key. The app receives only
+  the prompt result and a Keystore signature — **no biometric data is
+  collected or leaves the OS**, so *Health & fitness* stays unticked (§4).
+- **Google Play services Block Store** (`play-services-auth-blockstore`)
+  keeps the account hint (display name, avatar URL, masked email) and a
+  single-use resume grant **on the device only** (`setShouldBackupToCloud
+  (false)`, so same-device reinstall + device-to-device transfer, no cloud
+  copy). It is neither collected by us nor "shared" with Google in a
+  readable form; nothing to declare beyond the SDK row in inventory §4.
+- Nothing is uploaded from Block Store; the resume grant is redeemed against
+  `POST /api/auth/resume` and the server holds only its SHA-256.
 
 ---
 
@@ -131,7 +160,8 @@ Installed apps, SMS/Call logs, Purchase history (no IAP), Advertising ID
 | User Content (audio) | Voice or sound recordings | Audio Data |
 | User Content (messages) | Other in-app messages | (User Content) |
 | User Content (other) | Other user-generated content | Other User Content |
-| Identifiers | Device or other IDs | User ID + Device ID |
+| Identifiers (incl. 2026-08 device id / install id / device public key / session id) | Device or other IDs (App functionality + Fraud prevention, security, and compliance) | User ID + Device ID |
+| Security & session records (§2.9: IP + UA, security events) | Device or other IDs (same row, security purpose) | Other Data Types (note) |
 | Diagnostics | Crash logs + Diagnostics (shared→Sentry) | Crash + Performance Data |
 | Usage Data | App interactions (shared→Sentry) | Product Interaction |
 

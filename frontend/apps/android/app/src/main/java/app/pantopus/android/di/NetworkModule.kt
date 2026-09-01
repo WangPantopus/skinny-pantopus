@@ -106,6 +106,8 @@ import app.pantopus.android.data.api.services.UsersApi
 import app.pantopus.android.data.api.services.ViewingLocationApi
 import app.pantopus.android.data.api.services.WalletApi
 import app.pantopus.android.data.auth.AuthInterceptor
+import app.pantopus.android.data.auth.DeviceIdentityInterceptor
+import app.pantopus.android.data.auth.StepUpInterceptor
 import app.pantopus.android.data.auth.TokenAuthenticator
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
@@ -191,6 +193,8 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
+        deviceIdentityInterceptor: DeviceIdentityInterceptor,
+        stepUpInterceptor: StepUpInterceptor,
         tokenAuthenticator: TokenAuthenticator,
         retryInterceptor: RetryInterceptor,
         cache: Cache,
@@ -207,7 +211,12 @@ object NetworkModule {
         return OkHttpClient
             .Builder()
             .cache(cache)
+            // X-Client-Platform + X-Device-Id on every request (both clients).
+            .addInterceptor(deviceIdentityInterceptor)
+            // Bearer + pre-flight refresh when the access token is about to expire.
             .addInterceptor(authInterceptor)
+            // 403 STEP_UP_REQUIRED -> step-up UI -> retry once with X-Step-Up.
+            .addInterceptor(stepUpInterceptor)
             // Silent token refresh + replay on 401 (OkHttp-driven retry).
             .authenticator(tokenAuthenticator)
             .addInterceptor(retryInterceptor)
@@ -238,12 +247,16 @@ object NetworkModule {
     // main client risks a deadlock when a burst of concurrent 401s pins every
     // per-host slot. A separate dispatcher always has a free slot, and omitting
     // the authenticator guarantees no refresh-of-the-refresh recursion.
+    // It also carries the unauthenticated /api/auth/resume + /challenge and
+    // the proof-carrying /logout. Only the identity headers ride along
+    // (X-Client-Platform, X-Device-Id) — the DPoP proof is per call.
     @Provides
     @Singleton
     @Named("authRefresh")
-    fun provideRefreshOkHttpClient(): OkHttpClient =
+    fun provideRefreshOkHttpClient(deviceIdentityInterceptor: DeviceIdentityInterceptor): OkHttpClient =
         OkHttpClient
             .Builder()
+            .addInterceptor(deviceIdentityInterceptor)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)

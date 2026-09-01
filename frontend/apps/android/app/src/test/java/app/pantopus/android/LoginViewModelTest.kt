@@ -1,12 +1,17 @@
 package app.pantopus.android
 
 import app.pantopus.android.data.api.models.users.UserDto
+import app.pantopus.android.data.auth.AccountHint
 import app.pantopus.android.data.auth.AuthError
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.OAuthProvider
+import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.ui.screens.auth.LoginViewModel
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +41,16 @@ class LoginViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun repoReturning(result: Result<UserDto>) =
-        mockk<AuthRepository>(relaxed = true).apply {
-            coEvery { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
-            coEvery { signIn(any(), any()) } returns result
-        }
+    private fun repoReturning(
+        result: Result<UserDto>,
+        remembered: List<AccountHint> = emptyList(),
+        sessionEnd: SessionEndReason? = null,
+    ) = mockk<AuthRepository>(relaxed = true).apply {
+        coEvery { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+        every { rememberedAccounts } returns MutableStateFlow(remembered)
+        every { sessionEndReason } returns MutableStateFlow(sessionEnd)
+        coEvery { signIn(any(), any()) } returns result
+    }
 
     @Test
     fun `canSubmit requires valid email and 6+ char password`() =
@@ -137,5 +147,78 @@ class LoginViewModelTest {
 
             vm.onEmailChange("a@b.com ")
             assertNull(vm.uiState.value.errorMessage)
+        }
+
+    // ---- Persistent login: remembered-account prefill + session-end banner ----
+
+    @Test
+    fun `most recent remembered account is surfaced as the prefill hint, email field stays empty`() =
+        runTest {
+            val hints =
+                listOf(
+                    AccountHint(
+                        userId = "u_1",
+                        displayName = "Ying",
+                        maskedEmail = "y•••@gmail.com",
+                        lastMethod = AccountHint.METHOD_GOOGLE,
+                    ),
+                    AccountHint(userId = "u_2", displayName = "Old", maskedEmail = "o•••@x.com", lastMethod = AccountHint.METHOD_PASSWORD),
+                )
+            val vm = LoginViewModel(repoReturning(Result.success(sampleUser), remembered = hints))
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals("u_1", state.rememberedAccount?.userId)
+            assertEquals("y•••@gmail.com", state.rememberedAccount?.maskedEmail)
+            // The hint holds a *masked* address (CONTRACT) — never prefilled into the field.
+            assertEquals("", state.email)
+            assertEquals(OAuthProvider.Google, state.lastUsedOAuthProvider)
+        }
+
+    @Test
+    fun `no remembered account means no hint and no last-used provider`() =
+        runTest {
+            val vm = LoginViewModel(repoReturning(Result.success(sampleUser)))
+            advanceUntilIdle()
+            assertNull(vm.uiState.value.rememberedAccount)
+            assertNull(vm.uiState.value.lastUsedOAuthProvider)
+        }
+
+    @Test
+    fun `forgetRememberedAccount removes the hinted account on this device`() =
+        runTest {
+            val repo =
+                repoReturning(
+                    Result.success(sampleUser),
+                    remembered = listOf(AccountHint(userId = "u_1", displayName = "Ying")),
+                )
+            val vm = LoginViewModel(repo)
+            advanceUntilIdle()
+
+            vm.forgetRememberedAccount()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { repo.removeRememberedAccount("u_1") }
+        }
+
+    @Test
+    fun `security sign-out reason is surfaced and consumed on dismiss and on successful sign-in`() =
+        runTest {
+            val reason = SessionEndReason.fromCode("SESSION_REVOKED")
+            val repo = repoReturning(Result.success(sampleUser), sessionEnd = reason)
+            val vm = LoginViewModel(repo)
+            advanceUntilIdle()
+
+            assertEquals(reason, vm.uiState.value.sessionEndReason)
+            assertTrue(vm.uiState.value.sessionEndReason?.isSecurity == true)
+
+            vm.dismissSessionEndBanner()
+            verify(exactly = 1) { repo.consumeSessionEndReason() }
+
+            vm.onEmailChange("alice@example.com")
+            vm.onPasswordChange("hunter22")
+            vm.signIn()
+            advanceUntilIdle()
+            verify(exactly = 2) { repo.consumeSessionEndReason() }
         }
 }

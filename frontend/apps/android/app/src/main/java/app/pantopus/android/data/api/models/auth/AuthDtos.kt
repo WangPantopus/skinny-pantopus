@@ -5,16 +5,26 @@ import com.squareup.moshi.JsonClass
 
 /**
  * `POST /api/users/login` request body. Route: `backend/routes/users.js:1492`.
+ *
+ * [device] is the optional device descriptor (persistent-login CONTRACT
+ * §"Device descriptor"); sent together with a `DPoP` header so the server
+ * can bind the issued session to this device's key at issuance.
  */
 @JsonClass(generateAdapter = true)
 data class LoginRequest(
     val email: String,
     val password: String,
+    val device: DeviceDescriptorDto? = null,
 )
 
 /**
  * `POST /api/users/login` response. Tokens are omitted when the server is
  * in cookie-transport mode. Route: `backend/routes/users.js:1492`.
+ *
+ * Persistent-login additions (all optional, older backends omit them):
+ * [sessionId], [session] (`{ id, context }`), [device] (`{ id, deviceId,
+ * isNew, trustLevel }`) and — on `POST /api/auth/resume` only —
+ * [resumeGrant] (the next single-use Block Store grant).
  */
 @JsonClass(generateAdapter = true)
 data class LoginResponse(
@@ -26,6 +36,10 @@ data class LoginResponse(
     /** Absolute expiry (Unix epoch, seconds). */
     val expiresAt: Long?,
     val user: AuthenticatedUser,
+    val sessionId: String? = null,
+    val session: SessionInfoDto? = null,
+    val device: BoundDeviceDto? = null,
+    val resumeGrant: String? = null,
 )
 
 /**
@@ -44,6 +58,7 @@ data class OAuthUrlResponse(
 @JsonClass(generateAdapter = true)
 data class OAuthCodeExchangeRequest(
     val code: String,
+    val device: DeviceDescriptorDto? = null,
 )
 
 /**
@@ -54,6 +69,22 @@ data class OAuthCodeExchangeRequest(
 data class OAuthTokenExchangeRequest(
     val accessToken: String,
     val refreshToken: String,
+    val device: DeviceDescriptorDto? = null,
+)
+
+/**
+ * `POST /api/users/oauth/native` request — native Sign in with Google /
+ * Apple id-token exchange (persistent-login CONTRACT). Wired server-side;
+ * the Credential Manager client path lands in a later phase.
+ */
+@JsonClass(generateAdapter = true)
+data class OAuthNativeRequest(
+    /** `"apple"` or `"google"`. */
+    val provider: String,
+    val idToken: String,
+    val nonce: String? = null,
+    val accessToken: String? = null,
+    val device: DeviceDescriptorDto? = null,
 )
 
 /**
@@ -101,10 +132,14 @@ data class RegisterResponse(
 @JsonClass(generateAdapter = true)
 data class RefreshRequest(
     val refreshToken: String?,
+    /** Persistent login: lets the server resolve the bound session faster. */
+    val deviceId: String? = null,
+    val sessionId: String? = null,
 )
 
 /**
  * `POST /api/users/refresh` response. Route: `backend/routes/users.js:1910`.
+ * [sessionId] / [session] are the persistent-login additions.
  */
 @JsonClass(generateAdapter = true)
 data class RefreshResponse(
@@ -113,6 +148,8 @@ data class RefreshResponse(
     val refreshToken: String?,
     val expiresIn: Long?,
     val expiresAt: Long?,
+    val sessionId: String? = null,
+    val session: SessionInfoDto? = null,
 )
 
 /**

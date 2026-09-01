@@ -47,7 +47,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Pantopus uses Face ID to lock sensitive actions like payments.</string>
+	<string>Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Pantopus connects to the local development server on your Mac while testing.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

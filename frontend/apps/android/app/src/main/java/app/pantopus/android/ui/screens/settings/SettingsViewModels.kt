@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.core.security.StepUpCoordinator
 import app.pantopus.android.data.account.AccountDeletionRepository
+import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
@@ -35,6 +37,9 @@ enum class SettingsRoute {
     EditProfile,
     Password,
     Verification,
+
+    /** Persistent login — Settings → Security → Devices (trusted devices, sessions, security events). */
+    Devices,
     Blocks,
     Notifications,
     Privacy,
@@ -135,6 +140,7 @@ class SettingsIndexViewModel
                 "editProfile" -> _navigation.value = SettingsRoute.EditProfile
                 "password" -> _navigation.value = SettingsRoute.Password
                 "verification" -> _navigation.value = SettingsRoute.Verification
+                "devices" -> _navigation.value = SettingsRoute.Devices
                 "blocks" -> _navigation.value = SettingsRoute.Blocks
                 "visibility" -> _navigation.value = SettingsRoute.IdentityCenter
                 "notificationPreferences" -> _navigation.value = SettingsRoute.Notifications
@@ -178,6 +184,23 @@ class SettingsIndexViewModel
                                     GroupedListRow(id = "editProfile", label = "Edit profile", control = RowControl.Chevron),
                                     GroupedListRow(id = "password", label = "Password", control = RowControl.Chevron),
                                     GroupedListRow(id = "verification", label = "Verification", control = verificationChip),
+                                ),
+                        ),
+                    )
+                    // Persistent login — Settings → Security → Devices (design §7.6/§7.7).
+                    add(
+                        GroupedListGroup(
+                            id = "security",
+                            overline = "Security",
+                            rows =
+                                listOf(
+                                    GroupedListRow(
+                                        id = "devices",
+                                        label = "Devices & sessions",
+                                        subtext = "Trusted devices, sign out everywhere, security activity",
+                                        control = RowControl.Chevron,
+                                        testTag = "settings.devices.row",
+                                    ),
                                 ),
                         ),
                     )
@@ -339,6 +362,8 @@ class PrivacySettingsViewModel
         private val authRepository: AuthRepository,
         private val privacy: PrivacyRepository,
         private val accountDeletion: AccountDeletionRepository,
+        private val stepUp: StepUpCoordinator,
+        private val account: AccountRepository,
     ) : ViewModel() {
         enum class Variant { Populated, Stealth }
 
@@ -576,23 +601,36 @@ class PrivacySettingsViewModel
          *
          * Order matches RN `settings.tsx:103-119`: re-auth **first**, then
          * `DELETE /api/users/account` (`backend/routes/users.js:3945`), then
-         * a full sign-out so the host drops back to the auth root. The
+         * a full local erase so the host drops back to the auth root. The
          * backend answers 409 when the account still has in-progress gigs
          * or escrowed payments — that message is surfaced verbatim and
          * nothing is deleted.
+         *
+         * Persistent login (design §7.9, CONTRACT, WORKLOG decision 5): the
+         * re-auth is a *step-up* — `X-Step-Up` purpose `delete_account`
+         * obtained through [StepUpCoordinator] with the strongest method the
+         * account has: the password when it has one, otherwise the
+         * biometry-bound device key enrolled in an interactive session. The
+         * coordinator owns the Tier-2 gesture (biometric prompt, or
+         * `AppLockManager.verifySensitiveAction` before the password sheet).
+         * On success every local trace is erased — tokens, remembered
+         * accounts, Block Store entry, both Keystore keys.
          */
         fun confirmDeleteAccount(hostActivity: FragmentActivity?) {
             if (_deletingAccount.value) return
             _deleteAccountError.value = null
             viewModelScope.launch {
-                if (!verifyIdentityForDeletion(hostActivity)) return@launch
-
                 _deletingAccount.value = true
-                when (val result = accountDeletion.deleteAccount()) {
+                val stepUpToken = obtainDeletionStepUp(hostActivity)
+                if (stepUpToken == null) {
+                    _deletingAccount.value = false
+                    return@launch
+                }
+                when (val result = accountDeletion.deleteAccount(stepUpToken)) {
                     is NetworkResult.Success -> {
                         _deletingAccount.value = false
                         _deleteSheetVisible.value = false
-                        authRepository.signOut()
+                        authRepository.eraseAllLocalState()
                         appLock.clearTransientState()
                         _accountDeleted.value = true
                     }
@@ -608,22 +646,45 @@ class PrivacySettingsViewModel
         }
 
         /**
-         * `true` when the DELETE may proceed. Sets [deleteAccountError]
-         * itself for the "couldn't verify" outcomes; a plain cancel is
-         * silent, exactly like RN's guard.
+         * The `delete_account` step-up token, or `null` when the DELETE must
+         * not proceed. Sets [deleteAccountError] itself for the "couldn't
+         * verify" outcomes; a plain cancel is silent, exactly like RN's
+         * guard.
          */
-        private suspend fun verifyIdentityForDeletion(hostActivity: FragmentActivity?): Boolean {
+        private suspend fun obtainDeletionStepUp(hostActivity: FragmentActivity?): String? {
             if (hostActivity == null) {
-                _deleteAccountError.value = "We couldn't verify your identity. Please try again."
-                return false
+                _deleteAccountError.value = StepUpCoordinator.NO_ACTIVITY_MESSAGE
+                return null
             }
-            val outcome = appLock.verifySensitiveAction(hostActivity, "Approve account deletion")
+            // Strongest-method rule: an account with a password must present
+            // it (the server enforces the same); OAuth-only accounts use the
+            // biometric device key. Unknown (auth-methods fetch failed) →
+            // let the coordinator try the strongest and the server steer.
+            val hasPassword = (account.authMethods() as? NetworkResult.Success)?.data?.hasPassword
+            val methods =
+                when (hasPassword) {
+                    true -> listOf(StepUpCoordinator.METHOD_PASSWORD)
+                    false -> listOf(StepUpCoordinator.METHOD_DEVICE_KEY)
+                    null -> null
+                }
+            val outcome =
+                stepUp.obtainToken(
+                    purpose = StepUpCoordinator.PURPOSE_DELETE_ACCOUNT,
+                    methods = methods,
+                    activity = hostActivity,
+                    reason = "Approve account deletion",
+                )
             return when (outcome) {
-                is AppLockManager.SensitiveActionOutcome.Verified -> true
-                is AppLockManager.SensitiveActionOutcome.Cancelled -> false
-                is AppLockManager.SensitiveActionOutcome.Failed -> {
-                    _deleteAccountError.value = outcome.message
-                    false
+                is StepUpCoordinator.Outcome.Token -> outcome.stepUpToken
+                StepUpCoordinator.Outcome.Cancelled -> null
+                is StepUpCoordinator.Outcome.Failed -> {
+                    _deleteAccountError.value =
+                        if (hasPassword == false && outcome.message == StepUpCoordinator.NO_METHOD_MESSAGE) {
+                            PASSWORDLESS_DELETE_HELP
+                        } else {
+                            outcome.message
+                        }
+                    null
                 }
             }
         }
@@ -868,6 +929,10 @@ class PrivacySettingsViewModel
 
 /** `searchVisibility.<everyone|mutuals|nobody>` row-id prefix. */
 private const val SEARCH_VISIBILITY_PREFIX = "searchVisibility."
+
+/** Delete account: OAuth-only account without a usable biometric step-up key on this device. */
+internal const val PASSWORDLESS_DELETE_HELP =
+    "Biometric verification isn't set up on this device. Sign in again with Google or Apple, then try again."
 private const val ROW_FINDABLE_BY_NAME = "findableByName"
 private const val ROW_DELETE_ACCOUNT = "deleteAccount"
 

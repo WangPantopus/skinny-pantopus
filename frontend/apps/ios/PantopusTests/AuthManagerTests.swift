@@ -7,30 +7,46 @@
 //  Keychain or the real network.
 //
 
+// swiftlint:disable type_body_length
+
 import XCTest
 @testable import Pantopus
 
 @MainActor
 final class AuthManagerTests: XCTestCase {
+    private var markerDirectory: URL!
+
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        markerDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("auth-manager-tests-\(UUID().uuidString)", isDirectory: true)
     }
 
     override func tearDown() {
         SequencedURLProtocol.reset()
+        try? FileManager.default.removeItem(at: markerDirectory)
         super.tearDown()
     }
 
     // MARK: - Helpers
 
+    /// A manager on a stubbed client, a temp-dir install marker (never the
+    /// real Application Support folder), software device keys and a
+    /// presence gate that always verifies.
     private func makeManager(store: any SecureStore = InMemorySecureStore()) -> AuthManager {
         let client = APIClient(
             environment: .current,
             session: SequencedURLProtocol.makeSession(),
             retryPolicy: .none
         )
-        return AuthManager(store: store, apiClient: client)
+        return AuthManager(
+            store: store,
+            apiClient: client,
+            installMarker: InstallMarker(directory: markerDirectory),
+            presenceGate: FakePresenceGate(.verified),
+            allowSecureEnclave: false
+        )
     }
 
     private func stub(_ path: String, status: Int, body: String) {
@@ -40,19 +56,21 @@ final class AuthManagerTests: XCTestCase {
     // MARK: - Existing coverage
 
     func testInitialStateIsUnknown() {
-        let manager = AuthManager(store: InMemorySecureStore())
+        let manager = makeManager()
         if case .unknown = manager.state { /* pass */ } else {
             XCTFail("Expected .unknown on init, got \(manager.state)")
         }
         XCTAssertNil(manager.accessToken)
+        XCTAssertNil(manager.sessionEndReason)
     }
 
     func testSignOutClearsState() async throws {
         let store = InMemorySecureStore()
         try store.set("at_test", for: SecureStoreKey.accessToken)
         try store.set("u_123", for: SecureStoreKey.userId)
+        stub("/api/users/logout", status: 200, body: "{\"success\":true}")
 
-        let manager = AuthManager(store: store)
+        let manager = makeManager(store: store)
         await manager.signOut()
 
         if case .signedOut = manager.state { /* pass */ } else {
@@ -63,12 +81,72 @@ final class AuthManagerTests: XCTestCase {
         XCTAssertNil(store.get(SecureStoreKey.userId))
     }
 
+    /// Design §7.6: an explicit sign-out is no longer local-only — it tells
+    /// the server (`POST /api/users/logout {scope:"local"}`) with whatever
+    /// proof exists (Bearer + refresh token + DPoP `rth`), and the local wipe
+    /// happens first so a slow / failing network call can never keep the
+    /// user signed in.
+    func testSignOutCallsLogoutEndpointWithLocalScopeAndProof() async throws {
+        let store = InMemorySecureStore()
+        try store.set("at_test", for: SecureStoreKey.accessToken)
+        try store.set("rt_test", for: SecureStoreKey.refreshToken)
+        try store.set("u_123", for: SecureStoreKey.userId)
+        let identity = try DeviceIdentity.loadOrCreate(in: store, allowSecureEnclave: false)
+        stub("/api/users/logout", status: 200, body: "{\"success\":true}")
+        let manager = makeManager(store: store)
+
+        await manager.signOut()
+        await manager.awaitBackgroundWork()
+
+        let logout = try XCTUnwrap(SequencedURLProtocol.captured(path: "/api/users/logout").first)
+        XCTAssertEqual(logout.httpMethod, "POST")
+        XCTAssertEqual(logout.value(forHTTPHeaderField: "Authorization"), "Bearer at_test")
+        XCTAssertEqual(logout.value(forHTTPHeaderField: "X-Device-Id"), identity.deviceId)
+        let body = try XCTUnwrap(logout.authTestJSONBody())
+        XCTAssertEqual(body["scope"] as? String, "local")
+        XCTAssertEqual(body["deviceId"] as? String, identity.deviceId)
+        XCTAssertEqual(body["refreshToken"] as? String, "rt_test")
+        let proof = try XCTUnwrap(logout.authTestDPoP())
+        XCTAssertEqual(proof.payload.rth, DPoPProofBuilder.refreshTokenHash("rt_test"))
+        XCTAssertTrue(proof.signatureValid)
+        XCTAssertNil(store.get(SecureStoreKey.refreshToken))
+        XCTAssertNil(manager.sessionEndReason, "a user-initiated sign-out carries no security reason")
+    }
+
+    func testSignOutSurvivesLogoutEndpointFailure() async throws {
+        let store = InMemorySecureStore()
+        try store.set("at_test", for: SecureStoreKey.accessToken)
+        try store.set("rt_test", for: SecureStoreKey.refreshToken)
+        stub("/api/users/logout", status: 503, body: "{\"error\":\"down\"}")
+        let manager = makeManager(store: store)
+
+        await manager.signOut()
+
+        if case .signedOut = manager.state { /* pass */ } else {
+            XCTFail("Expected .signedOut even when /logout fails, got \(manager.state)")
+        }
+        XCTAssertNil(store.get(SecureStoreKey.accessToken))
+        XCTAssertNil(store.get(SecureStoreKey.refreshToken))
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/users/logout").count, 1)
+    }
+
+    func testSignOutWithoutTokensMakesNoNetworkCall() async {
+        let manager = makeManager()
+        await manager.signOut()
+        if case .signedOut = manager.state { /* pass */ } else {
+            XCTFail("Expected .signedOut, got \(manager.state)")
+        }
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.isEmpty)
+    }
+
     func testHandleUnauthorizedTransitionsToSignedOut() async {
-        let manager = AuthManager(store: InMemorySecureStore())
+        let manager = makeManager()
         await manager.handleUnauthorized()
         if case .signedOut = manager.state { /* pass */ } else {
             XCTFail("Expected .signedOut after 401, got \(manager.state)")
         }
+        XCTAssertEqual(manager.sessionEndReason, .expired, "no refresh code ⇒ plain expiry")
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.isEmpty, "the server already knows — no logout call")
     }
 
     // MARK: - Sign in mapping
@@ -88,6 +166,73 @@ final class AuthManagerTests: XCTestCase {
         XCTAssertEqual(store.get(SecureStoreKey.accessToken), "at_test")
         XCTAssertEqual(store.get(SecureStoreKey.refreshToken), "rt_test")
         XCTAssertEqual(store.get(SecureStoreKey.userId), "u_123")
+    }
+
+    /// Persistent login: a login response now also yields `expiresAt`,
+    /// `sessionId` / `session.context`, a remembered-account hint, the
+    /// install marker and a background `POST /api/auth/devices/register`
+    /// (design §7.1); the request itself carries the device descriptor and
+    /// a DPoP proof (bind-at-issue).
+    func testSignInPersistsSessionMetadataHintAndRegistersDevice() async throws {
+        let store = InMemorySecureStore()
+        stub("/api/users/login", status: 200, body: Fixtures.loginJSON(sessionId: "sess-42"))
+        stub("/api/auth/devices/register", status: 200, body: "{\"device\":{\"id\":\"row\",\"deviceId\":\"x\",\"trustLevel\":\"trusted\"}}")
+        let manager = makeManager(store: store)
+
+        try await manager.signIn(email: "alice@example.com", password: "hunter22")
+        await manager.awaitBackgroundWork()
+
+        XCTAssertEqual(manager.sessionId, "sess-42")
+        XCTAssertEqual(manager.sessionContext, .interactive)
+        XCTAssertEqual(manager.expiresAt, Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertEqual(store.get(SecureStoreKey.sessionId), "sess-42")
+        XCTAssertEqual(store.get(SecureStoreKey.sessionContext), "interactive")
+        XCTAssertEqual(store.get(SecureStoreKey.expiresAt), "1800000000")
+        XCTAssertNotNil(manager.lastInteractiveSignInAt)
+
+        let hint = try XCTUnwrap(manager.rememberedAccounts.first)
+        XCTAssertEqual(hint.userId, "u_123")
+        XCTAssertEqual(hint.maskedEmail, "a•••@example.com")
+        XCTAssertEqual(hint.lastMethod, .password)
+
+        let marker = InstallMarker(directory: markerDirectory)
+        XCTAssertEqual(marker.verdict(store: store), .sameInstall, "marker committed after a successful login")
+        XCTAssertEqual(store.get(SecureStoreKey.installId), marker.readFileInstallId())
+
+        let login = try XCTUnwrap(SequencedURLProtocol.captured(path: "/api/users/login").first)
+        let device = try XCTUnwrap(login.authTestJSONBody()?["device"] as? [String: Any])
+        XCTAssertEqual(device["deviceId"] as? String, store.get(SecureStoreKey.deviceId))
+        XCTAssertEqual(device["installId"] as? String, marker.readFileInstallId())
+        XCTAssertEqual(device["platform"] as? String, "ios")
+        XCTAssertEqual(device["keyBacking"] as? String, "software")
+        XCTAssertNotNil(device["appVersion"])
+        XCTAssertNotNil(device["osVersion"])
+        XCTAssertNotNil(device["model"])
+        XCTAssertNotNil(device["hasOsLock"])
+        let proof = try XCTUnwrap(login.authTestDPoP(), "login carries a DPoP proof")
+        XCTAssertNil(proof.payload.rth, "no refresh token travels on /login")
+        XCTAssertTrue(proof.payload.htu.hasSuffix("/api/users/login"))
+        XCTAssertTrue(proof.signatureValid)
+
+        let register = try XCTUnwrap(SequencedURLProtocol.captured(path: "/api/auth/devices/register").first)
+        XCTAssertEqual(register.value(forHTTPHeaderField: "Authorization"), "Bearer at_test")
+        XCTAssertNotNil(register.authTestDPoP(), "register carries a DPoP proof from the same key")
+        XCTAssertEqual(register.authTestDPoP()?.thumbprint, proof.thumbprint)
+        XCTAssertEqual(store.get(SecureStoreKey.registeredAppVersion), DeviceDescriptor.appVersion)
+    }
+
+    func testSignInWithoutSessionFieldsStillWorks() async throws {
+        // Backward compatibility: a server that has not shipped the additive
+        // fields yet (or the cookie transport) must not break the client.
+        let store = InMemorySecureStore()
+        stub("/api/users/login", status: 200, body: Fixtures.loginJSON())
+        let manager = makeManager(store: store)
+
+        try await manager.signIn(email: "alice@example.com", password: "hunter22")
+
+        XCTAssertNil(manager.sessionId)
+        XCTAssertNil(manager.sessionContext)
+        XCTAssertEqual(manager.expiresAt, Date(timeIntervalSince1970: 1_800_000_000))
     }
 
     func testSignInWrongCredentialsMapsToInvalidCredentials() async {

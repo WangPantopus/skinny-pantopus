@@ -54,6 +54,11 @@ struct PantopusApp: App {
                     case .active:
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
+                        // Proactive DPoP refresh when < 120 s of access-token
+                        // life remain, so the first request after a long
+                        // background never pays the 401 + replay tax
+                        // (CONTRACT "Client behaviour").
+                        Task { await authManager.refreshIfExpiringSoon() }
                     case .inactive:
                         // Transient interruption — Control Centre, the
                         // notification shade, an incoming call, or the
@@ -117,6 +122,12 @@ struct RootView: View {
                     SplashView()
                 case .signedOut:
                     PlaceLaunchHost()
+                case let .resumable(hint):
+                    // L2 "Continue as X": tokens survived a reinstall (or
+                    // the account went dormant) — one presence gesture via
+                    // `auth.resume()` before the session is live again.
+                    ContinueAsView(hint: hint, sessionEndReason: auth.sessionEndReason)
+                        .id(hint.userId)
                 case .signedIn:
                     RootTabView()
                 }
@@ -152,7 +163,10 @@ struct RootView: View {
             isSignedIn: isSignedInState,
             lastInteractiveSignInAt: auth.lastInteractiveSignInAt
         )
-        .onAppear { syncAppLock() }
+        .onAppear {
+            syncAppLock()
+            installStepUpPrompt()
+        }
         .onChange(of: auth.state) { previous, new in
             syncAppLock()
             // Workstream 1.4 — one-shot replay of a deferred content deep
@@ -196,8 +210,18 @@ struct RootView: View {
             appLock.configure(userID: user.id)
         case .unknown:
             break
-        case .signedOut:
+        case .signedOut, .resumable:
             appLock.configure(userID: nil)
+        }
+    }
+
+    /// Wire the password half of step-up into the auth layer. Until this
+    /// runs, `AuthManager.stepUp` can only use the biometry-bound device key
+    /// and a 403 `STEP_UP_REQUIRED` surfaces as `.forbidden`.
+    private func installStepUpPrompt() {
+        guard auth.stepUpPasswordPrompt == nil else { return }
+        auth.stepUpPasswordPrompt = { purpose in
+            await StepUpPasswordPrompter.shared.ask(purpose: purpose)
         }
     }
 

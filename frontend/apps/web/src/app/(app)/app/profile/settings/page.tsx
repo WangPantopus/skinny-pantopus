@@ -187,6 +187,27 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Security — where you're logged in, trusted devices, sign out everywhere */}
+          <div className="bg-surface rounded-xl border border-app p-6">
+            <h2 className="text-lg font-semibold text-app mb-2">Security</h2>
+            <p className="text-sm text-app-secondary mb-4">See where you&apos;re logged in, remove a lost phone, sign out everywhere, and review recent security activity.</p>
+            <button
+              onClick={() => router.push('/app/settings/security')}
+              className="w-full flex items-center justify-between px-4 py-3 border border-app rounded-lg hover-bg-app transition group"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🔐</span>
+                <div className="text-left">
+                  <span className="font-medium text-app group-hover:text-primary-600 block">Devices &amp; sessions</span>
+                  <span className="text-xs text-app-secondary">Where you&apos;re logged in, trusted devices, security activity</span>
+                </div>
+              </div>
+              <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
           {/* Payments & Payouts */}
           <div className="bg-surface rounded-xl border border-app p-6">
             <h2 className="text-lg font-semibold text-app mb-2">Payments & Payouts</h2>

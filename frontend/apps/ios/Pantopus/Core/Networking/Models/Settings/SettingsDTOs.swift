@@ -87,18 +87,40 @@ public struct BlockedUserSummary: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Envelope from `GET /api/users/auth-methods`.
+/// Envelope from `GET /api/users/auth-methods` (route
+/// `backend/routes/users.js:1887`). The route answers camelCase
+/// `{ providers, hasPassword }`; the snake_case spellings are still
+/// accepted so older fixtures keep decoding.
 public struct AuthMethodsResponse: Decodable, Sendable {
     public let methods: [AuthMethod]?
     public let hasPassword: Bool?
     public let providers: [String]?
     public let twoFactorEnabled: Bool?
 
+    public init(methods: [AuthMethod]?, hasPassword: Bool?, providers: [String]?, twoFactorEnabled: Bool?) {
+        self.methods = methods
+        self.hasPassword = hasPassword
+        self.providers = providers
+        self.twoFactorEnabled = twoFactorEnabled
+    }
+
     enum CodingKeys: String, CodingKey {
         case methods
-        case hasPassword = "has_password"
+        case hasPassword
+        case hasPasswordSnake = "has_password"
         case providers
-        case twoFactorEnabled = "two_factor_enabled"
+        case twoFactorEnabled
+        case twoFactorEnabledSnake = "two_factor_enabled"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        methods = try container.decodeIfPresent([AuthMethod].self, forKey: .methods)
+        hasPassword = try container.decodeIfPresent(Bool.self, forKey: .hasPassword)
+            ?? container.decodeIfPresent(Bool.self, forKey: .hasPasswordSnake)
+        providers = try container.decodeIfPresent([String].self, forKey: .providers)
+        twoFactorEnabled = try container.decodeIfPresent(Bool.self, forKey: .twoFactorEnabled)
+            ?? container.decodeIfPresent(Bool.self, forKey: .twoFactorEnabledSnake)
     }
 }
 

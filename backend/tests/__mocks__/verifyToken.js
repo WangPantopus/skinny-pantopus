@@ -6,6 +6,9 @@ const verifyToken = (req, _res, next) => {
   } else {
     req.user = { id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa', role };
   }
+  // Optional: routes that need req.user.email (e.g. /api/auth/step-up
+  // password) can supply it; absent header keeps the legacy shape.
+  if (req.headers['x-test-user-email']) req.user.email = req.headers['x-test-user-email'];
   next();
 };
 

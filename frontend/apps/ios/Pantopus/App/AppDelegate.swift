@@ -83,6 +83,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             // platform=ios. The backend stores it as an APNs provider token
             // and delivers via APNs directly (no Expo). See
             // docs/push-native-migration.md.
+            //
+            // Persistent login (CONTRACT "Client behaviour"): the body also
+            // carries `deviceId` so the backend links the token to the
+            // `AuthDevice` row, and a token change re-runs
+            // `POST /api/auth/devices/register` — both inside
+            // `registerPushToken` → `AuthManager.pushTokenDidChange`.
             await APIClient.shared.registerPushToken(tokenString, platform: "ios")
         }
     }

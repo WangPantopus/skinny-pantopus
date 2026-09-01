@@ -8,6 +8,8 @@
 //  feature code.
 //
 
+// swiftlint:disable file_length type_body_length
+
 import Foundation
 import Logging
 
@@ -44,12 +46,42 @@ final class APIClient: @unchecked Sendable {
     }
     #endif
 
+    /// Header names pinned by docs/persistent-login/CONTRACT.md ("Headers").
+    static let deviceIdHeader = "X-Device-Id"
+    static let dpopHeader = "DPoP"
+    static let stepUpHeader = "X-Step-Up"
+
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let logger = Logger(label: "app.pantopus.ios.APIClient")
     private let environment: AppEnvironment
     private let retryPolicy: RetryPolicy
+
+    /// The `AuthManager` this client asks for tokens, DPoP proofs, refreshes
+    /// and step-up. `AuthManager.init` registers itself here, so a test that
+    /// builds `AuthManager(store:apiClient:)` gets a fully wired pair; the
+    /// live app resolves to `AuthManager.shared`. Weak: the manager owns the
+    /// client, not the other way round.
+    @ObservationIgnored
+    weak var authProvider: AuthManager?
+
+    @MainActor
+    private var auth: AuthManager {
+        authProvider ?? AuthManager.shared
+    }
+
+    /// The API origin (`https://api.pantopus.com`) — the `htu` prefix of
+    /// every DPoP proof.
+    var apiBaseURL: URL {
+        environment.apiBaseURL
+    }
+
+    /// Absolute URL for `path` — used by `AuthManager` to build DPoP proofs
+    /// for the endpoints whose proof needs `rth` (refresh / logout).
+    func url(forPath path: String) -> URL {
+        environment.apiBaseURL.appendingPathComponent(path)
+    }
 
     /// - Parameters:
     ///   - environment: API target + base URL.
@@ -146,15 +178,24 @@ final class APIClient: @unchecked Sendable {
         }
     }
 
-    // MARK: - Push token (unchanged from Prompt P1)
+    // MARK: - Push token
 
+    /// `POST /api/notifications/register` (`backend/routes/notifications.js`).
+    /// Carries `deviceId` so the backend can link the APNs token to the
+    /// `AuthDevice` row, and re-runs `/api/auth/devices/register` because a
+    /// push-token change is one of the contract's re-register triggers.
     func registerPushToken(_ token: String, platform: String) async {
+        let deviceId = await auth.deviceId
+        var body: [String: String] = ["token": token, "platform": platform]
+        if let deviceId {
+            body["deviceId"] = deviceId
+        }
         do {
             try await request(
                 Endpoint(
                     method: .post,
                     path: "/api/notifications/register",
-                    body: ["token": token, "platform": platform]
+                    body: body
                 )
             )
         } catch {
@@ -163,10 +204,48 @@ final class APIClient: @unchecked Sendable {
                 metadata: ["error": .string("\(error)")]
             )
         }
+        await auth.pushTokenDidChange(token)
+    }
+
+    // MARK: - Raw send (no interceptors)
+
+    /// Status + body of one request with **no** retry, refresh, DPoP or
+    /// step-up interception. `AuthManager` uses it for `/refresh` and
+    /// `/logout`, where it needs the 401 body (`{ error, code }`) that the
+    /// typed path discards, and where the interceptors would recurse.
+    /// Transport failures surface as `APIError.transport`.
+    func sendRaw(_ endpoint: Endpoint) async throws -> RawResponse {
+        let request = try await buildRequest(for: endpoint)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError {
+            throw APIError.transport(underlying: error)
+        } catch {
+            throw APIError.invalidResponse
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        logger.debug("API \(endpoint.method.rawValue) \(endpoint.path) -> \(http.statusCode) (raw)")
+        return RawResponse(status: http.statusCode, data: data)
+    }
+
+    struct RawResponse {
+        let status: Int
+        let data: Data
+    }
+
+    /// Drop every cached HTTP response. Called on sign-out so the next
+    /// account can never see the previous one's cached reads.
+    func purgeCache() {
+        session.configuration.urlCache?.removeAllCachedResponses()
     }
 
     // MARK: - Retry loop
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func executeWithRetry(_ endpoint: Endpoint) async throws -> Data {
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
@@ -176,21 +255,55 @@ final class APIClient: @unchecked Sendable {
         // attempted regardless of HTTP method — a 401 is rejected at the auth
         // middleware before any side effect, so replaying is safe.
         var didAttemptRefresh = false
+        // One step-up round per request: a 403 `STEP_UP_REQUIRED` runs the
+        // step-up provider and replays once with `X-Step-Up`.
+        var didAttemptStepUp = false
+        var stepUpToken: String?
+        // Proactive refresh: when the access token is within 120 s of expiry
+        // renew it *before* sending, so a cold start never pays the 401 tax.
+        // Never for the refresh endpoint itself (single-flight recursion) and
+        // never for unauthenticated calls.
+        if endpoint.authenticated, await auth.isAccessTokenExpiringSoon {
+            didAttemptRefresh = true
+            if await auth.refreshIfPossible() == .authRejected {
+                // The session is dead server-side; the request would 401
+                // anyway. End it now with the reason the refresh reported.
+                await auth.handleUnauthorized()
+                throw APIError.unauthorized
+            }
+        }
         while true {
             // Rebuild each iteration so a refreshed access token is picked up.
-            let request = try await buildRequest(for: endpoint)
+            let request = try await buildRequest(
+                for: endpoint,
+                extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
+            )
             do {
                 return try await executeOnce(request, endpoint: endpoint)
+            } catch let signal as StepUpRequiredSignal {
+                guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden }
+                didAttemptStepUp = true
+                guard let token = await auth.obtainStepUpToken(purpose: signal.purpose, methods: signal.methods) else {
+                    throw APIError.forbidden
+                }
+                stepUpToken = token
+                continue
             } catch let error as APIError {
                 switch error {
+                case .unauthorized where endpoint.verifiesCredential:
+                    // The *presented credential* (a password for step-up /
+                    // reauthenticate) was refused — the session is fine.
+                    // Never refresh-and-replay (it would resend the wrong
+                    // password) and never sign out.
+                    throw error
                 case .unauthorized where endpoint.authenticated && !didAttemptRefresh:
                     didAttemptRefresh = true
-                    switch await AuthManager.shared.refreshIfPossible() {
+                    switch await auth.refreshIfPossible() {
                     case .rotated:
                         continue
                     case .authRejected:
                         // Refresh token expired/revoked — end the session.
-                        await AuthManager.shared.handleUnauthorized()
+                        await auth.handleUnauthorized()
                         throw error
                     case .transient:
                         // Couldn't refresh due to a network/server blip. Do NOT
@@ -202,7 +315,7 @@ final class APIClient: @unchecked Sendable {
                     // Unauthenticated endpoint (login/refresh/…) or refresh
                     // already tried and the replay still 401'd.
                     if endpoint.authenticated {
-                        await AuthManager.shared.handleUnauthorized()
+                        await auth.handleUnauthorized()
                     }
                     throw error
                 default:
@@ -218,6 +331,14 @@ final class APIClient: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// Internal signal thrown by `executeOnce` for a 403 whose body is
+    /// `{ code: "STEP_UP_REQUIRED", purpose, methods }`. `executeWithRetry`
+    /// converts it into a step-up round or a plain `.forbidden`.
+    private struct StepUpRequiredSignal: Error {
+        let purpose: String?
+        let methods: [String]
     }
 
     private func executeOnce(_ request: URLRequest, endpoint: Endpoint) async throws -> Data {
@@ -251,7 +372,14 @@ final class APIClient: @unchecked Sendable {
         case 401:
             // Refresh + sign-out decisions are made in executeWithRetry.
             throw APIError.unauthorized
-        case 403: throw APIError.forbidden
+        case 403:
+            // `STEP_UP_REQUIRED` is the one 403 the client can recover from
+            // (CONTRACT "Client behaviour"): surface it as a signal so the
+            // retry loop can run step-up and replay once.
+            if let body = AuthErrorBody.decode(data), body.code == "STEP_UP_REQUIRED" {
+                throw StepUpRequiredSignal(purpose: body.purpose, methods: body.methods ?? [])
+            }
+            throw APIError.forbidden
         case 404: throw APIError.notFound
         case 400..<500:
             let message = String(data: data, encoding: .utf8)
@@ -268,7 +396,7 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Building requests
 
-    private func buildRequest(for endpoint: Endpoint) async throws -> URLRequest {
+    private func buildRequest(for endpoint: Endpoint, extraHeaders: [String: String] = [:]) async throws -> URLRequest {
         guard var components = URLComponents(
             url: environment.apiBaseURL.appendingPathComponent(endpoint.path),
             resolvingAgainstBaseURL: false
@@ -302,9 +430,27 @@ final class APIClient: @unchecked Sendable {
         for (key, value) in endpoint.headers {
             request.setValue(value, forHTTPHeaderField: key)
         }
+        for (key, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
 
-        if endpoint.authenticated, let token = await AuthManager.shared.accessToken {
+        // Device identity travels on every request once it exists (CONTRACT
+        // "Headers"): the backend uses it for push-token linkage and audit,
+        // never as proof — proof is the DPoP signature.
+        if let deviceId = await auth.deviceId {
+            request.setValue(deviceId, forHTTPHeaderField: Self.deviceIdHeader)
+        }
+
+        if endpoint.authenticated, let token = await auth.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        // Proof-of-possession for the credential-issuing / key-bound routes.
+        // Built per attempt: `jti` is single-use server-side, so a replayed
+        // request must carry a fresh proof.
+        if endpoint.requiresDPoP, request.value(forHTTPHeaderField: Self.dpopHeader) == nil,
+           let proof = await auth.dpopProof(method: endpoint.method.rawValue, url: url) {
+            request.setValue(proof, forHTTPHeaderField: Self.dpopHeader)
         }
 
         if let body = endpoint.body {
@@ -372,6 +518,19 @@ public struct Endpoint: Sendable {
     /// Use for slow single-shot endpoints (e.g. AI vision drafts allow
     /// 30s server-side).
     public let timeout: TimeInterval?
+    /// Attach a `DPoP` proof signed by the device key (RFC 9449). Set on
+    /// the credential-issuing routes (`/login`, `/oauth/*`) and the
+    /// key-bound registry routes (`/api/auth/devices/register`, `/step-up`,
+    /// `/step-up-key`). `/refresh` and `/logout` build their proof in
+    /// `AuthManager` instead because it must carry `rth`.
+    public let requiresDPoP: Bool
+    /// A Bearer route whose 401 means "the credential in the body was
+    /// wrong" (password step-up, reauthenticate) rather than "the session
+    /// is dead". `APIClient` surfaces that 401 as `.unauthorized` without
+    /// the silent refresh + replay (which would resend the wrong password)
+    /// and without signing the user out. The pre-flight refresh still runs,
+    /// so the Bearer itself is fresh when the call goes out.
+    public let verifiesCredential: Bool
 
     public init(
         method: Method,
@@ -381,7 +540,9 @@ public struct Endpoint: Sendable {
         headers: [String: String] = [:],
         authenticated: Bool = true,
         cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
-        timeout: TimeInterval? = nil
+        timeout: TimeInterval? = nil,
+        requiresDPoP: Bool = false,
+        verifiesCredential: Bool = false
     ) {
         self.method = method
         self.path = path
@@ -391,6 +552,8 @@ public struct Endpoint: Sendable {
         self.authenticated = authenticated
         self.cachePolicy = cachePolicy
         self.timeout = timeout
+        self.requiresDPoP = requiresDPoP
+        self.verifiesCredential = verifiesCredential
     }
 }
 

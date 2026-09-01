@@ -10,9 +10,60 @@ const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const { isBlocked } = require('../services/blockService');
 const { setGauge } = require('../services/chatMetrics');
+// Persistent login (design §6.4): the same JWT decode helper verifyToken
+// exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
+// session-state cache and the `session_revoked` event that kicks sockets.
+const authSessionService = require('../services/authSessionService');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
+
+// ============ SESSION REVOCATION → SOCKET KICK ============
+// authSessionService emits 'session_revoked' {userId, sessionIds, reason}
+// whenever AuthSession rows are revoked (logout with proof, device removed,
+// revoke-others, lockdown, password change/reset, reuse/mismatch, account
+// deletion). Sockets carrying one of those session ids are told and dropped;
+// for user-wide reasons every socket of the user goes (GoTrue killed all of
+// the user's JWTs anyway).
+
+const USER_WIDE_REVOKE_REASONS = new Set(['lockdown', 'password_reset', 'account_deleted', 'global']);
+
+function kickRevokedSessions(io, { userId, sessionIds = [], reason = 'revoked' } = {}) {
+  if (!userId || !io?.sockets?.sockets) return 0;
+  const socketIds = connectedUsers.get(userId);
+  if (!socketIds || socketIds.size === 0) return 0;
+  const revoked = new Set((sessionIds || []).filter(Boolean));
+  const kickAll = USER_WIDE_REVOKE_REASONS.has(reason);
+  let kicked = 0;
+  for (const socketId of Array.from(socketIds)) {
+    const target = io.sockets.sockets.get(socketId);
+    if (!target) continue;
+    const sid = target.authSessionId || null;
+    if (!kickAll && !(sid && revoked.has(sid))) continue;
+    try {
+      target.emit('auth:session_revoked', { sessionId: sid, reason, code: 'SESSION_REVOKED' });
+      target.disconnect(true);
+      kicked += 1;
+    } catch (err) {
+      logger.warn('Socket kick failed', { userId, socketId, error: err.message });
+    }
+  }
+  if (kicked > 0) logger.info('Sockets disconnected for revoked session', { userId, reason, kicked });
+  return kicked;
+}
+
+let _revokeListener = null;
+function subscribeSessionRevocation(io) {
+  if (_revokeListener) authSessionService.authEvents.off('session_revoked', _revokeListener);
+  _revokeListener = (payload) => {
+    try {
+      kickRevokedSessions(io, payload || {});
+    } catch (err) {
+      logger.error('Session revocation handler error', { error: err.message });
+    }
+  };
+  authSessionService.authEvents.on('session_revoked', _revokeListener);
+}
 
 // ============ SOCKET RATE LIMITING ============
 // Simple sliding-window counter per socket per event type.
@@ -146,6 +197,8 @@ module.exports = (io) => {
   // Initialize badge + notification services with io + connectedUsers references
   badgeService.init(io, connectedUsers);
   notificationService.init(io, connectedUsers);
+  // Persistent login: disconnect sockets of revoked sessions
+  subscribeSessionRevocation(io);
   // ============ MIDDLEWARE ============
   
   // Authenticate socket connections
@@ -170,6 +223,26 @@ module.exports = (io) => {
       
       if (error || !data.user) {
         return next(new Error('Invalid token'));
+      }
+
+      // Persistent login: decode session_id / iat (getUser already accepted the
+      // token) and refuse revoked sessions / tokens older than the user's
+      // sessions_valid_after watermark — same policy as verifyToken.
+      const claims = authSessionService.sessionClaimsFromAccessToken(token);
+      socket.authSessionId = claims?.id || null;
+      if (socket.authSessionId) {
+        const state = await authSessionService.getSessionStateCached(socket.authSessionId);
+        if (state.known && state.revoked) {
+          logger.info('Socket auth refused: session revoked', { userId: data.user.id, sessionId: socket.authSessionId });
+          return next(new Error('Session revoked'));
+        }
+      }
+      if (typeof claims?.iat === 'number') {
+        const watermark = await authSessionService.getSessionsValidAfter(data.user.id);
+        if (watermark && claims.iat * 1000 < watermark.getTime()) {
+          logger.info('Socket auth refused: token before watermark', { userId: data.user.id, sessionId: socket.authSessionId });
+          return next(new Error('Session revoked'));
+        }
       }
       
       // Attach user to socket
@@ -673,3 +746,7 @@ module.exports = (io) => {
   
   logger.info('Socket.IO chat server initialized');
 };
+
+// Exposed for tests / other services
+module.exports.kickRevokedSessions = kickRevokedSessions;
+module.exports.connectedUsers = connectedUsers;

@@ -1,7 +1,7 @@
 # Pantopus — Privacy Data Inventory
 
 **Status:** Pre-launch (Bucket 2, Block RR-A)
-**Last reviewed:** 2026-06-05
+**Last reviewed:** 2026-08-18 (persistent login & trusted devices — new identifiers, see §2.6, §2.9, §5)
 **Owner:** Mobile / Compliance
 
 This is the single source of truth for **what personal data the Pantopus
@@ -34,7 +34,8 @@ All first-party data egress flows through a small number of chokepoints:
 | Realtime | `Core/Realtime` (Socket.IO) | Socket.IO | Chat messages, presence. |
 | Payments | Stripe `PaymentSheet` (`Core/Payments`) | Stripe Android SDK | Card data goes **device → Stripe**, never through our servers. |
 | Crash / perf | Sentry (`Core/Observability/Observability.swift`) | `sentry-android` | PII-scrubbed before send; `sendDefaultPii = false`. |
-| Push register | APNs token → `POST /api/notifications/register` (`App/AppDelegate.swift`) | FCM token → same endpoint (`push/PantopusMessagingService`) | Device token + `platform`. |
+| Push register | APNs token → `POST /api/notifications/register` (`App/AppDelegate.swift`) | FCM token → same endpoint (`push/PantopusMessagingService`) | Device token + `platform` (+ `deviceId` since 2026-08, so the token can be deleted when the device is removed). |
+| Device registry (persistent login, 2026-08) | `Core/Auth/DeviceDescriptor.swift`, `AuthManager+Devices.swift` → `device` object on `/api/users/login`, `/oauth/*`, `POST /api/auth/devices/register`; `X-Device-Id` + `DPoP` headers (`Core/Networking/APIClient.swift`) | `data/auth/DeviceDescriptorProvider.kt`, `DeviceIdentity.kt`, `AuthInterceptor.kt` → same endpoints + `POST /api/auth/resume` | Client-generated device id, install id, device **public** key (JWK), device name/model/OS/app version, key backing (`secure_enclave` / `strongbox` / `tee` / `software`), has-OS-lock flag. Private keys never leave the device. |
 
 **No advertising / cross-app tracking.** Neither app links AdSupport /
 `ASIdentifierManager`, requests App Tracking Transparency, embeds an ad SDK,
@@ -112,6 +113,18 @@ track across apps/sites owned by other companies (always *No* here).
 |-------|----------|-----------|
 | User / account ID | `AuthenticatedUser.id`, persisted to Keychain (`SecureStoreKey.userId`), set on Sentry scope | User ID |
 | Push device token | APNs token (`AppDelegate.didRegisterForRemoteNotifications…`) / FCM token (Android `PantopusMessagingService`) → `registerPushToken(_:platform:)` | Device ID |
+| **Device ID** (client UUIDv4, generated once per hardware key) — *new 2026-08* | iOS `SecureStoreKey.deviceId` (Keychain, `afterFirstUnlockThisDeviceOnly`, non-sync; survives reinstall) / Android `device_identity` prefs `device_id` (backup-excluded; dies with uninstall). Sent as `device.deviceId` at login/OAuth/resume/register and as `X-Device-Id` on every request; stored server-side in `AuthDevice.device_id`. Purpose: bind the session to *this* device, show it in "Where you're logged in", let the user revoke it. | Device ID |
+| **Install ID** (random per install; rotates on reinstall) — *new 2026-08* | iOS `Library/Application Support/.pantopus-install` (excluded from backup) + Keychain mirror `installId`; Android `device_identity` prefs `install_id`. Sent in the `device` descriptor; stored in `AuthDevice.install_id`. Purpose: detect reinstall (one-gesture "Continue as X" instead of silent restore) and dedupe new-device emails. | Device ID |
+| **Device public key** (P-256 JWK + RFC 7638 thumbprint) — *new 2026-08* | Secure Enclave / Android Keystore key created by `DeviceKey.swift` / `DeviceKeyStore.kt`; only the **public** half is sent (embedded in the `DPoP` proof) and stored in `AuthDevice.public_key_jwk` / `key_thumbprint`. Optional biometry-bound step-up public key → `AuthDevice.step_key_jwk` (`POST /api/auth/step-up-key`). Not personal data on its own; declared under Device ID because it is a stable per-device identifier. | Device ID |
+| **Session ID** (Supabase JWT `session_id`) — *new 2026-08* | Returned as `sessionId` by login/refresh; persisted next to the tokens (Keychain `sessionId`, Android `session_id`); server row `AuthSession`. | User ID (session of the account) |
+| Device metadata (name, model, OS version, app version, key backing, has-OS-lock) — *new 2026-08* | `DeviceDescriptor` / `DeviceDescriptorProvider`; server `AuthDevice.name/model/os_version/app_version/key_backing`. Shown back to the user in Settings → Security. | (Device ID row — descriptive attributes of the same record) |
+
+> **App Store label:** Device ID stays **App Functionality** (Apple's
+> definition of App Functionality explicitly covers "authenticate the user…
+> prevent fraud, implement security measures"). **Play:** *Device or other IDs*
+> with purposes **App functionality** + **Fraud prevention, security, and
+> compliance**. Both already say *Linked = Yes, Tracking = No* — the device id
+> is a first-party, per-app identifier (not IDFA/AAID) and is never shared.
 
 ### 2.7 Diagnostics — *App Functionality, Linked, not Tracking*
 
@@ -133,6 +146,47 @@ track across apps/sites owned by other companies (always *No* here).
 |-------|----------|-----------|
 | Product interaction (screen views, CTA taps) | Typed taxonomy `Core/Analytics/Analytics.swift` → `Observability.track` (Sentry breadcrumbs today; vendor SDK later). Event names + flat string props only (no free-form PII). | Product Interaction |
 
+### 2.9 Security & session records — *App Functionality (security), Linked, not Tracking* — *new 2026-08*
+
+Server-side records created by the persistent-login layer
+(`backend/database/migrations/160_auth_devices.sql`; design
+`docs/persistent-login/persistent-login-design-2026-08-18.md` §5). Nothing
+here is collected by an SDK — it is derived from the request itself.
+
+| Field | Where | Why | Apple type / Play type |
+|-------|-------|-----|------------------------|
+| IP address + User-Agent per session / device (`AuthSession.last_ip`, `user_agent`; `AuthDevice.last_ip`, `last_user_agent`) | request metadata on login / refresh / register | show "last active · IP" in *Where you're logged in*, detect anomalies | Apple: **Other Data Types** (security-log metadata; ¹) · Play: **Device or other IDs** (purpose *Fraud prevention, security, and compliance*) |
+| Security events (`AuthSecurityEvent`: type, timestamp, device, session, IP, UA, small `meta` JSON — e.g. `login`, `logout`, `refresh_reuse`, `device_revoked`, `revoke_all`, `password_changed`, `step_up`) | written by `backend/services/authSessionService.js` / `authDeviceService.js` | user-visible security activity (`GET /api/auth/security-events`, Settings → Security on web/iOS/Android) + new-device / device-removed emails | same as above |
+| Trust level / attestation summary (`AuthDevice.trust_level`, `attestation`, `attestation_level` — stays `none` in v1) | server | grade how much to trust a device (grants, inactivity window) | (attribute of the Device ID record) |
+| Security preferences (`User.security_prefs = {allowRestoreGrants, newDeviceEmail}`) | server; edited via `PATCH /api/auth/security-prefs` (step-up gated) | user choice | — (settings, not personal data) |
+| Android resume grant (`AuthResumeGrant.grant_hash` = sha256 of a 32-byte random grant; 90 d; single-use) | server stores the **hash only**; the grant itself lives in the device's Block Store item | one-tap "Continue as X" after reinstall | — (credential, not personal data) |
+| DPoP `jti` / step-up challenges (`AuthDpopJti`, `AuthChallenge`) | server, 10-min TTL | replay protection | — |
+
+¹ Apple has no dedicated "IP address" type. Because IP + UA are recorded on
+every authenticated session (not "infrequent"), we do **not** rely on the
+optional-disclosure exemption; they are covered by the already-declared
+**Other Data Types** row (see `appstore-privacy-labels.md`). Compliance owner
+to confirm the wording at submission time.
+
+**Local-only items (stored on the device, never uploaded — listed for the
+Keychain/Keystore review, not for the labels):**
+
+| Item | iOS | Android | Notes |
+|------|-----|---------|-------|
+| Device private key (DPoP) | Secure Enclave, blob in Keychain `deviceKey` (`afterFirstUnlockThisDeviceOnly`, `synchronizable=false`, **no** biometry gate — background refresh must work); software P-256 fallback on Simulator / no-SE hardware | Android Keystore alias `pantopus_device_key` (StrongBox when available; dies with uninstall) | non-exportable |
+| Step-up private key (biometry-bound) | Secure Enclave, `SecAccessControl(.privateKeyUsage \| .biometryCurrentSet)` (passcode-fallback key `.userPresence`), Keychain `stepUpKey` | Keystore `pantopus_stepup_key`, `setUserAuthenticationRequired(true)`, `setInvalidatedByBiometricEnrollment(true)`, signed through `BiometricPrompt` `CryptoObject` | non-exportable; invalidated when biometrics are re-enrolled |
+| Account hints (display-only: `userId`, `displayName`, `avatarUrl`, `maskedEmail`, `lastMethod`, `lastSeenAt`; most-recent-first, max 3) | Keychain `accountHints` (JSON, non-sync) | inside the Block Store item | pre-fill "Continue as X"; **kept** after ordinary sign-out (non-secret), **wiped** on "Not you? Remove", account deletion, and security sign-out where required |
+| Block Store item `pantopus.account_hint` (`{ v:1, accounts:[…], resumeGrant?, grantUserId?, issuedAt }`) | — | Google Play services Block Store, `setShouldBackupToCloud(false)` → same-device + device-to-device transfer only, **no cloud copy**; `deleteBytes` on remove / account deletion; no-op without GMS | ≤ 4 KB; the only place the resume grant lives |
+| Install marker | `Library/Application Support/.pantopus-install` (`isExcludedFromBackup = true`) + Keychain `installId` | `device_identity` prefs `install_id` | random; not personal |
+| `expiresAt`, `sessionId`, `sessionContext` | Keychain | `TokenStorage` (`expires_at`, `session_id`, `session_context`) | session bookkeeping next to the tokens |
+| App-lock preference `appLockEnabled.<uid>` | Keychain (migrated from UserDefaults so it survives reinstall) | encrypted prefs | user setting |
+
+> **Android backup rules — action for the Android layer:** `res/xml/backup_rules.xml`
+> and `data_extraction_rules.xml` must exclude `sharedpref/device_identity.xml`
+> in addition to `secure_auth_tokens.xml` (`allowBackup=false` already
+> covers Auto Backup; the explicit exclusion covers device-to-device transfer).
+> Verify before the Phase-1 store submission.
+
 ---
 
 ## 3. Required-reason API audit (iOS — Apple "privacy-impacting" APIs)
@@ -151,6 +205,17 @@ manifests and are **out of scope** for this file.
 
 → iOS manifest `NSPrivacyAccessedAPITypes` = **UserDefaults `CA92.1`** only.
 
+> **2026-08 re-check (persistent login).** The new auth code uses
+> `LocalAuthentication` (`LAContext.evaluatePolicy`), `CryptoKit`
+> `SecureEnclave.P256`, Keychain (`SecAccessControl`), and writes one marker
+> file under `Library/Application Support` with `isExcludedFromBackup` — none
+> of these is a required-reason API category. `InstallMarker` reads/writes
+> file *contents* only (no `modificationDate` / `creationDate`). The app-lock
+> preference migration reads `UserDefaults` — already covered by `CA92.1`.
+> **No manifest change required** for the required-reason section; the
+> collected-data section already lists `DeviceID` (App Functionality), which
+> now also covers the device / install id (§2.6).
+
 > Sentry and Stripe **do** use file-timestamp / boot-time / disk-space /
 > UserDefaults APIs, but they ship their own `PrivacyInfo.xcprivacy` inside
 > their SPM packages, which Apple aggregates automatically. Do not restate
@@ -168,6 +233,8 @@ manifests and are **out of scope** for this file.
 | Socket.IO | `socket.io-client-swift` | `socket.io` | Message transport | n/a (transport) |
 | Google Maps | Apple MapKit (no key) | `com.google.android.geo` maps SDK | Map tiles; approximate location on Android | Yes (Google) |
 | KeychainAccess / EncryptedSharedPreferences | Keychain | encrypted token store | Local secure token storage (not "collected") | n/a |
+| Google Play services **Block Store** (`play-services-auth-blockstore`) — *2026-08* | — | `data/auth/AccountHintStore.kt` | Stores the account hint + single-use resume grant **on the device only** (`setShouldBackupToCloud(false)`); Google does not receive the bytes in a readable form and no cloud copy is made. Not "collected" by us; not "shared". | Yes (Google) |
+| Apple `LocalAuthentication` / `CryptoKit` Secure Enclave; Android `BiometricPrompt` / Keystore — *2026-08* | system frameworks | system frameworks | Biometric / passcode presence check and hardware-backed keys. **Biometric templates never leave the OS**; the app only receives a yes/no and a signature. | n/a (OS) |
 
 ---
 
@@ -176,11 +243,30 @@ manifests and are **out of scope** for this file.
 - **Account deletion** is implemented in-app (Settings → account deletion),
   which removes the server-side account and associated personal data —
   satisfies App Store Guideline 5.1.1(v) and Play's account-deletion
-  requirement.
-- **Local secure storage:** access/refresh tokens + user id in the iOS
+  requirement. *2026-08:* deletion now requires a step-up (`X-Step-Up`,
+  purpose `delete_account`); before `admin.deleteUser` the backend revokes
+  every session and deletes the user's `PushToken` rows; `AuthDevice`,
+  `AuthSession`, `AuthResumeGrant`, `AuthSecurityEvent` rows are
+  `ON DELETE CASCADE` from `auth.users`. The clients wipe Keychain /
+  `TokenStorage` **including** the account hints and install marker, and
+  Android calls Block Store `deleteBytes` + `clearCredentialState`.
+- **Server-side session / security records (2026-08):** `AuthSecurityEvent`
+  180 days; revoked `AuthSession` / `AuthDevice` rows 90 days after
+  revocation; `AuthResumeGrant` 90 days (single-use); `AuthDpopJti` /
+  `AuthChallenge` 10 minutes (pruned by the existing jobs runner).
+- **Local secure storage:** access/refresh tokens + user id + (2026-08)
+  `expiresAt`, `sessionId`, `sessionContext`, `deviceId`, `deviceKey`,
+  `stepUpKey`, `installId`, `accountHints`, `appLockEnabled.<uid>` in the iOS
   Keychain (`KeychainStore`, `afterFirstUnlockThisDeviceOnly`,
-  `synchronizable = false`) / Android encrypted store; cleared on sign-out
-  (`AuthManager.signOut`).
+  `synchronizable = false`) / Android encrypted store + `device_identity`
+  prefs + Block Store item. On **ordinary sign-out** the tokens, `expiresAt`
+  and `sessionId` are cleared and `POST /api/users/logout` revokes the
+  session server-side; the device key, install marker and the *non-secret*
+  account hints are **kept** so the login screen can offer "Continue as X".
+  "Not you? Remove" (and account deletion) wipes the hints too. On iOS the
+  Keychain items intentionally **survive uninstall** (the reinstall path
+  requires the OS lock — design §2 principle 1); on Android nothing in app
+  storage survives uninstall and the Block Store item is same-device only.
 
 ---
 
@@ -193,6 +279,12 @@ regenerate the three outputs and re-verify they agree:
 - A new permission string (Info.plist) or `uses-permission` (manifest).
 - A new SDK that collects data, or a new analytics vendor.
 - A new first-party use of a required-reason API.
+- A new identifier or device/session record (e.g. the 2026-08 device id /
+  install id / device public key / security events — §2.6, §2.9), a new
+  Keychain / Keystore / Block Store item, or a change to backup / sync flags
+  (`synchronizable`, `setShouldBackupToCloud`, backup rules). The design's
+  Phase-4 "iCloud-synced display hint" is **not** approved by this inventory
+  and needs its own review.
 
 Consistency check (manifest ↔ labels ↔ this inventory) is documented at the
 bottom of `appstore-privacy-labels.md` and `play-data-safety.md`.

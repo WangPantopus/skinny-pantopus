@@ -311,6 +311,7 @@ app.use('/api/scheduling', require('./routes/scheduling'));
 
 app.use('/api/users', blockRoutes);    // Block routes (must be before userRoutes for /blocked static path)
 app.use('/api/users', userRoutes);
+app.use('/api/auth', require('./routes/authDevices')); // Persistent login: trusted devices, sessions, resume, step-up
 app.use('/api/gigs', magicTaskRoutes);  // Magic Task routes (must be before gigRoutes for static paths)
 app.use('/api/gigs', require('./routes/gigSavedSearches')); // P6 saved searches (static paths before /:id)
 app.use('/api/gigs', gigRoutes);

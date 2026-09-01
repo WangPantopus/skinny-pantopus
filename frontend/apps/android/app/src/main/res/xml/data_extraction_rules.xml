@@ -4,9 +4,14 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
         <exclude domain="file" path="datastore/auth_tokens.preferences_pb" />
+        <!-- Persistent login: device identity is per install (see backup_rules.xml). -->
+        <exclude domain="sharedpref" path="device_identity.xml" />
+        <exclude domain="sharedpref" path="app_lock_prefs_secure.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
         <exclude domain="file" path="datastore/auth_tokens.preferences_pb" />
+        <exclude domain="sharedpref" path="device_identity.xml" />
+        <exclude domain="sharedpref" path="app_lock_prefs_secure.xml" />
     </device-transfer>
 </data-extraction-rules>

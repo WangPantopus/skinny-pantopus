@@ -41,6 +41,15 @@ public final class MultipartUploader: @unchecked Sendable {
     private let environment: AppEnvironment
     private let logger = Logger(label: "app.pantopus.ios.MultipartUploader")
 
+    /// Mirrors `APIClient.authProvider`: injectable in tests, resolves to
+    /// `AuthManager.shared` in the app.
+    weak var authProvider: AuthManager?
+
+    @MainActor
+    private var auth: AuthManager {
+        authProvider ?? AuthManager.shared
+    }
+
     init(
         environment: AppEnvironment = .current,
         session: URLSession? = nil
@@ -57,16 +66,17 @@ public final class MultipartUploader: @unchecked Sendable {
     }
 
     /// Send a multipart POST, transparently refreshing the access token and
-    /// replaying once on a 401 (mirrors `APIClient`). Returns the raw body +
-    /// HTTP response so each caller keeps its own status-code mapping. If a
-    /// 401 survives the refresh, the user is signed out before returning so
-    /// the caller's `case 401` maps to `.unauthorized` uniformly.
+    /// replaying once on a 401 (mirrors `APIClient`, including the proactive
+    /// pre-flight refresh and the `X-Device-Id` header). Returns the raw
+    /// body + HTTP response so each caller keeps its own status-code
+    /// mapping. If a 401 survives the refresh, the user is signed out before
+    /// returning so the caller's `case 401` maps to `.unauthorized` uniformly.
     private func performUpload(
         to url: URL,
         boundary: String,
         body: Data
     ) async throws -> (Data, HTTPURLResponse) {
-        func makeRequest(token: String?) -> URLRequest {
+        func makeRequest(token: String?, deviceId: String?) -> URLRequest {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -74,32 +84,51 @@ public final class MultipartUploader: @unchecked Sendable {
             if let token {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
+            if let deviceId {
+                request.setValue(deviceId, forHTTPHeaderField: APIClient.deviceIdHeader)
+            }
             return request
         }
 
-        let token = await AuthManager.shared.accessToken
-        var (data, response) = try await session.upload(for: makeRequest(token: token), from: body)
+        // Proactive refresh (< 120 s left) so long uploads don't start with a
+        // token that expires mid-flight and cost a full replay.
+        var didAttemptRefresh = false
+        if await auth.isAccessTokenExpiringSoon {
+            didAttemptRefresh = true
+            if await auth.refreshIfPossible() == .authRejected {
+                await auth.handleUnauthorized()
+                throw APIError.unauthorized
+            }
+        }
+
+        let deviceId = await auth.deviceId
+        let token = await auth.accessToken
+        var (data, response) = try await session.upload(for: makeRequest(token: token, deviceId: deviceId), from: body)
         guard var http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
 
-        if http.statusCode == 401 {
-            switch await AuthManager.shared.refreshIfPossible() {
+        if http.statusCode == 401, !didAttemptRefresh {
+            switch await auth.refreshIfPossible() {
             case .rotated:
-                let refreshed = await AuthManager.shared.accessToken
-                (data, response) = try await session.upload(for: makeRequest(token: refreshed), from: body)
+                let refreshed = await auth.accessToken
+                (data, response) = try await session.upload(for: makeRequest(token: refreshed, deviceId: deviceId), from: body)
                 guard let retryHTTP = response as? HTTPURLResponse else { throw APIError.invalidResponse }
                 http = retryHTTP
                 // If the replay still 401s, the just-rotated token is rejected.
                 if http.statusCode == 401 {
-                    await AuthManager.shared.handleUnauthorized()
+                    await auth.handleUnauthorized()
                 }
             case .authRejected:
-                await AuthManager.shared.handleUnauthorized()
+                await auth.handleUnauthorized()
             case .transient:
                 // Network/server blip during refresh — don't sign out. Surface a
                 // transport error (parity with APIClient) instead of a
                 // misleading "session expired" 401, so the caller can retry.
                 throw APIError.transport(underlying: URLError(.networkConnectionLost))
             }
+        } else if http.statusCode == 401 {
+            // Pre-flight refresh already rotated the token and the server
+            // still refused it — the session is gone.
+            await auth.handleUnauthorized()
         }
         return (data, http)
     }

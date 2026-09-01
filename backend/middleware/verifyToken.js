@@ -3,6 +3,7 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const csrfProtection = require('./csrfProtection');
 const logger = require('../utils/logger');
+const authSessionService = require('../services/authSessionService');
 
 // ============ IN-MEMORY ROLE CACHE (AUTH-3.4) ============
 // Caches User.role lookups to reduce DB queries per request.
@@ -18,16 +19,27 @@ function getCachedRole(userId) {
     _roleCache.delete(userId);
     return null;
   }
-  return { role: entry.role, accountType: entry.accountType || 'individual' };
+  return {
+    role: entry.role,
+    accountType: entry.accountType || 'individual',
+    // Persistent login (design §6.4): User.sessions_valid_after watermark rides
+    // in the same 60-s cache; JWTs issued before it are refused.
+    sessionsValidAfter: entry.sessionsValidAfter || null,
+  };
 }
 
-function setCachedRole(userId, role, accountType) {
+function setCachedRole(userId, role, accountType, sessionsValidAfter = null) {
   // Evict oldest entries if at max size
   if (_roleCache.size >= ROLE_CACHE_MAX_SIZE && !_roleCache.has(userId)) {
     const firstKey = _roleCache.keys().next().value;
     _roleCache.delete(firstKey);
   }
-  _roleCache.set(userId, { role, accountType: accountType || 'individual', ts: Date.now() });
+  _roleCache.set(userId, {
+    role,
+    accountType: accountType || 'individual',
+    sessionsValidAfter: sessionsValidAfter || null,
+    ts: Date.now(),
+  });
 }
 
 /**
@@ -37,6 +49,63 @@ function setCachedRole(userId, role, accountType) {
 function invalidateRoleCache(userId) {
   _roleCache.delete(userId);
 }
+
+// ============ SESSION CLAIMS / REVOCATION (persistent login, design §6.4) ============
+
+/**
+ * Decode the session claims of an access token that Supabase already
+ * accepted. Pure decode — never call it before `supabase.auth.getUser`.
+ * Shared with socket/chatSocketio.js and optionalAuth.
+ * @returns {{id:string|null, iat:number|null, exp:number|null, sub:string|null, aal:string|null}|null}
+ */
+function decodeSessionClaims(token) {
+  return authSessionService.sessionClaimsFromAccessToken(token);
+}
+
+function parseWatermark(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Additive session policy on top of getUser (which stays the authority):
+ *   1. AuthSession row revoked            → { ok:false, code:'SESSION_REVOKED' }
+ *   2. JWT iat older than the user's       → { ok:false, code:'SESSION_REVOKED' }
+ *      sessions_valid_after watermark
+ * Pre-registry sessions (no row) and tokens without a session_id claim pass.
+ * @returns {Promise<{ok:true, session:object}|{ok:false, code:string, reason:string, session:object}>}
+ */
+async function checkSessionPolicy(token, { userId, sessionsValidAfter } = {}) {
+  const claims = decodeSessionClaims(token);
+  const session = {
+    id: claims?.id || null,
+    iat: claims?.iat || null,
+    aal: claims?.aal || null,
+    context: null,
+  };
+  if (session.id) {
+    const state = await authSessionService.getSessionStateCached(session.id);
+    if (state.known) {
+      session.context = state.context;
+      if (state.revoked) return { ok: false, code: 'SESSION_REVOKED', reason: state.row?.revoked_reason || 'revoked', session };
+    }
+  }
+  const watermark = parseWatermark(sessionsValidAfter);
+  if (watermark && typeof session.iat === 'number' && session.iat * 1000 < watermark.getTime()) {
+    logger.info('auth.session_before_watermark', { user_id: userId, iat: session.iat, watermark: watermark.toISOString() });
+    return { ok: false, code: 'SESSION_REVOKED', reason: 'watermark', session };
+  }
+  return { ok: true, session };
+}
+
+const SESSION_REVOKED_MESSAGE = 'This session was signed out. Please sign in again.';
+
+// A lockdown / password reset in this process must take effect on the next
+// request, not after the 60-s cache expires.
+authSessionService.authEvents.on('watermark_updated', ({ userId } = {}) => {
+  if (userId) invalidateRoleCache(userId);
+});
 
 /**
  * Middleware to verify Supabase JWT token
@@ -73,28 +142,57 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    // Fetch user role + account type — check cache first (AUTH-3.4)
+    // Fetch user role + account type (+ sessions_valid_after watermark) —
+    // check cache first (AUTH-3.4)
     let userRole = 'user';
     let userAccountType = 'individual';
+    let sessionsValidAfter = null;
     const cached = getCachedRole(data.user.id);
     if (cached) {
       logger.debug('auth.role_cache_hit', { user_id: data.user.id });
       userRole = cached.role;
       userAccountType = cached.accountType;
+      sessionsValidAfter = cached.sessionsValidAfter;
     } else {
       logger.debug('auth.role_cache_miss', { user_id: data.user.id });
       try {
-        const { data: userRow } = await supabaseAdmin
+        let { data: userRow, error: userRowError } = await supabaseAdmin
           .from('User')
-          .select('role, account_type')
+          .select('role, account_type, sessions_valid_after')
           .eq('id', data.user.id)
           .single();
+        if (userRowError && !userRow) {
+          // Migration 160 not applied yet (column missing) — fall back to the
+          // legacy projection so roles never silently downgrade to 'user'.
+          ({ data: userRow } = await supabaseAdmin
+            .from('User')
+            .select('role, account_type')
+            .eq('id', data.user.id)
+            .single());
+        }
         if (userRow?.role) userRole = userRow.role;
         if (userRow?.account_type) userAccountType = userRow.account_type;
+        if (userRow?.sessions_valid_after) sessionsValidAfter = userRow.sessions_valid_after;
       } catch {
         // Non-fatal: default to 'user' role
       }
-      setCachedRole(data.user.id, userRole, userAccountType);
+      setCachedRole(data.user.id, userRole, userAccountType, sessionsValidAfter);
+    }
+
+    // Persistent login (design §6.4): session_id / iat / aal from the JWT,
+    // AuthSession revocation (15-s cache) and the sessions_valid_after
+    // watermark. Additive — getUser above remains the authority.
+    const policy = await checkSessionPolicy(token, { userId: data.user.id, sessionsValidAfter });
+    req.session = policy.session;
+    if (!policy.ok) {
+      logger.warn('auth.session_revoked', {
+        user_id: data.user.id,
+        session_id: policy.session.id,
+        reason: policy.reason,
+        method: req._authMethod,
+        path: req.path,
+      });
+      return res.status(401).json({ error: SESSION_REVOKED_MESSAGE, code: policy.code });
     }
 
     // Attach user info to request
@@ -134,5 +232,9 @@ const requireAdmin = (req, res, next) => {
 module.exports = verifyToken;
 module.exports.requireAdmin = requireAdmin;
 module.exports.invalidateRoleCache = invalidateRoleCache;
+// Persistent login helpers (shared with optionalAuth / socket layer)
+module.exports.decodeSessionClaims = decodeSessionClaims;
+module.exports.checkSessionPolicy = checkSessionPolicy;
+module.exports.SESSION_REVOKED_MESSAGE = SESSION_REVOKED_MESSAGE;
 // Exposed for testing only
 module.exports._roleCache = _roleCache;

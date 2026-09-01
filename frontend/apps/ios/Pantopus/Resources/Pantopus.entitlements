@@ -10,6 +10,10 @@
 		<string>applinks:www.pantopus.com</string>
 		<string>applinks:pantopus.app</string>
 		<string>applinks:www.pantopus.app</string>
+		<string>webcredentials:pantopus.com</string>
+		<string>webcredentials:www.pantopus.com</string>
+		<string>webcredentials:pantopus.app</string>
+		<string>webcredentials:www.pantopus.app</string>
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>

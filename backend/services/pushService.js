@@ -42,12 +42,18 @@ async function saveToken(userId, token, opts = {}) {
 
   const { platform, provider } = resolveRegistration({ token, ...opts });
 
+  // Persistent-login (migration 160): link the token to the AuthDevice.device_id
+  // that registered it so device revoke / logout can delete exactly its tokens.
+  // Only written when the caller supplies it, so legacy callers keep the row's
+  // existing linkage.
+  const row = { user_id: userId, token, platform, provider, updated_at: new Date().toISOString() };
+  if (typeof opts.deviceId === 'string' && opts.deviceId.trim()) {
+    row.device_id = opts.deviceId.trim();
+  }
+
   const { data, error } = await supabaseAdmin
     .from('PushToken')
-    .upsert(
-      { user_id: userId, token, platform, provider, updated_at: new Date().toISOString() },
-      { onConflict: 'token' },
-    )
+    .upsert(row, { onConflict: 'token' })
     .select()
     .single();
 
@@ -83,6 +89,27 @@ async function removeAllTokens(userId) {
   }
 }
 
+/**
+ * Remove every push token registered by one device (persistent-login device
+ * revoke / local logout with proof). `deviceId` is the client device UUID
+ * (AuthDevice.device_id), not the AuthDevice row id.
+ */
+async function removeTokensForDevice(userId, deviceId) {
+  if (!userId || !deviceId) return 0;
+  const { data, error } = await supabaseAdmin
+    .from('PushToken')
+    .delete()
+    .eq('user_id', userId)
+    .eq('device_id', deviceId)
+    .select('id');
+
+  if (error) {
+    logger.error('Failed to remove device push tokens', { error: error.message, userId, deviceId });
+    return 0;
+  }
+  return Array.isArray(data) ? data.length : 0;
+}
+
 /** Dispatch one payload to a set of token rows and prune dead tokens. */
 async function deliver(rows, message) {
   if (!rows || rows.length === 0) return;
@@ -111,6 +138,36 @@ async function sendToUser(userId, { title, body, data }) {
   await deliver(rows, { title, body, data });
 }
 
+/**
+ * Send to every device of a user EXCEPT one (security notices about a device
+ * go to the user's other devices). `exceptDeviceId` = AuthDevice.device_id.
+ */
+async function sendToUserExcludingDevice(userId, exceptDeviceId, { title, body, data }) {
+  const { data: rows, error } = await supabaseAdmin
+    .from('PushToken')
+    .select('token, platform, provider, device_id')
+    .eq('user_id', userId);
+
+  if (error || !rows || rows.length === 0) return;
+  const targets = exceptDeviceId
+    ? rows.filter((r) => r.device_id !== exceptDeviceId)
+    : rows;
+  await deliver(targets, { title, body, data });
+}
+
+/** Send only to the tokens of one device (e.g. silent `session_revoked`). */
+async function sendToDevice(userId, deviceId, { title, body, data }) {
+  if (!userId || !deviceId) return;
+  const { data: rows, error } = await supabaseAdmin
+    .from('PushToken')
+    .select('token, platform, provider')
+    .eq('user_id', userId)
+    .eq('device_id', deviceId);
+
+  if (error || !rows || rows.length === 0) return;
+  await deliver(rows, { title, body, data });
+}
+
 /** Send a push notification to every device of many users at once. */
 async function sendToUsers(userIds, { title, body, data }) {
   if (!userIds || userIds.length === 0) return;
@@ -133,7 +190,10 @@ module.exports = {
   saveToken,
   removeToken,
   removeAllTokens,
+  removeTokensForDevice,
   sendToUser,
+  sendToUserExcludingDevice,
+  sendToDevice,
   sendToUsers,
   checkReceipts, // exported for testing / scheduled drain
 };
