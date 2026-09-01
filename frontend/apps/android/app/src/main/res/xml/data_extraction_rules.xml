@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- https://developer.android.com/guide/topics/data/autobackup#EnablingAutoBackup -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
+        <exclude domain="file" path="datastore/auth_tokens.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
+        <exclude domain="file" path="datastore/auth_tokens.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

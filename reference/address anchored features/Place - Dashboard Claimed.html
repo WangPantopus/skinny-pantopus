@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Dashboard, Claimed (C1)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 820px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 820px; line-height: 21px; }
+
+  /* product cards */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-hero { box-shadow: 0 3px 12px rgba(17,24,39,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+  .pl-textbtn:focus-visible { outline: 2px solid rgba(56,189,248,.5); outline-offset: 3px; border-radius: 4px; }
+  .pl-nudge { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border-radius: 12px; background: #f6f7f9; border: 1px solid #eef0f2; cursor: pointer; font-family: inherit; text-align: left; transition: background .15s ease; }
+  .pl-nudge:hover { background: #f1f3f5; }
+  .pl-nudge.alert { background: #FFFBEB; border-color: #fde68a; }
+  .pl-nudge.alert:hover { background: #fef6e0; }
+  .pl-verify-banner { transition: background .15s ease, box-shadow .15s ease; }
+  .pl-verify-banner:hover { background: #E0F2FE !important; }
+  .pl-verify-banner:focus-visible { outline: 2px solid rgba(56,189,248,.5); outline-offset: 2px; }
+
+  /* shimmer */
+  .pl-skel { position: relative; overflow: hidden; background: #eef1f4; }
+  .pl-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: pl-shimmer 1.5s infinite; }
+  @keyframes pl-shimmer { 100% { transform: translateX(100%); } }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .hero-toggle { display: inline-flex; background: #fff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 4px; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .hero-toggle button { border: none; background: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: #6b7280; padding: 7px 16px; border-radius: 9999px; white-space: nowrap; }
+  .hero-toggle button.on { background: #16A34A; color: #fff; }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  .spec-row { display: flex; flex-wrap: wrap; gap: 30px 40px; align-items: flex-start; }
+  .specimen { width: 340px; }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 20px; }
+
+  @media (prefers-reduced-motion: reduce) { .pl-skel::after { animation: none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-dashboard.jsx"></script>
+<script type="text/babel" src="place-dashboard-claimed.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [hero, setHero] = useState('allclear');
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · C1 — Claimed (T3, unverified)</div>
+        <h1 className="doc-title">Place dashboard — claimed, not yet verified</h1>
+        <p className="doc-sub">The verified archetype, exactly — same Today, Health, Home, Risk, Block, Money, and Civic, all fully live. Three things change for a resident who has claimed their place but hasn't proven their address: the avatar carries a <b>Claimed</b> badge instead of the green check, a gentle nudge sits above the pulse, and the verification-gated rows — messaging, badge, mailbox — show as locked cards. Every nudge leads to one place: verify.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#D97706' }}></span> Claimed status <b>Amber #D97706</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> Verify nudge / CTA <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Live place data <b>Home green #16A34A</b></div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The screen</h2>
+        </div>
+        <p className="zone-sub">Nothing is taken away from the claimed resident — the whole place reads live. The only difference is honesty about what verification still gates: a <b>Claimed</b> avatar, a sky verify banner above the pulse, and a <b>Locked until you verify</b> group at the foot. Each of those routes to B1 — verify your address.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <PlaceDashboardClaimed hero={hero} />
+            </IOSDevice>
+            <div className="hero-toggle" role="group" aria-label="Hero state">
+              <button className={hero === 'allclear' ? 'on' : ''} onClick={() => setHero('allclear')}>All-clear</button>
+              <button className={hero === 'alert' ? 'on' : ''} onClick={() => setHero('alert')}>Active alert</button>
+            </div>
+          </div>
+
+          <div className="side-note">
+            <h4>Claimed, not verified</h4>
+            <p>The avatar wears a slate disc and an amber "Claimed" badge instead of the green verified check. It's a real status, stated plainly — this person holds the place but hasn't proven the address yet.</p>
+
+            <h4>One gentle nudge</h4>
+            <p>"Verify your address to message neighbors and get your badge." A calm sky banner above the pulse — not a wall, not a modal. It sits in the flow and routes to B1 when tapped.</p>
+
+            <h4>Locked, with a reason</h4>
+            <p>Messaging, the verified badge, and the mailbox render as locked cards: a small lock in the header, one plain line of why, and a verbs-first "Verify address." No color floods — the lock carries the weight.</p>
+
+            <h4>Everything else is live</h4>
+            <p>Today, Health &amp; environment, Your home, Risk &amp; readiness, Your block, Money signals, Civic — all real, all the same as the verified screen. Claiming already earns the full readout of your place.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">What changed</h2>
+        </div>
+        <p className="zone-sub">Three swaps, side by side. The claimed avatar replaces the verified check; the verify banner is the gentle nudge that routes to B1; the Band-D rows become locked cards. Lift these onto the verified dashboard and the screen above is the result.</p>
+
+        <div className="spec-row">
+          <Specimen tag="Claimed avatar" note="amber badge, not the green check">
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 40, padding: '6px 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <Avatar initials="RC" size={48} />
+                <span style={{ fontSize: 11, color: 'var(--fg4)' }}>Verified</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <ClaimedAvatar initials="RC" size={48} />
+                <span style={{ fontSize: 11, color: 'var(--fg4)' }}>Claimed</span>
+              </div>
+            </div>
+          </Specimen>
+
+          <Specimen tag="Verify banner" note="the gentle nudge · routes to B1">
+            <VerifyBanner />
+          </Specimen>
+
+          <Specimen tag="Locked rows" note="messaging · badge · mailbox">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <LockedCard icon="message-circle" title="Neighbor messaging" reason="Verify your address to message neighbors." cta="Verify address" />
+              <LockedCard icon="badge-check" title="Verified badge" reason="Verify your address to get your verified badge." cta="Verify address" />
+              <LockedCard icon="mailbox" title="Your mailbox" reason="Verify your address for your mailbox — packages, civic notices, and permits." cta="Verify address" />
+            </div>
+          </Specimen>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>A09.4 · Invoice</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:#111827; min-height:100vh; }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+    .header h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#374151; background:#fff; border:1px solid #e5e7eb; padding:4px 9px; border-radius:6px; display:inline-block; margin-bottom:14px; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:780px; line-height:21px; }
+
+    .section-title { max-width:1100px; margin:0 auto 22px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 40px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:16px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A09.4 Invoice — gallery">
+    <div class="header">
+      <div class="kicker">Pantopus · A09 Detail: Transactional · A09.4</div>
+      <div class="path">src/app/invoice/[id].tsx</div>
+      <h1>Invoice — payable detail.</h1>
+      <p>Invoice variant of the A09 archetype. Status pill in the top bar, mono invoice # · dates, total elevated to hero in fg1, payer/payee cards with identity-tinted dots (Business violet ↔ Personal sky), line items table with tax + service-fee block and inline total row, payment terms + sender note, full-width Pay CTA. Secondary state — Paid — recolors total to success green, inserts a payment-receipt capsule, relabels totals row to "Paid", and pivots the dock to Share + Download receipt.</p>
+    </div>
+
+    <div class="section-title">Two frames · due · paid</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A09.4 Invoice — populated">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · DUE</div>
+          <div class="label-title">INV-00318 · $642.85 · due in 7 days</div>
+          <div class="label-sub">Amber "Due in 7 days" pill. Mono "INV-00318 · issued Dec 4 · due Dec 18". $642.85 total hero in fg1. From Brightside Outdoor (Business violet dot) → To Marcus Chen (Personal sky dot). 4-row line items + Subtotal / Service fee 3% / Tax 5.7% / Total $642.85 in primary-600. Payment terms + italic note from sender. Single full-width "Pay $642.85" CTA with credit-card glyph.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A09.4 Invoice — paid">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · PAID</div>
+          <div class="label-title">Paid 4 days early · Dec 14</div>
+          <div class="label-sub">Pill flips to green "Paid · Dec 14". Total recolors to success green with a check disc; "paid in full" trailing label. Pantopus Pay receipt capsule (txn id, mono timestamp, "4d early" badge) inserted under payer/payee row. Line items unchanged; totals row relabeled "Paid" in green. Sender note retained. Dock pivots to ghost Share + primary Download receipt.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="gig-v2-shared.jsx"></script>
+  <script type="text/babel" src="invoice-populated.jsx"></script>
+  <script type="text/babel" src="invoice-paid.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameInvoicePopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameInvoicePaid />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

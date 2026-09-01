@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 6c — "Tasks near me" widget. RemoteViews-safe views only
+     (LinearLayout / TextView / ImageView). Colors reference the token
+     mirror in values/colors.xml — never raw hex. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_tasks_near_me_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/widgetHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:maxLines="1"
+        android:text="@string/widget_tasks_near_me_title"
+        android:textColor="@color/pantopus_app_text"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widgetEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/widget_tasks_near_me_empty"
+        android:textColor="@color/pantopus_app_text_secondary"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/widgetRow1"
+        style="@style/WidgetTaskRow">
+
+        <ImageView
+            android:id="@+id/widgetRow1Dot"
+            style="@style/WidgetTaskRowDot"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/widgetRow1Title"
+            style="@style/WidgetTaskRowTitle" />
+
+        <TextView
+            android:id="@+id/widgetRow1Meta"
+            style="@style/WidgetTaskRowMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widgetRow2"
+        style="@style/WidgetTaskRow">
+
+        <ImageView
+            android:id="@+id/widgetRow2Dot"
+            style="@style/WidgetTaskRowDot"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/widgetRow2Title"
+            style="@style/WidgetTaskRowTitle" />
+
+        <TextView
+            android:id="@+id/widgetRow2Meta"
+            style="@style/WidgetTaskRowMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widgetRow3"
+        style="@style/WidgetTaskRow">
+
+        <ImageView
+            android:id="@+id/widgetRow3Dot"
+            style="@style/WidgetTaskRowDot"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/widgetRow3Title"
+            style="@style/WidgetTaskRowTitle" />
+
+        <TextView
+            android:id="@+id/widgetRow3Meta"
+            style="@style/WidgetTaskRowMeta" />
+    </LinearLayout>
+
+</LinearLayout>

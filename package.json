@@ -1,0 +1,34 @@
+{
+  "name": "pantopus-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pantopus — monorepo for the Pantopus platform. Node backend, Next.js web, native iOS (Swift), and native Android (Kotlin).",
+  "workspaces": [
+    "backend",
+    "frontend/apps/web",
+    "frontend/packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:web": "cd frontend/apps/web && npm run dev",
+    "ios:bootstrap": "cd frontend/apps/ios && make bootstrap",
+    "ios:open": "cd frontend/apps/ios && make open",
+    "android:assemble:debug": "cd frontend/apps/android && ./gradlew assembleDebug",
+    "android:install:debug": "cd frontend/apps/android && ./gradlew installDebug",
+    "build": "turbo run build",
+    "build:web": "cd frontend/apps/web && npm run build",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

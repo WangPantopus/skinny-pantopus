@@ -1,0 +1,13 @@
+// Debug — local development against your Mac / simulator.
+//
+// AppEnvironment resolves `.local` for Debug builds, so the API/socket URLs
+// below are read straight from Info.plist. Stripe runs in TEST mode.
+#include "Pantopus.base.xcconfig"
+
+PANTOPUS_API_BASE_URL = http:/$()/localhost:8000
+PANTOPUS_SOCKET_URL = http:/$()/localhost:8000
+STRIPE_PUBLISHABLE_KEY = pk_test_REPLACE_ME
+APS_ENVIRONMENT = development
+
+// Local overrides (LAN IP for device testing, real test key, Sentry DSN).
+#include? "Secrets.xcconfig"

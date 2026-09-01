@@ -1,0 +1,27 @@
+Pantopus puts your neighborhood, your mailbox, and the gigs you'd actually take in one address-proven place.
+
+Verified neighbors, not strangers
+Pantopus checks every member against a real address. You see who is actually nearby, who has been verified, and who shares your block. No anonymous handles. No drive-by trolls.
+
+A mailbox that finally makes sense
+Snap a photo of any letter or package. Pantopus pulls out the sender, tracking, and what it actually wants you to do. Bills land in Bills. Coupons land in Coupons. You decide what stays.
+
+Gigs and goods you can trust
+Post a task, sell a couch, find a babysitter — all with people whose addresses are confirmed. Tap to chat. Tap to pay. No back-and-forth on three apps.
+
+Your home, on your terms
+Claim your address once, then choose what your neighbors see. Show your name only to verified members. Hide entirely. You stay private by default.
+
+Designed for real life
+Pantopus skips the noisy feed. Every screen earns its spot — your hub today, your mail this week, your verified neighbors when you need a hand. The design system stays out of your way so the work stands out.
+
+What you can do today
+- Verify your home in under two minutes
+- Snap mail and let Pantopus sort it
+- Post a quick gig to neighbors who can actually show up
+- Sell something to the block before listing it nationally
+- Message verified neighbors with one tap
+
+Pantopus is built around trust. Every member is address-proven. Every payment runs through Stripe. Every screen tells you who you're talking to and why you can rely on them.
+
+Get the app, claim your address, and start working with the neighbors you already have.

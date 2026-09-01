@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Group Event Roster & Seats</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1040px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes sh-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Manage bookings · v2</div>
+      <h1>Group Event Roster &amp; Seats</h1>
+      <p>Manage the attendee roster for a group/multi-seat booking: capacity vs filled, waitlist, and per-attendee actions. Top bar: back chevron, centered "Roster", overflow. A capacity header reuses the Support Trains SlotPreview / ManageTrain stat machinery — a "12 of 16 seats filled" card with a fill bar (filled portion in the owner-context identity color, clamping to grayscale when full) plus a Confirmed / Pending / Waitlisted stat strip. Then a List-of-Rows avatar+kebab list of attendee rows with status chips and per-row actions, a Waitlist section with primary-tinted "Promote to seat" buttons (disabled when full, with a caption), host-only Add attendee + Adjust capacity controls, and a "Message all attendees" extended FAB.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ListOfRows + capacity header</div>
+        <div class="meta-item"><b>Mirrors</b>Support Trains SlotPreview · Manage Train capacity</div>
+        <div class="meta-item"><b>Route</b><code>bookings/[id]/roster</code></div>
+        <div class="meta-item"><b>Pillar</b>Owner-polymorphic · 1:1 never reaches this</div>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap"><div class="label-num">1 · UNDER CAPACITY</div><div class="label-title">Promote enabled</div><div class="label-sub">12 of 16 filled, identity fill bar, seated list + waitlist with a live Promote to seat.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap"><div class="label-num">2 · FULL</div><div class="label-title">Bar grayscale</div><div class="label-sub">All seats filled — bar clamps to gray, Promote disabled with "Open a seat to promote".</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap"><div class="label-num">3 · WAITLIST ACTIVE</div><div class="label-title">3 waiting, promote live</div><div class="label-sub">One seat open; three numbered waitlist rows each with a live Promote button.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap"><div class="label-num">4 · LOADING</div><div class="label-title">Shimmer</div><div class="label-sub">Skeleton capacity card and rows — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap"><div class="label-num">5 · EMPTY</div><div class="label-title">No signups</div><div class="label-sub">Users disc, "No signups yet", "Share the booking link to fill seats", primary CTA.</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap"><div class="label-num">6 · ERROR</div><div class="label-title">Couldn't load</div><div class="label-sub">Cloud-off icon and a ghost Try again.</div></div></div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="roster-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameUnderCapacity />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameFull />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameWaitlist />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameEmpty />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameError />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

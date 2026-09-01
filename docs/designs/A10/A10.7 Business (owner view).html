@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A10.7 Business (owner view)</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1100px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7c3aed; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 780px; line-height: 21px; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 12px; }
+
+    .meta { max-width: 1100px; margin: 0 auto 40px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 26px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 28px; }
+    .meta .col h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7c3aed; }
+    .meta .col p { margin: 0; font-size: 12.5px; color: #374151; line-height: 17px; }
+    .meta .col code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f5f3ff; color: #6d28d9; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+    .frames { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A10.7 Business (owner view)">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile · A10.7</div>
+      <h1>Business (owner view)</h1>
+      <p>The owner-facing twin of the public business profile (A10.6). Same screen, same business — <strong>Marlow &amp; Co.</strong> — but addressed by id and rendered for the person who runs it. The body keeps every public section, then layers on owner affordances: a live-status bar, an insights strip, a profile-strength checklist, inline edit pencils per section, and reply buttons on reviews. To make the distinction unmistakable, frame 2 is the literal <em>“preview as a neighbor”</em> state — the exact public render behind a preview bar.</p>
+      <div class="path">src/app/businesses/[id]/index.tsx</div>
+    </div>
+
+    <div class="meta">
+      <div class="col">
+        <h3>owner_vs_public</h3>
+        <p>Public (A10.6) leads with <em>Contact / Book</em> for a stranger. Owner view (this) leads with <code>Edit page</code> and surfaces owner-only data — views, saves, contacts, profile strength — that a neighbor never sees. The same sections, two audiences.</p>
+      </div>
+      <div class="col">
+        <h3>slot.body_pattern</h3>
+        <p><code>editable_sections</code> — each block (categories, about, hours, service area, services, photos, reviews) carries an inline <em>Edit / Manage / Add</em> affordance. Reviews gain owner replies; the gallery gains an add tile; one open task drives the strength meter.</p>
+      </div>
+      <div class="col">
+        <h3>slot.primary_cta</h3>
+        <p><code>edit_page</code> — sticky bar, violet-adjacent intent. <em>Edit page</em> primary, <em>Preview</em> secondary. <em>View as neighbor</em> also lives in the live-status bar — both routes drop you into frame 2’s public render.</p>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · OWNER / EDIT VIEW</div>
+          <div class="label-title">Marlow &amp; Co. — managing the live page</div>
+          <div class="label-sub">“Owner view” badge in the bar, a live-status row with View as neighbor, this-week insights, a 92% profile-strength checklist, edit pencils on every section, an add-photo tile, and reply controls on reviews.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · PREVIEW AS NEIGHBOR</div>
+          <div class="label-title">The same page, exactly as the public sees it</div>
+          <div class="label-sub">A dark preview bar replaces the owner chrome. No insights, no pencils, no strength meter — just the clean public profile ending in Contact / Book. Tapping Exit returns to edit mode. This is the public/owner contrast, made literal.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="business-frames.jsx"></script>
+  <script type="text/babel" src="business-owner-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameOwnerEdit />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FramePreviewPublic />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

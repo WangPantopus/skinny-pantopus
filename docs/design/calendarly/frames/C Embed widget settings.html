@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Embed widget settings</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: var(--font-sans, ui-sans-serif), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1180px; margin: 0 auto 36px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-identity-business); margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 880px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: var(--font-mono); font-size: 11px; color: var(--color-identity-business); background: #f5f3ff; padding: 1px 6px; border-radius: 4px; }
+
+    .stack { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+    .frame-wrap { display: flex; flex-direction: column; gap: 14px; }
+    .label-row { display: flex; align-items: baseline; gap: 12px; }
+    .label-num { font-family: var(--font-mono); font-size: 11px; color: #94a3b8; letter-spacing: 0.04em; }
+    .label-title { font-size: 15px; font-weight: 700; color: #111827; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12.5px; color: #64748b; line-height: 17px; max-width: 760px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Embed widget settings · Web</div>
+      <h1>Embed widget settings</h1>
+      <p>A web host-settings screen that surfaces the /book/[slug] flow onto external sites or the host's /b/[username] page. It mirrors the Edit Business Page block-editor — a left config column and a right live-preview pane — with the A14 settings-list rows and a code-snippet block. Business violet is the driving pillar: it's the widget's default brand color, shown in the preview's button and the brand swatch (a Personal sky variant is noted). Every functional control — the segmented type switcher, Copy snippet, toggles — stays product sky.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Settings form · block editor + snippet</div>
+        <div class="meta-item"><b>Mirrors</b>A13 Edit Business Page · A14 rows · A10.6 profile</div>
+        <div class="meta-item"><b>Path</b><code>/settings/embed</code></div>
+        <div class="meta-item"><b>Pillar</b>Business violet · Personal sky variant</div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="frame-wrap">
+        <div class="label-row"><span class="label-num">1 · INLINE</span><span class="label-title">Default — embedded in the page</span></div>
+        <div class="label-sub">The inline embed: a segmented type switcher, an appearance card, the &lt;script&gt; snippet, and a "Show inline on /b/yourname" toggle. The preview renders the booker — event-type list + mini calendar — inside a faux yoursite.com.</div>
+        <div id="f1"></div>
+      </div>
+      <div class="frame-wrap">
+        <div class="label-row"><span class="label-num">2 · POPUP BUTTON</span><span class="label-title">Opens in a modal</span></div>
+        <div class="label-sub">A button-text field and position picker appear; the preview shows a "Book a call" button with an "Opens a booking modal" hint.</div>
+        <div id="f2"></div>
+      </div>
+      <div class="frame-wrap">
+        <div class="label-row"><span class="label-num">3 · FLOATING BUTTON</span><span class="label-title">Corner pill</span></div>
+        <div class="label-sub">A corner picker drives a pill that follows visitors; the preview shows it pinned bottom-right over a faux page.</div>
+        <div id="f3"></div>
+      </div>
+      <div class="frame-wrap">
+        <div class="label-row"><span class="label-num">4 · APPEARANCE CONFIG</span><span class="label-title">Color / theme open</span></div>
+        <div class="label-sub">The brand-color popover is open — violet selected by default, with sky and other swatches, and a note that a Personal page defaults to sky.</div>
+        <div id="f4"></div>
+      </div>
+      <div class="frame-wrap">
+        <div class="label-row"><span class="label-num">5 · COPIED SNIPPET</span><span class="label-title">Toast</span></div>
+        <div class="label-sub">Copy snippet flips to a green Copied state and a "Snippet copied" success toast settles at the bottom.</div>
+        <div id="f5"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="embed-widget-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameInline />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FramePopup />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameFloating />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameAppearance />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameCopied />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

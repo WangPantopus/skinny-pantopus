@@ -1,0 +1,202 @@
+
+> @pantopus/web@0.1.0 type-check /home/user/pantopus/frontend/apps/web
+> tsc --noEmit
+
+src/app/(app)/app/homes/[id]/bills/page.tsx(33,31): error TS2307: Cannot find module '@pantopus/api/endpoints/homeProfile' or its corresponding type declarations.
+src/app/(app)/app/homes/new/page.tsx(757,49): error TS18047: 'normalized' is possibly 'null'.
+src/app/(app)/app/homes/new/page.tsx(759,45): error TS18047: 'normalized' is possibly 'null'.
+src/app/(app)/app/homes/new/page.tsx(760,47): error TS18047: 'normalized' is possibly 'null'.
+src/app/(app)/app/homes/new/page.tsx(761,48): error TS18047: 'normalized' is possibly 'null'.
+src/app/(app)/app/hub/page.tsx(70,5): error TS2741: Property 'profileCompleteness' is missing in type '{ steps: api.hub.SetupStep[]; allDone: boolean; }' but required in type '{ steps: SetupStep[]; allDone: boolean; profileCompleteness: ProfileCompleteness; }'.
+src/components/DashboardMap.tsx(108,21): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/DashboardMap.tsx(111,50): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/components/DashboardMap.tsx(112,85): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/components/business/tabs/CatalogTab.tsx(104,18): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/business/tabs/CatalogTab.tsx(107,66): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/CatalogTab.tsx(108,19): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/CatalogTab.tsx(114,84): error TS2339: Property 'replace' does not exist on type '{}'.
+src/components/business/tabs/CatalogTab.tsx(118,78): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/business/tabs/CatalogTab.tsx(120,51): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/business/tabs/InsightsTab.tsx(19,19): error TS2345: Argument of type 'BusinessInsights' is not assignable to parameter of type 'SetStateAction<Record<string, unknown> | null>'.
+  Type 'BusinessInsights' is not assignable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'BusinessInsights'.
+src/components/business/tabs/InsightsTab.tsx(36,65): error TS2339: Property 'total' does not exist on type '{}'.
+src/components/business/tabs/InsightsTab.tsx(37,67): error TS2339: Property 'total' does not exist on type '{}'.
+src/components/business/tabs/InsightsTab.tsx(38,66): error TS2339: Property 'average_rating' does not exist on type '{}'.
+src/components/business/tabs/InsightsTab.tsx(38,107): error TS2339: Property 'average_rating' does not exist on type '{}'.
+src/components/business/tabs/InsightsTab.tsx(43,30): error TS2339: Property 'by_source' does not exist on type '{}'.
+src/components/business/tabs/LocationsTab.tsx(3,15): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessLocation'.
+src/components/business/tabs/OverviewTab.tsx(5,3): error TS2724: '"@pantopus/api"' has no exported member named 'BusinessUser'. Did you mean 'businesses'?
+src/components/business/tabs/OverviewTab.tsx(6,3): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessProfile'.
+src/components/business/tabs/OverviewTab.tsx(7,3): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessLocation'.
+src/components/business/tabs/OverviewTab.tsx(283,20): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/business/tabs/OverviewTab.tsx(285,65): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/OverviewTab.tsx(286,74): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/OverviewTab.tsx(290,24): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/business/tabs/PagesTab.tsx(88,18): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/business/tabs/PagesTab.tsx(91,68): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/PagesTab.tsx(92,19): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/PagesTab.tsx(98,21): error TS18046: 'page.published_revision' is of type 'unknown'.
+src/components/business/tabs/PagesTab.tsx(102,22): error TS18046: 'page.published_revision' is of type 'unknown'.
+src/components/business/tabs/PagesTab.tsx(105,69): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/PagesTab.tsx(115,53): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/business/tabs/PaymentsTab.tsx(12,26): error TS2345: Argument of type 'StripeAccount' is not assignable to parameter of type 'SetStateAction<Record<string, boolean> | null>'.
+  Type 'StripeAccount' is not assignable to type 'Record<string, boolean>'.
+    Index signature for type 'string' is missing in type 'StripeAccount'.
+src/components/business/tabs/ProfileTab.tsx(3,15): error TS2724: '"@pantopus/api"' has no exported member named 'BusinessUser'. Did you mean 'businesses'?
+src/components/business/tabs/ProfileTab.tsx(3,29): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessProfile'.
+src/components/business/tabs/ReviewsTab.tsx(23,18): error TS2345: Argument of type 'BusinessReview[]' is not assignable to parameter of type 'SetStateAction<Record<string, unknown>[]>'.
+  Type 'BusinessReview[]' is not assignable to type 'Record<string, unknown>[]'.
+    Type 'BusinessReview' is not assignable to type 'Record<string, unknown>'.
+      Index signature for type 'string' is missing in type 'BusinessReview'.
+src/components/business/tabs/ReviewsTab.tsx(96,18): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/business/tabs/ReviewsTab.tsx(100,21): error TS2322: Type 'unknown' is not assignable to type 'string | null | undefined'.
+src/components/business/tabs/ReviewsTab.tsx(101,21): error TS2322: Type 'unknown' is not assignable to type 'string | null | undefined'.
+src/components/business/tabs/ReviewsTab.tsx(102,21): error TS2322: Type '{}' is not assignable to type 'string'.
+src/components/business/tabs/ReviewsTab.tsx(103,21): error TS2322: Type 'unknown' is not assignable to type 'string | null | undefined'.
+src/components/business/tabs/ReviewsTab.tsx(108,51): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type '{}' is not assignable to parameter of type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type '{}' is not assignable to parameter of type 'string | number'.
+src/components/business/tabs/ReviewsTab.tsx(112,31): error TS2345: Argument of type '{}' is not assignable to parameter of type 'number'.
+src/components/business/tabs/ReviewsTab.tsx(113,68): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/business/tabs/ReviewsTab.tsx(117,15): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/business/tabs/ReviewsTab.tsx(118,81): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/components/business/tabs/ReviewsTab.tsx(124,80): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/components/business/tabs/ReviewsTab.tsx(139,62): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/business/tabs/ReviewsTab.tsx(154,54): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'SetStateAction<string | null>'.
+src/components/business/tabs/SettingsTab.tsx(4,15): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessProfile'.
+src/components/business/useBusinessData.ts(6,3): error TS2724: '"@pantopus/api"' has no exported member named 'BusinessUser'. Did you mean 'businesses'?
+src/components/business/useBusinessData.ts(7,3): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessProfile'.
+src/components/business/useBusinessData.ts(8,3): error TS2305: Module '"@pantopus/api"' has no exported member 'BusinessLocation'.
+src/components/chat/ChatMessageBubble.tsx(64,42): error TS2345: Argument of type 'import("/home/user/pantopus/frontend/apps/web/src/components/chat/ChatMessageBubble").ChatMessage' is not assignable to parameter of type 'import("/home/user/pantopus/frontend/packages/types/src/index").ChatMessage'.
+  Type 'ChatMessage' is missing the following properties from type 'ChatMessage': room_id, message_type, is_deleted
+src/components/chat/ChatMessageBubble.tsx(66,38): error TS2345: Argument of type 'import("/home/user/pantopus/frontend/apps/web/src/components/chat/ChatMessageBubble").ChatMessage' is not assignable to parameter of type 'import("/home/user/pantopus/frontend/packages/types/src/index").ChatMessage'.
+  Type 'ChatMessage' is missing the following properties from type 'ChatMessage': room_id, message_type, is_deleted
+src/components/chat/ChatMessageBubble.tsx(106,10): error TS2739: Type '{ onSelect: (emoji: string) => void; onClose: () => void; }' is missing the following properties from type 'EmojiPickerPopoverProps': isOpen, anchorRef
+src/components/chat/ChatMessageBubble.tsx(222,73): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string | undefined'.
+src/components/chat/ChatMessageList.tsx(94,41): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/components/chat/ChatMessageList.tsx(113,17): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/components/chat/ChatRoomView.tsx(83,32): error TS2345: Argument of type '(p: Record<string, unknown>) => string' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => string'.
+  Types of parameters 'p' and 'value' are incompatible.
+    Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+      Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(102,23): error TS2345: Argument of type 'PreBidStatus' is not assignable to parameter of type 'SetStateAction<Record<string, unknown> | null>'.
+  Type 'PreBidStatus' is not assignable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'PreBidStatus'.
+src/components/chat/ChatRoomView.tsx(114,44): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; })[]', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; })[]', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(115,48): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(117,19): error TS2352: Conversion of type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' to type 'Record<string, unknown> | undefined' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(118,26): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(142,45): error TS2339: Property 'user_id' does not exist on type 'ChatMessage'.
+src/components/chat/ChatRoomView.tsx(142,78): error TS2339: Property 'sender' does not exist on type 'ChatMessage'.
+src/components/chat/ChatRoomView.tsx(149,39): error TS2365: Operator '<=' cannot be applied to types '{}' and 'number'.
+src/components/chat/ChatRoomView.tsx(239,54): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; })[]', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; })[]', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, array: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(240,46): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(243,15): error TS2339: Property 'type' does not exist on type 'ChatRoomWithDetails'.
+src/components/chat/ChatRoomView.tsx(245,42): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(247,38): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => value is ChatParticipant & { ...; }'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+  Overload 2 of 2, '(predicate: (value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown, thisArg?: any): (ChatParticipant & { ...; }) | undefined', gave the following error.
+    Argument of type '(p: Record<string, unknown>) => boolean' is not assignable to parameter of type '(value: ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }, index: number, obj: (ChatParticipant & { ...; })[]) => unknown'.
+      Types of parameters 'p' and 'value' are incompatible.
+        Type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' is not assignable to type 'Record<string, unknown>'.
+          Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(248,22): error TS2352: Conversion of type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'ChatParticipant & { user: Pick<User, "id" | "name" | "username" | "profile_picture_url">; }'.
+src/components/chat/ChatRoomView.tsx(252,18): error TS2339: Property 'name' does not exist on type 'ChatRoomWithDetails'.
+src/components/chat/ChatRoomView.tsx(283,32): error TS2339: Property 'sender' does not exist on type 'ChatMessage'.
+src/components/chat/ChatRoomView.tsx(284,46): error TS2339: Property 'user_id' does not exist on type 'ChatMessage'.
+src/components/chat/ChatRoomView.tsx(287,51): error TS2339: Property 'message' does not exist on type 'ChatMessage'.
+src/components/chat/ChatRoomView.tsx(347,53): error TS2365: Operator '<=' cannot be applied to types '{}' and 'number'.
+src/components/chat/ChatRoomView.tsx(372,28): error TS2339: Property 'type' does not exist on type 'ChatRoomWithDetails'.
+src/components/chat/ChatRoomView.tsx(386,7): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/chat/ChatRoomView.tsx(395,11): error TS2322: Type '(msg: import("/home/user/pantopus/frontend/packages/types/src/index").ChatMessage) => boolean' is not assignable to type '(msg: import("/home/user/pantopus/frontend/apps/web/src/components/chat/ChatMessageBubble").ChatMessage) => boolean'.
+  Types of parameters 'msg' and 'msg' are incompatible.
+    Type 'ChatMessage' is missing the following properties from type 'ChatMessage': room_id, message_type, is_deleted
+src/components/chat/ChatRoomView.tsx(406,14): error TS2365: Operator '>' cannot be applied to types '{}' and 'number'.
+src/components/chat/ChatRoomView.tsx(409,51): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/chat/ChatRoomView.tsx(413,33): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(iterable: ArrayLike<unknown> | Iterable<unknown>): unknown[]', gave the following error.
+    Type 'unknown' is not assignable to type 'number'.
+  Overload 2 of 4, '(arrayLike: ArrayLike<unknown>): unknown[]', gave the following error.
+    Type 'unknown' is not assignable to type 'number'.
+src/components/chat/ChatRoomView.tsx(414,69): error TS2365: Operator '<' cannot be applied to types 'number' and '{}'.
+src/components/chat/ChatRoomView.tsx(421,17): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/chat/ChatRoomView.tsx(437,9): error TS2322: Type 'unknown' is not assignable to type 'boolean | undefined'.
+src/components/chat/ConversationView.tsx(68,24): error TS2352: Conversion of type '{ roomId: string; otherUser: { id: string; username: string; name: string; profile_picture_url?: string | undefined; }; }' to type '{ otherUser?: User | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'otherUser' are incompatible.
+    Type '{ id: string; username: string; name: string; profile_picture_url?: string | undefined; }' is missing the following properties from type 'User': email, firstName, created_at, updated_at
+src/components/chat/ConversationView.tsx(228,33): error TS2352: Conversion of type 'User | null' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'User' is not comparable to type 'Record<string, unknown>'.
+
+[... output truncated, 1149 total lines]

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pantopus · Navigation Drawer</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827;
+      background:
+        radial-gradient(120% 50% at 50% 0%, #e0f2fe 0%, transparent 60%),
+        #f6f7f9;
+      min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1320px; margin:0 auto 36px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0284c7; margin-bottom:8px; }
+    .header h1 { font-size:36px; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header p { margin:0; color:#374151; font-size:15px; max-width:880px; line-height:23px; }
+
+    .principle {
+      max-width:1320px; margin:0 auto 28px; padding:16px 20px;
+      background:#fff; border:1px solid #bae6fd; border-left:4px solid #0284c7;
+      border-radius:12px;
+      display:flex; gap:14px; align-items:flex-start;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .principle .icon { width:32px; height:32px; border-radius:8px; background:#e0f2fe; color:#0284c7;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .principle .text { font-size:13px; line-height:19px; color:#374151; }
+    .principle .text strong { color:#111827; font-weight:700; }
+
+    .slots {
+      max-width:1320px; margin:0 auto 36px;
+      background:#fff; border:1px solid #e5e7eb;
+      border-radius:20px; padding:24px 28px;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .slots h2 { margin:0 0 6px; font-size:13px; font-weight:700;
+      letter-spacing:0.08em; text-transform:uppercase; color:#0284c7; }
+    .slots .lede { margin:0 0 18px; color:#6b7280; font-size:13px; line-height:19px; max-width:760px; }
+    .slot-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px 28px; }
+    .slot { display:flex; gap:10px; align-items:flex-start; }
+    .slot-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11.5px; color:#0284c7; background:#e0f2fe;
+      padding:2px 7px; border-radius:6px; white-space:nowrap; flex-shrink:0; font-weight:600;
+    }
+    .slot-desc { font-size:12px; color:#374151; line-height:17px; }
+    .slot-desc code { font-size:11px; background:#f3f4f6; padding:1px 5px; border-radius:4px; color:#111827; }
+
+    .pillars { max-width:1320px; margin:0 auto 36px; display:flex; gap:14px; flex-wrap:wrap; }
+    .pillar-chip {
+      display:inline-flex; align-items:center; gap:9px; padding:9px 15px 9px 11px;
+      background:#fff; border:1px solid #e5e7eb; border-radius:9999px;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .pillar-chip .dot { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; }
+    .pillar-chip b { font-size:13px; color:#111827; font-weight:700; }
+    .pillar-chip span { font-size:12px; color:#6b7280; }
+
+    .section-title {
+      max-width:1320px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+      color:#6b7280;
+    }
+
+    .frames { max-width:1320px; margin:0 auto;
+      display:grid; grid-template-columns:repeat(2, 1fr); gap:46px 24px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:17px; font-weight:700; color:#111827; margin-bottom:5px; letter-spacing:-0.1px; }
+    .label-sub { font-size:12px; color:#374151; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:1fr; max-width:420px; }
+      .slot-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · Navigation Drawer</div>
+      <h1>The context drawer — one menu, three identities.</h1>
+      <p>A left panel sliding over a dimmed scrim, opened from the Hub menu. It is <strong>context-aware</strong>: its body sections rewrite themselves for the active context — Personal, a specific Home, or a specific Business — and its header doubles as the identity/context switcher. The contract is this single panel and its four states.</p>
+    </div>
+
+    <div class="principle">
+      <div class="icon"><i data-lucide="panel-left-open" style="width:18px;height:18px;"></i></div>
+      <div class="text">
+        <strong>Header is the switcher.</strong> Collapsed, it shows a context pill tinted by the active identity pillar. Tap the chevron and it expands into a full switcher — Personal, Professional, your homes, your businesses, and the two "add" rows. The body below always reflects whichever context is active.
+      </div>
+    </div>
+
+    <div class="slots">
+      <h2>Anatomy</h2>
+      <p class="lede">Panel is <code>~82%</code> of the bezel width over a <code>rgba(0,0,0,.45)</code> scrim. Tap the scrim or swipe left to dismiss. Surface <code>--app-surface</code>, elevation <code>--shadow-xl</code>.</p>
+      <div class="slot-grid">
+        <div class="slot"><span class="slot-name">context_pill</span><span class="slot-desc">Round pillar icon + label + chevron, on the matching <code>-bg</code> tint. Chevron-down collapsed, chevron-up expanded.</span></div>
+        <div class="slot"><span class="slot-name">switcher_dropdown</span><span class="slot-desc">Personal · Professional, then <code>YOUR HOMES</code> and <code>YOUR BUSINESSES</code> groups, each with an "+ add" dashed row. Active context carries a check.</span></div>
+        <div class="slot"><span class="slot-name">context_sections[]</span><span class="slot-desc">Overline-titled groups of full-width rows (leading Lucide icon + label, ≥44pt tap target). The set swaps per context.</span></div>
+        <div class="slot"><span class="slot-name">selected_row</span><span class="slot-desc">Current area marked with <code>--color-primary-50</code> fill + primary text + a trailing dot — mirrors how the Hub marks the active surface.</span></div>
+        <div class="slot"><span class="slot-name">back_to_hub</span><span class="slot-desc">Home/Business only. A quiet-but-clear card pinned at the bottom that returns to Personal/Hub.</span></div>
+        <div class="slot"><span class="slot-name">no_tab_bar</span><span class="slot-desc">The drawer overlays the tabbed shell — bottom tabs are never shown inside it.</span></div>
+      </div>
+    </div>
+
+    <div class="pillars">
+      <div class="pillar-chip"><span class="dot" style="background:#0284C7"><i data-lucide="user" style="width:14px;height:14px;"></i></span><b>Personal</b><span>sky · #0284C7</span></div>
+      <div class="pillar-chip"><span class="dot" style="background:#475569"><i data-lucide="wrench" style="width:14px;height:14px;"></i></span><b>Professional</b><span>slate · sub-mode</span></div>
+      <div class="pillar-chip"><span class="dot" style="background:#16A34A"><i data-lucide="home" style="width:14px;height:14px;"></i></span><b>Home</b><span>green · #16A34A</span></div>
+      <div class="pillar-chip"><span class="dot" style="background:#7C3AED"><i data-lucide="building-2" style="width:14px;height:14px;"></i></span><b>Business</b><span>violet · #7C3AED</span></div>
+    </div>
+
+    <div class="section-title">Four frames · Personal · Home · Business · Switcher expanded</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · PERSONAL</div>
+          <div class="label-title">Personal context — collapsed</div>
+          <div class="label-sub">Sky pill. Manage · Discover · Your Stuff · Settings — the full personal menu, scrollable. Switcher closed.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · HOME</div>
+          <div class="label-title">Home context — Maple Street</div>
+          <div class="label-sub">Green pill on the active home. Property group · More · Settings. Overview marked current; "Back to Hub" pinned below.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · BUSINESS</div>
+          <div class="label-title">Business context — Cortado Coffee</div>
+          <div class="label-sub">Violet pill on the active business. Business group · Manage · Settings. Overview marked current; "Back to Hub" below.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f4"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 4 · SWITCHER</div>
+          <div class="label-title">Switcher expanded</div>
+          <div class="label-sub">Chevron-up, ringed pill. Personal (checked) · Professional · two homes + add · a business + add — the full pillar dropdown over Personal.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="beacon-shell.jsx"></script>
+  <script type="text/babel" src="nav-drawer-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameDrawerPersonal />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameDrawerHome />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameDrawerBusiness />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameDrawerSwitcher />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

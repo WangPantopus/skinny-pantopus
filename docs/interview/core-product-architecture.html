@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantopus Core Product Architecture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #52616b;
+      --border: #d9ded8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      padding: 20px 28px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    main {
+      height: calc(100vh - 82px);
+      overflow: auto;
+      padding: 24px;
+    }
+
+    .diagram-shell {
+      min-width: 1600px;
+      min-height: 900px;
+      padding: 24px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pantopus Core Product Architecture</h1>
+    <p>Scroll horizontally and zoom the browser for the widest view.</p>
+  </header>
+  <main>
+    <section class="diagram-shell">
+      <pre class="mermaid">
+flowchart LR
+  subgraph C["Clients"]
+    Web["Next.js Web&lt;br/&gt;React, API client, Stripe.js"]
+    Mobile["Expo Mobile&lt;br/&gt;React Native, API client, Stripe RN"]
+  end
+
+  subgraph B["Pantopus Backend"]
+    NextProxy["Next.js rewrites&lt;br/&gt;/api + /socket.io"]
+    API["Express API&lt;br/&gt;backend/app.js&lt;br/&gt;REST, auth, domain services"]
+    SIO["Socket.IO&lt;br/&gt;chat, badges, notifications,&lt;br/&gt;gig live updates"]
+    Cron["node-cron jobs&lt;br/&gt;payments, feeds, mail,&lt;br/&gt;home, marketplace"]
+  end
+
+  subgraph D["Supabase"]
+    Auth["Supabase Auth&lt;br/&gt;JWT/session authority"]
+    DB["Postgres + RLS&lt;br/&gt;users, homes, gigs, posts,&lt;br/&gt;chat, payments, seeder queues"]
+    StorageLegacy["Supabase Storage&lt;br/&gt;legacy file route path"]
+  end
+
+  subgraph AWS["AWS"]
+    S3["S3 uploads&lt;br/&gt;optional CloudFront CDN"]
+    EventBridge["EventBridge schedules"]
+    Secrets["Secrets Manager"]
+    Lambdas["Seeder Lambdas&lt;br/&gt;fetcher, poster, sports,&lt;br/&gt;discovery, briefing,&lt;br/&gt;alerts, reminders, mail, no-bid"]
+    CloudWatch["CloudWatch metrics/logs"]
+  end
+
+  subgraph EXT["External APIs"]
+    Stripe["Stripe + Connect&lt;br/&gt;PaymentIntents, SetupIntents,&lt;br/&gt;transfers, webhooks"]
+    OpenAI["OpenAI&lt;br/&gt;AI chat, Magic Task,&lt;br/&gt;drafts, briefings, seeder humanizer"]
+    Sources["Content/weather/news sources&lt;br/&gt;RSS, Google News, NOAA,&lt;br/&gt;AirNow, USGS, etc."]
+  end
+
+  Web --&gt;|"same-origin /api via rewrites&lt;br/&gt;httpOnly cookies + CSRF"| NextProxy
+  NextProxy --&gt; API
+  Web &lt;--&gt;|"Socket.IO /socket.io&lt;br/&gt;cookie fallback"| NextProxy
+  NextProxy &lt;--&gt;|"WebSocket upgrade"| SIO
+
+  Mobile --&gt;|"HTTPS /api&lt;br/&gt;Bearer Supabase JWT"| API
+  Mobile &lt;--&gt;|"Socket.IO&lt;br/&gt;auth token"| SIO
+
+  Web --&gt;|"Stripe Elements"| Stripe
+  Mobile --&gt;|"Stripe PaymentSheet"| Stripe
+
+  API --&gt; Auth
+  API --&gt; DB
+  API --&gt; S3
+  API --&gt; StorageLegacy
+  API --&gt; OpenAI
+  API --&gt; Stripe
+  Stripe --&gt;|"webhooks /api/webhooks/stripe"| API
+
+  SIO --&gt; Auth
+  SIO --&gt; DB
+  SIO --&gt;|"emit live events"| Web
+  SIO --&gt;|"emit live events"| Mobile
+
+  Cron --&gt; DB
+  Cron --&gt; Stripe
+  Cron --&gt; SIO
+
+  EventBridge --&gt; Lambdas
+  Secrets --&gt; Lambdas
+  Lambdas --&gt; DB
+  Lambdas --&gt; OpenAI
+  Lambdas --&gt; Sources
+  Lambdas --&gt;|"POST /api/posts&lt;br/&gt;curator bearer token"| API
+  Lambdas --&gt;|"POST /api/internal/briefing/*&lt;br/&gt;x-internal-api-key"| API
+  Lambdas --&gt; CloudWatch
+      </pre>
+    </section>
+  </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        primaryColor: "#eef6f2",
+        primaryTextColor: "#1f2933",
+        primaryBorderColor: "#6f9f8d",
+        lineColor: "#60717d",
+        secondaryColor: "#f7efe2",
+        tertiaryColor: "#eef1f5",
+        clusterBkg: "#fbfbf8",
+        clusterBorder: "#b8c3bb"
+      }
+    });
+  </script>
+</body>
+</html>

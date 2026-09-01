@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pantopus — Mobile Mailbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="colors_and_type.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: var(--font-sans); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mailbox.jsx"></script>
+
+<script type="text/babel">
+  const { useEffect } = React;
+
+  // Lucide refresh after every render
+  function useLucide(deps) {
+    useEffect(() => {
+      if (window.lucide) window.lucide.createIcons();
+    });
+  }
+
+  function PhoneFrame({ children, label }) {
+    // IOSDevice default is 402x874. We render the mailbox inside it.
+    return (
+      <IOSDevice width={402} height={874}>
+        {children}
+      </IOSDevice>
+    );
+  }
+
+  function App() {
+    useLucide();
+    return (
+      <DesignCanvas>
+        <DCSection
+          id="mailbox-root"
+          title="Mailbox — Root archetype"
+          subtitle="Drawer (Me/Home/Biz/Earn) × Tab (Incoming/Counter/Vault). One screen, four contexts, three tabs.">
+
+          <DCArtboard id="me-incoming" label="01 · Me drawer / Incoming" width={402} height={874}>
+            <MailboxScreen drawer="me" tab="incoming" mode="list" dataLabel="01 Me Incoming" />
+          </DCArtboard>
+
+          <DCArtboard id="biz-counter" label="02 · Biz drawer / Counter" width={402} height={874}>
+            <MailboxScreen drawer="biz" tab="counter" mode="list" dataLabel="02 Biz Counter" />
+          </DCArtboard>
+
+          <DCArtboard id="earn-empty" label="03 · Earn drawer / Empty state" width={402} height={874}>
+            <MailboxScreen drawer="earn" tab="incoming" mode="empty" dataLabel="03 Earn Empty" />
+          </DCArtboard>
+
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+  // Re-fire lucide on a short interval the first second to catch any late-mount icons
+  let n = 0;
+  const tick = () => {
+    if (window.lucide) window.lucide.createIcons();
+    if (n++ < 8) setTimeout(tick, 120);
+  };
+  tick();
+</script>
+</body>
+</html>

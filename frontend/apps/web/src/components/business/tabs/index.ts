@@ -1,0 +1,14 @@
+export { default as OverviewTab } from './OverviewTab';
+export { default as ProfileTab } from './ProfileTab';
+export { default as LocationsTab } from './LocationsTab';
+export { default as CatalogTab } from './CatalogTab';
+export { default as PagesTab } from './PagesTab';
+export { default as TeamTab } from './TeamTab';
+export { default as ReviewsTab } from './ReviewsTab';
+export { default as InsightsTab } from './InsightsTab';
+export { default as SettingsTab } from './SettingsTab';
+export { default as PaymentsTab } from './PaymentsTab';
+export { default as InvoicesTab } from './InvoicesTab';
+export { default as LegalTab } from './LegalTab';
+export { default as ActivityTab } from './ActivityTab';
+export { default as InboxTab } from './InboxTab';

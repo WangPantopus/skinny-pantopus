@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Open-in-app / deep-link hand-off</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1000px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes dlPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Deep-link hand-off</div>
+      <h1>Open-in-app / booking deep-link hand-off</h1>
+      <p>So an app-having invitee who taps a <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/book/[slug]</code> or <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/manage</code> link (or a push) lands cleanly in the native booking flow — with their identity, timezone, and saved details — instead of a degraded signed-out web flow. Two surfaces: a slim web smart-banner over the dimmed public page, and a native continue-in-app interstitial that resolves the link to the right event-type and confirms. Host pillar (Personal sky) on the Continue-in-app primary; neutral resolving chrome. Note: <b>DeepLinkRouter needs new booking routes</b> (<code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">pantopus://book/...</code>, /manage).</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Continue-in-app interstitial + web smart-banner</div>
+        <div class="meta-item"><b>Mirrors</b>A18 Verify Email landing · web app-banner · Token Accept routing</div>
+        <div class="meta-item"><b>Routes</b><code>pantopus://book/... · /manage</code></div>
+        <div class="meta-item"><b>Pillar</b>Host's — Personal sky on Continue-in-app</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · WEB BANNER</div><div class="label-title">Smart-banner strip</div>
+        <div class="label-sub">A slim top strip over the public booking page — app icon, "Open in Pantopus / Faster, with your saved details", an Open pill, and a dismiss x.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · RESOLVING</div><div class="label-title">Native interstitial</div>
+        <div class="label-sub">A shimmer skeleton card and "Opening your booking" while the deep link maps to the right event-type — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · RESOLVED</div><div class="label-title">Continue in app</div>
+        <div class="label-sub">Host avatar + pillar dot, an event-type preview card, an identity line, and Continue-in-app + Stay-on-web CTAs.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · FAILED</div><div class="label-title">Fallback to web</div>
+        <div class="label-sub">Warning halo, "We couldn't open this in the app", with a Continue-on-the-web primary reusing Token Accept's fallback routing.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · STAY ON WEB</div><div class="label-title">Banner collapses</div>
+        <div class="label-sub">The banner minimizes to a quiet "Continuing on the web" strip with a confirmation toast; the web flow stays put.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="deeplink-handoff-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameSmartBanner />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameResolving />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameResolved />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameFailed />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameStayWeb />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

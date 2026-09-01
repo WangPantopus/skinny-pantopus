@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Reschedule / Reassign Sheet</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1040px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes sh-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Manage bookings</div>
+      <h1>Reschedule / Reassign Sheet</h1>
+      <p>A host or member moves a booking to a new time and/or member, pulling live composed availability. A tall bottom sheet over a dimmed Booking Detail: the current slot shown struck-through with a down-arrow to an empty "New time" target, then the shared availability picker reused from Support Trains — a horizontal weekday strip and full-width stacked slot-row buttons (never a dense grid, so it works at the largest dynamic type). A tappable timezone chip sits above the grid; where Home/Business compose members an explainer notes availability comes from each member, and Business reassign adds a member-picker row. A host-only authority toggle switches between "Propose to invitee" and "Reschedule now"; the sticky CTA reflects it.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Sheet · shared availability picker</div>
+        <div class="meta-item"><b>Mirrors</b>Support Trains slot rows · Home calendar strip</div>
+        <div class="meta-item"><b>Component</b><code>BookingRescheduleSheet</code></div>
+        <div class="meta-item"><b>Pillar</b>Host/member · member hides authority toggle</div>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap"><div class="label-num">1 · LOADING</div><div class="label-title">Availability shimmer</div><div class="label-sub">Skeleton day chips and slot rows while composed availability resolves — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap"><div class="label-num">2 · SLOTS AVAILABLE</div><div class="label-title">Picker + authority toggle</div><div class="label-sub">Weekday strip, stacked slot rows, the host authority toggle, and a Notify invitee switch. CTA: Send proposal.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap"><div class="label-num">3 · NO AVAILABILITY</div><div class="label-title">Empty range</div><div class="label-sub">Calendar-x icon, "No open times in this range", "Widen the window or message the invitee".</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap"><div class="label-num">4 · MEMBER PICKER</div><div class="label-title">Business reassign</div><div class="label-sub">Eligible-seat avatar row above the grid plus the composed-availability explainer.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap"><div class="label-num">5 · PROPOSED</div><div class="label-title">Confirmation tint</div><div class="label-sub">Success disc, "Proposal sent", and a "Waiting on Rosa to accept" pill.</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap"><div class="label-num">6 · CONFLICT</div><div class="label-title">Amber banner</div><div class="label-sub">Overlap warning above the grid; CTA flips to Reschedule now.</div></div></div>
+      <div class="frame"><div id="f7"></div><div class="label-wrap"><div class="label-num">7 · SAVING</div><div class="label-title">Spinner</div><div class="label-sub">CTA shows an inline spinner and "Saving" — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f8"></div><div class="label-wrap"><div class="label-num">8 · ERROR</div><div class="label-title">Inline retry</div><div class="label-sub">Red inline message; CTA becomes Try again.</div></div></div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="reschedule-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameSlots />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameNoAvail />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameMemberPicker />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameProposed />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameConflict />);
+    ReactDOM.createRoot(document.getElementById('f7')).render(<FrameSaving />);
+    ReactDOM.createRoot(document.getElementById('f8')).render(<FrameError />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

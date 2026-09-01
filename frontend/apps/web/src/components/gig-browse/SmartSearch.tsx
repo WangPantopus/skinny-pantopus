@@ -1,0 +1,365 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
+import * as api from '@pantopus/api';
+
+const SUGGESTION_CHIPS = ['Pet Care', 'Handyman', 'Yard Work', 'Tutoring', 'Cleaning'];
+const STORAGE_KEY = 'pantopus_recent_searches';
+const MAX_RECENT = 10;
+
+function getRecentSearches(): string[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSearch(query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) return;
+  const recent = getRecentSearches().filter((s) => s.toLowerCase() !== trimmed.toLowerCase());
+  recent.unshift(trimmed);
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+}
+
+function clearRecentSearches() {
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
+interface SmartSearchProps {
+  value: string;
+  onChange: (value: string) => void;
+  onSearch: (query: string) => void;
+}
+
+export default function SmartSearch({ value, onChange, onSearch }: SmartSearchProps) {
+  const [focused, setFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<{ titles: string[]; categories: string[] }>({
+    titles: [],
+    categories: [],
+  });
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load recent searches on focus
+  useEffect(() => {
+    if (focused) setRecentSearches(getRecentSearches());
+  }, [focused]);
+
+  // Autocomplete debounce
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = value.trim();
+    if (!q) {
+      setSuggestions({ titles: [], categories: [] });
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const result = await api.gigs.autocompleteGigs(q, 5);
+        setSuggestions(result);
+      } catch {
+        setSuggestions({ titles: [], categories: [] });
+      }
+    }, 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [value]);
+
+  // Reset highlight when suggestions change
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [suggestions]);
+
+  // Click outside to close
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setFocused(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const submitSearch = useCallback(
+    (query: string) => {
+      const q = query.trim();
+      if (q) saveSearch(q);
+      onChange(q);
+      onSearch(q);
+      setFocused(false);
+      inputRef.current?.blur();
+    },
+    [onChange, onSearch]
+  );
+
+  // Flatten suggestions for keyboard nav
+  const allItems: { type: 'title' | 'category' | 'recent'; text: string }[] = [];
+  const q = value.trim();
+  if (q) {
+    suggestions.titles.forEach((t) => allItems.push({ type: 'title', text: t }));
+    suggestions.categories.forEach((c) => allItems.push({ type: 'category', text: c }));
+  } else {
+    recentSearches.slice(0, 5).forEach((s) => allItems.push({ type: 'recent', text: s }));
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!focused || allItems.length === 0) {
+      if (e.key === 'Enter') {
+        submitSearch(value);
+        e.preventDefault();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex((prev) => Math.min(prev + 1, allItems.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex((prev) => Math.max(prev - 1, -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightIndex >= 0 && highlightIndex < allItems.length) {
+        const item = allItems[highlightIndex];
+        submitSearch(item.text);
+      } else {
+        submitSearch(value);
+      }
+    } else if (e.key === 'Escape') {
+      setFocused(false);
+    }
+  };
+
+  const showDropdown = focused && (q ? allItems.length > 0 : recentSearches.length > 0 || true);
+
+  function highlightMatch(text: string, query: string) {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <strong className="font-bold text-app-text-strong">
+          {text.slice(idx, idx + query.length)}
+        </strong>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative mb-3">
+      {/* Search icon */}
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-app-text-muted"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Search tasks..."
+        role="combobox"
+        aria-expanded={showDropdown}
+        aria-autocomplete="list"
+        aria-controls="search-listbox"
+        aria-activedescendant={
+          highlightIndex >= 0 && highlightIndex < allItems.length
+            ? `search-option-${highlightIndex}`
+            : undefined
+        }
+        aria-label="Search tasks"
+        className="w-full pl-10 pr-10 py-2.5 border border-app-border rounded-xl bg-app-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+      />
+
+      {/* Clear button */}
+      {value && (
+        <button
+          onClick={() => {
+            onChange('');
+            onSearch('');
+            inputRef.current?.focus();
+          }}
+          aria-label="Clear search"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-app-text-muted hover:text-app-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      )}
+
+      {/* Dropdown */}
+      {showDropdown && (
+        <div
+          id="search-listbox"
+          role="listbox"
+          aria-label="Search suggestions"
+          className="absolute z-50 top-full mt-1 w-full bg-app-surface border border-app-border rounded-xl shadow-lg overflow-hidden"
+        >
+          {q ? (
+            // ── Autocomplete results ──
+            <div>
+              {suggestions.titles.map((title, i) => (
+                <button
+                  key={`t-${title}`}
+                  id={`search-option-${i}`}
+                  role="option"
+                  aria-selected={highlightIndex === i}
+                  onClick={() => submitSearch(title)}
+                  className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition ${
+                    highlightIndex === i
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                      : 'hover:bg-app-hover text-app-text-secondary'
+                  }`}
+                >
+                  <svg
+                    className="w-4 h-4 shrink-0 text-app-text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <span>{highlightMatch(title, q)}</span>
+                </button>
+              ))}
+              {suggestions.categories.map((cat, i) => (
+                <button
+                  key={`c-${cat}`}
+                  id={`search-option-${suggestions.titles.length + i}`}
+                  role="option"
+                  aria-selected={highlightIndex === suggestions.titles.length + i}
+                  onClick={() => submitSearch(cat)}
+                  className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition ${
+                    highlightIndex === suggestions.titles.length + i
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                      : 'hover:bg-app-hover text-app-text-secondary'
+                  }`}
+                >
+                  <svg
+                    className="w-4 h-4 shrink-0 text-primary-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
+                    />
+                  </svg>
+                  <span>
+                    {highlightMatch(cat, q)}{' '}
+                    <span className="text-xs text-app-text-muted">category</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            // ── Empty input: recent + suggestions ──
+            <div>
+              {recentSearches.length > 0 && (
+                <div>
+                  <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-app-text-muted uppercase tracking-wide">
+                      Recent Searches
+                    </span>
+                    <button
+                      onClick={() => {
+                        clearRecentSearches();
+                        setRecentSearches([]);
+                      }}
+                      className="text-xs text-app-text-muted transition hover:text-primary-600 dark:hover:text-primary-400"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {recentSearches.slice(0, 5).map((search, i) => (
+                    <button
+                      key={search}
+                      id={`search-option-${i}`}
+                      role="option"
+                      aria-selected={highlightIndex === i}
+                      onClick={() => submitSearch(search)}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition ${
+                        highlightIndex === i
+                          ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                          : 'hover:bg-app-hover text-app-text-secondary'
+                      }`}
+                    >
+                      <svg
+                        className="w-4 h-4 shrink-0 text-app-text-muted"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      {search}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="px-4 pt-3 pb-2">
+                <span className="text-xs font-semibold text-app-text-muted uppercase tracking-wide">
+                  Try searching for...
+                </span>
+              </div>
+              <div className="px-4 pb-3 flex flex-wrap gap-2">
+                {SUGGESTION_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => submitSearch(chip)}
+                    className="rounded-full border border-app-border bg-app-surface-raised px-3 py-1.5 text-xs font-medium transition hover:border-primary-400 hover:bg-primary-50 hover:text-primary-600 dark:hover:border-primary-700 dark:hover:bg-primary-900/30 dark:hover:text-primary-300"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

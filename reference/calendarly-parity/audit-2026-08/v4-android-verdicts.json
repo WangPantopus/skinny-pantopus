@@ -1,0 +1,345 @@
+[
+ {
+  "id": "fake-qr-code",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "ShareLinkSheet.kt (working tree): qrCells() at line 609 takes NO arguments and fills a 25x25 BooleanArray from a fixed LCG (seed=13L; seed=(seed*9301+49297)%233280) plus three hand-drawn finder squares (finder(0,0)/(0,18)/(18,0)) \u2014 the booking URL is never encoded. QrCanvas (line 588) has no url parameter and draws remember{qrCells()}; it is called from QrThumbCard (line 274) and QrFullscreenDialog (line 426). The dialog prints the real URL underneath and the caption 'Point a camera here to open the booking page.' (line 444). SaveToPhotosButton -> saveQrToPhotos(context) (line 476) rasterizes the same qrCells() noise at 720x720 and writes it to MediaStore as pantopus-booking-qr-*.png with a 'Saved to Photos' toast. The only acknowledgement is the code comment at 586 ('deterministic, decorative QR grid (not scannable)') which users never see. Sheet is live: BookingPageManageScreen.kt:132 renders ShareLinkSheet. Failure scenario traces exactly as claimed: any scanned camera gets nothing, and the saved PNG is a permanent decoy in the gallery.",
+  "fix": "Encode the real url: add com.google.zxing:core, QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, n, n) (ECC M to match iOS ShareLinkSheet.swift's CIFilter qrCodeGenerator), pass url into QrCanvas and saveQrToPhotos and draw from the BitMatrix. If no encoder can land, remove the QR share target, QrThumbCard, QrFullscreenDialog and SaveToPhotosButton rather than shipping a decoy. Also move saveQrToPhotos' bitmap compress + MediaStore write off the main thread."
+ },
+ {
+  "id": "bookingpage-owner-relay-never-set",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "Repo-wide grep for pendingOwner: the ONLY writes are InsightsDashboardViewModel.kt:147,153,158 \u2014 which write to the injected InsightsNavRelay (a different @Singleton in the insights package), plus tests. BookingPageOwnerRelay.pendingOwner's sole assignment is its own consume() clearing it to null (BookingPageOwnerRelay.kt:29), despite its KDoc claiming 'The navigation graph (RootTabScreen) sets [pendingOwner] before navigating'. RootTabScreen.kt:2446/2452 register BOOKING_PAGE_MANAGE / PUBLIC_PAGE_PREVIEW as arg-less composables that set nothing. Both consumers hard-fall-back: BookingPageManageViewModel injects BookingPageOwnerRelay and does `private val owner = ownerRelay.consume() ?: SchedulingOwner.Personal`; PublicPagePreviewViewModel has the identical line. Every navigation entry uses the bare constant with no owner: InsightsDashboardViewModel.bookingPageRoute() (line 162, sets NO relay \u2014 contrast its openTypeRoute/openNoShowRoute/openTeamRoute which do set InsightsNavRelay.pendingOwner), EventTypePerformanceViewModel.kt:171 bookingPageRoute(), BookingsInboxViewModel.kt:136 shareRoute(), GroupRosterViewModel.kt:194 onShareLink. So the booking-page manage/preview screens are permanently Personal: a business owner reaching them from business insights loads and SAVES against the personal page (updateSlug/updateBookingPage with Personal), overwriting personal content and leaving the business page unreachable on Android.",
+  "fix": "Pass owner as a real nav argument: add bookingPageManage(owner)/publicPagePreview(owner) route builders in SchedulingRoutes, declare navArguments at RootTabScreen.kt:2446/2452, read via SavedStateHandle in both VMs (pattern already used elsewhere), update the four call sites; or have each caller set BookingPageOwnerRelay.pendingOwner before navigating (weaker: singleton read-and-clear still breaks Manage->Preview chaining). Parameterise BookingPageManageViewModelTest assertions that currently pin Personal."
+ },
+ {
+  "id": "slotpicker-month-to-exclusive",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "SlotPickerViewModel.kt loadSlots() (working tree, ~line 187-189): `val from = maxOf(month.atDay(1), LocalDate.now(zone())).toString(); val to = month.atEndOfMonth().toString()` \u2014 date-only strings sent to GET /book/:slug/:eventTypeSlug/slots. Route (backend/routes/schedulingPublic.js:156-179, current tree) forwards from/to verbatim into availabilityService.computeSlots with no end-of-day adjustment. computeSlots (availabilityService.js:485-492): `const toMs = Math.min(new Date(to).getTime(), horizonMs)` \u2014 ECMA-262 parses a date-only string as UTC midnight, so to='2026-06-30' gives toMs=2026-06-30T00:00:00Z. computeSlotsCore line 300: `if (s < effectiveFrom || s > effectiveTo || e > toMs) continue;` \u2014 no slot may END after the last day's UTC midnight. Hence for viewers at or west of UTC the entire last calendar day of every month yields zero slots (and slots late on the second-to-last local day are also cut, e.g. after 17:00 PDT); east of UTC only slots ending before offset-hours local time survive. The month grid derives tappable days from returned slots (availableDaysIn(visibleMonth, slots) in fetchMonth/emitContent), so the last day renders permanently unavailable, and seeNextAvailable()'s month scan repeats the truncation each month.",
+  "fix": "Send an exclusive end: `val to = month.atEndOfMonth().plusDays(1).toString()` (or a full instant `month.atEndOfMonth().plusDays(1).atStartOfDay(zone()).toInstant().toString()`), covering the whole last local day. Applies to both the slug path and the one-off-token path in loadSlots()."
+ },
+ {
+  "id": "manual-booking-owner-hardcoded-personal",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "ManualBookingViewModel.kt (working tree): `private val owner: SchedulingOwner = SchedulingOwner.Personal` \u2014 an immutable val, never reassigned; used for repo.getBookingPage(owner) and repo.getEventTypes(owner) in loadEventTypes(), repo.getBookings(owner, status=\"upcoming\") in overlapConflict(), and repo.createBooking(owner, body) in create(). ManualBookingUiState.pillar defaults to SchedulingPillar.Personal and no code writes it (bookAnother() copies the stale value). Reachability: the ONLY producer navigation is GroupRosterViewModel.openAddAttendee() at line 388 pushing the arg-less SchedulingRoutes.MANUAL_BOOKING (= \"scheduling/bookings/manual\", SchedulingRoutes.kt:125); RootTabScreen.kt:2544 registers it with no arguments and no relay exists for it \u2014 even though GroupRosterViewModel.fetch() had just resolved the real owner via `owner = BookingsExtrasOwner.fromBooking(booking)` (line 135) and discards it at the hop. SchedulingRepository.createBooking (line 341-345) stamps body.copy(ownerType=owner.ownerType, ownerId=owner.ownerId); SchedulingOwner.kt confirms Personal yields null/null, and backend resolveOwner (schedulingShared.js: `const ownerType = src.owner_type || 'user'; if (ownerType === 'user') return { ownerType:'user', ownerId: req.user.id }`) defaults to the caller's personal owner. Failure path traces: Add-attendee from a business/home-owned roster lists only personal event types and creates the booking under owner_type='user', so the attendee never appears on that roster.",
+  "fix": "Thread the owner: reuse the new route-arg machinery (SchedulingOwner.routeKind/ownerRouteId + fromRouteArgs already exist in the working tree) \u2014 add owner args to MANUAL_BOOKING, pass them from GroupRosterViewModel.openAddAttendee() (it already holds the resolved owner), read via SavedStateHandle in ManualBookingViewModel, set state.pillar = owner.pillar(); fall back to Personal only when args are absent."
+ },
+ {
+  "id": "pkg-price-locale-roundtrip",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "PackageEditorViewModel.kt (working tree) seed() line 298: `priceText = pkg.priceCents.takeIf { it > 0 }?.let { \"%.2f\".format(it / CENTS_PER_UNIT) } ?: \"\"` with `CENTS_PER_UNIT = 100.0` (line 321). Kotlin's `\"%.2f\".format(x)` is java.lang.String.format with NO locale argument, i.e. Locale.getDefault(Locale.Category.FORMAT): on any comma-decimal locale (de-DE, fr-FR, ...) 22000 cents seeds the field as \"220,00\". save() line 222: `val priceCents = PackagesMoney.parseCents(form.priceText) ?: 0` sent unconditionally in Update/CreatePackageRequest (lines 232/244). PackagesKit.kt parseCents (lines 121-126): `raw.filter { it.isDigit() || it == '.' }` \u2014 ASCII '.' only, the comma is silently DROPPED (not treated as a separator) -> \"22000\" -> toDoubleOrNull()=22000.0 -> *100.0 -> roundToInt = 2,200,000 cents. So opening a EUR-locale editor on a $220.00 package and saving any unrelated edit PUTs price_cents=2200000 ($22,000.00) \u2014 exact 100x inflation. Fresh typed input \"240,50\" via the KeyboardType.Decimal field (PackageEditorScreen.kt:243) corrupts identically. Formatter locale: default FORMAT category; parser locale: none (hand-rolled ASCII digit+dot filter).",
+  "fix": "Pin both sides: `String.format(Locale.US, \"%.2f\", pkg.priceCents / 100.0)` in seed(), and normalize in parseCents (strip grouping, accept ',' as decimal: e.g. filter digits+'.'+',' then replace(',', '.') keeping only the last separator). Add a comma-decimal-locale unit test (existing test only asserts \"220.00\" under the JVM default)."
+ },
+ {
+  "id": "android-business-onboarding-unreachable",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "Verified against the CURRENT working tree (file has uncommitted changes \u2014 rail/pillar-chip polish only; flow selection untouched). OnboardingUiState defaults `flow = OnboardingFlow.Home` (OnboardingHomeBusinessViewModel.kt:42) and the VM doc says 'the flow is chosen in-screen (default Home)' \u2014 but no chooser is wired: `selectFlow` (line 169) has zero production callers (grep: only OnboardingHomeBusinessViewModelTest.kt:68), and `OnboardingFlowSwitch` (OnboardingSteps.kt:76) is declared but never rendered by any screen. OnboardingHomeBusinessScreen branches on state.flow (HomeStep vs BusinessStep) so only HomeStep can ever render; the step-1 SetupPillarChip label is likewise always 'Home'. Route is arg-less: SchedulingRoutes.ONBOARDING = \"scheduling/onboarding\" (line 70), registered with no arguments at RootTabScreen.kt:2370, and the hub sends Business owners there bare: SchedulingHubViewModel.startSetupRoute() line 462-463 `if (owner is Personal) SETUP_WIZARD else ONBOARDING` with no owner arg/relay. Failure path: Business hub empty-state CTA opens 'Family scheduling' (chrome title for Home flow) with Members/Combine steps; finishSetup() -> resolveOwner(Home) -> first home id or null -> either 'No household yet. Create one to share a family booking link.' or creates the 'Household meeting' collective event type on the user's home. The Business Link/Service/Team/Confirm wizard, slug claim, approval mode and price are all unreachable. iOS derives flow from the pushed owner.",
+  "fix": "Carry the pillar/owner into the route (the working tree already has SchedulingOwner.routeKind/ownerRouteId + fromRouteArgs machinery): add owner args to ONBOARDING, have startSetupRoute() build the parameterised route, read via SavedStateHandle and seed `flow = if (owner is Business) Business else Home`. Alternatively render OnboardingFlowSwitch(flow, vm::selectFlow) at step 1."
+ },
+ {
+  "id": "android-onboarding-price-ignores-paid-flag",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "Current tree: OnboardingHomeBusinessViewModel.eventTypeRequest() business branch (lines ~355-365) sets `priceCents = s.priceText.toIntOrNull()?.times(CENTS_PER_DOLLAR)` UNCONDITIONALLY, with priceText defaulting to \"120\" (state line 55) and the price field always rendered in BusinessStep (OnboardingHomeBusinessScreen.kt:158-162). The VM's constructor injects only repo/homes/auth/errors \u2014 SchedulingFeatureFlags is not referenced anywhere in the file. iOS gates exactly this: SchedulingOnboardingModel.swift:329 `let priceCents: Int? = (flow == .business && paidEnabled) ? (Int(priceText).map { $0 * 100 }) : nil`. The flags also diverge as claimed: Android SchedulingFeatureFlags.paidSchedulingEnabled = `environment != ENV_PRODUCTION` (SchedulingFeatureFlags.kt:28-29, BuildConfig.PANTOPUS_ENV-driven), iOS paidEnabled is a UserDefaults bool defaulting false (SchedulingFeatureFlags.swift:25-33). So a default business onboarding run on Android creates price_cents=12000 \u2014 including in production builds where the client's paid-scheduling UI is explicitly disabled \u2014 while the identical iOS run creates a free service. CAVEAT: this path is presently reachable only via unit tests because the Business flow itself is unreachable (see android-business-onboarding-unreachable); it becomes live user-facing the moment that blocker's one-line-away fix lands, so it must be fixed together with it.",
+  "fix": "Inject SchedulingFeatureFlags into OnboardingHomeBusinessViewModel and gate: `priceCents = if (flags.paidSchedulingEnabled) s.priceText.toIntOrNull()?.times(CENTS_PER_DOLLAR) else null`; hide/disable the price input in BusinessStep when the flag is off (parity with the intended iOS behavior)."
+ },
+ {
+  "id": "invoice-dto-missing-status",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "InvoiceDto (InvoiceDtos.kt, working tree) models exactly id/business_user_id/recipient_user_id/total_cents/currency/line_items/created_at \u2014 no status, paid_at, due_date, subtotal_cents or fee_cents. Backend returns the whole row: scheduling.js:1214 (list) and :1218 (detail) `.from('BusinessInvoice').select('*')`, and supabase/migrations/20260315000015_business_invoice.sql defines status (line 12, with CHECK constraint), due_date (13), paid_at (16), subtotal_cents (8), fee_cents (9). Moshi generateAdapter silently drops the unmodelled keys. InvoicesListViewModel.load() then computes `outstandingLabel = PackagesMoney.format(invoices.sumOf { it.totalCents ?: 0 })` over EVERY invoice, `collectedMonthLabel = format(0)`, `hasOverdue = false` \u2014 with in-code comments admitting all three ('cannot compute the real outstanding vs collected split', 'Deferred: always false until DTO has status'). InvoicesListScreen.kt renders these as KPI tiles labelled 'Outstanding' (225) and 'Collected \u00b7 month' (232), and the InvoiceFilter chips (All/Paid/Sent/Overdue/Refunded) render but cannot filter (enum doc admits 'selecting a status chip cannot yet filter the list'). So the failure scenario traces: paid invoices inflate 'Outstanding', collected always $0, Paid chip inert \u2014 wrong financial figures presented as fact, while the data to compute them correctly is already on the wire.",
+  "fix": "Add status/paid_at/due_date (+subtotal_cents/fee_cents for detail) to InvoiceDto with @Json names; compute outstanding from status !in {paid, void}, collected from paid_at in current month, hasOverdue from status=='overdue'; wire InvoiceFilter to status."
+ },
+ {
+  "id": "ics-streaming-body-read-on-main",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingPublicApi.kt:103-107: `@Streaming @GET(\"api/public/booking/{token}/ics\") suspend fun getIcs(...): ResponseBody` \u2014 with @Streaming Retrofit hands over the raw UNREAD body. SchedulingRepository.kt:621: `publicGetIcs(token) = safeApiCall { publicApi.getIcs(token) }` \u2014 and SafeApiCall.kt:19-38 is a bare try/catch with no dispatcher hop, so the unconsumed body propagates. Sole caller AddToCalendarViewModel.downloadIcs(): `viewModelScope.launch { ... runCatching { result.data.string() } ... }` \u2014 viewModelScope is Dispatchers.Main.immediate, so ResponseBody.string() performs the blocking socket read on the MAIN thread. Concretely on-device: if the remaining bytes require a socket read, Android's default thread policy raises NetworkOnMainThreadException, which the runCatching swallows into 'Couldn't prepare the calendar file.' \u2014 i.e. the feature errors (or, when bytes happen to be pre-buffered, silently blocks main); on a stalled read it is an ANR. Close/leak half also verified: nothing closes the body if the coroutine is cancelled between Success and .string() (string() itself is the only closer), leaking the connection.",
+  "fix": "Consume in the repository off-main and return decoded text: `publicGetIcs(token): NetworkResult<String> = safeApiCall { withContext(Dispatchers.IO) { publicApi.getIcs(token).use { it.string() } } }`; AddToCalendarViewModel then uses result.data directly."
+ },
+ {
+  "id": "hhmm-default-locale",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "AvailabilityFormat.kt: `fun hhmm(hour, minute): String = \"%02d:%02d\".format(hour, minute)` \u2014 kotlin.text String.format extension = java.lang.String.format with Locale.getDefault(Locale.Category.FORMAT); on Android, Formatter substitutes the locale zero digit, so ar-EG/fa-IR devices produce Arabic-Indic digits. This IS the wire format, not display: quarterHourOptions() (AvailabilityPickers.kt:55-61) builds each picker VALUE as hhmm(hour, minute); TimeRangeEditorSheet holds `start = normalizeHHmm(initialStart)` where normalizeHHmm() re-derives even server-loaded times through hhmm(); onConfirm hands the strings to updateBlock, and WeeklyHoursEditorViewModel.save() flat-maps them into `RuleInput(day.weekday, it.start, it.end)` for PUT rules. Backend rulesSchema (scheduling.js:565-571): `start_time: Joi.string().pattern(/^\\d{2}:\\d{2}(:\\d{2})?$/)` \u2014 JS \\d is ASCII-only, so the request 400s and finishSaveWithError shows a generic error. formatTime12 (same file) shares the unpinned format (display-only). Failure path traces: Arabic-locale device can never save weekly hours; invisible on en-US devices/JVM CI.",
+  "fix": "Pin the wire formatter: String.format(Locale.ROOT, \"%02d:%02d\", hour, minute) in hhmm (and Locale.US in formatTime12 for display consistency); add an ar-EG Locale.setDefault round-trip unit test."
+ },
+ {
+  "id": "weekly-hours-no-range-validation",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "WeeklyHoursEditorViewModel.updateBlock (lines 210-221) stores TimeRange(start, end) verbatim with no ordering check, and save() (~255-263) flat-maps every enabled day's blocks into RuleInput with no validation. TimeRangeEditorSheet (AvailabilityPickers.kt:75-116) offers two independent 24h columns and its `A3PrimaryButton(label = \"Set ...\", onClick = { onConfirm(start, end) })` is never disabled. WeeklyHoursEditorScreen.kt:159 calls `A3SaveBar(label, saving, onSave)` omitting the `enabled` parameter, whose default is true (AvailabilityComponents.kt:665-670). Backend does not defend: rulesSchema (scheduling.js:565-571) is pattern-only, and buildWeeklyWindows (availabilityService.js:194-202) silently drops the window via `if (endMs > startMs) windows.push(...)` \u2014 so an inverted range saves 200 OK and zeroes that day's public availability with no error anywhere. DateOverridesViewModel.applySelected (lines 176-185) writes customStart/customEnd with the identical gap. iOS guards both: WeeklyHoursEditorViewModel.swift:80-83 formValid rejects any !range.isValid and save() guards on it (line 279).",
+  "fix": "Add a minutes-since-midnight isValid to TimeRange, derive WeeklyHoursForm.isValid (every enabled day has >=1 block, none inverted), early-return in save() and pass enabled=form.isValid to A3SaveBar; mirror in DateOverridesViewModel.applySelected; optionally disable the sheet confirm when start >= end."
+ },
+ {
+  "id": "booking-limits-clobbers-untouched-fields",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingLimitsViewModel.kt (working tree): toForm() (lines 123-133) is lossy \u2014 `minNoticeHours = (minNoticeMin ?: DEFAULT_NOTICE_MIN) / MIN_PER_HOUR` (DEFAULT_NOTICE_MIN=240, MIN_PER_HOUR=60; integer division turns a 30-min notice into 0h), `maxPerDay = (dailyCap ?: DEFAULT_DAILY_CAP).coerceAtLeast(MIN_CAP)` / same for perPerson (null cap = 'no limit' per migration 159_calendarly_core.sql lines 186-187 nullable integers, collapsed to a concrete default), and `startInterval = StartInterval.fromMinutes(slotIntervalMin)` where fromMinutes maps anything != 60/30 to Quarter=15 (AvailabilityFormat.kt:274-280) though backend permits 5..240. save() (lines 157-166) then builds UpdateEventTypeRequest with ALL FIVE fields unconditionally \u2014 no dirty tracking, and `dailyCap = form.maxPerDay.takeIf { it > 0 }` is always non-null since the form clamps to MIN_CAP >= 1. Backend PUT is a true partial patch (eventTypePatchSchema, scheduling.js:338-372: every key optional, daily_cap/per_booker_cap `.allow(null)`), so sending fewer fields is fully supported. iOS documents and implements exactly the per-field-dirty behavior (BookingLimits/BookingLimitsViewModel.swift:12-18 comment + loaded-value snapshots). Failure path traces: open Booking limits on an unlimited event type, bump only the horizon, save \u2014 daily_cap gets written to the form default and the 9th booker of a day is refused; a web-configured 30-min notice becomes 0.",
+  "fix": "Snapshot loaded DTO values in toForm and include a field in UpdateEventTypeRequest only when the control moved off its loaded value (Moshi omits nulls); keep nullable loadedDailyCap/loadedPerBookerCap so untouched null stays null. Rewrite BookingLimitsViewModelTest's full-body assertion which currently certifies the defect."
+ },
+ {
+  "id": "eventtype-list-locked-to-personal",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "EventTypeListScreen.kt: FilterHeader declares `@Suppress(\"UNUSED_PARAMETER\") onSelectPillar: (SchedulingPillar) -> Unit` and renders only a static PillarIdentityPill (comment: 'The switcher row is NOT in the design \u2014 the user arrives scoped to one owner') \u2014 yet nothing scopes the arrival. The screen passes viewModel::selectPillar (line 153) but it is never invoked, so EventTypeListViewModel._pillar/owner stay at their initial SchedulingPillar.Personal / `private var owner: SchedulingOwner = SchedulingOwner.Personal`; selectPillar/resolveOwner/noOwnerMessage are dead code, and start() consumes no relay. Nothing supplies the owner externally: SchedulingRoutes.EVENT_TYPE_LIST is an arg-less constant registered bare at RootTabScreen.kt:2378, the hub navigates with the bare constant (SchedulingHubViewModel.kt:389, current tree \u2014 parallel design fixes did not touch this), and SchedulingEditorOwnerRelay.pending is written only inside the eventtypes package (EventTypeListViewModel.kt:335/340 createRoute/editorRoute, EventTypeEditorViewModel.kt:269) \u2014 the BookingsInbox write at BookingsInboxViewModel.kt:140 targets the separate BookingsOwnerRelay class. The VM's own doc ('the pillar pill re-scopes via HomesRepository/AuthRepository') describes behavior that does not exist. Failure path traces: Business hub -> Event types opens the Personal catalog; '+' -> createRoute() sets relay.pending = Personal, so the new service is created with no owner fields and lands on the personal booking page; Home users can never manage household services here.",
+  "fix": "Either wire the pill row to onSelectPillar (drop the @Suppress), or preferably carry the hub's resolved owner: hub sets SchedulingEditorOwnerRelay.pending = owner (or a route arg via the new SchedulingOwner.routeKind machinery) before navigating, and EventTypeListViewModel.start() consumes it as the initial owner/pillar."
+ },
+ {
+  "id": "price-field-cents-truncation",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "EventTypeEditorScreen.kt:440: `value = (form.priceCents / 100).toString()` \u2014 integer division, so a $49.99 service (price_cents=4999) renders as \"49\" and the cents are invisible. EventTypeEditorViewModel.onPrice (lines 186-192): `val cents = dollars.filter { c -> c.isDigit() }.toIntOrNull()?.times(100) ?: 0` \u2014 the decimal separator is STRIPPED, not interpreted: \"49.99\" -> digit-string \"4999\" -> 499,900 cents ($4,999.00, a 100x inflation); it also cascades into depositCents (= cents/2 when deposit mode on). Even without decimals, focusing the field and retyping the displayed \"49\" silently rewrites 4999 -> 4900. Overflow path also real: an 8-digit entry like 99999999 -> *100 wraps Int (9,999,999,900 mod 2^32) into garbage that is sent as-is. Two mitigating notes verified: the field uses KeyboardType.Number (line 444), which suppresses the '.' key on most IMEs (decimal entry then arrives via paste), and the backend Joi price_cents min(0) rejects negative wraps \u2014 neither prevents the display truncation or the paste/decimal inflation.",
+  "fix": "Render `\"%.2f\".format(Locale.US, form.priceCents / 100.0)` (or a money field), parse decimal-aware (digits + one separator -> BigDecimal.movePointRight(2), coerceIn(0, cap)), switch to KeyboardType.Decimal."
+ },
+ {
+  "id": "conflict-sheet-mixes-local-start-utc-end",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Derive the end label in the start's zone: parse slot.start/end as OffsetDateTime and shift end atZoneSameInstant(viewer zone) before formatting.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "hub-hardcoded-availability-summary",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Port iOS summarizeRules: day label from weekday set (Mon-Fri / Sat & Sun / comma list) + shortTime(min start)-shortTime(max end) from real rules (hub VM).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "whosfree-day-window-utc",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Send instants for the anchor's LOCAL day: from=anchor.atStartOfDay(zone).toInstant(), to=anchor.plusDays(1).atStartOfDay(zone).toInstant().",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "whosfree-optedout-unreachable",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Key the 'hasn't shared' tier off empty free-list (CellState.Unknown when freeByMember[id] null/empty).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "findatime-seed-never-consumed",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "FindATimeSetupViewModel.load(): consume session.takeSeed() and seed the form (today=seed.first + closest window preset).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "findatime-window-presets-short",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Send an exclusive end: toIso = isoDate(to.plusDays(1)) in submit() and SuggestedSlotsViewModel.resolveDefault; fix the misleading 'inclusive' comment.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "booking-search-all-scope-personal-only",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "BookingScopeFilter.All: resolve every owner (Personal + Home + Business via BookingsExtrasOwner.resolve), fan getBookings out, concatenate; any-success=data.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "resource-hours-locale-format",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Pin locale: String.format(Locale.US, \"%02d:%02d\", h, m) in ResourceEditorViewModel (~:321); harden seedTime for unparseable values.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "resource-editor-write-in-remembered-scope",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Move save()/confirmDelete()/cancelVisit() writes into viewModelScope with a one-shot completion StateFlow consumed by LaunchedEffect.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "group-roster-noshow-partial-failure",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Track succeeded ids; republish selectedIds minus succeeded so retries only re-send failures; BAD_STATE on already-no_show counts as success.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "invoice-line-item-total-ignores-quantity",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Add amount_cents to UNIT_KEYS (remove from TOTAL_KEYS); totalCents = explicit total ?: unit * (quantity ?: 1); mirror iOS.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "insights-range-excludes-today",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "range(): end-exclusive today.plusDays(1) (and hi.plusDays(1) for Custom); update InsightsMathTest; mirror iOS if affected.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-timezone-search-curated-only",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Non-blank query searches full ZoneId.getAvailableZoneIds() (cap ~60), curated 9 stay for blank query.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-wizard-copy-shares-instead",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "FirstRunWizardScreen onCopy = clipboard.setText(https://shareLink) via LocalClipboardManager (hub already does this).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-onboarding-copy-noop",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Same LocalClipboardManager copy wiring for the onboarding success screen.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-notif-resume-inert",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "NotifPauseBanner gains onResume; VM.resume() PUTs UpdateBookingPageRequest(isPaused=false) and flips state.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-hub-topbar-settings-inert",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "HubTopBar trailing settings glyph gets clickable onTrailing when canEdit \u2192 navigate(SchedulingRoutes.settings(owner...)).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-hub-availability-hardcoded-hours",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Same summarizeRules port as hub-hardcoded-availability-summary (second call site).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "block-off-conflict-check-race",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Hold conflictJob, cancel before each launch, read _form.value inside the coroutine.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "needs-setup-on-event-types-failure",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Bind typesDef.await(); on Failure set Error state instead of misclassifying as needs-setup.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "duplicate-drops-scheduling-config",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "duplicate(): include assignmentMode/buffers/minNotice/maxHorizon etc. in the create request.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "test-stubs-nonexistent-error-code",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Stub now uses HAS_BOOKINGS (fixed in main loop).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "viewmodelscope-async-inside-launch",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Use bare async{} children of the launch; hold fetchJob and cancel on refresh.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "connected-calendars-fake-sync-time",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Parse iso (Instant/OffsetDateTime) and render a relative label from Duration; drop the hardcoded constant.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "confirm-paid-bookingid-lost",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Stash created booking id in state during onCreated's payment early-return so post-payment nav works.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "poll-own-votes-by-display-name",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Stop matching own votes by display name; hide 'your votes' highlighting until a viewer-scoped key exists (server half deferred \u2014 public GET no longer returns voter_name).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "findatime-nooverlap-dead-ui",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "On SuggestedSlotsUiState.Empty record session.noOverlapMessage so the no-overlap frame renders.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "whosfree-day-next-window-skips-week",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "DAY_STEP = 1 for Day view (or drop the dead weekly condition).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "assignee-raw-uuid-in-ui",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Leave assigneeName/initials null until a display name is on the wire; hide chip/avatar for null.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "hhmm-localized-digits",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Locale.ROOT in BusinessTimeFormat.hhmm (shares the hhmm-default-locale fix).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "eventtype-perf-load-race",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Hold bookingsJob; cancel before each launch; guard final assignment.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "team-avail-utc-window-local-days",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Build the team-availability window in the requested tz so days align with startLocal.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "roundrobin-balanced-infers-as-strict",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Persist the balanced-vs-priority rule explicitly instead of inferring from weights (mirror iOS roundrobin-rule-roundtrip).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-hub-agenda-duration-from-type",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Agenda row duration derives from the booking's start/end, not the event type's default.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "android-notif-prefs-drops-nested-unknown-keys",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Preserve unknown nested keys in the prefs blob on write (merge, don't rebuild).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ }
+]

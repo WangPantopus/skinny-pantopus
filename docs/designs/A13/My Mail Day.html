@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A13.16 · My Mail Day</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1180px; margin: 0 auto 16px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .path { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
+            padding: 4px 10px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #374151; }
+    .path .dim { color: #9ca3af; }
+
+    .meta { max-width: 1180px; margin: 24px auto 40px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+    .meta dl { margin: 0; }
+    .meta dt { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+               color: #6b7280; margin-bottom: 4px; }
+    .meta dd { margin: 0; font-size: 13px; color: #111827; font-weight: 500; line-height: 17px; letter-spacing: -0.1px; }
+    .meta dd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                    background: #f3f4f6; padding: 1px 6px; border-radius: 4px; color: #0284c7; font-weight: 600; }
+
+    .section-title { max-width: 1180px; margin: 0 auto 24px; font-size: 13px; font-weight: 600;
+                     letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1040px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A13.16 My Mail Day">
+    <div class="header">
+      <div class="kicker">Pantopus · A13.16 · Form (single screen)</div>
+      <h1>My Mail Day</h1>
+      <p>Simple variant of the Form archetype, used as a <em>daily review editor</em>. Each "field" is a routing decision against a piece of physical mail the household scanned today. The screen accumulates decisions top-down: items needing a call sit at the top with a suggested recipient and one-tap Route; everything you've routed is collapsed into a compact reviewed list below, with an active 5-second undo on the latest. A scan card injects more mail mid-day; "Finish day" closes the ledger.</p>
+      <div class="path"><span class="dim">src/app/mailbox/</span>mailday.tsx</div>
+    </div>
+
+    <div class="meta">
+      <dl><dt>Archetype</dt><dd>A13 · Form (single screen)</dd></dl>
+      <dl><dt>Variant</dt><dd>Simple · daily-review editor</dd></dl>
+      <dl><dt>Primary action</dt><dd><code>Finish day</code> — sticky, blocked while pending</dd></dl>
+      <dl><dt>Sections</dt><dd>Day header (ring) · Scan-more · Needs-a-call · Reviewed · Sticky finish</dd></dl>
+      <dl><dt>Item actions</dt><dd>Route to X · Other (route-to picker) · junk · return</dd></dl>
+      <dl><dt>Undo</dt><dd>5-second active countdown · "Undo all" link · per-row pip</dd></dl>
+      <dl><dt>Streak</dt><dd>Day-N flame chip · gamifies consecutive close-outs</dd></dl>
+      <dl><dt>Empty copy</dt><dd>"Nothing new today" — primary CTA flips to Scan</dd></dl>
+    </div>
+
+    <div class="section-title">Two frames · populated &amp; empty</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A13.16 My Mail Day · Populated">
+        <div id="f-populated"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED (MID-AFTERNOON)</div>
+          <div class="label-title">8-piece stack · 6 routed · 2 pending</div>
+          <div class="label-sub">Progress ring shows 6/8. Two unrouted items at top with AI-suggested recipients (Con Ed → Maria · 94%, Lisbon postcard → Marcus · 71%) and a primary Route + secondary Other. Reviewed list compacts six pieces; the New Yorker still has a live 5s undo (amber row + countdown chip). Finish day is locked until the last two clear.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A13.16 My Mail Day · Empty">
+        <div id="f-empty"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · EMPTY (NOTHING NEW TODAY)</div>
+          <div class="label-title">"Nothing new today" · streak intact</div>
+          <div class="label-sub">Mailbox illustration with a "0" face, the empty headline, and the streak chip (12 days) + last-scan chip. Primary CTA flips to Scan today's stack. Below: yesterday's recap with a colored stacked bar, plus two setup-nudge rows for daily reminder and auto-route rules.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel" src="mail-day-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f-populated')).render(<FrameMailDayPopulated />);
+    ReactDOM.createRoot(document.getElementById('f-empty')).render(<FrameMailDayEmpty />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

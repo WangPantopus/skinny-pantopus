@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — ProfileDashboard</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 720px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 64px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 760px; line-height: 21px; }
+
+  .state-grid { display: grid; grid-template-columns: repeat(3, 360px); gap: 30px 28px; }
+  .special-grid { display: grid; grid-template-columns: repeat(3, 360px); gap: 30px 28px; }
+  .specimen { }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 16px; }
+
+  /* product cards (inside #f6f7f9 stages and phone) */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-hero { box-shadow: 0 3px 12px rgba(17,24,39,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+  .pl-textbtn:focus-visible { outline: 2px solid rgba(56,189,248,.5); outline-offset: 3px; border-radius: 4px; }
+  .pl-nudge { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border-radius: 12px; background: #f6f7f9; border: 1px solid #eef0f2; cursor: pointer; font-family: inherit; text-align: left; transition: background .15s ease; }
+  .pl-nudge:hover { background: #f1f3f5; }
+  .pl-nudge.alert { background: #FFFBEB; border-color: #fde68a; }
+  .pl-nudge.alert:hover { background: #fef6e0; }
+
+  /* shimmer */
+  .pl-skel { position: relative; overflow: hidden; background: #eef1f4; }
+  .pl-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: pl-shimmer 1.5s infinite; }
+  @keyframes pl-shimmer { 100% { transform: translateX(100%); } }
+
+  .dash-wrap { display: flex; gap: 56px; align-items: flex-start; flex-wrap: wrap; }
+  .hero-toggle { display: inline-flex; background: #fff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 4px; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .hero-toggle button { border: none; background: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: #6b7280; padding: 7px 16px; border-radius: 9999px; white-space: nowrap; }
+  .hero-toggle button.on { background: #16A34A; color: #fff; }
+  .side-note { max-width: 300px; }
+  .side-note h4 { margin: 0 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note p { margin: 0 0 16px; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  @media (prefers-reduced-motion: reduce) { .pl-skel::after { animation: none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-dashboard.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function AtomZone() {
+  const [errKey, setErrKey] = useState(0); // retry demo
+  return (
+    <div className="zone">
+      <div className="zone-head">
+        <span className="zone-num">01</span>
+        <h2 className="zone-title">The section-card atom</h2>
+      </div>
+      <p className="zone-sub">One reusable unit, two densities. Rich sections get the full card; short readings collapse to a compact single-line row (value right-aligned). White bordered card, Home-green section icon, sentence-case title, chevron for tap-through. Every section degrades through these states independently — so a missing feed never breaks the page.</p>
+      <div className="state-grid">
+        <Specimen tag="Loaded" note="title + value">
+          <SectionCard icon="wind" title="Air quality" value="Good (38)" asOf="9:12 AM" chip={{ tone: 'success', text: 'Good', icon: 'check' }} />
+        </Specimen>
+        <Specimen tag="Empty" note="no error styling">
+          <SectionCard icon="wind" title="Air quality" state="empty" />
+        </Specimen>
+        <Specimen tag="Unavailable" note="ragged coverage">
+          <SectionCard icon="wind" title="Air quality" state="unavailable" />
+        </Specimen>
+        <Specimen tag="Stale" note="older “as of” + refresh">
+          <SectionCard icon="wind" title="Air quality" value="Good (38)" asOf="as of yesterday" state="stale" />
+        </Specimen>
+        <Specimen tag="Error" note="verbs-first retry">
+          <SectionCard key={errKey} icon="wind" title="Air quality" state="error" onRetry={() => setErrKey((k) => k + 1)} />
+        </Specimen>
+        <Specimen tag="Loading" note="shimmer skeleton">
+          <SectionCard icon="wind" title="Air quality" state="loading" />
+        </Specimen>
+        <Specimen tag="Compact" note="single-line density">
+          <SectionCard icon="wind" title="Air quality" value="Good (38)" statusDot="#16A34A" inline />
+        </Specimen>
+      </div>
+    </div>
+  );
+}
+
+function SpecialZone() {
+  return (
+    <div className="zone">
+      <div className="zone-head">
+        <span className="zone-num">02</span>
+        <h2 className="zone-title">The two special cards</h2>
+      </div>
+      <p className="zone-sub">Same card frame, two jobs. <b>Locked</b> gates content the current tier can’t see yet — a small lock in the header, a one-line reason, a verbs-first CTA. <b>Density</b> describes the block in buckets, never a raw count.</p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 14px' }}>
+        <span className="spec-tag">Locked</span>
+        <span className="spec-note">three tier prompts · lock in header, not a color-flooded card</span>
+      </div>
+      <div className="special-grid" style={{ marginBottom: 40 }}>
+        <Specimen tag="Create account">
+          <LockedCard icon="home" title="Home details & value" reason="Save this place to see your home’s exact details and value." cta="Create account" />
+        </Specimen>
+        <Specimen tag="Claim home">
+          <LockedCard icon="wrench" title="Bills & maintenance" reason="Claim your place to add bills, maintenance, and your tools." cta="Claim home" />
+        </Specimen>
+        <Specimen tag="Verify address">
+          <LockedCard icon="message-circle" title="Neighbor messaging" reason="Verify your address to message neighbors." cta="Verify address" />
+        </Specimen>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 14px' }}>
+        <span className="spec-tag">Density bucket</span>
+        <span className="spec-note">four buckets · qualitative, never a number</span>
+      </div>
+      <div className="special-grid">
+        <Specimen tag="Forming">
+          <DensityCard bucket="forming" />
+        </Specimen>
+        <Specimen tag="A few">
+          <DensityCard bucket="few" />
+        </Specimen>
+        <Specimen tag="Growing">
+          <DensityCard bucket="growing" />
+        </Specimen>
+        <Specimen tag="None">
+          <DensityCard bucket="none" />
+        </Specimen>
+      </div>
+    </div>
+  );
+}
+
+function DashboardZone() {
+  const [hero, setHero] = useState('allclear');
+  return (
+    <div className="zone">
+      <div className="zone-head">
+        <span className="zone-num">03</span>
+        <h2 className="zone-title">The assembled dashboard</h2>
+      </div>
+      <p className="zone-sub">Verified tier, full access. Short readings sit in compact single-line cards; nuanced ones keep the full block. Each card degrades on its own — Permits sits <b>Unavailable</b>, the block shows a <b>density bucket</b>, and Environment + Rent band are still <b>loading</b>. The hero floats what matters now; toggle its two treatments below.</p>
+
+      <div className="dash-wrap">
+        <div style={{ transform: 'scale(1)', transformOrigin: 'top left' }}>
+          <IOSDevice width={402} height={860}>
+            <PlaceDashboard hero={hero} />
+          </IOSDevice>
+        </div>
+
+        <div className="side-note">
+          <div style={{ marginBottom: 24 }}>
+            <div className="spec-tag" style={{ marginBottom: 10 }}>Hero — Today’s Pulse</div>
+            <div className="hero-toggle" role="group" aria-label="Hero state">
+              <button className={hero === 'allclear' ? 'on' : ''} onClick={() => setHero('allclear')}>All-clear</button>
+              <button className={hero === 'alert' ? 'on' : ''} onClick={() => setHero('alert')}>Active alert</button>
+            </div>
+          </div>
+          <h4>Same card, two moods</h4>
+          <p>All-clear reassures and floats one non-urgent nudge. The alert carries urgency with a semantic chip and a Lucide icon — never a left-border or a red flood-fill.</p>
+
+          <h4>Profile lives behind the avatar</h4>
+          <p>The tab bar is Place · Neighborhood · Beacon · Inbox. Tapping the verified avatar opens your profile — it’s not a tab.</p>
+
+          <h4>Section-by-section degradation</h4>
+          <p>Each card owns its own state. Coverage gaps and slow feeds stay quiet and contained instead of failing the whole screen.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place archetype</div>
+        <h1 className="doc-title">Place — the ProfileDashboard</h1>
+        <p className="doc-sub">A per-address command center. The reusable section-card and its states, the locked and density variants, then the assembled dashboard for a verified resident — iOS, mobile-first.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Place accent <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> CTAs / links <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Shell <b>#f6f7f9</b>, white bordered cards</div>
+        </div>
+      </div>
+
+      <AtomZone />
+      <SpecialZone />
+      <DashboardZone />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

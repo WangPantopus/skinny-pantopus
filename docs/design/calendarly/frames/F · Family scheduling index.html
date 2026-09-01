@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Family / home scheduling</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111827; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 56px 40px 80px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #16a34a; margin-bottom: 10px; }
+    h1 { font-size: 38px; font-weight: 700; letter-spacing: -0.025em; margin: 0 0 12px; }
+    .lead { font-size: 15.5px; color: #6b7280; line-height: 23px; max-width: 720px; margin: 0 0 14px; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #6b7280; margin-bottom: 40px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 18px; }
+    a.card { text-decoration: none; color: inherit; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px 18px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: transform .15s ease, box-shadow .15s ease; display: flex; flex-direction: column; gap: 12px; }
+    a.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+    .top { display: flex; align-items: center; gap: 11px; }
+    .ic { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #f0fdf4; color: #16a34a; }
+    .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #94a3b8; }
+    .name { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
+    .desc { font-size: 12px; color: #6b7280; line-height: 16px; }
+    .footrow { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 4px; }
+    .tier { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 9999px; }
+    .mvp { background: #dcfce7; color: #15803d; }
+    .v2 { background: #f3f4f6; color: #6b7280; }
+    .frames { font-size: 11px; color: #9ca3af; font-weight: 600; }
+    .go { color: #16a34a; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">Pantopus · Calendarly</div>
+    <h1>Family / home scheduling</h1>
+    <p class="lead">Fifteen screens for household scheduling on the Home pillar — extending the family calendar with RSVP, the Find-a-time engine that composes each member's personal availability, a Who's-free heat grid, bookable home resources, vendor visits, and a permission-gated member view. Every screen is a 300×620 frame set; tap any card to open its full rail.</p>
+    <div class="legend">
+      <span><span class="dot" style="background:#16a34a"></span> Home pillar green</span>
+      <span><span class="dot" style="background:#0284c7"></span> Personal sky (source / own slots)</span>
+      <span><span class="dot" style="background:#d97706"></span> Composed availability</span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <script>
+    const SCREENS = [
+      { n:'01', file:'F1 Home calendar.html', icon:'calendar-days', name:'Home calendar / Agenda', desc:'Month strip + day-grouped agenda, assignee stacks, create menu.', tier:'mvp', frames:7 },
+      { n:'02', file:'F2 Home event detail.html', icon:'calendar-check', name:'Event detail · RSVP', desc:'Per-person RSVP pills and an inline Your-RSVP control.', tier:'mvp', frames:7 },
+      { n:'03', file:'F3 Home add-edit event.html', icon:'calendar-plus', name:'Add / edit event', desc:'Grouped form with request-RSVP and multi lead-time reminders.', tier:'mvp', frames:6 },
+      { n:'04', file:'F4 Find a time setup.html', icon:'users', name:'Find a time · Setup', desc:'Composes member availability — collective or round-robin.', tier:'mvp', frames:6 },
+      { n:'05', file:'F5 Find a time slots.html', icon:'list-checks', name:'Find a time · Slots', desc:'Ranked slots from composed availability; book or propose.', tier:'mvp', frames:5 },
+      { n:'06', file:'F6 Member poll response.html', icon:'vote', name:'Member poll response', desc:'Vote Works / If needed / Can\'t with conflict auto-flagging.', tier:'v2', frames:4 },
+      { n:'07', file:'F7 Whos free.html', icon:'layout-grid', name:"Who's free heat grid", desc:'Glanceable grid of who is free when, composed read-only.', tier:'v2', frames:5 },
+      { n:'08', file:'F8 My availability settings.html', icon:'sliders-horizontal', name:'My availability settings', desc:'Exposure-only boundary; deep-links to the Personal source.', tier:'mvp', frames:4 },
+      { n:'09', file:'F9 Resources list.html', icon:'package', name:'Resources · List', desc:'Bookable household resources with at-a-glance status.', tier:'v2', frames:5 },
+      { n:'10', file:'F10 Resource editor.html', icon:'pencil-ruler', name:'Resource editor', desc:'Define a resource with smart defaults from its type.', tier:'v2', frames:5 },
+      { n:'11', file:'F11 Resource detail.html', icon:'calendar-clock', name:'Resource detail', desc:'Schedule, bookings agenda, and an inline approval queue.', tier:'v2', frames:5 },
+      { n:'12', file:'F12 Book a resource.html', icon:'square-check-big', name:'Book a resource', desc:'Pick a time within rules; auto-confirm or request approval.', tier:'v2', frames:6 },
+      { n:'13', file:'F13 Schedule a visit setup.html', icon:'door-open', name:'Schedule a visit', desc:'Offer vendor/guest slots from hosts\u2019 availability + link.', tier:'v2', frames:5 },
+      { n:'14', file:'F14 Visit detail.html', icon:'clipboard-list', name:'Visit detail', desc:'Status timeline + folded-in share/manage. Nine states.', tier:'v2', frames:9 },
+      { n:'15', file:'F15 Permission-gated scheduler.html', icon:'shield', name:'Gated scheduler view', desc:'Read-only member mode; own assignments stay actionable.', tier:'mvp', frames:3 },
+    ];
+    const grid = document.getElementById('grid');
+    grid.innerHTML = SCREENS.map(s => `
+      <a class="card" href="${encodeURI(s.file)}">
+        <div class="top">
+          <div class="ic"><i data-lucide="${s.icon}"></i></div>
+          <div><div class="num">${s.n}</div><div class="name">${s.name}</div></div>
+        </div>
+        <div class="desc">${s.desc}</div>
+        <div class="footrow">
+          <span class="tier ${s.tier}">${s.tier === 'mvp' ? 'MVP' : 'v2'}</span>
+          <span class="frames">${s.frames} frames</span>
+        </div>
+      </a>`).join('');
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 30); setTimeout(refresh, 200);
+  </script>
+</body>
+</html>

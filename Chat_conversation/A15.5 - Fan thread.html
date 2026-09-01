@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A15.5 — Fan thread</title>
+<link rel="icon" href="https://www.google.com/s2/favicons?domain=pantopus.com" />
+<link rel="stylesheet" href="pantopus-tokens.css" />
+<link rel="stylesheet" href="chat-archetype.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  /* ─── Fan-thread-specific extras (variant only) ───────── */
+
+  /* Persona avatar — warm stationery look (matches the design
+     system's "ceremonial extensions" rather than a plain gradient) */
+  .persona-av {
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,.35) 0%, transparent 55%),
+      linear-gradient(135deg, #d9842e 0%, #8b4a17 100%);
+    color: #fff7e6;
+    font-family: var(--font-serif);
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+
+  /* Membership stripe under header — fan's POV on their own
+     membership status with this persona */
+  .member-stripe {
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border-subtle);
+    padding: 8px 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+  }
+  .member-stripe .ms-tier {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 999px;
+    background: var(--tier-bronze-bg); color: var(--tier-bronze);
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .member-stripe .ms-tier svg { width: 9px; height: 9px; stroke-width: 3; }
+  .member-stripe .ms-meta {
+    color: var(--app-text-secondary);
+    display: inline-flex; align-items: center; gap: 4px;
+    flex: 1; min-width: 0;
+  }
+  .member-stripe .ms-meta b { color: var(--app-text); font-weight: 700; }
+  .member-stripe .ms-meta svg { width: 11px; height: 11px; color: var(--app-text-muted); }
+  .member-stripe .ms-link {
+    font-size: 10.5px; color: var(--color-primary); font-weight: 600;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .member-stripe .ms-link svg { width: 11px; height: 11px; stroke-width: 2.5; }
+
+  /* Creator's auto-welcome card (the "free" intro that doesn't
+     consume the fan's quota — a common persona-DM pattern) */
+  .auto-welcome {
+    align-self: flex-start;
+    max-width: 86%;
+    background: #fff;
+    border: 1px solid var(--app-border);
+    border-radius: 16px;
+    padding: 12px 12px 10px;
+    box-shadow: var(--shadow-sm);
+  }
+  .auto-welcome .aw-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--color-identity-business);
+    background: var(--color-identity-business-bg);
+    border-radius: 999px; padding: 1px 6px;
+    margin-bottom: 6px;
+    white-space: nowrap;
+  }
+  .auto-welcome .aw-tag svg { width: 9px; height: 9px; stroke-width: 3; }
+  .auto-welcome .aw-t {
+    font-size: 14px; font-weight: 700; color: var(--app-text);
+    font-family: var(--font-serif);
+    letter-spacing: -.005em;
+    margin-bottom: 4px;
+  }
+  .auto-welcome .aw-b { font-size: 12.5px; color: var(--app-text-strong); line-height: 17.5px; }
+  .auto-welcome .aw-sig {
+    font-size: 12px; color: var(--app-text-secondary);
+    font-family: var(--font-serif); font-style: italic;
+    margin-top: 8px;
+  }
+
+  /* Workshop slot card inside a creator (incoming) bubble */
+  .slot-card {
+    margin-top: 8px;
+    background: var(--color-info-bg);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .slot-card .sc-head { display: flex; align-items: center; gap: 8px; }
+  .slot-card .sc-ico {
+    width: 30px; height: 30px; border-radius: 10px;
+    background: linear-gradient(135deg, #d9842e, #8b4a17); color: #fff;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .slot-card .sc-ico svg { width: 15px; height: 15px; }
+  .slot-card .sc-t { font-size: 12.5px; font-weight: 700; color: var(--app-text); }
+  .slot-card .sc-m { font-size: 11px; color: var(--app-text-secondary); margin-top: 1px; }
+  .slot-card .sc-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid #bae6fd;
+    font-size: 11px; color: var(--app-text-strong);
+  }
+  .slot-card .sc-row .pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: #fff; border: 1px solid var(--app-border);
+    border-radius: 999px; padding: 2px 7px; font-size: 10.5px; font-weight: 600;
+    color: var(--app-text);
+  }
+  .slot-card .sc-row .pill svg { width: 10px; height: 10px; color: var(--color-primary); }
+  .slot-card .sc-row .price {
+    margin-left: auto; font-size: 13px; font-weight: 800;
+    color: var(--color-primary-700); letter-spacing: -.01em;
+  }
+  .slot-card .sc-cta {
+    margin-top: 8px;
+    background: var(--color-primary); color: #fff;
+    border-radius: 10px; padding: 8px 10px;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    box-shadow: var(--shadow-primary);
+  }
+  .slot-card .sc-cta svg { width: 13px; height: 13px; }
+
+  /* ─── Composer quota gate ─────────────────────────────── */
+  .quota-gate {
+    background: var(--app-surface);
+    border-top: 1px solid var(--app-border);
+    padding: 7px 14px 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .quota-gate.warn { background: var(--color-warning-bg); border-top-color: var(--color-warning-light); }
+  .quota-gate .qg-chip {
+    font-size: 10.5px; font-weight: 700;
+    background: var(--color-info-bg);
+    color: var(--color-primary-700);
+    border-radius: 999px; padding: 3px 9px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .quota-gate.warn .qg-chip {
+    background: #fff;
+    color: #9a3412;
+    border: 1px solid var(--color-warning-light);
+  }
+  .quota-gate .qg-chip svg { width: 11px; height: 11px; stroke-width: 2.5; }
+  .quota-gate .qg-chip b { font-size: 11px; font-weight: 800; }
+  .quota-gate .qg-meta {
+    font-size: 10.5px; color: var(--app-text-secondary);
+    display: inline-flex; align-items: center; gap: 4px;
+    flex: 1; min-width: 0;
+  }
+  .quota-gate .qg-meta svg { width: 10px; height: 10px; }
+  .quota-gate .qg-up {
+    font-size: 10.5px; font-weight: 700;
+    color: var(--color-primary);
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .quota-gate .qg-up svg { width: 11px; height: 11px; }
+
+  /* Send button — "consumes 1" pill when fan is about to send */
+  .composer .send-cost {
+    position: relative;
+  }
+  .composer .send-cost::after {
+    content: "−1";
+    position: absolute; top: -6px; right: -8px;
+    background: #fff;
+    color: var(--color-primary-700);
+    border: 1px solid var(--color-primary);
+    border-radius: 999px;
+    font-size: 9px; font-weight: 800;
+    padding: 1px 5px;
+    line-height: 1.1;
+    box-shadow: 0 1px 3px rgba(2,132,199,.2);
+  }
+
+  /* Suggested-openers grid for empty state — feels like a curated
+     menu rather than a plain chip row */
+  .openers {
+    margin-top: 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    width: 100%;
+  }
+  .openers .op {
+    background: #fff;
+    border: 1px solid var(--app-border);
+    border-radius: 14px;
+    padding: 10px 12px;
+    text-align: left;
+    box-shadow: var(--shadow-sm);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .openers .op .op-ico {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--color-identity-business-bg);
+    color: var(--color-identity-business);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .openers .op .op-ico svg { width: 14px; height: 14px; }
+  .openers .op .op-body { flex: 1; min-width: 0; }
+  .openers .op .op-cat {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--app-text-muted);
+  }
+  .openers .op .op-t { font-size: 12.5px; font-weight: 500; color: var(--app-text); line-height: 16px; margin-top: 1px; }
+  .openers .op .op-chev svg { width: 14px; height: 14px; color: var(--app-text-muted); }
+
+  /* "You have N messages" centered hero chip */
+  .quota-hero {
+    margin-top: 12px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--color-info-bg);
+    color: var(--color-primary-700);
+    border: 1px solid #bae6fd;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .quota-hero svg { width: 13px; height: 13px; stroke-width: 2.5; flex-shrink: 0; }
+  .quota-hero b { font-weight: 800; }
+  .quota-hero .sep { color: #7dd3fc; margin: 0 2px; }
+  .quota-hero .reset { font-weight: 500; color: var(--color-primary); }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  const StatusBar = () => (
+    <>
+      <div className="island"></div>
+      <div className="sb">
+        <span>9:41</span>
+        <div className="sb-right">
+          <div className="sb-bars"></div>
+          <div className="batt"><i></i></div>
+        </div>
+      </div>
+    </>
+  );
+
+  // Fan-thread header — shows the CREATOR (the persona). "Phone"
+  // is dropped (irrelevant for persona-DM); replaced with "open
+  // persona page" since fans often want to revisit the profile.
+  const FanThreadHeader = () => (
+    <div className="chat-header">
+      <div className="icon-btn" aria-label="Back to memberships">
+        <i data-lucide="chevron-left"></i>
+      </div>
+      <div className="chat-id">
+        <div className="avatar persona-av" style={{ width: 36, height: 36, borderRadius: "50%" }}>
+          WB
+          <span className="vb"><i data-lucide="check"></i></span>
+        </div>
+        <div className="meta">
+          <div className="name">
+            Wynn B.
+            <span className="pillar business">
+              <i data-lucide="briefcase"></i>Persona
+            </span>
+          </div>
+          <div className="sub">
+            <span className="presence-dot"></span>
+            The Sourdough Diary · creator
+          </div>
+        </div>
+      </div>
+      <div className="header-actions">
+        <div className="icon-btn" title="Open persona page"><i data-lucide="external-link"></i></div>
+        <div className="icon-btn"><i data-lucide="more-horizontal"></i></div>
+      </div>
+    </div>
+  );
+
+  // Membership stripe — fan's view of their own subscription state
+  const MembershipStripe = ({ tier, renews }) => (
+    <div className="member-stripe">
+      <span className={`ms-tier`}><i data-lucide="award"></i>{tier}</span>
+      <span className="ms-meta">
+        <i data-lucide="calendar"></i>
+        <span>renews <b>{renews}</b></span>
+      </span>
+      <span className="ms-link">
+        Manage <i data-lucide="chevron-right"></i>
+      </span>
+    </div>
+  );
+
+  // Composer quota gate (above the composer itself)
+  const QuotaGate = ({ left, total, resetCopy, variant = "ok" }) => (
+    <div className={`quota-gate ${variant === "warn" ? "warn" : ""}`}>
+      <span className="qg-chip">
+        <i data-lucide="message-square"></i>
+        <b>{left}</b> of {total} left
+      </span>
+      <span className="qg-meta">
+        <i data-lucide="rotate-cw"></i>
+        {resetCopy}
+      </span>
+      <span className="qg-up">
+        Upgrade <i data-lucide="arrow-up-right"></i>
+      </span>
+    </div>
+  );
+
+  // ─── Populated fan thread ──────────────────────────────
+  function PopulatedFanThread() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <FanThreadHeader />
+        <MembershipStripe tier="Bronze" renews="Apr 12" />
+
+        <div className="scroll" ref={scrollRef}>
+          {/* Auto-welcome — does not consume quota */}
+          <div className="auto-welcome">
+            <span className="aw-tag"><i data-lucide="sparkles"></i>Auto-welcome · free</span>
+            <div className="aw-t">Welcome to the Diary, Maria.</div>
+            <div className="aw-b">
+              First message is on me — ask anything bread-related, share a bake, or just say hi.
+              I read everything personally on Sunday evenings.
+            </div>
+            <div className="aw-sig">— Wynn</div>
+          </div>
+
+          <div className="day">
+            <div className="line"></div><div className="label">Today</div><div className="line"></div>
+          </div>
+
+          {/* Fan question (outgoing) */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">
+                Loved this week's loaf 🍞 — quick question: can I sub bread flour for AP?
+              </div>
+              <div className="ts out">
+                Read 8:51 AM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Creator voice note (incoming) */}
+          <div className="msg-row">
+            <div className="mini-av persona-av">WB</div>
+            <div>
+              <div className="bubble in voice-bubble">
+                <div className="play"><i data-lucide="play"></i></div>
+                <div className="wave">
+                  {[6,12,9,15,7,11,13,8,14,10,6,12,9,11,7,13,8,15,9,10,6,12].map((h,i) =>
+                    <span key={i} style={{ height: `${h}px` }}></span>
+                  )}
+                </div>
+                <span className="dur">0:24</span>
+              </div>
+              <div className="ts">9:02 AM</div>
+            </div>
+          </div>
+
+          {/* Creator follow-up with workshop slot card */}
+          <div className="msg-row">
+            <div className="mini-av persona-av">WB</div>
+            <div>
+              <div className="bubble in">
+                Short answer — yes, bread flour gives more chew. Drop hydration by ~5g per 100g. Also: workshop slot opening up if you want it:
+                <div className="slot-card">
+                  <div className="sc-head">
+                    <div className="sc-ico"><i data-lucide="croissant"></i></div>
+                    <div>
+                      <div className="sc-t">Hands-on sourdough workshop</div>
+                      <div className="sc-m">Sat Apr 6 · 10am–1pm · Elm Park kitchen</div>
+                    </div>
+                  </div>
+                  <div className="sc-row">
+                    <span className="pill"><i data-lucide="users"></i>2 of 6 left</span>
+                    <span className="pill"><i data-lucide="map-pin"></i>0.6 mi</span>
+                    <span className="price">$45</span>
+                  </div>
+                  <div className="sc-cta">
+                    <i data-lucide="check"></i>Reserve my slot
+                  </div>
+                </div>
+              </div>
+              <div className="ts">9:03 AM</div>
+            </div>
+          </div>
+
+          {/* Fan reply (outgoing) */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">
+                Saving the tip 🙏 — and yes, please save me a workshop spot!
+              </div>
+              <div className="ts out">
+                Read 9:14 AM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Creator typing back */}
+          <div className="msg-row">
+            <div className="mini-av persona-av">WB</div>
+            <div className="bubble in" style={{ padding: 0 }}>
+              <div className="typing"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer quota gate */}
+        <QuotaGate left={3} total={5} resetCopy="Resets May 1" variant="ok" />
+
+        {/* Composer with "−1" cost indicator on send */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input">
+              <span>Can I bring my own starter?</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="send send-cost"><i data-lucide="arrow-up"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Empty / "Start a conversation" fan thread ─────────
+  function EmptyFanThread() {
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <FanThreadHeader />
+        <MembershipStripe tier="Bronze" renews="Apr 12" />
+
+        <div className="scroll" style={{ paddingBottom: 0 }}>
+          {/* Always-shown auto-welcome — even in "empty" first-time state */}
+          <div className="auto-welcome">
+            <span className="aw-tag"><i data-lucide="sparkles"></i>Auto-welcome · free</span>
+            <div className="aw-t">Welcome to the Diary, Maria.</div>
+            <div className="aw-b">
+              First message is on me — ask anything bread-related, share a bake, or just say hi.
+              I read everything personally on Sunday evenings.
+            </div>
+            <div className="aw-sig">— Wynn</div>
+          </div>
+
+          <div className="empty" style={{ paddingTop: 8, paddingBottom: 12 }}>
+            <h2 style={{ fontSize: 20 }}>Start a conversation</h2>
+            <p style={{ maxWidth: 280 }}>
+              You can message Wynn directly. Each send uses one of your monthly Bronze replies.
+            </p>
+            <div className="quota-hero">
+              <i data-lucide="message-square"></i>
+              <span><b>5 messages</b> this period</span>
+              <span className="sep">·</span>
+              <span className="reset">Resets May 1</span>
+            </div>
+
+            <div className="openers">
+              <div className="op">
+                <div className="op-ico"><i data-lucide="help-circle"></i></div>
+                <div className="op-body">
+                  <div className="op-cat">Recipe question</div>
+                  <div className="op-t">Why does my crumb come out tight on day 2?</div>
+                </div>
+                <div className="op-chev"><i data-lucide="chevron-right"></i></div>
+              </div>
+              <div className="op">
+                <div className="op-ico"><i data-lucide="image"></i></div>
+                <div className="op-body">
+                  <div className="op-cat">Share a bake</div>
+                  <div className="op-t">Send a photo for feedback</div>
+                </div>
+                <div className="op-chev"><i data-lucide="chevron-right"></i></div>
+              </div>
+              <div className="op">
+                <div className="op-ico"><i data-lucide="calendar"></i></div>
+                <div className="op-body">
+                  <div className="op-cat">Workshops</div>
+                  <div className="op-t">When's the next hands-on session?</div>
+                </div>
+                <div className="op-chev"><i data-lucide="chevron-right"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer quota gate (full quota available) */}
+        <QuotaGate left={5} total={5} resetCopy="Resets May 1" variant="ok" />
+
+        {/* "Start a conversation" composer — full placeholder */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Message Wynn… (uses 1 of 5)</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="mic"><i data-lucide="mic"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  function App() {
+    React.useEffect(() => {
+      const t = setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+      return () => clearTimeout(t);
+    });
+
+    return (
+      <DesignCanvas
+        title="A15.5 — Fan thread"
+        subtitle="src/app/audience/membership/[personaId]/inbox.tsx · persona DM · fan side · 2 frames"
+      >
+        <DCSection id="frames" title="Frames">
+          <DCArtboard id="populated" label="Populated · active fan thread · 3 of 5 left" width={382} height={782}>
+            <PopulatedFanThread />
+          </DCArtboard>
+          <DCArtboard id="empty" label='Empty · "Start a conversation" · 5 of 5' width={382} height={782}>
+            <EmptyFanThread />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

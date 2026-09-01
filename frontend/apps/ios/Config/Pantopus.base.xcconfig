@@ -1,0 +1,14 @@
+// Pantopus.base.xcconfig — settings shared by every build configuration.
+//
+// Per-configuration files (Pantopus.Debug/Staging/Release.xcconfig) #include
+// this first, then set the environment-specific API base URL, Stripe
+// publishable key, and APNs environment, and finally overlay
+// Config/Secrets.xcconfig.
+//
+// Config/Secrets.xcconfig is gitignored and materialized from the local .env
+// (`make env-to-xcconfig`) or from CI secrets in the release pipeline (see
+// fastlane/Fastfile `before_all`). Real Stripe keys / DSNs are NEVER
+// committed — only the placeholders below ship in git.
+
+// Crash-reporting DSN — empty disables Sentry. Overlaid by Secrets.xcconfig.
+SENTRY_DSN =

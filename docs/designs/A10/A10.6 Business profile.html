@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A10.6 Business profile</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1100px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 760px; line-height: 21px; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 12px; }
+
+    .meta { max-width: 1100px; margin: 0 auto 40px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 26px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 28px; }
+    .meta .col h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0284c7; }
+    .meta .col p { margin: 0; font-size: 12.5px; color: #374151; line-height: 17px; }
+    .meta .col code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f0f9ff; color: #0369a1; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+    .frames { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A10.6 Business profile">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile · A10.6</div>
+      <h1>Business profile</h1>
+      <p>Public business profile by username — A10's <em>content detail</em> variant. A long scroll built from stacked sections: banner + overlapping logo with the violet business verification, a 3-up stat strip, then category chips → about → hours → service-area map → services with prices → recent-work gallery → reviews. A sticky bar keeps <em>Contact</em> one tap away, with <em>Book</em> as the secondary.</p>
+      <div class="path">src/app/business/[username].tsx</div>
+    </div>
+
+    <div class="meta">
+      <div class="col">
+        <h3>slot.header_pattern</h3>
+        <p><code>banner_logo</code> — full-bleed cover band with a 68px rounded logo overlapping its lower edge, a <em>Business · Verified</em> violet chip, and a live <em>Open now / Closed</em> status dot. Back/share/more float on the banner as blurred circular controls.</p>
+      </div>
+      <div class="col">
+        <h3>slot.body_pattern</h3>
+        <p><code>stacked_sections</code> — category chips, about, hours table (today highlighted), service-area map with a store pin, priced services, horizontal work gallery, and a rating summary + featured review. Every block is a white hairline card on the <code>#f6f7f9</code> shell.</p>
+      </div>
+      <div class="col">
+        <h3>slot.primary_cta</h3>
+        <p><code>contact_book</code> — sticky bottom bar. <em>Contact</em> is the sky-blue primary with brand shadow; <em>Book</em> the outline secondary. When the business is closed, the bar grows a status note and the secondary softens to <em>Call</em>.</p>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Marlow &amp; Co. Cleaning — open, 128 reviews</div>
+          <div class="label-sub">A mature, verified business: full hours, priced services, a recent-work gallery, a 4.9 rating summary with distribution, and a featured review. The whole trust + booking case in one scroll.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · NEW &amp; CLOSED</div>
+          <div class="label-title">Tide Pool Pet Care — just claimed, closed now</div>
+          <div class="label-sub">The same scaffold degrades gracefully: verified-but-new banner, a closed-today hours state, two starter services, and dashed empty cards for photos and reviews. The action bar notes hours and softens Book → Call.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="business-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameBizPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameBizNew />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Scheduling summary card</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1280px; margin: 0 auto 44px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .frames { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 44px 24px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    @media (max-width: 1200px) { .frames { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 880px) { .frames { grid-template-columns: 1fr; max-width: 420px; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · A — Set up &amp; home base</div>
+      <h1>Scheduling summary card</h1>
+      <p>An at-a-glance "X bookings this month" pulse embedded at the top of the Scheduling Hub — not its own screen. Extends the Me.html stats card: one white card holding a row of metric cells split by 1px hairline dividers, with a period chip group, a flat sparkline in the pillar color, and a "See insights" link into the full dashboard. The card keys its accent and headline numbers off the active owner's pillar (Personal sky, Business violet) and rebinds its labels per owner. Powered by getBusinessInsights('30d').</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ContentDetail · StatCellRow</div>
+        <div class="meta-item"><b>Extends</b>Me.html stats · Hub.html · A10.1</div>
+        <div class="meta-item"><b>Embedded in</b>Scheduling Hub</div>
+        <div class="meta-item"><b>Source</b><code>getBusinessInsights('30d')</code></div>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · DEFAULT · PERSONAL</div>
+          <div class="label-title">18 bookings this month</div>
+          <div class="label-sub">Four cells — bookings, +24% delta (success arrow-up), upcoming, no-shows — split by hairline dividers, over a flat sky sparkline. A small per-type breakdown sits below; "See insights" links to the dashboard. Period chips default to month.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · EMPTY</div>
+          <div class="label-title">No bookings yet</div>
+          <div class="label-sub">Metrics give way to encouraging copy ("Share your link to get your first one") and one primary "Share booking link" button. The period chips drop away.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · LOADING</div>
+          <div class="label-title">Shimmer skeleton</div>
+          <div class="label-sub">Shimmer rects sized to each cell, the chip group, the sparkline, and the link — same footprint as the loaded card. Never a "Loading…" string.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f4"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 4 · ERROR</div>
+          <div class="label-title">Couldn't load your numbers</div>
+          <div class="label-sub">A quiet inline message with a cloud-off glyph and a "Retry" ghost button — the card stays calm rather than alarming.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f5"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 5 · SINGLE TYPE · BUSINESS</div>
+          <div class="label-title">Violet, breakdown hidden</div>
+          <div class="label-sub">Business pillar rebinds the accent to violet and the numbers scale up. With one event type the per-type breakdown is hidden, keeping just the four headline cells and the sparkline.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="summary-card-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameDefault />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameEmpty />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameError />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameSingle />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 60);
+    setTimeout(refresh, 300);
+    setTimeout(refresh, 700);
+    setTimeout(refresh, 1300);
+  </script>
+</body>
+</html>

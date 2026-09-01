@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A12.4 · Claim ownership — Evidence</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1240px; margin: 0 auto 36px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 720px; line-height: 22px; }
+    .header .meta { display: flex; gap: 24px; margin-top: 18px; font-size: 12px; color: #6b7280; flex-wrap: wrap; }
+    .header .meta b { color: #111827; font-weight: 600; }
+    .header .meta code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #0284c7; background: #f0f9ff; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+
+    .flow { max-width: 1240px; margin: 0 auto 40px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #6b7280; flex-wrap: wrap; }
+    .flow .pill { padding: 6px 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 9999px; font-weight: 600; color: #374151; }
+    .flow .pill.current { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+    .flow .pill.done { background: #ecfdf5; border-color: #d1fae5; color: #047857; }
+    .flow svg { flex-shrink: 0; color: #9ca3af; }
+
+    .frames { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 36px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .label-wrap { text-align: center; max-width: 340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) { .frames { grid-template-columns: 1fr; max-width: 420px; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · A12.4 · Mobile screen</div>
+      <h1>Claim ownership — Evidence</h1>
+      <p>Step 2 of the <b>claim-owner</b> wizard — the upload step. The same screen is used in both frames; the secondary frame captures the live "mid-upload" state, where one document is still streaming and the other came back with an OCR address mismatch that the user can still resolve at review time.</p>
+      <div class="meta">
+        <span>Path · <code>src/app/homes/[id]/claim-owner/evidence.tsx</code></span>
+        <span>Archetype · <b>A12 — Wizard</b></span>
+        <span>Variant · <b>Step 2 (uploads)</b></span>
+        <span>Primary CTA · <b>Submit claim</b></span>
+      </div>
+    </div>
+
+    <div class="flow">
+      <span class="pill done">✓ 1 · Start</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="pill current">2 · Upload evidence</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="pill">3 · Review &amp; submit</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="pill">✓ Submitted</span>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Ready to submit</div>
+          <div class="label-sub">Both required docs uploaded · per-file OCR address-match confirmations · optional claim statement filled · primary CTA active.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · IN-PROGRESS</div>
+          <div class="label-title">Mid-upload with address-mismatch hint</div>
+          <div class="label-sub">First doc returned an OCR mismatch (soft warning, non-blocking) · second doc still uploading with progress bar · statement partially typed · CTA disabled until upload finishes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="evidence-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameEvidencePopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameEvidenceInProgress />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

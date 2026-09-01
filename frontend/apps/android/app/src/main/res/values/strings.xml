@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pantopus</string>
+
+    <!-- FCM notification channels (Android 8+). Each category gets its own
+         channel so users can mute one without losing the others, matching
+         the per-type preference toggles the backend already supports. -->
+    <string name="notif_channel_chat">Chats</string>
+    <string name="notif_channel_mail">Mail</string>
+    <string name="notif_channel_gig_bid">Gig bids</string>
+    <string name="notif_channel_system">System</string>
+    <!-- P6b — ongoing active-task status mirror (silent, low importance). -->
+    <string name="notif_channel_active_task">Active task</string>
+
+    <!-- P6c — "Tasks near me" home-screen widget. -->
+    <string name="widget_tasks_near_me_title">Tasks near me</string>
+    <string name="widget_tasks_near_me_description">See open tasks near you at a glance.</string>
+    <string name="widget_tasks_near_me_empty">Open Pantopus to see tasks near you</string>
+    <plurals name="widget_tasks_nearby">
+        <item quantity="one">%d task nearby</item>
+        <item quantity="other">%d tasks nearby</item>
+    </plurals>
+</resources>

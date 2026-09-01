@@ -1,0 +1,43 @@
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.kotlin/
+captures/
+local.properties
+
+# Generated resources
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Keystores — never commit
+*.jks
+*.keystore
+app/signing.properties
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+fastlane/play-service-account.json
+fastlane/metadata
+vendor/bundle
+
+# KSP / annotation processing
+**/generated/
+
+# OS
+.DS_Store
+Thumbs.db

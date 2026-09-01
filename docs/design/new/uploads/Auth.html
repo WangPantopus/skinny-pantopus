@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <link rel="icon" href="assets/favicon.svg"/>
+  <title>Pantopus · Auth archetype</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:#111827; min-height:100vh; }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1640px; margin:0 auto 28px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+    .header h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:820px; line-height:21px; }
+    .header em { font-style:italic; color:#374151; }
+
+    .slots { max-width:1640px; margin:0 auto 36px; background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:20px 24px; }
+    .slots h2 { margin:0 0 4px; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#0369a1; }
+    .slots .lede { margin:0 0 16px; color:#6b7280; font-size:13px; line-height:19px; }
+    .slot-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px 24px; }
+    .slot { display:flex; gap:10px; align-items:flex-start; }
+    .slot-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#0369a1; background:#e0f2fe; padding:2px 7px; border-radius:6px; white-space:nowrap; flex-shrink:0; font-weight:600; }
+    .slot-desc { font-size:12px; color:#374151; line-height:17px; }
+    .slot-desc code { font-size:11px; background:#f3f4f6; padding:1px 5px; border-radius:4px; color:#111827; }
+
+    .section-title { max-width:1640px; margin:0 auto 22px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames-top { max-width:1640px; margin:0 auto 56px; display:grid; grid-template-columns:repeat(5, 1fr); gap:36px 18px; justify-items:center; }
+    .frames-bot { max-width:1640px; margin:0 auto; display:flex; justify-content:center; gap:48px; align-items:flex-start; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:300px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:15px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:17px; }
+
+    .error-note { max-width:380px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; }
+    .error-note-title { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#0369a1; margin-bottom:10px; }
+    .error-note ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+    .error-note li { display:flex; gap:9px; font-size:12px; color:#374151; line-height:17px; }
+    .error-note li::before { content:""; display:block; width:5px; height:5px; border-radius:50%; background:#0284c7; margin-top:6px; flex-shrink:0; }
+
+    @media (max-width:1500px) { .frames-top { grid-template-columns:repeat(3, 1fr); } }
+    @media (max-width:1100px) {
+      .slot-grid { grid-template-columns:1fr; }
+      .frames-top { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+      .frames-bot { flex-direction:column; align-items:center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · Auth Form</div>
+      <h1>The shape of "let me in."</h1>
+      <p>One archetype, five screens of doorway. Every Pantopus authentication screen shares the same vertical rhythm: <em>brand lockup</em> (mark + wordmark) → <em>kicker overline</em> → <em>headline</em> → <em>subcopy</em> → <em>form fields</em> stacked at 44px tall with label-above style → <em>primary 48px CTA</em> with brand halo → <em>secondary link row</em> → <em>shield-check trust footer</em>. The page is light, centered, gutter-honest. No tab bar — auth is pre-tab-bar. The error variant proves the validation vocabulary: red border, red semantic-error fill, inline message with alert-circle icon, plus an optional summary banner above the form.</p>
+    </div>
+
+    <div class="slots">
+      <h2>Archetype slots</h2>
+      <p class="lede">Six slot groups, plus the four validation states inherited from the general Form archetype (default · focus · valid · error).</p>
+      <div class="slot-grid">
+        <div class="slot"><span class="slot-name">brand_lockup</span><span class="slot-desc">Centered favicon mark + "Pantopus" wordmark. 48px mark + 22px wordmark on lockup-led screens; auto-shrinks on dense screens. Always present.</span></div>
+        <div class="slot"><span class="slot-name">kicker</span><span class="slot-desc">Optional 11px primary-600 overline above the headline ("Welcome back", "Get started", "Trouble logging in", "Almost done"). Sets emotional posture.</span></div>
+        <div class="slot"><span class="slot-name">headline</span><span class="slot-desc">24px / 700 / -0.02em letter-spacing, sentence case, centered. Names the action ("Log in to Pantopus", "Create your account", "Reset your password").</span></div>
+        <div class="slot"><span class="slot-name">subcopy</span><span class="slot-desc">13.5px fg3, centered, max 280px wide. One line that sets context — never reads as instruction.</span></div>
+        <div class="slot"><span class="slot-name">fields[]</span><span class="slot-desc">Stacked 44px inputs with leading Lucide icon (mail, lock), 8px radius, label-above. Passwords get an eye/eye-off toggle. Required fields show a red asterisk.</span></div>
+        <div class="slot"><span class="slot-name">primary_cta</span><span class="slot-desc">Full-width 48px button, primary-600 with brand-halo shadow, 12px radius. Trailing arrow on continue actions; trailing check on commit. Disabled state desaturates.</span></div>
+        <div class="slot"><span class="slot-name">secondary_link</span><span class="slot-desc">Centered text row below the CTA. fg3 prompt + primary-600 link ("New to Pantopus? Create account" / "← Back to log in"). 13px.</span></div>
+        <div class="slot"><span class="slot-name">trust_footer</span><span class="slot-desc">Pinned to bottom-of-screen safe area. Shield-check icon + caption — "Verified by address". Reassures the door belongs to a real platform.</span></div>
+        <div class="slot"><span class="slot-name">terms_consent</span><span class="slot-desc">Sign-up only. Checkbox + 12.5px fg2 sentence with inline Terms and Privacy links. Pre-checked never — must be deliberate.</span></div>
+      </div>
+    </div>
+
+    <div class="section-title">Five frames · the canonical auth sequence</div>
+    <div class="frames-top">
+      <div class="frame">
+        <div id="f1" data-screen-label="01 Log in"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · LOG IN</div>
+          <div class="label-title">"Welcome back"</div>
+          <div class="label-sub">Email + password with show/hide eye. "Forgot password?" inline right of the password label. Primary "Log in" with arrow. Footer link to sign up.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2" data-screen-label="02 Create account"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · CREATE ACCOUNT</div>
+          <div class="label-title">"Get started"</div>
+          <div class="label-sub">Email · password · confirm. Pre-validated check on the email. Terms checkbox with inline Terms + Privacy links. Footer link back to log in.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3" data-screen-label="03 Forgot password"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · FORGOT PASSWORD</div>
+          <div class="label-title">"Trouble logging in"</div>
+          <div class="label-sub">Email only. Subcopy explains the reset link. Primary "Send reset link" with paper-plane icon. Footer "← Back to log in".</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f4" data-screen-label="04 Reset password"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 4 · RESET PASSWORD</div>
+          <div class="label-title">"Almost done"</div>
+          <div class="label-sub">New password + confirm. 3-bar strength meter sits directly under the new-password input with a label and helper. Confirm shows valid check when matched.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f5" data-screen-label="05 Verify email"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 5 · VERIFY EMAIL</div>
+          <div class="label-title">"Check your email"</div>
+          <div class="label-sub">No fields — 80px primary-50 mail-check halo, the recipient address rendered bold, ghost "Resend email", underlined "Use a different email" link, plus an info pill hinting at spam/promotions.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Bonus · input error state</div>
+    <div class="frames-bot">
+      <div class="frame">
+        <div id="f6" data-screen-label="06 Error state"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 6 · INPUT ERROR</div>
+          <div class="label-title">"Couldn't log you in"</div>
+          <div class="label-sub">Same Log in skeleton, plus the validation vocabulary on full display: semantic-bg banner above the form, 1.5px red border on the failing input, semantic-bg light red fill, inline alert-circle + "Enter a valid email address."</div>
+        </div>
+      </div>
+
+      <div class="error-note">
+        <div class="error-note-title">Validation rules</div>
+        <ul>
+          <li><strong>Default → focus:</strong> border lifts to primary-600, 3px halo (rgba primary 15%), no fill change.</li>
+          <li><strong>Focus → valid:</strong> border green, trailing check icon. Halo softens (8% success). Never auto-advances focus.</li>
+          <li><strong>Focus → error:</strong> border 1.5px red, fill semantic-bg, inline message below with alert-circle. 11.5px / 500.</li>
+          <li><strong>Error banner</strong> appears only on submit failure — never on per-field blur. Owns "Couldn't log you in" / "Couldn't create account".</li>
+          <li><strong>Required indicator</strong> is a small red asterisk after the label — never used inside the placeholder.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="auth-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameAuthLogin />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameAuthSignup />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameAuthForgot />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameAuthReset />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameAuthVerify />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameAuthError />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

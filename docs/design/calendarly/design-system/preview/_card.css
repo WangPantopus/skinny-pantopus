@@ -1,0 +1,23 @@
+@import url("../colors_and_type.css");
+html, body { margin: 0; padding: 0; background: #fff; color: var(--fg1); font-family: var(--font-sans); }
+.card {
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rowg { display: grid; gap: 8px; }
+.swatch {
+  width: 56px; height: 56px;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+}
+.swatch.sq { border-radius: 6px; }
+.swatch.pill { border-radius: 999px; }
+.lbl { font-size: 11px; color: var(--fg3); font-weight: 500; letter-spacing: .02em; }
+.hex { font-family: var(--font-mono); font-size: 11px; color: var(--fg3); }
+.name { font-size: 13px; font-weight: 600; color: var(--fg1); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg3); }

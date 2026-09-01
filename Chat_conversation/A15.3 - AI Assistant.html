@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A15.3 — AI Assistant</title>
+<link rel="icon" href="https://www.google.com/s2/favicons?domain=pantopus.com" />
+<link rel="stylesheet" href="pantopus-tokens.css" />
+<link rel="stylesheet" href="chat-archetype.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  /* ─── AI-assistant-specific extras (variant only) ─────── */
+  .ai-grad {
+    background:
+      radial-gradient(circle at 30% 25%, #7dd3fc 0%, transparent 55%),
+      linear-gradient(135deg, #0284c7 0%, #075985 100%);
+  }
+  .ai-av {
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(2,132,199,.22);
+  }
+  .ai-av svg { stroke-width: 2.2; }
+
+  /* AI capability welcome card */
+  .ai-welcome {
+    align-self: stretch;
+    background: linear-gradient(180deg, var(--color-info-bg) 0%, #fff 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 16px;
+    padding: 14px 14px 12px;
+    margin: 4px 0 10px;
+    box-shadow: var(--shadow-sm);
+  }
+  .ai-welcome .aw-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ai-welcome .aw-head .ai-av { width: 32px; height: 32px; border-radius: 10px; }
+  .ai-welcome .aw-head .ai-av svg { width: 17px; height: 17px; }
+  .ai-welcome .aw-t { font-size: 13px; font-weight: 700; color: var(--app-text); letter-spacing: -.01em; }
+  .ai-welcome .aw-s { font-size: 11px; color: var(--app-text-secondary); margin-top: 1px; }
+  .ai-welcome .aw-caps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .ai-welcome .aw-cap {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--app-text-strong); font-weight: 500;
+    background: rgba(255,255,255,.7);
+    border: 1px solid var(--app-border-subtle);
+    border-radius: 10px; padding: 6px 8px;
+  }
+  .ai-welcome .aw-cap svg { width: 13px; height: 13px; color: var(--color-primary); stroke-width: 2; }
+
+  /* AI bubble with structured content */
+  .bubble.ai {
+    padding: 10px 12px 10px;
+    max-width: 82%;
+  }
+  .bubble.ai .ai-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--color-primary);
+    background: var(--color-info-bg);
+    border-radius: 999px; padding: 1px 6px;
+    margin-bottom: 6px;
+    white-space: nowrap;
+  }
+  .bubble.ai .ai-tag svg { width: 9px; height: 9px; stroke-width: 3; }
+
+  /* Inline estimate card inside AI bubble */
+  .est-card {
+    margin-top: 8px;
+    background: var(--color-info-bg);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 8px 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .est-card .est-amt { font-size: 18px; font-weight: 700; color: var(--color-primary-700); letter-spacing: -.02em; }
+  .est-card .est-range { font-size: 10.5px; color: var(--app-text-secondary); margin-top: -2px; }
+  .est-card .est-sep { width: 1px; background: #bae6fd; height: 28px; }
+  .est-card .est-conf { font-size: 10px; color: var(--app-text-secondary); }
+  .est-card .est-conf b { color: var(--app-text); font-weight: 700; display: block; font-size: 11px; }
+
+  /* AI citation chips */
+  .ai-cite {
+    display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px;
+  }
+  .ai-cite .cite {
+    font-size: 10px; font-weight: 600;
+    background: var(--app-surface-sunken); color: var(--app-text-secondary);
+    border: 1px solid var(--app-border);
+    border-radius: 999px; padding: 2px 8px;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .ai-cite .cite svg { width: 9px; height: 9px; stroke-width: 2.5; }
+
+  /* AI action buttons inside a bubble */
+  .ai-actions {
+    display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .ai-btn {
+    font-size: 11.5px; font-weight: 600;
+    border-radius: 10px; padding: 6px 10px;
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--app-border);
+    background: #fff; color: var(--app-text);
+  }
+  .ai-btn svg { width: 12px; height: 12px; }
+  .ai-btn.primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+  .ai-btn.primary svg { color: #fff; }
+
+  /* AI draft preview card (Pulse-post draft) */
+  .draft-card {
+    margin-top: 8px;
+    background: #fff;
+    border: 1px dashed var(--color-primary);
+    border-radius: 12px;
+    padding: 10px;
+    position: relative;
+  }
+  .draft-card .drf-label {
+    position: absolute; top: -8px; left: 10px;
+    background: var(--color-info-bg);
+    color: var(--color-primary-700);
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    padding: 1px 7px; border-radius: 999px;
+    border: 1px solid #bae6fd;
+  }
+  .draft-card .drf-row { display: flex; align-items: center; gap: 8px; }
+  .draft-card .drf-row .av-sm {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(135deg,#0ea5e9,#0369a1); color: #fff;
+    font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .draft-card .drf-name { font-size: 11px; font-weight: 700; color: var(--app-text); }
+  .draft-card .drf-meta { font-size: 10px; color: var(--app-text-muted); }
+  .draft-card .drf-chip {
+    margin-left: auto;
+    font-size: 9.5px; font-weight: 700;
+    background: #dbeafe; color: #1d4ed8;
+    border-radius: 999px; padding: 1px 7px;
+  }
+  .draft-card .drf-body { font-size: 12px; color: var(--app-text); margin-top: 6px; line-height: 17px; }
+
+  /* Follow-up suggestion chips after AI reply */
+  .follow-ups {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 4px 0 4px 28px;
+    margin-top: 2px;
+    scrollbar-width: none;
+  }
+  .follow-ups::-webkit-scrollbar { display: none; }
+  .follow-ups .fu {
+    flex-shrink: 0;
+    font-size: 11.5px; font-weight: 500;
+    background: #fff; color: var(--app-text);
+    border: 1px solid var(--app-border);
+    border-radius: 999px; padding: 5px 10px;
+    box-shadow: var(--shadow-sm);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .follow-ups .fu svg { width: 11px; height: 11px; color: var(--color-primary); }
+
+  /* "Thinking" animated label inside an empty AI bubble */
+  .thinking {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 12px;
+    font-size: 12.5px; font-weight: 500;
+    background: linear-gradient(90deg, var(--app-text-muted) 30%, var(--color-primary) 50%, var(--app-text-muted) 70%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+  .thinking-row svg.spark {
+    width: 14px; height: 14px; color: var(--color-primary);
+    animation: pulse-spark 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse-spark { 0%,100% { opacity:.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+
+  /* Stop-generating button (replaces send while AI is generating) */
+  .composer .stop {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #fff; color: var(--color-error);
+    border: 1.5px solid var(--color-error);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .composer .stop svg { width: 14px; height: 14px; stroke-width: 3; fill: currentColor; }
+
+  /* Empty-state prompt grid (categorized) */
+  .prompt-grid {
+    margin-top: 18px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    width: 100%;
+  }
+  .prompt-grid .pc {
+    background: #fff;
+    border: 1px solid var(--app-border);
+    border-radius: 14px;
+    padding: 10px;
+    text-align: left;
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .prompt-grid .pc .pc-ico {
+    width: 26px; height: 26px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .prompt-grid .pc .pc-ico svg { width: 14px; height: 14px; }
+  .prompt-grid .pc .pc-cat {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--app-text-muted);
+  }
+  .prompt-grid .pc .pc-q {
+    font-size: 12.5px; font-weight: 500; color: var(--app-text); line-height: 16px;
+  }
+
+  /* Disclaimer chip under empty headline */
+  .ai-trust {
+    margin-top: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+    align-items: center;
+  }
+  .ai-trust .row {
+    font-size: 11px; color: var(--app-text-secondary);
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-radius: 999px; padding: 4px 10px;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .ai-trust .row svg { width: 11px; height: 11px; stroke-width: 2.5; }
+  .ai-trust .row.priv svg { color: var(--color-success); }
+  .ai-trust .row.note svg { color: var(--app-text-muted); }
+
+  /* Compact "AI" tier-like badge in header */
+  .ai-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    background: var(--color-info-bg); color: var(--color-primary-700);
+    border-radius: 999px; padding: 1px 6px;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .ai-badge svg { width: 8px; height: 8px; stroke-width: 3; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  const av = {
+    maria:  "linear-gradient(135deg,#0ea5e9,#0369a1)",
+  };
+
+  const StatusBar = () => (
+    <>
+      <div className="island"></div>
+      <div className="sb">
+        <span>9:41</span>
+        <div className="sb-right">
+          <div className="sb-bars"></div>
+          <div className="batt"><i></i></div>
+        </div>
+      </div>
+    </>
+  );
+
+  // AI variant header — sparkles avatar, "AI" badge in name row, "new chat"
+  // icon replaces phone since voice calls don't apply.
+  const AIChatHeader = () => (
+    <div className="chat-header">
+      <div className="icon-btn" aria-label="Back">
+        <i data-lucide="chevron-left"></i>
+      </div>
+      <div className="chat-id">
+        <div className="avatar ai-av ai-grad" style={{ width: 36, height: 36, borderRadius: "50%" }}>
+          <i data-lucide="sparkles" style={{ width: 18, height: 18 }}></i>
+        </div>
+        <div className="meta">
+          <div className="name">
+            Pantopus AI
+            <span className="ai-badge"><i data-lucide="sparkles"></i>AI</span>
+          </div>
+          <div className="sub">Private to your account</div>
+        </div>
+      </div>
+      <div className="header-actions">
+        <div className="icon-btn" title="New chat"><i data-lucide="square-pen"></i></div>
+        <div className="icon-btn"><i data-lucide="more-horizontal"></i></div>
+      </div>
+    </div>
+  );
+
+  // Mini AI avatar used as a left-of-bubble marker.
+  const AIMiniAv = () => (
+    <div className="mini-av ai-av ai-grad">
+      <i data-lucide="sparkles" style={{ width: 11, height: 11 }}></i>
+    </div>
+  );
+
+  // ─── Populated AI assistant thread ──────────────────────
+  function PopulatedAI() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <AIChatHeader />
+
+        <div className="scroll" ref={scrollRef}>
+          {/* Welcome card — sits at top of thread, doubles as the system message */}
+          <div className="ai-welcome">
+            <div className="aw-head">
+              <div className="ai-av ai-grad" style={{ borderRadius: 10 }}>
+                <i data-lucide="sparkles"></i>
+              </div>
+              <div>
+                <div className="aw-t">Hey Maria — I'm Pantopus AI</div>
+                <div className="aw-s">I can use your verified neighbors, tasks, and mailbox to help.</div>
+              </div>
+            </div>
+            <div className="aw-caps">
+              <div className="aw-cap"><i data-lucide="hammer"></i>Price a task</div>
+              <div className="aw-cap"><i data-lucide="pencil"></i>Draft a Pulse post</div>
+              <div className="aw-cap"><i data-lucide="mailbox"></i>Summarize mail</div>
+              <div className="aw-cap"><i data-lucide="search"></i>Find a neighbor</div>
+            </div>
+          </div>
+
+          {/* User question */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">What's a fair price to hang 3 shelves in my living room?</div>
+            </div>
+          </div>
+
+          {/* AI structured reply with estimate card + citations */}
+          <div className="msg-row">
+            <AIMiniAv />
+            <div>
+              <div className="bubble in ai">
+                <span className="ai-tag"><i data-lucide="sparkles"></i>Pantopus AI</span>
+                <div>For drywall, 3 shelves, ~1.5 hours of work, neighbors in Elm Park are paying:</div>
+                <div className="est-card">
+                  <div>
+                    <div className="est-amt">$55–70</div>
+                    <div className="est-range">based on 8 nearby jobs</div>
+                  </div>
+                  <div className="est-sep"></div>
+                  <div className="est-conf">
+                    <b>Confidence</b>
+                    Medium–High
+                  </div>
+                </div>
+                <div className="ai-cite">
+                  <span className="cite"><i data-lucide="link"></i>3 local tasks · 30d</span>
+                  <span className="cite"><i data-lucide="link"></i>Handyman avg · Elm Park</span>
+                </div>
+              </div>
+              <div className="ts">9:08 AM</div>
+            </div>
+          </div>
+
+          {/* User follow-up */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">Great — draft a Pulse post asking for bids?</div>
+            </div>
+          </div>
+
+          {/* AI draft-post reply */}
+          <div className="msg-row">
+            <AIMiniAv />
+            <div>
+              <div className="bubble in ai">
+                <span className="ai-tag"><i data-lucide="sparkles"></i>Drafted a Pulse post</span>
+                <div className="draft-card">
+                  <span className="drf-label">Preview</span>
+                  <div className="drf-row">
+                    <div className="av-sm">MK</div>
+                    <div>
+                      <div className="drf-name">Maria K.</div>
+                      <div className="drf-meta">Elm Park · 0.5 mi</div>
+                    </div>
+                    <span className="drf-chip">Ask</span>
+                  </div>
+                  <div className="drf-body">
+                    Looking for a handyman to hang 3 shelves in my living room. Drywall, ~1.5 hours of work, budget $55–70. Saturday afternoon works best. DMs welcome 🙏
+                  </div>
+                </div>
+                <div className="ai-actions">
+                  <div className="ai-btn"><i data-lucide="pencil"></i>Edit</div>
+                  <div className="ai-btn primary"><i data-lucide="send"></i>Post to Pulse</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Follow-up suggestion row */}
+          <div className="follow-ups">
+            <div className="fu"><i data-lucide="sparkles"></i>Shortlist 3 handymen nearby</div>
+            <div className="fu"><i data-lucide="sparkles"></i>Tighten the copy</div>
+            <div className="fu"><i data-lucide="sparkles"></i>Add photo guide</div>
+          </div>
+
+          {/* User asks a new question */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">Also — any packages waiting today?</div>
+            </div>
+          </div>
+
+          {/* AI is "thinking" */}
+          <div className="msg-row thinking-row">
+            <AIMiniAv />
+            <div className="bubble in ai" style={{ padding: 0 }}>
+              <div className="thinking">
+                <i data-lucide="sparkles" className="spark"></i>
+                Checking your mailbox…
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer — Stop replaces Send while AI is generating */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Ask a follow-up…</span>
+              <i data-lucide="mic"></i>
+            </div>
+            <div className="stop" title="Stop generating">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Empty AI assistant ─────────────────────────────────
+  function EmptyAI() {
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <AIChatHeader />
+
+        <div className="empty">
+          <div className="big-av ai-av ai-grad">
+            <i data-lucide="sparkles" style={{ width: 36, height: 36 }}></i>
+          </div>
+          <h2>Ask me anything</h2>
+          <p>I use your verified neighbors, tasks, and mailbox to give answers that fit your block.</p>
+
+          <div className="ai-trust">
+            <div className="row priv">
+              <i data-lucide="shield-check"></i>
+              Private to your account · never shared with neighbors
+            </div>
+          </div>
+
+          <div className="prompt-grid">
+            <div className="pc">
+              <div className="pc-ico" style={{ background: "var(--cat-handyman)" }}><i data-lucide="hammer"></i></div>
+              <div className="pc-cat">Tasks</div>
+              <div className="pc-q">What's a fair price to mount a 55" TV?</div>
+            </div>
+            <div className="pc">
+              <div className="pc-ico" style={{ background: "var(--color-primary)" }}><i data-lucide="pencil"></i></div>
+              <div className="pc-cat">Pulse</div>
+              <div className="pc-q">Draft a post asking for a dog-sitter this weekend.</div>
+            </div>
+            <div className="pc">
+              <div className="pc-ico" style={{ background: "var(--color-identity-home)" }}><i data-lucide="mailbox"></i></div>
+              <div className="pc-cat">Mailbox</div>
+              <div className="pc-q">Summarize today's mail and packages.</div>
+            </div>
+            <div className="pc">
+              <div className="pc-ico" style={{ background: "var(--cat-goods)" }}><i data-lucide="shopping-bag"></i></div>
+              <div className="pc-cat">Marketplace</div>
+              <div className="pc-q">Price my mid-century sofa for a quick sale.</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer ready */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Ask Pantopus AI…</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="mic"><i data-lucide="mic"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  function App() {
+    React.useEffect(() => {
+      const t = setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+      return () => clearTimeout(t);
+    });
+
+    return (
+      <DesignCanvas
+        title="A15.3 — AI Assistant"
+        subtitle="src/app/chat/ai-assistant.tsx · AI variant · 2 frames"
+      >
+        <DCSection id="frames" title="Frames">
+          <DCArtboard id="populated" label="Populated · structured replies + thinking" width={382} height={782}>
+            <PopulatedAI />
+          </DCArtboard>
+          <DCArtboard id="empty" label='Empty · "Ask me anything"' width={382} height={782}>
+            <EmptyAI />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

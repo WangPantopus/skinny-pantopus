@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pantopus-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.dev
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Exclude node_modules from host
+      - /app/node_modules
+      # Persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - pantopus-network
+    command: npm run dev
+
+networks:
+  pantopus-network:
+    driver: bridge

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>A03.2 · src/app/(tabs)/beacons.tsx · Beacon Updates</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827;
+      min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+    .header h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header .filepath { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; color:#0369a1; background:#e0f2fe; display:inline-block; padding:3px 9px; border-radius:6px; margin-bottom:10px; font-weight:600; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:780px; line-height:21px; }
+
+    .annot {
+      max-width:1100px; margin:0 auto 24px; padding:14px 18px;
+      background:#f0f9ff; border:1px solid #bae6fd; border-left:4px solid #0284c7;
+      border-radius:12px; display:flex; gap:12px; align-items:flex-start; color:#0c4a6e;
+    }
+    .annot .icon { width:32px; height:32px; border-radius:8px; background:#e0f2fe; color:#0369a1;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .annot .text { font-size:13px; line-height:19px; }
+
+    .section-title { max-width:1100px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 24px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:16px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:1000px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A03.2 Beacon Updates">
+    <div class="header">
+      <div class="kicker">Pantopus · A03.2 · Beacon Updates tab</div>
+      <div class="filepath">src/app/(tabs)/beacons.tsx</div>
+      <h1>Beacon Updates — broadcasts from people you follow.</h1>
+      <p>Same A03 feed surface, scoped to persona broadcasts. The user is reading posts authored by Beacons (verified businesses, civic accounts, neighbors-as-creators) they've chosen to follow. Visually identical to Pulse — same chips, card recipe, FAB, tab bar — only authorship and the empty state diverge.</p>
+    </div>
+
+    <div class="annot">
+      <div class="icon"><i data-lucide="info" style="width:18px;height:18px;"></i></div>
+      <div class="text">
+        <strong>Inherits A03 archetype.</strong> Same chrome, card recipe, intent chip row, FAB placement, and tab bar as Pulse. Implemented as <code style="background:#e0f2fe;padding:1px 5px;border-radius:4px;font-size:11.5px;">&lt;FeedScreen initialSurface="personas" hideSurfaceTabs /&gt;</code>. Every author is a verified beacon — verified badges read pervasively in Frame 1.
+      </div>
+    </div>
+
+    <div class="section-title">Two frames · populated · empty</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Mixed beacon broadcasts</div>
+          <div class="label-sub">Five beacons: a bakery (Announce), library (Event w/ RSVP), a tradesperson (Recommend tip), a civic council (Announce), and a personal beacon (Recommend). All verified. Same chip row and card recipe as Pulse.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · EMPTY</div>
+          <div class="label-title">Follow a beacon to see updates here</div>
+          <div class="label-sub">Chrome stays. RSS glyph swaps in for the radio (this is a follow-driven surface, not a public square). CTA pivots from "Create post" to "Discover beacons"; footer chip reads follow count instead of scope.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="beacons-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameBeaconsPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameBeaconsEmpty />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

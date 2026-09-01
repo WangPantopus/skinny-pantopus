@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pantopus · Navigation Drawer (Launcher)</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827;
+      background:
+        radial-gradient(120% 50% at 50% 0%, #e0f2fe 0%, transparent 60%),
+        #f6f7f9;
+      min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1320px; margin:0 auto 36px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0284c7; margin-bottom:8px; }
+    .header h1 { font-size:36px; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header p { margin:0; color:#374151; font-size:15px; max-width:880px; line-height:23px; }
+
+    .principle {
+      max-width:1320px; margin:0 auto 28px; padding:16px 20px;
+      background:#fff; border:1px solid #bae6fd; border-left:4px solid #0284c7;
+      border-radius:12px;
+      display:flex; gap:14px; align-items:flex-start;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .principle .icon { width:32px; height:32px; border-radius:8px; background:#e0f2fe; color:#0284c7;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .principle .text { font-size:13px; line-height:19px; color:#374151; }
+    .principle .text strong { color:#111827; font-weight:700; }
+
+    .compare {
+      max-width:1320px; margin:0 auto 36px;
+      background:#fff; border:1px solid #e5e7eb;
+      border-radius:20px; padding:24px 28px;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .compare h2 { margin:0 0 16px; font-size:13px; font-weight:700;
+      letter-spacing:0.08em; text-transform:uppercase; color:#0284c7; }
+    .cmp-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:16px; }
+    .cmp { border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; background:#fbfcfd; }
+    .cmp.this { border-color:#bae6fd; background:#f0f9ff; }
+    .cmp .tag { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+      letter-spacing:0.04em; text-transform:uppercase; padding:3px 9px; border-radius:9999px; margin-bottom:10px; }
+    .cmp.this .tag { background:#0284c7; color:#fff; }
+    .cmp.other .tag { background:#eef0f3; color:#6b7280; }
+    .cmp h3 { margin:0 0 8px; font-size:15px; font-weight:700; color:#111827; letter-spacing:-0.2px; }
+    .cmp ul { margin:0; padding-left:0; list-style:none; }
+    .cmp li { font-size:12.5px; color:#374151; line-height:18px; padding:3px 0 3px 18px; position:relative; }
+    .cmp li::before { content:''; position:absolute; left:2px; top:9px; width:6px; height:6px; border-radius:50%; }
+    .cmp.this li::before { background:#0284c7; }
+    .cmp.other li::before { background:#cbd5e1; }
+    .cmp a { color:#0284c7; font-weight:600; text-decoration:none; }
+    .cmp a:hover { text-decoration:underline; }
+
+    .section-title {
+      max-width:1320px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+      color:#6b7280;
+    }
+
+    .frames { max-width:1320px; margin:0 auto;
+      display:grid; grid-template-columns:repeat(2, 1fr); gap:46px 24px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:17px; font-weight:700; color:#111827; margin-bottom:5px; letter-spacing:-0.1px; }
+    .label-sub { font-size:12px; color:#374151; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:1fr; max-width:420px; }
+      .cmp-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · Navigation Drawer · Variant B</div>
+      <h1>Thin launcher — switching lives in the Identity Center.</h1>
+      <p>Same context-aware menu, different switching path. Here the drawer is a <strong>launcher</strong>: the context pill doesn’t expand inline — tapping it hands off to the existing <strong>Identity Center</strong> switch surface. The drawer stays focused on navigation; one canonical screen owns identity and context.</p>
+    </div>
+
+    <div class="principle">
+      <div class="icon"><i data-lucide="external-link" style="width:18px;height:18px;"></i></div>
+      <div class="text">
+        <strong>One switcher, one place.</strong> The pill carries a “Switch” affordance instead of a chevron. Tapping it opens the Identity Center sheet — radio cards for Personal, Professional, your homes and businesses, plus a path to manage profiles & privacy. No switcher logic is duplicated inside the drawer.
+      </div>
+    </div>
+
+    <div class="compare">
+      <h2>Which fit is better?</h2>
+      <div class="cmp-grid">
+        <div class="cmp this">
+          <span class="tag"><i data-lucide="external-link" style="width:12px;height:12px;"></i>This · Launcher</span>
+          <h3>Drawer launches Identity Center</h3>
+          <ul>
+            <li>Single source of truth for switching — no drift between two switchers.</li>
+            <li>Room for richer switch UI: radio cards, privacy entry, “what people see”.</li>
+            <li>Drawer stays simple and fast to scan.</li>
+            <li>Cost: switching is a full screen change — one extra hop, loses drawer context.</li>
+          </ul>
+        </div>
+        <div class="cmp other">
+          <span class="tag"><i data-lucide="panel-left" style="width:12px;height:12px;"></i>Variant A · Inline</span>
+          <h3>Switcher expands in the drawer</h3>
+          <ul>
+            <li>Switch without leaving the drawer — fewer taps, keeps context.</li>
+            <li>Feels native to a navigation drawer pattern.</li>
+            <li>Cost: a second switcher to keep in sync with the Identity Center.</li>
+            <li>See <a href="Navigation Drawer.html">Variant A — inline switcher</a>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Four frames · Personal · Home · Business · Identity Center switch</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · PERSONAL</div>
+          <div class="label-title">Personal context — launcher</div>
+          <div class="label-sub">Same personal menu. Pill carries a “Switch” chip, not a chevron — it navigates out rather than expanding.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · HOME</div>
+          <div class="label-title">Home context — Maple Street</div>
+          <div class="label-sub">Green launcher pill on the active home. Identical body to Variant A; “Back to Hub” pinned below.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · BUSINESS</div>
+          <div class="label-title">Business context — Cortado Coffee</div>
+          <div class="label-sub">Violet launcher pill on the active business. Same menu; switching deferred to the Identity Center.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f4"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 4 · IDENTITY CENTER</div>
+          <div class="label-title">The switch sheet the pill opens</div>
+          <div class="label-sub">Dedicated surface: radio cards for Personal (selected) · Professional · homes · businesses + add rows, a profiles & privacy entry, Cancel + “Use this context”.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="beacon-shell.jsx"></script>
+  <script type="text/babel" src="nav-drawer-frames.jsx"></script>
+  <script type="text/babel" src="nav-drawer-launcher-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameLauncherPersonal />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameLauncherHome />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameLauncherBusiness />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameIdentityCenterSwitch />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

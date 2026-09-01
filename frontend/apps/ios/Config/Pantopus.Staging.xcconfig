@@ -1,0 +1,13 @@
+// Staging — pre-production backend, Stripe TEST keys, production APNs.
+//
+// Built/run via the "Pantopus (Staging)" scheme. AppEnvironment resolves
+// `.staging` here via the STAGING compilation condition (see project.yml).
+#include "Pantopus.base.xcconfig"
+
+PANTOPUS_API_BASE_URL = https:/$()/staging.api.pantopus.app
+PANTOPUS_SOCKET_URL = https:/$()/staging.api.pantopus.app
+STRIPE_PUBLISHABLE_KEY = pk_test_REPLACE_ME
+APS_ENVIRONMENT = production
+
+// CI/local overlay — staging test key + staging Sentry DSN.
+#include? "Secrets.xcconfig"

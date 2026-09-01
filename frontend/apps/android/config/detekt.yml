@@ -1,0 +1,58 @@
+# Detekt configuration — https://detekt.dev
+# Override specific rules here; anything not listed follows detekt defaults.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+complexity:
+  LongMethod:
+    threshold: 80
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 10
+  CyclomaticComplexMethod:
+    threshold: 18
+  TooManyFunctions:
+    thresholdInFiles: 25
+    thresholdInClasses: 20
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers: [ '-1', '0', '1', '2', '100', '1000' ]
+    ignoreHashCodeFunction: true
+    ignorePropertyDeclaration: true
+    ignoreConstantDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreEnums: true
+    ignoreRanges: true
+    ignoreExtensionFunctions: true
+  MaxLineLength:
+    maxLineLength: 140
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: true
+  ReturnCount:
+    max: 4
+  WildcardImport:
+    active: true
+
+naming:
+  FunctionNaming:
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    excludes: ['**/test/**', '**/androidTest/**']
+
+performance:
+  SpreadOperator:
+    active: true
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true
+
+empty-blocks:
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true

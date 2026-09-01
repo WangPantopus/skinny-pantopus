@@ -1,0 +1,12 @@
+source "https://rubygems.org"
+
+gem "fastlane"
+gem "xcodeproj"
+
+# Pin Ruby version so CI and local agree.
+ruby "~> 3.2"
+
+# Load fastlane plugins declared in fastlane/Pluginfile (e.g. the Sentry
+# plugin used for dSYM upload in the beta / release lanes).
+plugins_path = File.join(File.dirname(__FILE__), "fastlane", "Pluginfile")
+eval_gemfile(plugins_path) if File.exist?(plugins_path)

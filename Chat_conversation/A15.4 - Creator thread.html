@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A15.4 — Creator thread</title>
+<link rel="icon" href="https://www.google.com/s2/favicons?domain=pantopus.com" />
+<link rel="stylesheet" href="pantopus-tokens.css" />
+<link rel="stylesheet" href="chat-archetype.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  /* ─── Creator-thread-specific extras (variant only) ───── */
+
+  /* Audience-context strip (creator-side counterpart to .ctx-strip)
+     — uses business-violet to signal "this is your creator inbox" */
+  .audience-strip {
+    margin: 10px 12px 0;
+    background: var(--color-identity-business-bg);
+    border: 1px solid #e9d5ff;
+    border-radius: 12px;
+    padding: 8px 10px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: var(--shadow-sm);
+  }
+  .audience-strip .as-ico {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--color-identity-business); color: #fff;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .audience-strip .as-ico svg { width: 15px; height: 15px; }
+  .audience-strip .as-body { min-width: 0; flex: 1; }
+  .audience-strip .as-t {
+    font-size: 11.5px; font-weight: 700;
+    color: var(--color-identity-business);
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .audience-strip .as-m { font-size: 11px; color: var(--app-text-secondary); margin-top: 1px; }
+  .audience-strip .as-chev svg { width: 16px; height: 16px; color: var(--color-identity-business); }
+
+  /* Tier-aware chips for fan name row */
+  .tier.tier-bronze { background: var(--tier-bronze-bg); color: var(--tier-bronze); }
+  .tier.tier-silver { background: var(--tier-silver-bg); color: var(--tier-silver); }
+  .tier.tier-gold   { background: var(--tier-gold-bg);   color: #7a5a10; }
+  .tier.tier-free   { background: var(--tier-free-bg);   color: var(--tier-free); }
+
+  /* Quota meter — sits between header and scroll */
+  .quota {
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border);
+    padding: 8px 14px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .quota .q-row {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px;
+  }
+  .quota .q-label {
+    color: var(--app-text-secondary);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .quota .q-label svg { width: 11px; height: 11px; stroke-width: 2.5; color: var(--color-identity-business); }
+  .quota .q-count { color: var(--app-text); font-weight: 700; }
+  .quota .q-count b { color: var(--color-primary); }
+  .quota .q-count.maxed b { color: var(--color-error); }
+  .quota .q-track {
+    height: 4px; background: var(--app-surface-sunken);
+    border-radius: 4px; overflow: hidden;
+  }
+  .quota .q-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--color-primary) 0%, #38bdf8 100%);
+    transition: width 200ms ease-out;
+  }
+  .quota.maxed .q-fill { background: var(--color-error); width: 100% !important; }
+  .quota .q-meta {
+    font-size: 10px; color: var(--app-text-muted);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .quota .q-meta svg { width: 10px; height: 10px; }
+
+  /* Tier-bg avatar ring for the fan's avatar */
+  .avatar.ring-bronze { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--tier-bronze); }
+  .avatar.ring-silver { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--tier-silver); }
+  .avatar.ring-gold   { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--tier-gold); }
+
+  /* Inline upgrade-fan upsell card (in quota-exhausted state) */
+  .upgrade-card {
+    align-self: center;
+    width: calc(100% - 4px);
+    background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
+    border: 1px solid #fed7aa;
+    border-radius: 16px;
+    padding: 14px;
+    margin: 12px 0;
+    box-shadow: var(--shadow-sm);
+    text-align: left;
+  }
+  .upgrade-card .uc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .upgrade-card .uc-ico {
+    width: 30px; height: 30px; border-radius: 10px;
+    background: linear-gradient(135deg, #f4e2a8 0%, #c29230 100%);
+    color: #2A1F0A;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .upgrade-card .uc-ico svg { width: 15px; height: 15px; stroke-width: 2.4; }
+  .upgrade-card .uc-t { font-size: 13px; font-weight: 700; color: var(--app-text); letter-spacing: -.01em; }
+  .upgrade-card .uc-s { font-size: 11px; color: var(--app-text-secondary); margin-top: 1px; }
+  .upgrade-card .uc-body { font-size: 12px; color: var(--app-text-strong); line-height: 17px; }
+  .upgrade-card .uc-perks { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+  .upgrade-card .uc-perks .pr { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--app-text-strong); }
+  .upgrade-card .uc-perks .pr svg { width: 12px; height: 12px; color: var(--color-success); stroke-width: 2.5; flex-shrink: 0; }
+  .upgrade-card .uc-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .upgrade-btn {
+    flex: 1;
+    font-size: 12px; font-weight: 700;
+    border-radius: 10px; padding: 9px 10px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    background: linear-gradient(135deg, #c29230, #a06f15);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 10px rgba(194,146,48,0.28);
+  }
+  .upgrade-btn svg { width: 13px; height: 13px; stroke-width: 2.5; }
+  .upgrade-btn.ghost {
+    background: transparent; color: var(--app-text-strong);
+    border: 1px solid var(--app-border);
+    box-shadow: none;
+  }
+
+  /* Composer when quota exhausted */
+  .composer-wrap.locked { background: var(--app-surface-sunken); }
+  .composer-wrap.locked .input {
+    background: #fff;
+    border: 1px dashed var(--app-border-strong);
+    color: var(--app-text-muted);
+    font-style: italic;
+  }
+  .composer-wrap.locked .plus,
+  .composer-wrap.locked .mic { opacity: .45; }
+  .composer-wrap.locked .send {
+    background: var(--app-text-muted); box-shadow: none; opacity: .6;
+  }
+  .composer-wrap .lock-row {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 10.5px; color: var(--app-text-secondary);
+    margin-top: 6px;
+  }
+  .composer-wrap .lock-row svg { width: 11px; height: 11px; color: var(--color-warning); stroke-width: 2.5; }
+  .composer-wrap .lock-row b { color: var(--app-text); font-weight: 700; }
+
+  /* "Saved reply" mini-affordance above composer (creator-only) */
+  .saved-replies {
+    background: var(--app-surface);
+    border-top: 1px solid var(--app-border);
+    padding: 7px 10px 4px;
+    display: flex; gap: 6px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .saved-replies::-webkit-scrollbar { display: none; }
+  .saved-replies .sr {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 500;
+    background: var(--color-identity-business-bg);
+    color: var(--color-identity-business);
+    border: 1px solid #e9d5ff;
+    border-radius: 999px; padding: 4px 9px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .saved-replies .sr svg { width: 11px; height: 11px; stroke-width: 2.5; }
+
+  /* Pinned membership stripe under header (member-since, source) */
+  .member-row {
+    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border-subtle);
+    padding: 6px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10.5px; color: var(--app-text-secondary);
+  }
+  .member-row .left { display: inline-flex; align-items: center; gap: 5px; }
+  .member-row svg { width: 11px; height: 11px; color: var(--app-text-muted); }
+  .member-row b { color: var(--app-text); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  // Avatars for the personas in this thread
+  const av = {
+    priya:   "linear-gradient(135deg,#7C3AED,#5b21b6)",    // fan (Bronze)
+    mira:    "linear-gradient(135deg,#0ea5e9,#0369a1)",    // unused — creator is self
+  };
+
+  const StatusBar = () => (
+    <>
+      <div className="island"></div>
+      <div className="sb">
+        <span>9:41</span>
+        <div className="sb-right">
+          <div className="sb-bars"></div>
+          <div className="batt"><i></i></div>
+        </div>
+      </div>
+    </>
+  );
+
+  // Creator-thread header — shows the FAN. Voice call swapped for
+  // "fan profile" jump action since most creator-fan interaction is
+  // text-based via membership-DM.
+  const CreatorThreadHeader = ({ tier }) => (
+    <div className="chat-header">
+      <div className="icon-btn" aria-label="Back to inbox">
+        <i data-lucide="chevron-left"></i>
+      </div>
+      <div className="chat-id">
+        <div className={`avatar ring-${tier}`} style={{ background: av.priya }}>
+          PR
+          <span className="vb"><i data-lucide="check"></i></span>
+        </div>
+        <div className="meta">
+          <div className="name">
+            Priya R.
+            <span className={`tier tier-${tier}`}>
+              <i data-lucide="award"></i>
+              {tier === "gold"   ? "Gold"   :
+               tier === "silver" ? "Silver" :
+               tier === "free"   ? "Free"   : "Bronze"}
+            </span>
+          </div>
+          <div className="sub">
+            <span className="presence-dot" style={{
+              background: tier === "free" ? "var(--app-text-muted)" : "var(--color-success)"
+            }}></span>
+            {tier === "free" ? "Free member" : "Member since Aug · 0.4 mi"}
+          </div>
+        </div>
+      </div>
+      <div className="header-actions">
+        <div className="icon-btn" title="Open fan profile"><i data-lucide="user"></i></div>
+        <div className="icon-btn"><i data-lucide="more-horizontal"></i></div>
+      </div>
+    </div>
+  );
+
+  // Audience context strip (creator-side identifier)
+  const AudienceStrip = ({ rank, total }) => (
+    <div className="audience-strip">
+      <div className="as-ico"><i data-lucide="users"></i></div>
+      <div className="as-body">
+        <div className="as-t">Creator inbox · The Sourdough Diary</div>
+        <div className="as-m">{rank} of {total} Bronze members · joined 12 weeks ago</div>
+      </div>
+      <div className="as-chev"><i data-lucide="chevron-right"></i></div>
+    </div>
+  );
+
+  // Quota meter (shared across both states)
+  const Quota = ({ used, total, resetCopy }) => {
+    const maxed = used >= total;
+    const pct = Math.min(100, (used / total) * 100);
+    return (
+      <div className={`quota ${maxed ? "maxed" : ""}`}>
+        <div className="q-row">
+          <span className="q-label">
+            <i data-lucide="message-square"></i>
+            Replies this week
+          </span>
+          <span className={`q-count ${maxed ? "maxed" : ""}`}>
+            <b>{total - used}</b> of {total} left
+          </span>
+        </div>
+        <div className="q-track">
+          <div className="q-fill" style={{ width: `${100 - pct}%` }}></div>
+        </div>
+        <div className="q-meta">
+          <i data-lucide="rotate-cw"></i>
+          {resetCopy}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Populated creator thread ──────────────────────────
+  function PopulatedCreatorThread() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <CreatorThreadHeader tier="bronze" />
+        <AudienceStrip rank={9} total={23} />
+        <Quota used={2} total={5} resetCopy="Resets Mon · Upgrade to Gold for unlimited" />
+
+        <div className="scroll" ref={scrollRef}>
+          <div className="day">
+            <div className="line"></div><div className="label">Today</div><div className="line"></div>
+          </div>
+
+          <div className="sys sys-verify">
+            <i data-lucide="badge-dollar-sign"></i>
+            Priya joined Bronze · $5/mo
+          </div>
+
+          {/* Fan question (incoming) */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.priya }}>PR</div>
+            <div>
+              <div className="bubble in">
+                Hi! Loved this week's loaf 🍞 — quick question: can I sub bread flour for AP?
+              </div>
+              <div className="ts">8:51 AM</div>
+            </div>
+          </div>
+
+          {/* Creator reply (outgoing) — bread photo + tip */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out img-bubble">
+                <div className="img" data-label="oven shot"></div>
+              </div>
+            </div>
+          </div>
+          <div className="msg-row out same">
+            <div>
+              <div className="bubble out cont">
+                Yes — bread flour gives more chew. Use 5g less water per 100g. This is yesterday's bake with that ratio.
+              </div>
+              <div className="ts out">
+                Read 9:02 AM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Fan reaction-only quick reply */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.priya }}>PR</div>
+            <div>
+              <div className="bubble in">
+                🙏 amazing. Trying it Saturday.
+                <span className="reaction right">❤️<span className="count">1</span></span>
+              </div>
+              <div className="ts" style={{ marginTop: 10 }}>9:04 AM</div>
+            </div>
+          </div>
+
+          {/* New fan follow-up */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.priya }}>PR</div>
+            <div>
+              <div className="bubble in">
+                Also — would you ever do a hands-on workshop? I'd pay 💸
+              </div>
+              <div className="ts">9:14 AM</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Creator-only: saved replies above composer */}
+        <div className="saved-replies">
+          <div className="sr"><i data-lucide="bookmark"></i>Workshop interest list</div>
+          <div className="sr"><i data-lucide="bookmark"></i>Hydration tips</div>
+          <div className="sr"><i data-lucide="bookmark"></i>Thanks for joining</div>
+          <div className="sr"><i data-lucide="plus"></i>New</div>
+        </div>
+
+        {/* Composer (creator typing) */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input">
+              <span>Adding you to the list — first 6 get a slot</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="send"><i data-lucide="arrow-up"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Quota-exhausted state ──────────────────────────────
+  function QuotaExhaustedThread() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <CreatorThreadHeader tier="bronze" />
+        <AudienceStrip rank={9} total={23} />
+        <Quota used={5} total={5} resetCopy="Resets Monday 12:00 AM · 3 days, 14 hours" />
+
+        <div className="scroll" ref={scrollRef}>
+          <div className="day">
+            <div className="line"></div><div className="label">Friday</div><div className="line"></div>
+          </div>
+
+          {/* A few prior exchanges so context is clear */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.priya }}>PR</div>
+            <div>
+              <div className="bubble in">
+                Last one for now — when's the next live bake stream?
+              </div>
+              <div className="ts">4:18 PM</div>
+            </div>
+          </div>
+
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">
+                Sunday 10am! I'll DM the link Saturday so you don't miss it 🥖
+              </div>
+              <div className="ts out">
+                Read 4:22 PM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* The system pill announcing quota hit */}
+          <div className="sys" style={{
+            background: "var(--color-warning-bg)",
+            color: "#9a3412",
+            borderColor: "var(--color-warning-light)",
+          }}>
+            <i data-lucide="hourglass"></i>
+            You've used your 5 weekly Bronze replies with Priya
+          </div>
+
+          {/* Upgrade-fan upsell card */}
+          <div className="upgrade-card">
+            <div className="uc-head">
+              <div className="uc-ico"><i data-lucide="crown"></i></div>
+              <div>
+                <div className="uc-t">Invite Priya to Gold</div>
+                <div className="uc-s">Unlimited replies · $15/mo · she keeps Bronze perks</div>
+              </div>
+            </div>
+            <div className="uc-body">
+              Priya's clearly engaged — 5 messages this week and a workshop ask. Send her a Gold upgrade offer and pick up where you left off.
+            </div>
+            <div className="uc-perks">
+              <div className="pr"><i data-lucide="check"></i>Unlimited DMs both ways</div>
+              <div className="pr"><i data-lucide="check"></i>Voice notes &amp; long-form replies</div>
+              <div className="pr"><i data-lucide="check"></i>Front-of-queue on workshop slots</div>
+            </div>
+            <div className="uc-actions">
+              <div className="upgrade-btn ghost">Not now</div>
+              <div className="upgrade-btn"><i data-lucide="send"></i>Send offer</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Disabled composer */}
+        <div className="composer-wrap locked">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Out of replies until Monday</span>
+              <i data-lucide="lock"></i>
+            </div>
+            <div className="send"><i data-lucide="arrow-up"></i></div>
+          </div>
+          <div className="lock-row">
+            <i data-lucide="alert-triangle"></i>
+            <span><b>Bronze cap reached.</b> Upgrade Priya or wait for the reset.</span>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  function App() {
+    React.useEffect(() => {
+      const t = setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+      return () => clearTimeout(t);
+    });
+
+    return (
+      <DesignCanvas
+        title="A15.4 — Creator thread"
+        subtitle="src/app/audience/inbox/[membershipId].tsx · persona DM · creator side · 2 frames"
+      >
+        <DCSection id="frames" title="Frames">
+          <DCArtboard id="populated" label="Populated · Bronze fan · 3 replies left" width={382} height={782}>
+            <PopulatedCreatorThread />
+          </DCArtboard>
+          <DCArtboard id="exhausted" label="Secondary · weekly quota exhausted" width={382} height={782}>
+            <QuotaExhaustedThread />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

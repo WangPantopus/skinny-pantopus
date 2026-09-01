@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A13.9 · Edit profile</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1180px; margin: 0 auto 16px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .path { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
+            padding: 4px 10px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #374151; }
+    .path .dim { color: #9ca3af; }
+
+    .meta { max-width: 1180px; margin: 24px auto 40px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+    .meta dl { margin: 0; }
+    .meta dt { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+               color: #6b7280; margin-bottom: 4px; }
+    .meta dd { margin: 0; font-size: 13px; color: #111827; font-weight: 500; line-height: 17px; letter-spacing: -0.1px; }
+    .meta dd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                    background: #f3f4f6; padding: 1px 6px; border-radius: 4px; color: #0284c7; font-weight: 600; }
+
+    .section-title { max-width: 1180px; margin: 0 auto 24px; font-size: 13px; font-weight: 600;
+                     letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1040px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A13.9 Edit profile">
+    <div class="header">
+      <div class="kicker">Pantopus · A13.9 · Form (single screen)</div>
+      <h1>Edit profile</h1>
+      <p>Multi-section variant of the Form archetype. The user's own profile — avatar, cover, identity, skills, languages, and visibility toggles, stacked top-to-bottom. Save lives in a sticky-bottom bar because edits are usually partial and the user scrolls a lot; the bar swaps between a quiet "All saved" affordance and a full Discard + Save dual-button when changes are pending.</p>
+      <div class="path"><span class="dim">src/app/profile/</span>edit.tsx</div>
+    </div>
+
+    <div class="meta">
+      <dl><dt>Archetype</dt><dd>A13 · Form (single screen)</dd></dl>
+      <dl><dt>Variant</dt><dd>Multi-section · 5 sections</dd></dl>
+      <dl><dt>Top-bar right action</dt><dd><code>none</code></dd></dl>
+      <dl><dt>Sticky CTA</dt><dd>Save · dirty-aware (count + Discard)</dd></dl>
+      <dl><dt>Sections</dt><dd>Avatar+Cover · Identity · Skills · Languages · Visibility</dd></dl>
+      <dl><dt>Required fields</dt><dd>Display name · Username</dd></dl>
+      <dl><dt>Validation</dt><dd>Live, inline · matches archetype vocab</dd></dl>
+      <dl><dt>Dirty marker</dt><dd>Amber dot beside changed field labels</dd></dl>
+    </div>
+
+    <div class="section-title">Two frames · clean &amp; dirty (unsaved)</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A13.9 Edit profile · Clean">
+        <div id="f-clean"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · CLEAN (LAST-SAVED)</div>
+          <div class="label-title">No diff · Save is disabled</div>
+          <div class="label-sub">Sticky bar reads "All changes saved · just now"; Save is greyed because the form matches the server. This is the rest state most users see.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A13.9 Edit profile · Dirty">
+        <div id="f-dirty"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · DIRTY (UNSAVED EDITS)</div>
+          <div class="label-title">4 unsaved · Discard + Save</div>
+          <div class="label-sub">Avatar swapped, cover changed, bio rewritten, "Baking" skill added · amber dots mark the changed labels · sticky bar swaps to a "4 unsaved" pill, Discard, and a primary Save.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel" src="edit-profile-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f-clean')).render(<FrameEditProfileClean />);
+    ReactDOM.createRoot(document.getElementById('f-dirty')).render(<FrameEditProfileDirty />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

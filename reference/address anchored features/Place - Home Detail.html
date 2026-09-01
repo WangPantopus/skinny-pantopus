@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Your Home detail (C4)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 820px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 820px; line-height: 21px; }
+
+  /* product cards */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .td-back:hover { background: #f6f7f9 !important; }
+  .hm-prompt { transition: background .14s ease; }
+  .hm-prompt:hover { background: #f6f9fb !important; }
+  .hm-cta { transition: background .15s ease; }
+  .hm-cta:hover { background: #0369a1 !important; }
+  .hm-edit:hover { background: #e9ebef !important; }
+  .hm-field:focus-within { border-color: #7dd3fc !important; box-shadow: 0 0 0 3px rgba(56,189,248,.18); }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .stage-cap { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  .spec-row { display: flex; flex-wrap: wrap; gap: 30px 40px; align-items: flex-start; }
+  .specimen { width: 360px; }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-today-detail.jsx"></script>
+<script type="text/babel" src="place-home-detail.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · C4 — Your Home detail</div>
+        <h1 className="doc-title">Your home, by the numbers</h1>
+        <p className="doc-sub">Tap-through from Your Home. The facts of the property, an estimated market value with its range and how it tracks the block, and the county assessment — all drawn from public records, all dated and framed as informational. Then one private step the public records can't give you: add your mortgage, and the screen does the math to show your equity — a number only you ever see.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Value / equity <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> Private input / CTA <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Shell <b>#f6f7f9</b>, white bordered cards</div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The screen</h2>
+        </div>
+        <p className="zone-sub">Public facts up top — property, value with a value-vs-block sparkline, assessment, each sourced and dated. Then the equity block: a sky prompt that opens a small private form. Tap it in the phone to walk the three stages, or step through them on the stage below.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <HomeDetail />
+            </IOSDevice>
+            <div className="stage-cap">Tap “Add your mortgage” to try the equity flow</div>
+          </div>
+
+          <div className="side-note">
+            <h4>Public facts, plainly sourced</h4>
+            <p>Year built, size, beds and baths, lot — the record of the property. The value estimate carries its range so a single number never pretends to be precise, and the sparkline shows it against the block so the figure has context.</p>
+
+            <h4>Estimate vs assessment</h4>
+            <p>Two different numbers, both shown. The market estimate is what it might sell for; the county assessment is what it's taxed on. Naming both, and their sources, keeps the screen honest about what each means.</p>
+
+            <h4>Your equity is yours</h4>
+            <p>Public records stop at the mortgage. Equity needs a number only you know, so the resident enters their balance privately — and the lock icon and the copy both promise it's never shown to neighbors or on the public place.</p>
+
+            <h4>The math, made visible</h4>
+            <p>Equity is the value estimate minus the balance you entered, drawn as a green-and-grey bar so you see the split at a glance. Edit reopens the form; the figure updates live.</p>
+
+            <h4>Informational, never advice</h4>
+            <p>A closing note says it outright: estimates aren't an appraisal, a guarantee, or an offer. The product informs the resident; it doesn't transact for them.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">The equity flow</h2>
+        </div>
+        <p className="zone-sub">Three stages of one private interaction. A prompt that promises privacy, a two-field form, and the equity result with its green-vs-grey split. The number is computed from the public value estimate minus the balance the resident enters — and it lives only on their account.</p>
+
+        <div className="spec-row">
+          <Specimen tag="1 · Prompt" note="private, opt-in">
+            <MortgageEquity initialStage="prompt" />
+          </Specimen>
+          <Specimen tag="2 · Form" note="balance + rate">
+            <MortgageEquity initialStage="form" />
+          </Specimen>
+          <Specimen tag="3 · Equity" note="value − balance, yours only">
+            <MortgageEquity initialStage="result" />
+          </Specimen>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

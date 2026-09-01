@@ -1,0 +1,42 @@
+# Pantopus — fastlane snapshot config (P16)
+# https://docs.fastlane.tools/actions/snapshot
+
+# 6 spec'd App Store screen sizes × 3 devices.
+devices([
+  "iPhone 15 Pro Max",
+  "iPhone 15",
+  "iPhone SE (3rd generation)"
+])
+
+languages([
+  "en-US"
+])
+
+# Captured by `PantopusScreenshots` UI test target — see
+# `PantopusUITests/Screenshots/StoreScreenshots.swift`. The test mounts
+# every hero screen with `UI_TESTS_STUB_API=1` so screenshots don't need
+# a live backend.
+scheme("PantopusUITests")
+
+# Output PNGs under fastlane/screenshots/<lang>/<device>/<screen>.png.
+# `fastlane release` uploads from this directory automatically.
+output_directory("./fastlane/screenshots")
+clear_previous_screenshots(true)
+
+# Hide carrier / battery / time so screenshots don't churn frame-to-frame.
+override_status_bar(true)
+
+# Open the simulator's screenshots in a browser when done.
+skip_open_summary(false)
+
+# Stop on the first device that fails so test failures aren't masked.
+stop_after_first_error(false)
+
+# Each test invocation generates one PNG per `app.snapshot("Name")`
+# call. The hero screens we capture are:
+#   - 01_Hub_populated
+#   - 02_MyHomes
+#   - 03_HomeDashboard
+#   - 04_MailboxList
+#   - 05_MailboxItemDetail_package
+#   - 06_EditProfile

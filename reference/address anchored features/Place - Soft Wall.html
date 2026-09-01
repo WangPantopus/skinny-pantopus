@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Soft wall (A5)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 800px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 800px; line-height: 21px; }
+
+  /* product cards (inside #f6f7f9 stage and phone) */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-hero { box-shadow: 0 3px 12px rgba(17,24,39,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+
+  /* soft-wall interactions */
+  .sw-primary { transition: background .15s ease, box-shadow .15s ease; }
+  .sw-primary:hover { background: #0369a1 !important; }
+  .sw-social { transition: background .15s ease, border-color .15s ease; }
+  .sw-social.apple:hover { background: #000 !important; }
+  .sw-social.google:hover { background: #f6f9fb !important; border-color: #d7dbe0 !important; }
+  .sw-x:hover { background: #e5e7eb !important; }
+  .lx-caret { animation: lx-blink 1.1s steps(1) infinite; }
+  @keyframes lx-blink { 50% { opacity: 0; } }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .phone-cap { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .phone-cap span { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fg4); margin-left: 8px; }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  .note-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 26px 32px; margin-top: 34px; max-width: 760px; }
+  .note-grid h4 { margin: 0 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .note-grid p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+  .phone-strip { display: flex; flex-wrap: wrap; gap: 30px 36px; }
+
+  @media (prefers-reduced-motion: reduce) { .lx-caret { animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-launch.jsx"></script>
+<script type="text/babel" src="place-preview.jsx"></script>
+<script type="text/babel" src="place-softwall.jsx"></script>
+<script type="text/babel">
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · A5 — Soft wall</div>
+        <h1 className="doc-title">Soft wall — save this place</h1>
+        <p className="doc-sub">The one moment the preview asks for an account — triggered when a signed-out visitor acts to save their place. A sheet rises over the dimmed preview: a row of chips recaps the free look, one honest sentence names what an account buys, and the form keeps the same input and button recipes. Email leads; Apple and Google sit underneath; a quiet Sign in link catches returning people.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Place / address <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> Create account <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#111827' }}></span> Apple auth <b>Ink #111827</b></div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The sheet</h2>
+        </div>
+        <p className="zone-sub">A sheet over the preview, not a new screen — the place they were just looking at stays dimmed behind it, so the ask reads as "keep this", not "start over". <b>Save this place</b> + the address anchor it; a <b>From your one-time look</b> overline and three chips replay exactly what they saw — flood zone, who's verified nearby, area facts — turning the value into the reason to sign up.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <SoftWall block="warm" />
+            </IOSDevice>
+            <div className="phone-cap">Soft wall <span>warm block · resting form</span></div>
+          </div>
+
+          <div className="side-note">
+            <h4>A sheet, not a wall</h4>
+            <p>It slides over the preview rather than replacing it. The dimmed place behind keeps the context — the user is saving something specific they can still see, not signing up into the void.</p>
+
+            <h4>Recap before the ask</h4>
+            <p>The chips replay the free look — flood zone, a few verified nearby, area facts. Proof first, ask second. The value is concrete and already delivered, so the account feels like keeping it, not buying it.</p>
+
+            <h4>One honest sentence</h4>
+            <p>"Save this place, get daily updates, and see your home's exact details and value." Three real reasons, no hype — it names the recurring value and the exact data that an account unlocks.</p>
+
+            <h4>Email leads, social follows</h4>
+            <p>The email field and a sky <b>Create account</b> are the primary path; Apple and Google sit under an "or". Same input and button recipes as the launch and address screens — nothing new to learn.</p>
+
+            <h4>A door for returning people</h4>
+            <p>"Already have an account? Sign in" sits quietly at the bottom — present for anyone who's been here before, never competing with the create-account path.</p>
+
+            <h4>The clock stays bright</h4>
+            <p>The dim starts below the status bar, so the time and battery stay legible while everything beneath the sheet recedes — the standard iOS sheet behavior.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">Typing &amp; cold-block recap</h2>
+        </div>
+        <p className="zone-sub">Two more states of the same sheet. When the email field takes focus the keyboard rises and the sheet compresses — recap and copy step aside, Apple and Google collapse to a two-up row, and email plus <b>Create account</b> stay above the keys. The cold-block variant changes one chip — "Be the first nearby" — so the recap is always honest about what the block actually showed.</p>
+
+        <div className="phone-strip">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860} keyboard={true}>
+              <SoftWall block="warm" compact emailFocused emailValue="rachel.k" />
+            </IOSDevice>
+            <div className="phone-cap">Email focused <span>keyboard up · sheet compresses</span></div>
+          </div>
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <SoftWall block="cold" />
+            </IOSDevice>
+            <div className="phone-cap">Cold-block recap <span>"Be the first nearby"</span></div>
+          </div>
+        </div>
+
+        <div className="note-grid">
+          <div>
+            <h4>The sheet yields to the keyboard</h4>
+            <p>On focus the recap and copy collapse and the social buttons shrink to a two-up row, keeping the email field and <b>Create account</b> in reach above the keys — the form, not the pitch, owns the moment.</p>
+          </div>
+          <div>
+            <h4>The recap stays truthful</h4>
+            <p>On a cold block the middle chip becomes "Be the first nearby" instead of inventing neighbors. The recap only ever replays what the preview actually showed — never a number, never a claim it can't back.</p>
+          </div>
+          <div>
+            <h4>Other platforms</h4>
+            <p>iOS shown. Android keeps the same bottom-sheet with a Material filled <b>Create account</b> and the grabber as a drag affordance; on web it becomes a centered modal card over a dimmed preview, max-width inside the 1024 frame, with the same field-then-providers order.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

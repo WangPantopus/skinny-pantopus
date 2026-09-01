@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 6c — category dot. The provider tints it per row via
+     setColorFilter(GigsCategory.color); white base keeps the tint pure. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/pantopus_app_text_inverse" />
+    <size
+        android:width="8dp"
+        android:height="8dp" />
+</shape>

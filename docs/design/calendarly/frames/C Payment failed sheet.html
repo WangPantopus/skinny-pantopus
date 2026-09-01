@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Payment failed / retry sheet</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1560px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1000px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 1560px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes payPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Payment recovery</div>
+      <h1>Payment failed / retry state</h1>
+      <p>A payment-failure recovery sheet for paid bookings that holds the slot while the invitee retries — preventing the "paid but lost my slot" nightmare. It slides up over <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/book/[slug]/review</code> on a payment failure, leading with a clear, blame-free decline reason and a prominent slot-hold countdown so the reservation feels safe. The retry CTA re-opens the native Stripe PaymentSheet — never a hand-drawn card form — and the saved-card row reuses A14.6. Neutral error chrome; host pillar (Personal sky) only on the retry CTA. We never charge twice.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ErrorState + Stripe PaymentSheet · bottom sheet</div>
+        <div class="meta-item"><b>Mirrors</b>A18 halo + dock · A14.6 saved card · Slot Taken countdown</div>
+        <div class="meta-item"><b>Trigger</b><code>payment failure at confirm</code></div>
+        <div class="meta-item"><b>Pillar</b>Host's — Personal sky on retry CTA</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · DECLINED</div><div class="label-title">Retry</div>
+        <div class="label-sub">Red halo + clear decline reason, a live hold countdown, the declined saved card, and a Try another card CTA.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · HOLD EXPIRED</div><div class="label-title">Time released</div>
+        <div class="label-sub">The countdown flips red to "Hold released"; the CTA changes to Pick a time again. Still nothing charged.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · NETWORK TIMEOUT</div><div class="label-title">Idempotent retry</div>
+        <div class="label-sub">Info-toned "We're not sure that went through — we won't double-charge you", with a Check again CTA.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · SUCCEEDED</div><div class="label-title">Success morph</div>
+        <div class="label-sub">Green check halo, "Payment went through", paid confirmation, and an auto-advance to Booking Confirmed.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="payment-failed-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameDeclined />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameHoldExpired />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameTimeout />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameSucceeded />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

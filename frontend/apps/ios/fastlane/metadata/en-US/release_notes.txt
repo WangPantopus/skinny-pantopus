@@ -1,0 +1,8 @@
+First public release.
+
+What's in 1.0
+- Hub: today's pulse, your verified pillars, jump-back-in for unfinished work.
+- Mailbox: snap any letter or package, let Pantopus sort it.
+- My Homes: claim and verify the addresses you live at.
+- Edit Profile: control what your neighbors see, down to the field.
+- Add a home: a four-step wizard that confirms your address against real property data.

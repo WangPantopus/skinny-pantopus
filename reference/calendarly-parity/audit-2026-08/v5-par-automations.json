@@ -1,0 +1,114 @@
+[
+ {
+  "id": "AUT-001",
+  "severity": "blocker",
+  "platforms": [
+   "android"
+  ],
+  "title": "All Android automations screens hardcode SchedulingOwner.Personal \u2014 Business/Home context silently edits the personal owner's data",
+  "detail": "iOS threads the owner through every H1-H8 surface: SchedulingSettingsModel.openReminders/openWorkflows/openTemplates push .defaultReminders(owner:)/.workflowsList(owner:)/.messageTemplateLibrary(owner:) (SchedulingSettingsModel.swift:136-146), and the router forwards owner into DefaultRemindersView/WorkflowsListView/etc. On Android, the settings root IS owner-scoped (SchedulingSettingsRootViewModel reads ownerKind/ownerId from the route; the hub navigates with SchedulingRoutes.settings(owner.routeKind, owner.ownerRouteId), SchedulingHubViewModel.kt:437), but its automations rows return the arg-less routes remindersRoute()/workflowsRoute()/templatesRoute() (SchedulingSettingsRootViewModel.kt:191-195), and all six A16 ViewModels hardcode `private val owner: SchedulingOwner = SchedulingOwner.Personal` (RemindersQuickSetupViewModel.kt:43, WorkflowsListViewModel.kt:43, WorkflowEditorViewModel.kt:48, TemplateLibraryViewModel.kt:42, MessageTemplateEditorViewModel.kt:41, MessagePreviewViewModel.kt:37). Result: a user in Business (or Home) Booking Settings who taps Reminders saves reminder_minutes onto their PERSONAL BookingPage via PUT /booking-page, and Workflows/Templates list+mutate the personal owner's rows \u2014 cross-owner data corruption iOS does not have. This violates the Android route file's own contract comment (SchedulingRoutes.kt:35-40: \"Screens that read or MUTATE owner-scoped data must take the owner explicitly rather than defaulting to Personal\"). The repository layer already supports owners (SchedulingRepository.kt:257-304 takes SchedulingOwner); only the routes/VMs drop it.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/WorkflowsListViewModel.kt",
+  "line": 43,
+  "fix": "Mirror iOS: add ownerKind/ownerId query args to the A16 routes (REMINDERS_QUICK_SETUP, WORKFLOWS_LIST, WORKFLOW_EDITOR, TEMPLATE_LIBRARY, MESSAGE_TEMPLATE_EDITOR) exactly like SchedulingRoutes.SETTINGS does, register the navArguments in RootTabScreen, resolve `owner = SchedulingOwner.fromRoute(savedStateHandle[ARG_OWNER_KIND], savedStateHandle[ARG_OWNER_ID])` in all six automations ViewModels, and make SchedulingSettingsRootViewModel/EventTypeEditorViewModel route builders append ownerQuery(...)."
+ },
+ {
+  "id": "AUT-002",
+  "severity": "major",
+  "platforms": [
+   "android"
+  ],
+  "title": "Template editor missing the Active (is_active) toggle \u2014 templates cannot be paused on Android at all",
+  "detail": "iOS H5 has an 'Active' card wired to the backend `is_active` field: MessageTemplateEditorViewModel.swift declares `var isActive = true`, loads it from the DTO (line 150), and sends it on both POST and PUT (lines 193/204); MessageTemplateEditorView.swift renders activeSection with copy \"Workflows can use this template.\" / \"Template is paused \u2014 no sends.\" (lines 127-144, testTag templateEditor.activeToggle). Android's TemplateForm (MessageTemplateEditorViewModel.kt:169-189) has no isActive field, the screen renders no toggle, and Create/Update requests never set is_active (the DTO field exists in MessageTemplateDtos.kt:48/60 but is always null/omitted). The template library exposes no toggle either, so there is no way on Android to deactivate a template (backend templateSchema.is_active, backend/routes/scheduling.js:1127). Existing data is not corrupted (Moshi omits the null on PUT), but the feature is iOS-only.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/MessageTemplateEditorViewModel.kt",
+  "line": 169,
+  "fix": "Add `isActive: Boolean = true` to TemplateForm, hydrate it from template.isActive in start(), send it in CreateMessageTemplateRequest/UpdateMessageTemplateRequest in save(), and render the Active toggle card in MessageTemplateEditorScreen between the Name and Subject sections mirroring iOS activeSection (testTag templateEditor.activeToggle)."
+ },
+ {
+  "id": "AUT-003",
+  "severity": "major",
+  "platforms": [
+   "ios",
+   "android"
+  ],
+  "title": "H1 Default Reminders lets users build selections the backend rejects (max 5 items, 30-day cap) \u2014 the card itself offers 6 rows",
+  "detail": "Backend pageUpdateSchema caps reminder_minutes at max 5 items, each 0..43200 minutes (backend/routes/scheduling.js:139). Both clients render 6 selectable preset rows (1 week/1 day/1 hour/30 min/15 min/At start \u2014 ReminderPreset.all in AutomationsSupport.swift:210-217 and AutomationsSupport.kt:221-229) plus unlimited custom rows, with no count clamp: checking all 6 rows and saving yields a Joi 400 (\"must contain less than or equal to 5 items\") surfaced only as a save-error note. The custom stepper also allows up to 999 days = 1,438,560 minutes (stepCustom clamps 1..999, units include Days; DefaultRemindersViewModel.swift:133-135, RemindersQuickSetupViewModel.kt:99), far above the 43200 (30-day) per-item cap \u2014 'Add time' accepts it and the save then 400s. Identical on both platforms; the UI invites input the contract forbids.",
+  "file": "frontend/apps/ios/Pantopus/Features/Scheduling/Automations/Reminders/DefaultRemindersViewModel.swift",
+  "line": 124,
+  "fix": "Enforce the Joi caps client-side on both platforms: block toggling a 6th selection on (or auto-drop the oldest) with an inline note 'Up to 5 reminders', and clamp customResolvedMinutes to 43200 (cap the stepper at 30 when unit=days, 720 when unit=hours) so Add time can never produce a rejected value."
+ },
+ {
+  "id": "AUT-004",
+  "severity": "minor",
+  "platforms": [
+   "android"
+  ],
+  "title": "Template editor has no in-editor Delete (iOS shows a destructive 'Delete template' row with confirm)",
+  "detail": "iOS MessageTemplateEditorView renders deleteTemplateButton for existing templates (lines 147-162, testTag templateEditor.delete) with a confirmationDialog and MessageTemplateEditorViewModel.delete() calling DELETE /message-templates/:id (lines 222-240). Android's editor has neither the button nor a delete function; deletion is only reachable from the library row's overflow menu (TemplateLibraryScreen.kt:288). The capability exists on Android, but the editor-level affordance and testTag are iOS-only, so a user editing a template must back out to the library to delete it.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/MessageTemplateEditorScreen.kt",
+  "line": 214,
+  "fix": "Add a delete() to MessageTemplateEditorViewModel (repo.deleteMessageTemplate, navigate back on success) and render the destructive 'Delete template' row + AlertDialog confirm at the bottom of TemplateBody when !viewModel.isNew, with testTag templateEditor.delete."
+ },
+ {
+  "id": "AUT-005",
+  "severity": "minor",
+  "platforms": [
+   "ios",
+   "android"
+  ],
+  "title": "Trigger picker allows offsets up to 999 days, exceeding the backend offset_minutes max of 525600 (365 days)",
+  "detail": "workflowSchema caps offset_minutes at 525600 (backend/routes/scheduling.js:1081). Both trigger pickers clamp the stepper at 999 with a Days unit (999*1440 = 1,438,560 min): TriggerPickerSheet.swift:111 (`amount = min(999, amount + 1)`) and TriggerPickerSheet.kt:37/107 (MAX_OFFSET_VALUE=999). Choosing e.g. 400 days for a before_start/after_end trigger passes the picker's only validation (amount > 0), and the workflow save then 400s with a raw Joi message. Same gap on both platforms.",
+  "file": "frontend/apps/ios/Pantopus/Features/Scheduling/Automations/Workflows/TriggerPickerSheet.swift",
+  "line": 111,
+  "fix": "Clamp resolvedMinutes to 525600 in both pickers (cap the stepper per unit: 365 days / 8760 hours / 999 minutes) or mark the summary pill invalid with 'Keep it within a year' when resolvedMinutes > 525600 and disable Done."
+ },
+ {
+  "id": "AUT-006",
+  "severity": "minor",
+  "platforms": [
+   "android"
+  ],
+  "title": "Routed message-preview-by-template-id (H7) exists on iOS only; Android preview supports inline drafts only",
+  "detail": "iOS has SchedulingRoute.messagePreview(owner:, templateId:) (SchedulingRoute.swift:134) rendered by the router into MessagePreviewView's template-id init, whose ViewModel supports Source.template(id:) \u2014 it loads GET /message-templates, resolves the row, and has an error phase for a missing template (MessagePreviewViewModel.swift:83-94). Android has no preview route constant in SchedulingRoutes (A16 block lines 190-199), no RootTabScreen registration, and MessagePreviewViewModel.start() only accepts an inline subject/body/channel draft (no template source, no Error state). No iOS feature code currently pushes the route (it exists only in the frozen route table), so user impact today is nil, but any future deep-link/jump-back-in wiring to H7 will work on iOS and be impossible on Android.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/MessagePreviewViewModel.kt",
+  "line": 55,
+  "fix": "Either add the matching route (scheduling/templates/{templateId}/preview) + a template-id load path (getMessageTemplates, find row, Error state on missing) to Android's MessagePreviewViewModel, or delete the unused .messagePreview case from the iOS route enum/router so neither platform carries it."
+ },
+ {
+  "id": "AUT-007",
+  "severity": "minor",
+  "platforms": [
+   "android"
+  ],
+  "title": "No pull-to-refresh on Workflows list and Template library (iOS has .refreshable + onAppear re-fetch)",
+  "detail": "iOS WorkflowsListView (line 52-53) and MessageTemplateLibraryView (line 48-49) both attach .refreshable { await model.refresh() } and re-refresh on onAppear when already loaded. The Android counterparts use a plain verticalScroll Column with only LaunchedEffect(Unit) { viewModel.load() } (WorkflowsListScreen.kt:69, TemplateLibraryScreen.kt:69) \u2014 returning from a child editor re-triggers load (composable re-enters composition), but there is no swipe-down refresh gesture on either screen, and both ViewModels already expose refresh().",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/WorkflowsListScreen.kt",
+  "line": 175,
+  "fix": "Wrap the loaded content of WorkflowsListScreen and TemplateLibraryScreen in a Material3 PullToRefreshBox (or the project's established pull-refresh wrapper) wired to viewModel::refresh."
+ },
+ {
+  "id": "AUT-008",
+  "severity": "minor",
+  "platforms": [
+   "ios",
+   "android"
+  ],
+  "title": "Workflow delete is unexposed on both platforms despite backend route and dead client endpoints",
+  "detail": "Backend DELETE /workflows/:id exists (backend/routes/scheduling.js:1111-1115), and both clients define the call \u2014 SchedulingEndpoints.deleteWorkflow (SchedulingEndpoints.swift:376-378) and SchedulingRepository.deleteWorkflow (SchedulingRepository.kt:272-275) \u2014 but grep confirms no ViewModel or screen on either platform invokes it. The workflow editor's own copy promises it (\"Turn off to pause without deleting.\", WorkflowEditorView.swift:255 / WorkflowEditorScreen.kt:246), yet a workflow can only be paused, never removed, from either app. Parity between platforms is intact; the shared feature gap + dead code is the finding (contrast: templates DO expose delete).",
+  "file": "frontend/apps/ios/Pantopus/Features/Scheduling/Automations/Workflows/WorkflowEditorView.swift",
+  "line": 250,
+  "fix": "Add a 'Delete workflow' destructive row with confirm to both workflow editors (mirroring the iOS template editor's delete pattern) calling the existing deleteWorkflow endpoint, or remove the dead endpoint helpers if deletion is intentionally out of scope."
+ },
+ {
+  "id": "AUT-009",
+  "severity": "minor",
+  "platforms": [
+   "ios",
+   "android"
+  ],
+  "title": "Divergent presentation for the same states: mutation-error surface (alert vs toast) and preview loading (spinner vs text)",
+  "detail": "Two small state-presentation splits in shared surfaces: (1) action/mutation errors on the Workflows list and Template library are an alert dialog on iOS ('Heads up' .alert, WorkflowsListView.swift:59-63, MessageTemplateLibraryView.swift:56-60) but an auto-dismissing warning AutoToast on Android (WorkflowsListScreen.kt:144-151, TemplateLibraryScreen.kt:127-134); (2) the H7 preview loading state is a ProgressView spinner on iOS (MessagePreviewView.swift:63) vs a static 'Rendering\u2026' text on Android (MessagePreviewScreen.kt:72-75). Same data, same triggers, different chrome \u2014 neither matches a design frame (no frame covers these states), so pick one idiom per state and mirror it.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/automations/MessagePreviewScreen.kt",
+  "line": 72,
+  "fix": "Align both: use the dark AutoToast pattern for transient mutation errors on both platforms (drop the iOS alert), and give the preview loading state the same treatment on both (small centered spinner tinted with the pillar accent)."
+ }
+]

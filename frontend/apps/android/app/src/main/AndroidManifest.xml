@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Networking -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Location (feed + gigs) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Camera + media (profile + listings + mail capture) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <!-- Voice notes (A12.8 Magic Task describe transcription) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Push notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Biometric (sensitive action guard) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <application
+        android:name=".PantopusApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Pantopus"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="31">
+
+        <!-- singleTask: the browser OAuth redirect (pantopus://auth/callback)
+             must return to the RUNNING instance via onNewIntent instead of
+             stacking a second MainActivity and rebuilding the Compose tree.
+             It also re-fronts the app over Custom Tabs once the redirect
+             lands, which is what dismisses the browser after sign-in. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Pantopus">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Deep links: https://pantopus.com/... — the product domain. It is
+                 what the backend and both clients build share and invite links
+                 on, and the only host that serves .well-known/assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="pantopus.com" />
+                <data android:scheme="https" android:host="www.pantopus.com" />
+            </intent-filter>
+
+            <!-- pantopus.app links already in circulation still open the app,
+                 but deliberately WITHOUT autoVerify: minSdk is 26, and below
+                 API 31 verification is all-or-nothing across every autoVerify'd
+                 host, so an unserved assetlinks.json on .app would silently
+                 break verification for .com too. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="pantopus.app" />
+                <data android:scheme="https" android:host="www.pantopus.app" />
+            </intent-filter>
+
+            <!-- Custom scheme: pantopus://... — including the browser OAuth
+                 callback pantopus://auth/callback, which MainActivity hands
+                 to OAuthSessionStore before the deep-link router sees it
+                 (mirrors iOS PantopusApp's isOAuthCallback guard). A second
+                 activity with a scheme+host+path filter would collide with
+                 this one and pop a disambiguation chooser. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pantopus" />
+            </intent-filter>
+        </activity>
+
+        <!-- Google Maps API key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
+        <!-- Sentry's auto-init ContentProvider crashes the app when no
+             DSN is set (e.g. CI emulators, dev builds without a .env).
+             Observability.start() does the init manually and gracefully
+             skips when BuildConfig.SENTRY_DSN is empty. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
+
+        <!-- P6.6 — FileProvider for sharing the generated emergency-card PDF. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- P6c — "Tasks near me" home-screen widget. Reads the snapshot
+             WidgetSnapshotStore persists after each successful feed
+             fetch; row taps deep-link pantopus://gigs/<id> (the Phase 6b
+             ongoing-notification scheme). -->
+        <receiver
+            android:name=".widget.TasksNearMeWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_tasks_near_me_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_tasks_near_me_info" />
+        </receiver>
+
+        <!-- FCM bridge — mirrors the iOS AppDelegate push-notification
+             half. Handles token rotation (onNewToken) and incoming
+             payloads (onMessageReceived), delegating to
+             NotificationDispatcher for routing. -->
+        <service
+            android:name=".push.PantopusMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>

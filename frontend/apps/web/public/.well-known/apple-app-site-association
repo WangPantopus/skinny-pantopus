@@ -1,0 +1,48 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6UYZBA546R.com.pantopus.app",
+        "paths": [
+          "/post/*",
+          "/posts/*",
+          "/gig/*",
+          "/gigs/*",
+          "/listing/*",
+          "/listings/*",
+          "/marketplace/*",
+          "/home",
+          "/homes/*",
+          "/user/*",
+          "/users/*",
+          "/business/*",
+          "/businesses/*",
+          "/b/*",
+          "/u/*",
+          "/mailbox/*",
+          "/chat/*",
+          "/messages/*",
+          "/conversation/*",
+          "/support-trains/*",
+          "/connections",
+          "/notifications",
+          "/wallet",
+          "/invite/*",
+          "/join/*",
+          "/auth/*",
+          "/verify-email",
+          "/verify-email/*",
+          "/reset-password",
+          "/reset-password/*",
+          "/settings/payments"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "6UYZBA546R.com.pantopus.app"
+    ]
+  }
+}

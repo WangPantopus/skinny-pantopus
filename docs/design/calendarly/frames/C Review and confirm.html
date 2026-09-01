@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Review & Confirm / Checkout</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 3050px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1000px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 3050px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Public booking checkout</div>
+      <h1>Review &amp; Confirm / Checkout</h1>
+      <p>The single final summary before an invitee's booking is confirmed — at <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/book/[slug]/review</code> — that conditionally absorbs payment and package-credit redemption. The who/what/when/where summary card mirrors Form.html's rhythm; the price block reuses A09.4 Invoice's fees table, hero total in primary-600, and identity-tinted dots; the saved-card row matches A14.6 Payments. Card entry is the native Stripe PaymentSheet behind a "Payment method" button — never a hand-drawn card form. We never mark paid client-side: the copy says we confirm once payment clears. The host's Personal-sky pillar accents the active CTA and the price hero.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ContentDetail + CTA · Wizard final / CheckoutCoordinator</div>
+        <div class="meta-item"><b>Mirrors</b>A09.4 Invoice · Form.html · A14.6 Payments</div>
+        <div class="meta-item"><b>Path</b><code>/book/[slug]/review</code></div>
+        <div class="meta-item"><b>Pillar</b>Host's — Personal sky</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · FREE</div><div class="label-title">Ready to confirm</div>
+        <div class="label-sub">No money block. Summary card with answers expanded, refund line, and a Confirm booking CTA.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · PAID</div><div class="label-title">Full payment</div>
+        <div class="label-sub">Invoice-style price block — fees and a hero total — plus the PaymentSheet button. CTA: Pay $48 &amp; book.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · DEPOSIT</div><div class="label-title">Deposit only</div>
+        <div class="label-sub">Total splits to "Due now $20" with "Balance $40 at your visit". CTA: Pay $20 &amp; book.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · CREDIT</div><div class="label-title">Package credit applied</div>
+        <div class="label-sub">A session credit strikes the total to $0 with a green chip. No payment region. CTA reverts to Confirm booking.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · SAVED CARDS</div><div class="label-title">Logged in</div>
+        <div class="label-sub">Saved Visa (Default) and Mastercard rows with brand badges, plus a Use another method link.</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap">
+        <div class="label-num">6 · CONFIRMING</div><div class="label-title">In flight</div>
+        <div class="label-sub">CTA becomes a shimmer skeleton and the whole form locks while the PaymentIntent resolves.</div></div></div>
+      <div class="frame"><div id="f7"></div><div class="label-wrap">
+        <div class="label-num">7 · SLOT TAKEN</div><div class="label-title">No longer available</div>
+        <div class="label-sub">An error banner — "This time was just taken" — with See other times linking to the Slot Taken sheet. Nothing charged.</div></div></div>
+      <div class="frame"><div id="f8"></div><div class="label-wrap">
+        <div class="label-num">8 · CARD ERROR</div><div class="label-title">Declined / 3DS</div>
+        <div class="label-sub">An amber retry banner; the card shows "Declined". Time stays held. CTA: Try again.</div></div></div>
+      <div class="frame"><div id="f9"></div><div class="label-wrap">
+        <div class="label-num">9 · STRIPE DOWN</div><div class="label-title">Payments unavailable</div>
+        <div class="label-sub">An info banner — "Card payments are briefly unavailable, your time is held" — and the PaymentSheet button greys out.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="review-confirm-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameFree />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameFullPayment />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameDeposit />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameCredit />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameSavedCards />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameConfirming />);
+    ReactDOM.createRoot(document.getElementById('f7')).render(<FrameSlotTaken />);
+    ReactDOM.createRoot(document.getElementById('f8')).render(<FrameCardError />);
+    ReactDOM.createRoot(document.getElementById('f9')).render(<FrameStripeUnavailable />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

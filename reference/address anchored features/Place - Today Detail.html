@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Today / Environment detail (C3)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 820px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 820px; line-height: 21px; }
+
+  /* product cards */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .td-back:hover { background: #f6f7f9 !important; }
+  .td-hscroll { scrollbar-width: none; }
+  .td-hscroll::-webkit-scrollbar { display: none; }
+
+  /* shimmer (unused here but kept for parity) */
+  .pl-skel { position: relative; overflow: hidden; background: #eef1f4; }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .hero-toggle { display: inline-flex; background: #fff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 4px; gap: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .hero-toggle button { border: none; background: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: #6b7280; padding: 7px 16px; border-radius: 9999px; white-space: nowrap; }
+  .hero-toggle button.on { background: #16A34A; color: #fff; }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  .spec-row { display: flex; flex-wrap: wrap; gap: 30px 40px; align-items: flex-start; }
+  .specimen { width: 360px; }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-today-detail.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [alerts, setAlerts] = useState('none');
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · C3 — Today / Environment detail</div>
+        <h1 className="doc-title">Today, in full</h1>
+        <p className="doc-sub">The tap-through from the Today group opens the whole environment for this address. Current weather with an hourly and five-day strip, the air-quality index on its scale with a plain "what it means," any active NWS alerts as a list — or a calm "No active alerts" — and the day's sun. Three post-V1 readings sit honestly as "Coming soon." Every block names its source and how fresh it is.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Place accent <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#fbbf24' }}></span> Weather / sun <b>Amber</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Shell <b>#f6f7f9</b>, white bordered cards</div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The screen</h2>
+        </div>
+        <p className="zone-sub">A standard ContentDetail: a sticky header that names the place, then one labelled section per reading. It scrolls. The alerts block carries both states — flip it below to see the calm "No active alerts" become a real NWS list without changing anything else on the page.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <TodayDetail alertsActive={alerts === 'active'} />
+            </IOSDevice>
+            <div className="hero-toggle" role="group" aria-label="Alerts state">
+              <button className={alerts === 'none' ? 'on' : ''} onClick={() => setAlerts('none')}>No alerts</button>
+              <button className={alerts === 'active' ? 'on' : ''} onClick={() => setAlerts('active')}>Active alerts</button>
+            </div>
+          </div>
+
+          <div className="side-note">
+            <h4>One reading per section</h4>
+            <p>Weather, air quality, alerts, sun — each gets its own labelled block, in the same order they sit in the Today group. The detail expands the row you tapped without inventing a new mental model.</p>
+
+            <h4>The AQI scale does the explaining</h4>
+            <p>A number alone means little, so the index sits on its full Good→Hazardous scale with a marker, and a plain-language "what it means" line translates 38 into a decision: fine to be outside.</p>
+
+            <h4>Alerts, both ways</h4>
+            <p>Most days it's a calm "No active alerts." When the NWS issues something, the same block becomes a list of advisories — each with what it is, how long it lasts, and what to do. Color carries the severity; no red floods.</p>
+
+            <h4>Coming soon is honest</h4>
+            <p>Allergen, trash &amp; recycling, and power outages aren't live yet. Rather than hide them, they sit muted with a "Coming soon" pill — a roadmap you can see, not a gap you wonder about.</p>
+
+            <h4>Always sourced and dated</h4>
+            <p>Every section ends with where it came from and how fresh it is. In a trust product, a reading without a source is just a rumor.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">The blocks</h2>
+        </div>
+        <p className="zone-sub">The pieces on the stage. The AQI scale and its meaning line, the active-alert list it shows on warning days, and the post-V1 rows — each a self-contained card that degrades or defers on its own.</p>
+
+        <div className="spec-row">
+          <Specimen tag="AQI scale" note="number → scale → meaning">
+            <AqiCard />
+          </Specimen>
+
+          <Specimen tag="Active NWS alerts" note="the list, on warning days">
+            <AlertsCard active={true} />
+          </Specimen>
+
+          <Specimen tag="Coming soon" note="post-V1, shown honestly">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <ComingSoonRow icon="flower-2" title="Allergen & pollen" sub="Tree, grass, and weed pollen counts" />
+              <ComingSoonRow icon="trash-2" title="Trash & recycling" sub="Your pickup day and what goes out" />
+              <ComingSoonRow icon="zap-off" title="Power outages" sub="Live outage map for your block" />
+            </div>
+          </Specimen>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

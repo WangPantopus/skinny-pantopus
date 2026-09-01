@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A13.10 · Edit business page</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1180px; margin: 0 auto 16px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7C3AED; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .path { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
+            padding: 4px 10px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #374151; }
+    .path .dim { color: #9ca3af; }
+
+    .meta { max-width: 1180px; margin: 24px auto 40px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+    .meta dl { margin: 0; }
+    .meta dt { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+               color: #6b7280; margin-bottom: 4px; }
+    .meta dd { margin: 0; font-size: 13px; color: #111827; font-weight: 500; line-height: 17px; letter-spacing: -0.1px; }
+    .meta dd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                    background: #f3f4f6; padding: 1px 6px; border-radius: 4px; color: #7C3AED; font-weight: 600; }
+
+    .section-title { max-width: 1180px; margin: 0 auto 24px; font-size: 13px; font-weight: 600;
+                     letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1040px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A13.10 Edit business page">
+    <div class="header">
+      <div class="kicker">Pantopus · A13.10 · Form (single screen)</div>
+      <h1>Edit business page</h1>
+      <p>Multi-section variant of the Form archetype, applied to the public-facing business profile. Owners scroll a long stack — banner &amp; logo, name, description, hours, services, gallery, contact, location — each editable in-place. Save is sticky-bottom because edits are usually partial; the bar swaps between a "3 unsaved · Discard + Save" dirty state and a setup-mode "Save draft / Publish · 4 to go" pair.</p>
+      <div class="path"><span class="dim">src/app/businesses/[id]/</span>page-editor.tsx</div>
+    </div>
+
+    <div class="meta">
+      <dl><dt>Archetype</dt><dd>A13 · Form (single screen)</dd></dl>
+      <dl><dt>Variant</dt><dd>Multi-section · 7 sections</dd></dl>
+      <dl><dt>Identity pillar</dt><dd>Business · <code>#7C3AED</code></dd></dl>
+      <dl><dt>Top-bar right action</dt><dd>Preview (opens public page)</dd></dl>
+      <dl><dt>Sticky CTA</dt><dd>Save · dirty-aware · split for drafts</dd></dl>
+      <dl><dt>Sections</dt><dd>Banner+Logo+Name · Description · Hours · Services · Gallery · Contact · Location</dd></dl>
+      <dl><dt>Required fields</dt><dd>Name · Category · Address</dd></dl>
+      <dl><dt>Secondary state</dt><dd>Setup mode · completion meter · publish blocked until 4 sections done</dd></dl>
+    </div>
+
+    <div class="section-title">Two frames · populated &amp; setup</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A13.10 Edit business page · Populated">
+        <div id="f-populated"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED (PUBLISHED · LIGHT EDITS)</div>
+          <div class="label-title">Roost Café · 3 unsaved tweaks</div>
+          <div class="label-sub">Established business page mid-edit. Mon hours trimmed (amber row + dot), a new gallery shot uploaded (amber tile), banner swapped (amber rim + "New" chip). Sticky bar swaps to the dirty Discard + Save pair.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A13.10 Edit business page · Setup">
+        <div id="f-setup"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SETUP (NEWLY CLAIMED · DRAFT)</div>
+          <div class="label-title">Patch &amp; Paw · 3 of 7 sections</div>
+          <div class="label-sub">Newly claimed business. Completion strip replaces the identity band; banner/logo are empty drop targets, description &amp; services use prompt blocks, hours show "Not set" rows with quick-apply chips, address fails ZIP validation. Sticky bar offers Save draft; Publish is locked.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel" src="edit-business-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f-populated')).render(<FrameEditBusinessPopulated />);
+    ReactDOM.createRoot(document.getElementById('f-setup')).render(<FrameEditBusinessSetup />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

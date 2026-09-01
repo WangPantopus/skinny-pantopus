@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A10.10 Wallet</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1100px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 760px; line-height: 21px; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 12px; }
+
+    .meta { max-width: 1100px; margin: 0 auto 40px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 26px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 28px; }
+    .meta .col h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0284c7; }
+    .meta .col p { margin: 0; font-size: 12.5px; color: #374151; line-height: 17px; }
+    .meta .col code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f0f9ff; color: #0369a1; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+    .frames { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A10.10 Wallet">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile · A10.10</div>
+      <h1>Wallet</h1>
+      <p>Earnings wallet for neighbors getting paid through Pantopus gigs. The screen has one job above the fold: tell you, fast, how much you can move to your bank right now — and whether anything is in the way. Below the fold is the audit trail: recent activity, payout method, and a tax-docs entry that lights up around 1099 season. The financial-services adjacent vibe shows up in the dark-sky balance hero; everything else stays in the Pantopus calm-card vocabulary.</p>
+      <div class="path">src/app/wallet.tsx</div>
+    </div>
+
+    <div class="meta">
+      <div class="col">
+        <h3>slot.header_pattern</h3>
+        <p><code>balance_hero</code> — the only dark surface in the app. Big USD amount, decorative concentric arcs (no marketing gradients elsewhere — this earns its weight), and a glass-strip splitting <em>Pending</em> from <em>This month</em> so the user always knows what’s actually withdrawable vs still in escrow.</p>
+      </div>
+      <div class="col">
+        <h3>slot.body_pattern</h3>
+        <p><code>tx_list · payout_method · tax_docs</code> — grouped-by-day transactions with category-tinted icons (cleaning green, child-care amber, handyman orange, pet-care red), each row showing the cleared / pending / fee status as a tiny chip on the right. Payout method is a debit-card-shaped tile; tax-docs row hides until there’s actual filing-worthy activity.</p>
+      </div>
+      <div class="col">
+        <h3>slot.primary_cta</h3>
+        <p><code>withdraw</code> — sticky bottom bar, full amount on the right of the button so the user confirms the number before tapping. In the hold state the same control swaps to a locked variant with a one-line policy footnote pointing at the re-verify card above; never an alert dialog.</p>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">$847.50 available · $186 pending</div>
+          <div class="label-sub">Happy path. Dark hero with available big, pending + monthly trailing 22% above October. Five recent transactions (two of today’s still on hold, an Nov 28 withdrawal, a service fee). Instant payout to Chase. Tax docs YTD.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · PAYOUT ON HOLD</div>
+          <div class="label-title">Bank verification expired — funds safe</div>
+          <div class="label-sub">Amber banner explains the situation without scolding (“earnings keep landing — they’re safe”). Withdraw is locked but the balance still reads honestly. Payout-method card flips to a warm warning state with a primary <em>Re-verify</em> action. Tax-docs row picks up a “New” chip — January context.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="wallet-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameWalletPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameWalletOnHold />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

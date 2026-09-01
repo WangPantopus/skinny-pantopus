@@ -1,0 +1,203 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:NotificationDispatcher.kt$NotificationDispatcher$channel == Channel.CHAT &amp;&amp; deepLink != null &amp;&amp; !title.isNullOrBlank() &amp;&amp; !deepLink.contains('?')</ID>
+    <ID>ComplexCondition:UploadRepository.kt$bytes.size &gt;= 12 &amp;&amp; bytes[4] == 0x66.toByte() &amp;&amp; bytes[5] == 0x74.toByte() &amp;&amp; bytes[6] == 0x79.toByte() &amp;&amp; bytes[7] == 0x70.toByte()</ID>
+    <ID>ComplexCondition:UploadRepository.kt$bytes.size &gt;= 3 &amp;&amp; bytes[0] == 0xFF.toByte() &amp;&amp; bytes[1] == 0xD8.toByte() &amp;&amp; bytes[2] == 0xFF.toByte()</ID>
+    <ID>ComplexCondition:UploadRepository.kt$bytes.size &gt;= 8 &amp;&amp; bytes[0] == 0x89.toByte() &amp;&amp; bytes[1] == 0x50.toByte() &amp;&amp; bytes[2] == 0x4E.toByte() &amp;&amp; bytes[3] == 0x47.toByte()</ID>
+    <ID>CyclomaticComplexMethod:AIChatRepository.kt$AIChatRepository$fun streamChat( message: String, conversationId: String?, images: List&lt;String&gt; = emptyList(), ): Flow&lt;AIChatStreamEvent&gt;</ID>
+    <ID>CyclomaticComplexMethod:ChatConversationViewModel.kt$ChatConversationViewModel$private fun bodyOf(message: ChatMessageDto): ChatBubbleBody</ID>
+    <ID>CyclomaticComplexMethod:ChatConversationViewModel.kt$ChatConversationViewModel$private fun parseMessages(array: JSONArray?): List&lt;ChatMessageDto&gt;</ID>
+    <ID>CyclomaticComplexMethod:ChatConversationViewModel.kt$ChatConversationViewModel$private fun rebuild()</ID>
+    <ID>CyclomaticComplexMethod:ChatListViewModel.kt$ChatListViewModel$private fun project( dto: UnifiedConversationDto, mutedKeys: Set&lt;String&gt;, ): ConversationRowContent</ID>
+    <ID>CyclomaticComplexMethod:GigComposeWizardScreen.kt$@Composable fun GigComposeWizardScreen( onDismiss: () -&gt; Unit, onOpenGigDetail: (String) -&gt; Unit, preselectedCategoryKey: String? = null, viewModel: GigComposeViewModel = hiltViewModel(), )</ID>
+    <ID>CyclomaticComplexMethod:MarketplaceViewModel.kt$MarketplaceViewModel$private fun placeholderIcon( category: String?, layer: String?, ): PantopusIcon</ID>
+    <ID>CyclomaticComplexMethod:PlaceComponents.kt$@Composable fun PlaceChip(model: PlaceChipModel)</ID>
+    <ID>CyclomaticComplexMethod:PlaceJsonAdapters.kt$PlaceSectionEnvelopeAdapterFactory.EnvelopeAdapter$override fun toJson( writer: JsonWriter, value: PlaceSectionEnvelope?, )</ID>
+    <ID>CyclomaticComplexMethod:PlaceJsonAdapters.kt$PlaceSectionEnvelopeAdapterFactory.EnvelopeAdapter$private fun decodePayload( id: String, data: Any?, ): PlaceSectionData?</ID>
+    <ID>CyclomaticComplexMethod:PlacePresentation.kt$PlacePresentation$fun config(id: PlaceSectionId): PlaceSectionDisplayConfig</ID>
+    <ID>CyclomaticComplexMethod:RecurringSetupScreen.kt$@Composable private fun OccurrenceRow(occ: RecurrenceOccurrence)</ID>
+    <ID>CyclomaticComplexMethod:RescheduleCancelPolicyViewModel.kt$RescheduleCancelPolicyViewModel$private fun computeMode( actions: ManageActions?, status: String?, view: ManageView, ): ManagePolicyMode</ID>
+    <ID>CyclomaticComplexMethod:RootTabScreen.kt$@Composable fun RootTabScreen(inboxBadgeCount: Int = 0)</ID>
+    <ID>CyclomaticComplexMethod:SchedulingSettingsRootScreen.kt$@Composable private fun SettingsBody( data: SettingsData, onNavigate: (String) -&gt; Unit, onReset: () -&gt; Unit, onDisable: () -&gt; Unit, vm: SchedulingSettingsRootViewModel, )</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ConfirmedScreen.kt$val (bg, border, icon, tint) = when (state) { TimelineState.Done -&gt; TimelineDot( PantopusColors.success, PantopusColors.success, PantopusIcon.Check, PantopusColors.appTextInverse, ) TimelineState.Current -&gt; TimelineDot( PantopusColors.info, PantopusColors.info, null, PantopusColors.appTextInverse, ) TimelineState.Pending -&gt; TimelineDot( PantopusColors.appSurface, PantopusColors.appBorderStrong, null, PantopusColors.appTextMuted, ) }</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:PaymentsSetupScreen.kt$val (text, bg, fg, icon) = when (setup) { PaymentsSetupViewModel.Setup.NotConnected -&gt; ChipSpec("Off", PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong, null) PaymentsSetupViewModel.Setup.Incomplete -&gt; ChipSpec("In review", PantopusColors.warningBg, PantopusColors.warning, null) PaymentsSetupViewModel.Setup.Restricted -&gt; ChipSpec("Restricted", PantopusColors.errorBg, PantopusColors.error, null) PaymentsSetupViewModel.Setup.Ready -&gt; ChipSpec("Connected", PantopusColors.successBg, PantopusColors.success, PantopusIcon.Check) }</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:VisitDetailScreen.kt$val (icon, title, body, bg, fg) = when (lifecycle) { VisitLifecycle.Confirmed -&gt; BannerSpec( PantopusIcon.CalendarCheck, "On the home calendar", "This visit shows on the family schedule.", PantopusColors.homeBg, PantopusColors.home, ) VisitLifecycle.Done -&gt; BannerSpec( PantopusIcon.Check, "Visit complete", "This visit has passed.", PantopusColors.appSurfaceSunken, PantopusColors.appTextSecondary, ) }</ID>
+    <ID>ForbiddenComment:ResourceDetailViewModel.kt$ResourceDetailViewModel$// TODO: coordinate scroll to ApprovalQueueCard</ID>
+    <ID>FunctionOnlyReturningConstant:ConnectedCalendarsScreen.kt$private fun syncedAgo( @Suppress("UNUSED_PARAMETER") iso: String?, ): String</ID>
+    <ID>ImplicitDefaultLocale:ChatConversationViewModel.kt$ChatConversationViewModel$String.format("%.1f MB", bytes.toDouble() / 1_000_000)</ID>
+    <ID>ImplicitDefaultLocale:ContentDetailShell.kt$String.format("%.1f", it)</ID>
+    <ID>ImplicitDefaultLocale:GigComposeViewModel.kt$GigComposeViewModel.Companion$String.format("$%.2f", value)</ID>
+    <ID>ImplicitDefaultLocale:GigDetailViewModel.kt$GigDetailViewModel.Projection$String.format("$%.2f", amount)</ID>
+    <ID>ImplicitDefaultLocale:GigDetailViewModel.kt$GigDetailViewModel.Projection$String.format("$%.2f", price)</ID>
+    <ID>ImplicitDefaultLocale:GigDetailViewModel.kt$GigDetailViewModel.Projection$String.format("%.1f mi", miles)</ID>
+    <ID>ImplicitDefaultLocale:GigsFeedScreen.kt$String.format("%.1f mi", radiusMiles)</ID>
+    <ID>ImplicitDefaultLocale:GigsFeedScreen.kt$String.format("%.1f", miles)</ID>
+    <ID>ImplicitDefaultLocale:ListingDetailViewModel.kt$ListingDetailViewModel.Projection$String.format("$%.2f", listing.price)</ID>
+    <ID>ImplicitDefaultLocale:ListingDetailViewModel.kt$ListingDetailViewModel.Projection$String.format("%.1f mi", miles)</ID>
+    <ID>ImplicitDefaultLocale:MarketplaceScreen.kt$String.format("%.1f mi", radiusMiles)</ID>
+    <ID>ImplicitDefaultLocale:MarketplaceViewModel.kt$MarketplaceViewModel$String.format("$%.2f", price)</ID>
+    <ID>ImplicitDefaultLocale:MarketplaceViewModel.kt$MarketplaceViewModel$String.format("%.1fmi", miles)</ID>
+    <ID>ImplicitDefaultLocale:NearbyMapViewModel.kt$NearbyMapViewModel$String.format("$%.2f", price)</ID>
+    <ID>ImplicitDefaultLocale:NearbyMapViewModel.kt$NearbyMapViewModel$String.format("%.1f mi", miles)</ID>
+    <ID>LargeClass:ChatConversationViewModel.kt$ChatConversationViewModel : ViewModel</ID>
+    <ID>LongMethod:ChatListSnapshotTest.kt$ChatListSnapshotTest$private fun sampleRows(): List&lt;ConversationRowContent&gt;</ID>
+    <ID>LongMethod:ChatRichCard.kt$@Composable internal fun ChatListingOfferCardView( card: ChatListingOfferCard, isOutgoing: Boolean, onOpen: () -&gt; Unit, )</ID>
+    <ID>LongMethod:ChatSharePickers.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun ChatShareListingPickerSheet( listings: List&lt;ChatShareListingOption&gt;, isLoading: Boolean, error: String?, onDismiss: () -&gt; Unit, onSelect: (ChatShareListingOption) -&gt; Unit, onLoad: () -&gt; Unit, )</ID>
+    <ID>LongMethod:PlaceCards.kt$@Composable fun PlaceHeroCard( chip: PlaceChipModel, heroIcon: PantopusIcon, headline: String, nudgeIcon: PantopusIcon, nudgeText: String, modifier: Modifier = Modifier, variant: PlaceHeroVariant = PlaceHeroVariant.ALL_CLEAR, onNudgeTap: (() -&gt; Unit)? = null, onTap: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongMethod:PlaceHomeDetailContent.kt$@Composable private fun EquityCalculator(estimatedValue: Double?)</ID>
+    <ID>LongMethod:PlaceMoneyCivicDetailContent.kt$@Composable private fun BillBenchmarkCard(data: PlaceBillBenchmarkData)</ID>
+    <ID>LongMethod:PlaceVerifyFlow.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PlaceVerifySheet( address: String, onStart: (PlaceVerifyMethod) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongMethod:SchedulingChrome.kt$@Composable fun SchedulingTopBar( title: String, modifier: Modifier = Modifier, leading: SchedulingTopBarLeading = SchedulingTopBarLeading.Back, onLeading: (() -&gt; Unit)? = null, trailingIcon: PantopusIcon? = null, onTrailing: (() -&gt; Unit)? = null, applyStatusBarInset: Boolean = false, size: SchedulingTopBarSize = SchedulingTopBarSize.Standard, trailing: (@Composable () -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:CeremonialMailWizardScreen.kt$( form: CeremonialMailFormState, voiceStatus: VoicePostscriptStatus, onSelectStationery: (CeremonialMailStationery) -&gt; Unit, onSelectInk: (CeremonialMailInk) -&gt; Unit, onSelectSeal: (CeremonialMailSeal) -&gt; Unit, onUpdateBody: (String) -&gt; Unit, onRecordVoice: () -&gt; Unit, onClearVoice: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:ChatConversationHost.kt$( mode: ChatThreadMode, counterparty: ChatCounterparty, onBack: () -&gt; Unit, chrome: ChatConversationChrome = ChatConversationChrome(), scrollToMessageId: String? = null, initialTopic: ChatInitialTopic? = null, gigId: String? = null, onUseAIDraft: (ChatAIDraftCard) -&gt; Unit = {}, onOpenGig: (String) -&gt; Unit = {}, onOpenListing: (String) -&gt; Unit = {}, authViewModel: ChatConversationHostViewModel = hiltViewModel(), )</ID>
+    <ID>LongParameterList:ListingsRepository.kt$ListingsRepository$( latitude: Double, longitude: Double, radiusMiles: Double? = null, layer: String? = null, isFree: Boolean? = null, search: String? = null, sort: String = "newest", limit: Int = 30, offset: Int = 0, )</ID>
+    <ID>LongParameterList:ListingsRepository.kt$ListingsRepository$( south: Double, west: Double, north: Double, east: Double, layer: String? = null, isFree: Boolean? = null, search: String? = null, sort: String = "newest", cursor: String? = null, limit: Int = 30, )</ID>
+    <ID>LongParameterList:NearbyMapScreen.kt$( state: NearbyMapUiState, activeSort: NearbySort, sheetStop: SheetStop, screenHeightPx: Float, onSelectSort: (NearbySort) -&gt; Unit, onSelectStop: (SheetStop) -&gt; Unit, onTapEntity: (MapEntity) -&gt; Unit, onRefresh: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:PlaceCards.kt$( chip: PlaceChipModel, heroIcon: PantopusIcon, headline: String, nudgeIcon: PantopusIcon, nudgeText: String, modifier: Modifier = Modifier, variant: PlaceHeroVariant = PlaceHeroVariant.ALL_CLEAR, onNudgeTap: (() -&gt; Unit)? = null, onTap: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:PlaceSectionCard.kt$( title: String, icon: PantopusIcon = PantopusIcon.Wind, asOf: String? = null, state: PlaceSectionCardState = PlaceSectionCardState.LOADED, value: String? = null, caption: String? = null, chip: PlaceChipModel? = null, statusDot: Color? = null, sparkline: Boolean = false, actionLabel: String? = null, inline: Boolean = false, compact: Boolean = false, onTap: (() -&gt; Unit)? = null, onAction: (() -&gt; Unit)? = null, onRetry: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:PostsApi.kt$PostsApi$( @Query("surface") surface: String = "place", @Query("latitude") latitude: Double? = null, @Query("longitude") longitude: Double? = null, @Query("radiusMiles") radiusMiles: Double? = null, @Query("postType") postType: String? = null, @Query("limit") limit: Int = 20, @Query("cursorCreatedAt") cursorCreatedAt: String? = null, @Query("cursorId") cursorId: String? = null, )</ID>
+    <ID>LongParameterList:RootTabScreen.kt$ChildRoutes$( userId: String, displayName: String, initials: String, verified: Boolean, locality: String?, topicType: String? = null, topicRefId: String? = null, topicTitle: String? = null, )</ID>
+    <ID>LongParameterList:SchedulingChrome.kt$( title: String, modifier: Modifier = Modifier, leading: SchedulingTopBarLeading = SchedulingTopBarLeading.Back, onLeading: (() -&gt; Unit)? = null, trailingIcon: PantopusIcon? = null, onTrailing: (() -&gt; Unit)? = null, applyStatusBarInset: Boolean = false, size: SchedulingTopBarSize = SchedulingTopBarSize.Standard, trailing: (@Composable () -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:TimezoneSelectorSheet.kt$( options: List&lt;TimezoneOption&gt;, selectedId: String?, query: String, onQueryChange: (String) -&gt; Unit, onSelect: (TimezoneOption) -&gt; Unit, onDismiss: () -&gt; Unit, detectedId: String?, accent: Color, isOverridden: Boolean, onResetToDetected: () -&gt; Unit, )</ID>
+    <ID>LoopWithTooManyJumpStatements:BookResourceViewModel.kt$BookResourceViewModel$for</ID>
+    <ID>LoopWithTooManyJumpStatements:ChatConversationViewModel.kt$ChatConversationViewModel$for</ID>
+    <ID>LoopWithTooManyJumpStatements:InviteeConfirmViewModel.kt$InviteeConfirmViewModel$while</ID>
+    <ID>MagicNumber:AuthInterceptor.kt$AuthInterceptor$401</ID>
+    <ID>MagicNumber:BookingsInboxViewModel.kt$BookingsInboxViewModel$8</ID>
+    <ID>MagicNumber:DeepLinkRouter.kt$DeepLinkRouter$3</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFF0284C7</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFF059669</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFF0EA5E9</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFF7C3AED</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFBAE6FD</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFD1FAE5</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFDC2626</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFDDD6FE</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFE0F2FE</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFF59E0B</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFFECACA</ID>
+    <ID>MagicNumber:MarketplaceContent.kt$ListingGradient.Companion$0xFFFEF3C7</ID>
+    <ID>MagicNumber:Observability.kt$Observability$0.1</ID>
+    <ID>MagicNumber:OneOffLinkGeneratorViewModel.kt$OneOffLinkGeneratorViewModel$9</ID>
+    <ID>MagicNumber:PaymentRetryViewModel.kt$PaymentRetryViewModel$60</ID>
+    <ID>MagicNumber:PlaceCards.kt$3</ID>
+    <ID>MagicNumber:PlaceComponents.kt$0.42f</ID>
+    <ID>MagicNumber:PlaceComponents.kt$126f</ID>
+    <ID>MagicNumber:PlaceComponents.kt$30f</ID>
+    <ID>MagicNumber:PlaceComponents.kt$4</ID>
+    <ID>MagicNumber:PlaceDashboardScreen.kt$0.42f</ID>
+    <ID>MagicNumber:PlaceDashboardScreen.kt$3</ID>
+    <ID>MagicNumber:PlaceDetailScreen.kt$3</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$0.04</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$0.4f</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$0.75</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$0.96</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$10</ID>
+    <ID>MagicNumber:PlaceMoneyCivicDetailContent.kt$3</ID>
+    <ID>MagicNumber:PlacePresentation.kt$PlacePresentation$12</ID>
+    <ID>MagicNumber:PlacePresentation.kt$PlacePresentation$4</ID>
+    <ID>MagicNumber:PlacePulseScreen.kt$25</ID>
+    <ID>MagicNumber:PlacePulseScreen.kt$3</ID>
+    <ID>MagicNumber:PlacePulseScreen.kt$80</ID>
+    <ID>MagicNumber:PlaceRiskBlockDetailContent.kt$4</ID>
+    <ID>MagicNumber:PlaceTodayDetailContent.kt$300.0</ID>
+    <ID>MagicNumber:PlaceTodayDetailContent.kt$60</ID>
+    <ID>MagicNumber:PrivacyHandshakeRepository.kt$PrivacyHandshakeRepository$400</ID>
+    <ID>MagicNumber:PrivacyHandshakeRepository.kt$PrivacyHandshakeRepository$409</ID>
+    <ID>MagicNumber:RecurringSetupModels.kt$RecurringConfig$14</ID>
+    <ID>MagicNumber:RecurringSetupModels.kt$RecurringConfig$60</ID>
+    <ID>MagicNumber:SocketManager.kt$SocketManager$2_000</ID>
+    <ID>MagicNumber:UploadRepository.kt$12</ID>
+    <ID>MagicNumber:UploadRepository.kt$3</ID>
+    <ID>MagicNumber:UploadRepository.kt$4</ID>
+    <ID>MagicNumber:UploadRepository.kt$5</ID>
+    <ID>MagicNumber:UploadRepository.kt$6</ID>
+    <ID>MagicNumber:UploadRepository.kt$7</ID>
+    <ID>MagicNumber:UploadRepository.kt$8</ID>
+    <ID>MatchingDeclarationName:BookingPageComponents.kt$BookingLinkUrls</ID>
+    <ID>MatchingDeclarationName:BookingPageZeroState.kt$SchedulingZeroKind</ID>
+    <ID>MatchingDeclarationName:ChatConversationHost.kt$ChatConversationHostViewModel : ViewModel</ID>
+    <ID>MatchingDeclarationName:GroupedListScreen.kt$GroupedListCallbacks</ID>
+    <ID>MatchingDeclarationName:HomeCalendarCreateMenu.kt$HomeCreateAction</ID>
+    <ID>MatchingDeclarationName:IdentitySwitcherPillRow.kt$IdentityOption</ID>
+    <ID>MatchingDeclarationName:IdentitySwitcherSheet.kt$IdentitySwitcherCard</ID>
+    <ID>MatchingDeclarationName:LoginScreen.kt$LoginScreenTags</ID>
+    <ID>MatchingDeclarationName:MyBookingsScreen.kt$MyBookingsTags</ID>
+    <ID>MatchingDeclarationName:PackageEditorScreen.kt$PackageEditorTags</ID>
+    <ID>MatchingDeclarationName:PackagesListScreen.kt$PackagesListTags</ID>
+    <ID>MatchingDeclarationName:PlaceSectionCard.kt$PlaceSectionCardState</ID>
+    <ID>MatchingDeclarationName:TranscriptionDtos.kt$TranscriptionResponse</ID>
+    <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "Availability is conveyed only by an accent dot + weight; the cell has no contentDescription announcing ', available'/', today'."</ID>
+    <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "Picker is a labelled 'Time zone' control, but a host/viewer mismatch is not spoken; use SchedulingA11y.timezoneLabel(viewer, host)."</ID>
+    <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "The active code box uses a11yFocusRing; the input is one real labelled BasicTextField (TalkBack + autofill reach it)."</ID>
+    <ID>MaxLineLength:BookingSearchFilterViewModelTest.kt$BookingSearchFilterViewModelTest$coEvery { repo.getBookings(any(), any(), any(), any(), any(), any()) } returns NetworkResult.Success(GetBookingsResponse(emptyList()))</ID>
+    <ID>MaxLineLength:GroupRosterViewModelTest.kt$GroupRosterViewModelTest$NetworkResult.Success(BookingDetailResponse(booking = anchor, attendees = emptyList(), eventType = BookingEventTypeRef(id = "et1", name = "Coffee chat")))</ID>
+    <ID>MaxLineLength:GroupRosterViewModelTest.kt$GroupRosterViewModelTest$NetworkResult.Success(EventTypeDetailResponse(eventType = EventTypeDto(id = "et1", name = "Coffee chat", slug = "coffee", durations = listOf(30), seatCap = 16)))</ID>
+    <ID>MaxLineLength:GroupRosterViewModelTest.kt$GroupRosterViewModelTest$NetworkResult.Success(GetWaitlistResponse(listOf(WaitlistEntryDto(id = "w1", inviteeName = "Di", status = "waiting", createdAt = start))))</ID>
+    <ID>MaxLineLength:InviteeConfirmViewModelTest.kt$InviteeConfirmViewModelTest$NetworkResult.Success(PublicBookingCreatedResponse(booking = PublicBookingRef(id = "b3"), manageToken = "mt3", clientSecret = "cs_test_123"))</ID>
+    <ID>MaxLineLength:ManageBookingViewModelTest.kt$ManageBookingViewModelTest$NetworkResult.Success(AvailableSlotsResponse(slots = listOf(SlotDto(start = "2999-01-02T17:30:00Z", end = "2999-01-02T18:00:00Z"))))</ID>
+    <ID>MaxLineLength:ManageBookingViewModelTest.kt$ManageBookingViewModelTest$listOf(NetworkResult.Success(manageResponse("confirmed")), NetworkResult.Success(manageResponse("cancelled", canReschedule = false, canCancel = false)))</ID>
+    <ID>MaxLineLength:ManualBookingViewModelTest.kt$ManualBookingViewModelTest$coEvery { repo.getBookingPage(any()) } returns NetworkResult.Success(BookingPageResponse(BookingPageDto(id = "p1", slug = "myslug")))</ID>
+    <ID>MaxLineLength:ManualBookingViewModelTest.kt$ManualBookingViewModelTest$coEvery { repo.getBookings(any(), any(), any(), any(), any(), any()) } returns NetworkResult.Success(GetBookingsResponse(emptyList()))</ID>
+    <ID>MaxLineLength:MemberPollResponseViewModelTest.kt$MemberPollResponseViewModelTest$openPoll().copy(poll = PollDto(id = "poll-1", title = "Family call", status = "closed", finalizedStartAt = "2026-06-22T21:00:00Z"))</ID>
+    <ID>MaxLineLength:OnboardingHomeBusinessScreen.kt$"${memberWord.replaceFirstChar { it.uppercaseChar() }} scheduled. Choose how their availability turns into one set of bookable times."</ID>
+    <ID>MaxLineLength:RecurringSetupScreen.kt$text = "The other ${totalCount - openCount} ${if (totalCount - openCount == 1) "week is" else "weeks are"} full. Book the ${if (openCount == 1) "one" else openCount.toString()} that ${if (openCount == 1) "works" else "work"}, or adjust the pattern."</ID>
+    <ID>MaxLineLength:RescheduleCancelPolicyViewModelTest.kt$RescheduleCancelPolicyViewModelTest$"""{"error":"SLOT_TAKEN","alternatives":[{"start":"2026-06-20T18:00:00Z","end":"2026-06-20T18:30:00Z","startLocal":"2026-06-20T11:00:00"}]}"""</ID>
+    <ID>MaxLineLength:WhosFreeViewModelTest.kt$WhosFreeViewModelTest$NetworkResult.Success(FreeByMemberResponse(members = listOf("u-mom"), freeByMember = mapOf("u-mom" to listOf(freeBlock(9)))))</ID>
+    <ID>NestedBlockDepth:CancellationRefundPolicyViewModel.kt$CancellationRefundPolicyViewModel$private fun applyPagePolicy(value: String?)</ID>
+    <ID>PackageNaming:MailComposeRepository.kt$package app.pantopus.android.data.mail_compose</ID>
+    <ID>PackageNaming:TokenAcceptRepository.kt$package app.pantopus.android.data.token_accept</ID>
+    <ID>ReturnCount:AudienceProfileViewModel.kt$AudienceProfileViewModel$private suspend fun fetchAndProject()</ID>
+    <ID>ReturnCount:AudienceProfileViewModel.kt$AudienceProfileViewModel.Companion$private fun timeAgo(iso: String?): String</ID>
+    <ID>ReturnCount:ChatConversationViewModel.kt$ChatConversationViewModel$private fun handlePresence( json: JSONObject, online: Boolean, )</ID>
+    <ID>ReturnCount:GigComposeViewModel.kt$GigComposeViewModel.Companion$internal fun projectBenchmark( categoryLabel: String, dto: PriceBenchmarkDto?, ): GigComposePriceBenchmark?</ID>
+    <ID>ReturnCount:InsightsModels.kt$InsightsMath$fun balanceLabel(rows: List&lt;HostRow&gt;): String</ID>
+    <ID>ReturnCount:InvoicesKit.kt$InvoiceParsing$private fun firstInt( dict: Map&lt;String, Any?&gt;, keys: List&lt;String&gt;, ): Int?</ID>
+    <ID>ReturnCount:ManualBookingViewModel.kt$ManualBookingViewModel$private suspend fun overlapConflict(): DoubleBookConflict?</ID>
+    <ID>ReturnCount:PrivacyHandshakeViewModel.kt$PrivacyHandshakeViewModel$private suspend fun fetchAndProject()</ID>
+    <ID>ReturnCount:RootTabScreen.kt$private fun routeForJumpBackIn(item: JumpBackItem): String</ID>
+    <ID>ReturnCount:UseCreditSheet.kt$UseCreditViewModel$private fun isEligible(booking: BookingDto): Boolean</ID>
+    <ID>SwallowedException:AuthRepository.kt$AuthRepository$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AuthRepository.kt$AuthRepository$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PrivacyHandshakeRepository.kt$PrivacyHandshakeRepository$t: Throwable</ID>
+    <ID>TooManyFunctions:FindATimeFormat.kt$FindATimeFormat</ID>
+    <ID>TooManyFunctions:PlacePresentation.kt$PlacePresentation</ID>
+    <ID>TooManyFunctions:RootTabScreen.kt$ChildRoutes</ID>
+    <ID>UnusedParameter:BookingLimitsScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:CancellationRefundPolicyScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:ChatConversationScreen.kt$aiPrompts: List&lt;ChatPromptChip&gt;</ID>
+    <ID>UnusedParameter:DateOverridesScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:DateOverridesScreen.kt$scheduleId: String</ID>
+    <ID>UnusedParameter:GroupRosterScreen.kt$bookingId: String</ID>
+    <ID>UnusedParameter:InsightsComponents.kt$accent: Color</ID>
+    <ID>UnusedParameter:InviteeConfirmViewModel.kt$InviteeConfirmViewModel$overrideEndUtc: String? = null</ID>
+    <ID>UnusedParameter:ManageBookingScreen.kt$onBack: () -&gt; Unit</ID>
+    <ID>UnusedParameter:OneOffLinkGeneratorScreen.kt$viewModel: OneOffLinkGeneratorViewModel</ID>
+    <ID>UnusedParameter:PaymentsSetupScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:PayoutsEarningsScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:PermissionGatedSchedulerScreen.kt$onBack: () -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:PermissionGatedSchedulerScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:PostMeetingFollowupScreen.kt$bookingId: String</ID>
+    <ID>UnusedParameter:PostMeetingFollowupScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:PublicPagePreviewScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:RecurringSetupScreen.kt$onBack: () -&gt; Unit</ID>
+    <ID>UnusedParameter:RecurringSetupScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:RecurringSetupScreen.kt$onRepeat: (RecurrenceRepeat) -&gt; Unit</ID>
+    <ID>UnusedParameter:RescheduleCancelPolicyScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:SchedulingHubScreen.kt$onBack: () -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:SlotPickerScreen.kt$pillar: SchedulingPillar</ID>
+    <ID>UnusedParameter:TeamPerformanceScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:UnavailableExpiredScreen.kt$waitingCount: Int? = null</ID>
+    <ID>UnusedParameter:VariablePickerSheet.kt$accent: Color = PantopusColors.primary600</ID>
+    <ID>UnusedParameter:WaitlistJoinSheet.kt$accent: Color</ID>
+    <ID>UnusedParameter:WaitlistScreen.kt$onNavigate: (String) -&gt; Unit = {}</ID>
+    <ID>UnusedParameter:WeeklyHoursEditorScreen.kt$scheduleId: String</ID>
+    <ID>UnusedParameter:WhosFreeScreen.kt$onDismiss: () -&gt; Unit</ID>
+    <ID>UnusedPrivateProperty:BusinessKit.kt$private val ICON_MD = 18.dp</ID>
+    <ID>UnusedPrivateProperty:GroupRosterViewModel.kt$GroupRosterViewModel$private val auth: AuthRepository</ID>
+    <ID>UnusedPrivateProperty:GroupRosterViewModel.kt$GroupRosterViewModel$private val homes: HomesRepository</ID>
+    <ID>UnusedPrivateProperty:PostMeetingFollowupViewModel.kt$PostMeetingFollowupViewModel$private val errors: SchedulingErrorDecoder</ID>
+  </CurrentIssues>
+</SmellBaseline>

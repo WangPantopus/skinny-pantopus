@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · List-of-rows archetype</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1760px; margin: 0 auto 48px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 720px; line-height: 22px; }
+
+    .section-title { max-width: 1760px; margin: 0 auto 24px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .slots { max-width: 1760px; margin: 0 auto 48px; background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .slots h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: #111827; letter-spacing: -0.01em; }
+    .slots .lede { margin: 0 0 20px; color: #6b7280; font-size: 13px; line-height: 19px; max-width: 680px; }
+    .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px 24px; }
+    .slot { display: flex; gap: 12px; align-items: flex-start; }
+    .slot-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #0284c7; background: #f0f9ff; padding: 2px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+    .slot-desc { font-size: 12px; color: #374151; line-height: 17px; }
+
+    .frames { max-width: 1760px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px 24px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1540px) { .frames { grid-template-columns: repeat(2, 1fr); max-width: 900px; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype</div>
+      <h1>List of rows</h1>
+      <p>The highest-leverage mobile pattern — 30+ screens inherit from it. One shell, three row templates, one empty state. Subsequent screens only need to fill the slots below.</p>
+    </div>
+
+    <div class="slots">
+      <h2>Archetype slots</h2>
+      <p class="lede">Fields that change per screen. Everything else — top bar, spacing, card style, FAB, tab bar hidden — stays consistent across all 30+ inheriting screens.</p>
+      <div class="slot-grid">
+        <div class="slot"><span class="slot-name">slot.title</span><span class="slot-desc">Header text centered in the top bar (e.g. "Bills", "Documents", "Members").</span></div>
+        <div class="slot"><span class="slot-name">slot.tabs[]</span><span class="slot-desc">Optional tab strip labels with counts, e.g. ["Upcoming (4)", "Paid (12)", "All (16)"]. Omit for category-grouped lists.</span></div>
+        <div class="slot"><span class="slot-name">slot.row_template</span><span class="slot-desc">One of: <code>status_chip</code> (Bills), <code>file_chevron</code> (Docs), <code>avatar_kebab</code> (Members).</span></div>
+        <div class="slot"><span class="slot-name">slot.row_fields[]</span><span class="slot-desc">Data per row. Bills: payee, date, amount, status. Docs: name, size, uploaded. Members: name, role, joined, verified.</span></div>
+        <div class="slot"><span class="slot-name">slot.groupings[]</span><span class="slot-desc">Optional section headers for category-grouped variant (e.g. "LEASE (2)", "INSURANCE (3)").</span></div>
+        <div class="slot"><span class="slot-name">slot.fab_action</span><span class="slot-desc">FAB icon + action. Omit for read-only lists. Defaults to <code>plus</code>, primary-600.</span></div>
+        <div class="slot"><span class="slot-name">slot.trailing_action</span><span class="slot-desc">Top-bar right action — typically <code>plus</code>, <code>search</code>, or <code>user-plus</code>.</span></div>
+        <div class="slot"><span class="slot-name">slot.empty.icon</span><span class="slot-desc">Lucide icon for 72×72 identity-tinted empty circle.</span></div>
+        <div class="slot"><span class="slot-name">slot.empty.headline</span><span class="slot-desc">H3 sentence case — "No bills yet", "No documents yet".</span></div>
+        <div class="slot"><span class="slot-name">slot.empty.subcopy</span><span class="slot-desc">Muted explainer, one to two short sentences.</span></div>
+        <div class="slot"><span class="slot-name">slot.empty.cta</span><span class="slot-desc">Primary CTA matching the archetype's primary action (same as FAB).</span></div>
+      </div>
+    </div>
+
+    <div class="section-title">Four frames · variations &amp; states</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · PRIMARY</div>
+          <div class="label-title">Tabbed list with status chips</div>
+          <div class="label-sub">Bills · 3 tabs with counts, amount + status per row, FAB to add</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · VARIANT</div>
+          <div class="label-title">Category-grouped list</div>
+          <div class="label-sub">Documents · overline headers, file-type icon, chevron per row, search trailing</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · VARIANT</div>
+          <div class="label-title">Avatar-first row list</div>
+          <div class="label-sub">Members · tabs, 44px avatar + verification badge, inline role chip, kebab overflow</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f4"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 4 · STATE</div>
+          <div class="label-title">Empty state</div>
+          <div class="label-sub">Shared across all list variants · identity-tinted icon, headline, subcopy, primary CTA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameBills />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameDocs />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameMembers />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameEmpty />);
+
+    // Render Lucide icons after React mounts
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+  </script>
+</body>
+</html>

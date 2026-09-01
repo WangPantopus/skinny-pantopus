@@ -1,0 +1,21 @@
+{
+  "name": "@pantopus/utils",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint \"src/**/*.ts*\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pantopus/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}

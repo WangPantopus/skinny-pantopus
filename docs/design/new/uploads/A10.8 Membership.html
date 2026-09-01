@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A10.8 Membership</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1100px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 760px; line-height: 21px; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 12px; }
+
+    .meta { max-width: 1100px; margin: 0 auto 40px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 26px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 28px; }
+    .meta .col h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0284c7; }
+    .meta .col p { margin: 0; font-size: 12.5px; color: #374151; line-height: 17px; }
+    .meta .col code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f0f9ff; color: #0369a1; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+    .frames { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A10.8 Fan membership">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile · A10.8</div>
+      <h1>Fan membership</h1>
+      <p>The fan-side manage screen for a paid membership to a persona (creator / business). Per audience-profile §11.6, this screen is the <em>policy commitment made visible</em>: the tier, what it promises, the renewal mechanics, and — critically — a single-tap cancel with no retention dark patterns. When the persona breaks an SLA, the screen owns the refund offer up front rather than burying it.</p>
+      <div class="path">src/app/audience/membership/[personaId]/index.tsx</div>
+    </div>
+
+    <div class="meta">
+      <div class="col">
+        <h3>slot.header_pattern</h3>
+        <p><code>tier_card</code> — silver-tone strip with tier name, "2 of 3" ladder pill, monthly price big-right. Renewal row + payment row underneath. Reads like a paper membership card; no gradient hero.</p>
+      </div>
+      <div class="col">
+        <h3>slot.body_pattern</h3>
+        <p><code>persona &middot; benefits &middot; inbox</code> — persona card up top so you remember who you're paying; verified benefit list with the SLA promise inline ("Reply within 48h · SLA"); inbox row with unread dot. Change tier modal opens as a bottom sheet — same row layout but each tier carries an <em>upgrade/downgrade</em> arrow and the current row is locked.</p>
+      </div>
+      <div class="col">
+        <h3>slot.primary_cta &middot; cancel</h3>
+        <p><code>change_tier</code> is the sky CTA; <code>cancel_membership</code> is a quiet text button with the Pantopus policy footnote ("Single-tap cancel. No retention questions."). One tap → confirm sheet → done. No win-back screen.</p>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Silver tier, renews in 22 days, 1 unread from Lara</div>
+          <div class="label-sub">Happy path. Persona → tier card → benefits (with the SLA promise shown as a benefit, not buried in TOS) → Change tier primary → inbox row → cancel link + policy footnote.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · SLA MISSED</div>
+          <div class="label-title">Lara owes you a reply — refund offered</div>
+          <div class="label-sub">Amber banner pinned above the fold owns the situation: states the broken promise, names the days, presents the refund as the primary action. "Give it a week" is the gentler choice — never a guilt-trip "Are you sure".</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="membership-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameMembershipPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameMembershipSLA />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

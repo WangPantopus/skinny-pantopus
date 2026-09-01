@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Verify your address (B1)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 820px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 820px; line-height: 21px; }
+
+  /* product cards (inside #f6f7f9 stage and phone) */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-hero { box-shadow: 0 3px 12px rgba(17,24,39,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+
+  /* verify interactions */
+  .vf-primary { transition: background .15s ease, box-shadow .15s ease; }
+  .vf-primary:hover { background: #0369a1 !important; }
+  .vf-method:hover { background: #f6f9fb; }
+  .vf-method[data-on="1"]:hover { background: #e7f4fd; }
+  .vf-x:hover { background: #e5e7eb !important; }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .phone-cap { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .phone-cap span { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fg4); margin-left: 8px; }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  /* specimen stage */
+  .spec-row { display: flex; flex-wrap: wrap; gap: 30px 40px; }
+  .specimen { width: 340px; }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 16px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-dashboard.jsx"></script>
+<script type="text/babel" src="place-verify.jsx"></script>
+<script type="text/babel">
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · B1 — Prompt to verify</div>
+        <h1 className="doc-title">Verify your address</h1>
+        <p className="doc-sub">The Band-D unlock — the one sheet that turns a claimed place (T3) into a verified one (T4). It rises from the dashboard the resident already has, names exactly what verifying adds in three plain rows, offers three honest ways to prove the address, and promises that nothing they have now is taken away while they wait. Home-green anchors the place; sky carries the one action.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Place / address <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> Method + CTA <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Sheet over the dimmed dashboard</div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The sheet</h2>
+        </div>
+        <p className="zone-sub">A sheet over the claimed dashboard, not a new screen — the place stays dimmed behind it, so verifying reads as "add to this", not "start over". <b>Verify your address</b> + the address anchor it. Three rows under <b>What this unlocks</b> reuse the SectionCard row — green tile, label, one line — with the chevrons removed, because they're a promise, not a destination. Three methods follow as selectable rows; the most common is pre-picked so the sky <b>Start verification</b> is live the moment the sheet lands.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <VerifyPrompt selected="mail" />
+            </IOSDevice>
+            <div className="phone-cap">Verify your address <span>mail-a-code pre-selected</span></div>
+          </div>
+
+          <div className="side-note">
+            <h4>A sheet, not a wall</h4>
+            <p>It slides over the dashboard rather than replacing it. The dimmed place behind keeps the context — verifying adds to something they already hold, it doesn't gate them out of it.</p>
+
+            <h4>Name the unlock first</h4>
+            <p>Message neighbors, the verified badge, the digital mailbox. Three concrete things, each a SectionCard row with no chevron. The value is named before the ask, in the same visual language as the rest of Place.</p>
+
+            <h4>Three honest paths</h4>
+            <p>Mail a code, match records, upload a document. Each row says what it costs you in time — a postcard, an instant match, a file — so the choice is informed, not a guess. The radio makes one the active path.</p>
+
+            <h4>Nothing is taken away</h4>
+            <p>"This can take a few days. Everything you have now stays available while you wait." Verification is slow and physical; the note removes the fear that starting it locks the door behind them.</p>
+
+            <h4>The clock stays bright</h4>
+            <p>The dim starts below the status bar, so the time and battery stay legible while the dashboard recedes — standard iOS sheet behavior.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">The pieces</h2>
+        </div>
+        <p className="zone-sub">Two rows, one button — every part of the sheet pulled onto the stage. The benefit row is a SectionCard row stripped of its chevron and value. The method row carries a trailing radio and lights up sky when chosen; the icon tile goes from muted to sky with it. The note and the primary close the sheet.</p>
+
+        <div className="spec-row">
+          <Specimen tag="Benefit row" note="SectionCard row, no chevron">
+            <div className="pl-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <BenefitRow icon="message-circle" label="Message your verified neighbors" sub="Direct messages with the people on your block" />
+              <BenefitRow icon="badge-check" label="Your verified badge" sub="The address-proven check on your profile" />
+              <BenefitRow icon="mailbox" label="Your digital mailbox" sub="Packages, civic notices, and permits" isLast />
+            </div>
+          </Specimen>
+
+          <Specimen tag="Method row" note="unselected · selected">
+            <div className="pl-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <MethodRow icon="send" label="Mail a code to my address" sub="We send a postcard with a code. Most common." selected />
+              <MethodRow icon="file-search" label="Match property records" sub="Instant if your name is on the deed or lease" />
+              <MethodRow icon="upload" label="Upload a document" sub="A utility bill, lease, or bank statement" isLast />
+            </div>
+          </Specimen>
+
+          <Specimen tag="Note + primary" note="the close of the sheet">
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 16, padding: '0 2px' }}>
+              <Icon name="clock" size={15} color={FAINT} strokeWidth={2} style={{ marginTop: 1 }} />
+              <span style={{ fontSize: 12.5, color: MUTE, lineHeight: '18px' }}>This can take a few days. Everything you have now stays available while you wait.</span>
+            </div>
+            <StartButton />
+          </Specimen>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">03</span>
+          <h2 className="zone-title">Choosing a method</h2>
+        </div>
+        <p className="zone-sub">The radio is the whole interaction. Tapping a row moves the selection — the chosen row tints sky, its icon tile switches from muted to sky, and the filled dot follows. The same sheet, two different paths picked.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <VerifyPrompt selected="records" />
+            </IOSDevice>
+            <div className="phone-cap">Match property records <span>instant path chosen</span></div>
+          </div>
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <VerifyPrompt selected="document" />
+            </IOSDevice>
+            <div className="phone-cap">Upload a document <span>self-serve path chosen</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

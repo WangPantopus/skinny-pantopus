@@ -1,0 +1,222 @@
+[
+ {
+  "id": "HOME-F1-01",
+  "severity": "major",
+  "platforms": "android",
+  "title": "Booking-union row deep-link loses home owner context on Android",
+  "detail": "Tapping a booking-union agenda row: iOS presents .bookingDetail(owner: .home(homeId), bookingId:) with explicit home owner. Android HomeCalendarViewModel.openAgendaItem navigates SchedulingRoutes.bookingDetail(bookingId) ('scheduling/bookings/$id') without stashing BookingsOwnerRelay, so BookingDetailViewModel resolves owner via ownerRelay.consume() ?: SchedulingOwner.Personal \u2014 i.e. a stale relay value from a previous bookings visit, or Personal. Backend authorizes from the booking row itself so the fetch succeeds, but toDetailData(owner) renders the E2 screen under the wrong owner context (actions/labels/owner-scoped follow-ups).",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/HomeCalendarViewModel.kt",
+  "line": 221,
+  "fix": "Stash SchedulingOwner.Home(homeId) into BookingsOwnerRelay before navigating (or add an owner token segment to the bookingDetail route) to mirror iOS."
+ },
+ {
+  "id": "HOME-F1-02",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "Month-strip weekday labels: Android 3-letter uppercase vs iOS single initial",
+  "detail": "iOS HomeCalendarViewModel.makeMonthStripState formats weekday 'EEEEE' (single initial, 'S M T W T F S') with an explicit comment that this matches the home-shell MonthStrip design. Android HomeAgendaBuilder uses dowFmt 'EEE' and MonthStripHeader renders day.dayOfWeek.uppercase() -> 'SUN MON TUE \u2026'.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/HomeAgendaComponents.kt",
+  "line": 108,
+  "fix": "Format the day-of-week as the first initial (or apply .take(1)) in HomeAgendaBuilder.weekStrip / MonthStripHeader to match iOS + design."
+ },
+ {
+  "id": "HOME-F1-03",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "Error frame drops month strip / filter row that design keeps",
+  "detail": "Design F1 FrameError renders TopBar + MonthStrip + FilterRow above the error body (home-calendar-frames.jsx:104-118). Both platforms hide the FilterRow on error; Android additionally nulls monthStrip on fetch error (HomeCalendarViewModel.kt _monthStrip.value = null) so even a refresh failure after a successful load loses the strip, while iOS retains the previously-built strip in that case (first-load error has none on both).",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/HomeCalendarViewModel.kt",
+  "line": 143,
+  "fix": "Keep the last month strip on error (Android) and show the filter row on error per design, or align both platforms deliberately."
+ },
+ {
+  "id": "HOME-F1-04",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "Empty/filtered-empty icons deviate from design + iOS",
+  "detail": "First-run empty: design icon 'calendar', iOS Icon(.calendar); Android uses PantopusIcon.CalendarDays. Filtered-empty: design 'calendar-search', iOS Icon(.calendarSearch); Android uses PantopusIcon.SearchX.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/HomeCalendarScreen.kt",
+  "line": 335,
+  "fix": "Use Calendar / CalendarSearch icons on Android to match."
+ },
+ {
+  "id": "HOME-F1-05",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "Error subcopy shows raw server message on Android, fixed design copy on iOS",
+  "detail": "Android CalendarErrorView renders message.ifBlank { design copy } where message comes from NetworkError.message (can be a raw HTTP error string). iOS errorView always renders the design copy 'Something went wrong on our side. Check your connection and try again.' regardless of the state's message. Same pattern on F2: Android ErrorShell subcopy = message.ifBlank { design copy } (EventDetailScreen.kt:199) while iOS always renders the fixed design line.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/HomeCalendarScreen.kt",
+  "line": 318,
+  "fix": "Render the fixed design copy on Android (or surface the server message on both)."
+ },
+ {
+  "id": "HOME-F3-01",
+  "severity": "blocker",
+  "platforms": "both",
+  "title": "Event time picker semantics differ: iOS local wall-time vs Android UTC wall-time",
+  "detail": "iOS AddEventFormView uses SwiftUI DatePicker bound to Date with no timeZone override \u2014 the user picks LOCAL wall-time, producing a true absolute instant (a 6:30 PM PDT pick serializes as 01:30Z next day). Android AddEventFormViewModel pins zone=UTC (FORM_ZONE) and its date/time pickers read/write ZonedDateTime in UTC \u2014 the picked wall-time is interpreted AS UTC (6:30 PM pick serializes 18:30Z). For any non-UTC device the same user flow stores instants offset by the device's UTC offset; events created on one platform render hours (or a day) shifted on the other, and iOS's own UTC-pinned F1 agenda shows iOS-created events at the wrong wall time/day. The backend availability engine (busy union) then blocks the wrong absolute window for one of the two platforms.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/AddEventFormViewModel.kt",
+  "line": 237,
+  "fix": "Pick one semantics: either both compose true instants from device-local wall time (Android: zone=ZoneId.systemDefault()) and pin all display to one zone, or both treat input/display as a fixed household zone. Align F1 agenda + F2 detail display zones with it."
+ },
+ {
+  "id": "HOME-F3-02",
+  "severity": "major",
+  "platforms": "ios",
+  "title": "Create-event default end: iOS none, Android/design start+1h",
+  "detail": "Design FrameCreate prefills 'Ends' at start+1h (add-event-frames.jsx:68 endV 10:00 AM for 9:00 AM start). Android AddEventFormViewModel init sets defaultEnd = defaultStart.plusHours(1) and setAllDay(false) restores 9:00+1h. iOS AddEventFormViewModel create-path sets endDate = nil (point-in-time, no Ends value) and toggling all-day off leaves endDate nil. Identical user flows produce different event shapes (end_at present vs absent), changing F1 agenda time-range subtitles and the all-day heuristic (midnight-start iOS events with no end read as 'All day').",
+  "file": "frontend/apps/ios/Pantopus/Features/Homes/Calendar/AddEventFormViewModel.swift",
+  "line": 150,
+  "fix": "Prefill iOS endDate = start+1h on create and restore an end when toggling all-day off, matching Android + design."
+ },
+ {
+  "id": "HOME-F3-03",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "Edit-form hydration source differs (re-fetch vs passed DTO)",
+  "detail": "Android AddEventFormViewModel.load() re-fetches the source event (fetchEditingSource) before hydrating; on fetch failure it toasts but leaves a default-valued form editable \u2014 typing a title re-enables Save, and the PUT then overwrites the event with defaults. iOS hydrates synchronously from the passed CalendarEventDTO and never re-fetches (its load() doc-comment claiming a re-fetch is stale), so it can commit a stale prefill but cannot blank an event.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/AddEventFormViewModel.kt",
+  "line": 307,
+  "fix": "Android: block Save (or show error state) when the editing source fails to load. iOS: either re-fetch like Android or fix the stale comment."
+ },
+ {
+  "id": "HOME-F2-01",
+  "severity": "major",
+  "platforms": "both",
+  "title": "Event detail date/time rendered in different zones and formats",
+  "detail": "iOS EventDetailView.formattedTimeRange uses Calendar.current + Locale.current with pattern 'EEEE MMM d' (full weekday, device-local timezone). Android EventDetailScreen pins DISPLAY_ZONE=UTC with 'EEE MMM d' (Locale.US). The same event shows different wall-times on the two platforms for any non-UTC device, and iOS F2 disagrees with iOS's own UTC-pinned F1 agenda row time. Design shows 'Mon Jun 16 \u00b7 6:30 PM' (3-letter weekday).",
+  "file": "frontend/apps/ios/Pantopus/Features/Homes/Calendar/EventDetailView.swift",
+  "line": 522,
+  "fix": "Pick one display zone for home-calendar surfaces on both platforms (see HOME-F3-01) and use the design's EEE weekday format."
+ },
+ {
+  "id": "HOME-F2-02",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "Event detail offline banner missing on Android",
+  "detail": "Design FrameOffline shows an amber banner \"You're offline / RSVP buttons are disabled until you reconnect.\" iOS applies .offlineBanner(isOffline:) to the screen. Android EventDetailScreen renders no offline banner at all \u2014 offline is only conveyed by the disabled RSVP control + its inline note.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/calendar/EventDetailScreen.kt",
+  "line": 90,
+  "fix": "Add the offline banner (OfflineBanner component) to the F2 chrome stack on Android."
+ },
+ {
+  "id": "HOME-F2-03",
+  "severity": "minor",
+  "platforms": "ios",
+  "title": "iOS attendee avatars flat green instead of gradient",
+  "detail": "Design AttendeeRow uses gradient member avatars; Android AttendeeRow renders HomeMemberAvatar (per-user gradient, white initials). iOS AttendeeRow draws Circle().fill(homeBg) + home-colored initials \u2014 a flat tile \u2014 even though the gradient HomeMemberAvatar exists in iOS HomeSchedulingKit and is used on F1 agenda rows.",
+  "file": "frontend/apps/ios/Pantopus/Features/Homes/Calendar/EventDetailView.swift",
+  "line": 788,
+  "fix": "Use HomeMemberAvatar in iOS F2 AttendeeRow."
+ },
+ {
+  "id": "HOME-F2-04",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "Offline RSVP affordances diverge (hint, glow, Change button)",
+  "detail": "Design FrameOffline shows a plain dimmed RSVP card (muted overline, no green border/hint). iOS keeps the pending green border/glow + 'Tap to let everyone know' hint AND appends the reconnect note when offline; its recorded-state 'Change' stays enabled offline (POST fails and silently reverts). Android swaps the hint for the reconnect note (if/else) but also keeps the pending border/glow, and disables 'Change' when offline.",
+  "file": "frontend/apps/ios/Pantopus/Features/Homes/Calendar/EventDetailView.swift",
+  "line": 834,
+  "fix": "Align both to the design: offline = dimmed plain card, no pending emphasis; disable Change offline on iOS."
+ },
+ {
+  "id": "HOME-F1-06",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "Design 'visit' category missing \u2014 vendor/guest rows render generic 'Event'",
+  "detail": "F1 design agenda row uses cat:'visit' for 'Plumber visit' (home-calendar-frames.jsx:31) and F13 creates HomeCalendarEvent rows with event_type 'vendor'|'guest' (scheduling.js visitSchema). Neither platform's CalendarEventCategory maps vendor/guest/visit \u2014 both fall through to Generic ('Event' chip, calendar icon) unless the title happens to contain a heuristic keyword. Identical on both platforms, but visibly off-design for every scheduled visit.",
+  "file": "frontend/apps/ios/Pantopus/Features/Homes/Calendar/CalendarEventCategory.swift",
+  "line": 214,
+  "fix": "Add a visit category (door-open icon) mapped from event_type vendor/guest on both platforms."
+ },
+ {
+  "id": "HOME-F8-01",
+  "severity": "blocker",
+  "platforms": "android",
+  "title": "F8 quiet-hours row navigates to an unregistered route (runtime crash)",
+  "detail": "Android HouseholdAvailabilityScreen DisclosureRow onClick calls onNavigate(\"scheduling/home/quiet-hours\") but no composable registers that route (RootTabScreen only registers scheduling/home/availability and scheduling/home/scheduler). navController.navigate() on an unregistered route throws IllegalArgumentException, crashing the app when a user taps the always-visible 'Household quiet hours' row in the default (personal-set-up) state. iOS openQuietHours() is an explicit no-op stub until the F8b route exists.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/home/HouseholdAvailabilityScreen.kt",
+  "line": 400,
+  "fix": "Make the row a no-op (mirroring iOS) or register a stub destination before wiring navigation."
+ },
+ {
+  "id": "HOME-F8-02",
+  "severity": "major",
+  "platforms": "android",
+  "title": "F8 route carries no homeId on Android \u2014 screen binds to first active home",
+  "detail": "iOS routes SchedulingRoute.householdAvailability(homeId:) and the VM fetches HomesEndpoints.detail(homeId:) + scopes UserDefaults keys per home. Android's route is the arg-less constant scheduling/home/availability; the VM calls homes.myHomes() and picks firstOrNull{occupancy.isActive} ?: first, so a user in multiple households always gets the first home's name and prefs regardless of which home they navigated from. On myHomes() failure homeId falls back to \"default\", silently merging exposure prefs across all homes.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/home/HouseholdAvailabilityViewModel.kt",
+  "line": 117,
+  "fix": "Add a {homeId} nav arg to HOUSEHOLD_AVAILABILITY (SavedStateHandle in the VM) and fetch that home's detail, mirroring iOS."
+ },
+ {
+  "id": "HOME-F8-03",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "F8 offline banner missing on Android",
+  "detail": "iOS MyHouseholdAvailabilityView applies .offlineBanner(isOffline:). Android's VM exposes isOnline (NetworkMonitor) but HouseholdAvailabilityScreen never collects it and renders no OfflineBanner in the chrome stack.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/home/HouseholdAvailabilityScreen.kt",
+  "line": 71,
+  "fix": "Collect isOnline and add OfflineBanner to the Column, per the Android state rule."
+ },
+ {
+  "id": "HOME-F9-01",
+  "severity": "major",
+  "platforms": "android",
+  "title": "F9 loaded rows render through shared ListOfRows shell, not the design ResourceRow",
+  "detail": "iOS deliberately renders a bespoke ResourceRow (13.5/700 name, sunken capsule type badge, 7pt dot + colored 'Free now'/'Booked until' text) because \u2014 per its own file comment \u2014 the design row can't be expressed through the shared ListOfRows chrome. Android's Loaded branch delegates to ListOfRowsScreen with RowTrailing.Status \u2192 StatusChip (pill chip) and RowChip type badges, so every loaded row differs structurally from both design and iOS.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceListScreen.kt",
+  "line": 498,
+  "fix": "Render a bespoke loaded row on Android mirroring iOS ResourceRow (dot + colored status label, capsule type badge)."
+ },
+ {
+  "id": "HOME-F9-02",
+  "severity": "major",
+  "platforms": "android",
+  "title": "F9 offline frame is dead code on Android (isOffline hardcoded false)",
+  "detail": "ResourceListUiState.Loaded.isOffline is documented as 'left false until a ConnectivityManager observer is wired' and nothing ever sets it, so the amber offline banner, 0.55 row dim, and FAB-hide branches in ResourceListScreen can never execute. iOS drives the same visuals live from NetworkMonitor.shared.isOnline.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceListViewModel.kt",
+  "line": 42,
+  "fix": "Inject NetworkMonitor (as F8's VM already does) and set isOffline from it, or collect connectivity in the screen like other Android scheduling screens."
+ },
+ {
+  "id": "HOME-F9-03",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "F9 error subcopy: iOS shows server message, Android always shows fixed copy (swallows no-home message)",
+  "detail": "iOS errorFrame renders the state's message (SchedulingError.userMessage). Android ResourceErrorBody ignores state.message and always renders 'Check your connection and try again.' \u2014 including for the Android-only no-home case whose message is 'Join or create a home to manage shared resources.', where Retry can never succeed. Inverse of the F1/F2 pattern where Android showed raw messages and iOS fixed copy.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceListScreen.kt",
+  "line": 462,
+  "fix": "Pass state.message into ResourceErrorBody (and pick one message policy for both platforms)."
+ },
+ {
+  "id": "HOME-F9-04",
+  "severity": "minor",
+  "platforms": "android",
+  "title": "F9 'Add' top-bar action and Retry pill use primary blue instead of Home green",
+  "detail": "Android ResourceScaffold renders the 'Add' label in PantopusColors.primary600 and the error Retry pill background primary600. iOS uses Theme.Color.home for the Add action and HomePrimaryButton (home green) for Retry, matching the Home-pillar identity of the design frames.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceListScreen.kt",
+  "line": 259,
+  "fix": "Tint the Add label and Retry pill with PantopusColors.home."
+ },
+ {
+  "id": "HOME-F9-05",
+  "severity": "major",
+  "platforms": "android",
+  "title": "F9\u2013F14 Android routes are arg-less; home context inferred (and differently from F8)",
+  "detail": "iOS routes every resources/visits screen with an explicit homeId (.resourceEditor(homeId:resourceId:), .resourceDetail(homeId:resourceId:), \u2026). Android A12 routes carry no home arg; each VM calls resolvePrimaryHomeId() which picks isPrimaryOwner==true first, else the first home (ResourceKit.kt:295) \u2014 while Android's own F8 VM picks the first ACTIVE-occupancy home. A user in multiple homes gets F9\u2013F14 bound to a possibly different home than the one they navigated from (and than F8 shows), with all writes (create resource, book, visit) landing on that inferred home.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceKit.kt",
+  "line": 295,
+  "fix": "Add a homeId arg to the A12 routes (SavedStateHandle), mirroring iOS; at minimum unify the inference heuristic with F8."
+ },
+ {
+  "id": "HOME-F9-06",
+  "severity": "minor",
+  "platforms": "both",
+  "title": "Member avatar tone hash diverges across platforms (64-bit vs 32-bit djb2)",
+  "detail": "ResourceHomeMember.toneIndex (iOS) runs djb2 in 64-bit Int then abs % 6; Android HomeMember.tone wraps the same djb2 in 32-bit Int then abs % 6. The wrapped values are congruent mod 2^32 but abs-then-mod of the 64-bit vs 32-bit representation yields different indices for most UUIDs, so the same household member renders a different avatar tone on iOS vs Android across F12\u2013F14 pickers and visit detail.",
+  "file": "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/scheduling/resources/ResourceKit.kt",
+  "line": 262,
+  "fix": "Constrain both to the same width (e.g. compute djb2 mod 2^32 as unsigned on both, then % 6) so tones agree."
+ }
+]

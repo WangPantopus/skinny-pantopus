@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pantopus · Identity Center</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827;
+      background:
+        radial-gradient(120% 50% at 50% 0%, #e0f2fe 0%, transparent 60%),
+        #f6f7f9;
+      min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1320px; margin:0 auto 36px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0284c7; margin-bottom:8px; }
+    .header h1 { font-size:36px; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header p { margin:0; color:#374151; font-size:15px; max-width:880px; line-height:23px; }
+
+    .principle {
+      max-width:1320px; margin:0 auto 28px; padding:16px 20px;
+      background:#fff; border:1px solid #bae6fd; border-left:4px solid #0284c7;
+      border-radius:12px;
+      display:flex; gap:14px; align-items:flex-start;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .principle .icon { width:32px; height:32px; border-radius:8px; background:#e0f2fe; color:#0284c7;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .principle .text { font-size:13px; line-height:19px; color:#374151; }
+    .principle .text strong { color:#111827; font-weight:700; }
+
+    .slots {
+      max-width:1320px; margin:0 auto 36px;
+      background:#fff; border:1px solid #e5e7eb;
+      border-radius:20px; padding:24px 28px;
+      box-shadow:0 1px 2px rgba(17,24,39,0.04);
+    }
+    .slots h2 { margin:0 0 6px; font-size:13px; font-weight:700;
+      letter-spacing:0.08em; text-transform:uppercase; color:#0284c7; }
+    .slots .lede { margin:0 0 18px; color:#6b7280; font-size:13px; line-height:19px; max-width:760px; }
+    .slot-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px 28px; }
+    .slot { display:flex; gap:10px; align-items:flex-start; }
+    .slot-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11.5px; color:#0284c7; background:#e0f2fe;
+      padding:2px 7px; border-radius:6px; white-space:nowrap; flex-shrink:0; font-weight:600;
+    }
+    .slot-desc { font-size:12px; color:#374151; line-height:17px; }
+    .slot-desc code { font-size:11px; background:#f3f4f6; padding:1px 5px; border-radius:4px; color:#111827; }
+
+    .section-title {
+      max-width:1320px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+      color:#6b7280;
+    }
+
+    .frames { max-width:1320px; margin:0 auto;
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:40px 18px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:17px; font-weight:700; color:#111827; margin-bottom:5px; letter-spacing:-0.1px; }
+    .label-sub { font-size:12px; color:#374151; line-height:18px; }
+
+    @media (max-width:1280px) {
+      .frames { grid-template-columns:repeat(2, 1fr); max-width:860px; }
+      .slot-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width:820px) {
+      .frames { grid-template-columns:1fr; max-width:420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · Identity Center</div>
+      <h1>Profiles &amp; privacy — the single source of truth.</h1>
+      <p>One surface where the four identities sit side-by-side: <strong>Personal</strong> (account), <strong>Local</strong> (verified neighbor), <strong>Persona</strong> (public creator), <strong>Professional</strong> (hireable trade). Top-up by a "see what people see" preview so the user can always check what each viewer type sees.</p>
+    </div>
+
+    <div class="principle">
+      <div class="icon"><i data-lucide="users" style="width:18px;height:18px;"></i></div>
+      <div class="text">
+        <strong>Privacy by default.</strong> Profile-links toggles are all off out of the box (one is on as a deliberate user choice). Persona and Professional are opt-in — first-run users see "Not set up" placeholders, not pre-built profiles. Nothing links publicly unless the user picks it.
+      </div>
+    </div>
+
+    <div class="slots">
+      <h2>Archetype slots</h2>
+      <p class="lede">Five slot families. <code>identity_present</code> drives the populated vs. first-run state.</p>
+      <div class="slot-grid">
+        <div class="slot"><span class="slot-name">identity_present</span><span class="slot-desc">Array — which of <code>[local, personal, persona, professional]</code> are set up. Drives Frame 1 vs Frame 2 state.</span></div>
+        <div class="slot"><span class="slot-name">profile_card</span><span class="slot-desc"><code>{identity_type, handle, name, primary_stats_line, status}</code> per row. Color-codes via the identity pillar.</span></div>
+        <div class="slot"><span class="slot-name">profile_links_toggles[]</span><span class="slot-desc">Boolean per link: Local↔Persona, Persona-on-Local, Pro-to-Local. Default all off.</span></div>
+        <div class="slot"><span class="slot-name">privacy_rows[]</span><span class="slot-desc">Chevron rows for Address sharing, Block list, Hidden interactions. Right-aligned status string optional.</span></div>
+        <div class="slot"><span class="slot-name">disclosure_items[]</span><span class="slot-desc">"What Pantopus knows" rows — verified address, payment, identity tier, phone. Always paired with Data export.</span></div>
+      </div>
+    </div>
+
+    <div class="section-title">Three frames · populated, first-run, switcher</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">All four identities active</div>
+          <div class="label-sub">Preview CTA · 4 profile cards (Local/green · Personal/sky · Persona/pink · Pro/violet) · 3 link toggles · privacy rows · businesses link · expanded "What Pantopus knows" with Data export.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · FIRST RUN</div>
+          <div class="label-title">Two set up, two to go</div>
+          <div class="label-sub">Local + Personal active · Persona + Professional show "Not set up" with primary "Create" chip · Profile-links section disabled with helper · primary-tinted "Two more to go" hint at bottom.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · SWITCHER</div>
+          <div class="label-title">Identity switcher bottom sheet</div>
+          <div class="label-sub">Backdrop dimmed + blurred · 74% sheet (grabber, h3, lede) · 4 large radio cards (Local selected) · disclosure linking to A22 Audience hub · Cancel ghost + "Use this identity" primary.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="identity-center-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FramePopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameFirstRun />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameSwitcherModal />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

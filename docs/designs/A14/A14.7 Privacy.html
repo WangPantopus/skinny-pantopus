@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pantopus · A14.7 Privacy</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827; min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker {
+      font-size:11px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:#0369a1; margin-bottom:6px;
+    }
+    .header h1 {
+      font-size:32px; font-weight:600; letter-spacing:-0.02em;
+      margin:0 0 10px; color:#111827;
+    }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:820px; line-height:21px; }
+
+    .inherits {
+      max-width:1100px; margin:0 auto 36px;
+      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+      padding:18px 22px;
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:10px 24px;
+    }
+    .inherit { display:flex; gap:10px; align-items:flex-start; }
+    .inherit-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:10.5px; color:#0369a1; background:#e0f2fe;
+      padding:2px 7px; border-radius:6px; white-space:nowrap;
+      flex-shrink:0; font-weight:600;
+    }
+    .inherit-desc { font-size:12px; color:#374151; line-height:17px; }
+
+    .section-title {
+      max-width:1100px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em;
+      text-transform:uppercase; color:#9ca3af;
+    }
+
+    .frames {
+      max-width:1100px; margin:0 auto;
+      display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 32px;
+      justify-items:center;
+    }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:360px; }
+    .label-num {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em;
+    }
+    .label-title {
+      font-size:16px; font-weight:600; color:#111827;
+      margin-bottom:5px; letter-spacing:-0.01em;
+    }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+      .inherits { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A14.7 Privacy">
+    <div class="header">
+      <div class="kicker">A14.7 · src/app/settings/privacy.tsx</div>
+      <h1>Privacy.</h1>
+      <p>Mixed-control variant of the A14 archetype — the screen that exercises the full control vocabulary. Radios for profile visibility and address granularity, a five-stop slider with live map preview for location fuzz, toggles for activity visibility, leading-icon chevron rows for data export. Two frames contrast everyday defaults against a Stealth state where every control is set to its most private.</p>
+    </div>
+
+    <div class="inherits">
+      <div class="inherit"><span class="inherit-label">top bar</span><span class="inherit-desc">52px, chevron-left + centered title "Privacy". No trailing affordance.</span></div>
+      <div class="inherit"><span class="inherit-label">radio cards</span><span class="inherit-desc">Profile visibility (4 options) &amp; Address on profile (4 options) — Row + Radio. Sub on each option spells out the exact thing strangers will see.</span></div>
+      <div class="inherit"><span class="inherit-label">step slider</span><span class="inherit-desc">Five-stop slider for "Map location fuzz": Exact · Block · Quarter mile · Half mile · Neighborhood. Filled track in primary-600, white thumb with 2px primary border.</span></div>
+      <div class="inherit"><span class="inherit-label">fuzz map</span><span class="inherit-desc">Inline 92px-tall map strip below the slider — faint street grid, central pin, blue fuzz circle that scales with the selected stop. Mono tag in the corner names the current stop.</span></div>
+      <div class="inherit"><span class="inherit-label">toggle group</span><span class="inherit-desc">Activity card — 4 standard iOS toggles: online status, recent activity, nearby search, public ratings. Each sub tells you what the toggle exposes.</span></div>
+      <div class="inherit"><span class="inherit-label">leading icons</span><span class="inherit-desc">Data card rows carry primary-50 tinted 32px icon badges (download, file-text). Reserved for "actions" rather than "settings" — separates them from the radio/toggle vocabulary above.</span></div>
+      <div class="inherit"><span class="inherit-label">stealth banner</span><span class="inherit-desc">Dark slate card above the first overline — visible only on Frame 2. Eye-off icon, "Stealth mode is on" + sub explaining the floor it puts under everything.</span></div>
+      <div class="inherit"><span class="inherit-label">helpers</span><span class="inherit-desc">Each card's helper text rewrites between frames to reflect the chosen pattern's consequence — never just restating the toggle.</span></div>
+      <div class="inherit"><span class="inherit-label">destructive</span><span class="inherit-desc">Detached "Delete account" card at the bottom with sub "Permanent. 30-day grace period." Present in both frames.</span></div>
+    </div>
+
+    <div class="section-title">Two frames · populated · stealth (secondary)</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Everyday defaults</div>
+          <div class="label-sub">Verified-only profile, street name on profile, "Block" location fuzz, balanced activity. The settings most people sit at after onboarding — open enough to be useful, private enough to feel safe.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · STEALTH (SECONDARY)</div>
+          <div class="label-title">Everything at the strictest</div>
+          <div class="label-sub">Stealth banner up top; profile hidden, address hidden, fuzz at Neighborhood (biggest blue circle on the map preview), every activity toggle off. Helpers shift to consequence language — "buyers see only Park Slope", "Existing chats still work".</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="settings-archetype.jsx"></script>
+  <script type="text/babel" src="privacy-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FramePrivacyPopulated/>);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FramePrivacyStealth/>);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250);
+    setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A13.11 · Professional profile</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1180px; margin: 0 auto 16px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7c3aed; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .header h1 .pillar { display: inline-flex; align-items: center; gap: 6px; vertical-align: 4px;
+                        font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+                        color: #fff; background: #7c3aed;
+                        padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
+    .header h1 .pillar svg { width: 12px; height: 12px; }
+    .header h1 .new { font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+                      color: #166534; background: #dcfce7; border: 1px solid #bbf7d0;
+                      padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .path { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
+            padding: 4px 10px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #374151; }
+    .path .dim { color: #9ca3af; }
+
+    .meta { max-width: 1180px; margin: 24px auto 40px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+    .meta dl { margin: 0; }
+    .meta dt { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+               color: #6b7280; margin-bottom: 4px; }
+    .meta dd { margin: 0; font-size: 13px; color: #111827; font-weight: 500; line-height: 17px; letter-spacing: -0.1px; }
+    .meta dd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                    background: #f5f3ff; padding: 1px 6px; border-radius: 4px; color: #7c3aed; font-weight: 600; }
+
+    .section-title { max-width: 1180px; margin: 0 auto 24px; font-size: 13px; font-weight: 600;
+                     letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1040px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A13.11 Professional profile">
+    <div class="header">
+      <div class="kicker">Pantopus · A13.11 · Form (single screen)</div>
+      <h1>
+        Professional profile
+        <span class="pillar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Business pillar</span>
+        <span class="new">New</span>
+      </h1>
+      <p>Edits the Business-pillar identity — separate from the Personal profile (A13.9) and the Home command center. Every claim that grants outsized trust (company affiliation, certifications) carries a verification status; the sticky-save bar is verification-aware and tells the user when claims need 1–2 business days to confirm.</p>
+      <div class="path"><span class="dim">src/app/</span>professional.tsx</div>
+    </div>
+
+    <div class="meta">
+      <dl><dt>Archetype</dt><dd>A13 · Form (single screen)</dd></dl>
+      <dl><dt>Variant</dt><dd>Multi-section · 5 sections · 655 lines</dd></dl>
+      <dl><dt>Identity pillar</dt><dd><code>Business · #7C3AED</code></dd></dl>
+      <dl><dt>Sticky CTA</dt><dd>Save &amp; submit · verification-aware</dd></dl>
+      <dl><dt>Sections</dt><dd>Role · Skills · Certifications · Portfolio · Visibility</dd></dl>
+      <dl><dt>Required fields</dt><dd>Title</dd></dl>
+      <dl><dt>Verification</dt><dd>Company · Certifications · Portfolio fetch</dd></dl>
+      <dl><dt>Profile strength</dt><dd>0–100% · gates Pro+ tier</dd></dl>
+    </div>
+
+    <div class="section-title">Two frames · verified &amp; pending verification</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A13.11 Professional profile · Verified">
+        <div id="f-verified"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · VERIFIED (PUBLISHED)</div>
+          <div class="label-title">Strength 92% · all claims verified</div>
+          <div class="label-sub">Live profile. Company verified, 3 certs (1 expiring), 3 portfolio links resolved, neighbor search on. Sticky bar reads "Published" with Save disabled.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A13.11 Professional profile · Pending">
+        <div id="f-pending"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · PENDING VERIFICATION</div>
+          <div class="label-title">Strength 68% · 2 claims pending</div>
+          <div class="label-sub">Switched company to "Elm Park Trades Co-op", added a new Tile-Installer cert + Behance link, added "Tile work" skill. Amber badges mark fresh items; sticky bar previews the 1–2 day verification SLA before submit.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel" src="professional-profile-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f-verified')).render(<FrameProProfileVerified />);
+    ReactDOM.createRoot(document.getElementById('f-pending')).render(<FrameProProfilePending />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

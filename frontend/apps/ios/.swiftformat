@@ -1,0 +1,30 @@
+# SwiftFormat configuration — https://github.com/nicklockwood/SwiftFormat
+#
+# Run: swiftformat .
+# Check only: swiftformat --lint .
+
+--swiftversion 5.10
+--indent 4
+--maxwidth 140
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--wrapconditions after-first
+--closingparen balanced
+--commas inline
+--elseposition same-line
+--emptybraces no-space
+--ifdef no-indent
+--importgrouping testable-last
+--ranges no-space
+--self remove
+--semicolons never
+--trimwhitespace always
+--voidtype void
+--someany enabled
+
+--exclude build,DerivedData,.build,Pantopus.xcodeproj,fastlane,SourcePackages
+
+--disable andOperator
+--disable redundantType
+--disable wrapMultilineStatementBraces

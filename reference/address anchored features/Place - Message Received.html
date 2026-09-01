@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Neighbor message / received (D2)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 820px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 820px; line-height: 21px; }
+
+  /* product cards */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-reply:hover { background: #e0f2fe !important; }
+  .pl-manage:hover { background: #f8fafb !important; }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+  .td-back:hover { background: #f6f7f9 !important; }
+  .pl-skel { position: relative; overflow: hidden; background: #eef1f4; }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .stage-cap { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .side-note { max-width: 330px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  .spec-row { display: flex; flex-wrap: wrap; gap: 30px 40px; align-items: flex-start; }
+  .specimen { width: 360px; }
+  .spec-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .spec-tag { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .spec-note { font-size: 12px; color: var(--fg4); }
+  .spec-stage { background: #f6f7f9; border: 1px solid #e7eaee; border-radius: 18px; padding: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-today-detail.jsx"></script>
+<script type="text/babel" src="place-message-received.jsx"></script>
+<script type="text/babel">
+function Specimen({ tag, note, children }) {
+  return (
+    <div className="specimen">
+      <div className="spec-label">
+        <span className="spec-tag">{tag}</span>
+        {note && <span className="spec-note">{note}</span>}
+      </div>
+      <div className="spec-stage">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · D2 — Neighbor message / received</div>
+        <h1 className="doc-title">A note from a neighbor you'll never have to identify</h1>
+        <p className="doc-sub">The other side of the channel. A verified-neighbor message arrives with no name, no avatar, no way to find out who sent it — just “from a verified neighbor nearby,” the verified badge, and the same neutral, pre-written note they picked. Receiving it shouldn't feel like being watched, so the framing is calm and the controls put you in charge: reply with a template if you want, mark it unhelpful, block the home, or report it — and none of those tell the sender what you did. The screen's job is to make an anonymous message from a stranger feel safe to receive.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Verified <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> Templated reply <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#FEF2F2' }}></span> Report <b>Red, last resort</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Shell <b>#f6f7f9</b>, white bordered cards</div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The screen</h2>
+        </div>
+        <p className="zone-sub">The message up top, anonymized and verified. A templated reply if you want one — tap a quick reply in the phone and it sends, anonymously, with a way to change it. Then the calm controls: not helpful, block, report. A reassurance line closes it out.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <MessageReceived />
+            </IOSDevice>
+            <div className="stage-cap">Tap a quick reply · it sends anonymously</div>
+          </div>
+
+          <div className="side-note">
+            <h4>No identity, on purpose</h4>
+            <p>“From a verified neighbor nearby,” a shield avatar, and a Verified chip — that's all you get. There's no profile to open, no name to learn. The badge tells you they're real without telling you who.</p>
+
+            <h4>The same neutral note</h4>
+            <p>The body is the pre-written template the sender chose — they couldn't type freely, so there's nothing pointed or personal in it. The footnote says so, which lowers the temperature on arrival.</p>
+
+            <h4>Reply only if you want to</h4>
+            <p>Templated quick replies, anonymous both ways. Tap one and it's sent; you can change it. No obligation, no thread that traps you in a back-and-forth.</p>
+
+            <h4>Controls that don't tattle</h4>
+            <p>Not helpful, block, report — each says plainly that the sender won't be notified. Acting to protect yourself never tips off the person you're protecting yourself from.</p>
+
+            <h4>Calm, not alarming</h4>
+            <p>No red banners, no “stranger danger.” Report is the one red affordance, held for last. The default tone is a neighborly heads-up, because that's almost always what it is.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">The message, and the reply</h2>
+        </div>
+        <p className="zone-sub">The received card carries the anonymized sender, the templated body, and the line that explains why it's safe. The reply is templated too — and once sent, it confirms anonymous delivery rather than opening a chat.</p>
+
+        <div className="spec-row">
+          <Specimen tag="Received message" note="anonymized · verified">
+            <ReceivedCard body="A package may have been left at the wrong door near you. You might want to check around." />
+          </Specimen>
+          <Specimen tag="Quick replies" note="templated · anonymous">
+            <QuickReplyBar onReply={() => {}} />
+          </Specimen>
+          <Specimen tag="Reply sent" note="confirms, doesn't open a thread">
+            <ReplySent reply="Got it — I'll check" onChange={() => {}} />
+          </Specimen>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">03</span>
+          <h2 className="zone-title">The controls</h2>
+        </div>
+        <p className="zone-sub">Three ways to manage a message you didn't ask for — graded from gentle to serious, and each one quiet to the sender. Feedback trains the templates, block stops the home, report escalates to the trust team.</p>
+
+        <div className="spec-row">
+          <Specimen tag="Manage this message" note="not helpful · block · report">
+            <ManageCard />
+          </Specimen>
+          <Specimen tag="Anonymized sender" note="the header, on its own">
+            <div className="pl-card" style={{ padding: 16 }}>
+              <AnonSender time="2h ago" />
+            </div>
+          </Specimen>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

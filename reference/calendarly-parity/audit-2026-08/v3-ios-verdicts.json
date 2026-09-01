@@ -1,0 +1,366 @@
+[
+ {
+  "id": "price-int-overflow-trap",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "EventTypeEditorViewModel.swift:289-295 verified in working tree: `guard let value = Double(cleaned), value >= 0 else { return nil }; return Int((value * 100).rounded())`. `priceDollars` (line 75) is a plain var with no didSet; EventTypeEditorView.swift:410-414 is a bare TextField(.decimalPad) with no onChange/maxLength clamp. Double(\"99999999999999999\") (17 digits) = ~1e17 > Int.max/100 (~9.22e16), so Int(1e19) traps ('Double value cannot be converted to Int because the result would be greater than Int.max'). Reached from render: EventTypeEditorView.swift:64 `FormShell(isValid: viewModel.formValid)` and :94 both read formValid -> priceValid -> parsedPriceCents on every body evaluation. One gate: priceValid short-circuits (`!chargeEnabled ||`), so the trap requires chargeEnabled == true \u2014 exactly the state in which the price field is visible. Secondary locale point also verified: trimmingCharacters only strips leading/trailing ' $\u20ac\u00a3,' so an interior comma ('120,50' from a comma-locale decimal pad) survives, Double() fails, Save silently disables with no price error (validateBeforeSave sets only name/slug/duration errors).",
+  "fix": "In parsedPriceCents clamp before converting: `let scaled = (value * 100).rounded(); guard scaled >= 0, scaled <= Double(Int.max) else { return nil }; return Int(scaled)`. Optionally cap field length in the view and parse via locale-aware NumberFormatter for comma locales."
+ },
+ {
+  "id": "filter-today-always-zero",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingFilterViewModel.swift:302-303 verified: `case .today: return (isoDay(now), isoDay(now))` \u2014 from == to == the same bare 'yyyy-MM-dd' string (local isoDay at :320-327 formats in .current tz with en_US_POSIX; no locale bug here, just the zero-width window). Backend working tree backend/routes/scheduling.js:644-645: `if (req.query.from) q = q.gte('start_at', req.query.from); if (req.query.to) q = q.lte('start_at', req.query.to)` \u2014 Postgres casts '2026-08-07' to midnight timestamptz on both bounds, so start_at >= midnight AND <= midnight matches only exact-midnight bookings; Today recounts to 0. Sheet trap verified: resultCount==0 makes ctaEnabled false (BookingFilterViewModel.swift:160-161 `resultCount != 0`) and BookingFilterSheet.swift:38-45 replaces status/owner/event-type/date-range sections with noResults \u2014 its own comment says 'the only escape is Clear all', so Today cannot be deselected without discarding all facets. Same math confirms .custom excludes the entire last selected day (to = midnight of upper).",
+  "fix": "Make the upper bound exclusive next-day: `case .today: return (isoDay(now), isoDay(calendar.date(byAdding: .day, value: 1, to: now) ?? now))`; same +1 day for .custom's upper. Matches Android BookingSearchFilterViewModel.kt today..today.plusDays(1)."
+ },
+ {
+  "id": "d2-stuck-confirming",
+  "severity": "blocker",
+  "verdict": "CONFIRMED",
+  "evidence": "InviteeReviewConfirmViewModel.swift verified: state=.confirming set at :236; success path (:246-259) saves token, clears draft, `push(.inviteeConfirmed(...))` at :259 with NO state restore. Full state-mutation census shows .ready restored only at :263 (generic catch) and :274 (handle(_:)) \u2014 the success path is the sole leak. D3 is a pushed NavigationStack destination (HomeSchedulingKit.swift:341 `.navigationDestination(for: SchedulingRoute.self)`; SchedulingRouter.swift:105 maps .inviteeConfirmed); InviteeConfirmedView.swift has `.navigationBarBackButtonHidden(true)` (:30) and its only exits are dismiss() \u2014 X button :34, Done :283 and :291 \u2014 which pops exactly one level back onto D2. On re-appear D2 cannot recover: `.task { await viewModel.load() }` (InviteeReviewConfirmView.swift:30) is guarded by didLoad (:189-190), refresh() (:221) has no caller from this view, and there is no .refreshable. Frozen render verified: content gets .opacity(0.85)/.disabled when .confirming (InviteeReviewConfirmView.swift:73-74) and ConfirmShimmerButton('Confirming your booking') replaces the CTA (:84-85).",
+  "fix": "Set `state = .ready` immediately before push(.inviteeConfirmed(...)) in confirm() (or use `defer` in the do block). Extend testConfirmPersistsTokenAndPushesConfirmed to assert state == .ready after success."
+ },
+ {
+  "id": "isoday-locale",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingTime.swift:88-94 verified in working tree: isoDay sets calendar=.iso8601 and timeZone=UTC but never locale, with fixed dateFormat 'yyyy-MM-dd' \u2014 the QA1480 case; numbering system comes from Locale.current (ar_SA/fa_IR default to arab/arabext digits), calendar does not protect digits. All wire consumers verified by grep: OneOffLinkGeneratorViewModel.swift:282-283 (public slots from/to), InsightsModels.swift:85-88, FindATimeSetup/Suggested/WhosFree/SlotTaken. Backend behavior verified empirically: node `new Date('\u0662\u0660\u0662\u0666-\u0660\u0668-\u0660\u0666').getTime()` returns NaN; availabilityService.js:488-492 then returns [] (silent 200 empty slots); findATimeSchema scheduling.js:802 `from: Joi.string().isoDate().required()` 400s. Note: dup of isoday-missing-posix-locale.",
+  "fix": "Set `formatter.locale = Locale(identifier: \"en_US_POSIX\")` in SchedulingTime.isoDay (assign locale before calendar/dateFormat)."
+ },
+ {
+  "id": "error-code-dropped-non-409",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingError.swift verified: `code` property (:146-151) returns the code only for .slotConflict/.conflict; classify (:184-207) routes non-409 coded bodies to `.unknown(message: message ?? code)` \u2014 code lost as machine code. Backend emits coded non-409s: scheduling.js:1204 & :1476 `res.status(400).json({ error: 'BUSINESS_ONLY' })` (no message), :1000/:1003 BAD_RANGE, :453 INVALID_ASSIGNEE (body has `invalid` array, NOT `details`, so the .validation branch also misses), schedulingPublic.js:258 SLOT_NOT_OFFERED. Dead branch sites verified: TeamBookingAvailabilityViewModel.swift:173 (`error.code == \"BUSINESS_ONLY\"` never true, so phase falls to .error(\"BUSINESS_ONLY\") \u2014 raw code as user copy since userMessage folds code into message), ScheduleVisitViewModel.swift:150 (BAD_RANGE), CollectiveEventSetupViewModel.swift:154 and RoundRobinAssignmentViewModel.swift:169 (INVALID_ASSIGNEE \u2014 both the validationDetails and code checks fail).",
+  "fix": "Carry body.error on all classified cases (add code associated value to .validation/.notFound/.forbidden/.server/.unknown or a dedicated .coded case) and surface it from the `code` projection."
+ },
+ {
+  "id": "summary-dto-mismatch",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "Backend verified: scheduling.js:654-655 wires GET /bookings/summary to bookingMetricsService.getSummary, whose return object (bookingMetricsService.js:67-76) is {bookingsThisMonth, bookingsLastMonth, deltaPct, upcomingCount, noShowCount, sparkline, byEventType} \u2014 no pendingCount/totalThisMonth/noShowRate/nextBooking. SchedulingSummaryDTO (InsightsDTOs.swift:24-30) declares exactly those missing fields, all optional, so decode silently succeeds with nils. Consumer chain verified: BookingActions.summary() (:43-45) returns the DTO; BookingsInboxViewModel.swift:204 `pendingCount = summary.pendingCount ?? 0` \u2014 permanently 0; BookingsInboxView.swift:176-177 gates the Pending badge on pendingCount > 0 (never shows) and :196 reads 'Pending approval, 0' for VoiceOver. The optimistic decrement at :222 starts from 0 so stays 0.",
+  "fix": "Fix SchedulingSummaryDTO to the deployed camelCase shape and derive the Pending badge from the pending list the inbox already fetches (or add pendingCount server-side)."
+ },
+ {
+  "id": "public-eventtype-questions-never-sent",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "backend/routes/schedulingPublic.js verified in working tree: publicEventTypeView (:71-90) enumerates its fields explicitly and includes no `questions`; grep for 'question' across the whole public router returns zero hits, so no public endpoint ever emits them. iOS PublicBookingDTOs.swift:59 declares `questions: [EventTypeQuestionDTO]?` (CodingKeys :79) \u2014 optional, decodes to nil silently. Consumers verified: InviteeIntakeFormViewModel.swift:151-153 builds the schema-driven section from `(eventType?.questions ?? [])` (always empty) and :366 loops required-question validation over the same empty array, so host-mandated intake questions are silently dropped and bookings arrive with empty answers.",
+  "fix": "Join EventTypeQuestion rows into the public payload in schedulingPublic.js (ordered by sort_order) \u2014 or fetch them via a public questions endpoint; until then D1's questions UI and required-field validation are dead."
+ },
+ {
+  "id": "limits-clobbers-untouched-notice-interval",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingLimitsViewModel.swift verified in working tree (no parallel fix landed): apply() lossily projects \u2014 :153 `minNoticeHours = max(0, Int((Double(notice)/60).rounded()))` (90 -> 2h) and :158 `SlotInterval.from(minutes:)` whose switch (:46-52) maps anything not 60/30 to .every15 (20 -> 15). save() then compares the re-derived value to the RAW loaded value: :176-180 `noticeMin = minNoticeHours * 60; if noticeMin != loadedMinNoticeMin { request.minNoticeMin = noticeMin }` (120 != 90 -> sends 120) and :185-188 `if slotInterval.rawValue != loadedSlotIntervalMin { request.slotIntervalMin = slotInterval.rawValue }` (15 != 20 -> sends 15). Caps use the correct value-shown-at-load pattern (initialDailyCap/initialPerBookerCap, :160-161, :191-198) \u2014 confirmed drift between the two paths. With min_notice_min=90/slot_interval_min=20, changing only horizonDays makes canSave true (signature includes horizonDays) and the PUT silently rewrites both untouched fields.",
+  "fix": "Capture initialMinNoticeHours/initialSlotInterval in apply() and compare the user-visible values in save(), mirroring the cap handling."
+ },
+ {
+  "id": "isoday-missing-posix-locale",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "Duplicate of isoday-locale (same root defect, same file). SchedulingTime.swift:88-94: isoDay has calendar+timeZone but no locale with fixed dateFormat \u2014 Locale.current numbering system leaks into wire params; OneOffLinkGeneratorViewModel.swift:282-283 confirmed as consumer; backend availabilityService.js:488-492 confirmed to return [] on the resulting NaN parse (verified empirically with node: new Date('\u0662\u0660\u0662\u0666-\u0660\u0668-\u0660\u0666') is Invalid Date), and OneOffLinkGenerator's catch swallows into empty slotOptions. CORRECTION to the claim's fix note: the cited siblings are already correct \u2014 BookingFilterViewModel.swift:320-327 and BookingsSupport.swift:237-244 both already set en_US_POSIX; only SchedulingTime.isoDay needs the fix.",
+  "fix": "Set formatter.locale = Locale(identifier: \"en_US_POSIX\") in SchedulingTime.isoDay only."
+ },
+ {
+  "id": "blockoff-conflict-check-request-storm",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "BlockOffTimeViewModel.swift verified: didSets on startTime/allDay/date/endTime (:64-78) each call scheduleConflictCheck(); scheduleConflictCheck (:136-147) cancels the prior task and immediately spawns a Task that goes straight into client.request \u2014 no Task.sleep debounce anywhere in the file. The driver is a continuous wheel: BlockOffTimeView.swift BlockTimePickerSheet (:299-318) binds `set: { time = TimeOfDay(from: $0) }` to a .wheel DatePicker, so every detent issues a fresh GET /api/scheduling/bookings (prior in-flight request cancelled but already dispatched; backend/middleware/rateLimiter.js exists). Second leg confirmed: detectConflict's catch (:186-189) runs `conflict = nil` with NO Task.isCancelled guard, while the success path checks isCancelled at :167 \u2014 every cancelled task's URLError.cancelled lands in that catch on the MainActor in nondeterministic order and can erase the warning a fresher task just set.",
+  "fix": "Debounce inside the spawned task (try? await Task.sleep(~300ms) then guard !Task.isCancelled) and guard the catch with `if Task.isCancelled { return }` (or catch CancellationError/URLError.cancelled separately) before clearing conflict."
+ },
+ {
+  "id": "holiday-toggle-deletes-custom-overrides",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "DateOverridesViewModel.swift:188-197 verified: `toggleHolidays` starts from `overrides.filter { !holidayDates.contains($0.date) }` \u2014 drops EVERY override on a holiday date regardless of shape (a user's custom-hours entry with start/end times is indistinguishable-but-distinguishable: isUnavailable==false with non-nil start/end is available on OverrideEntry and unused). When enable==false nothing is re-added; when enable==true the user's entry is replaced by a full-day unavailable (:192-194). persist (:214-231) PUTs the entire set and the backend (scheduling.js:596-599) does `AvailabilityOverride.delete().eq('schedule_id', ...)` then inserts only the sent rows \u2014 so a hand-authored half-day override on e.g. Jul 4 is permanently destroyed server-side by flipping the holidays switch, no confirmation, no undo.",
+  "fix": "Only strip import-shaped entries: filter on `holidayDates.contains($0.date) && $0.isUnavailable && $0.start == nil && $0.end == nil`; when enabling, skip holiday dates that already carry a user override."
+ },
+ {
+  "id": "onboarding-price-mult-overflow",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingOnboardingModel.swift:329 verified in working tree (line moved from ~307 by local edits, logic unchanged): `let priceCents: Int? = (flow == .business && paidEnabled) ? (Int(priceText).map { $0 * 100 }) : nil` \u2014 plain `*` with no overflow handling. Int(\"92233720368547759\") (~9.22e16) parses fine, *100 = ~9.22e18 > Int.max -> Swift arithmetic-overflow trap. Field is SchedulingOnboardingScreen.swift:569-573: bare TextField(.numberPad) bound to a plain `var priceText = \"120\"` (:44) with no didSet/length cap. Trap fires inside finishSetup() on the Finish tap \u2014 after the wizard has already published is_live=true (:322-325), so the crash leaves a live page with zero event types.",
+  "fix": "Use `Int(priceText).flatMap { let r = $0.multipliedReportingOverflow(by: 100); return r.overflow ? nil : r.partialValue }` plus a length cap on the binding; ideally share one validated money parser with EventTypeEditorViewModel."
+ },
+ {
+  "id": "wizard-hours-never-persisted",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "evidence": "FirstRunWizardModel.swift in the working tree (uncommitted local fix) now persists the grid: seedTimezoneAndAdvance() (:305-335) fetches the default schedule, PUTs its timezone (:320-323), builds rules from `hoursEnabled.filter(\\.value).keys.sorted()` (:324-326) and PUTs them via SchedulingEndpoints.setRules (:327-330) before advancing to .success; also publishes is_live=true (:311-314). hoursEnabled now has three references (declaration :43, binding in FirstRunWizardScreen.swift:96, and the rules build :324) \u2014 the 'never read again' claim no longer holds. Residual nit (not the claimed defect): all three writes are try? best-effort, so a failed rules PUT still lands on the success step silently.",
+  "fix": "n/a (fixed in working tree; optionally surface failures of the best-effort writes)"
+ },
+ {
+  "id": "onboarding-home-hardcoded-share-link",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingOnboardingModel.swift:121-127 verified in working tree (the uncommitted inputSteps refactor did not touch it): `case .home: return \"pantopus.com/book/family\"` \u2014 a literal global slug, ignoring the household's real page. All three consumers verified: SchedulingOnboardingScreen.swift:163 displays it, :164 `UIPasteboard.general.string = \"https://\\(model.shareLink)\"` copies it, and primaryTapped's success branch (SchedulingOnboardingModel.swift:225-227) sets `pendingShareURL = URL(string: \"https://\\(shareLink)\")` feeding the share sheet. The Home flow never resolves a real slug: claimSlug() is only reached from the business step-1 branch (:230-231) and the model never calls getBookingPage. Every household shares the identical https://pantopus.com/book/family, which resolves to whichever account owns slug 'family' or 404s.",
+  "fix": "Fetch the home's booking page in the Home flow and derive shareLink from page.slug; hide Copy/Share until a slug resolves (pattern: SchedulingHubModel.bookingShareURL returns \"\" for empty slug)."
+ },
+ {
+  "id": "hub-error-masquerades-as-empty",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingHubModel.swift verified in working tree: :189 `async let typesR: EventTypesResponse? = try? api.request(getEventTypes)` swallows every failure to nil, :199 folds it to [], and :209 `phase = eventTypes.isEmpty ? .empty : .loaded` \u2014 a 500/timeout/decode failure on /event-types is indistinguishable from a genuinely empty catalog once /booking-page succeeded. The summary call gets dedicated failure tracking (`summaryFailed = (s == nil)`, :202) but types do not. SchedulingHubScreen.swift:65-69: the .empty branch renders HubEmptyState whose only affordance is `model.startSetup()` (pushes first-run wizard); no Retry and zero `.refreshable` in the file, so an established owner on flaky network sees the first-run empty state with no recovery except leaving the tab.",
+  "fix": "Track types failure separately (typesFailed) and route it to .error so the existing retry applies; enter .empty only on a successful zero-row response."
+ },
+ {
+  "id": "sharelink-copied-never-resets",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "ShareLinkSheet.swift verified: full census of `copied` = declaration (:35), single write `withAnimation { copied = true }` (:177), and six reads (:90 bottom overlay gate, :103 toast, :181/:182/:188 button glyph/label/green fill, :193 a11y label). No reset anywhere \u2014 once Copy is tapped the green 'Link copied' pill stays pinned to the sheet's bottom overlay (:90 `.overlay(alignment: .bottom) { copiedToast }`) for the sheet's whole life, and the Copy button permanently reads 'Copied' so repeat copies give no feedback. The doc comment (:100) explicitly calls it a floating toast (design Frame 3), i.e. intended transient; SchedulingHubScreen.copyLink() does the 1.8s reset correctly, confirming drift.",
+  "fix": "After setting copied = true, schedule `Task { try? await Task.sleep(for: .seconds(1.8)); withAnimation { copied = false } }` mirroring SchedulingHubScreen.copyLink()."
+ },
+ {
+  "id": "qr-cicontext-in-body",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "ShareLinkSheet.swift verified in working tree: qrCGImage(_:size:) allocates a fresh CIContext() at :449 and rasterizes via context.createCGImage at :456 on every call; qrImage(_:size:) (:436-446) calls it with no memoization (no @State, no .task, no cache keyed on url; grep confirms the only qr state is `showQR`). qrImage is evaluated straight from body: :242 (qrCard, 32pt) and :377 (qrFullScreen, 184pt). Any state flip re-runs it synchronously on the main thread during layout: copied set at :177 (Copy button), showQR, confirmRegenerate, and both Toggle bindings (:289-303, Binding(get:set:) into parent callbacks re-rendering the sheet). CIContext is documented-expensive (Metal-backed) and Apple guidance is create-once/reuse.",
+  "fix": "Hoist `static let context = CIContext()` and cache the rendered CGImage in `@State`, populated from `.task(id: url)`; keep the :443 placeholder as the pre-render state."
+ },
+ {
+  "id": "pillar-switch-empty-owner-id",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingHubModel.swift verified in working tree (file actively edited by fixers \u2014 summary card got wired \u2014 but selectPillar untouched): :167 `owner = await .home(homeId: resolveFirstHomeId() ?? \"\")` and :169 `owner = await .business(id: resolveCurrentUserId() ?? \"\")`, then unconditional `await fetch()` (:171). resolveFirstHomeId (:446-449) is try?-nil on failure AND on genuinely-no-homes. SchedulingOwner.swift:39 `case let .home(homeId): \"/api/homes/\\(homeId)/scheduling\"` \u2192 empty id yields /api/homes//scheduling/booking-page. Re-tap trap verified: guard at :161 `!choice.matches(owner)` with SetupKit.swift:154-158 matching on case only \u2014 after the mutation to .home(\"\") the Home pill permanently no-ops while phase = .error re-runs the malformed request via Try again.",
+  "fix": "Resolve the id BEFORE mutating owner; on nil set phase = .error with a pillar-specific message and return without fetch. Optionally have SchedulingOwner reject empty ids at construction."
+ },
+ {
+  "id": "ios-hub-pillar-switch-empty-owner-id",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "Duplicate of pillar-switch-empty-owner-id (same defect, same lines). SchedulingHubModel.swift:167/:169 bake `?? \"\"` into the owner then fetch; SchedulingOwner.swift:39 builds /api/homes//scheduling. Android parity gap verified: SchedulingHubViewModel.kt resolves first and bails with a tailored message before any owner mutation or network call (claim's :111-121 behavior present in working tree). iOS shows generic 'Couldn't load your scheduling hub.' with a Try again that repeats the malformed request.",
+  "fix": "Same as pillar-switch-empty-owner-id \u2014 guard nil resolution with a pillar-specific error and no owner mutation."
+ },
+ {
+  "id": "ios-hub-canedit-never-resets",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingHubModel.swift verified in current working tree: full census of canEdit = declaration `private(set) var canEdit = true` (:134), guard read (:226), writes to false only \u2014 fetch() catch `if case .forbidden = error { canEdit = false }` (:179) and setPaused catch (:237). Neither load() (:151), refresh() (:156), selectPillar() (:160) nor fetch() (:174) ever sets it back to true, so one 403 from any pillar latches view-only mode across every subsequent pillar until process death. Android resets per-fetch: SchedulingHubViewModel.kt:142 `canEdit = true` at the top of fetch (verified in working tree).",
+  "fix": "Set canEdit = true at the start of fetch() before the booking-page request, mirroring Android."
+ },
+ {
+  "id": "inbox-drops-applied-facets",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingsInboxViewModel.swift verified: applyFilters (:169-181) stores the full BookingFilters in appliedFilters (:170) but forwards only filters.search (:171) and the status\u2192tab mapping (:173-178); fetch() (:188) calls actions.list(status:search:) and BookingActions.list (BookingActions.swift:30-40) builds only SchedulingEndpoints.getBookings(owner:status:search:) \u2014 eventTypeId/dateRange/scope never reach the wire. The plumbing exists on both ends: SchedulingEndpoints.getBookings (:383-402) already takes eventTypeId/from/to (event_type_id/from/to query params) and backend scheduling.js honors them; BookingFilterViewModel.recount passes all facets when computing the CTA count (verified during filter-today-always-zero). The code even self-documents the gap (:41-44 and :161-165 'need a richer BookingActions.list to reach the wire'), but ships the contradiction: CTA says 'Show 2 bookings', inbox then lists every booking for the tab with no indication the event-type/date facets were discarded.",
+  "fix": "Widen BookingActions.list to list(status:search:eventTypeId:from:to:), forward from applyFilters using appliedFilters + a shared dateBounds helper, and include the facets in fetch() for subsequent tab switches/refreshes."
+ },
+ {
+  "id": "timerange-24h-mixed-clock",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingsSupport.swift verified: timeRange (:136-146) mixes two clock conventions \u2014 startStr uses timeStringNoMeridiem (:171-177, en_US_POSIX + fixed 12-hour \"h\"/\"h:mm\") when sameMeridiem, while endStr always uses timeString (:165-169, timeStyle=.short with NO locale, so it follows Locale.current including the user's 24-Hour Time override). With 24-Hour Time on, a 14:00-14:30 booking has sameMeridiem=true (both hours >=12) \u2192 \"2:00\u201314:30\". Even a morning 9:00-9:30 renders mixed-style \"9:00\u201309:30\". Consumers verified by grep: headerWhen (:127-133) \u2192 BookingDetailViewModel.swift:70 (E2 header) and RescheduleReassignViewModel.swift:135/:157 (every E4 slot row + confirm subtitle); timeRange also feeds BookingSheetComponents.swift:67, Invitee ConfirmSupport.swift:58 and EdgeSupport.swift:75 \u2014 so the invitee confirm/review surfaces inherit the same mixed clock.",
+  "fix": "Pin timeString to en_US_POSIX with \"h:mm a\" (matching timeStringNoMeridiem), or derive both halves from a locale-aware template (setLocalizedDateFormatFromTemplate) and only suppress the meridiem when the resolved pattern actually contains one."
+ },
+ {
+  "id": "resourcetime-missing-posix-locale",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "ResourceKit.swift verified: every fixed-dateFormat formatter in ResourceTime omits locale \u2014 clockLabel (:318-320 'h a'/'h:mm a'), rangeLabel (:327-334), timeLabel (:340-343), daySectionLabel (:352-355), dayStripLabel (:363-366), longRangeLabel (:372-375), shortDate (:383-386), meridiem (:404-409 'a'). Per QA1480, a fixed format with Locale.current is rewritten by the user's 12/24-hour override, and locale numbering leaks (ar/fa \u2192 non-Latin digits). Drift confirmed: peers on the same Home surfaces pin en_US_POSIX \u2014 HomeAgendaComponents.swift:133/:137/:146/:167 and FindATimeModels.swift:244. CORRECTION to the claim's scenario: under the 24-hour override iOS rewrites 'h:mm a' coherently to 'HH:mm', so a 15:00-17:00 visit renders '15:00\u201317:00' (meridiem() returns \"\" \u2192 sameMeridiem vacuously true), NOT the ambiguous '3:00\u20135:00' the claim describes; the end==nil branch of rangeLabel (:332) also emits a trailing space ('15:00 '). The real failures are mixed clock conventions across adjacent screens (agenda POSIX-pinned '3:00 PM' beside resource-grid '15:00'), the broken sameMeridiem logic, and non-Latin digits on ar/fa devices where peer labels stay Latin.",
+  "fix": "Set formatter.locale = Locale(identifier: \"en_US_POSIX\") on every fixed-format DateFormatter in ResourceTime (clockLabel, rangeLabel, timeLabel, daySectionLabel, dayStripLabel, longRangeLabel, shortDate, meridiem), matching HomeAgendaBuilder and FindATimeFormat."
+ },
+ {
+  "id": "whosfree-utc-isoday-off-by-one",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "WhosFreeViewModel.swift verified: load() computes startOfDay with tzCalendar (:245-249, pinned to the home's tz) at :106-107, then serialises it via SchedulingTime.isoDay (:117-118), which hard-codes formatter.timeZone = UTC (SchedulingTime.swift:88-94, verified earlier). For any positive-offset zone the local-midnight instant falls on the previous UTC day: Asia/Tokyo Aug 6 00:00 JST = Aug 5 15:00Z \u2192 from=\"2026-08-05\". Backend parses it as UTC midnight (availabilityService.js \u2014 new Date(from).getTime(), verified earlier), so the returned window is [Aug 5 09:00 JST, Aug 6 09:00 JST) for the .day mode. freeHours (:164-181) then extracts only hour-of-day in tz and discards the date, folding yesterday's free slots into today's grid \u2014 a member busy all day today but free 2-4 PM yesterday renders Free at 2p. Negative offsets get the right day STRING but a window shifted back by the offset, folding late-yesterday hours in. Same pattern confirmed at findATimeHere (:203-204), FindATimeSetupViewModel.swift:229-230, FindATimeSuggestedViewModel.swift:181-182. Android uses LocalDate.now() (no UTC conversion) per claim.",
+  "fix": "Use the existing tz-aware BookingsCalendar.isoDay(_:tz:) (BookingsSupport.swift:237-244) \u2014 or add a SchedulingTime.isoDay(_:tz:) overload \u2014 at all four call sites so the day key is formatted in the same zone the start-of-day was computed in."
+ },
+ {
+  "id": "noshow-partial-failure-stuck",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "MarkNoShowViewModel.swift verified: confirm() (:75-94) runs the sequential POSTs inside one do block \u2014 the first throw aborts the loop, returns false, and neither removes already-marked ids from selectedIds nor records per-target outcomes. MarkNoShowDialog.swift:166-172 calls onMarked/onClose only on true, so the dialog stays open with the full selection. On retry the loop restarts at targets[0], now server-side no_show: backend bookingService.js:544-546 asserts ['confirmed','completed'] and transitionBooking returns null for a terminal state \u2192 409 BAD_STATE, so every retry fails on the first, already-marked target and the remaining targets are permanently unmarkable from this dialog. Wrong copy confirmed too: Self.message (:96-103) maps BAD_STATE to 'You can mark a no-show only after the booking's start time' \u2014 false for the already-no_show case. (Minor correction to claim: allowed-from is ['confirmed','completed'] at :544, not ['confirmed'] \u2014 doesn't change the trap.) SchedulingError.code does carry 409 codes (.conflict), so the mapping path is live.",
+  "fix": "Track per-target results: remove each id from selectedIds on success, continue past per-target failures, report partial success ('Marked 1 of 3 \u2014 retry the rest'), and add a distinct message for BAD_STATE on an already-terminal booking."
+ },
+ {
+  "id": "reschedule-jump-backwards",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "InviteeRescheduleViewModel.swift:141-147 verified: jumpNextAvailable() is `if let firstDay = availableDays.min() { selectedDate = firstDay } else { await changeMonth(1) }` \u2014 availableDays is the Set of ALL open start-of-days in the loaded month, so .min() is the earliest open day regardless of the current selection: selecting a later day then tapping the CTA jumps BACKWARDS, and when already on the earliest open day the button is a visible no-op even with later open days present. Sibling drift confirmed: DiscoverySlotPickerViewModel.swift:261-267 filters `availableDays.filter({ $0 > afterStart }).min()` before falling through to the forward month scan. Reachability confirmed: SlotPicker.swift:478-483 renders a permanent 'Next available' header button whenever onJumpNextAvailable is non-nil, and InviteeRescheduleView.swift:107 always supplies it (plus the day-full card CTA at SlotPicker.swift:309-317).",
+  "fix": "Mirror the discovery VM: compute afterStart = cal.startOfDay(for: selectedDate), take availableDays.filter({ $0 > afterStart }).min(); on hit set selectedDate + clear selectedSlotStart, else fall through to changeMonth(1)."
+ },
+ {
+  "id": "slot-taken-pick-another-dead-end",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "InviteeReviewConfirmView.swift verified: slotTakenSheet's onPickAnotherTime is `viewModel.showSlotTakenSheet = false; dismiss()` (:340-343) \u2014 D2 was pushed from D1 via push(.inviteeReviewConfirm(slug:eventTypeSlug:start:tz:)) (InviteeIntakeFormViewModel.swift:408), so dismiss() pops exactly one level onto D1, whose route payload still carries the lost `start`; nothing rewinds to the slot picker, and D1's live 'Review booking' CTA re-pushes a fresh D2 that 409s again. Dead code confirmed: repo-wide grep for markSlotTaken finds only its definition (DiscoverySlotPickerViewModel.swift:226) \u2014 zero production callers (the :316 hit is the #if DEBUG preview factory assigning takenSlotStart directly), so takenSlotStart (:44) is never set in production and the amber slotJustTaken toast (DiscoverySlotPickerView.swift:26-29) plus the taken-row treatment are unreachable; the picker still renders the dead slot as selectable.",
+  "fix": "On .slotConflict pop back to the slot picker (router path surgery, not single dismiss()) and call the picker VM's markSlotTaken(bookingStart) through a navigator seam; or if no seam is planned, delete markSlotTaken/takenSlotStart/slotJustTaken and the toast so unreachable UI isn't mistaken for shipped behavior."
+ },
+ {
+  "id": "parsecents-decimal-separator",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "PackagesKit.swift verified: SchedulingMoney.parseCents (:44-48) is `raw.filter { $0.isNumber || $0 == \".\" }` then Double(cleaned) \u2014 only the ASCII period survives as a decimal mark. Feeding field verified: PackageEditorView.swift:171 PkgTextField(keyboard: .decimalPad), which renders the LOCALE decimal separator (comma in de/fr/es/it/pt-BR). \"240,50\" \u2192 cleaned \"24050\" \u2192 24050.0 \u2192 Int(2405000) cents, posted verbatim by save() (PackageEditorViewModel.swift:193 `SchedulingMoney.parseCents(priceText) ?? 0`) \u2014 a 100x inflated package price, previewed live by perSessionLabel (:113-115) too. Bonus failure in the same line: `$0.isNumber` admits non-ASCII digits (Arabic-Indic), Double() then fails \u2192 nil \u2192 `?? 0` saves the package at $0. Also carries the same unclamped Int(Double) trap class as price-int-overflow-trap for 17+ digit input.",
+  "fix": "Parse with a locale-aware NumberFormatter (numberStyle .decimal, locale .current) or normalize Locale.current.decimalSeparator to '.' before filtering; restrict the filter to $0.isASCII && $0.isNumber; clamp (value*100).rounded() to Double(Int.max) before Int(); add comma-input cases to PackagesKitTests.testParseCents."
+ },
+ {
+  "id": "roundrobin-rule-roundtrip",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "RoundRobinAssignmentViewModel.swift verified: save() encodes .balanced as (weight: pick.weight, priority: 0) at :154-155 with pick.weight defaulting to assignee?.weight ?? 1 (:88), and .strict as (weight: 1, priority: 0) at :158-159 \u2014 byte-identical payloads when the owner never touches the weight steppers. inferRule (:183-188) classifies all-weights-1 + all-priorities-0 as .strict, and load() assigns it straight to selectedRule (:103), so 'Balanced' with default weights reads back as 'Strict' after save\u2192reload. Single-member .priority (index 0 \u2192 priority 0, weight 1) is likewise indistinguishable and re-infers .strict. Test lock-in confirmed: RoundRobinAssignmentViewModelTests.swift:63-70 testInfersStrictWhenAllEqual asserts .strict for exactly this weight-1/priority-0 shape, treating the round-trip loss as correct.",
+  "fix": "Persist the rule explicitly (event-type field or a sentinel encoding the other rules never produce, e.g. balanced always sends weight >= 1 with a marker) instead of inferring from weights/priorities; update the test to assert the chosen rule survives save\u2192reload."
+ },
+ {
+  "id": "reminders-no-max5-cap",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "Backend cap verified: scheduling.js:139 `reminder_minutes: Joi.array().items(Joi.number().integer().min(0).max(43200)).max(5)`. iOS DefaultRemindersViewModel.swift verified: toggle() (:124-131) and addCustom() (:141-152) append to reminderMinutes with no upper bound (grep for any cap/disabled logic in VM+view: none \u2014 only the customValue 999 clamp at :134); save() (:156-163) PUTs the whole array. ReminderPreset.all ships exactly six presets (AutomationsSupport.swift:210-217: 1 week/1 day/1 hour/30 min/15 min/At start), so turning all six on \u2014 or five plus a custom row \u2014 produces a 6-element array the backend 400s. saveError surfaces only the generic validation message with no hint which selection to drop, and retrying can never succeed. (Note: file line numbers drifted slightly from the claim \u2014 toggle at :124 not :117, presets at AutomationsSupport.swift:210 not :238 \u2014 the defect is as claimed.)",
+  "fix": "Cap client-side at 5: disable unselected preset rows and Add custom once reminderMinutes.count == 5 with an 'Up to 5 reminders' note; mirror on Android."
+ },
+ {
+  "id": "member-hours-save-silent-failure",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "MemberWorkingHoursViewModel.swift verified: save() (:173-196) ends in a bare `catch { return false }`; grep confirms zero saveError/errorMessage occurrences in both the VM and MemberWorkingHoursSheet.swift. Sole consumer verified at MemberWorkingHoursSheet.swift:44 `{ Task { if await model.save() { onClose() } } }` \u2014 on false the sheet just stays open, spinner stops, nothing rendered. Partial-success misreport also verified: the rules PUT (:182-185) and the conditional timezone PUT (:186-192) are sequential in one do block, so a timezone failure after the rules landed returns false \u2014 hours ARE persisted server-side while the UI implies total failure; a user who then re-edits from stale assumptions or dismisses loses track of what saved.",
+  "fix": "Add `private(set) var saveError: String?` set in the catch (map SchedulingError.userMessage), render it in the sheet footer; track the rules/timezone steps separately so partial success reports accurately."
+ },
+ {
+  "id": "package-editor-error-discards-edits",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "PackageEditorViewModel.swift verified: save()'s both catches set phase = .error(...) (visible at the 'Couldn't save the package.' assignments), and PackageEditorView.swift:34-38 switches the WHOLE screen to errored(message) on .error \u2014 form unmounted. errored's only action (:236-243) is `Task { await model.load() }`; for an existing package load() (:140-157) refetches the packages list, seed(from:) overwrites name/sessionsCount/priceText/selectedEventTypeId/isActive with server values, and `snapshot = Snapshot(self)` (:157) resets isDirty \u2014 so Retry after a transient save failure silently discards every in-progress edit with no warning. Sibling pattern confirmed by grep: SchedulingInvoiceDetailViewModel.swift:230/:232 (send() failure blanks a loaded invoice) and SchedulingPackagesListViewModel.swift:126/:128/:140/:142 (archive/restore failure blanks the loaded list).",
+  "fix": "Route mutation failures to an inline `saveError` note above the sticky Save CTA, keeping the form and edits mounted; reserve phase .error for load failures. Apply the same split in the invoice send and packages archive/restore paths."
+ },
+ {
+  "id": "ios-home-onboarding-blank-step3",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "evidence": "SchedulingOnboardingModel.swift in the working tree (uncommitted fixer change) now carries the inputSteps/railSteps split the claim asked for: `var inputSteps` (:104-109) returns 2 for .home / 4 for .business, `isSuccess` is `stepIndex > inputSteps` (:111-112), and primaryTapped/skip gate on `stepIndex < inputSteps` (:229, :246) so Home step 2's Continue runs finishSetup() directly and rail step 3 renders as the success frame \u2014 the doc comment (:96-103) explicitly documents the fix and its Android mirror (OnboardingHomeBusinessViewModel inputSteps/railSteps). The phantom empty-body step 3 is no longer reachable.",
+  "fix": "n/a (fixed in working tree)"
+ },
+ {
+  "id": "ios-notif-pushoff-never-detected",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "evidence": "SchedulingNotificationPrefsModel.swift in the working tree (uncommitted fixer change): load() now awaits refreshPushAuthorization() before rebuildRows()/phase=.loaded (:96-98), and refreshPushAuthorization (:109-112) assigns `pushOff = await NotificationChannelService.shared.pushStatus() != .authorized` \u2014 the doc comment (:101-108) explicitly cites this audit finding ('previously declared and rendered against but never assigned'). Screen consumption intact: pushOffNotice gate at SchedulingNotificationPrefsScreen.swift:68 and P-chip disabling at :376. The sibling DefaultRemindersViewModel also gained a refreshPushState() reading UNUserNotificationCenter.",
+  "fix": "n/a (fixed in working tree; optionally re-run refreshPushAuthorization on scenePhase .active as the comment suggests)"
+ },
+ {
+  "id": "ios-onboarding-success-on-failure",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingOnboardingModel.swift finishSetup() verified in the CURRENT working tree (post-fixer): every failure path still advances to the success frame \u2014 non-SLUG_TAKEN SchedulingError sets `stepIndex = totalSteps + 1; return` (:355-356), the generic catch does the same (:357-360), and the exhausted 4-attempt SLUG_TAKEN loop falls out to `stepIndex = totalSteps + 1` (:362). No submitError field exists anywhere in the model (grep: zero hits). Aggravator now in-tree: :320-325 best-effort publishes is_live=true BEFORE createEventType, so an offline/500 finish shows 'Your business is taking bookings' AND leaves a live public page with zero event types. Android keeps the user on the last input step with submitError copy (OnboardingHomeBusinessViewModel createEventTypeWithRetry else-branch).",
+  "fix": "Add a submitError field surfaced in the wizard footer, only set stepIndex = totalSteps + 1 when createEventType succeeded, and defer the is_live=true publish until after creation succeeds."
+ },
+ {
+  "id": "hubsummarycard-dead",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "evidence": "Working tree (uncommitted fixer change): HubSummaryCard is now mounted \u2014 SchedulingHubScreen.swift:120 instantiates HubSummaryCard(...) with content from summaryContent (:130, mapping model.summary/summaryRetrying) and onRetry wired to `Task { await model.retrySummary() }` (:125). SchedulingHubModel gained the matching plumbing: summaryRetrying (:125) and retrySummary() (:214-221) refetching just the summary; summaryFailed (:124) is now read by the screen's content mapping. The 'no call site / orphaned state / wasted request' claim no longer holds.",
+  "fix": "n/a (fixed in working tree)"
+ },
+ {
+  "id": "approve-rollback-cross-tab",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingsInboxViewModel.swift verified: approve(_:) (:218-230) snapshots bookings (:220), optimistically removes the row (:221), and its catch unconditionally assigns `bookings = snapshot` (:226) with no fetchGeneration/selectedTab guard \u2014 unlike fetch() (:183-198) which guards every assignment with `generation == fetchGeneration`. selectTab (:126-130) and applyFilters (:169-181) both mutate selectedTab and refetch while an approve can still be in flight, so a failed approve (e.g. 409 PAST_DEADLINE) that resolves after the tab's fetch restores the previous tab's pending rows into the Upcoming tab, complete with Approve/Decline affordances, until a manual refresh.",
+  "fix": "Capture generation (and tab) before the await: `let generation = fetchGeneration` \u2026 `catch { guard generation == fetchGeneration else { return }; bookings = snapshot; \u2026 }` \u2014 or drop the snapshot and reconcile via await refresh()."
+ },
+ {
+  "id": "summary-contract-test-fabricated",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingDecodeTests.swift:114-123 verified: testBookingsSummaryDecodes stubs `{\"upcomingCount\":3,\"pendingCount\":1,\"totalThisMonth\":12,\"noShowRate\":0.08,\"nextBooking\":{\"start_at\":\u2026,\"invitee_name\":\"Sam\"}}` and asserts noShowRate == 0.08 and nextBooking?.inviteeName == \"Sam\". Per the CONFIRMED summary-dto-mismatch verdict, the deployed bookingMetricsService.getSummary (bookingMetricsService.js:67-76) emits {bookingsThisMonth, bookingsLastMonth, deltaPct, upcomingCount, noShowCount, sparkline, byEventType} \u2014 pendingCount/totalThisMonth/noShowRate/nextBooking do not exist. The suite therefore certifies a fabricated shape while the production decode yields all-nils and the Pending badge sticks at 0 \u2014 exactly the regression class the contract suite claims to catch.",
+  "fix": "Replace the fixture with the real getSummary payload, assert against the corrected DTO fields, and add a negative assertion so a service/doc divergence fails the build."
+ },
+ {
+  "id": "router-test-does-not-evaluate-body",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingRouterTests.swift:113-120 verified: testAllRoutesResolveToAView constructs the destination and does `_ = AnyView(view)` \u2014 AnyView(_:) type-erases without evaluating body, yet the inline comment claims 'a trap here (e.g. a force-unwrap) would fail the test'. Stub spot-checks confirm real view-models are built inside body, not init: EventTypeListStubView.swift:37-41 (`EventTypeListViewModel(owner:push:)` in body) and ManualBookingStubView.swift:38-46 (`ManualBookingViewModel(owner:push:client:)` in body). So the 74-route assertion exercises only the thin \u2026StubViewModel initialisers; a trap added to any real VM init constructed in body ships green and first fires on user navigation.",
+  "fix": "Render each destination through UIHostingController(rootView:).view.layoutIfNeeded() (or ImageRenderer) in the test, or hoist real VM construction into the stubs' inits as InviteeIntakeFormStubView already does, so the existing assertion covers it."
+ },
+ {
+  "id": "conflict-label-24h-locale",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "BlockOffTimeViewModel.swift:200-204 verified: timeLabel builds DateFormatter with fixed dateFormat \"h:mm a\", no locale AND no timeZone. With the user's 24-Hour Time override, iOS rewrites the fixed pattern (QA1480) \u2192 'confirmed 14:00 booking' inside the user copy at BlockOffTimeView.swift:237 ('This overlaps a \\(conflict.bookingLabel). Blocking won't cancel it.'), matching the claim's scenario; non-latn locales additionally render non-ASCII digits. Missing timeZone also renders the conflict time in the device zone rather than the schedule's. Sibling confirmed: OneOffLinkGeneratorViewModel.swift:305-313 slotDateLabel uses fixed 'EEE \u00b7 MMM d' with timeZone but no locale. SchedulingTime.localString does this correctly with dateStyle/timeStyle.",
+  "fix": "Use timeStyle = .short (or SchedulingTime.localString) for the conflict label, or pin en_US_POSIX if the design mandates 12-hour; set the schedule timezone; add locale to slotDateLabel."
+ },
+ {
+  "id": "oneoff-duration-and-intake-toggles-are-noops",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "OneOffLinkGeneratorViewModel.swift verified: askIntakeQuestions (:153-154) and selectedDurationMin (:156) are live bindings \u2014 OneOffLinkGeneratorView.swift:286 (duration chips), :253 (summary echo '60 min \u00b7 video'), :481 (intake Toggle) \u2014 but generate() builds OneOffLinkRequest(eventTypeId:expiresInMin:singleUse:offeredSlots:) only (:340-345). OneOffLinkRequest (BookingPageDTOs.swift:166-180) has no duration or intake field, and backend oneOffSchema (scheduling.js:1051-1061) accepts only owner_type/owner_id/event_type_id/expires_in_min/single_use/offered_slots. Both controls are pure no-ops: the invitee books the event type's default duration while the card claims the chip value.",
+  "fix": "Remove the two controls until the API supports them, or add duration_min/collect_questions to OneOffLinkRequest + oneOffSchema + BookingToken and wire generate()."
+ },
+ {
+  "id": "saved-toast-blocks-save-bar",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingPageManagementViewModel.swift verified: save() declares `defer { isSaving = false }` (:418) and the success path ends with `await flashSavedToast()` (:456); flashSavedToast (:463-467) sets showSavedToast, sleeps 2_000_000_000 ns, then clears it \u2014 and because it is awaited inside save(), the defer cannot run until the sleep completes, pinning isSaving=true for ~2s after the network call finished. BookingPageManagementView.swift:71 hands isSaving to FormShell, so the commit button shows the saving spinner and stays unusable for those 2 seconds after every successful save.",
+  "fix": "Fire-and-forget the toast: `Task { await flashSavedToast() }` (or set showSavedToast here and let the view clear it on a timer) so defer runs as soon as the request completes."
+ },
+ {
+  "id": "limits-test-only-covers-lossless-fixtures",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "BookingLimitsViewModelTests.swift verified: the only fixtures \u2014 Self.detail (:26-30) and detailNoCaps (:33-36) \u2014 carry min_notice_min:240 (exactly 4h) and slot_interval_min:30 (an exact chip value), both lossless round-trips. testUntouchedFieldsNotResent (:80-100, doc comment even naming 'possibly lossy' fields) changes only horizonDays and asserts XCTAssertNil for min_notice_min/slot_interval_min \u2014 assertions that pass only because 240/30 re-derive identically. With the lossy 90/20 fixture the body would contain 120 and 15 (per the CONFIRMED limits-clobbers-untouched-notice-interval defect, still unfixed in the working tree), so the suite is green while the production guarantee is broken. Caps are properly covered by testNoCapEventTypeNotCappedWhenUntouched (:120).",
+  "fix": "Add a detailLossyValues fixture (min_notice_min:90, slot_interval_min:20) plus a test changing only horizonDays asserting neither field appears in the PUT body \u2014 it will fail until the VM defect is fixed."
+ },
+ {
+  "id": "save-qr-silent-failure",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "ShareLinkSheet.swift:430-433 verified: saveQRToPhotos is `guard let cg = Self.qrCGImage(url, size: 1024) else { return }; UIImageWriteToSavedPhotosAlbum(UIImage(cgImage: cg), nil, nil, nil)` \u2014 completion target/selector/context all nil, so neither success nor failure is observable, and grep confirms zero PHPhotoLibrary usage anywhere in Features/Scheduling (no add-only authorization request, no denial branch, no Settings deep link). A previously-denied user taps 'Save to Photos' (fullscreen QR, :403) and nothing happens, repeatably; even on success there is no confirmation. Info.plist claim verified: NSPhotoLibraryUsageDescription present (Info.plist:59, project.yml:128) but NSPhotoLibraryAddUsageDescription absent from both \u2014 the add-only flow's preferred key.",
+  "fix": "Request PHPhotoLibrary.requestAuthorization(for: .addOnly), branch denied/restricted to an alert with a Settings link, pass a completion (or use performChanges) surfacing a toast both ways, and add NSPhotoLibraryAddUsageDescription to project.yml/Info.plist."
+ },
+ {
+  "id": "duration-error-copy-mismatch",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "EventTypeEditorViewModel.swift:387 verified: `durationError = durationsValid ? nil : \"Enter a length between 5 and 480 minutes.\"` while durationsValid (:283-285) enforces `(5...1440).contains($0)` \u2014 matching backend scheduling.js:260/:345 `Joi.number().integer().min(5).max(1440)`. The stated ceiling is 3x lower than what both client and server actually accept, so a user hitting duration validation (e.g. an out-of-set default) is told to shorten a perfectly valid 600-minute service.",
+  "fix": "Change the copy to 'between 5 and 1440 minutes' \u2014 or derive bound and copy from one shared constant with durationsValid."
+ },
+ {
+  "id": "setup-zero-test-coverage",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "Mostly still true in the working tree, with one partial landing: fixers created PantopusTests/Scheduling/Setup/ containing exactly one file, SchedulingOnboardingModelTests.swift (9 tests, all step-machine projections for the new inputSteps fix \u2014 testHomeHasThreeRailStepsButOnlyTwoTakeInput etc.). Grep across PantopusTests for FirstRunWizardModel|SchedulingHubModel|SchedulingSettingsModel|NotificationPrefs still matches only the Contract decode file \u2014 so SchedulingHubModel (empty-vs-error projection, summarizeRules 0=Sunday weekday convention, agenda bucketing), FirstRunWizardModel (the wizard's is_live + rules writes, freshly rewritten in this tree), SchedulingSettingsModel and SchedulingNotificationPrefsModel remain untested, and neither irreversible write path (wizard seedTimezoneAndAdvance, onboarding finishSetup network writes) has any test. Three confirmed defects in this audit (hub error-as-empty, canEdit latch, onboarding success-on-failure) sit exactly in that untested surface.",
+  "fix": "Extend PantopusTests/Scheduling/Setup/ with SchedulingHubModelTests (SequencedURLProtocol: .empty vs .error for failing /event-types; pin summarizeRules/dayBucket), FirstRunWizardModelTests (step machine + what each step writes), and finishSetup failure-path tests asserting no success frame without a created event type."
+ },
+ {
+  "id": "reschedule-past-month-paging",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "InviteeRescheduleViewModel.swift:127-133 verified: changeMonth applies the delta and refetches with no lower clamp and never moves selectedDate into the new month. Sibling clamp confirmed: DiscoverySlotPickerViewModel.swift:231-242 rejects anchors before the current month's start (with the exact comment the claim quotes) and sets selectedDate = max(interval.start, today). Downstream chain confirmed: fetchMonth uses DiscoveryCalendar.monthRange (:98), which clamps from = max(monthStart, today) and to = max(end, from) (DiscoverySupport.swift:162-172), so a fully-past month collapses to from == to and the backend returns [] (fromMs >= toMs, availabilityService.js \u2014 verified earlier). Result: paging back renders empty months the invitee must page forward out of, while the selected-day pill and dstHint (:69-70) still describe the original month.",
+  "fix": "Copy the discovery clamp into InviteeRescheduleViewModel.changeMonth and set selectedDate = max(newInterval.start, startOfToday) after a successful page."
+ },
+ {
+  "id": "manage-token-write-only-userdefaults",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "ManageTokenStore.swift verified: persist() JSON-encodes entries (bookingId + manageToken + metadata) into UserDefaults.standard under 'scheduling.invitee.manageTokens.v1' (:40, :98-101) \u2014 plaintext, included in device backups, no Keychain. Call-site census via repo grep: production uses only save (InviteeReviewConfirmViewModel.swift:250) and remove (InviteeManageBookingViewModel.swift:252); token(forBookingId:)/contains/allEntries/clear appear ONLY in PantopusTests \u2014 the header's 'returning invitee re-opens their booking after relaunch' purpose has no implementation, so the bearer credential (sole authorization for public manage/reschedule/cancel/.ics endpoints, e.g. manageAvailableSlots(token:) used at InviteeRescheduleViewModel.swift:101) is stored for zero functional benefit. PolicyBlockedViewModel.swift contains no ManageTokenStore reference, so cancelling from the policy-blocked surface leaves the token behind, unlike the D4 cancel path.",
+  "fix": "Either delete the store (nothing reads it) or move it to Keychain (kSecAttrAccessibleWhenUnlockedThisDeviceOnly) and actually wire a re-entry surface; add remove(bookingId:) to PolicyBlockedViewModel.cancel() if it stays."
+ },
+ {
+  "id": "guests-foreach-offset-id",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "InviteeIntakeFormView.swift:373 verified: `ForEach(Array(viewModel.guests.enumerated()), id: \\.offset)` \u2014 row identity is the array index of a collection that removeGuest(at:) mutates in place (InviteeIntakeFormViewModel.swift:323-326 guests.remove(at:)). Each row hosts an IntakeField bound via guestBinding(index) (:377), an index-captured binding into the same mutable array. Removing element 0 shifts survivors down while SwiftUI keeps per-offset identities, so a still-mounted TextField (focus + uncommitted edit buffer) re-points at a different guest's slot and the highest row's in-progress text is torn down \u2014 focus jumps and typed content lands on/disappears from the wrong guest. Value-stable ids used elsewhere in the same file confirm the drift.",
+  "fix": "Model guests as Identifiable (struct Guest { let id = UUID(); var email: String }) and iterate ForEach($viewModel.guests) with element bindings so removal never renumbers live rows."
+ },
+ {
+  "id": "timeline-uuid-identity-churn",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "SchedulingInvoiceDetailViewModel.swift verified: TimelineEvent declares `let id = UUID()` (:103) and timelineEvents is a computed property (:91-99) constructing fresh TimelineEvent values on every access. SchedulingInvoiceDetailView.swift:217-218 reads `let events = model.timelineEvents` inside body and iterates `ForEach(Array(events.enumerated()), id: \\.element.id)` \u2014 every body re-evaluation (send-toast flip, offline banner) presents an entirely new id set, so SwiftUI tears down and rebuilds every timeline row instead of diffing, restarting any row transition. Same latent shape confirmed in the claim for InsightsResponses `?? UUID().uuidString` fallbacks.",
+  "fix": "Derive a deterministic id (e.g. var id: String { label }) for TimelineEvent and stable derivations for the Insights fallbacks."
+ },
+ {
+  "id": "bizavatar-unstable-hash-tint",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "BusinessKit.swift verified: BizAvatar.tint (:194-197) computes `abs(name.hashValue) % Self.tints.count` while the doc comment at :183 promises a 'stable hash'. Swift's String.hashValue is SipHash with a per-process random seed (since Swift 4.2), so the same member maps to a different tint on every cold launch \u2014 members are not visually identifiable across sessions and won't match Android's deterministic tinting. Secondary: abs(_:) traps if hashValue happens to be Int.min (theoretical but free to fix).",
+  "fix": "Hash deterministically over the member id (e.g. FNV-1a over id.utf8 or utf8.reduce with &* &+) and index with .magnitude % tints.count; prefer id over display name so renames keep the color."
+ },
+ {
+  "id": "team-coverage-utc-vs-local-days",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "evidence": "TeamBookingAvailabilityViewModel.swift verified: weekWindow() (:224-232) builds window.days from utcCalendar().startOfDay + ymd (:213-222), i.e. UTC day keys (the :210 comment even says 'YYYY-MM-DD (UTC)'). coverage() (:238-241) derives coveredDays from `String(($0.startLocal ?? $0.start).prefix(10))` and intersects against window.days; startLocal is confirmed tz-LOCAL \u2014 SchedulingCommonDTOs.swift:22-23 ('Local ISO rendered in the requested tz') and backend availabilityService.js:562 `DateTime.fromMillis(s.startMs, { zone: vtz }).toISO()`. distinctDayCount (:234-236) mixes the same conventions for each row's bookable flag. In America/Los_Angeles after 5 PM local, UTC is already the next day: window.days = [D+1 \u2026 D+7] while local slot keys span [D \u2026 D+6], so the final window day can never be covered \u2192 spurious 'no coverage \u2014 add hours' warning on a fully-configured team.",
+  "fix": "Build the window in the requested tz (calendar pinned to the VM's tz) so window.days and startLocal prefixes share one zone; when startLocal is absent convert start into tz before taking the prefix."
+ }
+]

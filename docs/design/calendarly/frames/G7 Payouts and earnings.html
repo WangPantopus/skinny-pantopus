@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Payouts & Earnings</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1700px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7c3aed; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1040px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #7c3aed; background: #f3e8ff; padding: 1px 6px; border-radius: 4px; }
+    .rail { max-width: 1700px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes sh-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · G — Business payments</div>
+      <h1>Payouts &amp; Earnings <span style="font-weight:500;color:#6b7280;font-size:22px;">· Wallet, extended</span></h1>
+      <p>Extends the existing A10.10 Wallet — the app's one dark surface — rather than redesigning it. The dark balance hero keeps its concentric arcs and the glass strip splitting Pending from This month; below, a source-filter chip row (All / Gigs / Booking earnings / Packages) where the Booking-earnings chip goes violet when active, then booking rows with a calendar-check icon and violet-tinted disc joining the grouped-by-day list. The payout-method debit tile, tax-docs row, and sticky Withdraw all carry over.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>EXISTING WalletView (A10.10) extended</div>
+        <div class="meta-item"><b>Matches</b>A10.10 Wallet · A10.11 Earn</div>
+        <div class="meta-item"><b>Path</b><code>/app/wallet</code></div>
+        <div class="meta-item"><b>Pillar</b>Violet on booking source only</div>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap"><div class="label-num">1 · POPULATED</div><div class="label-title">Booking earnings filter</div><div class="label-sub">Filter set to Booking earnings; mixed cleared/pending booking + package rows; Withdraw live.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap"><div class="label-num">2 · ON HOLD</div><div class="label-title">Re-verify bank</div><div class="label-sub">Amber banner, hero hold notice, payout tile warns, Withdraw swaps to a locked variant with a footnote.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap"><div class="label-num">3 · NOT ENABLED</div><div class="label-title">Withdraw gated</div><div class="label-sub">Payouts not set up — a dashed Connect-Stripe payout tile and Withdraw disabled.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap"><div class="label-num">4 · EMPTY</div><div class="label-title">$0.00 hero</div><div class="label-sub">A dashed empty card and a $0.00 hero before any booking earnings land.</div></div></div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="biz-kit.jsx"></script>
+  <script type="text/babel" src="wallet-earnings-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<WE_FramePopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<WE_FrameOnHold />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<WE_FrameNotEnabled />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<WE_FrameEmpty />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

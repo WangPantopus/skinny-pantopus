@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A13.7 · Invite to home</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1180px; margin: 0 auto 16px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 760px; line-height: 22px; }
+    .path { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
+            padding: 4px 10px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #374151; }
+    .path .dim { color: #9ca3af; }
+
+    .meta { max-width: 1180px; margin: 24px auto 40px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 28px; }
+    .meta dl { margin: 0; }
+    .meta dt { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+               color: #6b7280; margin-bottom: 4px; }
+    .meta dd { margin: 0; font-size: 13px; color: #111827; font-weight: 500; line-height: 17px; letter-spacing: -0.1px; }
+    .meta dd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                    background: #f3f4f6; padding: 1px 6px; border-radius: 4px; color: #0284c7; font-weight: 600; }
+
+    .section-title { max-width: 1180px; margin: 0 auto 24px; font-size: 13px; font-weight: 600;
+                     letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 32px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1040px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A13.7 Invite to home">
+    <div class="header">
+      <div class="kicker">Pantopus · A13.7 · Form (single screen)</div>
+      <h1>Invite to home</h1>
+      <p>General invite — for residents, helpers, and guests. Differs from A13.5 Invite Owner: no ownership grant, no co-signer round-trip, role tiers are scoped instead of equity. Channel toggle picks email or SMS; the form validates the contact, surfaces a Pantopus match if found, and offers a free-text note before sending.</p>
+      <div class="path"><span class="dim">src/app/homes/</span>invite.tsx</div>
+    </div>
+
+    <div class="meta">
+      <dl><dt>Archetype</dt><dd>A13 · Form (single screen)</dd></dl>
+      <dl><dt>Variant</dt><dd>Simple (channel · contact · role · note)</dd></dl>
+      <dl><dt>Top-bar right action</dt><dd><code>none</code></dd></dl>
+      <dl><dt>Primary action</dt><dd>Send invite</dd></dl>
+      <dl><dt>Role tiers</dt><dd>Resident · Helper · Guest</dd></dl>
+      <dl><dt>Channels</dt><dd>Email · Phone</dd></dl>
+      <dl><dt>Match assist</dt><dd>Inline Pantopus lookup</dd></dl>
+      <dl><dt>States</dt><dd>Composing · Sent</dd></dl>
+    </div>
+
+    <div class="section-title">Two frames · composing &amp; sent</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A13.7 Invite · Composing">
+        <div id="f-compose"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Composing — Jin as resident</div>
+          <div class="label-sub">Email channel · validated address · matched Pantopus account · Resident role selected · friendly note · 14-day expiry hint.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A13.7 Invite · Sent">
+        <div id="f-sent"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SENT (SECONDARY)</div>
+          <div class="label-title">Delivered — waiting for open</div>
+          <div class="label-sub">Status timeline (sent → delivered → opened → accepted) with live state · next-step rows · cancel-invite escape hatch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel" src="invite-home-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f-compose')).render(<FrameInviteHomeCompose />);
+    ReactDOM.createRoot(document.getElementById('f-sent')).render(<FrameInviteHomeSent />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

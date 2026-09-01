@@ -1,0 +1,20 @@
+// Release — App Store / TestFlight. Production backend + LIVE Stripe key.
+//
+// The live publishable key (and any prod-only overrides) MUST be injected
+// from CI secrets via Config/Secrets.xcconfig — see fastlane/Fastfile
+// `before_all`, which runs `make env-to-xcconfig` against the CI-written
+// .env. The pk_live_REPLACE_ME default below is intentionally
+// non-functional: a misconfigured release simply can't take payments rather
+// than silently charging against the wrong account or a test key.
+//
+// AppEnvironment resolves `.production` for Release builds (no DEBUG/STAGING
+// flag), so the API/socket URLs are the prod hosts below.
+#include "Pantopus.base.xcconfig"
+
+PANTOPUS_API_BASE_URL = https:/$()/api.pantopus.app
+PANTOPUS_SOCKET_URL = https:/$()/api.pantopus.app
+STRIPE_PUBLISHABLE_KEY = pk_live_REPLACE_ME
+APS_ENVIRONMENT = production
+
+// CI overlay — LIVE Stripe key + prod Sentry DSN from App Store secrets.
+#include? "Secrets.xcconfig"

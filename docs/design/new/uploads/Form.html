@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Form archetype (single screen)</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1520px; margin: 0 auto 48px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 720px; line-height: 22px; }
+
+    .section-title { max-width: 1520px; margin: 0 auto 24px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .slots { max-width: 1520px; margin: 0 auto 32px; background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .slots h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: #111827; letter-spacing: -0.01em; }
+    .slots .lede { margin: 0 0 20px; color: #6b7280; font-size: 13px; line-height: 19px; max-width: 680px; }
+    .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px 24px; }
+    .slot { display: flex; gap: 12px; align-items: flex-start; }
+    .slot-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #0284c7; background: #f0f9ff; padding: 2px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+    .slot-desc { font-size: 12px; color: #374151; line-height: 17px; }
+    .slot-desc code { font-size: 11px; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+
+    /* field states cheat sheet */
+    .states { max-width: 1520px; margin: 0 auto 48px; background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .states h2 { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #111827; letter-spacing: -0.01em; }
+    .states-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .state-col { }
+    .state-col h4 { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; }
+
+    .frames { max-width: 1520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px 24px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 1240px) { .frames { grid-template-columns: 1fr; max-width: 420px; } .states-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · A13</div>
+      <h1>Form (single screen)</h1>
+      <p>One mobile form shell covering 14 screens — profile edit, page editor, invites, share, property details, mail-day, disambiguate. Same top-bar pattern (X + title + right action), same field rhythm, same validation language across the product.</p>
+    </div>
+
+    <div class="slots">
+      <h2>Archetype slots</h2>
+      <p class="lede">Fields that change per screen. Everything else — 44px inputs, 8px radius, 16px horizontal padding, section overlines, inline validation language — stays consistent.</p>
+      <div class="slot-grid">
+        <div class="slot"><span class="slot-name">slot.title</span><span class="slot-desc">Header text centered in the top bar (sentence case: "Invite owner", "Edit profile", "Who is this for?").</span></div>
+        <div class="slot"><span class="slot-name">slot.right_action</span><span class="slot-desc">One of <code>Save</code> / <code>Send</code> / <code>Post</code> / <code>Done</code> / <code>none</code>. Text button, primary-600. Disabled (gray) until form valid. Omit for sticky-bottom-CTA forms.</span></div>
+        <div class="slot"><span class="slot-name">slot.field_groups[]</span><span class="slot-desc">Array of <code>{overline, fields[]}</code>. Overline in UPPERCASE + 0.08em letter-spacing separates the form into scannable sections.</span></div>
+        <div class="slot"><span class="slot-name">slot.field.type</span><span class="slot-desc"><code>text</code> · <code>email</code> · <code>number</code> · <code>slider</code> · <code>toggle</code> · <code>chips</code> · <code>radio</code> · <code>textarea</code> · <code>upload</code>.</span></div>
+        <div class="slot"><span class="slot-name">slot.field.label</span><span class="slot-desc">Above-input label, 12px 600 fg2. Required fields get a small <span style="color:#dc2626">*</span> after the label.</span></div>
+        <div class="slot"><span class="slot-name">slot.field.placeholder</span><span class="slot-desc">Muted fg4 placeholder. Prefer ghost-text examples over generic "Enter X…".</span></div>
+        <div class="slot"><span class="slot-name">slot.field.helper</span><span class="slot-desc">11px fg3 italic under the field. Explains the "why" — what the data is used for.</span></div>
+        <div class="slot"><span class="slot-name">slot.field.validation</span><span class="slot-desc">Live state: <code>default</code> → <code>focus</code> → <code>valid</code> (green + check) or <code>error</code> (red border + inline icon + 11px red message).</span></div>
+        <div class="slot"><span class="slot-name">slot.sticky_cta</span><span class="slot-desc">Optional full-width primary CTA pinned bottom. Used when the commit action needs extra weight (disambiguate, destructive).</span></div>
+      </div>
+    </div>
+
+    <div class="states">
+      <h2>Field states — validation vocabulary</h2>
+      <div class="states-grid">
+        <div class="state-col">
+          <h4>Default</h4>
+          <div id="s-default"></div>
+        </div>
+        <div class="state-col">
+          <h4>Focus</h4>
+          <div id="s-focus"></div>
+        </div>
+        <div class="state-col">
+          <h4>Valid</h4>
+          <div id="s-valid"></div>
+        </div>
+        <div class="state-col">
+          <h4>Error</h4>
+          <div id="s-error"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Three frames · size &amp; complexity variants</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · SIMPLE</div>
+          <div class="label-title">Send invite</div>
+          <div class="label-sub">3–4 fields · email, phone, ownership slider, note · "Send" text button in top bar</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · MULTI-SECTION</div>
+          <div class="label-title">Edit profile</div>
+          <div class="label-sub">Avatar + cover upload · 3 sections (About, Skills, Visibility) · chip input · toggles</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · FIELD-HEAVY</div>
+          <div class="label-title">Disambiguate mail recipient</div>
+          <div class="label-sub">Scanned envelope + OCR · radio candidates · sticky-bottom primary commit</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="form-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameInvite />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameEditProfile />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameDisambiguate />);
+
+    // Field state samples for the cheat sheet
+    function StateSample({ state, value, placeholder, error }) {
+      return (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+            Email <span style={{ color: '#dc2626' }}>*</span>
+          </div>
+          <Input value={value} placeholder={placeholder} state={state} error={error} />
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('s-default')).render(
+      <StateSample state="default" placeholder="maya@pantopus.app" />
+    );
+    ReactDOM.createRoot(document.getElementById('s-focus')).render(
+      <StateSample state="focus" value="maya@pantopus.ap" />
+    );
+    ReactDOM.createRoot(document.getElementById('s-valid')).render(
+      <StateSample state="valid" value="maya@pantopus.app" />
+    );
+    ReactDOM.createRoot(document.getElementById('s-error')).render(
+      <StateSample state="error" value="maya@pantopus" error="Enter a valid email address." />
+    );
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

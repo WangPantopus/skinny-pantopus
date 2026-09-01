@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · A10.9 Support train</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1100px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 760px; line-height: 21px; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 12px; }
+
+    .meta { max-width: 1100px; margin: 0 auto 40px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 26px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 28px; }
+    .meta .col h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0284c7; }
+    .meta .col p { margin: 0; font-size: 12.5px; color: #374151; line-height: 17px; }
+    .meta .col code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #f0f9ff; color: #0369a1; padding: 1px 6px; border-radius: 5px; font-weight: 600; }
+
+    .frames { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 360px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @media (max-width: 900px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A10.9 Support train">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile · A10.9</div>
+      <h1>Support train</h1>
+      <p>A neighbor-led care train tied to a verified address: meals after a baby, rides during chemo, dog walks after a surgery. The screen is shared between coordinators (who launched it) and contributors (who scroll, pick a slot, and follow through). It’s built around <em>commitment density</em> — at a glance, you can see how much help is still needed, where the gaps are, and what other neighbors are already bringing so you don’t double up the lasagna.</p>
+      <div class="path">src/app/support-trains/[id].tsx</div>
+    </div>
+
+    <div class="meta">
+      <div class="col">
+        <h3>slot.header_pattern</h3>
+        <p><code>recipient_card</code> + <code>type_dates_progress</code> — the household is foregrounded (with a quote from them so the request feels human), then a green meal-train strip with dates, a 12 / 21 progress bar, and a stacked-avatar peek of who’s already on board.</p>
+      </div>
+      <div class="col">
+        <h3>slot.body_pattern</h3>
+        <p><code>slot_calendar</code> + <code>slot_rows</code> — 4-week grid uses dashed cells for Open, soft-green for Covered, sky for Today; legend pinned underneath. Below it, two row stacks: <em>Open near you</em> (each row has an inline "Sign up" pill) and <em>Already on the train</em> (showing who and what they’re bringing).</p>
+      </div>
+      <div class="col">
+        <h3>slot.primary_cta</h3>
+        <p><code>sign_up_for_slot</code> — sticky bottom bar with a soft fade into the page so the CTA never floats over content. In the covered state it splits into <code>send_a_card</code> + <code>join_as_backup</code> — the train doesn’t need another dinner but the recipient still deserves a note.</p>
+      </div>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">12 of 21 slots covered · 9 open</div>
+          <div class="label-sub">The common case. Recipient note pinned to the top so you remember <em>who</em> the food is for. Calendar shows the next two weeks have most of the gaps. Three open slots inline with sign-up pills, three covered slots with the dish named so a contributor can balance the menu.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SECONDARY · FULLY COVERED</div>
+          <div class="label-title">Every slot taken — you’re already signed up</div>
+          <div class="label-sub">Soft green celebration banner replaces the sign-up urgency. The user’s own commitment surfaces in its own section (sky outline + “Your slot” pill + Edit). Primary CTA splits into <em>Send a card</em> and <em>Join as backup</em> so the screen still has work to do.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="support-train-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameSupportTrainPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameSupportTrainCovered />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

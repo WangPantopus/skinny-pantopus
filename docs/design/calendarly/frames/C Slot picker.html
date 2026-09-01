@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Slot picker</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1820px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 920px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 1820px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Date + time slot picker</div>
+      <h1>Pick a time</h1>
+      <p>The full-screen slot picker an invitee reaches after choosing an event type (or via a single-type deep link, or the reschedule CTA on Manage your booking). The month calendar and the day's slots stack in one scroll — not a wizard split. It mirrors the Support Train weekday/time grid and A10.9 slot rows over Home calendar's month strip. Every day is a real, labelled button; available days are solid, unavailable muted, today carries a pillar ring, and the selected day is a filled pillar circle. The accent follows the host's pillar (Personal sky here) for today and selected; all controls stay product sky.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Slot calendar — stacked scroll</div>
+        <div class="meta-item"><b>Mirrors</b>Support Train grid · A10.9 slot rows · Home calendar strip</div>
+        <div class="meta-item"><b>Path</b><code>/book/[slug] › pick a time</code></div>
+        <div class="meta-item"><b>Pillar</b>Host's — today / selected accent</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · LOADING</div><div class="label-title">Fetching slots</div>
+        <div class="label-sub">Calendar renders immediately; the slot column shimmers while the day's times load — never a "Loading…" string.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · DAY WITH SLOTS</div><div class="label-title">Default</div>
+        <div class="label-sub">Slots grouped Morning / Afternoon. The chosen slot shows the host-local-time hint ("12:30 PM for Maria").</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · FULLY BOOKED</div><div class="label-title">Day is full</div>
+        <div class="label-sub">A quiet "No times left this day" with a See next available link — no alarm.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · NO AVAILABILITY</div><div class="label-title">Nothing open in June</div>
+        <div class="label-sub">All days muted and a centered prompt with a Jump to next available link.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · TIMEZONE / DST</div><div class="label-title">Clock-change hint</div>
+        <div class="label-sub">An info caption under the timezone chip — "Clocks change this weekend — times are adjusted."</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap">
+        <div class="label-num">6 · SLOT JUST TAKEN</div><div class="label-title">Race condition</div>
+        <div class="label-sub">A warning toast — "That time was just taken" — and the slot greys out as the list refetches.</div></div></div>
+      <div class="frame"><div id="f7"></div><div class="label-wrap">
+        <div class="label-num">7 · RESCHEDULE</div><div class="label-title">Moving a booking</div>
+        <div class="label-sub">An info banner carries the existing booking; the same picker sits below to choose a new time.</div></div></div>
+      <div class="frame"><div id="f8"></div><div class="label-wrap">
+        <div class="label-num">8 · RESCHEDULE CUTOFF</div><div class="label-title">Blocked</div>
+        <div class="label-sub">A warning banner, the picker disabled, and a Message host secondary at the bottom.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="slot-picker-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameDay />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameFullyBooked />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameNoMonth />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameTzHint />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameTaken />);
+    ReactDOM.createRoot(document.getElementById('f7')).render(<FrameReschedule />);
+    ReactDOM.createRoot(document.getElementById('f8')).render(<FrameCutoff />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

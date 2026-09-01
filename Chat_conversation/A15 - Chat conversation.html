@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A15 — Chat conversation</title>
+<link rel="icon" href="https://www.google.com/s2/favicons?domain=pantopus.com" />
+<link rel="stylesheet" href="pantopus-tokens.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="chat-archetype.css" />
+<style data-archetype-overrides>
+  /* page-specific overrides only — base scaffolding in chat-archetype.css */
+  .img-bubble .img[data-label]::before { content: attr(data-label); }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  // ─── Avatar palettes (mirror the mobile UI kit) ──────────
+  const av = {
+    derek:  "linear-gradient(135deg,#f97316,#c2410c)",   // handyman orange
+    maria:  "linear-gradient(135deg,#0ea5e9,#0369a1)",   // personal sky
+    priya:  "linear-gradient(135deg,#7C3AED,#5b21b6)",   // violet — neighborhood persona
+  };
+
+  // ─── Status bar + chat header (shared scaffold) ──────────
+  const StatusBar = () => (
+    <>
+      <div className="island"></div>
+      <div className="sb">
+        <span>9:41</span>
+        <div className="sb-right">
+          <div className="sb-bars"></div>
+          <div className="batt"><i></i></div>
+        </div>
+      </div>
+    </>
+  );
+
+  const ChatHeader = ({ avatar, initials, name, sub, presence, tier, verified }) => (
+    <div className="chat-header">
+      <div className="icon-btn" aria-label="Back">
+        <i data-lucide="chevron-left"></i>
+      </div>
+      <div className="chat-id">
+        <div className="avatar" style={{ background: avatar }}>
+          {initials}
+          {verified && <span className="vb"><i data-lucide="check"></i></span>}
+        </div>
+        <div className="meta">
+          <div className="name">
+            {name}
+            {tier && (
+              <span className="tier" style={{
+                background: tier === "gold" ? "var(--tier-gold-bg)" : "var(--tier-bronze-bg)",
+                color:      tier === "gold" ? "#7a5a10"           : "var(--tier-bronze)",
+              }}>
+                <i data-lucide="award"></i>{tier === "gold" ? "Gold" : "Bronze"}
+              </span>
+            )}
+          </div>
+          <div className="sub">
+            {presence === "online" && <span className="presence-dot"></span>}
+            {sub}
+          </div>
+        </div>
+      </div>
+      <div className="header-actions">
+        <div className="icon-btn"><i data-lucide="phone"></i></div>
+        <div className="icon-btn"><i data-lucide="info"></i></div>
+      </div>
+    </div>
+  );
+
+  // ─── Populated chat scaffold ─────────────────────────────
+  function PopulatedChat() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <ChatHeader
+          avatar={av.derek}
+          initials="DR"
+          name="Derek R."
+          sub="Active now"
+          presence="online"
+          tier="gold"
+          verified
+        />
+
+        {/* Pinned task context */}
+        <div className="ctx-strip">
+          <div className="ctx-ico"><i data-lucide="hammer"></i></div>
+          <div className="ctx-body">
+            <div className="ctx-t">Hang 3 shelves · $55 accepted bid</div>
+            <div className="ctx-m">Sat 2:00 PM · 412 Elm St</div>
+          </div>
+          <div className="ctx-chev"><i data-lucide="chevron-right"></i></div>
+        </div>
+
+        <div className="scroll" ref={scrollRef}>
+          <div className="day">
+            <div className="line"></div><div className="label">Today</div><div className="line"></div>
+          </div>
+
+          <div className="sys sys-accept">
+            <i data-lucide="check-circle-2"></i>
+            Derek accepted your task · 9:12 AM
+          </div>
+
+          {/* Incoming */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.derek }}>DR</div>
+            <div>
+              <div className="bubble in">
+                Hey Maria — confirmed for Saturday at 2pm. Want me to bring the stud finder or do you have one?
+              </div>
+              <div className="ts">9:13 AM</div>
+            </div>
+          </div>
+
+          {/* Outgoing */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">No stud finder here — please bring one 🙏</div>
+            </div>
+          </div>
+          <div className="msg-row out same">
+            <div>
+              <div className="bubble out cont">Walls are drywall, ~½″ thick. Snapped a photo:</div>
+            </div>
+          </div>
+
+          {/* Outgoing image */}
+          <div className="msg-row out same">
+            <div>
+              <div className="bubble out img-bubble">
+                <div className="img"></div>
+              </div>
+              <div className="ts out">
+                Read 9:14 <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Incoming */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.derek }}>DR</div>
+            <div>
+              <div className="bubble in">Got it. I'll bring an anchor kit too just in case.</div>
+              <div className="ts">9:16 AM</div>
+            </div>
+          </div>
+
+          {/* Typing indicator */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.derek }}>DR</div>
+            <div className="bubble in" style={{ padding: 0 }}>
+              <div className="typing"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Attachment strip — user has queued an image + a PDF before sending */}
+        <div className="att-strip">
+          <div className="att">
+            <div className="thumb"></div>
+            <div className="x"><i data-lucide="x"></i></div>
+          </div>
+          <div className="att">
+            <div className="file">
+              <i data-lucide="file-text"></i>
+              <div className="fname">shelf.pdf</div>
+            </div>
+            <div className="x"><i data-lucide="x"></i></div>
+          </div>
+        </div>
+
+        {/* Composer */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input">
+              <span>Sounds good — see you Sat</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="send"><i data-lucide="arrow-up"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Empty chat scaffold ─────────────────────────────────
+  function EmptyChat() {
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <ChatHeader
+          avatar={av.priya}
+          initials="PR"
+          name="Priya R."
+          sub="Verified neighbor · Elm Park · 0.2 mi"
+          presence="offline"
+          verified
+        />
+
+        <div className="empty">
+          <div className="big-av" style={{ background: av.priya }}>
+            PR
+            <span className="vb"><i data-lucide="check"></i></span>
+          </div>
+          <h2>Say hi</h2>
+          <p>
+            This is the start of your conversation with Priya. She replied to your sourdough Pulse rec.
+          </p>
+          <div className="trust">
+            <i data-lucide="shield-check"></i>
+            Private between verified neighbors
+          </div>
+
+          <div className="suggestions">
+            <div className="sug">
+              <span>👋 Hi Priya — thanks for the rec!</span>
+              <i data-lucide="arrow-up-right"></i>
+            </div>
+            <div className="sug">
+              <span>Is the bakery open Sundays?</span>
+              <i data-lucide="arrow-up-right"></i>
+            </div>
+            <div className="sug">
+              <span>Want to swap sourdough starter?</span>
+              <i data-lucide="arrow-up-right"></i>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer (no attachment strip — nothing queued) */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Message…</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="mic"><i data-lucide="mic"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Mount ───────────────────────────────────────────────
+  function App() {
+    // Re-render lucide icons whenever react paints
+    React.useEffect(() => {
+      const t = setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+      return () => clearTimeout(t);
+    });
+
+    return (
+      <DesignCanvas
+        title="A15 — Chat conversation"
+        subtitle="src/app/chat/[roomId].tsx · 2 frames · iPhone @ 360 × 760"
+      >
+        <DCSection id="frames" title="Frames">
+          <DCArtboard id="populated" label="Populated · active task thread" width={382} height={782}>
+            <PopulatedChat />
+          </DCArtboard>
+          <DCArtboard id="empty" label='Empty · "Say hi"' width={382} height={782}>
+            <EmptyChat />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

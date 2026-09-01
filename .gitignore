@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+
+# Env files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Build and cache output
+.next/
+.next-dev/
+next-env.d.ts
+*.tsbuildinfo
+dist/
+build/
+coverage/
+.turbo/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+combined*.log
+
+# Package manager caches
+.pnpm-store/
+
+# Temporary production reference copy for backend/CI migration
+/pantopus/
+
+# macOS
+.DS_Store
+
+# Local design caches (not committed)
+more-designed-pages/
+per-screen-and-previous-designs/
+A08 — per-screen batch 1/
+A10___Detail__Content/
+A13___Form__single_screen_/
+Creator_Audience_hub/
+Full-bleed_map___pins___legend___collapsible_bottom_sheet_/
+Wizard__multi-step_form_/
+mobile_Mailbox_root_archetype/
+reference/all-designs2/
+
+# iOS local caches (Xcode) — never source
+DerivedData/
+SourcePackages/
+*.xcuserstate
+xcuserdata/
+
+# Android local caches
+.gradle/
+local.properties
+
+# Python caches
+__pycache__/
+.pytest_cache/
+.venv/
+
+# Playwright / tooling output
+test-results/
+playwright-report/

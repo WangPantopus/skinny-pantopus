@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>A09.2 · Gig (V1)</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:#111827; min-height:100vh; }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+    .header h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#374151; background:#fff; border:1px solid #e5e7eb; padding:4px 9px; border-radius:6px; display:inline-block; margin-bottom:14px; }
+    .header .legacy { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:10px; color:#B45309; background:#FEF3C7; padding:3px 8px; border-radius:6px; display:inline-block; margin-left:8px; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:780px; line-height:21px; }
+
+    .section-title { max-width:1100px; margin:0 auto 22px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 40px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:16px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A09.2 Gig V1 — gallery">
+    <div class="header">
+      <div class="kicker">Pantopus · A09 Detail: Transactional · A09.2</div>
+      <div class="path">src/app/gig/[id].tsx</div><span class="legacy">V1 Legacy</span>
+      <h1>Gig (V1) — legacy detail.</h1>
+      <p>Same A09 chrome as V2 — top bar, hero (price + title), sticky Message + Place&nbsp;bid dock — but the body is the sparser legacy shape: no Magic Task JSONB modules, no sunken stat strip, no trust capsule row, no category chip. Just description + a posted-by line + the bid list. Secondary state shows the gig after award: green status pill, winner-highlighted bid row, losing bids dimmed with line-through, primary CTA disabled to "Bidding closed".</p>
+    </div>
+
+    <div class="section-title">Two frames · populated · awarded</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A09.2 Gig V1 — populated">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Dog walk · $22 · 3 bids</div>
+          <div class="label-sub">Amber "Open" pill. $22 hero. Plain meta row (0.4 mi · Thu Nov 14 · 5:30pm) above a divider — legacy doesn't use category chips. Single Description block + posted-by line. 3-bid list, no tags. Standard Message + Place bid dock.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A09.2 Gig V1 — awarded">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · AWARDED</div>
+          <div class="label-title">Awarded to Tomás G. · 14 min ago</div>
+          <div class="label-sub">Status flips to green "Awarded". Inline award banner under the hero. Bid list "closed" subheader; winning row gets green background + Winner pill, losers dim to 55% with strike-through prices. Dock keeps Message live; right CTA flips to disabled "Bidding closed" with lock glyph.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="gig-v2-shared.jsx"></script>
+  <script type="text/babel" src="gig-v1-populated.jsx"></script>
+  <script type="text/babel" src="gig-v1-awarded.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameGigV1Populated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameGigV1Awarded />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

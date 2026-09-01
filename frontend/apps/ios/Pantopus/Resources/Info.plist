@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pantopus</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pantopus</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>sms</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Pantopus uses Face ID to lock sensitive actions like payments.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Pantopus connects to the local development server on your Mac while testing.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Pantopus uses your location to show gigs and neighbors near you.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pantopus uses the microphone for voice messages in chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Pantopus saves images you export, like your booking QR code, to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pantopus uses your photo library to upload profile photos, listing images, and mail.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>PantopusAPIBaseURL</key>
+	<string>$(PANTOPUS_API_BASE_URL)</string>
+	<key>PantopusSocketURL</key>
+	<string>$(PANTOPUS_SOCKET_URL)</string>
+	<key>PostHogAPIKey</key>
+	<string>$(POSTHOG_API_KEY)</string>
+	<key>PostHogHost</key>
+	<string>$(POSTHOG_HOST)</string>
+	<key>SentryDSN</key>
+	<string>$(SENTRY_DSN)</string>
+	<key>StripePublishableKey</key>
+	<string>$(STRIPE_PUBLISHABLE_KEY)</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

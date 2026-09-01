@@ -1,0 +1,73 @@
+# Pantopus Android — Fastfile
+# https://docs.fastlane.tools
+
+default_platform(:android)
+
+PACKAGE_NAME = "app.pantopus.android"
+JSON_KEY_PATH = File.expand_path("play-service-account.json", __dir__)
+
+platform :android do
+  desc "Run unit + Compose UI tests (emulator required for the latter)"
+  lane :test do
+    gradle(task: "test", project_dir: "..")
+    gradle(task: "connectedDebugAndroidTest", project_dir: "..") if ENV["INSTRUMENTED"]
+  end
+
+  desc "Lint (ktlint + detekt + Android Lint)"
+  lane :lint do
+    gradle(task: "ktlintCheck detekt :app:lintDebug", project_dir: "..")
+  end
+
+  desc "Assemble a signed release AAB"
+  lane :build_release do
+    gradle(
+      task: "bundleRelease",
+      project_dir: "..",
+      properties: {
+        # Fail the build if prod config (https URL + pk_live_ key) is missing,
+        # so a release artifact can never ship localhost/test values.
+        "pantopus.requireProdConfig" => "true",
+        "android.injected.signing.store.file" => ENV["PANTOPUS_KEYSTORE_FILE"],
+        "android.injected.signing.store.password" => ENV["PANTOPUS_KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["PANTOPUS_KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["PANTOPUS_KEY_PASSWORD"]
+      }.reject { |_, v| v.nil? || v.empty? }
+    )
+  end
+
+  desc "Upload the AAB to the Play Internal track"
+  lane :beta do
+    build_release
+    upload_to_play_store(
+      track: "internal",
+      package_name: PACKAGE_NAME,
+      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      json_key: JSON_KEY_PATH,
+      release_status: "draft",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+  end
+
+  desc "Promote latest internal build to the Production track"
+  lane :release do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      package_name: PACKAGE_NAME,
+      json_key: JSON_KEY_PATH,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+  end
+
+  error do |lane, exception|
+    UI.error("Lane #{lane} failed: #{exception.message}")
+  end
+end

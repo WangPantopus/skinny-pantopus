@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pantopus · A14.8 Vacation hold</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color:#111827; min-height:100vh;
+    }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker {
+      font-size:11px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:#0369a1; margin-bottom:6px;
+    }
+    .header h1 {
+      font-size:32px; font-weight:600; letter-spacing:-0.02em;
+      margin:0 0 10px; color:#111827;
+    }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:820px; line-height:21px; }
+
+    .inherits {
+      max-width:1100px; margin:0 auto 36px;
+      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+      padding:18px 22px;
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:10px 24px;
+    }
+    .inherit { display:flex; gap:10px; align-items:flex-start; }
+    .inherit-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:10.5px; color:#0369a1; background:#e0f2fe;
+      padding:2px 7px; border-radius:6px; white-space:nowrap;
+      flex-shrink:0; font-weight:600;
+    }
+    .inherit-desc { font-size:12px; color:#374151; line-height:17px; }
+
+    .section-title {
+      max-width:1100px; margin:0 auto 22px;
+      font-size:11px; font-weight:700; letter-spacing:0.14em;
+      text-transform:uppercase; color:#9ca3af;
+    }
+
+    .frames {
+      max-width:1100px; margin:0 auto;
+      display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 32px;
+      justify-items:center;
+    }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:360px; }
+    .label-num {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em;
+    }
+    .label-title {
+      font-size:16px; font-weight:600; color:#111827;
+      margin-bottom:5px; letter-spacing:-0.01em;
+    }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+      .inherits { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A14.8 Vacation hold">
+    <div class="header">
+      <div class="kicker">A14.8 · src/app/mailbox/vacation.tsx</div>
+      <h1>Vacation hold.</h1>
+      <p>Toggle-heavy variant carrying a date-range pair, scope toggles, forwarding, and an emergency contact. The primary action "Save" lives as a top-bar trailing text button (iOS convention). The active-hold secondary frame replaces the date pickers with a sky-gradient status hero and a ledger of items currently held.</p>
+    </div>
+
+    <div class="inherits">
+      <div class="inherit"><span class="inherit-label">top bar</span><span class="inherit-desc">52px, chevron-left + centered "Vacation hold". Trailing primary-600 "Save" text button (Frame 1) or neutral "Edit" (Frame 2).</span></div>
+      <div class="inherit"><span class="inherit-label">date pair</span><span class="inherit-desc">When card holds two chevron rows (From / To) showing weekday + date as the value, sub describing what happens. A timeline strip below shows the span with a 13-day pill centered.</span></div>
+      <div class="inherit"><span class="inherit-label">scope toggles</span><span class="inherit-desc">Four rows: Packages · Mail &amp; flyers · Marketplace pickups · Civic notices. Civic carries an "Always on" caption next to a disabled toggle — communicates the locked floor.</span></div>
+      <div class="inherit"><span class="inherit-label">forwarding</span><span class="inherit-desc">Master toggle row; when on, an additional row with a primary-50 map-pin badge holds the forwarding address. Helper explains what counts as "urgent".</span></div>
+      <div class="inherit"><span class="inherit-label">emergency contact</span><span class="inherit-desc">Avatar-led row with name + relation + masked phone. Helper "We'll call them if a delivery driver flags an issue at your door."</span></div>
+      <div class="inherit"><span class="inherit-label">active hero</span><span class="inherit-desc">Frame 2 only. Sky → primary-700 gradient card, pulsing dot + "Hold active" pill, big tabular "5 days left", and a 3-cell stats grid (Packages · Mail · Forwarded).</span></div>
+      <div class="inherit"><span class="inherit-label">held ledger</span><span class="inherit-desc">Replaces the scope toggles in the active state. Icon + label + sub + tabular count for each scope. Civic notices show "Delivered as normal" so the user sees the locked floor working.</span></div>
+      <div class="inherit"><span class="inherit-label">destructive</span><span class="inherit-desc">Frame 2 ends with a detached "End hold early" card. Sub "Mail resumes tomorrow morning." Frame 1 has no destructive — Save is the action.</span></div>
+      <div class="inherit"><span class="inherit-label">helpers</span><span class="inherit-desc">Every helper rewrites between frames. Scheduling: civic always delivered, urgent re-routes same day. Active: everything held resumes Jun 9 morning.</span></div>
+    </div>
+
+    <div class="section-title">Two frames · scheduling · active (secondary)</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">13 days, set up</div>
+          <div class="label-sub">Date range selected with a visual timeline strip, all hold scopes on, civic locked, forwarding to Mom's place, Sam as the emergency contact. Save sits in the top bar in primary-600.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · ACTIVE (SECONDARY)</div>
+          <div class="label-title">5 days left, items piling up</div>
+          <div class="label-sub">Sky gradient hero replaces the date pickers — pulsing dot, big days-left count, 3-cell stats grid. The scope toggles are replaced by a ledger of what's currently held. Top bar swaps Save for a neutral "Edit"; a detached "End hold early" sits at the bottom.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="settings-archetype.jsx"></script>
+  <script type="text/babel" src="vacation-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameVacationPopulated/>);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameVacationActive/>);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250);
+    setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Hand-authored placeholder for the Lucide "hammer" icon.
+
+  Simple geometric hammer: rectangular head on the upper left with a
+  diagonal handle going down-right. Swap for the real Lucide SVG once
+  design_system/ ships authoritative vector sources. Fill color is black
+  so Compose's Icon tint takes over.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Head + neck -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M2,5 h10 v4 h-4 v3 h-2 v-3 h-4 z" />
+    <!-- Diagonal handle -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M13,10 l8,8 l-3,3 l-8,-8 z" />
+</vector>

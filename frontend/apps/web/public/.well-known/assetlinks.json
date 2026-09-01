@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pantopus.app",
+      "sha256_cert_fingerprints": [
+        "33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF"
+      ]
+    }
+  }
+]

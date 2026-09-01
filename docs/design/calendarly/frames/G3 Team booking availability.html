@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Team Booking Availability</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7c3aed; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1040px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #7c3aed; background: #f3e8ff; padding: 1px 6px; border-radius: 4px; }
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes sh-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · G — Business booking</div>
+      <h1>Team Booking Availability</h1>
+      <p>A section inside the Team tab listing which members are bookable and the weekly hours that feed round-robin. ListOfRows over the businessSeats roster (A10.7 + A14.6): each row is an avatar, name, hours-summary caption, a "Personal hours" or "Business hours" pill, and a bookable toggle; tapping the body opens "Edit hours". A coverage hint card surfaces gaps. Business violet accent; white cards, no left-border accents.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ListOfRows over businessSeats</div>
+        <div class="meta-item"><b>Matches</b>A10.7 Business · A14.6 Payments</div>
+        <div class="meta-item"><b>Path</b><code>/app/business/[id]/availability</code></div>
+        <div class="meta-item"><b>Pillar</b>Business violet</div>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap"><div class="label-num">1 · DEFAULT</div><div class="label-title">Mixed bookable</div><div class="label-sub">Roster with hours summaries, personal/business pills, bookable toggles, and a Sundays coverage hint.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap"><div class="label-num">2 · LOADING</div><div class="label-title">Shimmer rows</div><div class="label-sub">Skeleton roster rows while hours load. No "Loading…" text.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap"><div class="label-num">3 · NOT BOOKABLE</div><div class="label-title">Member dimmed</div><div class="label-sub">A member off — row dims, toggle off, sub reads "Not taking bookings".</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap"><div class="label-num">4 · GAPS WARNING</div><div class="label-title">Amber coverage</div><div class="label-sub">Coverage hint elevates to amber when a weekday has no one available.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap"><div class="label-num">5 · GATED</div><div class="label-title">Read-only</div><div class="label-sub">Toggles hidden for non-admins, with a quiet team.manage footer note.</div></div></div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="biz-kit.jsx"></script>
+  <script type="text/babel" src="teamavail-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<TA_FrameDefault />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<TA_FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<TA_FrameNotBookable />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<TA_FrameGaps />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<TA_FrameGated />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

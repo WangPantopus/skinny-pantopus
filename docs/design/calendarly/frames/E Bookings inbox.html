@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Bookings Inbox</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1040px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Manage bookings</div>
+      <h1>Bookings Inbox</h1>
+      <p>One owner-polymorphic home base where a host or member sees every booking across Personal, Home and Business, organized by lifecycle. Mirrors the A08 tabbed-list-with-status-chips archetype exactly as Support trains and My bids do: top bar with back chevron + centered "Bookings" title + search and filter icons; a horizontally-scrolling scope pill row (All / Personal / Home:Riverside / Business:Acme), the active pill filled in that scope's identity color; then a segmented control (Upcoming / Pending / Past / Cancelled) with a warning-tinted count badge on Pending. Rows are white cards — no left accent — with a verified invitee avatar, event type, day·date·time·timezone, status chip, an owner-context glyph and (on Business) an assigned-member chip, plus an overflow kebab. A "Share booking link" extended FAB sits bottom-right.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>ListOfRows (tabbed) · A08 status chips</div>
+        <div class="meta-item"><b>Mirrors</b>Support trains · My bids · Notifications</div>
+        <div class="meta-item"><b>Route</b><code>pantopus://bookings</code></div>
+        <div class="meta-item"><b>Pillar</b>Owner-polymorphic · accent follows scope</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · UPCOMING</div><div class="label-title">Populated (All scope)</div>
+        <div class="label-sub">Confirmed rows grouped under Today / Tomorrow / Later, mixed pillars, Pending badge "2". Neutral sky accent.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · PENDING APPROVAL</div><div class="label-title">Inline approve / decline</div>
+        <div class="label-sub">Unread-dotted pending rows with a warning chip and inline Decline / Approve quick actions in each card.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · EMPTY · UPCOMING</div><div class="label-title">No bookings yet</div>
+        <div class="label-sub">Calendar-clock icon in an identity-tinted disc, "No bookings yet", and a Share your booking link primary.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · EMPTY · PAST</div><div class="label-title">Empty history</div>
+        <div class="label-sub">Different copy — "Nothing in your history yet" — no CTA, just a calm history icon.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · LOADING</div><div class="label-title">Shimmer skeleton</div>
+        <div class="label-sub">Skeleton overlines and rows while bookings resolve — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap">
+        <div class="label-num">6 · ERROR</div><div class="label-title">Couldn't load</div>
+        <div class="label-sub">Cloud-off icon, plain explanation, and a ghost Try again button.</div></div></div>
+      <div class="frame"><div id="f7"></div><div class="label-wrap">
+        <div class="label-num">7 · BUSINESS SCOPE</div><div class="label-title">Acme · assigned members</div>
+        <div class="label-sub">Violet scope active; every row carries an assigned-member chip (Priya, Devon, Unassigned).</div></div></div>
+      <div class="frame"><div id="f8"></div><div class="label-wrap">
+        <div class="label-num">8 · AUTO-CONFIRM</div><div class="label-title">Pending segment hidden</div>
+        <div class="label-sub">Home scope with auto-confirm on — the Pending tab is gone; only Upcoming / Past / Cancelled.</div></div></div>
+      <div class="frame"><div id="f9"></div><div class="label-wrap">
+        <div class="label-num">9 · MEMBER-GATED</div><div class="label-title">Own bookings only</div>
+        <div class="label-sub">A member sees only rows assigned to them, with an explainer banner and no approve actions or kebab approvals.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="bookings-inbox-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameUpcoming />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FramePending />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameEmptyUpcoming />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameEmptyPast />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameLoading />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameError />);
+    ReactDOM.createRoot(document.getElementById('f7')).render(<FrameBusiness />);
+    ReactDOM.createRoot(document.getElementById('f8')).render(<FrameAutoConfirm />);
+    ReactDOM.createRoot(document.getElementById('f9')).render(<FrameMemberGated />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

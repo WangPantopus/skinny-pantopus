@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>A09.3 · Listing</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:#111827; min-height:100vh; }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1100px; margin:0 auto 28px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+    .header h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#374151; background:#fff; border:1px solid #e5e7eb; padding:4px 9px; border-radius:6px; display:inline-block; margin-bottom:14px; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:780px; line-height:21px; }
+
+    .section-title { max-width:1100px; margin:0 auto 22px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 40px; justify-items:center; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:16px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @media (max-width:900px) {
+      .frames { grid-template-columns:repeat(1, 1fr); max-width:420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A09.3 Listing — gallery">
+    <div class="header">
+      <div class="kicker">Pantopus · A09 Detail: Transactional · A09.3</div>
+      <div class="path">src/app/listing/[id].tsx</div>
+      <h1>Listing — marketplace detail.</h1>
+      <p>Listing variant of the A09 archetype: hero carousel under a glass-button top nav, $-in-primary-600 price hero, condition + pickup pills, seller card with identity chip + DM shortcut, description + details, similar-nearby horizontal scroll, and a Message · Make offer · Buy split dock. Secondary state — Sold — keeps the same scaffolding but stamps the hero, strikes the asking price, and pivots the dock to "Find similar".</p>
+    </div>
+
+    <div class="section-title">Two frames · populated · sold</div>
+    <div class="frames">
+      <div class="frame" data-screen-label="A09.3 Listing — populated">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Vintage Bianchi · $410 · Excellent</div>
+          <div class="label-sub">Celeste bike on a soft sky/mint hero. Glass share + bookmark over hero, 4-dot pagination. $410 in primary-600. Excellent · Pickup · 0.8 mi pill row. Manny R. seller card with Personal identity chip. Description + 4-row Details grid. Similar nearby horizontal scroll. Message icon + Make offer primary + Buy $410 outline dock.</div>
+        </div>
+      </div>
+      <div class="frame" data-screen-label="A09.3 Listing — sold">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · SOLD</div>
+          <div class="label-title">Sold for $385 · 6h ago</div>
+          <div class="label-sub">Hero desaturated with a tilted SOLD stamp. Red "Sold" pill where price chips would sit. $410 struck through next to a green "Sold for $385" final-sale tag. Description retained; Details row swaps "Posted" → "Sold". Similar row relabeled "Similar still available". Alert-when-similar inline card. Dock flips to Seller + Find similar.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="gig-v2-shared.jsx"></script>
+  <script type="text/babel" src="listing-populated.jsx"></script>
+  <script type="text/babel" src="listing-sold.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameListingPopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameListingSold />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

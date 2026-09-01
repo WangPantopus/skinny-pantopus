@@ -1,0 +1,538 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Pantopus content seeder — fetcher, poster, and discovery Lambda functions
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+      - dev
+    Description: Deployment environment — controls resource naming and scheduling
+  SecretName:
+    Type: String
+    Default: ''
+    Description: >-
+      Override the Secrets Manager secret name. If empty, defaults to
+      pantopus/seeder/{Environment} (e.g. pantopus/seeder/production).
+  NoBidNudgeBackfillBefore:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional ISO-8601 timestamp for one-time no-bid nudge backfill. When set,
+      the Lambda also checks open gigs created before this timestamp. Clear it
+      after the backfill is complete.
+
+Conditions:
+  UseDefaultSecretName: !Equals [!Ref SecretName, '']
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Architectures:
+      - arm64
+    Timeout: 600
+    MemorySize: 256
+    Environment:
+      Variables:
+        SECRET_NAME: !If
+          - UseDefaultSecretName
+          - !Sub pantopus/seeder/${Environment}
+          - !Ref SecretName
+        AWS_REGION_NAME: !Ref AWS::Region
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # Fetcher Lambda — pulls content from RSS feeds and sources into the queue
+  # ---------------------------------------------------------------------------
+  SeederFetcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-seeder-fetcher-${Environment}
+      Handler: src.handlers.fetcher.handler
+      Description: !Sub 'Fetches content from RSS feeds and local sources [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      Events:
+        FetchSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-fetch-${Environment}
+            Schedule: rate(2 hours)
+            Description: !Sub 'Run fetcher every 2 hours [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/Seeder/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Poster Lambda — humanizes and posts content from the queue
+  # ---------------------------------------------------------------------------
+  SeederPosterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-seeder-poster-${Environment}
+      Handler: src.handlers.poster.handler
+      Description: !Sub 'Selects, humanizes, and posts content from the seeder queue [${Environment}]'
+      CodeUri: ../build/
+      Events:
+        PostSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-post-${Environment}
+            # Run every hour from 14:00-01:00 UTC to cover all Pacific Time
+            # posting windows (7am, 12pm, 5pm PT) regardless of DST.
+            Schedule: cron(0 14-23,0-1 * * ? *)
+            Description: !Sub 'Hourly during posting windows [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+
+  # ---------------------------------------------------------------------------
+  # Sports National Fetcher Lambda — pulls Google News items for each active
+  # major event into the seeder queue with scope='national', so the Sports
+  # National Poster has news-linked items to humanize instead of only the
+  # templated fallback starters. Event-gated; no-op when nothing is active.
+  # ---------------------------------------------------------------------------
+  SeederSportsNationalFetcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-seeder-sports-national-fetcher-${Environment}
+      Handler: src.handlers.sports_national_fetcher.handler
+      Description: !Sub 'Fetches Google News items for each active sports event into the national queue [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 180
+      MemorySize: 256
+      Events:
+        SportsNationalFetchSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-sports-national-fetch-${Environment}
+            # Every 3h — enough to keep the poster's 3x/day cadence fed with
+            # fresh items without thrashing Google News or the queue.
+            Schedule: rate(3 hours)
+            Description: !Sub 'Sports national fetcher — every 3 hours [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/SportsSeeder/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Sports Poster Lambda — posts national Sports topic threads during major events
+  # (NBA Playoffs, Super Bowl, World Cup). Event-gated via sports_events; cap,
+  # dedup, and freshness logic live in src/handlers/sports_poster.py.
+  # ---------------------------------------------------------------------------
+  SeederSportsPosterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-seeder-sports-poster-${Environment}
+      Handler: src.handlers.sports_poster.handler
+      Description: !Sub 'Posts national Sports topic threads during active major events [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 180
+      MemorySize: 256
+      Events:
+        SportsPostMorning:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-sports-morning-${Environment}
+            # Offset from the regular poster (14:00 UTC) by 30 min so we don't
+            # compete for auth tokens. 14:30 UTC = ~7:30am PT.
+            Schedule: cron(30 14 * * ? *)
+            Description: !Sub 'Sports national poster — morning window [${Environment}]'
+            Enabled: true
+        SportsPostMidday:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-sports-midday-${Environment}
+            Schedule: cron(30 19 * * ? *)
+            Description: !Sub 'Sports national poster — midday window [${Environment}]'
+            Enabled: true
+        SportsPostEvening:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-sports-evening-${Environment}
+            # 00:30 UTC = ~5:30pm PT — after most game tip-offs on the West coast.
+            Schedule: cron(30 0 * * ? *)
+            Description: !Sub 'Sports national poster — evening window [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/SportsSeeder/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Discovery Lambda — detects user clusters and provisions new regions
+  # ---------------------------------------------------------------------------
+  SeederDiscoveryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-seeder-discovery-${Environment}
+      Handler: src.handlers.discovery.handler
+      Description: !Sub 'Discovers user clusters and auto-provisions new seeder regions [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Events:
+        DiscoverySchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-seeder-discovery-${Environment}
+            Schedule: rate(1 day)
+            Description: !Sub 'Run region discovery daily [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+
+  # ---------------------------------------------------------------------------
+  # Briefing Scheduler Lambda — finds eligible users and sends daily briefings
+  # ---------------------------------------------------------------------------
+  BriefingSchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-briefing-scheduler-${Environment}
+      Handler: src.handlers.briefing.handler
+      Description: !Sub 'Finds eligible users and triggers daily briefing delivery [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 300
+      MemorySize: 256
+      Events:
+        BriefingSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-briefing-schedule-${Environment}
+            Schedule: rate(15 minutes)
+            Description: !Sub 'Run briefing scheduler every 15 minutes [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/Briefing/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Briefing Cleanup Lambda — purges old delivery logs and retries failures
+  # ---------------------------------------------------------------------------
+  BriefingCleanupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-briefing-cleanup-${Environment}
+      Handler: src.handlers.briefing_cleanup.handler
+      Description: !Sub 'Purges old delivery logs and retries failed briefings [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Events:
+        CleanupSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-briefing-cleanup-${Environment}
+            Schedule: rate(1 day)
+            Description: !Sub 'Run briefing cleanup daily [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+
+  # ---------------------------------------------------------------------------
+  # Alert Checker Lambda — real-time weather/AQI alert push notifications
+  # ---------------------------------------------------------------------------
+  AlertCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-alert-checker-${Environment}
+      Handler: src.handlers.alert_checker.handler
+      Description: !Sub 'Checks NOAA weather alerts and AQI, sends push for new alerts [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Events:
+        AlertCheckSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-alert-check-${Environment}
+            Schedule: rate(10 minutes)
+            Description: !Sub 'Check weather/AQI alerts every 10 minutes [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/Alerts/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Home Reminders Lambda — bill/task/calendar push notifications
+  # ---------------------------------------------------------------------------
+  HomeRemindersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-home-reminders-${Environment}
+      Handler: src.handlers.home_reminders.handler
+      Description: !Sub 'Sends push for bills due, tasks due, and upcoming calendar events [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Events:
+        MorningReminders:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-home-reminders-morning-${Environment}
+            Schedule: cron(0 14 * * ? *)
+            Description: !Sub 'Morning home reminders ~7 AM PT [${Environment}]'
+            Enabled: true
+        EveningReminders:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-home-reminders-evening-${Environment}
+            Schedule: cron(0 1 * * ? *)
+            Description: !Sub 'Evening home reminders ~6 PM PT [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/Reminders/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Mail Notifications Lambda — urgent mail + daily summary push
+  # ---------------------------------------------------------------------------
+  MailNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-mail-notifications-${Environment}
+      Handler: src.handlers.mail_notifications.handler
+      Description: !Sub 'Sends push for urgent mail and daily mailbox summary [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Events:
+        MailCheckSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-mail-notifications-${Environment}
+            Schedule: rate(5 minutes)
+            Description: !Sub 'Check for urgent mail every 5 minutes [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/MailNotifications/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # No-Bid Nudge Lambda — sends nudges to gig posters without bids
+  # ---------------------------------------------------------------------------
+  NoBidNudgeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-no-bid-nudge-${Environment}
+      Handler: src.handlers.no_bid_nudge.handler
+      Description: !Sub 'Sends nudge notifications to gig posters with no bids after 24-48h [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          NO_BID_NUDGE_BACKFILL_BEFORE: !Ref NoBidNudgeBackfillBefore
+      Events:
+        NoBidNudgeSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-no-bid-nudge-${Environment}
+            Schedule: rate(6 hours)
+            Description: !Sub 'Check for no-bid gigs every 6 hours [${Environment}]'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/NoBidNudge/${Environment}
+
+  # ---------------------------------------------------------------------------
+  # Secrets Manager secret — populate manually after first deployment
+  # ---------------------------------------------------------------------------
+  SeederSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !If
+        - UseDefaultSecretName
+        - !Sub pantopus/seeder/${Environment}
+        - !Ref SecretName
+      Description: !Sub >-
+        Configuration for the Pantopus content seeder (${Environment}).
+        Secret contents are managed outside CloudFormation so deploys do not
+        overwrite live credentials.
+
+Outputs:
+  FetcherFunctionArn:
+    Description: ARN of the fetcher Lambda function
+    Value: !GetAtt SeederFetcherFunction.Arn
+  FetcherFunctionName:
+    Description: Name of the fetcher Lambda function
+    Value: !Ref SeederFetcherFunction
+  PosterFunctionArn:
+    Description: ARN of the poster Lambda function
+    Value: !GetAtt SeederPosterFunction.Arn
+  PosterFunctionName:
+    Description: Name of the poster Lambda function
+    Value: !Ref SeederPosterFunction
+  SportsPosterFunctionArn:
+    Description: ARN of the sports poster Lambda function
+    Value: !GetAtt SeederSportsPosterFunction.Arn
+  SportsPosterFunctionName:
+    Description: Name of the sports poster Lambda function
+    Value: !Ref SeederSportsPosterFunction
+  SportsNationalFetcherFunctionArn:
+    Description: ARN of the sports national fetcher Lambda function
+    Value: !GetAtt SeederSportsNationalFetcherFunction.Arn
+  SportsNationalFetcherFunctionName:
+    Description: Name of the sports national fetcher Lambda function
+    Value: !Ref SeederSportsNationalFetcherFunction
+  DiscoveryFunctionArn:
+    Description: ARN of the discovery Lambda function
+    Value: !GetAtt SeederDiscoveryFunction.Arn
+  DiscoveryFunctionName:
+    Description: Name of the discovery Lambda function
+    Value: !Ref SeederDiscoveryFunction
+  BriefingSchedulerFunctionArn:
+    Description: ARN of the briefing scheduler Lambda function
+    Value: !GetAtt BriefingSchedulerFunction.Arn
+  BriefingSchedulerFunctionName:
+    Description: Name of the briefing scheduler Lambda function
+    Value: !Ref BriefingSchedulerFunction
+  BriefingCleanupFunctionArn:
+    Description: ARN of the briefing cleanup Lambda function
+    Value: !GetAtt BriefingCleanupFunction.Arn
+  BriefingCleanupFunctionName:
+    Description: Name of the briefing cleanup Lambda function
+    Value: !Ref BriefingCleanupFunction
+  AlertCheckerFunctionArn:
+    Description: ARN of the alert checker Lambda function
+    Value: !GetAtt AlertCheckerFunction.Arn
+  AlertCheckerFunctionName:
+    Description: Name of the alert checker Lambda function
+    Value: !Ref AlertCheckerFunction
+  HomeRemindersFunctionArn:
+    Description: ARN of the home reminders Lambda function
+    Value: !GetAtt HomeRemindersFunction.Arn
+  HomeRemindersFunctionName:
+    Description: Name of the home reminders Lambda function
+    Value: !Ref HomeRemindersFunction
+  MailNotificationsFunctionArn:
+    Description: ARN of the mail notifications Lambda function
+    Value: !GetAtt MailNotificationsFunction.Arn
+  MailNotificationsFunctionName:
+    Description: Name of the mail notifications Lambda function
+    Value: !Ref MailNotificationsFunction
+  NoBidNudgeFunctionArn:
+    Description: ARN of the no-bid nudge Lambda function
+    Value: !GetAtt NoBidNudgeFunction.Arn
+  NoBidNudgeFunctionName:
+    Description: Name of the no-bid nudge Lambda function
+    Value: !Ref NoBidNudgeFunction
+  SecretArn:
+    Description: ARN of the Secrets Manager secret
+    Value: !Ref SeederSecret
+  SecretName:
+    Description: Name of the Secrets Manager secret
+    Value: !If
+      - UseDefaultSecretName
+      - !Sub pantopus/seeder/${Environment}
+      - !Ref SecretName
+  Environment:
+    Description: Deployment environment
+    Value: !Ref Environment

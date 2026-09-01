@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: ${DOCKER_TARGET:-production}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env.${APP_ENV:-dev}
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/apps/web/Dockerfile
+      target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

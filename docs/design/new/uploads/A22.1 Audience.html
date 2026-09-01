@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Pantopus · A22.1 Audience</title>
+<link rel="stylesheet" href="colors_and_type.css"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html,body{margin:0;padding:0;background:#f0eee9;}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .page{padding:56px 48px 96px;min-height:100vh;box-sizing:border-box;}
+  .header{max-width:1200px;margin:0 auto 36px;}
+  .kicker{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0284c7;margin-bottom:8px;}
+  .header h1{font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0 0 8px;color:#111827;}
+  .header p{margin:0;color:#6b7280;font-size:14px;max-width:760px;line-height:21px;}
+  .meta{max-width:1200px;margin:0 auto 36px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  .meta-cell{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;}
+  .meta-label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;}
+  .meta-value{font-size:12.5px;color:#111827;line-height:17px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .section-title{max-width:1200px;margin:0 auto 24px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;}
+  .frames{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:40px;justify-items:center;}
+  .frame{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .label-wrap{text-align:center;max-width:340px;}
+  .label-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#9ca3af;margin-bottom:4px;letter-spacing:0.04em;}
+  .label-title{font-size:14px;font-weight:600;color:#111827;margin-bottom:3px;letter-spacing:-0.01em;}
+  .label-sub{font-size:12px;color:#6b7280;line-height:17px;}
+  @media (max-width:880px){.frames,.meta{grid-template-columns:1fr;max-width:420px;}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="kicker">A22.1 · Pantopus Mobile · Audience tab</div>
+    <h1>Audience</h1>
+    <p>Creator dashboard tab — composer + broadcast timeline + fans + DM threads. Inherits the A22 Creator Audience hub archetype: top bar with identity switcher, status line, Updates/Fans/Inbox sub-tabs, full bottom tab bar. Updates tab is the default landing.</p>
+  </div>
+
+  <div class="meta">
+    <div class="meta-cell"><div class="meta-label">File</div><div class="meta-value">src/app/(tabs)/audience.tsx</div></div>
+    <div class="meta-cell"><div class="meta-label">Archetype</div><div class="meta-value">A22 · creator audience variant</div></div>
+    <div class="meta-cell"><div class="meta-label">Flag</div><div class="meta-value">audience_profile</div></div>
+    <div class="meta-cell"><div class="meta-label">Primary action</div><div class="meta-value">Compose broadcast</div></div>
+  </div>
+
+  <div class="section-title">Two frames · populated + empty</div>
+  <div class="frames">
+    <div class="frame"><div id="f1"></div><div class="label-wrap"><div class="label-num">FRAME 1 · POPULATED</div><div class="label-title">Composer + 4 broadcasts</div><div class="label-sub">Default Updates tab landing · 1,247 beacons, +3 new · mix of public + Bronze+ / Silver+ posts with reach/read/reactions inline</div></div></div>
+    <div class="frame"><div id="f2"></div><div class="label-wrap"><div class="label-num">FRAME 2 · EMPTY</div><div class="label-title">No broadcasts yet</div><div class="label-sub">Composer stays prominent · dashed empty card with primary CTA · tip card suggesting a good first broadcast · status line shifts to "0 beacons · invite to grow"</div></div></div>
+  </div>
+</div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="a22-1-audience-frames.jsx"></script>
+<script type="text/babel">
+  ReactDOM.createRoot(document.getElementById('f1')).render(<FramePopulated />);
+  ReactDOM.createRoot(document.getElementById('f2')).render(<FrameEmpty />);
+  const refresh = () => window.lucide && window.lucide.createIcons();
+  setTimeout(refresh, 50); setTimeout(refresh, 250); setTimeout(refresh, 600); setTimeout(refresh, 1200);
+</script>
+</body>
+</html>

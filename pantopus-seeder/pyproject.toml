@@ -1,0 +1,13 @@
+[project]
+name = "pantopus-seeder"
+version = "0.1.0"
+description = "Community content seeder for Pantopus — AWS Lambda functions that post local news, events, and seasonal tips via a curator account."
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

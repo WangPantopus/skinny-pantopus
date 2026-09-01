@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A15.2 — Conversation</title>
+<link rel="icon" href="https://www.google.com/s2/favicons?domain=pantopus.com" />
+<link rel="stylesheet" href="pantopus-tokens.css" />
+<link rel="stylesheet" href="chat-archetype.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  const av = {
+    jamal:  "linear-gradient(135deg,#16A34A,#15803d)",   // Home green
+    amina:  "linear-gradient(135deg,#16A34A,#0a5f3a)",
+    maria:  "linear-gradient(135deg,#0ea5e9,#0369a1)",
+    priya:  "linear-gradient(135deg,#7C3AED,#5b21b6)",
+  };
+
+  const StatusBar = () => (
+    <>
+      <div className="island"></div>
+      <div className="sb">
+        <span>9:41</span>
+        <div className="sb-right">
+          <div className="sb-bars"></div>
+          <div className="batt"><i></i></div>
+        </div>
+      </div>
+    </>
+  );
+
+  // Person-resolved header: emphasises identity pillar over thread context.
+  const ChatHeader = ({ avatar, initials, name, sub, presence, verified, pillar }) => (
+    <div className="chat-header">
+      <div className="icon-btn" aria-label="Back">
+        <i data-lucide="chevron-left"></i>
+      </div>
+      <div className="chat-id">
+        <div className="avatar" style={{ background: avatar }}>
+          {initials}
+          {verified && <span className="vb"><i data-lucide="check"></i></span>}
+        </div>
+        <div className="meta">
+          <div className="name">
+            {name}
+            {pillar && (
+              <span className={`pillar ${pillar}`}>
+                <i data-lucide={
+                  pillar === "home" ? "home" :
+                  pillar === "business" ? "briefcase" : "user"
+                }></i>
+                {pillar === "home" ? "Home" : pillar === "business" ? "Biz" : "Personal"}
+              </span>
+            )}
+          </div>
+          <div className="sub">
+            {presence === "online" && <span className="presence-dot"></span>}
+            {sub}
+          </div>
+        </div>
+      </div>
+      <div className="header-actions">
+        <div className="icon-btn"><i data-lucide="phone"></i></div>
+        <div className="icon-btn"><i data-lucide="info"></i></div>
+      </div>
+    </div>
+  );
+
+  // Voice waveform — deterministic pattern for design preview.
+  const Wave = ({ bars = 22, seed = 7 }) => {
+    const heights = Array.from({ length: bars }, (_, i) => {
+      // pseudo-random but stable
+      const v = Math.sin(i * 0.8 + seed) * Math.cos(i * 0.31 + seed * 0.5);
+      return 5 + Math.abs(v) * 14;
+    });
+    return (
+      <div className="wave">
+        {heights.map((h, i) => <span key={i} style={{ height: `${h}px` }}></span>)}
+      </div>
+    );
+  };
+
+  // ─── Populated person-thread ─────────────────────────────
+  function PopulatedConversation() {
+    const scrollRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, []);
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <ChatHeader
+          avatar={av.jamal}
+          initials="JT"
+          name="Jamal T."
+          sub="Last seen 4m ago · Elm Park"
+          presence="offline"
+          verified
+          pillar="home"
+        />
+
+        <div className="scroll" ref={scrollRef}>
+          <div className="day">
+            <div className="line"></div><div className="label">Yesterday</div><div className="line"></div>
+          </div>
+
+          <div className="sys sys-verify">
+            <i data-lucide="shield-check"></i>
+            You and Jamal both verified at Elm Park
+          </div>
+
+          {/* Incoming — link preview from his earlier sourdough rec */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.jamal }}>JT</div>
+            <div>
+              <div className="bubble in" style={{ paddingBottom: 6 }}>
+                Btw — here's the bakery I keep raving about ↓
+              </div>
+            </div>
+          </div>
+          <div className="msg-row same">
+            <div className="mini-av hidden"></div>
+            <div>
+              <div className="bubble in link-bubble">
+                <div className="lp-img"></div>
+                <div className="lp-body">
+                  <div className="lp-host">pantopus · Pulse rec</div>
+                  <div className="lp-t">4th &amp; Market Bakery</div>
+                  <div className="lp-d">Family-run · sourdough on weekends · 0.3 mi</div>
+                </div>
+              </div>
+              <div className="ts">6:42 PM</div>
+            </div>
+          </div>
+
+          {/* Outgoing — reply quoting the link */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">
+                <div className="reply-quote">4th &amp; Market Bakery — Pulse rec</div>
+                Bookmarked! Sunday morning mission 🥖
+              </div>
+              <div className="ts out">
+                Read 6:44 PM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          <div className="day">
+            <div className="line"></div><div className="label">Today</div><div className="line"></div>
+          </div>
+
+          {/* Incoming voice */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.jamal }}>JT</div>
+            <div>
+              <div className="bubble in voice-bubble">
+                <div className="play"><i data-lucide="play"></i></div>
+                <Wave seed={3} />
+                <span className="dur">0:18</span>
+              </div>
+              <div className="ts">9:02 AM</div>
+            </div>
+          </div>
+
+          {/* Outgoing with reaction */}
+          <div className="msg-row out">
+            <div>
+              <div className="bubble out">
+                Ha — yes, I owe you a coffee. Tomorrow at the bench?
+                <span className="reaction left">❤️<span className="count">1</span></span>
+              </div>
+              <div className="ts out" style={{ marginTop: 10 }}>
+                Read 9:09 AM <i data-lucide="check-check"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Incoming */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.jamal }}>JT</div>
+            <div>
+              <div className="bubble in">8:30 sharp. I'll grab two.</div>
+              <div className="ts">9:10 AM</div>
+            </div>
+          </div>
+
+          {/* Typing */}
+          <div className="msg-row">
+            <div className="mini-av" style={{ background: av.jamal }}>JT</div>
+            <div className="bubble in" style={{ padding: 0 }}>
+              <div className="typing"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Composer — mid-typing reply */}
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input">
+              <span>Deal — see you</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="send"><i data-lucide="arrow-up"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  // ─── Empty person-thread ─────────────────────────────────
+  function EmptyConversation() {
+    return (
+      <div className="phone"><div className="phone-inner">
+        <StatusBar />
+        <ChatHeader
+          avatar={av.amina}
+          initials="AS"
+          name="Amina S."
+          sub="Verified · 0.6 mi · Elm Park"
+          presence="offline"
+          verified
+          pillar="business"
+        />
+
+        <div className="empty">
+          <div className="big-av" style={{ background: av.amina }}>
+            AS
+            <span className="vb"><i data-lucide="check"></i></span>
+          </div>
+          <h2>Say hi</h2>
+          <p>This is the start of your conversation with Amina.</p>
+          <div className="trust">
+            <i data-lucide="shield-check"></i>
+            Private between verified neighbors
+          </div>
+
+          {/* Person preview card — replaces task context in person-resolved chat */}
+          <div className="person-card">
+            <div className="pc-row">
+              <div className="avatar" style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: av.amina, color: "#fff", fontWeight: 700, fontSize: 13,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>AS</div>
+              <div className="pc-meta">
+                <div className="pc-name">
+                  Amina S.
+                  <span className="pillar business">
+                    <i data-lucide="briefcase"></i>Biz
+                  </span>
+                </div>
+                <div className="pc-sub">Handyman · serves Elm Park &amp; Riverside</div>
+              </div>
+              <div className="icon-btn" style={{ marginRight: -6 }}>
+                <i data-lucide="external-link"></i>
+              </div>
+            </div>
+            <div className="pc-stats">
+              <div className="pc-stat"><b>★ 5.0</b><i>rating</i></div>
+              <div className="pc-stat"><b>18</b><i>jobs done</i></div>
+              <div className="pc-stat"><b>~2h</b><i>reply time</i></div>
+            </div>
+            <div className="pc-mutuals">
+              <div className="stack">
+                <div className="av-sm" style={{ background: av.maria }}>MK</div>
+                <div className="av-sm" style={{ background: av.jamal }}>JT</div>
+                <div className="av-sm" style={{ background: av.priya }}>PR</div>
+              </div>
+              <span><b style={{ color: "var(--app-text)" }}>3 neighbors</b> you know hired Amina</span>
+            </div>
+          </div>
+
+          <div className="suggestions">
+            <div className="sug">
+              <span>👋 Hi Amina — quick question about availability</span>
+              <i data-lucide="arrow-up-right"></i>
+            </div>
+            <div className="sug">
+              <span>Can you take a look at my deck?</span>
+              <i data-lucide="arrow-up-right"></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="composer-wrap">
+          <div className="composer">
+            <div className="plus"><i data-lucide="plus"></i></div>
+            <div className="input placeholder">
+              <span>Message Amina…</span>
+              <i data-lucide="smile"></i>
+            </div>
+            <div className="mic"><i data-lucide="mic"></i></div>
+          </div>
+        </div>
+
+        <div className="home-ind"></div>
+      </div></div>
+    );
+  }
+
+  function App() {
+    React.useEffect(() => {
+      const t = setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+      return () => clearTimeout(t);
+    });
+
+    return (
+      <DesignCanvas
+        title="A15.2 — Conversation"
+        subtitle="src/app/chat/conversation/[otherUserId].tsx · person-resolved · 2 frames"
+      >
+        <DCSection id="frames" title="Frames">
+          <DCArtboard id="populated" label="Populated · ongoing neighbor DM" width={382} height={782}>
+            <PopulatedConversation />
+          </DCArtboard>
+          <DCArtboard id="empty" label='Empty · "Say hi" (person card)' width={382} height={782}>
+            <EmptyConversation />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

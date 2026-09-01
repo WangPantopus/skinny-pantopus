@@ -1,0 +1,170 @@
+[
+ {
+  "id": "pkg-restore-wipes-price",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Defaults-free packagePatchSchema landed in routes/scheduling.js.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "workflow-toggle-resets-offset",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "workflowPatchSchema landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "workflow-patch-defaults-wipe-offset",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Same backend fix.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "cancellation-policy-object-vs-text",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "jsonb migration 166 + Joi alternatives + TS CancellationPolicyValue landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "custom-cancellation-policy-400",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Covered by the jsonb/Joi fix.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "teaminsights-shape-mismatch",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "TS retype + TeamPerformance rewrite landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "noshowinsights-shape-mismatch",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "TS retype + NoShowReport rewrite landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "bookingssummary-shape-mismatch",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "TS retype landed; web summary card reads wire shape.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "public-booking-trimmed-vs-full-booking",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "PublicBookingSummary/ManageBookingRow landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "resourcebooking-shape-mismatch",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Type deleted; api layer retyped.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "bookingsource-union-wrong",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Union corrected.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "wizard-never-sets-is-live",
+  "severity": "blocker",
+  "verdict": "ALREADY-FIXED",
+  "fix": "is_live publish landed at all 4 mobile sites.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "check-slug-null-available",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "!! coercion + ordered lookup landed.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "oneoff-never-expiry-becomes-7-days",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Backend now accepts explicit null expires_in_min (= never). iOS half remains: OneOffLinkRequest must encode an EXPLICIT JSON null for the Never option (custom encode with encodeNil) instead of omitting the key.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "has-upcoming-bookings-dead-code",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "iOS matches HAS_BOOKINGS (legacy alias kept).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "delete-409-code-mismatch",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Android CODE_HAS_UPCOMING = HAS_BOOKINGS; test stub updated.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "isoday-missing-posix-locale",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "iOS SchedulingTime.isoDay (+ fixed-format formatters) need en_US_POSIX \u2014 assigned to ios-invitee-bookings agent.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "home-onboarding-hardcoded-share-link",
+  "severity": "major",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Both platforms derive from the captured page slug.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "booking-request-mislabeled-daily-agenda",
+  "severity": "major",
+  "verdict": "CONFIRMED",
+  "fix": "Relabel the booking_request row ('Booking request' / approval copy) + default true on BOTH platforms; iOS half assigned to ios-editors-business; Android half in hub-followups (NotificationPrefsViewModel.kt:121).",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "wizard-hours-discarded",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Wizard persists toggled hours + schedule timezone on both platforms.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "package-missing-sold-count",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "fix": "sold_count optional on Package type.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "status-enum-drift",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "fix": "BookingStatus cleaned; WaitlistStatus gained cancelled.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "onboarding-default-selection-mismatch",
+  "severity": "minor",
+  "verdict": "ALREADY-FIXED",
+  "fix": "Android seeds current-user-only.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ },
+ {
+  "id": "hub-agenda-future-day-header-mismatch",
+  "severity": "minor",
+  "verdict": "CONFIRMED",
+  "fix": "Android adopts the iOS one-line future-day header (hub VM ~:339-344) \u2014 assigned to hub-followups.",
+  "note": "reconstructed-from-audit-digest after tmp wipe; fix text abbreviated \u2014 re-verify against source before applying"
+ }
+]

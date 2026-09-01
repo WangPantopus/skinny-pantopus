@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A17.11 — Stamps · Pantopus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="colors_and_type.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: var(--font-sans); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mailbox.jsx"></script>
+<script type="text/babel" src="stamps.jsx"></script>
+
+<script type="text/babel">
+  function App() {
+    return (
+      <DesignCanvas>
+        <DCSection
+          id="a17-11-stamps"
+          title="A17.11 — Stamps"
+          subtitle="src/app/mailbox/stamps.tsx · postage / stamp book · inherits A17 archetype">
+
+          <DCArtboard id="populated" label="01 · Stamp book · received" width={402} height={874}>
+            <MailStampsScreen state="populated" dataLabel="01 Stamp book" />
+          </DCArtboard>
+
+          <DCArtboard id="empty" label="02 · No stamps yet · empty state" width={402} height={874}>
+            <MailStampsScreen state="empty" dataLabel="02 Empty" />
+          </DCArtboard>
+
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+  let n = 0;
+  const tick = () => {
+    if (window.lucide) window.lucide.createIcons();
+    if (n++ < 12) setTimeout(tick, 150);
+  };
+  tick();
+</script>
+</body>
+</html>

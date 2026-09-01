@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <link rel="icon" href="favicon.svg"/>
+  <title>Pantopus · A18 · Verify email (deep-link landing)</title>
+  <link rel="stylesheet" href="colors_and_type.css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin:0; padding:0; background:#f8fafc; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:#111827; min-height:100vh; }
+    .page { padding:56px 48px 96px; min-height:100vh; box-sizing:border-box; }
+    .header { max-width:1280px; margin:0 auto 24px; }
+    .kicker { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0369a1; margin-bottom:8px; }
+    .header .filepath { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; color:#0369a1; background:#e0f2fe; display:inline-block; padding:3px 9px; border-radius:6px; margin-bottom:12px; font-weight:600; }
+    .header h1 { font-size:30px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; color:#111827; }
+    .header p { margin:0; color:#6b7280; font-size:14px; max-width:880px; line-height:21px; }
+    .header em { font-style:italic; color:#374151; }
+    .header code { font-size:12px; background:#f3f4f6; padding:2px 7px; border-radius:5px; color:#0369a1; font-weight:600; }
+
+    .annot { max-width:1280px; margin:0 auto 22px; padding:15px 18px; background:#f0f9ff; border:1px solid #bae6fd; border-left:4px solid #0284c7; border-radius:12px; display:flex; gap:12px; align-items:flex-start; color:#0c4a6e; }
+    .annot .icon { width:32px; height:32px; border-radius:8px; background:#e0f2fe; color:#0369a1; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .annot .text { font-size:13px; line-height:19px; }
+    .annot .text strong { color:#075985; }
+    .annot code { background:#e0f2fe; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+
+    .verdict { max-width:1280px; margin:0 auto 36px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .vcard { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px; }
+    .vcard .tag { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:3px 8px; border-radius:9999px; margin-bottom:10px; }
+    .vcard.exists .tag { background:#D1FAE5; color:#065f46; }
+    .vcard.missing .tag { background:#FEF3C7; color:#92400e; }
+    .vcard h3 { margin:0 0 5px; font-size:14px; font-weight:700; color:#111827; letter-spacing:-0.2px; }
+    .vcard p { margin:0; font-size:12.5px; color:#4b5563; line-height:18px; }
+    .vcard code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px; background:#f3f4f6; padding:1px 5px; border-radius:4px; color:#0369a1; }
+
+    .section-title { max-width:1280px; margin:0 auto 24px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#9ca3af; }
+
+    .frames { max-width:1280px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:center; gap:44px 26px; }
+    .frame { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .label-wrap { text-align:center; max-width:320px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#9ca3af; margin-bottom:4px; letter-spacing:0.04em; }
+    .label-title { font-size:16px; font-weight:600; color:#111827; margin-bottom:5px; letter-spacing:-0.01em; }
+    .label-sub { font-size:12px; color:#6b7280; line-height:18px; }
+
+    @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+
+    @media (max-width:1100px) { .verdict { grid-template-columns:1fr; } }
+    @media (max-width:760px)  { .frames { max-width:420px; } }
+  </style>
+</head>
+<body>
+  <div class="page" data-screen-label="A18 Verify email landing">
+    <div class="header">
+      <div class="kicker">Pantopus · A18 · Status / waiting · deep-link landing variant</div>
+      <div class="filepath">src/screens/(auth)/verify-email.tsx</div>
+      <h1>Verify email — the deep-link landing</h1>
+      <p>The screen the app opens when the user taps the link in their verification email. The A18 status archetype, <em>collapsed</em> — no timeline, because the token check is instantaneous: <em>halo → headline → email-bolded body → status pill → CTA stack → shield-check footer</em>. Three states for the three things that can happen on tap. Rendered in the shared beacon-family bezel.</p>
+    </div>
+
+    <div class="annot">
+      <div class="icon"><i data-lucide="search-check" style="width:18px;height:18px;"></i></div>
+      <div class="text">
+        <strong>Verify-first result.</strong> A18.1 <code>verify-email-sent</code> is the <em>pre-tap</em> “we sent you an email” state; A18.3 / A18.4 are timeline review waits. None of them is the <strong>post-tap landing</strong> — the loading, success, and expired states below did not exist. Built here as A18 collapsed-status variants on shared tokens.
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div class="vcard exists">
+        <span class="tag"><i data-lucide="check" style="width:12px;height:12px;stroke-width:3;"></i> Already covered</span>
+        <h3>The “email sent” wait</h3>
+        <p><code>A18.1 Verify Email Sent</code> handles the pre-tap state — mail halo, resend, cooldown. Unchanged.</p>
+      </div>
+      <div class="vcard missing">
+        <span class="tag"><i data-lucide="plus" style="width:12px;height:12px;stroke-width:3;"></i> New piece</span>
+        <h3>The post-tap landing</h3>
+        <p>Verifying → Verified → Expired had no screen. Added as three A18 status variants with the matching CTA contract.</p>
+      </div>
+    </div>
+
+    <div class="section-title">Three states · what happens when the link is tapped</div>
+    <div class="frames">
+      <div class="frame">
+        <div id="f1" data-screen-label="01 Verify email · verifying"></div>
+        <div class="label-wrap">
+          <div class="label-num">STATE 1 · VERIFYING</div>
+          <div class="label-title">Checking the link</div>
+          <div class="label-sub">Mail halo wrapped in a spinning ring, neutral “Checking your link…” pill with its own spinner, no CTA — the transient moment while the token is validated.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2" data-screen-label="02 Verify email · verified"></div>
+        <div class="label-wrap">
+          <div class="label-num">STATE 2 · VERIFIED</div>
+          <div class="label-title">“Email verified”</div>
+          <div class="label-sub">Green check halo, email confirmed in the body, success “Verified · just now” pill, and a single primary “Continue” with trailing arrow into the app.</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3" data-screen-label="03 Verify email · expired"></div>
+        <div class="label-wrap">
+          <div class="label-num">STATE 3 · EXPIRED</div>
+          <div class="label-title">“This link has expired”</div>
+          <div class="label-sub">Amber broken-link halo, 24-hour explanation, “Link expired” pill, primary “Resend verification”, and a ghost “Use a different email” fallback.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="beacon-shell.jsx"></script>
+  <script type="text/babel" src="verify-email-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameVerifyEmailVerifying />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameVerifyEmailSuccess />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameVerifyEmailExpired />);
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 60); setTimeout(refresh, 280); setTimeout(refresh, 650); setTimeout(refresh, 1300);
+  </script>
+</body>
+</html>

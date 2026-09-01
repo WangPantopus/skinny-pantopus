@@ -1,0 +1,159 @@
+# Pantopus iOS — Fastfile
+# https://docs.fastlane.tools
+
+default_platform(:ios)
+
+# Build an App Store Connect API key from the secrets the CI workflow writes
+# into .env (APP_STORE_CONNECT_KEY_ID / ISSUER_ID / KEY_CONTENT). Returns nil
+# when unset so local `make build` style runs don't require credentials.
+# KEY_CONTENT is the base64-encoded contents of the .p8 file.
+def appstore_api_key
+  key_id = ENV["APP_STORE_CONNECT_KEY_ID"].to_s
+  issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s
+  key_content = ENV["APP_STORE_CONNECT_KEY_CONTENT"].to_s
+  return nil if key_id.empty? || issuer_id.empty? || key_content.empty?
+
+  app_store_connect_api_key(
+    key_id: key_id,
+    issuer_id: issuer_id,
+    key_content: key_content,
+    is_key_content_base64: true,
+    in_house: false
+  )
+end
+
+platform :ios do
+  before_all do
+    # Materialize Config/Secrets.xcconfig from .env so the per-configuration
+    # xcconfig `#include? "Secrets.xcconfig"` resolves the real Stripe key
+    # (and Sentry DSN). Without this, Release builds fall back to the
+    # committed pk_live_REPLACE_ME placeholder. The CI workflow writes .env
+    # from repository secrets before this lane runs.
+    app_root = File.expand_path("..", __dir__)
+    sh("make", "-C", app_root, "env-to-xcconfig")
+    xcodegen(spec: "project.yml")
+  end
+
+  desc "Run unit + UI tests on simulator"
+  lane :test do
+    run_tests(
+      project: "Pantopus.xcodeproj",
+      scheme: "Pantopus",
+      devices: ["iPhone 15"],
+      clean: true
+    )
+  end
+
+  desc "Build a signed Release archive without uploading (CI dry run / verification)"
+  lane :build_release do
+    setup_ci if is_ci
+    api_key = appstore_api_key
+    match(type: "appstore", readonly: is_ci, api_key: api_key)
+
+    build_app(
+      project: "Pantopus.xcodeproj",
+      scheme: "Pantopus",
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true
+    )
+    UI.success("✓ Signed Release archive built (no upload). Verify it points at api.pantopus.app with a pk_live_ key.")
+  end
+
+  desc "Build and upload to TestFlight (via match for signing)"
+  lane :beta do
+    setup_ci if is_ci
+    api_key = appstore_api_key
+    match(type: "appstore", readonly: is_ci, api_key: api_key)
+
+    increment_build_number(
+      build_number: latest_testflight_build_number(initial_build_number: 0, api_key: api_key) + 1
+    )
+
+    build_app(
+      project: "Pantopus.xcodeproj",
+      scheme: "Pantopus",
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true
+    )
+
+    upload_dsyms_to_sentry
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      changelog: last_git_commit[:message]
+    )
+  end
+
+  desc "Build, upload metadata + screenshots, and submit to App Store review"
+  lane :release do
+    setup_ci if is_ci
+    api_key = appstore_api_key
+    match(type: "appstore", readonly: is_ci, api_key: api_key)
+
+    build_app(
+      project: "Pantopus.xcodeproj",
+      scheme: "Pantopus",
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true
+    )
+
+    upload_dsyms_to_sentry
+
+    # Push every text file under fastlane/metadata/<locale>/ + the
+    # PNGs under fastlane/screenshots/ before submitting.
+    upload_to_app_store(
+      api_key: api_key,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      skip_metadata: false,
+      skip_screenshots: false
+    )
+  end
+
+  desc "Capture App Store screenshots for the 6 hero screens × 3 devices"
+  lane :screenshots do
+    capture_screenshots(
+      project: "Pantopus.xcodeproj",
+      scheme: "PantopusUITests",
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      override_status_bar: true,
+      stop_after_first_error: false
+    )
+  end
+
+  # Upload the freshly-built dSYMs to Sentry so release crashes symbolicate
+  # to real source lines. Bitcode is OFF (project.yml: ENABLE_BITCODE NO), so
+  # gym's local dSYMs are final — no App Store Connect re-download needed.
+  #
+  # Gated on Sentry env: a no-op (with a notice) when the credentials are not
+  # present, so dev / CI lanes without secrets still pass.
+  desc "Upload build dSYMs to Sentry for release symbolication"
+  private_lane :upload_dsyms_to_sentry do
+    auth_token = ENV["SENTRY_AUTH_TOKEN"]
+    org = ENV["SENTRY_ORG"]
+    project = ENV["SENTRY_PROJECT"]
+
+    if [auth_token, org, project].any? { |v| v.to_s.strip.empty? }
+      UI.important("Sentry dSYM upload skipped — set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT to enable.")
+      next
+    end
+
+    sentry_upload_dsym(
+      auth_token: auth_token,
+      org_slug: org,
+      project_slug: project,
+      dsym_path: lane_context[SharedValues::DSYM_OUTPUT_PATH]
+    )
+  end
+
+  error do |lane, exception|
+    UI.error("Lane #{lane} failed: #{exception.message}")
+  end
+end

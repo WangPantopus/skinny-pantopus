@@ -1,0 +1,339 @@
+/* ============================================================
+   PANTOPUS — Colors & Type
+   Source of truth: frontend/packages/theme + apps/web/src/app/globals.css
+   ============================================================ */
+
+:root {
+  /* ── Primary (Sky) ─────────────────────────────────────── */
+  --color-primary-50:  #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;  /* brand primary */
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0c4a6e;
+  --color-primary: var(--color-primary-600);
+
+  /* ── Semantic ──────────────────────────────────────────── */
+  --color-success:        #059669;
+  --color-success-light:  #D1FAE5;
+  --color-success-bg:     #F0FDF4;
+  --color-warning:        #D97706;
+  --color-warning-light:  #FDE68A;
+  --color-warning-bg:     #FFFBEB;
+  --color-error:          #DC2626;
+  --color-error-light:    #FECACA;
+  --color-error-bg:       #FEF2F2;
+  --color-info:           #0284c7;
+  --color-info-light:     #BAE6FD;
+  --color-info-bg:        #F0F9FF;
+
+  /* ── Identity pillars (Personal / Home / Business) ─────── */
+  --color-identity-personal:    #0284C7;
+  --color-identity-personal-bg: #DBEAFE;
+  --color-identity-home:        #16A34A;
+  --color-identity-home-bg:     #DCFCE7;
+  --color-identity-business:    #7C3AED;
+  --color-identity-business-bg: #F3E8FF;
+
+  /* ── App shell / neutrals ──────────────────────────────── */
+  --app-bg:              #f6f7f9;
+  --app-surface:         #ffffff;
+  --app-surface-raised:  #f9fafb;
+  --app-surface-sunken:  #f3f4f6;
+  --app-surface-muted:   #f8fafc;
+  --app-border:          #e5e7eb;
+  --app-border-strong:   #d1d5db;
+  --app-border-subtle:   #f3f4f6;
+  --app-text:            #111827;  /* fg1 */
+  --app-text-strong:     #374151;  /* fg2 */
+  --app-text-secondary:  #6b7280;  /* fg3 */
+  --app-text-muted:      #9ca3af;  /* fg4 */
+  --app-text-inverse:    #ffffff;
+  --app-hover:           #f3f4f6;
+
+  /* Semantic aliases */
+  --fg1: var(--app-text);
+  --fg2: var(--app-text-strong);
+  --fg3: var(--app-text-secondary);
+  --fg4: var(--app-text-muted);
+  --bg1: var(--app-bg);
+  --bg2: var(--app-surface);
+  --bg3: var(--app-surface-raised);
+  --bg4: var(--app-surface-sunken);
+
+  /* ── Category accents (used for map pins & badges) ─────── */
+  --cat-handyman:   #f97316;
+  --cat-cleaning:   #27ae60;
+  --cat-moving:     #8e44ad;
+  --cat-pet-care:   #e74c3c;
+  --cat-child-care: #f39c12;
+  --cat-tutoring:   #2980b9;
+  --cat-delivery:   #374151;
+  --cat-tech:       #3498db;
+  --cat-goods:      #7c3aed;
+  --cat-gigs:       #f97316;
+  --cat-rentals:    #16a34a;
+  --cat-vehicles:   #dc2626;
+
+  /* ── Spacing ───────────────────────────────────────────── */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+
+  /* ── Radii ─────────────────────────────────────────────── */
+  --radius-xs:  4px;
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-pill: 9999px;
+
+  /* ── Shadows (web equivalents) ─────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-xl: 0 8px 24px rgba(0,0,0,0.10);
+  --shadow-primary: 0 6px 16px rgba(2,132,199,0.18);
+
+  /* ── Typography ────────────────────────────────────────── */
+  /* Web stack uses system UI (per Next.js default). Mobile uses system font.
+     No custom brand webfont is shipped in the codebase. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+               sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+               "Liberation Mono", "Courier New", monospace;
+
+  /* Sizes (from @pantopus/theme typography tokens) */
+  --type-h1:    30px; --type-h1-lh:   36px; --type-h1-w:   700;
+  --type-h2:    24px; --type-h2-lh:   32px; --type-h2-w:   600;
+  --type-h3:    20px; --type-h3-lh:   28px; --type-h3-w:   600;
+  --type-body:  16px; --type-body-lh: 24px; --type-body-w: 400;
+  --type-small: 14px; --type-small-lh:20px; --type-small-w:400;
+  --type-cap:   12px; --type-cap-lh:  16px; --type-cap-w:  400;
+  --type-over:  11px; --type-over-lh: 16px; --type-over-w: 600;
+
+  /* Hero-scale display (landing page only) */
+  --type-display: clamp(48px, 6vw, 72px);
+  --type-display-lh: 1.05;
+  --type-display-w: 800;
+}
+
+/* ── Semantic element styles ─────────────────────────────── */
+html, body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-size: var(--type-h1);
+  line-height: var(--type-h1-lh);
+  font-weight: var(--type-h1-w);
+  letter-spacing: -0.02em;
+  color: var(--fg1);
+}
+h2, .h2 {
+  font-size: var(--type-h2);
+  line-height: var(--type-h2-lh);
+  font-weight: var(--type-h2-w);
+  letter-spacing: -0.015em;
+  color: var(--fg1);
+}
+h3, .h3 {
+  font-size: var(--type-h3);
+  line-height: var(--type-h3-lh);
+  font-weight: var(--type-h3-w);
+  color: var(--fg1);
+}
+p, .body { font-size: var(--type-body); line-height: var(--type-body-lh); color: var(--fg2); }
+.small   { font-size: var(--type-small); line-height: var(--type-small-lh); color: var(--fg3); }
+.caption { font-size: var(--type-cap); line-height: var(--type-cap-lh); color: var(--fg3); }
+.overline{
+  font-size: var(--type-over); line-height: var(--type-over-lh);
+  font-weight: var(--type-over-w); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg3);
+}
+.display {
+  font-size: var(--type-display);
+  line-height: var(--type-display-lh);
+  font-weight: var(--type-display-w);
+  letter-spacing: -0.03em;
+  color: var(--fg1);
+}
+code, pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--app-surface-sunken);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-xs);
+}
+
+/* ============================================================
+   PANTOPUS v2 — Ceremonial Extensions (additive)
+   Stationery, envelope inks, tier badges, paper serifs.
+   These tokens are appended; nothing above is modified.
+   ============================================================ */
+:root {
+  /* ── Paper serif stack (ceremonial surfaces only) ─────────
+     System "old-style" stack — looks at home on paper, no
+     webfont ships. Use --font-serif only inside stationery /
+     mailbox / persona "letter" surfaces, never in product UI. */
+  --font-serif: "Iowan Old Style", "Hoefler Text", "Sitka Text",
+                "Charter", "Bitstream Charter", "Georgia",
+                "Cambria", "Source Serif Pro", ui-serif, serif;
+
+  /* ── Stationery inks ──────────────────────────────────────
+     Three inks chosen so handwritten body sits warm on paper.
+     `ink-ivory` is reserved for dark-paper themes only. */
+  --stationery-ink-ivory:    #F6ECD8;
+  --stationery-ink-iron:     #2A2723;
+  --stationery-ink-mahogany: #4A1F1A;
+
+  /* ── Stationery themes ────────────────────────────────────
+     Each theme = paper + ink + accent (ornament / rule color).
+     Paper is a single light tone; depth comes from the porch
+     gradient + grain overlay, not from gradient on the paper
+     itself, so ink stays legible at body copy size. */
+
+  /* Fall — ochre cardstock, mahogany ink, copper ornament */
+  --stationery-fall-paper:    #F0E2C4;
+  --stationery-fall-ink:      var(--stationery-ink-mahogany);
+  --stationery-fall-accent:   #B45623;
+
+  /* Winter — bone paper, iron ink, slate ornament */
+  --stationery-winter-paper:  #ECE9E2;
+  --stationery-winter-ink:    var(--stationery-ink-iron);
+  --stationery-winter-accent: #4B6478;
+
+  /* Spring — soft cream, iron ink, sage ornament */
+  --stationery-spring-paper:  #F4EFDC;
+  --stationery-spring-ink:    var(--stationery-ink-iron);
+  --stationery-spring-accent: #6B8E5A;
+
+  /* Summer — pale rose paper, mahogany ink, sun-amber ornament */
+  --stationery-summer-paper:  #F6E6D3;
+  --stationery-summer-ink:    var(--stationery-ink-mahogany);
+  --stationery-summer-accent: #D9842E;
+
+  /* Evergreen — deep forest paper, ivory ink, gold ornament
+     (the only dark-paper theme — uses --stationery-ink-ivory) */
+  --stationery-evergreen-paper:  #1F2E26;
+  --stationery-evergreen-ink:    var(--stationery-ink-ivory);
+  --stationery-evergreen-accent: #C9A24A;
+
+  /* ── Wax seal colors (used by envelope SVGs) ──────────────
+     One per theme accent + neutral default. */
+  --seal-default:   #8B2E1F;   /* classic burgundy wax */
+  --seal-fall:      var(--stationery-fall-accent);
+  --seal-winter:    var(--stationery-winter-accent);
+  --seal-spring:    var(--stationery-spring-accent);
+  --seal-summer:    var(--stationery-summer-accent);
+  --seal-evergreen: var(--stationery-evergreen-accent);
+
+  /* ── Porch scene gradients (full-bleed backgrounds) ───────
+     Each is a layered radial+linear that reads as warm golden
+     hour. Pair with --porch-grain for a noise overlay. */
+  --porch-fall:
+    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.35) 0%, transparent 55%),
+    radial-gradient(70% 50% at 20% 25%, #F2B66A 0%, transparent 60%),
+    radial-gradient(80% 60% at 85% 30%, #E08A5B 0%, transparent 65%),
+    linear-gradient(180deg, #C46A3E 0%, #7E3326 60%, #3D1A18 100%);
+
+  --porch-winter:
+    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.4) 0%, transparent 55%),
+    radial-gradient(70% 50% at 25% 20%, #C6D3DE 0%, transparent 60%),
+    radial-gradient(80% 60% at 80% 30%, #E8E1D2 0%, transparent 65%),
+    linear-gradient(180deg, #8AA0B3 0%, #4E6478 55%, #2A3744 100%);
+
+  --porch-spring:
+    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.3) 0%, transparent 55%),
+    radial-gradient(70% 50% at 30% 20%, #F2E9A8 0%, transparent 60%),
+    radial-gradient(80% 60% at 80% 35%, #B8CDA0 0%, transparent 65%),
+    linear-gradient(180deg, #9DBE82 0%, #5E7C56 60%, #2E4030 100%);
+
+  --porch-summer:
+    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.32) 0%, transparent 55%),
+    radial-gradient(70% 55% at 20% 30%, #F8C9A0 0%, transparent 60%),
+    radial-gradient(85% 60% at 80% 25%, #D6B2D8 0%, transparent 65%),
+    linear-gradient(180deg, #E89978 0%, #B26B83 55%, #4A2A50 100%);
+
+  --porch-evergreen:
+    radial-gradient(140% 90% at 50% 110%, rgba(0,0,0,0.45) 0%, transparent 55%),
+    radial-gradient(60% 45% at 25% 22%, #E8DCC0 0%, transparent 60%),
+    radial-gradient(75% 55% at 80% 35%, #6B7A5C 0%, transparent 65%),
+    linear-gradient(180deg, #3E4F3C 0%, #1F2E26 55%, #0E1612 100%);
+
+  /* Soft inline-svg noise — applied as separate layer, not
+     mixed into the gradient string, so opacity is tunable. */
+  --porch-grain:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+
+  /* Paper grain — softer, lighter, applied INSIDE stationery
+     surfaces for subtle tooth. */
+  --paper-grain:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+
+  /* ── Membership tier badges ───────────────────────────────
+     Used on persona profiles, DM threads, and beside the
+     beacon "follow" button. Fill + on-color text pair. */
+  --tier-free:        #6B7C8A;
+  --tier-free-on:     #FFFFFF;
+  --tier-free-bg:     #E6ECF1;
+
+  --tier-bronze:      #A0623A;
+  --tier-bronze-on:   #FFF5EC;
+  --tier-bronze-bg:   #F2DCC6;
+
+  --tier-silver:      #8C95A1;
+  --tier-silver-on:   #FFFFFF;
+  --tier-silver-bg:   #DDE2E8;
+
+  --tier-gold:        #C29230;
+  --tier-gold-on:     #2A1F0A;
+  --tier-gold-bg:     #F4E2A8;
+}
+
+/* ── Stationery surface helper ─────────────────────────────
+   Apply to a "letter" container to get paper + grain + serif.
+   Theme is set by adding .stationery-{fall|winter|...}. */
+.stationery {
+  font-family: var(--font-serif);
+  background-color: var(--stationery-winter-paper);
+  color: var(--stationery-winter-ink);
+  position: relative;
+  isolation: isolate;
+}
+.stationery::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: var(--paper-grain);
+  background-size: 200px 200px;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 1;
+}
+.stationery > * { position: relative; z-index: 2; }
+
+.stationery-fall      { background-color: var(--stationery-fall-paper);      color: var(--stationery-fall-ink); }
+.stationery-winter    { background-color: var(--stationery-winter-paper);    color: var(--stationery-winter-ink); }
+.stationery-spring    { background-color: var(--stationery-spring-paper);    color: var(--stationery-spring-ink); }
+.stationery-summer    { background-color: var(--stationery-summer-paper);    color: var(--stationery-summer-ink); }
+.stationery-evergreen { background-color: var(--stationery-evergreen-paper); color: var(--stationery-evergreen-ink); }

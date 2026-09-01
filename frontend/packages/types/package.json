@@ -1,0 +1,27 @@
+{
+  "name": "@pantopus/types",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./post": "./src/post.ts",
+    "./notification": "./src/notification.ts",
+    "./home": "./src/home.ts",
+    "./wallet": "./src/wallet.ts",
+    "./business": "./src/business.ts",
+    "./identity": "./src/identity.ts",
+    "./relationship": "./src/relationship.ts",
+    "./mailCompose": "./src/mailCompose.ts",
+    "./placeIntelligence": "./src/placeIntelligence.ts"
+  },
+  "scripts": {
+    "lint": "eslint \"src/**/*.ts*\"",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}

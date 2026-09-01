@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 6c — provider metadata for the "Tasks near me" widget. The
+     30-min updatePeriodMillis is a fallback; the real refresh rides the
+     WidgetSnapshotStore broadcast after each successful feed fetch. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_tasks_near_me_description"
+    android:initialLayout="@layout/widget_tasks_near_me"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:previewLayout="@layout/widget_tasks_near_me"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

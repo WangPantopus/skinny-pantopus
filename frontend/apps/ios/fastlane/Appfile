@@ -1,0 +1,8 @@
+# App identifier is stable; everything else is sourced from CI secrets / env
+# so no Apple account details are committed. Authentication in CI uses the
+# App Store Connect API key (see Fastfile `appstore_api_key`), so apple_id is
+# only needed for legacy username/password flows.
+app_identifier("app.pantopus.ios")
+apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"]
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
+itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"]) if ENV["APP_STORE_CONNECT_TEAM_ID"]

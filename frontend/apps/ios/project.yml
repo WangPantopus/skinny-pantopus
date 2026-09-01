@@ -1,0 +1,307 @@
+# XcodeGen project definition — https://github.com/yonaskolb/XcodeGen
+#
+# This file is the single source of truth for the Xcode project.
+# Run `xcodegen generate` (or `make bootstrap`) to produce Pantopus.xcodeproj.
+# Pantopus.xcodeproj is NOT committed — it is regenerated from this file.
+
+name: Pantopus
+
+options:
+  bundleIdPrefix: app.pantopus
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.4"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  transitivelyLinkDependencies: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    CLANG_ENABLE_MODULES: YES
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "6UYZBA546R" # Set in Xcode or via xcconfig; do not commit a team ID
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad
+    ENABLE_BITCODE: NO
+    OTHER_SWIFT_FLAGS:
+      - "-enable-upcoming-feature"
+      - "ExistentialAny"
+
+# Release is listed before Staging so the auto-generated "Pantopus" scheme
+# archives the Release configuration (XcodeGen picks the first release-type
+# config for the archive action). The dedicated "Pantopus (Staging)" scheme
+# below archives Staging.
+configs:
+  Debug: debug
+  Release: release
+  Staging: release
+
+configFiles:
+  Debug: Config/Pantopus.Debug.xcconfig
+  Release: Config/Pantopus.Release.xcconfig
+  Staging: Config/Pantopus.Staging.xcconfig
+
+packages:
+  # Stripe iOS SDK — payments (card, Apple Pay, PaymentSheet)
+  Stripe:
+    url: https://github.com/stripe/stripe-ios
+    from: "23.32.0"
+  # Socket.IO client for realtime chat
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: "16.1.1"
+  # Keychain wrapper — cleaner than raw Security framework
+  KeychainAccess:
+    url: https://github.com/kishikawakatsumi/KeychainAccess
+    from: "4.2.2"
+  # Structured logging
+  SwiftLog:
+    url: https://github.com/apple/swift-log
+    from: "1.6.0"
+  # Crash + performance reporting
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: "8.36.0"
+  # Product analytics — matches Android's vendor (PostHog). Gated on
+  # POSTHOG_API_KEY so dev / CI builds send nothing.
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    from: "3.15.0"
+
+targets:
+  Pantopus:
+    type: application
+    platform: iOS
+    sources:
+      - path: Pantopus
+        excludes:
+          - "**/*.md"
+          # Bundled explicitly below so it always lands in Copy Bundle
+          # Resources (Apple requires PrivacyInfo.xcprivacy at the .app root).
+          - "PrivacyInfo.xcprivacy"
+      # App privacy manifest — see docs/compliance/privacy-data-inventory.md.
+      - path: Pantopus/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    resources:
+      - path: Pantopus/Resources/Assets.xcassets
+      - path: "Pantopus/Preview Content"
+        buildPhase: resources
+    info:
+      path: Pantopus/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Pantopus
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        PantopusAPIBaseURL: $(PANTOPUS_API_BASE_URL)
+        PantopusSocketURL: $(PANTOPUS_SOCKET_URL)
+        StripePublishableKey: $(STRIPE_PUBLISHABLE_KEY)
+        SentryDSN: $(SENTRY_DSN)
+        PostHogAPIKey: $(POSTHOG_API_KEY)
+        PostHogHost: $(POSTHOG_HOST)
+        LSRequiresIPhoneOS: true
+        # Phase 6b — active-task Live Activity (PantopusWidgets extension).
+        NSSupportsLiveActivities: true
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: "Pantopus connects to the local development server on your Mac while testing."
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        ITSAppUsesNonExemptEncryption: false
+        NSLocationWhenInUseUsageDescription: "Pantopus uses your location to show gigs and neighbors near you."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications."
+        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat."
+        NSPhotoLibraryUsageDescription: "Pantopus uses your photo library to upload profile photos, listing images, and mail."
+        NSPhotoLibraryAddUsageDescription: "Pantopus saves images you export, like your booking QR code, to your photo library."
+        NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat."
+        NSFaceIDUsageDescription: "Pantopus uses Face ID to lock sensitive actions like payments."
+        UIBackgroundModes:
+          - remote-notification
+        LSApplicationQueriesSchemes:
+          - tel
+          - mailto
+          - sms
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - pantopus
+    entitlements:
+      path: Pantopus/Resources/Pantopus.entitlements
+      properties:
+        # Resolved per configuration from xcconfig: development for Debug,
+        # production for Staging/Release (App Store + TestFlight use the
+        # production APNs environment). Xcode substitutes the build setting
+        # into the entitlements plist at sign time.
+        aps-environment: $(APS_ENVIRONMENT)
+        # pantopus.com is the product domain: it is what the backend and both
+        # clients put in share and invite links, and it is where the web app
+        # serves .well-known/apple-app-site-association. The .app entries are
+        # kept so any link already in circulation still resolves; iOS verifies
+        # each domain independently, so an unserved one costs nothing.
+        com.apple.developer.associated-domains:
+          - applinks:pantopus.com
+          - applinks:www.pantopus.com
+          - applinks:pantopus.app
+          - applinks:www.pantopus.app
+        # Phase 6c — shared UserDefaults suite feeding the Tasks-near-me
+        # widget snapshot (also declared on PantopusWidgets).
+        com.apple.security.application-groups:
+          - group.app.pantopus.ios
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios
+        PRODUCT_NAME: Pantopus
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        DEVELOPMENT_ASSET_PATHS: '"Pantopus/Preview Content"'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          GCC_PREPROCESSOR_DEFINITIONS: "DEBUG=1"
+        Staging:
+          # AppEnvironment resolves `.staging` from this flag (no DEBUG, so
+          # the runtime falls through to `#elseif STAGING`).
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
+          SWIFT_COMPILATION_MODE: wholemodule
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+    dependencies:
+      - package: Stripe
+        product: StripePaymentSheet
+      - package: Stripe
+        product: StripeApplePay
+      - package: SocketIO
+        product: SocketIO
+      - package: KeychainAccess
+      - package: SwiftLog
+        product: Logging
+      - package: Sentry
+        product: Sentry
+      - package: PostHog
+        product: PostHog
+      # Phase 6b — Live Activity host, embedded into PlugIns.
+      - target: PantopusWidgets
+    scheme:
+      testTargets:
+        - PantopusTests
+        - PantopusUITests
+      gatherCoverageData: true
+      environmentVariables:
+        - variable: PANTOPUS_API_ENV
+          value: local
+          isEnabled: true
+
+  # Phase 6b — WidgetKit extension hosting the active-task ActivityKit
+  # Live Activity (lock screen + Dynamic Island) and, since Phase 6c, the
+  # Tasks-near-me timeline widget. Signing stays inherited (dev-managed
+  # automatic signing, no team committed).
+  PantopusWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PantopusWidgets
+      # Shared contracts — compiled into BOTH the app target (whose
+      # sources glob already includes them) and this extension, which
+      # cannot import the app module.
+      - path: Pantopus/Core/LiveActivity/GigActivityAttributes.swift
+      - path: Pantopus/Core/Widgets/GigWidgetSnapshot.swift
+    entitlements:
+      path: PantopusWidgets/PantopusWidgets.entitlements
+      properties:
+        # Phase 6c — read side of the Tasks-near-me snapshot suite.
+        com.apple.security.application-groups:
+          - group.app.pantopus.ios
+    info:
+      path: PantopusWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Pantopus Widgets
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios.widgets
+        PRODUCT_NAME: PantopusWidgets
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
+          SWIFT_COMPILATION_MODE: wholemodule
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+
+  PantopusTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PantopusTests
+        excludes:
+          # Baseline PNGs are resolved at runtime via `#filePath` from the
+          # source tree, so they must not be copied into the test bundle.
+          # t5/ and t6/ share several basenames (e.g. bills-ios.png), and
+          # the flattened CopyPNGFile destination collides on those names —
+          # exclude the whole tree.
+          - "__Snapshots__/**"
+          # New-design lockfile PNGs — batch 1 (Features/Shared/__snapshots__/
+          # new-designs/) and batch 2 (Features/__snapshots__/
+          # new-designs-batch2/) — are likewise resolved via `#filePath`, not
+          # bundled.
+          - "**/__snapshots__/**"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Pantopus
+
+  PantopusUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PantopusUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Pantopus
+    dependencies:
+      - target: Pantopus
+
+# The default "Pantopus" scheme is generated from the Pantopus target's
+# `scheme:` block above (Debug run/test, Release archive). This extra scheme
+# targets the Staging configuration for pre-prod TestFlight builds. Build it
+# with: `xcodebuild -scheme "Pantopus (Staging)" -configuration Staging`.
+schemes:
+  Pantopus (Staging):
+    build:
+      targets:
+        Pantopus: all
+    run:
+      config: Staging
+    test:
+      config: Staging
+      targets:
+        - PantopusTests
+    profile:
+      config: Staging
+    analyze:
+      config: Staging
+    archive:
+      config: Staging

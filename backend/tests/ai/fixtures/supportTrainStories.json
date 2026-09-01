@@ -1,0 +1,101 @@
+[
+  {
+    "name": "postpartum_meal_support",
+    "input": {
+      "story": "My sister just had a baby. Family of 4. Dinners for two weeks would really help. No peanuts. Contactless after 5pm."
+    },
+    "expectations": {
+      "must_include_chips": ["Family of 4", "Peanut", "Contactless", "5 PM"],
+      "must_extract_restrictions": ["peanut_allergy"],
+      "must_set_household_size": 4,
+      "must_flag_missing": ["recipient", "address"]
+    }
+  },
+  {
+    "name": "surgery_recovery_dinners",
+    "input": {
+      "story": "My friend is recovering from surgery and could use dinners for 10 days. She's vegetarian and lives alone. Please leave food at the door."
+    },
+    "expectations": {
+      "must_include_chips": ["Vegetarian", "Contactless"],
+      "must_extract_restrictions_or_preferences": ["vegetarian"],
+      "must_set_household_size": 1,
+      "must_flag_missing": ["address"]
+    }
+  },
+  {
+    "name": "meals_and_groceries_postpartum",
+    "input": {
+      "story": "We need meals and groceries after the baby arrives. Family of 5, two adults and three kids. Gluten-free household. Prefer drop-offs between 6 and 7 PM.",
+      "support_modes_requested": ["meal", "groceries"]
+    },
+    "expectations": {
+      "must_include_chips": ["Family of 5", "Gluten"],
+      "must_extract_restrictions": ["gluten_free"],
+      "must_set_household_size": 5,
+      "must_flag_missing": ["address"]
+    }
+  },
+  {
+    "name": "elderly_parent_meal_dropoffs",
+    "input": {
+      "story": "My parents need meal drop-offs this week. Dad is diabetic, mom can't have shellfish. Family of 2. Lunch preferred."
+    },
+    "expectations": {
+      "must_include_chips": ["Family of 2"],
+      "must_extract_restrictions": ["shellfish_allergy"],
+      "must_set_household_size": 2,
+      "must_flag_missing": ["address"]
+    }
+  },
+  {
+    "name": "family_emergency_mixed_support",
+    "input": {
+      "story": "Our neighbor's house had a fire. Family of 6. They need everything — meals, groceries, and any donations would help. No dietary restrictions that I know of.",
+      "support_modes_requested": ["meal", "groceries", "gift_funds"]
+    },
+    "expectations": {
+      "must_include_chips": ["Family of 6"],
+      "must_extract_restrictions": [],
+      "must_set_household_size": 6,
+      "must_flag_missing": ["address", "recipient"]
+    }
+  },
+  {
+    "name": "bereavement_takeout_support",
+    "input": {
+      "story": "A colleague lost her mother. She has 3 kids and could use takeout deliveries for the next week. She's kosher. Please be discreet.",
+      "support_modes_requested": ["takeout"]
+    },
+    "expectations": {
+      "must_include_chips": ["Kosher"],
+      "must_extract_restrictions": ["kosher"],
+      "must_set_household_size_one_of": [null, 4],
+      "must_flag_missing": ["address", "recipient"]
+    }
+  },
+  {
+    "name": "minimal_info_story",
+    "input": {
+      "story": "My friend needs help with dinners for a while."
+    },
+    "expectations": {
+      "must_include_chips": [],
+      "must_extract_restrictions": [],
+      "must_set_household_size": null,
+      "must_flag_missing": ["recipient", "address", "restrictions"]
+    }
+  },
+  {
+    "name": "detailed_preferences_story",
+    "input": {
+      "story": "Setting up meals for my sister's family after her C-section. Family of 4 — two adults, two toddlers. They love soups and rice bowls. Avoid spicy food. Tree nut allergy and dairy-free. Contactless porch drop-off after 5:30 PM please. Mon/Wed/Fri dinners for 3 weeks."
+    },
+    "expectations": {
+      "must_include_chips": ["Family of 4", "Contactless"],
+      "must_extract_restrictions": ["tree_nut_allergy", "dairy_free"],
+      "must_set_household_size": 4,
+      "must_flag_missing": ["address"]
+    }
+  }
+]

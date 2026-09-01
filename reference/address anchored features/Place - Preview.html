@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Place — Preview (signed out)</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root { --canvas-bg: #eceff3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); font-family: var(--font-sans); color: var(--app-text); -webkit-font-smoothing: antialiased; }
+
+  .canvas { padding: 56px 40px 96px; max-width: 1360px; margin: 0 auto; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--color-identity-home); }
+  .doc-title { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .doc-sub { font-size: 15px; color: var(--fg3); max-width: 760px; line-height: 22px; margin: 0; }
+  .doc-meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; }
+  .doc-meta div { font-size: 12.5px; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+  .doc-meta b { color: var(--fg2); font-weight: 600; }
+  .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+
+  .zone { margin-top: 56px; }
+  .zone-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .zone-num { font-size: 13px; font-weight: 700; color: var(--color-identity-home); font-variant-numeric: tabular-nums; }
+  .zone-title { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+  .zone-sub { font-size: 14px; color: var(--fg3); margin: 0 0 26px; max-width: 780px; line-height: 21px; }
+
+  /* product cards (inside #f6f7f9 stages and phone) */
+  .pl-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .pl-hero { box-shadow: 0 3px 12px rgba(17,24,39,.06), 0 1px 2px rgba(0,0,0,.04); }
+  .pl-textbtn:hover { color: #0369a1 !important; }
+  .pl-textbtn:focus-visible { outline: 2px solid rgba(56,189,248,.5); outline-offset: 3px; border-radius: 4px; }
+
+  /* shimmer */
+  .pl-skel { position: relative; overflow: hidden; background: #eef1f4; }
+  .pl-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: pl-shimmer 1.5s infinite; }
+  @keyframes pl-shimmer { 100% { transform: translateX(100%); } }
+
+  .dash-wrap { display: flex; gap: 64px; align-items: flex-start; flex-wrap: wrap; }
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .phone-cap { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg2); }
+  .phone-cap span { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--fg4); margin-left: 8px; }
+  .side-note { max-width: 320px; }
+  .side-note h4 { margin: 28px 0 6px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .side-note h4:first-child { margin-top: 0; }
+  .side-note p { margin: 0; font-size: 13px; color: var(--fg3); line-height: 19px; }
+
+  @media (prefers-reduced-motion: reduce) { .pl-skel::after { animation: none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="place-components.jsx"></script>
+<script type="text/babel" src="place-preview.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function App() {
+  return (
+    <div className="canvas">
+      <div className="doc-head">
+        <div className="doc-kicker">Pantopus · Place · Preview tier</div>
+        <h1 className="doc-title">Place — preview (anonymous, signed out)</h1>
+        <p className="doc-sub">What a new U.S. user sees the moment they type their address — no account. Same shell and section-card system as the verified archetype, but framed as a <b>one-time demonstration</b>, not a returnable daily dashboard. A couple of public readings prove the value; everything recurring or exact — including daily conditions — is account-gated, and reopening the app lands on the wall, not here.</p>
+        <div className="doc-meta">
+          <div><span className="sw" style={{ background: '#16A34A' }}></span> Place accent <b>Home green #16A34A</b></div>
+          <div><span className="sw" style={{ background: '#0284C7' }}></span> CTAs / Sign in <b>Sky #0284C7</b></div>
+          <div><span className="sw" style={{ background: '#f6f7f9' }}></span> Shell <b>#f6f7f9</b>, white bordered cards</div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">01</span>
+          <h2 className="zone-title">The signed-out screen</h2>
+        </div>
+        <p className="zone-sub">No avatar — a quiet <b>Sign in</b> link sits top-right. The hero speaks to a stranger and sets expectations: a free, one-time look. Two public sections (Risk &amp; readiness, Your block) carry real content as the demonstration. Everything recurring or exact — daily conditions, home details, health, money, civic — collapses to a <b>LockedCard</b>. No tab bar yet — a single sticky <b>Create account</b> bar takes its place.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <PlacePreview block="warm" />
+            </IOSDevice>
+            <div className="phone-cap">Warm block <span>a few verified homes nearby</span></div>
+          </div>
+
+          <div className="side-note">
+            <h4>A one-time look, not a dashboard</h4>
+            <p>The hero sets expectations honestly: "Here's what's public about your address — a free, one-time look." This isn't a daily surface a stranger can return to — it's a single demonstration that earns the account.</p>
+
+            <h4>The demonstration is real</h4>
+            <p>The flood zone and the block read as real public data, so the proof isn't a mockup. The block teaser stays a Census median — area-level, never presented as your home.</p>
+
+            <h4>Daily conditions are the hook</h4>
+            <p>Weather, air quality, and alerts are deliberately <i>not</i> shown free here. They live in a locked "Daily conditions" card — "updated every day" — because the recurring value is exactly what an account buys.</p>
+
+            <h4>Locked, not hidden</h4>
+            <p>Daily conditions, home details, health &amp; environment, money signals, and civic each become a LockedCard — a lock in the header, a one-line reason, a verbs-first "Create account." The value is visible; the data is gated.</p>
+
+            <h4>Nothing persists</h4>
+            <p>This preview doesn't save. The real dashboard is account-gated, so reopening the app lands on the create-account wall — not back on this screen. The one-time framing is a promise the app keeps.</p>
+
+            <h4>One CTA, pinned</h4>
+            <p>Pre-account, there's no Place · Neighborhood · Beacon · Inbox bar. The sticky bottom bar carries the only ask: create a free account to save this place and get daily updates.</p>
+
+            <h4>Other platforms</h4>
+            <p>iOS shown. On Android the pinned bar keeps the same content with a Material elevated button; on web it becomes a right-aligned sticky footer inside the 1024 content column, with Sign in moving into the top nav.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="zone">
+        <div className="zone-head">
+          <span className="zone-num">02</span>
+          <h2 className="zone-title">Cold-block variant</h2>
+        </div>
+        <p className="zone-sub">Same screen where nobody has verified yet. The DensityCard drops to its <b>none</b> bucket — "No activity shown yet" — and invites the visitor to be the first. Everything else is unchanged: the block isn't broken, it's just early.</p>
+
+        <div className="dash-wrap">
+          <div className="phone-col">
+            <IOSDevice width={402} height={860}>
+              <PlacePreview block="cold" />
+            </IOSDevice>
+            <div className="phone-cap">Cold block <span>no activity shown yet</span></div>
+          </div>
+
+          <div className="side-note">
+            <h4>Buckets, never counts</h4>
+            <p>Density is always qualitative. The cold state reads "No activity shown yet" with the dots emptied — it never exposes a raw number of homes, which protects early adopters on a sparse block.</p>
+
+            <h4>An invitation, not a dead end</h4>
+            <p>"Be one of the first to verify on your block" turns an empty state into a reason to act. The rest of the page still delivers real public readings, so the screen never feels hollow.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

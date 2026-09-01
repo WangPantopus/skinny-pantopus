@@ -1,0 +1,809 @@
+
+> @pantopus/web@0.1.0 lint /home/user/pantopus/frontend/apps/web
+> eslint ./src/
+
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/chat/new/page.tsx
+   14:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   41:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   42:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/connections/page.tsx
+   69:9   warning  The 'accepted' logical expression could make the dependencies of useMemo Hook (at line 82) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'accepted' in its own useMemo() Hook  react-hooks/exhaustive-deps
+   70:9   warning  The 'pending' logical expression could make the dependencies of useMemo Hook (at line 95) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'pending' in its own useMemo() Hook    react-hooks/exhaustive-deps
+  495:61  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                                                                                                         react/no-unescaped-entities
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/feed/page.tsx
+  120:6  warning  React Hook useEffect has missing dependencies: 'feed' and 'virtualizer'. Either include them or remove the dependency array               react-hooks/exhaustive-deps
+  120:7  warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs-v2/GigCardV2.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  45:34  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs-v2/[id]/page.tsx
+   17:8   warning  'OffersPanel' is defined but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+   22:8   warning  'DetailRow' is defined but never used. Allowed unused vars must match /^_/u                                     @typescript-eslint/no-unused-vars
+  129:10  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  200:10  warning  'OffersPanelV2' is defined but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+  207:11  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  208:8   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  271:10  warning  'InstantAcceptButton' is defined but never used. Allowed unused vars must match /^_/u                           @typescript-eslint/no-unused-vars
+  294:19  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  312:14  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                 react/no-unescaped-entities
+  340:10  warning  'ETATracker' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+  340:45  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  340:58  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  347:32  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  420:50  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  421:34  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  422:44  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  425:48  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  426:10  warning  'gigMedia' is assigned a value but never used. Allowed unused elements of array destructuring must match /^_/u  @typescript-eslint/no-unused-vars
+  426:44  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  457:19  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  474:33  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  485:27  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  493:29  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  563:32  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  564:37  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  565:38  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  566:46  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  567:53  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  575:30  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  583:17  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs-v2/new/page.tsx
+   14:3   warning  'MagicTaskDraft' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  231:19  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  263:41  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  314:31  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  327:45  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  332:19  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  369:49  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs-v2/page.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  252:19  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs/GigsMap.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                                 @typescript-eslint/ban-ts-comment
+  10:47  warning  'boundsChangedSignificantly' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  17:6   warning  'PriceFilter' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  18:6   warning  'SortOption' is defined but never used. Allowed unused vars must match /^_/u                  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs/[id]/page.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                                   @typescript-eslint/ban-ts-comment
+  356:5   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  768:29  warning  Unexpected any. Specify a different type                                                        @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs/[id]/review/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs/new/page.tsx
+  97:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/gigs/page.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  212:52  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/access/page.tsx
+  140:50  warning  Unexpected any. Specify a different type                                                                                                                                                        @typescript-eslint/no-explicit-any
+  146:9   warning  The 'secrets' logical expression could make the dependencies of useMemo Hook (at line 161) change on every render. To fix this, wrap the initialization of 'secrets' in its own useMemo() Hook  react-hooks/exhaustive-deps
+  485:69  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                                                                 react/no-unescaped-entities
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/bills/page.tsx
+  359:41  warning  React Hook useMemo has an unnecessary dependency: 'bills'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/calendar/page.tsx
+  41:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  69:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/dashboard/page.tsx
+    1:1    warning  Do not use "@ts-nocheck" because it alters compilation errors                                                    @typescript-eslint/ban-ts-comment
+    7:104  warning  'Clock' is defined but never used. Allowed unused vars must match /^_/u                                          @typescript-eslint/no-unused-vars
+  104:6    warning  React Hook useEffect has a missing dependency: 'intelligence'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  146:6    warning  React Hook useEffect has a missing dependency: 'intelligence'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  153:6    warning  React Hook useEffect has a missing dependency: 'intelligence'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/docs/page.tsx
+  27:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  36:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/edit/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/emergency/page.tsx
+    5:44  warning  'Users' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   24:38  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+   40:24  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+   65:47  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  133:44  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/members/add-guest/page.tsx
+  18:15  warning  'homeId' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  34:19  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/owners/invite/page.tsx
+  28:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/owners/review-claim/page.tsx
+   22:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  171:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/owners/transfer/page.tsx
+  40:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/packages/page.tsx
+  24:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  39:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  66:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/pets/page.tsx
+  23:8  warning  'PetSpeciesWire' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/property-details/page.tsx
+   22:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/settings/page.tsx
+   7:3   warning  'CheckSquare' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   7:16  warning  'Receipt' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+   7:25  warning  'Package' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+   7:34  warning  'Wrench' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+   7:42  warning  'BarChart3' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  30:36  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  31:44  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  49:35  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  53:75  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  69:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  77:17  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/settings/security/page.tsx
+  72:95  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  74:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  75:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  79:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/share/page.tsx
+   31:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   44:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   51:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/tasks/page.tsx
+  346:41  warning  React Hook useMemo has an unnecessary dependency: 'tasks'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/verify-landlord/details/page.tsx
+  30:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/verify-postcard/page.tsx
+  33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/[id]/waiting-room/page.tsx
+   23:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:92  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   98:87  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:87  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/find/page.tsx
+  13:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  81:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/homes/invite/page.tsx
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/invoice/[id]/page.tsx
+   26:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   51:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/booklet/page.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                    @typescript-eslint/ban-ts-comment
+  17:42  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  18:38  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  42:9   warning  'page' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/certified/page.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors            @typescript-eslint/ban-ts-comment
+   6:34  warning  'Clock' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  18:36  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  20:48  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  46:19  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/coupon/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/disambiguate/page.tsx
+   54:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  101:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  101:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/gig/page.tsx
+  17:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/package/page.tsx
+  23:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  24:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  84:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/party/page.tsx
+  20:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/stamps/page.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  18:40  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  19:40  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  71:33  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  79:33  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/translation/page.tsx
+  16:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/unboxing/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/mailbox/vacation/page.tsx
+   5:41  warning  'Calendar' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  54:41  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/map/page.tsx
+  46:9  warning  'handleContact' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/CreateListingModal.tsx
+  228:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/MarketplaceMap.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  464:37  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  464:68  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  465:48  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+  547:32  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/SnapSellListingModal.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/OfferModal.tsx
+  18:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  72:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  86:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/PriceContext.tsx
+  15:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/ReviewModal.tsx
+  57:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/SimilarListings.tsx
+  14:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/TradeModal.tsx
+  12:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/_components/useListingDetail.ts
+  11:33  warning  'STATUS_OPTIONS' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/[id]/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/marketplace/page.tsx
+  264:66  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  311:52  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  752:33  warning  'prefill' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  813:35  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/my-bids/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/my-gigs/page.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                                                                                                                             @typescript-eslint/ban-ts-comment
+  288:9   warning  The 'gigs' logical expression could make the dependencies of useMemo Hook (at line 300) change on every render. To fix this, wrap the initialization of 'gigs' in its own useMemo() Hook  react-hooks/exhaustive-deps
+  655:60  warning  Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+  665:62  warning  Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/network/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/professional/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/profile/page.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                  @typescript-eslint/ban-ts-comment
+  10:43  warning  'GigListItem' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/profile/settings/blocked/page.tsx
+  14:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/profile/settings/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/profile/settings/password/page.tsx
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/settings/notifications/page.tsx
+  44:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/settings/payments/page.tsx
+    1:1    warning  Do not use "@ts-nocheck" because it alters compilation errors                                                       @typescript-eslint/ban-ts-comment
+   32:10   warning  'accountError' is assigned a value but never used. Allowed unused elements of array destructuring must match /^_/u  @typescript-eslint/no-unused-vars
+   39:19   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  319:41   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  319:72   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  319:102  warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  320:41   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  320:72   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  320:102  warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  361:52   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  370:34   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  370:67   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  371:19   warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/support-trains/[id]/calendar/page.tsx
+   31:36  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+   52:9   warning  The 'slots' logical expression could make the dependencies of useMemo Hook (at line 61) change on every render. To fix this, wrap the initialization of 'slots' in its own useMemo() Hook  react-hooks/exhaustive-deps
+   52:9   warning  The 'slots' logical expression could make the dependencies of useMemo Hook (at line 98) change on every render. To fix this, wrap the initialization of 'slots' in its own useMemo() Hook  react-hooks/exhaustive-deps
+   52:16  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+   56:31  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+   82:53  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+  169:43  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+  199:40  warning  Unexpected any. Specify a different type                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/support-trains/[id]/manage/page.tsx
+   15:3   warning  'DollarSign' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   20:3   warning  'X' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   21:3   warning  'Plus' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   34:36  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   35:52  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   36:42  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   37:36  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   38:54  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   71:38  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  102:19  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  122:19  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  156:63  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  257:36  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  317:42  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  382:45  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/support-trains/[id]/page.tsx
+   20:3   warning  'CheckCircle2' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   22:3   warning  'RefreshCw' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+   36:36  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   51:19  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   85:38  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   86:39  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  222:41  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  225:42  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  309:33  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  341:38  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  347:46  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  347:82  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  379:48  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  400:45  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  461:51  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/support-trains/new/page.tsx
+   61:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  182:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  219:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  268:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  300:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(app)/app/support-trains/page.tsx
+   7:23  warning  'Calendar' is defined but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+   7:33  warning  'Users' is defined but never used. Allowed unused vars must match /^_/u                                      @typescript-eslint/no-unused-vars
+  47:40  warning  Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  48:10  warning  'total' is assigned a value but never used. Allowed unused elements of array destructuring must match /^_/u  @typescript-eslint/no-unused-vars
+  61:21  warning  Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  68:19  warning  Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/app/(auth)/register/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/[username]/PublicProfileClient.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/auth/callback/page.tsx
+    1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors                            @typescript-eslint/ban-ts-comment
+   45:17  warning  'token' is assigned a value but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+   51:17  warning  'refreshToken' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   96:15  warning  'token' is assigned a value but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+  102:15  warning  'refreshToken' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/app/invite/seat/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/posts/[id]/page.tsx
+  160:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/app/shared/[token]/page.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/app/support-trains/[id]/page.tsx
+  130:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  285:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/BidsDrawer.tsx
+   1:1   warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+  97:27  warning  Unexpected any. Specify a different type                       @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/address/VerdictScreens.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/components/business/BlockEditor.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/components/business/BlockPreview.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/components/business/BusinessPublicProfile.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/components/business/PublicBlockRenderer.tsx
+  1:1  warning  Do not use "@ts-nocheck" because it alters compilation errors  @typescript-eslint/ban-ts-comment
+
+/home/user/pantopus/frontend/apps/web/src/components/business/tabs/ActivityTab.tsx
+  38:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  49:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  89:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/business/tabs/InboxTab.tsx
+   18:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   87:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   88:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/business/tabs/InvoicesTab.tsx
+   79:17   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:17   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:90   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:122  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/business/tabs/LegalTab.tsx
+  35:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:81  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  82:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/ChatMessageBubble.tsx
+   71:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  203:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/ChatRichCard.tsx
+  19:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/ChatRoomView.tsx
+  222:6    warning  React Hook useCallback has a missing dependency: 'chat'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  321:71   warning  Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+  321:100  warning  Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/ConversationView.tsx
+  196:6  warning  React Hook useCallback has a missing dependency: 'chat'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/GigChatActions.tsx
+  11:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  32:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/ListingChatActions.tsx
+   8:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  39:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/MiniChatView.tsx
+   55:6   warning  React Hook useCallback has a missing dependency: 'chat'. Either include it or remove the dependency array                                                                                                                                                                                react-hooks/exhaustive-deps
+   57:55  warning  'files' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  126:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/chat/MiniConversationList.tsx
+  166:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/feed/PostTargetPicker.tsx
+  41:53   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:21   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  43:18   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:72   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:40   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:109  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-browse/BrowseFeed.tsx
+    3:44  warning  'useMemo' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  210:6   warning  React Hook useCallback has a missing dependency: 'onDataLoaded'. Either include it or remove the dependency array. If 'onDataLoaded' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-browse/CategoryRail.tsx
+  54:9  warning  'clusterMap' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-browse/NewTasksBanner.tsx
+  3:21  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-browse/SmartSearch.tsx
+  4:8  warning  'Link' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail-v2/ActiveTaskPanel.tsx
+   31:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  146:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail-v2/ETATracker.tsx
+  10:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail-v2/InstantAcceptButton.tsx
+  23:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail-v2/OfferCardV2.tsx
+   7:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  10:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail-v2/OffersPanelV2.tsx
+  7:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  8:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/BidPanel.tsx
+   94:20  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+  211:67  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  211:91  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/CompletionActionCards.tsx
+  30:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/ConfirmCompletionModal.tsx
+   20:8   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   92:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  107:51  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/GigHeader.tsx
+  9:6  warning  'AnyObj' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/GigMediaGallery.tsx
+   44:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   44:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  103:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  130:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  141:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/LeaveReviewModal.tsx
+  136:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/OffersPanel.tsx
+   50:3   warning  'onOpenChat' is defined but never used. Allowed unused args must match /^_/u                                             @typescript-eslint/no-unused-vars
+   62:10  warning  'pendingChatRoomId' is assigned a value but never used. Allowed unused elements of array destructuring must match /^_/u  @typescript-eslint/no-unused-vars
+  162:13  warning  'eData' is assigned a value but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+  175:13  warning  'eData' is assigned a value but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-detail/useCompletionFlow.ts
+   19:8   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   79:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   87:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   89:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  208:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  210:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  231:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  233:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  256:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  276:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  309:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  335:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  363:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  370:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  383:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  404:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/CareModule.tsx
+  34:38  warning  'category' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/DeliveryModule.tsx
+  29:3  warning  'category' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/DeliveryProofSheet.tsx
+  48:39  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  49:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  99:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/DraftPreview.tsx
+   53:20  warning  'setCategory' is assigned a value but never used. Allowed unused elements of array destructuring must match /^_/u  @typescript-eslint/no-unused-vars
+  100:44  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  104:19  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  125:49  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/ProServicesModule.tsx
+  38:45  warning  'category' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/QuickComposer.tsx
+  13:26  warning  'isDeliveryCategory' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  14:29  warning  'isProCategory' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  80:19  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  87:43  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/gig-v2-create/QuickModifiersV2.tsx
+   93:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  228:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  241:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  430:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/home/HomeTimeline.tsx
+    4:17  warning  'Loader2' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  101:9   warning  'totalItems' is assigned a value but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  159:19  warning  'currentGlobal' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/magic-task-v2/LiveAIPanel.tsx
+    3:39  warning  'useCallback' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  136:6   warning  React Hook useEffect has missing dependencies: 'draft', 'onDraftReady', and 'state'. Either include them or remove the dependency array. If 'onDraftReady' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/components/map/BaseMap.tsx
+   4:24  warning  'TileLayer' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  72:21  warning  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/map/CachedTileLayer.tsx
+  115:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/map/OfflineIndicator.tsx
+  3:31  warning  'useCallback' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  3:44  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+
+/home/user/pantopus/frontend/apps/web/src/components/map/useCluster.ts
+  78:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/home/user/pantopus/frontend/apps/web/src/components/marketplace-browse/MarketplaceDiscoveryFeed.tsx
+   44:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  345:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/payments/PaymentMethodList.tsx
+  101:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/public-share/GuestSignupModal.tsx
+  110:19  warning  Unexpected any. Specify a different type                                                                    @typescript-eslint/no-explicit-any
+  132:5   warning  Unused eslint-disable directive (no problems were reported from 'jsx-a11y/no-static-element-interactions')
+  320:18  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+  323:17  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+
+/home/user/pantopus/frontend/apps/web/src/components/public-share/PublicShareMedia.tsx
+  17:9   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  26:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/ui/FloatingPromoModal.tsx
+  99:13  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/pantopus/frontend/apps/web/src/components/wallet/WalletBalanceCard.tsx
+   46:39   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   47:39   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:19   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:129  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:180  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/components/wallet/WalletTransactionList.tsx
+  60:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/hooks/useGigPaymentFlow.ts
+   72:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/hooks/useGigsData.ts
+   11:32  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   12:32  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   68:24  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  102:34  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  102:59  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  112:21  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  116:5   warning  React Hook useCallback has a missing dependency: 'viewerHome'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/pantopus/frontend/apps/web/src/hooks/useHomeAccess.ts
+  90:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/hooks/usePromoTriggers.ts
+  120:17  warning  'router' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  213:14  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/hooks/useRadiusSuggestion.ts
+  26:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/lib/publicShare.ts
+   45:83  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   46:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:87  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   51:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:84  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:92  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   68:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/user/pantopus/frontend/apps/web/src/lib/signal-buffer.ts
+  44:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 510 problems (0 errors, 510 warnings)
+  0 errors and 3 warnings potentially fixable with the `--fix` option.
+
+EXIT: 0

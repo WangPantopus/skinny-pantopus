@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Hub tab archetype (A02)</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f0eee9; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 56px 48px 96px; min-height: 100vh; box-sizing: border-box; }
+    .header { max-width: 1520px; margin: 0 auto 48px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 15px; max-width: 780px; line-height: 22px; }
+
+    .section-title { max-width: 1520px; margin: 0 auto 24px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+
+    .sections-map { max-width: 1520px; margin: 0 auto 48px; background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .sections-map h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: #111827; letter-spacing: -0.01em; }
+    .sections-map .lede { margin: 0 0 20px; color: #6b7280; font-size: 13px; line-height: 19px; max-width: 720px; }
+    .sm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
+    .sm-item { display: flex; gap: 10px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; }
+    .sm-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; font-weight: 700; color: #0284c7; background: #fff; border: 1px solid #bae6fd; padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; height: fit-content; }
+    .sm-body { font-size: 12px; color: #374151; line-height: 17px; }
+    .sm-body strong { color: #111827; font-weight: 600; display: block; margin-bottom: 2px; }
+
+    .states-legend { max-width: 1520px; margin: 0 auto 36px; display: flex; gap: 24px; align-items: center; justify-content: center; flex-wrap: wrap; color: #6b7280; font-size: 12px; }
+    .states-legend .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: #fff; border: 1px solid #e5e7eb; border-radius: 9999px; font-weight: 600; color: #111827; }
+    .states-legend .dot { width: 8px; height: 8px; border-radius: 9999px; }
+
+    .frames { max-width: 1520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px 24px; justify-items: center; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .label-wrap { text-align: center; max-width: 340px; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #9ca3af; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 12px; color: #6b7280; line-height: 17px; }
+
+    @keyframes hub-shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    @media (max-width: 1240px) {
+      .frames { grid-template-columns: 1fr; max-width: 420px; }
+      .sm-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Mobile Archetype · A02 · Tab</div>
+      <h1>Hub — home command center</h1>
+      <p>The most visually prominent tab in the app. Composes 9 sections as a single scrollable canvas — greeting, quick actions, setup banner, Today, four pillar cards, Discover, Jump-back-in, Activity. One shell covering <code style="font-size:13px">(tabs)/index.tsx</code> and <code style="font-size:13px">control-center.tsx</code>.</p>
+    </div>
+
+    <div class="sections-map">
+      <h2>Section sequence</h2>
+      <p class="lede">Each section occupies a fixed vertical slot. Empty sections collapse entirely (no "nothing here yet" placeholders) — the next section slides up to take its place.</p>
+      <div class="sm-grid">
+        <div class="sm-item"><span class="sm-num">01</span><div class="sm-body"><strong>Top bar</strong>Avatar (identity ring) · Good morning + name · bell + unread dot · menu</div></div>
+        <div class="sm-item"><span class="sm-num">02</span><div class="sm-body"><strong>Action strip</strong>Horizontal chips — Post task · Snap &amp; sell · Scan mail · Add home. 36px tall, first chip is the current-identity primary.</div></div>
+        <div class="sm-item"><span class="sm-num">03</span><div class="sm-body"><strong>Setup banner</strong>Dismissable amber card. Disappears after verification complete.</div></div>
+        <div class="sm-item"><span class="sm-num">04</span><div class="sm-body"><strong>Today</strong>Weather + AQI + commute preview. Tap → full Today detail screen.</div></div>
+        <div class="sm-item"><span class="sm-num">05</span><div class="sm-body"><strong>Pillar grid (2×2)</strong>Pulse · Marketplace · Gigs · Mail. Color-accented. Count chip when populated, "Set up" chip otherwise.</div></div>
+        <div class="sm-item"><span class="sm-num">06</span><div class="sm-body"><strong>Discover nearby</strong>140×180 horizontal rail — persons, businesses, listings mixed. Always shown (even first-run).</div></div>
+        <div class="sm-item"><span class="sm-num">07</span><div class="sm-body"><strong>Jump back in</strong>Two 124px cards resuming flows — draft listings, unfinished task posts. Hidden if nothing pending.</div></div>
+        <div class="sm-item"><span class="sm-num">08</span><div class="sm-body"><strong>Recent activity</strong>3 rows in a single card. Icon + body + relative time. "See all" → activity log.</div></div>
+        <div class="sm-item"><span class="sm-num">09</span><div class="sm-body"><strong>Tab bar</strong>4 tabs — Hub (active) · Nearby · Inbox · You. FAB hidden here (action strip replaces it).</div></div>
+      </div>
+    </div>
+
+    <div class="section-title">Three frames · three states</div>
+    <div class="states-legend">
+      <span class="pill"><span class="dot" style="background:#16A34A"></span>Populated</span>
+      <span class="pill"><span class="dot" style="background:#D97706"></span>First-run / Empty</span>
+      <span class="pill"><span class="dot" style="background:#9ca3af"></span>Loading skeleton</span>
+    </div>
+
+    <div class="frames">
+      <div class="frame">
+        <div id="f1"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 1 · POPULATED</div>
+          <div class="label-title">Good morning, Maria</div>
+          <div class="label-sub">All 9 sections rendered · setup banner still present · 4 pillars with counts · 2 jump-back cards · 3 activity rows</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f2"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 2 · FIRST-RUN</div>
+          <div class="label-title">Good morning, Sam</div>
+          <div class="label-sub">Verify-home hero replaces the banner · pillars in setup state · no jump-back, no activity · floating setup-progress card</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div id="f3"></div>
+        <div class="label-wrap">
+          <div class="label-num">FRAME 3 · SKELETON</div>
+          <div class="label-title">Loading</div>
+          <div class="label-sub">Shimmer rects preserving section proportions · top bar &amp; tab bar keep their chrome · no text anywhere</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="hub-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FramePopulated />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameFirstRun />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameSkeleton />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

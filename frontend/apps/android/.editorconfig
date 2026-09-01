@@ -1,0 +1,19 @@
+# ktlint (and IntelliJ) configuration for the Android app.
+
+root = true
+
+[*.{kt,kts}]
+# Compose convention: @Composable functions are PascalCase. Disable the
+# standard "function name must start lowercase" rule.
+ktlint_standard_function-naming = disabled
+
+# Allow filenames that don't exactly match a single top-level declaration —
+# we use `Color.kt`, `Typography.kt`, `Theme.kt` as logical groupings even
+# when they contain a single non-matching object.
+ktlint_standard_filename = disabled
+
+# Allow `_internal` as a package segment for the debug-only token gallery.
+ktlint_standard_package-name = disabled
+
+# Pre-existing docstring-then-EOL-comment pattern in a few data-model files.
+ktlint_standard_no-consecutive-comments = disabled

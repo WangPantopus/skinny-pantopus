@@ -1,0 +1,47 @@
+# SAM deployment configuration for pantopus-seeder
+#
+# Usage:
+#   sam build && sam deploy --config-env dev      # deploys dev
+#   sam build && sam deploy --config-env staging   # deploys staging
+#   sam build && sam deploy --config-env prod      # deploys production
+
+version = 0.1
+
+# ── Dev ──
+[dev.build.parameters]
+template_file = "template.yaml"
+
+[dev.deploy.parameters]
+stack_name = "pantopus-seeder-dev"
+region = "us-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+parameter_overrides = "Environment=dev"
+disable_rollback = true
+
+# ── Staging ──
+[staging.build.parameters]
+template_file = "template.yaml"
+
+[staging.deploy.parameters]
+stack_name = "pantopus-seeder-staging"
+region = "us-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+parameter_overrides = "Environment=staging"
+disable_rollback = true
+
+# ── Production ──
+[prod.build.parameters]
+template_file = "template.yaml"
+
+[prod.deploy.parameters]
+stack_name = "pantopus-seeder-production"
+region = "us-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+parameter_overrides = "Environment=production"
+disable_rollback = false

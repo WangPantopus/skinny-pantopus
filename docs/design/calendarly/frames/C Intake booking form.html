@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Intake / Booking details form</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 2050px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 980px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 2050px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Public booking intake</div>
+      <h1>Intake / Booking details form</h1>
+      <p>The full-screen step after an invitee picks a time on the slot picker — the tail of the public web <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/book/[slug]</code> flow at <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#0284c7;">/book/[slug]/details</code>, also reachable in-app post-slot-select. It extends the web GuestSignupModal form step into a real intake surface and mirrors Form.html exactly: 44px inputs with 8px radius, 1px borders, section overlines, the validation vocabulary, and a sticky-bottom primary CTA. A non-editable booking summary header holds the event type, host, date, time, and timezone, with a thin slot-hold countdown beneath. The accent borrows the host's pillar — Personal sky here — for focus rings and the hold chip.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Form (A13 single-screen shell)</div>
+        <div class="meta-item"><b>Mirrors</b>Form.html · GuestSignupModal · Intake questions editor</div>
+        <div class="meta-item"><b>Path</b><code>/book/[slug]/details</code></div>
+        <div class="meta-item"><b>Pillar</b>Host's — Personal sky</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · DEFAULT</div><div class="label-title">Empty intake</div>
+        <div class="label-sub">Summary header, hold countdown, name + email, the host's questions, and a collapsed Add guests row. CTA disabled until valid.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · PREFILLED</div><div class="label-title">Logged in</div>
+        <div class="label-sub">Name and email collapse to a "Booking as Maya Chen" chip — only the host's questions remain. Guests expanded. CTA enabled.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · ERRORS</div><div class="label-title">Validation</div>
+        <div class="label-sub">Required fields get a 1.5px red border, an alert-circle, and an 11px message. Valid fields show a green check.</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · ACCOUNT</div><div class="label-title">Existing account</div>
+        <div class="label-sub">An info banner under the email — "You have an account" — with an inline Open-in-app link to use saved details.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · SUBMITTING</div><div class="label-title">In flight</div>
+        <div class="label-sub">The CTA becomes a shimmer skeleton — never "Loading…" — and the form quietly dims while the booking submits.</div></div></div>
+      <div class="frame"><div id="f6"></div><div class="label-wrap">
+        <div class="label-num">6 · EXPIRED</div><div class="label-title">Slot expired</div>
+        <div class="label-sub">An amber banner replaces the hold — "This held time just expired" — the form dims, and the CTA becomes Pick another time.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="intake-booking-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameDefault />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FramePrefilled />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameErrors />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameExistingAccount />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameSubmitting />);
+    ReactDOM.createRoot(document.getElementById('f6')).render(<FrameExpired />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>

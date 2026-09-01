@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pantopus · Calendarly · Add to calendar sheet</title>
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #eef2f7; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page { padding: 52px 44px 88px; min-height: 100vh; box-sizing: border-box; }
+
+    .header { max-width: 1900px; margin: 0 auto 40px; }
+    .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0284c7; margin-bottom: 8px; }
+    .header h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; color: #111827; }
+    .header p { margin: 0; color: #6b7280; font-size: 14.5px; max-width: 1000px; line-height: 22px; }
+    .meta { display: flex; gap: 24px; margin-top: 18px; flex-wrap: wrap; }
+    .meta-item { font-size: 12px; color: #374151; }
+    .meta-item b { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; margin-bottom: 3px; }
+    .meta-item code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #0284c7; background: #f0f9ff; padding: 1px 6px; border-radius: 4px; }
+
+    .rail { max-width: 1900px; margin: 0 auto; display: flex; gap: 28px; overflow-x: auto; padding: 4px 4px 24px; }
+    .frame { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+    .label-wrap { width: 300px; text-align: center; }
+    .label-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: #94a3b8; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .label-title { font-size: 13.5px; font-weight: 600; color: #111827; margin-bottom: 3px; letter-spacing: -0.01em; }
+    .label-sub { font-size: 11.5px; color: #64748b; line-height: 16px; }
+
+    @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="kicker">Pantopus · Calendarly · Add to calendar</div>
+      <h1>Add to calendar sheet</h1>
+      <p>The surface that actually produces the calendar event promised across the confirmation screens — the RsvpCluster chips promoted to a full action sheet with a native EventKit write path. It slides up over any booking surface (invitee confirmed, host detail, home-event, visit) with a one-line event recap, then a vertical list of real labeled tap rows reusing the Gig Picker Sheets pattern (56px rows, leading icon disc, label + sub, trailing chevron, 1px dividers) — Apple Calendar, Google, Outlook, and Download .ics. Context-neutral chrome; the accent inherits the surface that opened it. Lucide icons, no emoji.</p>
+      <div class="meta">
+        <div class="meta-item"><b>Archetype</b>Action bottom sheet (picker rows) · EventKit</div>
+        <div class="meta-item"><b>Mirrors</b>RsvpCluster chips · Gig Picker Sheets rows · A18 dock</div>
+        <div class="meta-item"><b>Opens from</b><code>any booking/event detail</code></div>
+        <div class="meta-item"><b>Pillar</b>Neutral — inherits opening surface</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="frame"><div id="f1"></div><div class="label-wrap">
+        <div class="label-num">1 · WEB DEFAULT</div><div class="label-title">Three providers + .ics</div>
+        <div class="label-sub">Recap chip, four tap rows (Apple, Google, Outlook, Download .ics), an event-detail caption, and a Done ghost. No primary.</div></div></div>
+      <div class="frame"><div id="f2"></div><div class="label-wrap">
+        <div class="label-num">2 · NATIVE</div><div class="label-title">EventKit primary</div>
+        <div class="label-sub">"Add to iPhone Calendar" promoted to a full-width primary; Google / Outlook / .ics drop to a secondary More-options group.</div></div></div>
+      <div class="frame"><div id="f3"></div><div class="label-wrap">
+        <div class="label-num">3 · GENERATING</div><div class="label-title">.ics in flight</div>
+        <div class="label-sub">The tapped Download row shows an inline shimmer skeleton + "Preparing your file" — never "Loading…".</div></div></div>
+      <div class="frame"><div id="f4"></div><div class="label-wrap">
+        <div class="label-num">4 · ADDED</div><div class="label-title">Success morph</div>
+        <div class="label-sub">The row morphs to a green check + "Added to Apple Calendar"; the sheet auto-dismisses after a beat.</div></div></div>
+      <div class="frame"><div id="f5"></div><div class="label-wrap">
+        <div class="label-num">5 · PICK CALENDAR</div><div class="label-title">Multi-calendar</div>
+        <div class="label-sub">A second-level sheet listing writable calendars — Personal, Work, Family with color dots — to choose the target before writing.</div></div></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="event-editor-shell.jsx"></script>
+  <script type="text/babel" src="add-calendar-frames.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('f1')).render(<FrameWebDefault />);
+    ReactDOM.createRoot(document.getElementById('f2')).render(<FrameNative />);
+    ReactDOM.createRoot(document.getElementById('f3')).render(<FrameGenerating />);
+    ReactDOM.createRoot(document.getElementById('f4')).render(<FrameAdded />);
+    ReactDOM.createRoot(document.getElementById('f5')).render(<FrameMultiCalendar />);
+
+    const refresh = () => window.lucide && window.lucide.createIcons();
+    setTimeout(refresh, 50);
+    setTimeout(refresh, 250);
+    setTimeout(refresh, 600);
+    setTimeout(refresh, 1200);
+  </script>
+</body>
+</html>
