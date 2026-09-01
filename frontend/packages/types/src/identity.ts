@@ -270,6 +270,8 @@ export interface ViewAsPreviewPost {
   content?: string | null;
   media_urls?: string[] | null;
   media_types?: string[] | null;
+  /** Live Photo companion clips, parallel to `media_urls` (see Post.media_live_urls). */
+  media_live_urls?: string[] | null;
   post_type?: string | null;
   post_format?: string | null;
   visibility?: string | null;

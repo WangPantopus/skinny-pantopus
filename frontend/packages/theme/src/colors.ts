@@ -83,6 +83,13 @@ export const colors = {
     green: '#22C55E',
     purple: '#A855F7',
     cyan: '#0891B2',
+    // Live Photo badge yellow (iOS systemYellow) — semantic rather than a
+    // hue name: the 7px dot on Live Photo tiles and the LIVE replay pill
+    // in the media viewer. Identical in dark mode; it sits on photo
+    // content, never on a themed surface. Mirrored natively as
+    // `Theme.Color.liveBadge` (iOS Core/Design/Colors.swift:145) and
+    // `PantopusColors.liveBadge` (Android ui/theme/Color.kt:309).
+    liveBadge: '#FFD60A',
   },
 
   // ─── Dark mode ───────────────────────────────────────────

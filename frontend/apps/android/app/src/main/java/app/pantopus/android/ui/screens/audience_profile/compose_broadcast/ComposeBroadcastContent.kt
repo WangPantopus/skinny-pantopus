@@ -41,7 +41,11 @@ enum class BroadcastAudience(
  * published. Sample / snapshot data leaves it null so the preview falls
  * back to a tinted placeholder, keeping baselines deterministic.
  * [remoteUrl] is set only for already-hosted media, which rides the
- * publish body's `media[]` field instead of the upload leg.
+ * publish body's `media[]` field instead of the upload leg — as do its
+ * [thumbnailUrl] (video poster / Live Photo still) and [liveVideoUrl]
+ * (Live Photo companion clip), both of which
+ * `broadcastMediaItemsFromPayload` (`backend/routes/broadcastChannels.js:113`)
+ * reads straight into the post's `media_thumbnails` / `media_live_urls`.
  * [capturedLatitude]/[capturedLongitude] are the capture coordinates
  * extracted at pick time (EXIF for stills, the ISO-6709 atom for
  * videos; mirrors the iOS `ComposeMediaPreview` fields) — a LOCAL
@@ -56,10 +60,31 @@ data class ComposeMediaPreview(
     val remoteUrl: String? = null,
     val fileName: String? = null,
     val mimeType: String? = null,
+    /** Poster for a video slot, still frame for a Live Photo slot. */
+    val thumbnailUrl: String? = null,
+    /** Companion clip — only meaningful on [Kind.LivePhoto]. */
+    val liveVideoUrl: String? = null,
     val capturedLatitude: Double? = null,
     val capturedLongitude: Double? = null,
 ) {
-    enum class Kind { Image, Video }
+    /**
+     * [wire] is the `type` string the publish body carries; it is spelled out
+     * rather than derived from the enum name because the backend's
+     * `BROADCAST_MEDIA_TYPES` uses snake_case (`live_photo`), and a mismatch
+     * is a 400 rather than a silent downgrade
+     * (`broadcastMediaItemSchema`, `backend/routes/broadcastChannels.js:44-58`).
+     *
+     * Nothing authors a [LivePhoto] locally today — every picker on this
+     * surface is `PickVisualMedia` over stills and videos — so the case exists
+     * for already-hosted media round-tripping through [remoteUrl], which is
+     * exactly the shape `mediaFromPost` hands back
+     * (`backend/routes/broadcastChannels.js:200-215`).
+     */
+    enum class Kind(val wire: String) {
+        Image("image"),
+        Video("video"),
+        LivePhoto("live_photo"),
+    }
 
     val resolvedMimeType: String
         get() = mimeType ?: if (kind == Kind.Video) "video/mp4" else "image/jpeg"
@@ -80,6 +105,8 @@ data class ComposeMediaPreview(
                     remoteUrl == other.remoteUrl &&
                     fileName == other.fileName &&
                     mimeType == other.mimeType &&
+                    thumbnailUrl == other.thumbnailUrl &&
+                    liveVideoUrl == other.liveVideoUrl &&
                     capturedLatitude == other.capturedLatitude &&
                     capturedLongitude == other.capturedLongitude &&
                     bytesEqual(bytes, other.bytes)
@@ -90,6 +117,8 @@ data class ComposeMediaPreview(
         result = 31 * result + kind.hashCode()
         result = 31 * result + (caption?.hashCode() ?: 0)
         result = 31 * result + (remoteUrl?.hashCode() ?: 0)
+        result = 31 * result + (thumbnailUrl?.hashCode() ?: 0)
+        result = 31 * result + (liveVideoUrl?.hashCode() ?: 0)
         result = 31 * result + (capturedLatitude?.hashCode() ?: 0)
         result = 31 * result + (capturedLongitude?.hashCode() ?: 0)
         result = 31 * result + (bytes?.contentHashCode() ?: 0)

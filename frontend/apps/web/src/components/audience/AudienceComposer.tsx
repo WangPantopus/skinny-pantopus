@@ -110,12 +110,27 @@ export function AudienceComposer({
       if (mediaFiles.length > 0) {
         try {
           const upload = await api.upload.uploadPostMedia(postedMessage.id, mediaFiles);
+          // POST /api/upload/post-media returns four PARALLEL arrays; this
+          // optimistic row used to keep only two, so until the next refetch
+          // the freshly-posted update lost its video posters entirely and
+          // every Live Photo rendered as a dead still (a live slot needs
+          // media_live_urls[i] non-blank — see resolvePostMediaSlots in
+          // components/feed/PostMediaGrid.tsx). Transposing all four here
+          // matches what the server sends back on the next read
+          // (mediaFromPost, backend/routes/broadcastChannels.js:200-215).
           postedMessage = {
             ...postedMessage,
-            media: upload.media_urls.map((url: string, index: number) => ({
-              url,
-              type: upload.media_types[index] || 'image',
-            })),
+            media: upload.media_urls.map((url: string, index: number) => {
+              const item: Record<string, unknown> = {
+                url,
+                type: upload.media_types?.[index] || 'image',
+              };
+              const thumbnailUrl = upload.media_thumbnails?.[index];
+              const liveVideoUrl = upload.media_live_urls?.[index];
+              if (thumbnailUrl) item.thumbnailUrl = thumbnailUrl;
+              if (liveVideoUrl) item.liveVideoUrl = liveVideoUrl;
+              return item;
+            }),
           };
         } catch {
           setError('Update posted, but some media failed to upload.');

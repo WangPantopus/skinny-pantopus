@@ -25,19 +25,30 @@ public final class BroadcastDetailViewModel {
     private let broadcastId: String
     private let seed: UpdateCardContent?
     private let tierSegments: [TierBreakdownContent.TierSegment]
+    private let broadcastMedia: [BroadcastMediaDTO]
 
     /// `seed` carries the tapped row's snapshot (visibility, body,
-    /// counts, timestamp). `tierSegments` is the parent persona's tier
-    /// ladder + member counts (used to split the broadcast's read
-    /// count proportionally until the per-broadcast endpoint lands).
+    /// counts, timestamp, attachments). `tierSegments` is the parent
+    /// persona's tier ladder + member counts (used to split the
+    /// broadcast's read count proportionally until the per-broadcast
+    /// endpoint lands).
+    ///
+    /// `broadcastMedia` is the escape hatch for a caller that holds a
+    /// **broadcast-channel** row rather than an Audience Profile card:
+    /// `GET /api/broadcast/channels/:id/messages` describes attachments
+    /// with a nested camelCase array instead of the padded snake_case
+    /// arrays `UpdateCardContent.media` was built from (see
+    /// `BroadcastMediaDTO`). When non-empty it wins over `seed.media`.
     public init(
         broadcastId: String,
         seed: UpdateCardContent? = nil,
-        tierSegments: [TierBreakdownContent.TierSegment] = []
+        tierSegments: [TierBreakdownContent.TierSegment] = [],
+        broadcastMedia: [BroadcastMediaDTO] = []
     ) {
         self.broadcastId = broadcastId
         self.seed = seed
         self.tierSegments = tierSegments
+        self.broadcastMedia = broadcastMedia
     }
 
     public func load() async {
@@ -46,7 +57,10 @@ public final class BroadcastDetailViewModel {
             state = .error(message: "Couldn't load this broadcast.")
             return
         }
-        state = .loaded(Self.project(broadcastId: broadcastId, seed: seed, tiers: tierSegments))
+        let media = broadcastMedia.isEmpty ? seed.media : Self.heroMedia(broadcastMedia)
+        state = .loaded(
+            Self.project(broadcastId: broadcastId, seed: seed, tiers: tierSegments, media: media)
+        )
     }
 
     // MARK: - Projection
@@ -54,14 +68,15 @@ public final class BroadcastDetailViewModel {
     static func project(
         broadcastId: String,
         seed: UpdateCardContent,
-        tiers: [TierBreakdownContent.TierSegment]
+        tiers: [TierBreakdownContent.TierSegment],
+        media: [PostMediaItem]? = nil
     ) -> BroadcastDetailLoaded {
         let hero = BroadcastDetailHero(
             body: seed.body,
             visibility: seed.visibility,
             targetTierRank: seed.targetTierRank,
             timestamp: seed.timeAgo,
-            mediaUrl: nil
+            media: media ?? seed.media
         )
         let cells = analyticsCells(seed: seed)
         let breakdown = tierBreakdown(seed: seed, tiers: tiers)
@@ -73,6 +88,46 @@ public final class BroadcastDetailViewModel {
             replies: [],
             totalReplies: 0
         )
+    }
+
+    /// Adapter for the broadcast-channel wire shape → render-ready items.
+    ///
+    /// `mediaFromPost` (`backend/routes/broadcastChannels.js:200-229`) does
+    /// NOT emit the four padded parallel arrays every other post route
+    /// uses. It emits `[{ url, type?, thumbnailUrl?, liveVideoUrl? }]` and
+    /// drops each key whose slot is falsy, so there is nothing to align by
+    /// index and no `""` padding to skip — each object is self-describing.
+    /// That is exactly why this can't go through
+    /// `PostMediaItem.items(urls:types:thumbnails:liveURLs:)`, whose whole
+    /// job is walking the ragged parallel arrays.
+    ///
+    /// The kind rules still match the parallel-array resolver verbatim: a
+    /// `live_photo` only stays one while its companion clip is non-blank,
+    /// otherwise it downgrades to a plain image.
+    static func heroMedia(_ media: [BroadcastMediaDTO]) -> [PostMediaItem] {
+        media.enumerated().compactMap { index, item in
+            guard let url = cleanURL(item.url) else { return nil }
+            let liveVideoURL = cleanURL(item.liveVideoUrl)
+            let kind: PostMediaKind = switch item.type?.lowercased() {
+            case "video": .video
+            case "live_photo" where liveVideoURL != nil: .livePhoto
+            default: .image
+            }
+            return PostMediaItem(
+                id: "\(index)-\(url.absoluteString)",
+                kind: kind,
+                url: url,
+                thumbnailURL: cleanURL(item.thumbnailUrl),
+                liveVideoURL: kind == .livePhoto ? liveVideoURL : nil
+            )
+        }
+    }
+
+    private static func cleanURL(_ raw: String?) -> URL? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return URL(string: trimmed)
     }
 
     private static func analyticsCells(seed: UpdateCardContent) -> [BroadcastAnalyticsCell] {

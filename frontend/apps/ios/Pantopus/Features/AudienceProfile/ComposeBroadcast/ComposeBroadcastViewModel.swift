@@ -159,7 +159,7 @@ public final class ComposeBroadcastViewModel {
         // nor already-hosted media, and locally-picked files can only be
         // attached after the post exists — so text is required when the
         // only media is local.
-        guard !trimmed.isEmpty || !preUploadedMedia(for: draft).isEmpty else {
+        guard !trimmed.isEmpty || !Self.preUploadedMedia(for: draft).isEmpty else {
             throw ComposeBroadcastError(message: "Add a message to go with your media.")
         }
         let wire = Self.wire(for: draft.audience)
@@ -167,7 +167,7 @@ public final class ComposeBroadcastViewModel {
             body: trimmed,
             visibility: wire.visibility,
             targetTierRank: wire.rank,
-            media: preUploadedMedia(for: draft),
+            media: Self.preUploadedMedia(for: draft),
             latitude: selectedPlaceTag?.latitude,
             longitude: selectedPlaceTag?.longitude,
             locationName: selectedPlaceTag?.name,
@@ -196,10 +196,32 @@ public final class ComposeBroadcastViewModel {
     /// Attachments that are already hosted — they ride the publish body's
     /// `media[]` field (`backend/routes/broadcastChannels.js:113`) rather
     /// than the post-media upload leg.
-    private func preUploadedMedia(for draft: ComposeBroadcastDraft) -> [BroadcastMediaPayload] {
+    ///
+    /// All four fields matter on the write. `broadcastMediaItemsFromPayload`
+    /// (`broadcastChannels.js:154-185`) fans `thumbnailUrl` and
+    /// `liveVideoUrl` out onto the Post row's `media_thumbnails` /
+    /// `media_live_urls` columns; sending only `url` + `type` stored an
+    /// all-empty pair, so a video lost its poster and a Live Photo lost the
+    /// clip that makes it one on the read side.
+    ///
+    /// A `live_photo` with no clip is downgraded to `image` here rather
+    /// than shipped: `broadcastMediaItemSchema` rejects that combination
+    /// outright (`broadcastChannels.js:50-55`), so passing it through would
+    /// 400 the whole broadcast. The downgrade mirrors the read-side rule in
+    /// `PostMediaItem.items`.
+    static func preUploadedMedia(for draft: ComposeBroadcastDraft) -> [BroadcastMediaPayload] {
         draft.media.compactMap { item in
             guard let url = item.remoteURL, !url.isEmpty else { return nil }
-            return BroadcastMediaPayload(url: url, type: item.kind.rawValue)
+            let liveVideoURL = item.liveVideoURL.flatMap { $0.isEmpty ? nil : $0 }
+            let type = item.kind == .livePhoto && liveVideoURL == nil
+                ? ComposeMediaPreview.Kind.image.rawValue
+                : item.kind.rawValue
+            return BroadcastMediaPayload(
+                url: url,
+                type: type,
+                thumbnailUrl: item.thumbnailURL.flatMap { $0.isEmpty ? nil : $0 },
+                liveVideoUrl: liveVideoURL
+            )
         }
     }
 

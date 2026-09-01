@@ -16,13 +16,54 @@ const { serializeAudienceProfileForViewer } = require('../serializers/identitySe
 
 router.use(requirePersonaBroadcastEnabled);
 
+// Post.media_types only ever holds these three values —
+// backend/routes/posts.js:201-203 validates the same set on the direct
+// post-create path. A broadcast that slipped a fourth value through wrote a
+// media slot no client knows how to render.
+const BROADCAST_MEDIA_TYPES = ['image', 'video', 'live_photo'];
+
+// One already-hosted attachment: {url, type, thumbnailUrl?, liveVideoUrl?} —
+// the shape the clients encode (frontend/apps/ios/Pantopus/Core/Networking/
+// Endpoints/AudienceProfileEndpoints.swift:129-133). .unknown(true) is
+// load-bearing: validate.js runs with stripUnknown, so declaring the keys
+// here would silently drop thumbnailUrl / liveVideoUrl before
+// broadcastMediaItemsFromPayload ever sees them.
+//
+// The `type` check runs through normalizeBroadcastMediaType so the mime-
+// prefixed spellings clients already send ('video/mp4') keep working; only
+// values that don't collapse to image/video/live_photo are rejected. A
+// live_photo with no companion clip is rejected outright: the parallel-array
+// contract makes slot i a Live Photo only when media_types[i] ===
+// 'live_photo' AND media_live_urls[i] is non-blank, so storing one without
+// the clip just degrades to a still on every surface — better a 400 at the
+// composer than a silently broken row.
+//
+// Errors are thrown rather than raised via helpers.error('any.custom', ...):
+// Joi's any.custom template interpolates {{#error.message}}, so only a thrown
+// Error reaches the client as a readable reason.
+const broadcastMediaItemSchema = Joi.object().unknown(true).custom((value) => {
+  const explicitType = value.type || value.media_type || value.mimeType || value.mime_type || null;
+  const normalizedType = explicitType ? normalizeBroadcastMediaType(explicitType) : null;
+  if (explicitType && !BROADCAST_MEDIA_TYPES.includes(normalizedType)) {
+    throw new Error(`media type must be one of ${BROADCAST_MEDIA_TYPES.join(', ')}`);
+  }
+  if (normalizedType === 'live_photo') {
+    const liveUrl = value.liveVideoUrl || value.live_video_url
+      || value.media_live_url || value.liveUrl || '';
+    if (!String(liveUrl).trim()) {
+      throw new Error('a live_photo needs its companion video URL (liveVideoUrl)');
+    }
+  }
+  return value;
+});
+
 // P1.10 — visibility now supports tier_or_above with target_tier_rank.
 // 'subscribers' is kept as a transitional alias for legacy callers
 // (existing identityFirewallPrivacy tests + any external client) and
 // is normalized server-side into tier_or_above rank=2 before insert.
 const createBroadcastMessageSchema = Joi.object({
   body: Joi.string().max(5000).allow('', null),
-  media: Joi.array().items(Joi.object().unknown(true)).max(10).default([]),
+  media: Joi.array().items(broadcastMediaItemSchema).max(10).default([]),
   visibility: Joi.string()
     .valid('public', 'followers', 'tier_or_above', 'subscribers')
     .default('followers'),
@@ -138,9 +179,19 @@ function broadcastMediaItemsFromPayload(media) {
       const liveUrl = typeof item === 'object' && item
         ? item.liveVideoUrl || item.live_video_url || item.media_live_url || item.liveUrl || ''
         : '';
+      // mediaThumbnailsFromBroadcastMedia reads item.thumbnailUrl off this
+      // shape; without parsing it here every published broadcast stored an
+      // all-empty media_thumbnails, so video posters and Live Photo stills
+      // were lost on the write. `thumbnailUrl` is what the clients encode
+      // (see broadcastMediaItemSchema above); the snake_case aliases match
+      // the tolerance the liveUrl parse already has.
+      const thumbnailUrl = typeof item === 'object' && item
+        ? item.thumbnailUrl || item.thumbnail_url || item.media_thumbnail || ''
+        : '';
       return {
         url,
         type: normalizeBroadcastMediaType(explicitType) || inferBroadcastMediaTypeFromUrl(url),
+        thumbnailUrl,
         liveUrl,
       };
     })

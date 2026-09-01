@@ -160,6 +160,11 @@ public struct PersonaPostsResponse: Decodable, Sendable {
     public let posts: [PersonaPostDTO]
 }
 
+/// Owner-side decoder for the same route `BeaconPostDTO` reads
+/// (`GET /api/personas/:handle/posts`), kept separate because the audience
+/// dashboard projects the delivered/read counters the visitor surface has no
+/// use for. The `media_*` arrays must stay in step across both decoders —
+/// two divergent shapes for one route is how the Beacon media gap opened.
 public struct PersonaPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let body: String?
@@ -169,6 +174,13 @@ public struct PersonaPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let deliveredCount: Int?
     public let readCount: Int?
     public let mediaUrls: [String]?
+    /// Parallel arrays to `media_urls` — slot `i` is described by
+    /// `media_types[i]` / `media_thumbnails[i]` / `media_live_urls[i]`, with
+    /// `media_live_urls[i]` carrying the companion clip when the type is
+    /// `live_photo`. Same shape as `FeedDTOs.swift:40-45`.
+    public let mediaTypes: [String]
+    public let mediaThumbnails: [String]
+    public let mediaLiveURLs: [String]
 
     enum CodingKeys: String, CodingKey {
         case id, body, visibility
@@ -177,6 +189,27 @@ public struct PersonaPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case deliveredCount = "delivered_count"
         case readCount = "read_count"
         case mediaUrls = "media_urls"
+        case mediaTypes = "media_types"
+        case mediaThumbnails = "media_thumbnails"
+        case mediaLiveURLs = "media_live_urls"
+    }
+
+    /// Hand-rolled because the synthesized decoder can't fall back to `[]`
+    /// for the three non-optional media arrays when the serializer omits the
+    /// key. Every other field keeps the synthesized behaviour verbatim.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        body = try c.decodeIfPresent(String.self, forKey: .body)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        targetTierRank = try c.decodeIfPresent(Int.self, forKey: .targetTierRank)
+        deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
+        readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        mediaUrls = try c.decodeIfPresent([String].self, forKey: .mediaUrls)
+        mediaTypes = try c.decodeIfPresent([String].self, forKey: .mediaTypes) ?? []
+        mediaThumbnails = try c.decodeIfPresent([String].self, forKey: .mediaThumbnails) ?? []
+        mediaLiveURLs = try c.decodeIfPresent([String].self, forKey: .mediaLiveURLs) ?? []
     }
 }
 
@@ -293,7 +326,33 @@ public struct BroadcastHistoryMessageDTO: Decodable, Sendable, Hashable {
     }
 }
 
+/// One attachment on a broadcast-channel row.
+///
+/// **Wire-shape divergence, and it is a trap.** Every other post route
+/// (`/api/posts/feed`, `/api/personas/:handle/posts`) describes attachments
+/// with four *parallel snake_case arrays* padded to equal length —
+/// `media_urls[i]` / `media_types[i]` / `media_thumbnails[i]` /
+/// `media_live_urls[i]`. The broadcast serializer does not: `mediaFromPost`
+/// (`backend/routes/broadcastChannels.js:200-229`) zips those arrays into a
+/// **nested camelCase object array** and OMITS every key whose slot value is
+/// falsy (`if (thumbnailUrl) item.thumbnailUrl = …`). So a plain image
+/// arrives as a bare `{ "url": … }`, and only a Live Photo carries
+/// `liveVideoUrl`. Nothing here is padded, and nothing is indexed — which is
+/// why this shape needs its own adapter rather than
+/// `PostMediaItem.items(urls:types:thumbnails:liveURLs:)`.
+///
+/// Keys are already camelCase on the wire, so no `CodingKeys` are needed —
+/// `APIClient` does not apply `convertFromSnakeCase`.
 public struct BroadcastMediaDTO: Decodable, Sendable, Hashable {
     public let url: String?
+    /// `image` / `video` / `live_photo` — normalized server-side by
+    /// `normalizeBroadcastMediaType` (`broadcastChannels.js:142`).
     public let type: String?
+    /// Video poster frame or Live Photo still. Absent when blank.
+    public let thumbnailUrl: String?
+    /// Companion clip for a `live_photo`. Absent for every other type —
+    /// and a `live_photo` row can never reach the client without one,
+    /// because `broadcastMediaItemSchema` rejects that combination on the
+    /// write (`broadcastChannels.js:50-55`).
+    public let liveVideoUrl: String?
 }

@@ -52,6 +52,11 @@ export function generateLightCssVariables(): string {
   vars.push(`  --color-error: ${colors.semantic.error};`);
   vars.push(`  --color-info: ${colors.semantic.info};`);
 
+  // Media badges — no dark-mode override: the Live Photo dot/pill is
+  // drawn over photo content, not over a themed surface, so both schemes
+  // use the same yellow (same rule as iOS/Android).
+  vars.push(`  --color-live-badge: ${colors.accent.liveBadge};`);
+
   // Spacing
   for (const [key, value] of Object.entries(spacing)) {
     vars.push(`  --spacing-${key}: ${value}px;`);

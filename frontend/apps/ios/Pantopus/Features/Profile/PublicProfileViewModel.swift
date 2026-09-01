@@ -91,6 +91,13 @@ public struct PublicProfilePost: Sendable, Hashable, Identifiable {
 
     public let id: String
     public let body: String
+    /// Attachments resolved from the row's parallel `media_*` arrays via
+    /// `PostMediaItem.items` — the same items the Pulse card renders, so a
+    /// `live_photo` slot keeps its LIVE dot and long-press playback here.
+    /// Empty when the broadcast is locked for the viewer: the paywall CTA
+    /// replaces the body and `/personas/:handle/posts` does not strip media
+    /// server-side, so suppressing it client-side is the only guard.
+    public let media: [PostMediaItem]
     public let timeAgo: String
     public let locality: String?
     public let reactions: Int
@@ -108,6 +115,7 @@ public struct PublicProfilePost: Sendable, Hashable, Identifiable {
     public init(
         id: String,
         body: String,
+        media: [PostMediaItem] = [],
         timeAgo: String,
         locality: String? = nil,
         reactions: Int = 0,
@@ -119,6 +127,7 @@ public struct PublicProfilePost: Sendable, Hashable, Identifiable {
     ) {
         self.id = id
         self.body = body
+        self.media = media
         self.timeAgo = timeAgo
         self.locality = locality
         self.reactions = reactions

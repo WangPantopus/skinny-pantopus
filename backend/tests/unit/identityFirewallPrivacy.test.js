@@ -32,6 +32,9 @@ function createApp() {
   app.use('/api/local-profiles', require('../../routes/localProfiles'));
   app.use('/api/broadcast', require('../../routes/broadcastChannels'));
   app.use('/api/relationships', require('../../routes/relationships'));
+  // identityCenter is the View-As surface — it runs on verifyToken (the
+  // jest moduleNameMapper stub), not the optionalAuth mock above.
+  app.use('/api/identity-center', require('../../routes/identityCenter'));
   return app;
 }
 
@@ -440,6 +443,56 @@ describe('Identity Firewall two-user privacy contract', () => {
     expect(personaPostsRes.body.posts.map((post) => post.id)).toEqual(['persona-public-post']);
     expect(JSON.stringify(personaPostsRes.body)).not.toContain('Follower-only video should stay private');
     expect(JSON.stringify(personaPostsRes.body)).not.toContain('private-follower-video.mp4');
+  });
+
+  // Live Photo regression pin for the View-As preview. safePostPreview
+  // projects each post through SAFE_PREVIEW_POST_FIELDS
+  // (routes/identityCenter.js) — media_live_urls was the one parallel
+  // array missing from that whitelist, so a Live Photo previewed as a
+  // plain still while the real Beacon surface rendered it correctly.
+  // Because the projection writes `source[field] ?? null` for every
+  // whitelisted name, a field left off the list is ABSENT from the
+  // preview object, not null — so assert on the key and on the value.
+  test('View-As preview keeps media_live_urls aligned with the other three media arrays', async () => {
+    const app = createApp();
+    seedIdentityFixture({ follow: true });
+    seedTable('Post', getTable('Post').map((post) => (
+      post.id === 'persona-public-post'
+        ? {
+            ...post,
+            media_urls: [
+              'https://cdn.example.com/still.jpg',
+              'https://cdn.example.com/live-key.heic',
+            ],
+            media_types: ['image', 'live_photo'],
+            media_thumbnails: ['', 'https://cdn.example.com/live-thumb.jpg'],
+            media_live_urls: ['', 'https://cdn.example.com/live-clip.mov'],
+          }
+        : post
+    )));
+
+    const res = await request(app)
+      .get('/api/identity-center/view-as?surface=persona&handle=MayaBuilds&viewer=public')
+      .set('x-test-user-id', USER_A);
+
+    expect(res.status).toBe(200);
+    const preview = res.body.sample.posts.find((post) => post.id === 'persona-public-post');
+    expect(preview).toBeDefined();
+    expect(Object.keys(preview)).toContain('media_live_urls');
+    expect(preview.media_urls).toEqual([
+      'https://cdn.example.com/still.jpg',
+      'https://cdn.example.com/live-key.heic',
+    ]);
+    expect(preview.media_types).toEqual(['image', 'live_photo']);
+    expect(preview.media_thumbnails).toEqual(['', 'https://cdn.example.com/live-thumb.jpg']);
+    expect(preview.media_live_urls).toEqual(['', 'https://cdn.example.com/live-clip.mov']);
+    // The "" slot is padding, not a missing entry: dropping it would
+    // shift the clip onto the plain still at index 0.
+    expect(preview.media_live_urls).toHaveLength(preview.media_urls.length);
+    expect(preview.media_live_urls[preview.media_types.indexOf('live_photo')])
+      .toBe('https://cdn.example.com/live-clip.mov');
+    // Widening the media whitelist must not widen the identity firewall.
+    expectNoLocalOrPrivateData(res.body);
   });
 
   test('broadcast follower reads broadcasts without creating chat or exposing owner identity', async () => {

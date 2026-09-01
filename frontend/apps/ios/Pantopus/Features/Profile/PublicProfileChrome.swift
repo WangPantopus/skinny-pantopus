@@ -60,15 +60,42 @@ struct PublicProfileBroadcastCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            metaRow
-            if post.isLocked {
-                lockedContent
-            } else {
-                Text(post.body)
-                    .font(.system(size: PantopusTextStyle.small.size))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
+            // The card's text chrome is one combined element — the media
+            // grid deliberately is NOT inside it. `.combine` flattens its
+            // subtree into a single a11y element, which would swallow the
+            // tiles' own "Live Photo" / "Photo" labels and collapse the
+            // grid into one frame, taking the long-press-to-play gesture
+            // and the tap that presents `MediaViewerView` with it.
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                metaRow
+                if post.isLocked {
+                    lockedContent
+                } else {
+                    Text(post.body)
+                        .font(.system(size: PantopusTextStyle.small.size))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilitySummary)
+
+            // Same grid the Pulse card renders (`PulsePostCard.swift:222`),
+            // so a `live_photo` slot keeps its yellow LIVE dot, long-press
+            // playback, and the viewer's LIVE replay pill. No paywall guard
+            // here on purpose: a locked broadcast projects to empty media in
+            // `BeaconProfileViewModel.project`, which is the one place that
+            // decision belongs.
+            if !post.media.isEmpty {
+                PostMediaGridView(
+                    items: post.media,
+                    style: .compact,
+                    accessibilityID: "beaconBroadcastMedia_\(post.id)"
+                )
+            }
+
+            if !post.isLocked {
                 reactionsRow
             }
         }
@@ -80,7 +107,7 @@ struct PublicProfileBroadcastCard: View {
             RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("publicProfileBroadcastCard_\(post.id)")
         .accessibilityLabel(accessibilitySummary)
     }
@@ -118,6 +145,11 @@ struct PublicProfileBroadcastCard: View {
             Icon(.bookmark, size: 13, color: Theme.Color.appTextSecondary)
         }
         .padding(.top, Spacing.s1)
+        // The counts are already spoken by `accessibilitySummary`; before
+        // the media grid moved out of the combined element this row was
+        // folded into that same label, so hiding it keeps VoiceOver from
+        // re-reading the bare "8" / "14" as standalone elements.
+        .accessibilityHidden(true)
     }
 
     /// Locked broadcast body — paywall surface that swaps out the body
@@ -232,12 +264,28 @@ struct PublicProfileLocalPostCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            metaRow
-            Text(post.body)
-                .font(.system(size: PantopusTextStyle.small.size))
-                .foregroundStyle(Theme.Color.appText)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
+            // Combine narrowed to the text chrome for the same reason as
+            // `PublicProfileBroadcastCard` — the grid below has to keep its
+            // own a11y elements and its own long-press / tap gestures.
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                metaRow
+                Text(post.body)
+                    .font(.system(size: PantopusTextStyle.small.size))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilitySummary)
+
+            if !post.media.isEmpty {
+                PostMediaGridView(
+                    items: post.media,
+                    style: .compact,
+                    accessibilityID: "beaconLocalPostMedia_\(post.id)"
+                )
+            }
+
             reactionsRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,7 +296,7 @@ struct PublicProfileLocalPostCard: View {
             RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("publicProfileLocalPostCard_\(post.id)")
         .accessibilityLabel(accessibilitySummary)
     }
@@ -294,6 +342,9 @@ struct PublicProfileLocalPostCard: View {
             Icon(.share, size: 13, color: Theme.Color.appTextSecondary)
         }
         .padding(.top, Spacing.s1)
+        // Counts already ride `accessibilitySummary` — see the broadcast
+        // card's reactions row.
+        .accessibilityHidden(true)
     }
 
     private var accessibilitySummary: String {

@@ -60,7 +60,13 @@ const SAFE_PREVIEW_POST_FIELDS = [
   'content',
   'media_urls',
   'media_types',
+  // media_live_urls rides along with the other three: they are PARALLEL
+  // arrays (slot i of each describes attachment i), so dropping it here
+  // silently downgrades every Live Photo in the View-As preview to a
+  // plain still. routes/localProfiles.js:36-38 / :82-84 already whitelist
+  // all four — this list was the odd one out.
   'media_thumbnails',
+  'media_live_urls',
   'post_type',
   'post_format',
   'visibility',

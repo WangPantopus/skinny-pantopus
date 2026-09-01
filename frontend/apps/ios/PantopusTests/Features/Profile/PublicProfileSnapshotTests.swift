@@ -284,6 +284,18 @@ enum PublicProfileFixture {
                 PublicProfilePost(
                     id: "b1",
                     body: "Today's loaf has a crumb you could read poetry through.",
+                    // Pins the media grid on a Beacon broadcast card — a plain
+                    // still beside a Live Photo, so the baseline covers both the
+                    // two-up layout and the LIVE dot the live tile draws.
+                    media: PostMediaItem.items(
+                        urls: [
+                            "https://cdn.example.com/loaf-crumb.jpg",
+                            "https://cdn.example.com/loaf-rise.jpg"
+                        ],
+                        types: ["image", "live_photo"],
+                        thumbnails: ["", ""],
+                        liveURLs: ["", "https://cdn.example.com/loaf-rise.mov"]
+                    ),
                     timeAgo: "2h ago",
                     reactions: 34,
                     replies: 8,

@@ -172,15 +172,18 @@ public struct BroadcastDetailView: View {
                     .accessibilityIdentifier("broadcastDetailBody")
             }
             .padding(Spacing.s3)
-            if hero.mediaUrl != nil {
-                Rectangle()
-                    .fill(Theme.Color.appSurfaceSunken)
-                    .frame(height: 160)
-                    .overlay {
-                        Icon(.image, size: 28, color: Theme.Color.appTextMuted)
-                    }
-                    .accessibilityIdentifier("broadcastDetailMedia")
-                    .accessibilityLabel("Broadcast media")
+            // The real attachments, through the same grid the Pulse card
+            // and the Beacon profile use — the hero shipped with a tinted
+            // `Rectangle` + `.image` glyph placeholder that never showed
+            // the photo, let alone a Live Photo's LIVE dot or playback.
+            if !hero.media.isEmpty {
+                PostMediaGridView(
+                    items: hero.media,
+                    style: .regular,
+                    accessibilityID: "broadcastDetailMedia"
+                )
+                .padding(.horizontal, Spacing.s3)
+                .padding(.bottom, Spacing.s3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

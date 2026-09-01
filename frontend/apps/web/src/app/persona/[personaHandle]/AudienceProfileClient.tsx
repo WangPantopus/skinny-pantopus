@@ -8,6 +8,7 @@ import type { AudienceProfile, BroadcastChannel, BroadcastMessage, PersonaNotifi
 import type { PublicTier } from '@pantopus/api';
 import BroadcastMessageContent from '@/components/audience/BroadcastMessageContent';
 import PostMediaGrid from '@/components/feed/PostMediaGrid';
+import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
 import { trackIdentityEvent } from '@/lib/identityAnalytics';
 import { identityCopy } from '@/lib/identityLabels';
@@ -66,6 +67,10 @@ export default function AudienceProfileClient({
   const audienceFlagEnabled = useFeatureFlag('audience_profile');
   const paidMembershipsEnabled = audienceFlagEnabled && webFeatureFlags.personaPaidMemberships;
   const [publicTiers, setPublicTiers] = useState<PublicTier[]>([]);
+  // Full-screen viewer for a post's media. Keyed by post id so the
+  // viewer's prev/next stays inside the post that was tapped — the page
+  // renders many posts, each with its own parallel media arrays.
+  const [lightbox, setLightbox] = useState<{ postId: string; index: number } | null>(null);
   const markedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const markMessagesRead = (nextMessages: BroadcastMessage[], nextPersona: AudienceProfile) => {
@@ -186,6 +191,9 @@ export default function AudienceProfileClient({
   const emptyPostsBody = hiddenPostCount > 0
     ? `${hiddenPostCount.toLocaleString()} ${hiddenPostCount === 1 ? 'post is' : 'posts are'} limited to followers or members. Follow this Beacon to see more.`
     : 'Public posts shared as this Beacon will appear here.';
+  // Resolved from the live list rather than captured at tap time, so a
+  // background refetch cannot leave the viewer showing a stale post.
+  const lightboxPost = lightbox ? posts.find((post) => post.id === lightbox.postId) ?? null : null;
 
   return (
     <main className="min-h-screen bg-app">
@@ -435,10 +443,22 @@ export default function AudienceProfileClient({
                   <span>{formatRelative(post.created_at)}</span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm leading-6 text-app">{post.content}</p>
+                {/*
+                  `liveUrls` is the fourth parallel array — without it every
+                  live_photo slot downgrades to a still (see
+                  resolvePostMediaSlots in components/feed/PostMediaGrid.tsx).
+                  GET /api/personas/:handle/posts normalizes and returns it
+                  alongside the other three (backend/routes/personas.js).
+                  `onPress` was missing entirely, so the grid rendered
+                  buttons that did nothing and a Live Photo had nowhere to
+                  escalate to.
+                */}
                 <PostMediaGrid
                   urls={post.media_urls || []}
                   thumbnailUrls={post.media_thumbnails || []}
                   mediaTypes={post.media_types || []}
+                  liveUrls={post.media_live_urls || []}
+                  onPress={(index) => setLightbox({ postId: post.id, index })}
                   compact
                 />
               </article>
@@ -512,6 +532,17 @@ export default function AudienceProfileClient({
           </div>
         </aside>
       </section>
+
+      {lightboxPost ? (
+        <PostMediaLightbox
+          urls={lightboxPost.media_urls || []}
+          mediaTypes={lightboxPost.media_types || []}
+          liveUrls={lightboxPost.media_live_urls || []}
+          index={lightbox?.index ?? null}
+          onIndexChange={(index) => setLightbox((prev) => (prev ? { ...prev, index } : prev))}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </main>
   );
 }

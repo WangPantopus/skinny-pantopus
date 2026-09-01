@@ -51,6 +51,11 @@ module.exports = {
         'app-info-light':      'var(--color-info-light)',
         'app-info-bg':         'var(--color-info-bg)',
 
+        // ── Media badges ────────────────────────────────────────
+        // Live Photo dot / LIVE pill. Same value in both schemes — it
+        // sits on photo content, not on a themed surface.
+        'app-live-badge':      'var(--color-live-badge)',
+
         // ── Identity / pillar colors ────────────────────────────
         'app-personal':        'var(--color-identity-personal)',
         'app-personal-bg':     'var(--color-identity-personal-bg)',

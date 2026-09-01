@@ -17,6 +17,7 @@ import app.pantopus.android.data.posts.MatchedBusinessesRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
+import app.pantopus.android.ui.screens.shared.media.PostMediaKind
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -200,6 +201,31 @@ class PulsePostDetailViewModelTest {
             vm.load()
             val errorState = vm.state.value as PulsePostDetailUiState.Error
             assertTrue(errorState.message.contains("post"))
+        }
+
+    @Test fun live_photo_slots_survive_the_detail_projection() =
+        runTest {
+            // Every other fixture here passes `mediaTypes = emptyList`, so the
+            // `live_photo` branch of `buildPostMediaItems` never ran in CI on
+            // this surface. Slot 0 is a Live Photo with a clip, slot 1 claims
+            // to be one but has none and must downgrade to a still.
+            val withMedia =
+                samplePost().copy(
+                    mediaUrls = listOf("https://cdn/still.jpg", "https://cdn/orphan.jpg"),
+                    mediaTypes = listOf("live_photo", "live_photo"),
+                    mediaThumbnails = listOf("https://cdn/thumb.jpg", ""),
+                    mediaLiveUrls = listOf("https://cdn/clip.mov", ""),
+                )
+            coEvery { repo.detail("p1") } returns NetworkResult.Success(PostDetailResponse(withMedia))
+            val vm = makeVm()
+            vm.load()
+            val media = (vm.state.value as PulsePostDetailUiState.Loaded).content.media
+            assertEquals(2, media.size)
+            assertEquals(PostMediaKind.LivePhoto, media[0].kind)
+            assertEquals("https://cdn/clip.mov", media[0].liveVideoUrl)
+            assertEquals("https://cdn/thumb.jpg", media[0].thumbnailUrl)
+            assertEquals(PostMediaKind.Image, media[1].kind)
+            assertNull(media[1].liveVideoUrl)
         }
 
     @Test fun comments_flatten_to_depth_one() =

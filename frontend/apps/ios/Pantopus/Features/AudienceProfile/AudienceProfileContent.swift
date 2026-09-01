@@ -128,6 +128,14 @@ public struct UpdateCardContent: Sendable, Hashable, Identifiable {
     public let targetTierRank: Int?
     public let deliveredCount: Int
     public let readCount: Int
+    /// Attachments resolved from the row's parallel `media_*` arrays. The
+    /// updates feed is served by `GET /api/personas/:handle/posts`
+    /// (`backend/routes/personas.js:1075-1101`), which hands back the four
+    /// padded snake_case arrays — so `AudienceProfileViewModel.updateCard`
+    /// resolves them through `PostMediaItem.items(urls:types:thumbnails:liveURLs:)`.
+    /// Rides the `YouRoute.broadcastDetail` payload so the detail takeover
+    /// can paint its hero without a second fetch.
+    public let media: [PostMediaItem]
 
     public init(
         id: String,
@@ -136,7 +144,8 @@ public struct UpdateCardContent: Sendable, Hashable, Identifiable {
         visibility: UpdateVisibility,
         targetTierRank: Int?,
         deliveredCount: Int,
-        readCount: Int
+        readCount: Int,
+        media: [PostMediaItem] = []
     ) {
         self.id = id
         self.body = body
@@ -145,6 +154,7 @@ public struct UpdateCardContent: Sendable, Hashable, Identifiable {
         self.targetTierRank = targetTierRank
         self.deliveredCount = deliveredCount
         self.readCount = readCount
+        self.media = media
     }
 
     public var visibilityLabel: String {

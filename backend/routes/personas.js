@@ -45,6 +45,14 @@ const {
   serializeFanForCreator,
   sanitizePersonaPostForViewer,
 } = require('../serializers/identitySerializers');
+// GET /:handle/posts queries Post directly instead of going through
+// feedService.getListFeed, so it has to run the same media normalization
+// by hand — see services/feedService.js:143-157 for the two helpers and
+// :172-175 for the call pattern normalizeFeedPostRow uses.
+const {
+  normalizeMediaUrls,
+  normalizeAlignedMediaUrls,
+} = require('../services/feedService');
 
 router.use(requirePersonaEnabled);
 
@@ -1074,6 +1082,23 @@ router.get('/:handle/posts', optionalAuth, async (req, res) => {
         const author = serializePostAuthorForViewer({ ...post, persona });
         return sanitizePersonaPostForViewer({
           ...safePost,
+          // Beacon posts carry the same parallel media arrays as feed
+          // posts (media_urls[i] / media_types[i] / media_thumbnails[i] /
+          // media_live_urls[i] all describe attachment i), so normalize
+          // them the way normalizeFeedPostRow does — feedService.js:172-175.
+          // normalizeMediaUrls resolves stored relative S3 keys to public
+          // URLs; normalizeAlignedMediaUrls does the same but KEEPS the
+          // empty-string padding, because dropping a blank slot would shift
+          // every later thumbnail/clip off its still. Both also turn a NULL
+          // column into [], which matters for legacy rows: the
+          // unify-broadcasts backfill (supabase/migrations/
+          // 20260510000002_unify_broadcasts_as_posts.sql) copied only
+          // media_urls + media_types, so every pre-unification broadcast
+          // still has NULL media_thumbnails / media_live_urls.
+          media_urls: normalizeMediaUrls(safePost.media_urls),
+          media_types: safePost.media_types || [],
+          media_thumbnails: normalizeAlignedMediaUrls(safePost.media_thumbnails),
+          media_live_urls: normalizeAlignedMediaUrls(safePost.media_live_urls),
           user_id: persona.id,
           author_user_id: null,
           // P0.4 follow-up: creator slot mirrors author with the new

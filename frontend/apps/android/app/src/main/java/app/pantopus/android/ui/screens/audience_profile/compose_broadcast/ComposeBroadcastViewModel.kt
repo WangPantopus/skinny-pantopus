@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.audience.BroadcastMediaPayload
 import app.pantopus.android.data.api.models.audience.MembershipStatsCountsDto
 import app.pantopus.android.data.api.models.audience.PersonaSummaryDto
 import app.pantopus.android.data.api.models.audience.PublishUpdateBody
+import app.pantopus.android.data.api.models.posts.PostMediaUploadResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.audience.AudienceProfileRepository
 import app.pantopus.android.data.upload.UploadFile
@@ -184,8 +185,14 @@ class ComposeBroadcastViewModel
 
             if (files.isEmpty()) return
             if (messageId == null) error(MEDIA_PARTIAL_FAILURE)
-            when (uploadRepository.uploadPostMediaFiles(messageId, files)) {
-                is NetworkResult.Success -> Unit
+            when (val upload = uploadRepository.uploadPostMediaFiles(messageId, files)) {
+                // The echo is the post's reconciled slot table, so a transport
+                // success is not the same as every attachment landing — see
+                // [mediaUploadIsComplete].
+                is NetworkResult.Success ->
+                    if (!mediaUploadIsComplete(upload.data, hosted.size + files.size)) {
+                        error(MEDIA_PARTIAL_FAILURE)
+                    }
                 is NetworkResult.Failure -> error(MEDIA_PARTIAL_FAILURE)
             }
         }
@@ -303,6 +310,19 @@ internal const val MEDIA_PARTIAL_FAILURE = "Your update was posted, but some med
  * Attachments that are already hosted — they ride the publish body's
  * `media[]` field (`backend/routes/broadcastChannels.js:113`) rather than
  * the post-media upload leg.
+ *
+ * `broadcastMediaItemsFromPayload` reads `thumbnailUrl` and `liveVideoUrl`
+ * off each item and writes them into the post's `media_thumbnails` /
+ * `media_live_urls` columns (`backend/routes/broadcastChannels.js:169-183`);
+ * dropping them here — as this mapper used to — stored an all-empty
+ * thumbnails array and lost every Live Photo clip on the write, so the read
+ * side could only ever show the still.
+ *
+ * A `live_photo` with no clip is now a hard 400
+ * (`broadcastMediaItemSchema`, `backend/routes/broadcastChannels.js:50-56`),
+ * and a rejected item fails the whole publish — so a clip-less Live Photo is
+ * downgraded to a plain image here, matching what `buildPostMediaItems`
+ * would have rendered anyway.
  */
 internal fun preUploadedMedia(draft: ComposeBroadcastDraft): List<BroadcastMediaPayload> =
     draft.media.mapNotNull { item ->
@@ -310,9 +330,49 @@ internal fun preUploadedMedia(draft: ComposeBroadcastDraft): List<BroadcastMedia
         if (url.isNullOrEmpty()) {
             null
         } else {
-            BroadcastMediaPayload(url = url, type = item.kind.name.lowercase(Locale.US))
+            val clip = item.liveVideoUrl?.takeIf { it.isNotBlank() }
+            val kind =
+                if (item.kind == ComposeMediaPreview.Kind.LivePhoto && clip == null) {
+                    ComposeMediaPreview.Kind.Image
+                } else {
+                    item.kind
+                }
+            BroadcastMediaPayload(
+                url = url,
+                type = kind.wire,
+                thumbnailUrl = item.thumbnailUrl?.takeIf { it.isNotBlank() },
+                liveVideoUrl = if (kind == ComposeMediaPreview.Kind.LivePhoto) clip else null,
+            )
         }
     }
+
+/**
+ * Did the post-media upload leg land every slot intact?
+ *
+ * `POST /api/upload/post-media/:postId` appends the multipart files to the
+ * post's existing media columns and echoes the *whole* post's parallel
+ * arrays back (`backend/routes/upload.js:1029-1035`). The composer used to
+ * throw that echo away, so a 200 that silently dropped an attachment — or
+ * that came back with a `media_live_urls` no longer aligned to its
+ * `media_urls` — read as a clean success and the draft was cleared.
+ *
+ * Two checks, both mirroring the read-side contract in
+ * `buildPostMediaItems`:
+ *  1. the echo carries at least [expectedSlots] urls (hosted + uploaded);
+ *  2. every `live_photo` slot still has a non-blank clip — without one the
+ *     viewer silently downgrades it to a still, which is exactly the loss
+ *     the author needs to hear about.
+ */
+internal fun mediaUploadIsComplete(
+    response: PostMediaUploadResponse,
+    expectedSlots: Int,
+): Boolean {
+    if (response.mediaUrls.size < expectedSlots) return false
+    return response.mediaTypes.withIndex().none { (index, type) ->
+        type == ComposeMediaPreview.Kind.LivePhoto.wire &&
+            response.mediaLiveUrls.getOrNull(index).isNullOrBlank()
+    }
+}
 
 /** Locally-picked bytes, ready for the `files` multipart part. */
 internal fun uploadFileFor(item: ComposeMediaPreview): UploadFile? {

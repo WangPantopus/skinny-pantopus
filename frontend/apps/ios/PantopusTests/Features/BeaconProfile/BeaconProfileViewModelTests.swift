@@ -197,6 +197,88 @@ final class BeaconProfileViewModelTests: XCTestCase {
         XCTAssertEqual(content.posts.first?.visibility, .silver)
     }
 
+    // MARK: - Media projection
+
+    func testBroadcastMediaProjectsImageThenLivePhoto() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.visitorFollowingJSON),
+            .status(200, body: Self.mediaPostsJSON),
+            .status(200, body: Self.tiersJSON)
+        ]
+        let vm = BeaconProfileViewModel(mode: .visitor(handle: "mariak"), client: makeAPI())
+        await vm.load()
+
+        guard case let .loaded(content) = vm.state, let post = content.posts.first else {
+            XCTFail("Expected .loaded with one post, got \(vm.state)")
+            return
+        }
+        XCTAssertEqual(post.media.count, 2)
+        XCTAssertEqual(post.media[0].kind, .image)
+        XCTAssertNil(post.media[0].liveVideoURL)
+        XCTAssertEqual(post.media[0].thumbnailURL?.absoluteString, "https://cdn.example.com/thumb0.jpg")
+        XCTAssertEqual(post.media[1].kind, .livePhoto)
+        XCTAssertEqual(post.media[1].liveVideoURL?.absoluteString, "https://cdn.example.com/clip1.mov")
+    }
+
+    func testLivePhotoWithoutCompanionClipDowngradesToImage() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.visitorFollowingJSON),
+            .status(200, body: Self.blankClipPostsJSON),
+            .status(200, body: Self.tiersJSON)
+        ]
+        let vm = BeaconProfileViewModel(mode: .visitor(handle: "mariak"), client: makeAPI())
+        await vm.load()
+
+        guard case let .loaded(content) = vm.state, let post = content.posts.first else {
+            XCTFail("Expected .loaded with one post, got \(vm.state)")
+            return
+        }
+        XCTAssertEqual(post.media.count, 1)
+        XCTAssertEqual(post.media[0].kind, .image, "A live_photo with a blank clip is just a photo")
+        XCTAssertNil(post.media[0].liveVideoURL)
+    }
+
+    func testLockedBroadcastProjectsNoMedia() async {
+        // The paywall guard: `/personas/:handle/posts` still ships the
+        // media_* arrays on a gated row, so the projection dropping them is
+        // the only thing keeping a paid attachment off a non-member's screen.
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.visitorFollowingJSON),
+            .status(200, body: Self.lockedMediaPostsJSON),
+            .status(200, body: Self.tiersJSON)
+        ]
+        let vm = BeaconProfileViewModel(mode: .visitor(handle: "mariak"), client: makeAPI())
+        await vm.load()
+
+        guard case let .loaded(content) = vm.state, let post = content.posts.first else {
+            XCTFail("Expected .loaded with one post, got \(vm.state)")
+            return
+        }
+        XCTAssertTrue(post.isLocked)
+        XCTAssertTrue(post.media.isEmpty, "A locked broadcast must not leak its attachment")
+    }
+
+    func testRaggedLiveURLsWalkWithACursor() async {
+        // Older serializers filtered the "" padding out of media_live_urls,
+        // so it arrives shorter than media_urls: the k-th live_photo slot
+        // consumes the k-th surviving clip instead of an index lookup.
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.visitorFollowingJSON),
+            .status(200, body: Self.raggedPostsJSON),
+            .status(200, body: Self.tiersJSON)
+        ]
+        let vm = BeaconProfileViewModel(mode: .visitor(handle: "mariak"), client: makeAPI())
+        await vm.load()
+
+        guard case let .loaded(content) = vm.state, let post = content.posts.first else {
+            XCTFail("Expected .loaded with one post, got \(vm.state)")
+            return
+        }
+        XCTAssertEqual(post.media.map(\.kind), [.image, .livePhoto, .livePhoto])
+        XCTAssertEqual(post.media[1].liveVideoURL?.absoluteString, "https://cdn.example.com/clipA.mov")
+        XCTAssertEqual(post.media[2].liveVideoURL?.absoluteString, "https://cdn.example.com/clipB.mov")
+    }
+
     // MARK: - Fixtures
 
     // JSON fixtures mirror the on-wire shape verbatim, so lines run long.
@@ -224,6 +306,22 @@ final class BeaconProfileViewModelTests: XCTestCase {
 
     private static let gatedPostJSON = #"""
     {"posts":[{"id":"g1","body":"members only","created_at":"2026-06-19T10:00:00.000Z","visibility":"followers","target_tier_rank":2}]}
+    """#
+
+    private static let mediaPostsJSON = #"""
+    {"posts":[{"id":"m1","body":"Two shots from the morning bake.","created_at":"2026-06-19T10:00:00.000Z","visibility":"public","media_urls":["https://cdn.example.com/still0.jpg","https://cdn.example.com/still1.jpg"],"media_types":["image","live_photo"],"media_thumbnails":["https://cdn.example.com/thumb0.jpg","https://cdn.example.com/thumb1.jpg"],"media_live_urls":["","https://cdn.example.com/clip1.mov"]}]}
+    """#
+
+    private static let blankClipPostsJSON = #"""
+    {"posts":[{"id":"m2","body":"Marked live, but the clip never uploaded.","created_at":"2026-06-19T10:00:00.000Z","visibility":"public","media_urls":["https://cdn.example.com/still.jpg"],"media_types":["live_photo"],"media_thumbnails":[""],"media_live_urls":[""]}]}
+    """#
+
+    private static let lockedMediaPostsJSON = #"""
+    {"posts":[{"id":"m3","visibility":"tier_or_above","target_tier_rank":2,"locked":true,"teaser":"Subscribe to see the crumb shot…","created_at":"2026-06-19T10:00:00.000Z","media_urls":["https://cdn.example.com/paid.jpg"],"media_types":["live_photo"],"media_thumbnails":["https://cdn.example.com/paid-thumb.jpg"],"media_live_urls":["https://cdn.example.com/paid-clip.mov"]}]}
+    """#
+
+    private static let raggedPostsJSON = #"""
+    {"posts":[{"id":"m4","body":"Legacy row: the blank padding was filtered out.","created_at":"2026-06-19T10:00:00.000Z","visibility":"public","media_urls":["https://cdn.example.com/a.jpg","https://cdn.example.com/b.jpg","https://cdn.example.com/c.jpg"],"media_types":["image","live_photo","live_photo"],"media_thumbnails":[],"media_live_urls":["https://cdn.example.com/clipA.mov","https://cdn.example.com/clipB.mov"]}]}
     """#
 
     private static let tiersJSON = #"""

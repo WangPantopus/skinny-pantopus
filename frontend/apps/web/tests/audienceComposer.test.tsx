@@ -13,6 +13,12 @@
  *   4. Reach counts come from getMembershipStats and render alongside
  *      each visibility option.
  *   5. The component never renders any home/business/place selector.
+ *
+ * Plus the media contract: POST /api/upload/post-media answers with FOUR
+ * parallel arrays and the optimistic message handed to `onPosted` has to
+ * carry all four across, or the just-published update renders without its
+ * video posters and with every Live Photo downgraded to a dead still until
+ * the next refetch.
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
@@ -134,6 +140,51 @@ describe('AudienceComposer (P2.5)', () => {
     expect(labels[1]).toContain('1,200 reach');   // Followers
     expect(labels[2]).toContain('14 reach');      // Members
     expect(labels[3]).toContain('3 reach');       // Insiders
+  });
+
+  test('Optimistic media keeps media_thumbnails and media_live_urls, not just url + type', async () => {
+    const onPosted = jest.fn();
+    apiMock.upload.uploadPostMedia.mockResolvedValue({
+      message: 'ok',
+      media_urls: ['https://cdn.test/live-still.jpg', 'https://cdn.test/plain.jpg'],
+      media_types: ['live_photo', 'image'],
+      media_thumbnails: ['https://cdn.test/live-thumb.jpg', ''],
+      media_live_urls: ['https://cdn.test/live-clip.mov', ''],
+    });
+    renderComposer({ onPosted });
+    await waitFor(() => expect(apiMock.personas.getMembershipStats).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByTestId('audience-composer-body'), {
+      target: { value: 'Update with a Live Photo' },
+    });
+    // jsdom's DataTransfer is a stub, so the file list is assigned directly.
+    const file = new File(['still'], 'live-still.jpg', { type: 'image/jpeg' });
+    const input = document
+      .querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('audience-composer-submit'));
+    });
+
+    expect(apiMock.upload.uploadPostMedia).toHaveBeenCalled();
+    const posted = onPosted.mock.calls[0][0];
+    // Slot 0 is a Live Photo: still + poster + companion clip all survive,
+    // in the {url, type, thumbnailUrl, liveVideoUrl} shape the read path
+    // normalizes (src/components/audience/broadcastMedia.tsx).
+    expect(posted.media[0]).toEqual({
+      url: 'https://cdn.test/live-still.jpg',
+      type: 'live_photo',
+      thumbnailUrl: 'https://cdn.test/live-thumb.jpg',
+      liveVideoUrl: 'https://cdn.test/live-clip.mov',
+    });
+    // Slot 1 is a plain image: the blank padding is dropped rather than
+    // stored as "" — matching mediaFromPost on the server.
+    expect(posted.media[1]).toEqual({
+      url: 'https://cdn.test/plain.jpg',
+      type: 'image',
+    });
   });
 
   test('Component never renders a home/business/place selector or persona-picker affordance', () => {

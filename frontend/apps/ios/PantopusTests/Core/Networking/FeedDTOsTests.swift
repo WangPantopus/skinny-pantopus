@@ -123,4 +123,56 @@ final class FeedDTOsTests: XCTestCase {
         XCTAssertEqual(post.mediaThumbnails, ["https://cdn.example.com/thumb.jpg"])
         XCTAssertEqual(post.mediaTypes, ["image"])
     }
+
+    func testDecodesBeaconPostMediaArrays() throws {
+        let json = Data("""
+        {
+          "posts": [
+            {
+              "id": "b_live",
+              "body": "Crumb shot",
+              "created_at": "2026-06-19T10:00:00.000Z",
+              "visibility": "public",
+              "media_urls": ["https://cdn.example.com/still.jpg"],
+              "media_types": ["live_photo"],
+              "media_thumbnails": ["https://cdn.example.com/thumb.jpg"],
+              "media_live_urls": ["https://cdn.example.com/clip.mov"]
+            }
+          ]
+        }
+        """.utf8)
+
+        let post = try JSONDecoder().decode(BeaconPostsResponse.self, from: json).posts[0]
+        XCTAssertEqual(post.mediaUrls, ["https://cdn.example.com/still.jpg"])
+        XCTAssertEqual(post.mediaTypes, ["live_photo"])
+        XCTAssertEqual(post.mediaThumbnails, ["https://cdn.example.com/thumb.jpg"])
+        XCTAssertEqual(post.mediaLiveURLs, ["https://cdn.example.com/clip.mov"])
+    }
+
+    func testBeaconPostMediaArraysDefaultToEmptyWhenAbsent() throws {
+        // Pre-unification broadcast rows have NULL media_thumbnails /
+        // media_live_urls, and the persona serializer omits the keys — the
+        // three arrays are non-optional, so the decoder has to fall back to
+        // [] rather than throw. (`supabase/migrations/
+        // 20260510000002_unify_broadcasts_as_posts.sql` copied only
+        // media_urls + media_types.)
+        let json = Data("""
+        {
+          "posts": [
+            {
+              "id": "b_text",
+              "body": "No attachments at all",
+              "created_at": "2026-06-19T10:00:00.000Z",
+              "visibility": "public"
+            }
+          ]
+        }
+        """.utf8)
+
+        let post = try JSONDecoder().decode(BeaconPostsResponse.self, from: json).posts[0]
+        XCTAssertNil(post.mediaUrls)
+        XCTAssertEqual(post.mediaTypes, [])
+        XCTAssertEqual(post.mediaThumbnails, [])
+        XCTAssertEqual(post.mediaLiveURLs, [])
+    }
 }

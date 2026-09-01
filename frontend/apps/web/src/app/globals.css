@@ -56,6 +56,12 @@
   --color-info-light: #BAE6FD;
   --color-info-bg: #F0F9FF;
 
+  /* ── Media badges ────────────────────────────────────────── */
+  /* Live Photo dot / LIVE pill. Deliberately absent from the dark
+     block below: the badge is drawn over photo content, not over a
+     themed surface, so both schemes use the same yellow. */
+  --color-live-badge: #FFD60A;
+
   /* ── Identity / pillars ──────────────────────────────────── */
   --color-identity-personal: #0284C7;
   --color-identity-personal-bg: #DBEAFE;

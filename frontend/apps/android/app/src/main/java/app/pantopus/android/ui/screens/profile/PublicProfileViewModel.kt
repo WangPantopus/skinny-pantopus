@@ -23,6 +23,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileTab
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.StatsTabsContent
 import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPillarBadge
 import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPillarVerificationState
+import app.pantopus.android.ui.screens.shared.media.PostMediaItem
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,6 +86,14 @@ data class PublicProfilePost(
     val targetTierRank: Int? = null,
     /** Local-only — `null` on Persona broadcasts. */
     val intent: Intent? = null,
+    /**
+     * Attachments built from the post's slot-aligned `media_*` arrays, same
+     * treatment as the Pulse feed (Live Photo slots carry a companion clip).
+     * Empty on a locked broadcast — the persona posts route does not strip
+     * media server-side, so suppressing it here is what keeps paid content
+     * behind the paywall.
+     */
+    val media: List<PostMediaItem> = emptyList(),
 ) {
     enum class Visibility { Free, Bronze, Silver, Gold }
 

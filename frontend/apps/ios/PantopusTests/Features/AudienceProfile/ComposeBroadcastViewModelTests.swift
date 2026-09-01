@@ -97,6 +97,73 @@ final class ComposeBroadcastViewModelTests: XCTestCase {
         )
     }
 
+    func testPreUploadedMediaCarriesThumbnailAndLiveVideoURLs() {
+        // `broadcastMediaItemsFromPayload` (`broadcastChannels.js:154-185`)
+        // fans these two onto the Post row's media_thumbnails /
+        // media_live_urls columns. Dropping them stored an all-empty pair,
+        // which is what lost video posters and Live Photo clips on the write.
+        let draft = ComposeBroadcastDraft(
+            body: "Re-attaching the loaf shots",
+            media: [
+                ComposeMediaPreview(
+                    id: "live",
+                    kind: .livePhoto,
+                    caption: nil,
+                    remoteURL: "https://cdn.example.com/still.jpg",
+                    thumbnailURL: "https://cdn.example.com/thumb.jpg",
+                    liveVideoURL: "https://cdn.example.com/clip.mov"
+                ),
+                ComposeMediaPreview(
+                    id: "clip",
+                    kind: .video,
+                    caption: nil,
+                    remoteURL: "https://cdn.example.com/reel.mp4",
+                    thumbnailURL: "https://cdn.example.com/poster.jpg"
+                )
+            ]
+        )
+        let payload = ComposeBroadcastViewModel.preUploadedMedia(for: draft)
+
+        XCTAssertEqual(payload.count, 2)
+        XCTAssertEqual(payload[0].type, "live_photo")
+        XCTAssertEqual(payload[0].thumbnailUrl, "https://cdn.example.com/thumb.jpg")
+        XCTAssertEqual(payload[0].liveVideoUrl, "https://cdn.example.com/clip.mov")
+        XCTAssertEqual(payload[1].type, "video")
+        XCTAssertEqual(payload[1].thumbnailUrl, "https://cdn.example.com/poster.jpg")
+        XCTAssertNil(payload[1].liveVideoUrl)
+    }
+
+    func testPreUploadedMediaDowngradesACliplessLivePhoto() {
+        // `broadcastMediaItemSchema` 400s a live_photo with no companion
+        // clip (`broadcastChannels.js:50-55`), so shipping the type through
+        // would reject the whole broadcast rather than one attachment.
+        let draft = ComposeBroadcastDraft(
+            media: [
+                ComposeMediaPreview(
+                    id: "half",
+                    kind: .livePhoto,
+                    caption: nil,
+                    remoteURL: "https://cdn.example.com/still.jpg",
+                    liveVideoURL: ""
+                )
+            ]
+        )
+        let payload = ComposeBroadcastViewModel.preUploadedMedia(for: draft)
+        XCTAssertEqual(payload.count, 1)
+        XCTAssertEqual(payload[0].type, "image")
+        XCTAssertNil(payload[0].liveVideoUrl)
+        XCTAssertNil(payload[0].thumbnailUrl, "A blank thumbnail is omitted, not sent as \"\"")
+    }
+
+    func testLocallyPickedMediaNeverRidesThePublishBody() {
+        // No remoteURL ⇒ the file goes up through
+        // `POST /api/upload/post-media/:messageId` after publish instead.
+        let draft = ComposeBroadcastDraft(
+            media: [ComposeMediaPreview(kind: .image, caption: nil, data: Data([0x1]))]
+        )
+        XCTAssertTrue(ComposeBroadcastViewModel.preUploadedMedia(for: draft).isEmpty)
+    }
+
     func testSetAudienceUpdatesDraftAndReach() {
         let vm = makeVM(audienceReach: [.allBeacons: 1247, .bronzePlus: 518])
         XCTAssertEqual(vm.draft.audience, .allBeacons)

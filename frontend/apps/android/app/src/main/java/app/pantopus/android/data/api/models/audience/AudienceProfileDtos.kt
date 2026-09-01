@@ -150,6 +150,15 @@ data class PersonaPostDto(
     @Json(name = "delivered_count") val deliveredCount: Int? = null,
     @Json(name = "read_count") val readCount: Int? = null,
     @Json(name = "media_urls") val mediaUrls: List<String>? = null,
+    /**
+     * Same slot-aligned parallel arrays the visitor-side `BeaconPostDto` decodes
+     * — this is the same `GET /api/personas/:handle/posts` row, read here by the
+     * owner's "Your audience" surface. Index `i` of each array describes slot `i`
+     * (padded with `""` server-side).
+     */
+    @Json(name = "media_types") val mediaTypes: List<String> = emptyList(),
+    @Json(name = "media_thumbnails") val mediaThumbnails: List<String> = emptyList(),
+    @Json(name = "media_live_urls") val mediaLiveUrls: List<String> = emptyList(),
 )
 
 // GET /api/personas/:handle/tiers

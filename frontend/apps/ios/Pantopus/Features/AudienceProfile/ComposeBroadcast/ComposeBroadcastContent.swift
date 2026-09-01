@@ -72,9 +72,15 @@ public enum BroadcastAudience: String, Sendable, Hashable, CaseIterable, Identif
 /// published. Sample / snapshot data leaves it `nil` so the preview falls
 /// back to a tinted placeholder — deterministic for snapshot baselines.
 public struct ComposeMediaPreview: Sendable, Hashable, Identifiable {
+    /// Raw values are the wire `type` vocabulary `broadcastMediaItemSchema`
+    /// accepts (`backend/routes/broadcastChannels.js:23`). `livePhoto` is
+    /// only ever reached by re-attaching already-hosted media — no picker
+    /// in the app authors one (every `PhotosPicker` here is
+    /// `matching: .images`).
     public enum Kind: String, Sendable, Hashable {
         case image
         case video
+        case livePhoto = "live_photo"
     }
 
     public let id: String
@@ -85,6 +91,16 @@ public struct ComposeMediaPreview: Sendable, Hashable, Identifiable {
     /// existing post). Such items ride the `media[]` field of the publish
     /// body instead of the post-media upload leg.
     public let remoteURL: String?
+    /// Poster frame (video) or still (Live Photo) that is already hosted.
+    /// Rides the publish body as `thumbnailUrl`; dropping it stored an
+    /// all-empty `media_thumbnails` on the Post row, which is what lost
+    /// video posters and Live Photo stills on the write.
+    public let thumbnailURL: String?
+    /// Companion clip for a `livePhoto`, already hosted. Rides the publish
+    /// body as `liveVideoUrl` — mandatory for that kind, since a
+    /// `live_photo` without one is now a 400
+    /// (`backend/routes/broadcastChannels.js:50-55`).
+    public let liveVideoURL: String?
     /// Randomised on pick so the library's `IMG_xxxx` never reaches S3.
     public let fileName: String
     public let mimeType: String
@@ -100,6 +116,8 @@ public struct ComposeMediaPreview: Sendable, Hashable, Identifiable {
         caption: String?,
         data: Data? = nil,
         remoteURL: String? = nil,
+        thumbnailURL: String? = nil,
+        liveVideoURL: String? = nil,
         fileName: String? = nil,
         mimeType: String? = nil,
         capturedLatitude: Double? = nil,
@@ -110,6 +128,8 @@ public struct ComposeMediaPreview: Sendable, Hashable, Identifiable {
         self.caption = caption
         self.data = data
         self.remoteURL = remoteURL
+        self.thumbnailURL = thumbnailURL
+        self.liveVideoURL = liveVideoURL
         let defaultMime = kind == .video ? "video/mp4" : "image/jpeg"
         self.mimeType = mimeType ?? defaultMime
         self.fileName = fileName ?? "broadcast-\(id.prefix(8)).\(kind == .video ? "mp4" : "jpg")"

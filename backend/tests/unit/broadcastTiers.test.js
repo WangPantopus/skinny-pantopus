@@ -324,6 +324,145 @@ describe('GET /api/broadcast/channels/:channelId/messages — tier visibility', 
     }]);
   });
 
+  // ---------------------------------------------------------------------
+  // Live Photo — the read path.
+  //
+  // Post.media_urls / media_types / media_thumbnails / media_live_urls are
+  // PARALLEL arrays; mediaFromPost zips them into the client-facing
+  // {url, type, thumbnailUrl, liveVideoUrl} items. The fixture above
+  // ('post-backed-media') pins the still + thumbnail case with an all-empty
+  // media_live_urls; this one populates that array so the liveVideoUrl leg
+  // of the zip is actually exercised.
+  // ---------------------------------------------------------------------
+  test('post-backed broadcasts map media_live_urls onto media[i].liveVideoUrl', async () => {
+    seedTable('Post', [{
+      id: 'post-backed-live-photo',
+      user_id: OWNER_ID,
+      author_user_id: OWNER_ID,
+      identity_context_type: 'persona',
+      identity_context_id: PERSONA_ID,
+      content: 'A still, a Live Photo, and a video',
+      media_urls: [
+        'https://cdn.example.com/still.jpg',
+        'https://cdn.example.com/live-key.heic',
+        'https://cdn.example.com/clip.mp4',
+      ],
+      media_types: ['image', 'live_photo', 'video'],
+      media_thumbnails: ['', 'https://cdn.example.com/live-thumb.jpg', 'https://cdn.example.com/clip-poster.jpg'],
+      // Padding at 0 and 2 is deliberate: only slot 1 is a Live Photo.
+      media_live_urls: ['', 'https://cdn.example.com/live-clip.mov', ''],
+      post_type: 'personal_update',
+      visibility: 'followers',
+      audience: 'followers',
+      post_as: 'persona',
+      broadcast_channel_id: CHANNEL_ID,
+      target_tier_rank: null,
+      delivered_count: 1,
+      read_count: 0,
+      post_metadata: {
+        source: 'broadcast_composer',
+        broadcast_visibility: 'followers',
+        broadcast_status: 'published',
+        broadcast_media: [],
+      },
+      created_at: '2026-05-04T14:10:00Z',
+      updated_at: '2026-05-04T14:10:00Z',
+      archived_at: null,
+    }]);
+
+    const res = await asUser(
+      request(buildApp()).get(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      FOLLOWER_ID,
+    );
+    expect(res.status).toBe(200);
+    const message = res.body.messages.find((m) => m.id === 'post-backed-live-photo');
+    expect(message.media).toEqual([
+      {
+        url: 'https://cdn.example.com/still.jpg',
+        type: 'image',
+      },
+      {
+        url: 'https://cdn.example.com/live-key.heic',
+        type: 'live_photo',
+        thumbnailUrl: 'https://cdn.example.com/live-thumb.jpg',
+        liveVideoUrl: 'https://cdn.example.com/live-clip.mov',
+      },
+      {
+        url: 'https://cdn.example.com/clip.mp4',
+        type: 'video',
+        thumbnailUrl: 'https://cdn.example.com/clip-poster.jpg',
+      },
+    ]);
+    // The blank slots must not bleed onto their neighbours.
+    expect(message.media[0].liveVideoUrl).toBeUndefined();
+    expect(message.media[2].liveVideoUrl).toBeUndefined();
+  });
+
+  test('a LOCKED broadcast still strips media, Live Photo clip URLs included', async () => {
+    seedTable('Post', [{
+      id: 'post-backed-locked-live-photo',
+      user_id: OWNER_ID,
+      author_user_id: OWNER_ID,
+      identity_context_type: 'persona',
+      identity_context_id: PERSONA_ID,
+      content: 'Insider-only Live Photo that a Member must never receive',
+      media_urls: ['https://cdn.example.com/locked-live-key.heic'],
+      media_types: ['live_photo'],
+      media_thumbnails: ['https://cdn.example.com/locked-live-thumb.jpg'],
+      media_live_urls: ['https://cdn.example.com/locked-live-clip.mov'],
+      post_type: 'personal_update',
+      visibility: 'followers',
+      audience: 'followers',
+      post_as: 'persona',
+      broadcast_channel_id: CHANNEL_ID,
+      target_tier_rank: 3,
+      delivered_count: 1,
+      read_count: 0,
+      post_metadata: {
+        source: 'broadcast_composer',
+        broadcast_visibility: 'tier_or_above',
+        broadcast_status: 'published',
+        broadcast_media: [],
+      },
+      created_at: '2026-05-04T14:20:00Z',
+      updated_at: '2026-05-04T14:20:00Z',
+      archived_at: null,
+    }]);
+
+    // Member (rank 2) is below the rank-3 gate → locked teaser only.
+    const memberRes = await asUser(
+      request(buildApp()).get(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      MEMBER_ID,
+    );
+    expect(memberRes.status).toBe(200);
+    const locked = memberRes.body.messages.find((m) => m.id === 'post-backed-locked-live-photo');
+    expect(locked.locked).toBe(true);
+    expect(locked.target_tier_rank).toBe(3);
+    expect(locked.media).toBeUndefined();
+    expect(locked.body).toBeUndefined();
+    // Nothing about the attachment may survive the projection — the clip
+    // URL is a directly playable asset, so a leak here is the whole bug.
+    const memberJson = JSON.stringify(memberRes.body);
+    expect(memberJson).not.toContain('locked-live-clip.mov');
+    expect(memberJson).not.toContain('locked-live-key.heic');
+    expect(memberJson).not.toContain('locked-live-thumb.jpg');
+
+    // Insider (rank 3) gets the full item back, proving the strip above
+    // is the rank gate and not a serializer that lost the media entirely.
+    const insiderRes = await asUser(
+      request(buildApp()).get(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      INSIDER_ID,
+    );
+    const unlocked = insiderRes.body.messages.find((m) => m.id === 'post-backed-locked-live-photo');
+    expect(unlocked.locked).toBeUndefined();
+    expect(unlocked.media).toEqual([{
+      url: 'https://cdn.example.com/locked-live-key.heic',
+      type: 'live_photo',
+      thumbnailUrl: 'https://cdn.example.com/locked-live-thumb.jpg',
+      liveVideoUrl: 'https://cdn.example.com/locked-live-clip.mov',
+    }]);
+  });
+
   test('Anonymous viewers do NOT receive locked teasers (no "subscribe" hint to logged-out users)', async () => {
     const res = await request(buildApp())
       .get(`/api/broadcast/channels/${CHANNEL_ID}/messages`);
@@ -446,6 +585,159 @@ describe('POST /api/broadcast/channels/:channelId/messages — tier validation',
       OWNER_ID,
     ).send({ body: 'Hello', visibility: 'public', target_tier_rank: 2 });
     expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live Photo — the write path.
+//
+// Two shipped fixes are pinned here:
+//   (a) broadcastMediaItemsFromPayload now parses `thumbnailUrl` off the
+//       payload item. Before that, mediaThumbnailsFromBroadcastMedia read a
+//       key nobody set, so every published broadcast wrote an all-empty
+//       media_thumbnails — video posters and Live Photo stills were lost on
+//       the write and unrecoverable on read.
+//   (b) createBroadcastMessageSchema validates each media item instead of
+//       accepting any object: the type must collapse to image/video/
+//       live_photo (mime-prefixed spellings normalize down), and a
+//       live_photo without its companion clip URL is a 400 rather than a
+//       row that silently degrades to a still on every client.
+//
+// NOTE: broadcastPublishLimiter allows 20 publishes per user per window and
+// the counter is per-process, so it spans this whole file. Keep the number
+// of POSTs here small.
+// ---------------------------------------------------------------------------
+describe('POST /api/broadcast/channels/:channelId/messages — media validation + persistence', () => {
+  test('thumbnailUrl and liveVideoUrl are parsed off the payload onto the parallel Post columns', async () => {
+    const res = await asUser(
+      request(buildApp()).post(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      OWNER_ID,
+    ).send({
+      body: 'Still, Live Photo, video',
+      visibility: 'followers',
+      media: [
+        // No thumbnail — its slot must stay "" so indices stay aligned.
+        { url: 'https://cdn.example.com/still.jpg', type: 'image' },
+        {
+          url: 'https://cdn.example.com/live-key.heic',
+          type: 'live_photo',
+          thumbnailUrl: 'https://cdn.example.com/live-thumb.jpg',
+          liveVideoUrl: 'https://cdn.example.com/live-clip.mov',
+        },
+        {
+          url: 'https://cdn.example.com/clip.mp4',
+          type: 'video/mp4',
+          thumbnailUrl: 'https://cdn.example.com/clip-poster.jpg',
+        },
+      ],
+    });
+
+    expect(res.status).toBe(201);
+    const stored = getTable('Post').find((m) => m.id === res.body.message.id);
+    expect(stored.media_urls).toEqual([
+      'https://cdn.example.com/still.jpg',
+      'https://cdn.example.com/live-key.heic',
+      'https://cdn.example.com/clip.mp4',
+    ]);
+    expect(stored.media_types).toEqual(['image', 'live_photo', 'video']);
+    // The regression: this was ['', '', ''] before thumbnailUrl was parsed.
+    expect(stored.media_thumbnails).toEqual([
+      '',
+      'https://cdn.example.com/live-thumb.jpg',
+      'https://cdn.example.com/clip-poster.jpg',
+    ]);
+    expect(stored.media_live_urls).toEqual([
+      '', 'https://cdn.example.com/live-clip.mov', '',
+    ]);
+    // All four columns stay the same length — that is what makes slot i
+    // describe attachment i.
+    expect(stored.media_thumbnails).toHaveLength(stored.media_urls.length);
+    expect(stored.media_live_urls).toHaveLength(stored.media_urls.length);
+
+    // And it round-trips back out through mediaFromPost.
+    expect(res.body.message.media).toEqual([
+      { url: 'https://cdn.example.com/still.jpg', type: 'image' },
+      {
+        url: 'https://cdn.example.com/live-key.heic',
+        type: 'live_photo',
+        thumbnailUrl: 'https://cdn.example.com/live-thumb.jpg',
+        liveVideoUrl: 'https://cdn.example.com/live-clip.mov',
+      },
+      {
+        url: 'https://cdn.example.com/clip.mp4',
+        type: 'video',
+        thumbnailUrl: 'https://cdn.example.com/clip-poster.jpg',
+      },
+    ]);
+  });
+
+  test('mime-prefixed media types clients already send are accepted and normalized down', async () => {
+    const res = await asUser(
+      request(buildApp()).post(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      OWNER_ID,
+    ).send({
+      body: 'Mime spellings',
+      visibility: 'followers',
+      media: [
+        { url: 'https://cdn.example.com/photo.jpg', type: 'image/jpeg' },
+        { url: 'https://cdn.example.com/movie.mov', type: 'video/quicktime' },
+        // No `type` at all — inferBroadcastMediaTypeFromUrl fills it in,
+        // and the validator must not reject an item that omits the key.
+        { url: 'https://cdn.example.com/bare.png' },
+        // Explicit live_photo, with its clip, is the third accepted value.
+        {
+          url: 'https://cdn.example.com/live.heic',
+          type: 'live_photo',
+          liveVideoUrl: 'https://cdn.example.com/live.mov',
+        },
+      ],
+    });
+
+    expect(res.status).toBe(201);
+    const stored = getTable('Post').find((m) => m.id === res.body.message.id);
+    expect(stored.media_types).toEqual(['image', 'video', 'image', 'live_photo']);
+    expect(stored.media_live_urls).toEqual(['', '', '', 'https://cdn.example.com/live.mov']);
+  });
+
+  test('an unknown media type is rejected with 400 rather than written as an unrenderable slot', async () => {
+    const res = await asUser(
+      request(buildApp()).post(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      OWNER_ID,
+    ).send({
+      body: 'Unsupported attachment',
+      visibility: 'followers',
+      media: [{ url: 'https://cdn.example.com/track.mp3', type: 'audio/mpeg' }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body.details))
+      .toContain('media type must be one of image, video, live_photo');
+    // Nothing was written.
+    expect(getTable('Post').some((row) => (row.media_urls || []).includes(
+      'https://cdn.example.com/track.mp3',
+    ))).toBe(false);
+  });
+
+  test('a live_photo with no companion clip URL is rejected with 400', async () => {
+    const res = await asUser(
+      request(buildApp()).post(`/api/broadcast/channels/${CHANNEL_ID}/messages`),
+      OWNER_ID,
+    ).send({
+      body: 'Live Photo missing its clip',
+      visibility: 'followers',
+      media: [{
+        url: 'https://cdn.example.com/orphan-live-key.heic',
+        type: 'live_photo',
+        thumbnailUrl: 'https://cdn.example.com/orphan-live-thumb.jpg',
+      }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body.details))
+      .toContain('a live_photo needs its companion video URL (liveVideoUrl)');
+    expect(getTable('Post').some((row) => (row.media_urls || []).includes(
+      'https://cdn.example.com/orphan-live-key.heic',
+    ))).toBe(false);
   });
 });
 

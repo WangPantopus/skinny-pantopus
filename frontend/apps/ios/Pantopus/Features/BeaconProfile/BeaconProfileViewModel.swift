@@ -451,15 +451,26 @@ public final class BeaconProfileViewModel {
     }
 
     private func project(post: BeaconPostDTO) -> PublicProfilePost {
-        PublicProfilePost(
+        // One lock verdict drives both the paywall chrome and the media
+        // suppression: `/personas/:handle/posts` hands back the `media_*`
+        // arrays on gated rows too, so dropping the items here is the only
+        // thing keeping a paid attachment off a non-member's screen.
+        let isLockedForViewer = !isOwner && (post.locked ?? false)
+        return PublicProfilePost(
             id: post.id,
             body: post.locked == true ? (post.teaser ?? "") : (post.body ?? ""),
+            media: isLockedForViewer ? [] : PostMediaItem.items(
+                urls: post.mediaUrls ?? [],
+                types: post.mediaTypes,
+                thumbnails: post.mediaThumbnails,
+                liveURLs: post.mediaLiveURLs
+            ),
             timeAgo: timeAgo(post.createdAt),
             locality: nil,
             reactions: post.reactions ?? 0,
             replies: post.replies ?? 0,
             visibility: visibility(post.visibility, rank: post.targetTierRank),
-            isLocked: !isOwner && (post.locked ?? false),
+            isLocked: isLockedForViewer,
             targetTierRank: post.targetTierRank,
             intent: nil
         )

@@ -12,28 +12,30 @@
 
 import Foundation
 
-/// Hero card payload — the broadcast body itself plus visibility chip
-/// and timestamp. `mediaUrl` is the URL string of the first attached
-/// media item; renderers paint a tinted placeholder when present.
+/// Hero card payload — the broadcast body itself plus visibility chip,
+/// timestamp, and attachments. `media` carries render-ready
+/// `PostMediaItem`s so the hero uses the shared `PostMediaGridView` (LIVE
+/// dot, long-press playback, full-screen viewer) instead of the tinted
+/// single-URL placeholder it shipped with.
 public struct BroadcastDetailHero: Sendable, Hashable {
     public let body: String
     public let visibility: UpdateVisibility
     public let targetTierRank: Int?
     public let timestamp: String
-    public let mediaUrl: String?
+    public let media: [PostMediaItem]
 
     public init(
         body: String,
         visibility: UpdateVisibility,
         targetTierRank: Int?,
         timestamp: String,
-        mediaUrl: String?
+        media: [PostMediaItem] = []
     ) {
         self.body = body
         self.visibility = visibility
         self.targetTierRank = targetTierRank
         self.timestamp = timestamp
-        self.mediaUrl = mediaUrl
+        self.media = media
     }
 
     /// Renderable chip label — mirrors the audience-frames TierChip map

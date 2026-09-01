@@ -14,7 +14,11 @@ import XCTest
 
 @MainActor
 final class BroadcastDetailViewModelTests: XCTestCase {
-    private func seed(delivered: Int = 1247, read: Int = 892) -> UpdateCardContent {
+    private func seed(
+        delivered: Int = 1247,
+        read: Int = 892,
+        media: [PostMediaItem] = []
+    ) -> UpdateCardContent {
         UpdateCardContent(
             id: "b_demo",
             body: "Today's loaf has a crumb you could read poetry through.",
@@ -22,7 +26,8 @@ final class BroadcastDetailViewModelTests: XCTestCase {
             visibility: .publicVisible,
             targetTierRank: nil,
             deliveredCount: delivered,
-            readCount: read
+            readCount: read,
+            media: media
         )
     }
 
@@ -121,8 +126,7 @@ final class BroadcastDetailViewModelTests: XCTestCase {
             body: "x",
             visibility: .followers,
             targetTierRank: nil,
-            timestamp: "now",
-            mediaUrl: nil
+            timestamp: "now"
         )
         XCTAssertEqual(followers.visibilityLabel, "Followers")
 
@@ -130,8 +134,7 @@ final class BroadcastDetailViewModelTests: XCTestCase {
             body: "x",
             visibility: .tierOrAbove,
             targetTierRank: 2,
-            timestamp: "now",
-            mediaUrl: nil
+            timestamp: "now"
         )
         XCTAssertEqual(tier2.visibilityLabel, "Tier 2+")
 
@@ -139,9 +142,89 @@ final class BroadcastDetailViewModelTests: XCTestCase {
             body: "x",
             visibility: .tierOrAbove,
             targetTierRank: nil,
-            timestamp: "now",
-            mediaUrl: nil
+            timestamp: "now"
         )
         XCTAssertEqual(tierUnranked.visibilityLabel, "Tier")
+    }
+
+    // MARK: - Hero media
+
+    func testHeroCarriesTheSeedCardsAttachments() async {
+        // The live path: the Audience Profile card was projected from
+        // `/personas/:handle/posts`' parallel arrays, so the hero just
+        // forwards the items it was handed.
+        let seeded = seed(media: PostMediaItem.items(
+            urls: ["https://cdn.example.com/still.jpg"],
+            types: ["live_photo"],
+            thumbnails: ["https://cdn.example.com/thumb.jpg"],
+            liveURLs: ["https://cdn.example.com/clip.mov"]
+        ))
+        let vm = BroadcastDetailViewModel(broadcastId: "b_demo", seed: seeded, tierSegments: tiers())
+        await vm.load()
+
+        guard case let .loaded(loaded) = vm.state else {
+            XCTFail("Expected .loaded, got \(vm.state)")
+            return
+        }
+        XCTAssertEqual(loaded.hero.media.count, 1)
+        XCTAssertEqual(loaded.hero.media[0].kind, .livePhoto)
+        XCTAssertEqual(loaded.hero.media[0].liveVideoURL?.absoluteString, "https://cdn.example.com/clip.mov")
+    }
+
+    func testHeroMediaBuiltFromTheNestedBroadcastWireShape() async throws {
+        // `GET /api/broadcast/channels/:id/messages` does NOT send the four
+        // parallel snake_case arrays — `mediaFromPost`
+        // (`backend/routes/broadcastChannels.js:200-229`) sends a nested
+        // camelCase array and OMITS every falsy key, so the plain image here
+        // is a bare `{ url }` while only the Live Photo carries a clip.
+        let wire = Data("""
+        [
+          { "url": "https://cdn.example.com/a.jpg" },
+          {
+            "url": "https://cdn.example.com/b.jpg",
+            "type": "live_photo",
+            "thumbnailUrl": "https://cdn.example.com/b-thumb.jpg",
+            "liveVideoUrl": "https://cdn.example.com/b-clip.mov"
+          },
+          { "url": "https://cdn.example.com/c.mp4", "type": "video", "thumbnailUrl": "https://cdn.example.com/c-poster.jpg" }
+        ]
+        """.utf8)
+        let media = try JSONDecoder().decode([BroadcastMediaDTO].self, from: wire)
+
+        let vm = BroadcastDetailViewModel(
+            broadcastId: "b_demo",
+            seed: seed(),
+            tierSegments: tiers(),
+            broadcastMedia: media
+        )
+        await vm.load()
+
+        guard case let .loaded(loaded) = vm.state else {
+            XCTFail("Expected .loaded, got \(vm.state)")
+            return
+        }
+        XCTAssertEqual(loaded.hero.media.map(\.kind), [.image, .livePhoto, .video])
+        XCTAssertNil(loaded.hero.media[0].thumbnailURL, "An omitted thumbnailUrl is no thumbnail")
+        XCTAssertNil(loaded.hero.media[0].liveVideoURL)
+        XCTAssertEqual(loaded.hero.media[1].liveVideoURL?.absoluteString, "https://cdn.example.com/b-clip.mov")
+        XCTAssertEqual(loaded.hero.media[1].thumbnailURL?.absoluteString, "https://cdn.example.com/b-thumb.jpg")
+        XCTAssertEqual(loaded.hero.media[2].thumbnailURL?.absoluteString, "https://cdn.example.com/c-poster.jpg")
+        XCTAssertNil(loaded.hero.media[2].liveVideoURL, "Only a live_photo keeps a companion clip")
+    }
+
+    func testNestedLivePhotoWithoutClipDowngradesToImage() {
+        let items = BroadcastDetailViewModel.heroMedia([
+            BroadcastMediaDTO(
+                url: "https://cdn.example.com/still.jpg",
+                type: "live_photo",
+                thumbnailUrl: "https://cdn.example.com/thumb.jpg",
+                liveVideoUrl: nil
+            ),
+            BroadcastMediaDTO(url: "  ", type: "image", thumbnailUrl: nil, liveVideoUrl: nil)
+        ])
+        XCTAssertEqual(items.count, 1, "A blank url slot is dropped, not rendered")
+        XCTAssertEqual(items[0].kind, .image)
+        XCTAssertNil(items[0].liveVideoURL)
+        XCTAssertEqual(items[0].thumbnailURL?.absoluteString, "https://cdn.example.com/thumb.jpg")
     }
 }

@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.BeaconBanner
 import app.pantopus.android.ui.components.BeaconIdentity
+import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
+import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -87,9 +89,9 @@ fun PublicProfileBanner(kind: PublicProfileKind) {
 
 /**
  * Persona broadcast card: meta row (timeAgo + visibility chip), body,
- * reactions/replies footer. When [PublicProfilePost.isLocked] is true,
- * swap the body + reactions row for a tinted paywall overlay inviting
- * the visitor to subscribe.
+ * attachments, reactions/replies footer. When [PublicProfilePost.isLocked]
+ * is true, swap the body + media + reactions row for a tinted paywall
+ * overlay inviting the visitor to subscribe.
  */
 @Composable
 fun PublicProfileBroadcastCard(
@@ -118,6 +120,18 @@ fun PublicProfileBroadcastCard(
                 color = PantopusColors.appText,
                 maxLines = 3,
             )
+            // Same grid the Pulse card hosts (`PulsePostCard.kt:181-187`), so a
+            // Beacon broadcast gets the yellow LIVE dot, long-press playback and
+            // the full-screen viewer for free. `media` is already empty on a
+            // locked row (`BeaconProfileViewModel.project`), and this sits in the
+            // unlocked branch as well so the paywall has two doors.
+            if (post.media.isNotEmpty()) {
+                PostMediaGridWithViewer(
+                    items = post.media,
+                    style = PostMediaGridStyle.Compact,
+                    testTag = "beaconBroadcastMedia_${post.id}",
+                )
+            }
             ReactionsRow(post = post, leadingIcon = PantopusIcon.Heart)
         }
     }
@@ -262,6 +276,15 @@ fun PublicProfileLocalPostCard(post: PublicProfilePost) {
             color = PantopusColors.appText,
             maxLines = 3,
         )
+        // Local Beacon posts carry the same slot-aligned `media_*` arrays as a
+        // persona broadcast, so they share the Pulse grid too.
+        if (post.media.isNotEmpty()) {
+            PostMediaGridWithViewer(
+                items = post.media,
+                style = PostMediaGridStyle.Compact,
+                testTag = "beaconLocalPostMedia_${post.id}",
+            )
+        }
         ReactionsRow(post = post, leadingIcon = PantopusIcon.Lightbulb)
     }
 }
@@ -651,6 +674,17 @@ private fun accessibilitySummary(post: PublicProfilePost): String {
             else -> "Post"
         }
     val localityPart = post.locality?.let { " in $it." } ?: ""
-    return "$descriptor.$localityPart ${post.body}. ${post.timeAgo}. " +
+    // Attachment count, mirroring `PulsePostCard.buildA11yLabel`. Both cards
+    // set a *non-merging* `semantics { }` on the column, so the grid keeps its
+    // own "N attached items" node and its tap / long-press gestures — the count
+    // is repeated here only so a reader that stops on the card summary still
+    // learns the post has media. Locked rows return above with empty media.
+    val mediaPart =
+        if (post.media.isEmpty()) {
+            ""
+        } else {
+            " ${post.media.size} attached ${if (post.media.size == 1) "photo" else "photos"}."
+        }
+    return "$descriptor.$localityPart ${post.body}.$mediaPart ${post.timeAgo}. " +
         "${post.reactions} reactions, ${post.replies} replies."
 }

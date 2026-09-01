@@ -134,6 +134,19 @@ public struct BeaconPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let locked: Bool?
     public let teaser: String?
     public let mediaUrls: [String]?
+    /// Parallel arrays to `media_urls` — slot `i` is described by
+    /// `media_types[i]` / `media_thumbnails[i]` / `media_live_urls[i]`.
+    /// `GET /api/personas/:handle/posts` returns the raw `Post` row and the
+    /// viewer sanitizer strips only the location fields
+    /// (`backend/serializers/identitySerializers.js:136-148`), so all four
+    /// arrays reach the client. Same shape as `FeedDTOs.swift:40-45`.
+    public let mediaTypes: [String]
+    public let mediaThumbnails: [String]
+    /// Companion clip when `media_types[i] == "live_photo"`, empty string
+    /// otherwise. Older serializers dropped the "" padding, so this can
+    /// arrive shorter than `media_urls` — `PostMediaItem.items` walks the
+    /// ragged case with a cursor.
+    public let mediaLiveURLs: [String]
     /// Set on Post rows published through a broadcast channel
     /// (`backend/routes/broadcastChannels.js:554`). Non-nil is what makes a
     /// row eligible for a read receipt — RN gates on the same field
@@ -149,6 +162,9 @@ public struct BeaconPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case deliveredCount = "delivered_count"
         case readCount = "read_count"
         case mediaUrls = "media_urls"
+        case mediaTypes = "media_types"
+        case mediaThumbnails = "media_thumbnails"
+        case mediaLiveURLs = "media_live_urls"
         case broadcastChannelId = "broadcast_channel_id"
     }
 
@@ -167,6 +183,9 @@ public struct BeaconPostDTO: Decodable, Sendable, Hashable, Identifiable {
         locked = try c.decodeIfPresent(Bool.self, forKey: .locked)
         teaser = try c.decodeIfPresent(String.self, forKey: .teaser)
         mediaUrls = try c.decodeIfPresent([String].self, forKey: .mediaUrls)
+        mediaTypes = try c.decodeIfPresent([String].self, forKey: .mediaTypes) ?? []
+        mediaThumbnails = try c.decodeIfPresent([String].self, forKey: .mediaThumbnails) ?? []
+        mediaLiveURLs = try c.decodeIfPresent([String].self, forKey: .mediaLiveURLs) ?? []
         broadcastChannelId = try c.decodeIfPresent(String.self, forKey: .broadcastChannelId)
     }
 }

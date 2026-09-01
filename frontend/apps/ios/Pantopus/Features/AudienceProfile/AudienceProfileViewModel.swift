@@ -218,7 +218,16 @@ public final class AudienceProfileViewModel {
             visibility: visibility,
             targetTierRank: dto.targetTierRank,
             deliveredCount: dto.deliveredCount ?? 0,
-            readCount: dto.readCount ?? 0
+            readCount: dto.readCount ?? 0,
+            // Owner-side rows are never locked, so there is no paywall
+            // suppression to apply here — unlike the visitor projection in
+            // `BeaconProfileViewModel.project`.
+            media: PostMediaItem.items(
+                urls: dto.mediaUrls ?? [],
+                types: dto.mediaTypes,
+                thumbnails: dto.mediaThumbnails,
+                liveURLs: dto.mediaLiveURLs
+            )
         )
     }
 

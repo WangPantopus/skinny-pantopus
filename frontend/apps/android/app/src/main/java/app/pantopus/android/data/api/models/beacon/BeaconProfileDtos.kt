@@ -98,6 +98,19 @@ data class BeaconPostDto(
     val teaser: String? = null,
     @Json(name = "media_urls") val mediaUrls: List<String>? = null,
     /**
+     * Slot-aligned companions to [mediaUrls]. `GET /api/personas/:handle/posts`
+     * selects the raw Post row and `sanitizePersonaPostForViewer`
+     * (`backend/serializers/identitySerializers.js:136-148`) strips only the
+     * location columns, so every media column reaches the wire. Index `i` of
+     * each array describes slot `i` — the backend pads with `""` to keep the
+     * indices aligned — and a slot is a Live Photo only when
+     * `media_types[i] == "live_photo"` and its clip URL is non-blank.
+     * Mirrors `FeedPost` (`data/api/models/feed/FeedDtos.kt:39-42`).
+     */
+    @Json(name = "media_types") val mediaTypes: List<String> = emptyList(),
+    @Json(name = "media_thumbnails") val mediaThumbnails: List<String> = emptyList(),
+    @Json(name = "media_live_urls") val mediaLiveUrls: List<String> = emptyList(),
+    /**
      * Set on Post rows published through a broadcast channel
      * (`backend/routes/broadcastChannels.js:554`). Non-null is what makes a
      * row eligible for a read receipt — RN gates on the same field

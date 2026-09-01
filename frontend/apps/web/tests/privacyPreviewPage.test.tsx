@@ -8,14 +8,40 @@
  *      mode and the updated visible payload renders.
  *   3. Switching the surface to persona repopulates the viewer dropdown
  *      with persona-only modes (no household/business teammate options).
+ *   4. The sample posts in the view-as payload carry media_live_urls
+ *      alongside the other three parallel media arrays, so a Beacon's
+ *      Live Photos are previewed as Live Photos rather than silently
+ *      downgraded to stills.
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import type { ViewAsPreviewPost } from '@pantopus/types';
+import { resolvePostMediaSlots } from '@/components/feed/PostMediaGrid';
 
 const apiMock = require('@pantopus/api');
+
+/**
+ * Shaped exactly like one entry of `sample.posts`, which the server builds
+ * by copying SAFE_PREVIEW_POST_FIELDS off the row
+ * (backend/routes/identityCenter.js:57-90). The `ViewAsPreviewPost`
+ * annotation is load-bearing: tsconfig includes tests/, so dropping
+ * media_live_urls from the type again fails `tsc --noEmit`, not just this
+ * assertion.
+ */
+const LIVE_PHOTO_SAMPLE_POST: ViewAsPreviewPost = {
+  id: 'post-live-1',
+  content: 'Behind the scenes',
+  media_urls: ['https://cdn.test/still.jpg', 'https://cdn.test/plain.jpg'],
+  media_types: ['live_photo', 'live_photo'],
+  // Slot 1's clip is blank — the padding the serializers emit when the
+  // companion upload never landed.
+  media_live_urls: ['https://cdn.test/clip.mov', ''],
+  visibility: 'public',
+  created_at: '2026-05-08T10:00:00Z',
+};
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() }),
@@ -36,6 +62,7 @@ beforeEach(() => {
           bridges: { localProfile: null },
         },
         hidden: ['email', 'phone', 'address', 'home_id', 'user_id', 'first_name', 'last_name'],
+        sample: { posts: [LIVE_PHOTO_SAMPLE_POST], broadcasts: [] },
       });
     }
     if (opts?.viewer === 'public') {
@@ -141,5 +168,40 @@ describe('Privacy preview page (P2.7)', () => {
     // persona (household/business teammate are personal-side).
     expect(optionLabels).not.toContain('household_member');
     expect(optionLabels).not.toContain('business_teammate');
+  });
+
+  test('the persona view-as payload carries media_live_urls parallel to media_urls', async () => {
+    loadPage();
+    await waitFor(() => expect(apiMock.identityCenter.getViewAsPreview).toHaveBeenCalled());
+
+    act(() => {
+      fireEvent.change(screen.getByTestId('privacy-preview-surface'), { target: { value: 'persona' } });
+    });
+    await waitFor(() => {
+      expect(apiMock.identityCenter.getViewAsPreview).toHaveBeenCalledWith(
+        expect.objectContaining({ surface: 'persona' }),
+      );
+    });
+    // The panels render from the same response the sample posts ride on.
+    await waitFor(() => expect(screen.getByTestId('privacy-preview-visible')).toHaveTextContent('mayabuilds'));
+
+    const preview = await apiMock.identityCenter.getViewAsPreview.mock.results.at(-1)!.value;
+    const post: ViewAsPreviewPost = preview.sample.posts[0];
+    expect(post.media_live_urls).toHaveLength(post.media_urls!.length);
+
+    // Run the payload through the production resolver rather than
+    // eyeballing the arrays: the preview's promise is that what it shows
+    // is what the real surface shows, so slot 0 has to come out live and
+    // slot 1 — the blank clip — has to come out as a plain still.
+    expect(
+      resolvePostMediaSlots(post.media_urls!, post.media_types!, post.media_live_urls!),
+    ).toEqual([
+      { kind: 'live', liveUrl: 'https://cdn.test/clip.mov' },
+      { kind: 'image', liveUrl: '' },
+    ]);
+
+    // media_live_urls is visible-side data, never a firewalled personal
+    // field — it must not turn up in the "Hidden from this viewer" list.
+    expect(screen.getByTestId('privacy-preview-hidden')).not.toHaveTextContent('media_live_urls');
   });
 });

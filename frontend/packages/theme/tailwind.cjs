@@ -49,6 +49,8 @@ const accent = {
   green:   '#22C55E',
   purple:  '#A855F7',
   cyan:    '#0891B2',
+  // Live Photo badge yellow — see src/colors.ts for the full note.
+  liveBadge: '#FFD60A',
 };
 
 const radii = {

@@ -147,6 +147,108 @@ class ComposeBroadcastViewModelTest {
     }
 
     @Test
+    fun `hosted media carries its thumbnail and live clip`() {
+        // `broadcastMediaItemsFromPayload` reads `thumbnailUrl` / `liveVideoUrl`
+        // into the post's `media_thumbnails` / `media_live_urls`
+        // (`backend/routes/broadcastChannels.js:169-183`); the mapper used to
+        // drop both, which stored an all-empty thumbnails array and lost the
+        // Live Photo clip on the write.
+        val draft =
+            ComposeBroadcastDraft(
+                media =
+                    listOf(
+                        ComposeMediaPreview(
+                            id = "live",
+                            kind = ComposeMediaPreview.Kind.LivePhoto,
+                            caption = null,
+                            remoteUrl = "https://cdn/still.jpg",
+                            thumbnailUrl = "https://cdn/thumb.jpg",
+                            liveVideoUrl = "https://cdn/clip.mov",
+                        ),
+                        ComposeMediaPreview(
+                            id = "video",
+                            kind = ComposeMediaPreview.Kind.Video,
+                            caption = null,
+                            remoteUrl = "https://cdn/reel.mp4",
+                            thumbnailUrl = "https://cdn/poster.jpg",
+                        ),
+                        // Locally-picked bytes have no remote URL — they ride
+                        // the upload leg instead and never reach the payload.
+                        ComposeMediaPreview(
+                            id = "local",
+                            kind = ComposeMediaPreview.Kind.Image,
+                            caption = null,
+                            bytes = byteArrayOf(7),
+                        ),
+                    ),
+            )
+
+        val payload = preUploadedMedia(draft)
+
+        assertEquals(2, payload.size)
+        assertEquals("live_photo", payload[0].type)
+        assertEquals("https://cdn/thumb.jpg", payload[0].thumbnailUrl)
+        assertEquals("https://cdn/clip.mov", payload[0].liveVideoUrl)
+        assertEquals("video", payload[1].type)
+        assertEquals("https://cdn/poster.jpg", payload[1].thumbnailUrl)
+        assertNull(payload[1].liveVideoUrl)
+    }
+
+    @Test
+    fun `clipless live photo downgrades instead of failing the publish`() {
+        // `broadcastMediaItemSchema` rejects a `live_photo` with no companion
+        // URL (`backend/routes/broadcastChannels.js:50-56`), and one bad item
+        // 400s the whole broadcast — so the mapper downgrades it to the image
+        // the reader would have rendered anyway.
+        val payload =
+            preUploadedMedia(
+                ComposeBroadcastDraft(
+                    media =
+                        listOf(
+                            ComposeMediaPreview(
+                                id = "orphan",
+                                kind = ComposeMediaPreview.Kind.LivePhoto,
+                                caption = null,
+                                remoteUrl = "https://cdn/still.jpg",
+                                liveVideoUrl = "   ",
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(1, payload.size)
+        assertEquals("image", payload.first().type)
+        assertNull(payload.first().liveVideoUrl)
+    }
+
+    @Test
+    fun `upload echo reconciles the post's slots`() {
+        // A 200 from `POST /api/upload/post-media/:postId` is not proof every
+        // attachment landed — the echo is the post's reconciled slot table.
+        val complete =
+            PostMediaUploadResponse(
+                message = "2 file(s) uploaded successfully",
+                mediaUrls = listOf("https://cdn/still.jpg", "https://cdn/b.jpg"),
+                mediaTypes = listOf("live_photo", "image"),
+                mediaThumbnails = listOf("https://cdn/thumb.jpg", ""),
+                mediaLiveUrls = listOf("https://cdn/clip.mov", ""),
+            )
+        assertTrue(mediaUploadIsComplete(complete, expectedSlots = 2))
+
+        // One attachment never made it into the post.
+        assertFalse(mediaUploadIsComplete(complete, expectedSlots = 3))
+
+        // The slot still claims live_photo but its clip is gone, so the
+        // viewer would silently downgrade it to a still.
+        assertFalse(
+            mediaUploadIsComplete(
+                complete.copy(mediaLiveUrls = listOf("", "")),
+                expectedSlots = 2,
+            ),
+        )
+    }
+
+    @Test
     fun `set audience updates draft and reach`() {
         val vm = buildVm()
         assertEquals(BroadcastAudience.AllBeacons, vm.state.value.draft.audience)

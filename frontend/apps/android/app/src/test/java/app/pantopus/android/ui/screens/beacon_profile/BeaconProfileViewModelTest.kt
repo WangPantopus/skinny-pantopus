@@ -18,6 +18,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.beacon.BeaconProfileRepository
 import app.pantopus.android.data.broadcast.BroadcastReadRepository
 import app.pantopus.android.ui.screens.profile.PublicProfilePost
+import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.PostMediaKind
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +31,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -228,6 +231,125 @@ class BeaconProfileViewModelTest {
 
             val content = (vm.state.value as BeaconProfileUiState.Loaded).content
             assertEquals(PublicProfilePost.Visibility.Silver, content.posts.first().visibility)
+        }
+
+    // MARK: - Media projection
+    //
+    // `GET /api/personas/:handle/posts` ships the four slot-aligned arrays
+    // (`media_urls` / `media_types` / `media_thumbnails` / `media_live_urls`)
+    // straight off the Post row — `sanitizePersonaPostForViewer` strips only
+    // the location columns — so the Beacon profile card projects them with
+    // the same `buildPostMediaItems` rules as the Pulse feed.
+
+    /** Visitor stubs shared by the media cases — one post, no tiers. */
+    private fun stubVisitor(post: BeaconPostDto) {
+        val viewer = BeaconViewerDto(isOwner = false, isFollowing = true, followStatus = "active")
+        coEvery { repo.persona("mariak") } returns NetworkResult.Success(BeaconPersonaResponse(persona(viewer)))
+        coEvery { repo.posts("mariak") } returns NetworkResult.Success(BeaconPostsResponse(listOf(post)))
+        coEvery { repo.tiers("mariak") } returns NetworkResult.Success(PersonaTiersResponse(emptyList()))
+    }
+
+    /** Load [post] as a visitor and hand back the projected media slots. */
+    private fun loadedPostMedia(post: BeaconPostDto): List<PostMediaItem> {
+        stubVisitor(post)
+        val vm = visitorVm()
+        vm.load()
+        return (vm.state.value as BeaconProfileUiState.Loaded).content.posts.first().media
+    }
+
+    @Test fun `live photo slot keeps its companion clip`() =
+        runTest {
+            val media =
+                loadedPostMedia(
+                    BeaconPostDto(
+                        id = "m1",
+                        body = "Proofing time-lapse",
+                        createdAt = "2026-06-19T10:00:00.000Z",
+                        visibility = "public",
+                        mediaUrls = listOf("https://cdn/still.jpg", "https://cdn/plain.jpg"),
+                        mediaTypes = listOf("live_photo", "image"),
+                        mediaThumbnails = listOf("https://cdn/thumb.jpg", ""),
+                        mediaLiveUrls = listOf("https://cdn/clip.mov", ""),
+                    ),
+                )
+
+            assertEquals(2, media.size)
+            assertEquals(PostMediaKind.LivePhoto, media[0].kind)
+            assertEquals("https://cdn/still.jpg", media[0].url)
+            assertEquals("https://cdn/clip.mov", media[0].liveVideoUrl)
+            assertEquals("https://cdn/thumb.jpg", media[0].thumbnailUrl)
+            // The neighbouring plain slot must not inherit the clip.
+            assertEquals(PostMediaKind.Image, media[1].kind)
+            assertNull(media[1].liveVideoUrl)
+        }
+
+    @Test fun `live photo without a clip downgrades to image`() =
+        runTest {
+            val media =
+                loadedPostMedia(
+                    BeaconPostDto(
+                        id = "m2",
+                        body = "Just the still",
+                        createdAt = "2026-06-19T10:00:00.000Z",
+                        visibility = "public",
+                        mediaUrls = listOf("https://cdn/still.jpg"),
+                        mediaTypes = listOf("live_photo"),
+                        mediaLiveUrls = listOf(""),
+                    ),
+                )
+
+            assertEquals(1, media.size)
+            assertEquals(PostMediaKind.Image, media.first().kind)
+            assertNull(media.first().liveVideoUrl)
+        }
+
+    @Test fun `compacted live urls feed the k-th live photo slot`() =
+        runTest {
+            // Ragged wire shape: `media_live_urls` came back shorter than
+            // `media_urls`, so index alignment is gone and the k-th surviving
+            // clip belongs to the k-th live_photo slot.
+            val media =
+                loadedPostMedia(
+                    BeaconPostDto(
+                        id = "m3",
+                        body = "Two lives and a still",
+                        createdAt = "2026-06-19T10:00:00.000Z",
+                        visibility = "public",
+                        mediaUrls = listOf("https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg"),
+                        mediaTypes = listOf("image", "live_photo", "live_photo"),
+                        mediaLiveUrls = listOf("https://cdn/b.mov", "https://cdn/c.mov"),
+                    ),
+                )
+
+            assertEquals(3, media.size)
+            assertEquals(PostMediaKind.Image, media[0].kind)
+            assertEquals(PostMediaKind.LivePhoto, media[1].kind)
+            assertEquals("https://cdn/b.mov", media[1].liveVideoUrl)
+            assertEquals(PostMediaKind.LivePhoto, media[2].kind)
+            assertEquals("https://cdn/c.mov", media[2].liveVideoUrl)
+        }
+
+    @Test fun `locked broadcast projects no media`() =
+        runTest {
+            // The route does not strip `media_*` on a locked row, so the
+            // projection is the only thing keeping the paid attachments off
+            // the card. Same fixture as the locked-visibility case, plus media.
+            val media =
+                loadedPostMedia(
+                    BeaconPostDto(
+                        id = "lp2",
+                        visibility = "tier_or_above",
+                        targetTierRank = 2,
+                        locked = true,
+                        teaser = "Subscribe to read…",
+                        createdAt = "2026-06-19T10:00:00.000Z",
+                        mediaUrls = listOf("https://cdn/paid.jpg"),
+                        mediaTypes = listOf("live_photo"),
+                        mediaLiveUrls = listOf("https://cdn/paid.mov"),
+                    ),
+                )
+
+            assertTrue(media.isEmpty())
         }
 
     @Test fun `credential drives verification`() =

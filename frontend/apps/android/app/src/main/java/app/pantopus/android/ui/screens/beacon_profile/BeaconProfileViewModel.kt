@@ -17,6 +17,7 @@ import app.pantopus.android.data.broadcast.BroadcastReadRepository
 import app.pantopus.android.ui.screens.profile.PublicProfileHeader
 import app.pantopus.android.ui.screens.profile.PublicProfilePost
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileStatCell
+import app.pantopus.android.ui.screens.shared.media.buildPostMediaItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -351,6 +352,21 @@ class BeaconProfileViewModel
                 isLocked = locked,
                 intent = null,
                 targetTierRank = post.targetTierRank,
+                // A locked row swaps its body for the "Subscribe to unlock" CTA,
+                // and the persona posts route ships `media_*` on the wire even
+                // then — dropping the attachments here is the only thing that
+                // stops the card leaking the paid content it is gating.
+                media =
+                    if (locked) {
+                        emptyList()
+                    } else {
+                        buildPostMediaItems(
+                            urls = post.mediaUrls.orEmpty(),
+                            types = post.mediaTypes,
+                            thumbnails = post.mediaThumbnails,
+                            liveUrls = post.mediaLiveUrls,
+                        )
+                    },
             )
         }
 
