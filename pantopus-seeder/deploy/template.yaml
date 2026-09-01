@@ -441,6 +441,114 @@ Resources:
                   cloudwatch:namespace: !Sub Pantopus/NoBidNudge/${Environment}
 
   # ---------------------------------------------------------------------------
+  # Job Trigger Lambda — generic cron job trigger via EventBridge
+  # ---------------------------------------------------------------------------
+  JobTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub pantopus-job-trigger-${Environment}
+      Handler: src.handlers.job_trigger.handler
+      Description: !Sub 'Triggers backend cron jobs via /api/internal/jobs/* [${Environment}]'
+      CodeUri: ../build/
+      Timeout: 120
+      MemorySize: 128
+      Events:
+        ProcessPendingTransfers:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-process-pending-transfers-${Environment}
+            Schedule: cron(15 * * * ? *)
+            Description: !Sub 'Escrow release — hourly at :15 [${Environment}]'
+            Input: '{"job": "process-pending-transfers"}'
+            Enabled: true
+        RetryCaptureFailures:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-retry-capture-failures-${Environment}
+            Schedule: rate(15 minutes)
+            Description: !Sub 'Retry failed Stripe captures [${Environment}]'
+            Input: '{"job": "retry-capture-failures"}'
+            Enabled: true
+        AuthorizeUpcomingGigs:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-authorize-upcoming-gigs-${Environment}
+            Schedule: cron(5 * * * ? *)
+            Description: !Sub 'Create PaymentIntents for upcoming gigs — hourly at :05 [${Environment}]'
+            Input: '{"job": "authorize-upcoming-gigs"}'
+            Enabled: true
+        ExpireUncapturedAuth:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-expire-uncaptured-auth-${Environment}
+            Schedule: cron(0 3 * * ? *)
+            Description: !Sub 'Cancel gigs with expiring auths — daily 3:00 AM [${Environment}]'
+            Input: '{"job": "expire-uncaptured-authorizations"}'
+            Enabled: true
+        CheckStuckPayments:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-check-stuck-payments-${Environment}
+            Schedule: rate(15 minutes)
+            Description: !Sub 'Alert on stuck payments [${Environment}]'
+            Input: '{"job": "check-stuck-payments"}'
+            Enabled: true
+        CleanupGhostBusinesses:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-cleanup-ghost-businesses-${Environment}
+            Schedule: cron(30 2 * * ? *)
+            Description: !Sub 'Remove orphaned business accounts — daily 2:30 AM [${Environment}]'
+            Input: '{"job": "cleanup-ghost-businesses"}'
+            Enabled: true
+        ChatRedaction:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-chat-redaction-${Environment}
+            Schedule: cron(30 * * * ? *)
+            Description: !Sub 'GDPR message redaction — hourly at :30 [${Environment}]'
+            Input: '{"job": "chat-redaction"}'
+            Enabled: true
+        TrustAnomalyDetection:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-trust-anomaly-detection-${Environment}
+            Schedule: cron(45 */6 * * ? *)
+            Description: !Sub 'Flag suspicious neighbor growth — every 6h [${Environment}]'
+            Input: '{"job": "trust-anomaly-detection"}'
+            Enabled: true
+        ComputeAvgResponseTime:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-compute-avg-response-time-${Environment}
+            Schedule: cron(0 5 * * ? *)
+            Description: !Sub 'Business response time stats — daily 5:00 AM [${Environment}]'
+            Input: '{"job": "compute-avg-response-time"}'
+            Enabled: true
+        AutoArchivePosts:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-auto-archive-posts-${Environment}
+            Schedule: cron(0 4 * * ? *)
+            Description: !Sub 'Archive expired local posts — daily 4:00 AM [${Environment}]'
+            Input: '{"job": "auto-archive-posts"}'
+            Enabled: true
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  cloudwatch:namespace: !Sub Pantopus/Jobs/${Environment}
+
+  # ---------------------------------------------------------------------------
   # Secrets Manager secret — populate manually after first deployment
   # ---------------------------------------------------------------------------
   SeederSecret:
@@ -524,6 +632,12 @@ Outputs:
   NoBidNudgeFunctionName:
     Description: Name of the no-bid nudge Lambda function
     Value: !Ref NoBidNudgeFunction
+  JobTriggerFunctionArn:
+    Description: ARN of the job trigger Lambda function
+    Value: !GetAtt JobTriggerFunction.Arn
+  JobTriggerFunctionName:
+    Description: Name of the job trigger Lambda function
+    Value: !Ref JobTriggerFunction
   SecretArn:
     Description: ARN of the Secrets Manager secret
     Value: !Ref SeederSecret

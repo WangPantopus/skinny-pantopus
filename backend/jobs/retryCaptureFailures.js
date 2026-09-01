@@ -13,6 +13,10 @@ const { createNotification } = require('../services/notificationService');
 const logger = require('../utils/logger');
 
 const MAX_CAPTURE_ATTEMPTS = 3;
+// Cap work per run so a capture backlog can't push the job past the Lambda
+// HTTP timeout. Remaining gigs are retried on the next run (every 15 min),
+// oldest confirmation first (FIFO).
+const BATCH_SIZE = 100;
 
 async function retryCaptureFailures() {
   // Find gigs where owner confirmed but payment is still authorized
@@ -21,7 +25,9 @@ async function retryCaptureFailures() {
     .select('id, title, user_id, payment_id')
     .not('owner_confirmed_at', 'is', null)
     .not('payment_id', 'is', null)
-    .eq('payment_status', PAYMENT_STATES.AUTHORIZED);
+    .eq('payment_status', PAYMENT_STATES.AUTHORIZED)
+    .order('owner_confirmed_at', { ascending: true })
+    .limit(BATCH_SIZE);
 
   if (error) {
     logger.error('retryCaptureFailures: failed to query gigs', { error: error.message });
@@ -34,6 +40,10 @@ async function retryCaptureFailures() {
   }
 
   logger.info('retryCaptureFailures: found orphaned captures', { count: orphanedGigs.length });
+
+  if (orphanedGigs.length === BATCH_SIZE) {
+    logger.warn('retryCaptureFailures: batch full — possible backlog, remaining gigs retried next run', { batchSize: BATCH_SIZE });
+  }
 
   for (const gig of orphanedGigs) {
     try {

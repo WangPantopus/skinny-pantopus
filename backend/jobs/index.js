@@ -91,12 +91,45 @@ const { runBookingReminders } = require('./bookingReminders');
 // Payment health alerting
 const { checkAndAlertStuckPayments } = require('../routes/paymentOps');
 
+const LAMBDA_BACKED_CRON_JOBS = new Set([
+  'authorizeUpcomingGigs',
+  'processPendingTransfers',
+  'retryCaptureFailures',
+  'expireUncapturedAuthorizations',
+  'autoArchivePosts',
+  'computeAvgResponseTime',
+  'trustAnomalyDetection',
+  'chatRedactionJob',
+  'cleanupGhostBusinesses',
+  'checkAndAlertStuckPayments',
+]);
+
+const PGBOSS_BACKED_CRON_JOBS = new Set([
+  'recomputeUtilityScores',
+  'organicMatch',
+  'refreshDiscoveryCache',
+  'expirePendingPaymentBids',
+  'computeReputation',
+  'earnRiskReview',
+  'processClaimWindows',
+  'reconcileHomeHouseholdResolution',
+  'validateHomeCoordinates',
+  'mailInterruptNotification',
+  'communityModeration',
+]);
+
+function envFlagEnabled(name, defaultValue = true) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === '') return defaultValue;
+  return !['false', '0', 'no', 'off'].includes(String(value).trim().toLowerCase());
+}
+
 /**
  * Wraps a job function with error handling and timing.
  * Prevents one job crash from killing the whole process.
  */
 function wrapJob(name, fn) {
-  return async () => {
+  const wrapped = async () => {
     const start = Date.now();
     logger.info(`[CRON] Starting: ${name}`);
     try {
@@ -112,13 +145,15 @@ function wrapJob(name, fn) {
       });
     }
   };
+  wrapped.jobName = name;
+  return wrapped;
 }
 
 /**
  * Start all scheduled jobs.
  * Call this once after the server is listening.
  */
-function startJobs() {
+function startJobs(options = {}) {
   // Skip in test environment
   if (process.env.NODE_ENV === 'test') {
     logger.info('[CRON] Skipping job startup in test environment');
@@ -128,12 +163,30 @@ function startJobs() {
   logger.info('[CRON] Initializing background jobs...');
 
   const householdClaimJobsDryRun = householdClaimConfig.jobs.dryRun;
+  const skipPgBossBackedJobs = Boolean(options.skipPgBossBackedJobs);
+  const lambdaBackedCronsEnabled = options.lambdaBackedCronsEnabled ?? envFlagEnabled('LAMBDA_BACKED_CRON_ENABLED', true);
+  const scheduledJobs = [];
+  const skippedJobs = [];
+
+  const scheduleCron = (expression, task, cronOptions) => {
+    const jobName = task.jobName || 'unknown';
+    if (skipPgBossBackedJobs && PGBOSS_BACKED_CRON_JOBS.has(jobName)) {
+      skippedJobs.push({ name: jobName, reason: 'pg-boss' });
+      return null;
+    }
+    if (!lambdaBackedCronsEnabled && LAMBDA_BACKED_CRON_JOBS.has(jobName)) {
+      skippedJobs.push({ name: jobName, reason: 'lambda' });
+      return null;
+    }
+    scheduledJobs.push(jobName);
+    return cron.schedule(expression, task, cronOptions);
+  };
 
   // ─── Authorize Upcoming Gigs ───
   // Runs at minute 5 of every hour (e.g. 1:05, 2:05, ...)
   // For gigs starting within 24h with saved cards, creates off-session
   // PaymentIntents. Also auto-cancels gigs with failed auth within 2h of start.
-  cron.schedule('5 * * * *', wrapJob('authorizeUpcomingGigs', authorizeUpcomingGigs), {
+  scheduleCron('5 * * * *', wrapJob('authorizeUpcomingGigs', authorizeUpcomingGigs), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -142,7 +195,7 @@ function startJobs() {
   // Runs at minute 15 of every hour (e.g. 1:15, 2:15, ...)
   // For captured payments past the 48h cooling-off period,
   // transfers funds to provider's Stripe Connect account.
-  cron.schedule('15 * * * *', wrapJob('processPendingTransfers', processPendingTransfers), {
+  scheduleCron('15 * * * *', wrapJob('processPendingTransfers', processPendingTransfers), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -151,7 +204,7 @@ function startJobs() {
   // Runs every 15 minutes at :20/:35/:50/:05.
   // Retries payment capture for gigs where owner confirmed completion
   // but capture failed. Stops after 3 attempts and notifies payer.
-  cron.schedule('5,20,35,50 * * * *', wrapJob('retryCaptureFailures', retryCaptureFailures), {
+  scheduleCron('5,20,35,50 * * * *', wrapJob('retryCaptureFailures', retryCaptureFailures), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -161,7 +214,7 @@ function startJobs() {
   // Cancels gigs whose payment auth is expiring soon (within 24h)
   // if work hasn't started. Alerts admins for in-progress gigs
   // with expiring auths (needs manual re-authorization).
-  cron.schedule('0 3 * * *', wrapJob('expireUncapturedAuthorizations', expireUncapturedAuthorizations), {
+  scheduleCron('0 3 * * *', wrapJob('expireUncapturedAuthorizations', expireUncapturedAuthorizations), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -170,7 +223,7 @@ function startJobs() {
   // Runs daily at 4:00 AM UTC.
   // Archives local posts (Nearby, Neighborhood, etc.) based on
   // category TTL rules: stories=24h, events=24h after end, deals=3d, etc.
-  cron.schedule('0 4 * * *', wrapJob('autoArchivePosts', autoArchivePosts), {
+  scheduleCron('0 4 * * *', wrapJob('autoArchivePosts', autoArchivePosts), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -182,7 +235,7 @@ function startJobs() {
   // MailDaySession.notified_at keeps that to exactly one push per user per
   // mail day. (It previously ran once at 08:00 UTC — 1am Pacific — which
   // is both the wrong hour and before most mail is scanned.)
-  cron.schedule('*/15 * * * *', wrapJob('mailDayNotification', mailDayNotification), {
+  scheduleCron('*/15 * * * *', wrapJob('mailDayNotification', mailDayNotification), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -191,7 +244,7 @@ function startJobs() {
   // Runs every 5 minutes.
   // Detects time-critical events (package out-for-delivery, urgent/overdue
   // items, certified mail) and logs interrupt events for real-time push.
-  cron.schedule('*/5 * * * *', wrapJob('mailInterruptNotification', mailInterruptNotification), {
+  scheduleCron('*/5 * * * *', wrapJob('mailInterruptNotification', mailInterruptNotification), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -200,7 +253,7 @@ function startJobs() {
   // Runs every minute.
   // Expires pending party invitations older than 90 seconds and
   // notifies the host that nobody joined.
-  cron.schedule('* * * * *', wrapJob('mailPartyExpiry', mailPartyExpiry), {
+  scheduleCron('* * * * *', wrapJob('mailPartyExpiry', mailPartyExpiry), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -209,7 +262,7 @@ function startJobs() {
   // Runs every 15 minutes.
   // Reviews risk sessions, calculates rolling scores, transitions
   // users through risk tiers, auto-lifts expired suspensions.
-  cron.schedule('*/15 * * * *', wrapJob('earnRiskReview', earnRiskReview), {
+  scheduleCron('*/15 * * * *', wrapJob('earnRiskReview', earnRiskReview), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -218,7 +271,7 @@ function startJobs() {
   // Runs every Monday at 9:00 AM UTC.
   // Summarizes vault activity: auto-filed items, unfiled items needing
   // attention, and storage stats per drawer.
-  cron.schedule('0 9 * * 1', wrapJob('vaultWeeklyDigest', vaultWeeklyDigest), {
+  scheduleCron('0 9 * * 1', wrapJob('vaultWeeklyDigest', vaultWeeklyDigest), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -226,7 +279,7 @@ function startJobs() {
   // ─── Vacation Hold Expiry (Phase 3) ───
   // Runs hourly at :25.
   // Expires completed vacation holds and activates scheduled ones.
-  cron.schedule('25 * * * *', wrapJob('vacationHoldExpiry', vacationHoldExpiry), {
+  scheduleCron('25 * * * *', wrapJob('vacationHoldExpiry', vacationHoldExpiry), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -234,7 +287,7 @@ function startJobs() {
   // ─── Stamp Awarder (Phase 3) ───
   // Runs every 6 hours at :35.
   // Checks user milestones and awards stamps.
-  cron.schedule('35 */6 * * *', wrapJob('stampAwarder', stampAwarder), {
+  scheduleCron('35 */6 * * *', wrapJob('stampAwarder', stampAwarder), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -242,7 +295,7 @@ function startJobs() {
   // ─── Community Moderation (Phase 3) ───
   // Runs every 30 minutes.
   // Flags community items with multiple "concerned" reactions.
-  cron.schedule('*/30 * * * *', wrapJob('communityModeration', communityModeration), {
+  scheduleCron('*/30 * * * *', wrapJob('communityModeration', communityModeration), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -251,7 +304,7 @@ function startJobs() {
   // Runs daily at 5:00 AM UTC.
   // For each business, computes the average time between a customer's
   // first message and the business's first reply. Stores on BusinessProfile.
-  cron.schedule('0 5 * * *', wrapJob('computeAvgResponseTime', computeAvgResponseTime), {
+  scheduleCron('0 5 * * *', wrapJob('computeAvgResponseTime', computeAvgResponseTime), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -260,7 +313,7 @@ function startJobs() {
   // Runs every 2 minutes.
   // Matches local businesses to community posts with service_category set.
   // Uses proximity, neighbor work history, and rating. Never paid.
-  cron.schedule('*/2 * * * *', wrapJob('organicMatch', organicMatch), {
+  scheduleCron('*/2 * * * *', wrapJob('organicMatch', organicMatch), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -269,7 +322,7 @@ function startJobs() {
   // Runs every 6 hours at :45.
   // Flags providers with suspicious neighbor_count growth from
   // recently-created homes. Routes to manual review queue.
-  cron.schedule('45 */6 * * *', wrapJob('trustAnomalyDetection', trustAnomalyDetection), {
+  scheduleCron('45 */6 * * *', wrapJob('trustAnomalyDetection', trustAnomalyDetection), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -278,7 +331,7 @@ function startJobs() {
   // Runs every 15 minutes at :10.
   // Recomputes utility_score on recent posts so feed ranking
   // reflects up-to-date engagement signals.
-  cron.schedule('10,25,40,55 * * * *', wrapJob('recomputeUtilityScores', recomputeUtilityScores), {
+  scheduleCron('10,25,40,55 * * * *', wrapJob('recomputeUtilityScores', recomputeUtilityScores), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -287,7 +340,7 @@ function startJobs() {
   // Runs every 15 minutes at :03/:18/:33/:48.
   // Archives active listings whose expires_at has passed and
   // decrements inventory slot counts for address-attached ones.
-  cron.schedule('3,18,33,48 * * * *', wrapJob('expireListings', expireListings), {
+  scheduleCron('3,18,33,48 * * * *', wrapJob('expireListings', expireListings), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -296,7 +349,7 @@ function startJobs() {
   // Runs every 15 minutes at :01/:16/:31/:46.
   // Expires pending listing offers whose 48-hour window has passed,
   // decrements active_offer_count, and notifies buyers.
-  cron.schedule('1,16,31,46 * * * *', wrapJob('expireOffers', expireOffers), {
+  scheduleCron('1,16,31,46 * * * *', wrapJob('expireOffers', expireOffers), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -305,7 +358,7 @@ function startJobs() {
   // Runs every 30 minutes at :07/:37.
   // Recomputes reputation for users with recent reviews
   // or completed transactions.
-  cron.schedule('7,37 * * * *', wrapJob('computeReputation', computeReputation), {
+  scheduleCron('7,37 * * * *', wrapJob('computeReputation', computeReputation), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -313,7 +366,7 @@ function startJobs() {
   // ─── Refresh Discovery Cache (Marketplace) ───
   // Runs every 2 minutes.
   // Refreshes geohash-based discovery cache for recently active areas.
-  cron.schedule('*/2 * * * *', wrapJob('refreshDiscoveryCache', refreshDiscoveryCache), {
+  scheduleCron('*/2 * * * *', wrapJob('refreshDiscoveryCache', refreshDiscoveryCache), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -322,7 +375,7 @@ function startJobs() {
   // Runs every 15 minutes at :08/:23/:38/:53.
   // Cancels open gigs whose deadline has passed so they
   // no longer appear in browse or map results.
-  cron.schedule('8,23,38,53 * * * *', wrapJob('expireGigs', expireGigs), {
+  scheduleCron('8,23,38,53 * * * *', wrapJob('expireGigs', expireGigs), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -331,7 +384,7 @@ function startJobs() {
   // Runs every 10 minutes at :07/:17/:27/:37/:47/:57.
   // Promotes provisional occupancies whose challenge window has expired
   // to fully verified status.
-  cron.schedule('7,17,27,37,47,57 * * * *', wrapJob('processClaimWindows', processClaimWindows), {
+  scheduleCron('7,17,27,37,47,57 * * * *', wrapJob('processClaimWindows', processClaimWindows), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -340,7 +393,7 @@ function startJobs() {
   // Runs every 30 minutes at :12/:42.
   // Reverse-geocodes recently created homes via Mapbox
   // and flags coordinate-address mismatches.
-  cron.schedule('12,42 * * * *', wrapJob('validateHomeCoordinates', validateHomeCoordinates), {
+  scheduleCron('12,42 * * * *', wrapJob('validateHomeCoordinates', validateHomeCoordinates), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -349,7 +402,7 @@ function startJobs() {
   // Runs every 2 hours at :20.
   // Sends 48-hour warning notifications to home occupants
   // before the ownership claim window closes.
-  cron.schedule('20 */2 * * *', wrapJob('notifyClaimWindowExpiry', notifyClaimWindowExpiry), {
+  scheduleCron('20 */2 * * *', wrapJob('notifyClaimWindowExpiry', notifyClaimWindowExpiry), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -357,7 +410,7 @@ function startJobs() {
   // ─── Expire Initiated Home Claims (Household Claim Phase 3) ───
   // Runs hourly at :11.
   // Expires initiated ownership claims whose evidence deadline passed.
-  cron.schedule('11 * * * *', wrapJob(
+  scheduleCron('11 * * * *', wrapJob(
     'expireInitiatedHomeClaims',
     () => expireInitiatedHomeClaims({ dryRun: householdClaimJobsDryRun }),
   ), {
@@ -369,7 +422,7 @@ function startJobs() {
   // Runs daily at 03:41 UTC.
   // Retention for verification telemetry. The table previously grew without
   // bound and no job touched it.
-  cron.schedule('41 3 * * *', wrapJob(
+  scheduleCron('41 3 * * *', wrapJob(
     'purgeAddressVerificationEvents',
     () => purgeAddressVerificationEvents(),
   ), {
@@ -382,7 +435,7 @@ function startJobs() {
   // Sweeps mail-verification attempts and postcard codes past their expiry.
   // Before this existed, no job touched any mail table: an attempt sat at
   // 'sent' forever, holding a slot in the per-address budget.
-  cron.schedule('26 * * * *', wrapJob(
+  scheduleCron('26 * * * *', wrapJob(
     'expireAddressVerifications',
     () => expireAddressVerifications(),
   ), {
@@ -393,7 +446,7 @@ function startJobs() {
   // ─── Reconcile Home Household Resolution (Household Claim Phase 3) ───
   // Runs every 30 minutes at :14/:44.
   // Recomputes household resolution for homes with ownership-claim activity.
-  cron.schedule('14,44 * * * *', wrapJob(
+  scheduleCron('14,44 * * * *', wrapJob(
     'reconcileHomeHouseholdResolution',
     () => reconcileHomeHouseholdResolution({ dryRun: householdClaimJobsDryRun }),
   ), {
@@ -405,14 +458,14 @@ function startJobs() {
   // Runs hourly at :30.
   // Permanently redacts soft-deleted messages past their retention period.
   // Replaces message text and clears attachments in batches.
-  cron.schedule('30 * * * *', wrapJob('chatRedactionJob', chatRedactionJob), {
+  scheduleCron('30 * * * *', wrapJob('chatRedactionJob', chatRedactionJob), {
     scheduled: true,
     timezone: 'UTC',
   });
 
   // ─── Auth registry prune (persistent login) ───
   // Runs hourly at :50. Drops expired DPoP jtis and challenges.
-  cron.schedule('50 * * * *', wrapJob('authRegistryPrune', authRegistryPrune), {
+  scheduleCron('50 * * * *', wrapJob('authRegistryPrune', authRegistryPrune), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -421,7 +474,7 @@ function startJobs() {
   // Runs daily at 2:30 AM UTC.
   // Removes orphaned business accounts created by the old wizard flow
   // that were never completed (no locations, no catalog, low completeness).
-  cron.schedule('30 2 * * *', wrapJob('cleanupGhostBusinesses', cleanupGhostBusinesses), {
+  scheduleCron('30 2 * * *', wrapJob('cleanupGhostBusinesses', cleanupGhostBusinesses), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -429,7 +482,7 @@ function startJobs() {
   // ─── Expire Pop-Up Businesses ───
   // Runs hourly at :45.
   // Unpublishes pop_up_temporary businesses whose active_until has passed.
-  cron.schedule('45 * * * *', wrapJob('expirePopupBusinesses', expirePopupBusinesses), {
+  scheduleCron('45 * * * *', wrapJob('expirePopupBusinesses', expirePopupBusinesses), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -438,7 +491,7 @@ function startJobs() {
   // Runs daily at 10:00 AM UTC.
   // Sends in-app and email reminders for draft businesses < 7 days old.
   // Max 3 reminders per business.
-  cron.schedule('0 10 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
+  scheduleCron('0 10 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -447,7 +500,7 @@ function startJobs() {
   // Runs daily at 6:00 AM UTC.
   // Expires pending escrowed mail past its expiry date and
   // notifies senders that their letter wasn't picked up.
-  cron.schedule('0 6 * * *', wrapJob('mailEscrowExpiry', mailEscrowExpiry), {
+  scheduleCron('0 6 * * *', wrapJob('mailEscrowExpiry', mailEscrowExpiry), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -456,7 +509,7 @@ function startJobs() {
   // Runs every 6 hours at :05.
   // Pre-computes anonymous neighborhood bill averages from paid HomeBill
   // records. Groups by geohash-6, bill_type, month/year. Privacy: min 3 households.
-  cron.schedule('5 */6 * * *', wrapJob('billBenchmarkRefresh', billBenchmarkRefresh), {
+  scheduleCron('5 */6 * * *', wrapJob('billBenchmarkRefresh', billBenchmarkRefresh), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -466,7 +519,7 @@ function startJobs() {
   // Fetches OpenFEMA NFIP premium benchmarks for tracts the flood
   // composer marked pending (the API is too slow for the request path).
   // Up to 3 tracts per run; results cache 90 days.
-  cron.schedule('8,23,38,53 * * * *', wrapJob('nfipTractWarm', nfipTractWarm), {
+  scheduleCron('8,23,38,53 * * * *', wrapJob('nfipTractWarm', nfipTractWarm), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -475,7 +528,7 @@ function startJobs() {
   // Runs Fridays at 02:00 UTC — the PMMS survey publishes Thursdays,
   // so one weekly evaluation sees each fresh reading. Alerts are
   // idempotent via claim-before-send on the watch row.
-  cron.schedule('0 2 * * 5', wrapJob('rateWatchEvaluate', rateWatchEvaluate), {
+  scheduleCron('0 2 * * 5', wrapJob('rateWatchEvaluate', rateWatchEvaluate), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -484,7 +537,7 @@ function startJobs() {
   // Runs on the 1st of each month at 9:00 AM PT (17:00 UTC).
   // Computes personalized monthly summaries for active users,
   // stores receipts, sends notification + push + email.
-  cron.schedule('0 17 1 * *', wrapJob('monthlyReceiptJob', monthlyReceiptJob), {
+  scheduleCron('0 17 1 * *', wrapJob('monthlyReceiptJob', monthlyReceiptJob), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -493,7 +546,7 @@ function startJobs() {
   // Runs every 15 minutes at :02/:17/:32/:47.
   // Counts verified users per geohash-6 cell, upserts NeighborhoodPreview,
   // and sends milestone notifications (10/25/50/100/200/500).
-  cron.schedule('2,17,32,47 * * * *', wrapJob('neighborhoodPreviewRefresh', neighborhoodPreviewRefresh), {
+  scheduleCron('2,17,32,47 * * * *', wrapJob('neighborhoodPreviewRefresh', neighborhoodPreviewRefresh), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -501,7 +554,7 @@ function startJobs() {
   // ─── Payment Health Alerts ───
   // Runs every 15 minutes at :12/:27/:42/:57.
   // Checks for stuck payments and sends Slack/PagerDuty alerts.
-  cron.schedule('12,27,42,57 * * * *', wrapJob('checkAndAlertStuckPayments', checkAndAlertStuckPayments), {
+  scheduleCron('12,27,42,57 * * * *', wrapJob('checkAndAlertStuckPayments', checkAndAlertStuckPayments), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -509,7 +562,7 @@ function startJobs() {
   // ─── Expire Stale pending_payment Bids ───
   // Runs every 2 minutes.
   // Reverts bids stuck in pending_payment past their 10-minute expiry.
-  cron.schedule('*/2 * * * *', wrapJob('expirePendingPaymentBids', expirePendingPaymentBids), {
+  scheduleCron('*/2 * * * *', wrapJob('expirePendingPaymentBids', expirePendingPaymentBids), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -518,7 +571,7 @@ function startJobs() {
   // Runs every 5 minutes at :02/:07/:12/...
   // Sends automatic start-work reminders to workers approaching their
   // scheduled start time. Caps at 2 auto-reminders per assignment.
-  cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', wrapJob('autoRemindWorker', autoRemindWorker), {
+  scheduleCron('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', wrapJob('autoRemindWorker', autoRemindWorker), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -527,65 +580,22 @@ function startJobs() {
   // Runs every 30 minutes at :09/:39.
   // Sends 24h and day-of reminders to helpers, nudges organizers
   // about unfilled slots within the next 7 days.
-  cron.schedule('9,39 * * * *', wrapJob('supportTrainReminders', runSupportTrainReminders), {
+  scheduleCron('9,39 * * * *', wrapJob('supportTrainReminders', runSupportTrainReminders), {
     scheduled: true,
     timezone: 'UTC',
   });
 
   // Calendarly booking reminders — every 15 minutes at :03/:18/:33/:48 (T-24h + T-1h).
-  cron.schedule('3,18,33,48 * * * *', wrapJob('bookingReminders', runBookingReminders), {
+  scheduleCron('3,18,33,48 * * * *', wrapJob('bookingReminders', runBookingReminders), {
     scheduled: true,
     timezone: 'UTC',
   });
 
   logger.info('[CRON] Background jobs initialized', {
-    jobs: [
-      { name: 'authorizeUpcomingGigs', schedule: 'hourly at :05' },
-      { name: 'processPendingTransfers', schedule: 'hourly at :15' },
-      { name: 'retryCaptureFailures', schedule: 'every 15 minutes at :05/:20/:35/:50' },
-      { name: 'expireUncapturedAuthorizations', schedule: 'daily at 3:00 AM UTC' },
-      { name: 'autoArchivePosts', schedule: 'daily at 4:00 AM UTC' },
-      { name: 'mailDayNotification', schedule: 'every 15 minutes' },
-      { name: 'mailInterruptNotification', schedule: 'every 5 minutes' },
-      { name: 'mailPartyExpiry', schedule: 'every minute' },
-      { name: 'earnRiskReview', schedule: 'every 15 minutes' },
-      { name: 'vaultWeeklyDigest', schedule: 'Mondays at 9:00 AM UTC' },
-      { name: 'vacationHoldExpiry', schedule: 'hourly at :25' },
-      { name: 'stampAwarder', schedule: 'every 6 hours at :35' },
-      { name: 'communityModeration', schedule: 'every 30 minutes' },
-      { name: 'computeAvgResponseTime', schedule: 'daily at 5:00 AM UTC' },
-      { name: 'organicMatch', schedule: 'every 2 minutes' },
-      { name: 'trustAnomalyDetection', schedule: 'every 6 hours at :45' },
-      { name: 'recomputeUtilityScores', schedule: 'every 15 minutes at :10/:25/:40/:55' },
-      { name: 'expireListings', schedule: 'every 15 minutes at :03/:18/:33/:48' },
-      { name: 'expireOffers', schedule: 'every 15 minutes at :01/:16/:31/:46' },
-      { name: 'computeReputation', schedule: 'every 30 minutes at :07/:37' },
-      { name: 'refreshDiscoveryCache', schedule: 'every 2 minutes' },
-      { name: 'expireGigs', schedule: 'every 15 minutes at :08/:23/:38/:53' },
-      { name: 'processClaimWindows', schedule: 'every 10 minutes at :07/:17/:27/:37/:47/:57' },
-      { name: 'validateHomeCoordinates', schedule: 'every 30 minutes at :12/:42' },
-      { name: 'notifyClaimWindowExpiry', schedule: 'every 2 hours at :20' },
-      { name: 'expireInitiatedHomeClaims', schedule: 'hourly at :11' },
-      { name: 'expireAddressVerifications', schedule: 'hourly at :26' },
-      { name: 'purgeAddressVerificationEvents', schedule: 'daily at 03:41 UTC' },
-      { name: 'reconcileHomeHouseholdResolution', schedule: 'every 30 minutes at :14/:44' },
-      { name: 'chatRedactionJob', schedule: 'hourly at :30' },
-      { name: 'authRegistryPrune', schedule: 'hourly at :50' },
-      { name: 'cleanupGhostBusinesses', schedule: 'daily at 2:30 AM UTC' },
-      { name: 'expirePopupBusinesses', schedule: 'hourly at :45' },
-      { name: 'draftBusinessReminder', schedule: 'daily at 10:00 AM UTC' },
-      { name: 'mailEscrowExpiry', schedule: 'daily at 6:00 AM UTC' },
-      { name: 'billBenchmarkRefresh', schedule: 'every 6 hours at :05' },
-      { name: 'nfipTractWarm', schedule: 'every 15 minutes at :08/:23/:38/:53' },
-      { name: 'rateWatchEvaluate', schedule: 'Fridays at 02:00 UTC' },
-      { name: 'monthlyReceiptJob', schedule: '1st of month at 9:00 AM PT (17:00 UTC)' },
-      { name: 'neighborhoodPreviewRefresh', schedule: 'every 15 minutes at :02/:17/:32/:47' },
-      { name: 'checkAndAlertStuckPayments', schedule: 'every 15 minutes at :12/:27/:42/:57' },
-      { name: 'autoRemindWorker', schedule: 'every 5 minutes at :02/:07/:12/...' },
-      { name: 'expirePendingPaymentBids', schedule: 'every 2 minutes' },
-      { name: 'supportTrainReminders', schedule: 'every 30 minutes at :09/:39' },
-      { name: 'bookingReminders', schedule: 'every 15 minutes at :03/:18/:33/:48' },
-    ],
+    scheduled_count: scheduledJobs.length,
+    skipped_count: skippedJobs.length,
+    scheduled_jobs: scheduledJobs,
+    skipped_jobs: skippedJobs,
   });
 }
 

@@ -13,6 +13,8 @@ services:
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - PGBOSS_ENABLED=false
+      - CRON_ENABLED=false
     volumes:
       # Mount source code for hot reload
       - .:/app
@@ -24,6 +26,27 @@ services:
     networks:
       - pantopus-network
     command: npm run dev
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pantopus-worker
+    env_file:
+      - .env.dev
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - PGBOSS_ENABLED=true
+      - CRON_ENABLED=true
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - pantopus-network
+    command: npx nodemon worker.js
 
 networks:
   pantopus-network:

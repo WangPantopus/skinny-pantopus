@@ -9,7 +9,22 @@ services:
       - ./backend/.env.${APP_ENV:-dev}
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      PGBOSS_ENABLED: "false"
+      CRON_ENABLED: "false"
     restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      target: worker
+    env_file:
+      - ./backend/.env.${APP_ENV:-dev}
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PGBOSS_ENABLED: "true"
+      CRON_ENABLED: "true"
+    restart: unless-stopped
+    # No ports — worker doesn't serve HTTP
 
   web:
     build:

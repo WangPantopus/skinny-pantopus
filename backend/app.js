@@ -72,6 +72,8 @@ const chatSocketio = require('./socket/chatSocketio');
 
 // Import background jobs
 const { startJobs } = require('./jobs');
+const { initPgBoss, stopPgBoss } = require('./jobs/pgBossManager');
+const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 
 // Import logger
 const logger = require('./utils/logger');
@@ -93,6 +95,12 @@ function parseTrustProxy(value) {
   const parsed = Number.parseInt(normalized, 10);
   if (Number.isFinite(parsed)) return parsed;
   return value;
+}
+
+function envFlagEnabled(name, defaultValue = true) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === '') return defaultValue;
+  return !['false', '0', 'no', 'off'].includes(String(value).trim().toLowerCase());
 }
 
 const DEFAULT_DEV_ORIGINS = [
@@ -503,7 +511,7 @@ const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 = accept connections from
 // began serving requests, and only then process.exit(1)'d on missing keys.
 require('./config/addressVerification').validate();
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   logger.info(`🚀 Pantopus Backend Server started`, {
     host: HOST,
     port: PORT,
@@ -531,14 +539,40 @@ server.listen(PORT, HOST, () => {
   // requiring an environment change and a redeploy.
   require('./utils/addressRolloutFlags').startRolloutFlagRefresh();
 
-  // Start background jobs (cron-based)
-  startJobs();
+  // Start pg-boss queue workers (Tier 2 jobs)
+  // Set PGBOSS_ENABLED=false when running a separate worker container.
+  let pgBossBackedJobsStarted = false;
+  if (process.env.NODE_ENV !== 'test' && envFlagEnabled('PGBOSS_ENABLED', true)) {
+    try {
+      const boss = await initPgBoss();
+      if (boss) {
+        await registerPgBossJobs(boss);
+        pgBossBackedJobsStarted = true;
+      }
+    } catch (err) {
+      logger.error('[pg-boss] Failed to initialize:', { error: err.message, stack: err.stack });
+      // pg-boss failure should not prevent server from running —
+      // Tier 2 jobs fall back to node-cron (still registered below)
+    }
+  }
+
+  // Start cron-based jobs unless a deployment runs them in a separate worker.
+  if (envFlagEnabled('CRON_ENABLED', true)) {
+    startJobs({ skipPgBossBackedJobs: pgBossBackedJobsStarted });
+  } else {
+    logger.info('[CRON] Skipping job startup because CRON_ENABLED=false');
+  }
 });
 
 // ============ GRACEFUL SHUTDOWN ============
 
-const gracefulShutdown = (signal) => {
+const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received, starting graceful shutdown`);
+
+  // Stop pg-boss workers first (allows in-flight jobs to complete)
+  await stopPgBoss().catch((err) => {
+    logger.error('[pg-boss] Error during shutdown:', { error: err.message });
+  });
 
   server.close(() => {
     logger.info('HTTP server closed');
@@ -546,7 +580,7 @@ const gracefulShutdown = (signal) => {
     // Close Socket.io connections
     io.close(() => {
       logger.info('Socket.io connections closed');
-      
+
       // Exit process
       process.exit(0);
     });

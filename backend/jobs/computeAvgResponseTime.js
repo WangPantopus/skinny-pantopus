@@ -13,6 +13,12 @@
  *   - Requires response time > 0 minutes (sanity).
  *
  * Runs daily at 5:00 AM UTC.
+ *
+ * Bounded execution: each run processes at most BATCH_SIZE published profiles,
+ * least-recently-computed first (avg_response_calc_at ASC, NULLs first), then
+ * stamps avg_response_calc_at so subsequent runs rotate to the rest. This caps
+ * per-run work so the job can't exceed the Lambda HTTP timeout. With <= BATCH_SIZE
+ * published businesses every business is still refreshed on every run.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -22,13 +28,19 @@ const logger = require('../utils/logger');
 const LOOKBACK_DAYS = 90;
 // Max response time to count (7 days in minutes)
 const MAX_RESPONSE_MINUTES = 7 * 24 * 60;
+// Max published profiles processed per run (rotated by avg_response_calc_at).
+const BATCH_SIZE = 150;
+// Safety cap on messages fetched per business (guards hyper-active businesses).
+const MAX_MESSAGES_PER_BUSINESS = 10000;
 
 async function computeAvgResponseTime() {
   // 1. Get all published business user IDs
   const { data: profiles, error: profileErr } = await supabaseAdmin
     .from('BusinessProfile')
     .select('business_user_id')
-    .eq('is_published', true);
+    .eq('is_published', true)
+    .order('avg_response_calc_at', { ascending: true, nullsFirst: true })
+    .limit(BATCH_SIZE);
 
   if (profileErr) {
     logger.error('[computeAvgResponseTime] Error fetching profiles', { error: profileErr.message });
@@ -40,10 +52,12 @@ async function computeAvgResponseTime() {
   }
 
   const cutoffDate = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const processedIds = [];
   let updatedCount = 0;
   let skippedCount = 0;
 
   for (const { business_user_id: bizId } of profiles) {
+    processedIds.push(bizId);
     try {
       // 2. Get rooms this business participates in
       const { data: participations } = await supabaseAdmin
@@ -85,7 +99,8 @@ async function computeAvgResponseTime() {
         .select('room_id, user_id, created_at')
         .in('room_id', recentRoomIds)
         .eq('deleted', false)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .limit(MAX_MESSAGES_PER_BUSINESS);
 
       if (!messages?.length) {
         skippedCount++;
@@ -155,8 +170,21 @@ async function computeAvgResponseTime() {
     }
   }
 
+  // Stamp calc time for every processed business so the next run rotates to the
+  // least-recently-computed profiles (fair rotation, no starvation).
+  if (processedIds.length > 0) {
+    const { error: touchErr } = await supabaseAdmin
+      .from('BusinessProfile')
+      .update({ avg_response_calc_at: new Date().toISOString() })
+      .in('business_user_id', processedIds);
+    if (touchErr) {
+      logger.error('[computeAvgResponseTime] Failed to stamp avg_response_calc_at', { error: touchErr.message });
+    }
+  }
+
   logger.info('[computeAvgResponseTime] Completed', {
-    totalBusinesses: profiles.length,
+    processedBusinesses: profiles.length,
+    batchSize: BATCH_SIZE,
     updatedCount,
     skippedCount,
   });

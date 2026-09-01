@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 
 # --- Production dependencies only ---
@@ -28,3 +28,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 CMD ["node", "app.js"]
+
+# --- Worker (pg-boss + Tier 3 cron, no HTTP) ---
+FROM base AS worker
+ENV NODE_ENV=production
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY . .
+CMD ["node", "worker.js"]
