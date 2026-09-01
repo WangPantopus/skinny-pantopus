@@ -25,10 +25,14 @@ fi
 
 # 5. Apply with a three-way merge; conflicts get markers instead of failing
 git apply --3way "$OUT" || true
-CONFLICTS=$(git diff --name-only --diff-filter=U)
+# git's U-status misses files whose hunks fell back to direct application,
+# so look for the markers themselves.
+CONFLICTS=$(grep -rl '^<<<<<<< ' --include='*.js' --include='*.ts' --include='*.tsx' --include='*.swift' \
+  --include='*.kt' --include='*.json' --include='*.sql' --include='*.yml' --include='*.md' \
+  backend frontend pantopus-seeder supabase tools docs 2>/dev/null || true)
 if [ -n "$CONFLICTS" ]; then
   echo "Resolve conflict markers in:"; echo "$CONFLICTS"
+  echo "Then: re-run this grep until it is empty, run the tests, commit, push."
 else
-  echo "Applied cleanly."
+  echo "Applied cleanly. Run the tests, then commit and push."
 fi
-
