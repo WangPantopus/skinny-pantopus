@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.services.AdminApi
 import app.pantopus.android.data.api.services.AudienceProfileApi
 import app.pantopus.android.data.api.services.AuthApi
 import app.pantopus.android.data.api.services.BeaconProfileApi
+import app.pantopus.android.data.api.services.BlockFoundersApi
 import app.pantopus.android.data.api.services.BlocksApi
 import app.pantopus.android.data.api.services.BroadcastReadApi
 import app.pantopus.android.data.api.services.BusinessCatalogApi
@@ -30,6 +31,7 @@ import app.pantopus.android.data.api.services.EarnOffersApi
 import app.pantopus.android.data.api.services.FeedActionsApi
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.FollowingApi
+import app.pantopus.android.data.api.services.FridgeCardsApi
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.api.services.GigReassignmentApi
 import app.pantopus.android.data.api.services.GigSavedSearchesApi
@@ -59,6 +61,7 @@ import app.pantopus.android.data.api.services.ListingsReadApi
 import app.pantopus.android.data.api.services.MailComposeApi
 import app.pantopus.android.data.api.services.MailDayApi
 import app.pantopus.android.data.api.services.MailboxApi
+import app.pantopus.android.data.api.services.MailboxCheckApi
 import app.pantopus.android.data.api.services.MailboxCommunityApi
 import app.pantopus.android.data.api.services.MailboxDocumentApi
 import app.pantopus.android.data.api.services.MailboxKeepsakeApi
@@ -86,7 +89,10 @@ import app.pantopus.android.data.api.services.PrivacyApi
 import app.pantopus.android.data.api.services.PrivacyHandshakeApi
 import app.pantopus.android.data.api.services.ProfessionalApi
 import app.pantopus.android.data.api.services.ProfileInsightsApi
+import app.pantopus.android.data.api.services.RealRentApi
+import app.pantopus.android.data.api.services.RecordWatchApi
 import app.pantopus.android.data.api.services.RelationshipsApi
+import app.pantopus.android.data.api.services.ResidencyClaimsApi
 import app.pantopus.android.data.api.services.ResidencyLettersApi
 import app.pantopus.android.data.api.services.ReviewsApi
 import app.pantopus.android.data.api.services.SavedPlacesApi
@@ -99,6 +105,7 @@ import app.pantopus.android.data.api.services.TenantApi
 import app.pantopus.android.data.api.services.TokenAcceptApi
 import app.pantopus.android.data.api.services.TransactionReviewsApi
 import app.pantopus.android.data.api.services.UniversalSearchApi
+import app.pantopus.android.data.api.services.UnlistedApi
 import app.pantopus.android.data.api.services.UploadApi
 import app.pantopus.android.data.api.services.UserReportsApi
 import app.pantopus.android.data.api.services.UserSocialApi
@@ -584,6 +591,34 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideResidencyLettersApi(retrofit: Retrofit): ResidencyLettersApi = retrofit.create(ResidencyLettersApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideMailboxCheckApi(retrofit: Retrofit): MailboxCheckApi = retrofit.create(MailboxCheckApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideFridgeCardsApi(retrofit: Retrofit): FridgeCardsApi = retrofit.create(FridgeCardsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRecordWatchApi(retrofit: Retrofit): RecordWatchApi = retrofit.create(RecordWatchApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRealRentApi(retrofit: Retrofit): RealRentApi = retrofit.create(RealRentApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBlockFoundersApi(retrofit: Retrofit): BlockFoundersApi = retrofit.create(BlockFoundersApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideUnlistedApi(retrofit: Retrofit): UnlistedApi = retrofit.create(UnlistedApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideResidencyClaimsApi(retrofit: Retrofit): ResidencyClaimsApi = retrofit.create(ResidencyClaimsApi::class.java)
 
     @Provides
     @Singleton

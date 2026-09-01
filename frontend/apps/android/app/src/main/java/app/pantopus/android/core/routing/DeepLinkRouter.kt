@@ -42,6 +42,14 @@ object DeepLinkRouter {
         Content,
     }
 
+    /**
+     * The group-detail slugs the Place stack understands (mirrors
+     * `PlaceDetailGroup.slug`). Kept here so link parsing never depends on
+     * UI code; an unrecognised slug degrades to the dashboard.
+     */
+    private val PLACE_DETAIL_SLUGS =
+        setOf("today", "your-home", "risk", "block", "money", "civic", "identity")
+
     sealed interface Destination {
         data object Feed : Destination
 
@@ -133,6 +141,27 @@ object DeepLinkRouter {
          * can render the recipient.
          */
         data class VerifyEmail(val token: String, val email: String?) : Destination
+
+        /**
+         * `pantopus://place` — the address dashboard, and the destination
+         * every Place-derived push should carry.
+         *
+         * Both clients auto-land the Home tab on Place, but until now
+         * there was no way to *return* to it: once the user swiped back,
+         * Place was unreachable until the app relaunched, and every
+         * briefing/alert push routed to `/hub` — the secondary surface.
+         *
+         * [homeId] is optional. Server-sent links always carry it (the
+         * briefing already resolves the home to pick a location), so the
+         * common path navigates straight to the dashboard. A bare link
+         * falls back to the Home tab, whose existing landing resolver
+         * picks the user's primary home.
+         *
+         * [slug] opens a group-detail page directly — one of `today`,
+         * `your-home`, `risk`, `block`, `money`, `civic`, `identity`.
+         * An unknown slug degrades to the dashboard rather than a dead end.
+         */
+        data class Place(val homeId: String? = null, val slug: String? = null) : Destination
 
         /**
          * `pantopus://mailbox/mailday` — the A13.16 My Mail Day editor.
@@ -549,6 +578,21 @@ object DeepLinkRouter {
             "invite" -> {
                 val token = segments.getOrNull(1)
                 if (token.isNullOrBlank()) Destination.Unknown(raw) else Destination.Invite(token)
+            }
+            "place" -> {
+                // `pantopus://place`                      → dashboard (home resolved client-side)
+                // `pantopus://place?id=<homeId>`          → that home's dashboard
+                // `pantopus://place/<homeId>`             → same
+                // `pantopus://place/<homeId>/<slug>`      → a group-detail page
+                // `pantopus://place?id=<homeId>&section=<slug>`
+                val homeId = segments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: idQuery
+                val slug =
+                    segments.getOrNull(2)?.takeIf { it.isNotBlank() }
+                        ?: Paths.queryParam(queryPart, "section")
+                Destination.Place(
+                    homeId = homeId?.takeIf { it.isNotBlank() },
+                    slug = slug?.takeIf { it.isNotBlank() && PLACE_DETAIL_SLUGS.contains(it) },
+                )
             }
             "mailbox" -> {
                 // `pantopus://mailbox/vacation` opens A14.8;

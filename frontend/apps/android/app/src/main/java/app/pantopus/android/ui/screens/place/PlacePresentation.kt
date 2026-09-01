@@ -3,11 +3,14 @@ package app.pantopus.android.ui.screens.place
 import androidx.compose.ui.graphics.Color
 import app.pantopus.android.data.api.models.place.AirQualityCategory
 import app.pantopus.android.data.api.models.place.BenchmarkComparison
+import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
 import app.pantopus.android.data.api.models.place.FloodRiskLevel
+import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
+import app.pantopus.android.data.api.models.place.RealRentState
 import app.pantopus.android.data.api.models.place.SeismicDesignCategory
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
@@ -95,6 +98,24 @@ object PlacePresentation {
     }
 
     /**
+     * "Mar 2023" from a bare calendar month ("2023-03"). NEVER routed
+     * through an instant: midnight-UTC-on-the-1st formatted in a
+     * US-local zone is the previous day — every US timezone rendered
+     * the user's one entered fact as the WRONG month.
+     */
+    fun fmtYearMonth(yearMonth: String?): String? {
+        val raw = yearMonth?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        return try {
+            java.time.YearMonth
+                .parse(raw)
+                .format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.US))
+        } catch (_: java.time.format.DateTimeParseException) {
+            null
+        }
+    }
+
+    /**
      * "6:42a" — the compact sun clock. Sunrise/sunset arrive as LOCAL
      * wall-clock with no zone or seconds ("2026-06-12T05:19"), so parse
      * them as a LocalDateTime and read the hour/minute directly (no zone
@@ -144,8 +165,13 @@ object PlacePresentation {
             PlaceSectionId.ALERTS -> PlaceSectionDisplayConfig(PantopusIcon.Bell, "Alerts", inline = true)
             PlaceSectionId.SUNRISE_SUNSET ->
                 PlaceSectionDisplayConfig(PantopusIcon.Sunrise, "Sunrise & sunset", inline = true)
+            PlaceSectionId.GOOD_DAY_TO ->
+                PlaceSectionDisplayConfig(PantopusIcon.ListChecks, "Good day to\u2026", inline = true)
             PlaceSectionId.YOUR_HOME -> PlaceSectionDisplayConfig(PantopusIcon.Home, "Your home", sparkline = true)
+            PlaceSectionId.HOME_SYSTEMS -> PlaceSectionDisplayConfig(PantopusIcon.Wrench, "Systems", inline = true)
             PlaceSectionId.FLOOD -> PlaceSectionDisplayConfig(PantopusIcon.Waves, "Flood", inline = true)
+            PlaceSectionId.HEAT_COLD ->
+                PlaceSectionDisplayConfig(PantopusIcon.Sun, "Heat & cold", inline = true)
             PlaceSectionId.SEISMIC -> PlaceSectionDisplayConfig(PantopusIcon.Activity, "Earthquake", inline = true)
             PlaceSectionId.WILDFIRE -> PlaceSectionDisplayConfig(PantopusIcon.Flame, "Wildfire", inline = true)
             PlaceSectionId.LEAD_RADON -> PlaceSectionDisplayConfig(PantopusIcon.TestTube, "Lead & radon")
@@ -156,6 +182,8 @@ object PlacePresentation {
             PlaceSectionId.BILL_BENCHMARK -> PlaceSectionDisplayConfig(PantopusIcon.Zap, "Bill benchmark")
             PlaceSectionId.INCENTIVES -> PlaceSectionDisplayConfig(PantopusIcon.BadgePercent, "Incentives")
             PlaceSectionId.RENT_BAND -> PlaceSectionDisplayConfig(PantopusIcon.Building2, "Rent band")
+            PlaceSectionId.REAL_RENT -> PlaceSectionDisplayConfig(PantopusIcon.Users, "Real rent on your block")
+            PlaceSectionId.EXEMPTION_CHECK -> PlaceSectionDisplayConfig(PantopusIcon.Landmark, "Homestead exemption")
             PlaceSectionId.CIVIC_DISTRICTS -> PlaceSectionDisplayConfig(PantopusIcon.Landmark, "Your districts")
             PlaceSectionId.CIVIC_ELECTION ->
                 PlaceSectionDisplayConfig(PantopusIcon.Vote, "Next election", inline = true)
@@ -196,6 +224,53 @@ object PlacePresentation {
             PlaceSectionId.SUNRISE_SUNSET -> {
                 val d = env.sunriseSunset ?: return PlaceSectionReading()
                 PlaceSectionReading(value = "${fmtSunClock(d.sunrise)} · ${fmtSunClock(d.sunset)}")
+            }
+            PlaceSectionId.GOOD_DAY_TO -> {
+                val d = env.goodDayTo ?: return PlaceSectionReading()
+                // Lead with what the row says yes to; a row of no's still
+                // reads usefully rather than rendering blank.
+                val yes = d.tiles.filter { it.verdict == GoodDayVerdict.YES }
+                if (yes.isEmpty()) {
+                    PlaceSectionReading(value = "Nothing outdoors today", statusDot = PantopusColors.warning)
+                } else {
+                    PlaceSectionReading(
+                        value = yes.take(2).joinToString(", ") { it.label.lowercase() },
+                        statusDot = PantopusColors.home,
+                    )
+                }
+            }
+            PlaceSectionId.HOME_SYSTEMS -> {
+                val d = env.homeSystems ?: return PlaceSectionReading()
+                when {
+                    d.summary.pastExpectedCount > 0 ->
+                        PlaceSectionReading(
+                            value = "${d.summary.pastExpectedCount} past expected life",
+                            statusDot = PantopusColors.error,
+                        )
+                    d.summary.agingCount > 0 ->
+                        PlaceSectionReading(
+                            value = "${d.summary.agingCount} aging",
+                            statusDot = PantopusColors.warning,
+                        )
+                    else ->
+                        PlaceSectionReading(
+                            value = "All within expected life",
+                            statusDot = PantopusColors.home,
+                        )
+                }
+            }
+            PlaceSectionId.HEAT_COLD -> {
+                val d = env.heatCold ?: return PlaceSectionReading()
+                when (d.mode) {
+                    "cold" -> PlaceSectionReading(value = "Freeze expected", statusDot = PantopusColors.error)
+                    "heat" ->
+                        PlaceSectionReading(
+                            value = "${d.heatDays.firstOrNull { it.level == d.peakLevel }?.label ?: "Elevated"} heat risk",
+                            statusDot = if ((d.peakLevel ?: 0) >= 3) PantopusColors.error else PantopusColors.warning,
+                        )
+                    // `none` is the honest common case, not a missing reading.
+                    else -> PlaceSectionReading(value = "Nothing expected", statusDot = PantopusColors.home)
+                }
             }
             PlaceSectionId.YOUR_HOME -> {
                 val d = env.yourHome ?: return PlaceSectionReading()
@@ -275,6 +350,35 @@ object PlacePresentation {
                 val lo = money(d.bandLow) ?: ""
                 val hi = money(d.bandHigh) ?: ""
                 PlaceSectionReading(value = "${d.bedrooms}BR market band $lo–$hi")
+            }
+            PlaceSectionId.REAL_RENT -> {
+                val d = env.realRent ?: return PlaceSectionReading()
+                // `building` is a real reading — the block's own progress
+                // toward its benchmark — not an empty card. The server
+                // always composes the sentence, so both states read.
+                val chip =
+                    if (d.state == RealRentState.BUILDING) {
+                        PlaceChipModel(PlaceChipTone.SKY, "${d.reports} of ${d.needed}")
+                    } else {
+                        null
+                    }
+                PlaceSectionReading(value = d.summary, chip = chip)
+            }
+            PlaceSectionId.EXEMPTION_CHECK -> {
+                val d = env.exemptionCheck ?: return PlaceSectionReading()
+                when (d.filingStatus) {
+                    ExemptionFilingStatus.ON_FILE ->
+                        PlaceSectionReading(
+                            value = "Exemption on file",
+                            chip = PlaceChipModel(PlaceChipTone.SUCCESS, "On file", PantopusIcon.BadgeCheck),
+                        )
+                    ExemptionFilingStatus.NONE_ON_FILE ->
+                        PlaceSectionReading(
+                            value = "Nothing on file — worth checking",
+                            chip = PlaceChipModel(PlaceChipTone.WARNING, "Not filed", PantopusIcon.AlertCircle),
+                        )
+                    ExemptionFilingStatus.UNKNOWN -> PlaceSectionReading(value = "Not reported by this county")
+                }
             }
             PlaceSectionId.CIVIC_DISTRICTS -> {
                 val d = env.civicDistricts ?: return PlaceSectionReading()

@@ -214,6 +214,60 @@ class LobMailProvider {
   }
 
   /**
+   * Send an arbitrary-content postcard (Wave 3 — Block Founders
+   * invites). Same transport as verification postcards; the caller
+   * owns the HTML. Content policy (template-only, sender anonymity,
+   * caps, opt-out) is enforced by the calling service, not here.
+   *
+   * @param {object} address - NormalizedAddress { line1, line2?, city, state, zip }
+   * @param {object} card    - { description, frontHtml, backHtml, toName? }
+   * @returns {Promise<{vendorJobId: string, status: string}>}
+   */
+  async sendCustomPostcard(address, card) {
+    if (!this.isAvailable()) {
+      throw new Error('Lob API key not configured');
+    }
+    const body = {
+      description: card.description || 'Pantopus postcard',
+      to: {
+        name: card.toName || 'Current Resident',
+        address_line1: address.line1,
+        ...(address.line2 && { address_line2: address.line2 }),
+        address_city: address.city,
+        address_state: address.state,
+        address_zip: address.zip,
+      },
+      from: getReturnAddress(),
+      size: POSTCARD_SIZE,
+      front: card.frontHtml,
+      back: card.backHtml,
+    };
+    const res = await fetch(`${LOB_API_URL}/postcards`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader(this.apiKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      logger.error('LobMailProvider.sendCustomPostcard: API error', { status: res.status, body: text });
+      throw new Error(`Lob API error: ${res.status}`);
+    }
+    const data = await res.json();
+    logger.info('LobMailProvider.sendCustomPostcard: created', {
+      postcardId: data.id,
+      description: card.description,
+    });
+    return {
+      vendorJobId: data.id,
+      status: data.object === 'postcard' ? 'created' : data.status || 'created',
+    };
+  }
+
+  /**
    * Get the status of a previously-sent postcard.
    *
    * @param {string} vendorJobId - Lob postcard ID (psc_xxx)

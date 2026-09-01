@@ -30,6 +30,8 @@ const { encodeGeohash } = require('../utils/geohash');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { readThrough } = require('./placeSectionCache');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
+const { fetchHeatRisk } = require('./external/heatRisk');
+const { buildHeatColdOutlook } = require('./heatColdEngine');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -53,6 +55,19 @@ async function fetchJson(url, { headers } = {}) {
   }
 }
 
+// ── County FIPS for a point (geocoder, cached ~permanently) ──
+//
+// Keyed on LOCATION, never on the home row. County assignment is a fact
+// about coordinates, so a home-scoped key was both redundant and unsafe:
+// Scout composes against a synthetic home with `id: null`, and
+// `home:${home.id}` stringified that to the literal "home:null" — one
+// global cache row, TTL a year, shared by every Scout request in the
+// deployment. The first address anyone scouted pinned its county, and
+// every later report priced rent, radon and drinking water for that
+// stranger's county instead. A geohash-5 cell is ~5 km, far finer than
+// any county, so this is also a better key for real homes.
+// (This tree keys at geohash-7, ~150 m, and single-flights concurrent
+// callers — radon, rent band, water — so one geocoder call serves them.)
 // ── County FIPS for a point (geocoder, cached ~1 yr per geohash-7) ──
 // Single-flight: several composers (radon, rent band, water) ask for the
 // county of the same point at the same moment; one geocoder call serves
@@ -60,6 +75,14 @@ async function fetchJson(url, { headers } = {}) {
 const countyInFlight = new Map();
 
 async function homeCountyFips(home) {
+  // A caller that already resolved the tract (the anonymous preview shares
+  // ONE resolution across the census teaser, the money lead and these
+  // adapters) passes the county straight through — no second geocoder hit.
+  // '' means "the shared resolution already ran and could not place the
+  // point": honour that rather than hitting a failing geocoder again.
+  if (home && typeof home.county_fips === 'string') {
+    return /^\d{5}$/.test(home.county_fips) ? home.county_fips : null;
+  }
   const ll = homeLatLng(home);
   if (!ll) return null;
   const pointKey = `geo:${encodeGeohash(ll.lat, ll.lng, 7)}`;
@@ -142,6 +165,80 @@ async function composeSunriseSunset(home) {
   } catch (err) {
     logger.warn('placeSections: sunrise failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('sunrise_sunset', { status: 'error' })];
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// heat_cold — NWS HeatRisk (CONUS) + the freeze line
+// ════════════════════════════════════════════════════════════
+// The national replacement for seasonalEngine's two-city gate. Heat comes
+// from the NWS HeatRisk ImageServer; cold is derived from the temperature
+// forecast the caller already fetched for `weather`, so the freeze half
+// costs no extra provider call.
+//
+// HeatRisk is published once daily, so a 6 h budget at geohash-5 (~5 km,
+// twice the raster's 2.5 km cell) keeps the day fresh while collapsing a
+// whole neighbourhood onto one fetch.
+async function composeHeatCold(home, weather) {
+  const ll = homeLatLng(home);
+  if (!ll) return [serializePlaceSection('heat_cold', { status: 'unavailable' })];
+
+  try {
+    const gh5 = encodeGeohash(ll.lat, ll.lng, 5);
+    const { payload, fetchedAt, stale } = await readThrough({
+      cacheKey: `geo:${gh5}`,
+      sectionId: 'heat_cold',
+      ttlMs: 6 * 60 * 60 * 1000,
+      fetch: async () => {
+        const result = await fetchHeatRisk(ll.lat, ll.lng);
+        // A genuine out-of-CONUS gap ({days:[], covered:false}) IS cached —
+        // re-asking NWS about Honolulu every request buys nothing.
+        //
+        // A FAILURE (null) must not be. Coalescing the two used to pin
+        // "NWS HeatRisk covers the contiguous US" onto a Phoenix home for
+        // six hours during an NWS outage — a false statement about the
+        // place, cached across the whole geohash-5 cell. Returning null
+        // lets placeSectionCache decline to cache it and lets the section
+        // report an error instead of a calm reading.
+        return result;
+      },
+    });
+
+    // Null payload = the NWS fetch failed (see above). The freeze half still
+    // works off the temperature forecast, so the section degrades to
+    // `partial` with an honest reason rather than claiming a coverage gap.
+    const heatFetchFailed = payload == null;
+
+    const outlook = buildHeatColdOutlook({
+      heatRisk: heatFetchFailed ? null : payload,
+      weather,
+      home,
+      timezone: (weather && weather.timezone) || null,
+    });
+
+    if (!outlook) {
+      return [serializePlaceSection('heat_cold', {
+        status: 'unavailable',
+        unavailableReason: 'No temperature forecast for this area yet.',
+      })];
+    }
+
+    return [serializePlaceSection('heat_cold', {
+      asOf: fetchedAt,
+      status: stale ? 'stale' : 'ready',
+      // Outside CONUS the heat half has no data; the freeze half still works,
+      // so the section is genuinely partial rather than unavailable.
+      coverage: outlook.heat_covered ? 'full' : 'partial',
+      unavailableReason: outlook.heat_covered
+        ? null
+        : (heatFetchFailed
+          ? 'Heat risk is temporarily unavailable; the freeze forecast still applies.'
+          : 'NWS HeatRisk covers the contiguous US; the freeze forecast still applies here.'),
+      data: outlook,
+    })];
+  } catch (err) {
+    logger.warn('placeSections: heat_cold failed', { homeId: home.id, error: err.message });
+    return [serializePlaceSection('heat_cold', { status: 'error' })];
   }
 }
 
@@ -239,12 +336,19 @@ async function composeRentBand(home) {
       : 2;
     const fmrLo = row.fmr_lo[bedrooms];
     const fmrHi = row.fmr_hi[bedrooms];
-    // HUD FMRs are 40th-percentile point estimates; where HUD prices a
-    // county at one number (lo = hi) the band extends 20% above it to
-    // show a typical asking-rent spread — the summary says exactly that.
+    // HUD FMRs are 40th-percentile point estimates. Where HUD publishes a
+    // genuine range (a handful of New England counties) it is used
+    // verbatim — a Math.max against lo × 1.2 silently discarded HUD's own
+    // upper figure in favour of a larger invented one. Only where HUD
+    // prices the county at a single number does the band extend 20%
+    // above it, and then the summary says so out loud.
+    const hudPublishedRange = fmrHi > fmrLo;
     const bandLow = fmrLo;
-    const bandHigh = Math.max(fmrHi, Math.round(fmrLo * 1.2));
+    const bandHigh = hudPublishedRange ? fmrHi : Math.round(fmrLo * 1.2);
     const bedroomsLabel = bedrooms === 0 ? 'studio' : `${bedrooms}-bedroom`;
+    const bandNote = hudPublishedRange
+      ? `–$${fmrHi.toLocaleString('en-US')}/mo.`
+      : '/mo; the band runs to about 20% above it.';
 
     return [serializePlaceSection('rent_band', {
       status: 'ready',
@@ -254,9 +358,9 @@ async function composeRentBand(home) {
         band_high: bandHigh,
         // Full comparison track: efficiency floor to 20% over the 4BR top.
         market_low: Math.min(row.fmr_lo[0], bandLow),
-        market_high: Math.max(Math.round(row.fmr_hi[4] * 1.2), bandHigh),
+        market_high: Math.max(row.fmr_hi[4] > row.fmr_lo[4] ? row.fmr_hi[4] : Math.round(row.fmr_hi[4] * 1.2), bandHigh),
         period: `FY ${row.fiscal_year}`,
-        summary: `HUD's FY ${row.fiscal_year} fair market rent for a ${bedroomsLabel} in ${row.county_name} is $${fmrLo.toLocaleString('en-US')}/mo; the band runs to about 20% above it.`,
+        summary: `HUD's FY ${row.fiscal_year} fair market rent for a ${bedroomsLabel} in ${row.county_name} is $${fmrLo.toLocaleString('en-US')}${bandNote}`,
       },
     })];
   } catch (err) {
@@ -894,6 +998,7 @@ async function composeWildfire(home) {
 
 module.exports = {
   composeSunriseSunset,
+  composeHeatCold,
   composeLeadRadon,
   composeRentBand,
   composeDrinkingWater,
@@ -902,6 +1007,9 @@ module.exports = {
   composeCivicElection,
   composeSeismic,
   composeWildfire,
+  // The anonymous preview leads with a dollar figure and needs the raw
+  // HUD row for a county it has geocoded, without a Home row.
+  hudFmrRow,
   // Exported for testing.
   parseCsv,
   districtEq,

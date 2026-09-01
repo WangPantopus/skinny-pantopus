@@ -74,9 +74,9 @@ private fun GroupContent(
     when (group) {
         PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel)
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
-        PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel)
-        PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel)
-        PlaceDetailGroup.MONEY -> PlaceMoneyDetailContent(intel)
+        PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
+        PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)
+        PlaceDetailGroup.MONEY -> PlaceMoneyDetailContent(intel, viewModel)
         PlaceDetailGroup.CIVIC -> PlaceCivicDetailContent(intel)
         PlaceDetailGroup.IDENTITY -> PlaceIdentityDetailContent(intel, viewModel)
     }
@@ -94,9 +94,19 @@ private fun PlaceDetailSkeleton() {
     }
 }
 
-/** Fallback card for a section with no bespoke layout. */
+/**
+ * Fallback card for a section with no bespoke layout.
+ *
+ * [onRetry] is what makes the ERROR state's "Try again" a button rather
+ * than a label: [PlaceSectionCard] always draws it, and a caller that
+ * passes nothing ships a tap that does nothing. Pass `viewModel::refresh`
+ * wherever a re-read is the actual remedy.
+ */
 @Composable
-fun PlaceDetailFallbackCard(env: PlaceSectionEnvelope) {
+fun PlaceDetailFallbackCard(
+    env: PlaceSectionEnvelope,
+    onRetry: (() -> Unit)? = null,
+) {
     val cfg = PlacePresentation.config(env.sectionId)
     val cardState = PlacePresentation.cardState(env)
     val isLive = cardState == PlaceSectionCardState.LOADED || cardState == PlaceSectionCardState.STALE
@@ -111,6 +121,7 @@ fun PlaceDetailFallbackCard(env: PlaceSectionEnvelope) {
         chip = reading.chip,
         statusDot = reading.statusDot,
         inline = false,
+        onRetry = onRetry,
     )
 }
 

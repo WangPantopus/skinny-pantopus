@@ -217,12 +217,37 @@ app.use(cookieParser());
 // NOTE: CSRF protection is applied per-route AFTER verifyToken (which
 // sets req._authMethod). See verifyToken.js for the combined middleware.
 
-// Request logging middleware
+// Request logging middleware.
+//
+// Public bearer-code URLs are redacted before logging: a fridge card,
+// (case-INSENSITIVE, because Express routing is — /API/Public/... reaches
+// the same handler and must not log the code either.)
+// residency claim/letter, or invite opt-out code IS the credential, and
+// writing it next to an IP + user agent would turn the log stream into
+// a directory of live codes.
+const BEARER_CODE_PATH = /^(\/api\/public\/(?:fridge-cards|residency-claims|residency-letters|block-invites\/opt-out))\/[^/]+/i;
+
+// Paths where the REQUEST ITSELF is the sensitive fact, so no caller
+// identifiers are recorded alongside it.
+//
+// Unlisted is "get my address off the internet". Its readers are
+// disproportionately hiding from a specific person, the feature promises
+// in writing that we do not record that they looked, and the route
+// deliberately persists nothing and sends nothing to a third party — all
+// of which an IP + user-agent + timestamp row quietly undoes. The typed
+// address was never logged (it is a query param; `req.path` excludes the
+// query string), but "this IP opened the page for people hiding their
+// address" is itself the disclosure worth avoiding.
+//
+// The path is still logged, so volume, latency and errors stay visible,
+// and abuse control is unaffected — the mount-level previewLimiter rate
+// limits per IP without reading this log.
+const NO_CALLER_ID_PATH = /^\/api\/public\/unlisted$/i;
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.get('user-agent')
-  });
+  const path = req.path.replace(BEARER_CODE_PATH, '$1/:code');
+  logger.info(`${req.method} ${path}`, NO_CALLER_ID_PATH.test(req.path)
+    ? {}
+    : { ip: req.ip, userAgent: req.get('user-agent') });
   next();
 });
 
@@ -332,6 +357,14 @@ app.use('/api/homes', require('./routes/homePrivacy'));   // Per-home privacy/se
 app.use('/api/homes', require('./routes/placeIntelligence')); // Place dashboard contract (/:id/intelligence)
 app.use('/api/homes', require('./routes/residencyLetters')); // Server-attested residency letters (/:id/residency-letters)
 app.use('/api/admin/address-review', require('./routes/adminAddressReview')); // SCN-11: manual_review queue
+app.use('/api/homes', require('./routes/residencyClaims')); // Scoped live residency claims (/:id/residency-claims)
+app.use('/api/homes', require('./routes/fridgeCards'));   // 911-ready household cards (/:id/fridge-cards)
+app.use('/api/homes', require('./routes/mailboxCheck'));  // Mailbox reality check (/:id/mailbox-check)
+app.use('/api/homes', require('./routes/homeRecordWatch')); // Rate watch (/:id/record-watch)
+app.use('/api/homes', require('./routes/blockFounders')); // Founding ranks + postcard invites (/:id/block-founders)
+app.use('/api/homes', require('./routes/realRent')); // Real Rent Benchmark contribution (/:id/rent-report)
+app.use('/api/homes', require('./routes/unlisted')); // Unlisted removal tracking (/:id/unlisted)
+app.use('/api/scout', require('./routes/scout')); // Before-You-Sign Scout (T1, no home)
 app.use('/api/homes/:homeId/scheduling', require('./routes/scheduling')); // Calendarly home-scoped (before catch-all /:id)
 app.use('/api/homes', homeRoutes);
 app.use('/api/posts', postRoutes);

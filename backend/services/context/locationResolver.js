@@ -341,4 +341,21 @@ async function resolveLocation(userId) {
   }
 }
 
-module.exports = { resolveLocation };
+/**
+ * A location anchor for EXPLICIT coordinates — the Place Intelligence
+ * path, where the payload must be about the requested home, not about
+ * wherever the viewer happens to be. Bypasses the per-user preference
+ * hierarchy entirely; timezone and geohash are derived from the coords.
+ *
+ * @returns the standard location shape, or null for missing/invalid coords.
+ */
+function locationFromCoordinates({ latitude, longitude, label, homeId } = {}) {
+  if (latitude == null || longitude == null) return null;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null; // Null Island, never a real home
+  return makeResult(lat, lng, label || 'Home', 'home', homeId || null);
+}
+
+module.exports = { resolveLocation, locationFromCoordinates };

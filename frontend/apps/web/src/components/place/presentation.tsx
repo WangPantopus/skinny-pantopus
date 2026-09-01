@@ -14,6 +14,9 @@ import {
   Wind,
   Bell,
   Sunrise,
+  ListChecks,
+  Thermometer,
+  Wrench,
   Waves,
   Activity,
   Flame,
@@ -49,6 +52,9 @@ import type {
   PlaceWeatherData,
   PlaceAlertsData,
   PlaceSunriseSunsetData,
+  PlaceGoodDayData,
+  PlaceHeatColdData,
+  PlaceHomeSystemsData,
   PlaceFloodData,
   FloodRiskLevel,
   PlaceSeismicData,
@@ -60,6 +66,8 @@ import type {
   PlaceBillBenchmarkData,
   PlaceIncentivesData,
   PlaceRentBandData,
+  PlaceRealRentData,
+  PlaceExemptionCheckData,
   PlaceCivicDistrictsData,
   PlaceCivicElectionData,
   PlaceYourHomeData,
@@ -182,6 +190,23 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       return { value: `${fmtSunClock(d.sunrise)} · ${fmtSunClock(d.sunset)}` };
     },
   },
+  good_day_to: {
+    icon: ListChecks,
+    title: 'Good day to\u2026',
+    inline: true,
+    asOf: (env) => fmtTime(env.as_of),
+    format: (data) => {
+      const d = data as PlaceGoodDayData;
+      const tiles = d.tiles ?? [];
+      if (tiles.length === 0) return { value: '\u2014' };
+      // The summary line leads with what the row says yes to; a "no" row
+      // still reads usefully ("Nothing outdoors today").
+      const yes = tiles.filter((t) => t.verdict === 'yes');
+      return yes.length > 0
+        ? { value: yes.map((t) => t.label.toLowerCase()).slice(0, 2).join(', '), statusDot: 'success' }
+        : { value: 'Nothing outdoors today', statusDot: 'warning' };
+    },
+  },
   your_home: {
     icon: House,
     title: 'Your home',
@@ -197,6 +222,19 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       return { value: parts.join(' · ') || 'Property details on file' };
     },
   },
+  home_systems: {
+    icon: Wrench,
+    title: 'Systems',
+    inline: true,
+    format: (data) => {
+      const d = data as PlaceHomeSystemsData;
+      const past = d.summary?.past_expected_count ?? 0;
+      const aging = d.summary?.aging_count ?? 0;
+      if (past > 0) return { value: `${past} past expected life`, statusDot: 'error' };
+      if (aging > 0) return { value: `${aging} aging`, statusDot: 'warning' };
+      return { value: 'All within expected life', statusDot: 'success' };
+    },
+  },
   flood: {
     icon: Waves,
     title: 'Flood',
@@ -204,6 +242,27 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
     format: (data) => {
       const d = data as PlaceFloodData;
       return { chip: FLOOD_CHIP[d.risk_level] ?? { label: d.zone_label, variant: 'neutral' } };
+    },
+  },
+  heat_cold: {
+    icon: Thermometer,
+    title: 'Heat & cold',
+    inline: true,
+    asOf: (env) => fmtTime(env.as_of),
+    format: (data) => {
+      const d = data as PlaceHeatColdData;
+      // The dashboard row is the verdict, not the index — and `none` is the
+      // honest answer on most days rather than a manufactured warning.
+      // `error`, matching both mobile clients and RiskDetail's own cold tone.
+      if (d.mode === 'cold') return { value: 'Freeze expected', statusDot: 'error' };
+      if (d.mode === 'heat') {
+        const level = d.peak_level ?? 0;
+        return {
+          value: `${d.heat_days.find((x) => x.level === level)?.label ?? 'Elevated'} heat risk`,
+          statusDot: level >= 3 ? 'error' : 'warning',
+        };
+      }
+      return { value: 'Nothing expected', statusDot: 'success' };
     },
   },
   seismic: {
@@ -289,6 +348,31 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       const lo = money(d.band_low);
       const hi = money(d.band_high);
       return { value: `${d.bedrooms}BR market band ${lo}–${hi}` };
+    },
+  },
+  // Band D — what verified neighbors on THIS block pay, not the HUD
+  // county estimate one row up. The `building` summary is a real
+  // reading (progress toward the block's own benchmark), so the card
+  // shows it rather than degrading to an empty state.
+  real_rent: {
+    icon: Users,
+    title: 'Real rent on your block',
+    format: (data) => {
+      const d = data as PlaceRealRentData;
+      const chip: PlaceSectionCardChip | undefined = d.state === 'building'
+        ? { label: `${d.reports} of ${d.needed}`, variant: 'info' }
+        : undefined;
+      return { value: d.summary, chip, caption: 'Reported by verified neighbors — not a listings estimate' };
+    },
+  },
+  exemption_check: {
+    icon: Landmark,
+    title: 'Homestead exemption',
+    format: (data) => {
+      const d = data as PlaceExemptionCheckData;
+      if (d.filing_status === 'on_file') return { value: 'Exemption on file' };
+      if (d.filing_status === 'none_on_file') return { value: 'Nothing on file — worth checking' };
+      return { value: 'Not reported by this county' };
     },
   },
   civic_districts: {

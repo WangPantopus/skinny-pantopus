@@ -418,10 +418,12 @@ module.exports = {
   getLetterPdf,
   revokeLetter,
   verifyByCode,
-  // Exported for testing.
+  // Shared with the other attested-artifact services (claims, cards) —
+  // one code alphabet, one address-line rule, one base URL.
   generateLetterCode,
   normalizeLetterCode,
   residentNameFromUser,
   addressLine1FromHome,
+  webBaseUrl,
   sanitizePurpose,
 };

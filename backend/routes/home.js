@@ -6,6 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const addressConfig = require('../config/addressVerification');
 const householdClaimConfig = require('../config/householdClaims');
 const verifyToken = require('../middleware/verifyToken');
+const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
@@ -614,7 +615,7 @@ const propertySuggestionsSchema = Joi.object({
  * POST /api/homes/property-suggestions
  * Tiered hints for Add Home step 2: ATTOM → heuristics → optional LLM (PROPERTY_SUGGESTIONS_LLM=1).
  */
-router.post('/property-suggestions', verifyToken, validate(propertySuggestionsSchema), async (req, res) => {
+router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(propertySuggestionsSchema), async (req, res) => {
   try {
     const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin);
     res.json(result);
@@ -6255,7 +6256,7 @@ router.delete('/:id/access/:secretId', verifyToken, async (req, res) => {
  * - Checks for duplicate pending invites
  * - Sends invitation email
  */
-router.post('/:id/invite', verifyToken, async (req, res) => {
+router.post('/:id/invite', verifyToken, homeOutboundLimiter, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -7989,7 +7990,21 @@ router.get('/:id/seasonal-checklist', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
-    const seasonalCtx = getSeasonalContext();
+    // Pass the home's coordinates so the engine can tell whether its
+    // region-specific copy applies. Calling without them satisfied the old
+    // `!hasCoords ||` gate, which served Portland-specific tips to every
+    // home in the country. The season itself is month-based and resolves
+    // nationally, so the checklist below works either way.
+    const { data: seasonHome } = await supabaseAdmin
+      .from('Home')
+      .select('map_center_lat, map_center_lng')
+      .eq('id', homeId)
+      .maybeSingle();
+    const seasonalCtx = getSeasonalContext(
+      seasonHome && seasonHome.map_center_lat != null && seasonHome.map_center_lng != null
+        ? { latitude: Number(seasonHome.map_center_lat), longitude: Number(seasonHome.map_center_lng) }
+        : {},
+    );
     const seasonKey = seasonalCtx.primary_season;
     const year = new Date().getFullYear();
     const seasonDef = SEASONS[seasonKey] || {};

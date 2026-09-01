@@ -87,10 +87,16 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                     parse(PlaceAlertsData::class.java)?.let(PlaceSectionData::Alerts)
                 PlaceSectionId.SUNRISE_SUNSET ->
                     parse(PlaceSunriseSunsetData::class.java)?.let(PlaceSectionData::SunriseSunset)
+                PlaceSectionId.GOOD_DAY_TO ->
+                    parse(PlaceGoodDayData::class.java)?.let(PlaceSectionData::GoodDayTo)
                 PlaceSectionId.YOUR_HOME ->
                     parse(PlaceYourHomeData::class.java)?.let(PlaceSectionData::YourHome)
+                PlaceSectionId.HOME_SYSTEMS ->
+                    parse(PlaceHomeSystemsData::class.java)?.let(PlaceSectionData::HomeSystems)
                 PlaceSectionId.FLOOD ->
                     parse(PlaceFloodData::class.java)?.let(PlaceSectionData::Flood)
+                PlaceSectionId.HEAT_COLD ->
+                    parse(PlaceHeatColdData::class.java)?.let(PlaceSectionData::HeatCold)
                 PlaceSectionId.SEISMIC ->
                     parse(PlaceSeismicData::class.java)?.let(PlaceSectionData::Seismic)
                 PlaceSectionId.WILDFIRE ->
@@ -111,6 +117,10 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                     parse(PlaceIncentivesData::class.java)?.let(PlaceSectionData::Incentives)
                 PlaceSectionId.RENT_BAND ->
                     parse(PlaceRentBandData::class.java)?.let(PlaceSectionData::RentBand)
+                PlaceSectionId.REAL_RENT ->
+                    parse(PlaceRealRentData::class.java)?.let(PlaceSectionData::RealRent)
+                PlaceSectionId.EXEMPTION_CHECK ->
+                    parse(PlaceExemptionCheckData::class.java)?.let(PlaceSectionData::ExemptionCheck)
                 PlaceSectionId.CIVIC_DISTRICTS ->
                     parse(PlaceCivicDistrictsData::class.java)?.let(PlaceSectionData::CivicDistricts)
                 PlaceSectionId.CIVIC_ELECTION ->
@@ -147,8 +157,11 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 is PlaceSectionData.AirQuality -> writeValue(writer, payload.value)
                 is PlaceSectionData.Alerts -> writeValue(writer, payload.value)
                 is PlaceSectionData.SunriseSunset -> writeValue(writer, payload.value)
+                is PlaceSectionData.GoodDayTo -> writeValue(writer, payload.value)
                 is PlaceSectionData.YourHome -> writeValue(writer, payload.value)
+                is PlaceSectionData.HomeSystems -> writeValue(writer, payload.value)
                 is PlaceSectionData.Flood -> writeValue(writer, payload.value)
+                is PlaceSectionData.HeatCold -> writeValue(writer, payload.value)
                 is PlaceSectionData.Seismic -> writeValue(writer, payload.value)
                 is PlaceSectionData.Wildfire -> writeValue(writer, payload.value)
                 is PlaceSectionData.LeadRadon -> writeValue(writer, payload.value)
@@ -159,6 +172,8 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 is PlaceSectionData.BillBenchmark -> writeValue(writer, payload.value)
                 is PlaceSectionData.Incentives -> writeValue(writer, payload.value)
                 is PlaceSectionData.RentBand -> writeValue(writer, payload.value)
+                is PlaceSectionData.RealRent -> writeValue(writer, payload.value)
+                is PlaceSectionData.ExemptionCheck -> writeValue(writer, payload.value)
                 is PlaceSectionData.CivicDistricts -> writeValue(writer, payload.value)
                 is PlaceSectionData.CivicElection -> writeValue(writer, payload.value)
             }
@@ -192,7 +207,34 @@ object PlaceEnumAdapterFactory : JsonAdapter.Factory {
             LeadPaintRisk::class.java to LeadPaintRisk.UNKNOWN,
             PlaceDensityBucket::class.java to PlaceDensityBucket.UNKNOWN,
             BillUtilityKind::class.java to BillUtilityKind.UNKNOWN,
+            // Without this, a fourth verdict from the server throws inside
+            // decodePayload's runCatching and blanks the WHOLE good_day_to
+            // section — including the tiles whose verdicts were valid. The
+            // UNKNOWN constant and its doc comment promised forward
+            // compatibility the factory was never told about. iOS handles
+            // this in GoodDayVerdict's Decodable init.
+            GoodDayVerdict::class.java to GoodDayVerdict.UNKNOWN,
             BenchmarkComparison::class.java to BenchmarkComparison.UNKNOWN,
+            // Real Rent (Wave 3). `state` decides which of the two very
+            // different cards renders, so an unrecognized value must land
+            // on UNKNOWN — which renders neither — rather than throwing
+            // inside decodePayload and blanking the whole section.
+            RealRentState::class.java to RealRentState.UNKNOWN,
+            RealRentScope::class.java to RealRentScope.UNKNOWN,
+            RealRentStanding::class.java to RealRentStanding.UNKNOWN,
+            ExemptionFilingStatus::class.java to ExemptionFilingStatus.UNKNOWN,
+            AssessmentStance::class.java to AssessmentStance.UNKNOWN,
+            MailboxCheckVerdict::class.java to MailboxCheckVerdict.UNKNOWN,
+            MailboxFindingSeverity::class.java to MailboxFindingSeverity.INFO,
+            MailboxPhysicalStatus::class.java to MailboxPhysicalStatus.NOT_RUN,
+            ResidencyClaimScope::class.java to ResidencyClaimScope.UNKNOWN,
+            ResidencyClaimStatus::class.java to ResidencyClaimStatus.EXPIRED,
+            // ResidencyLetterStatus declares UNKNOWN but was never
+            // registered, so the forward-compatibility promise its own
+            // constant makes was not kept: an unrecognized status threw
+            // and took the whole section's decode with it.
+            ResidencyLetterStatus::class.java to ResidencyLetterStatus.UNKNOWN,
+            FridgeCardStatus::class.java to FridgeCardStatus.REVOKED,
             IncentiveLevel::class.java to IncentiveLevel.UNKNOWN,
             IncentiveType::class.java to IncentiveType.UNKNOWN,
             CivicLevel::class.java to CivicLevel.UNKNOWN,
@@ -200,6 +242,16 @@ object PlaceEnumAdapterFactory : JsonAdapter.Factory {
             PlacePreviewStatus::class.java to PlacePreviewStatus.UNKNOWN,
             PlacePreviewSectionStatus::class.java to PlacePreviewSectionStatus.UNAVAILABLE,
             PlacePreviewUnlock::class.java to PlacePreviewUnlock.UNKNOWN,
+            MoneyLeadKind::class.java to MoneyLeadKind.UNKNOWN,
+            // Unlisted (Wave 4). Every one of these is on the path of
+            // someone trying to get their home address off the internet:
+            // an unrecognized value must degrade to UNKNOWN — which the
+            // UI renders as "not stated" — rather than throwing and
+            // taking the whole removal list, the state program, and the
+            // method note down with it.
+            UnlistedRemovalMethod::class.java to UnlistedRemovalMethod.UNKNOWN,
+            UnlistedRemovalStatus::class.java to UnlistedRemovalStatus.UNKNOWN,
+            UnlistedPreviewStatus::class.java to UnlistedPreviewStatus.UNKNOWN,
         )
 
     override fun create(

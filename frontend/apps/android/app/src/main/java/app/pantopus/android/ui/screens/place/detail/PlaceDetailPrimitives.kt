@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceAddressRef
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
@@ -34,6 +37,7 @@ import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import kotlinx.coroutines.delay
 
 /**
  * Shared chrome for the Place group-detail pages — parity twin of iOS
@@ -199,3 +203,26 @@ fun PlaceDot(
 ) {
     Box(modifier = Modifier.size(size).clip(CircleShape).background(color))
 }
+
+/**
+ * The claim/card composers' outcome line — parity twin of the iOS
+ * sections' toast, tinted by outcome (a failed issue must never read
+ * as a green confirmation). Auto-dismisses; consuming is the VM's.
+ */
+@Composable
+fun PlaceActionToastLine(viewModel: PlaceDetailViewModel) {
+    val toast by viewModel.actionToast.collectAsStateWithLifecycle()
+    val current = toast ?: return
+    LaunchedEffect(current) {
+        delay(ACTION_TOAST_MS)
+        viewModel.consumeActionToast()
+    }
+    Text(
+        current.message,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = if (current.isError) PantopusColors.error else PantopusColors.success,
+    )
+}
+
+private const val ACTION_TOAST_MS = 4000L

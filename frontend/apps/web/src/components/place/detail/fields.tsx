@@ -6,7 +6,7 @@
 
 'use client';
 
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 
 export interface MoneyFieldProps {
@@ -19,12 +19,17 @@ export interface MoneyFieldProps {
 }
 
 export function MoneyField({ label, prefix, suffix, value, onChange, placeholder }: MoneyFieldProps) {
+  // The label sits outside the input's box (the prefix/suffix live in
+  // there), so the association has to be explicit — without it the
+  // field is unlabelled to a screen reader.
+  const id = useId();
   return (
     <div>
-      <label className="block text-[12.5px] font-semibold text-app-text-strong mb-1.5">{label}</label>
+      <label htmlFor={id} className="block text-[12.5px] font-semibold text-app-text-strong mb-1.5">{label}</label>
       <div className="flex items-center gap-1.5 h-[46px] px-3 bg-app-surface border border-app-border-strong rounded-[10px] transition focus-within:border-primary-600 focus-within:ring-4 focus-within:ring-primary-600/10">
         {prefix ? <span className="text-base font-medium text-app-text-secondary">{prefix}</span> : null}
         <input
+          id={id}
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}

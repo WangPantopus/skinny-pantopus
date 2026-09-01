@@ -308,20 +308,28 @@ function getSeasonalContext(options = {}) {
   const date = options.date || new Date();
   const month = date.getMonth(); // 0-indexed
   const hasCoords = options.latitude != null && options.longitude != null;
-  const isRelevantRegion = !hasCoords || isSupportedSeasonalRegion(options);
 
-  if (!isRelevantRegion) {
-    return {
-      active_seasons: [],
-      primary_season: null,
-      seasonal_tip: null,
-      suggested_gig_categories: [],
-      home_specific_tip: null,
-      urgency: 'low',
-      first_action_nudge: null,
-      is_relevant_region: false,
-    };
-  }
+  // Region-specific COPY requires knowing the region. This used to read
+  // `!hasCoords || isSupportedSeasonalRegion(options)`, which had two
+  // symmetrical failures:
+  //
+  //   with coords, outside the PNW → EVERYTHING returned null, so Hub,
+  //     the briefing, the pulse and the home-health score silently lost
+  //     the whole seasonal signal class for every user in the country;
+  //   without coords → the gate passed, so `home.js` (seasonal-checklist)
+  //     and `homeHealthService` served Portland-specific copy to every
+  //     home in the country: "Portland/Vancouver averages 3–5 ice events
+  //     per winter" to a homeowner in Phoenix.
+  //
+  // The fix separates the two things that were conflated. The month-based
+  // season calendar is generic and now runs everywhere, so the checklist
+  // and health score work nationally. Only the PNW-specific TIP TEXT is
+  // gated — and it now fails closed, because without coordinates we do
+  // not know the region and must not claim it.
+  //
+  // National, data-driven seasonal risk lives in `heat_cold` (NWS
+  // HeatRisk + the freeze line), which is what actually replaces this.
+  const inRegion = hasCoords && isSupportedSeasonalRegion(options);
 
   const ctx = {
     homeYearBuilt: options.homeYearBuilt || null,
@@ -358,12 +366,16 @@ function getSeasonalContext(options = {}) {
   return {
     active_seasons: activeSeasons,
     primary_season: primarySeason,
-    seasonal_tip: tip,
-    suggested_gig_categories: gigSuggestion.categories,
-    home_specific_tip: homeTip,
+    // The tips carry PNW-specific statistics ("Portland/Vancouver averages
+    // 3–5 ice events per winter"), so they are withheld outside the region
+    // rather than served as if they were national facts. The season itself
+    // is month-based and applies anywhere.
+    seasonal_tip: inRegion ? tip : null,
+    suggested_gig_categories: inRegion ? gigSuggestion.categories : [],
+    home_specific_tip: inRegion ? homeTip : null,
     urgency: maxUrgency,
-    first_action_nudge: gigSuggestion.nudge,
-    is_relevant_region: true,
+    first_action_nudge: inRegion ? gigSuggestion.nudge : null,
+    is_relevant_region: inRegion,
   };
 }
 

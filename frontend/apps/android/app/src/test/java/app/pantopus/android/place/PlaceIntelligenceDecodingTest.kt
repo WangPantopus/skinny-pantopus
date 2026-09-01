@@ -1,6 +1,7 @@
 package app.pantopus.android.place
 
 import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
+import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplates
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import app.pantopus.android.data.api.models.place.PlaceBand
@@ -59,6 +60,122 @@ class PlaceIntelligenceDecodingTest {
 
     private inline fun <reified T> decode(json: String): T = checkNotNull(moshi.adapter(T::class.java).fromJson(json)) { "decoded null" }
 
+    // ── The three sections added after the launch set ────────
+    // good_day_to / heat_cold / home_systems all decoded to UNKNOWN (and
+    // therefore rendered nothing) until the DTOs, the section-id enum and
+    // the envelope adapter learned them. These pin that they decode.
+
+    @Test
+    fun `decodes good_day_to tiles`() {
+        val json =
+            """
+            {"place":{"label":"x","line1":"x","city":"x","state":"OR","postal_code":"97214"},
+             "tier":"T3","region_supported":true,"generated_at":"2026-06-07T09:00:00Z",
+             "groups":[{"group":"today","label":"Today","sections":[
+               {"id":"good_day_to","group":"today","band":"A","access":"available","status":"ready",
+                "as_of":null,"source":"Pantopus","coverage":"full","unavailable_reason":null,
+                "data":{"tiles":[
+                  {"id":"open_windows","label":"Open windows","glyph":"W","verdict":"yes",
+                   "answer":"Yes - until 5pm","because":"AQI 38 and 62-68F through 5pm."},
+                  {"id":"wash_car","label":"Wash the car","glyph":"C","verdict":"no",
+                   "answer":"Wait - rain Tuesday","because":"60% chance of rain Tuesday."}]}}]}]}
+            """.trimIndent()
+
+        val env = decode<PlaceIntelligence>(json).groups.first().sections.first()
+        assertEquals(PlaceSectionId.GOOD_DAY_TO, env.sectionId)
+        val d = assertNotNull(env.goodDayTo).let { env.goodDayTo!! }
+        assertEquals(2, d.tiles.size)
+        assertEquals(GoodDayVerdict.YES, d.tiles[0].verdict)
+        assertEquals(GoodDayVerdict.NO, d.tiles[1].verdict)
+        // The reasoning always ships — an opinionated tile must show its work.
+        assertTrue(d.tiles[0].because.contains("AQI 38"))
+    }
+
+    @Test
+    fun `decodes heat_cold with the 7-day strip`() {
+        val json =
+            """
+            {"place":{"label":"x","line1":"x","city":"x","state":"AZ","postal_code":"85001"},
+             "tier":"T3","region_supported":true,"generated_at":"2026-08-19T09:00:00Z",
+             "groups":[{"group":"risk_readiness","label":"Risk & readiness","sections":[
+               {"id":"heat_cold","group":"risk_readiness","band":"A","access":"available","status":"ready",
+                "as_of":null,"source":"NWS HeatRisk","coverage":"full","unavailable_reason":null,
+                "data":{"mode":"heat","heat_covered":true,"peak_level":3,"peak_date":"2026-08-19",
+                        "freeze":null,"headline":"Major heat risk, today through Friday.",
+                        "guidance":"Overnight lows near 79F.","source_note":"NWS HeatRisk (experimental)",
+                        "heat_days":[{"date":"2026-08-19","day":1,"level":3,"label":"Major","meaning":"m"}]}}]}]}
+            """.trimIndent()
+
+        val env = decode<PlaceIntelligence>(json).groups.first().sections.first()
+        assertEquals(PlaceSectionId.HEAT_COLD, env.sectionId)
+        val d = env.heatCold!!
+        assertEquals("heat", d.mode)
+        assertTrue(d.heatCovered)
+        assertEquals(3, d.peakLevel)
+        assertEquals(1, d.heatDays.size)
+        assertEquals("Major", d.heatDays[0].label)
+    }
+
+    @Test
+    fun `decodes heat_cold coverage gap outside CONUS`() {
+        // covered=false is a GAP, not a reading of zero — the card must not
+        // imply calm where HeatRisk simply has no data.
+        val json =
+            """
+            {"place":{"label":"x","line1":"x","city":"Honolulu","state":"HI","postal_code":"96813"},
+             "tier":"T3","region_supported":true,"generated_at":"2026-08-19T09:00:00Z",
+             "groups":[{"group":"risk_readiness","label":"Risk & readiness","sections":[
+               {"id":"heat_cold","group":"risk_readiness","band":"A","access":"available","status":"ready",
+                "as_of":null,"source":"NWS","coverage":"partial",
+                "unavailable_reason":"NWS HeatRisk covers the contiguous US.",
+                "data":{"mode":"none","heat_covered":false,"peak_level":null,"peak_date":null,
+                        "freeze":null,"headline":"No freeze in the forecast.","guidance":"",
+                        "source_note":"National Weather Service forecast","heat_days":[]}}]}]}
+            """.trimIndent()
+
+        val d = decode<PlaceIntelligence>(json).groups.first().sections.first().heatCold!!
+        assertFalse(d.heatCovered)
+        assertTrue(d.heatDays.isEmpty())
+        assertNull(d.peakLevel)
+    }
+
+    @Test
+    fun `decodes home_systems with provenance on every row`() {
+        val json =
+            """
+            {"place":{"label":"x","line1":"x","city":"x","state":"OR","postal_code":"97214"},
+             "tier":"T3","region_supported":true,"generated_at":"2026-08-19T09:00:00Z",
+             "groups":[{"group":"your_home","label":"Your home","sections":[
+               {"id":"home_systems","group":"your_home","band":"C","access":"available","status":"ready",
+                "as_of":null,"source":"Your household record","coverage":"full","unavailable_reason":null,
+                "data":{"summary":{"past_expected_count":1,"aging_count":1,"confirmed_count":1,
+                                   "total_count":6,"headline":"Past typical service life: windows."},
+                        "systems":[
+                          {"key":"water_heater","label":"Water heater","installed_year":2022,"age_years":4,
+                           "typical_life_low":8,"typical_life_high":12,"status":"ok","life_remaining":0.67,
+                           "source":"resident","source_label":"You told us","confidence":"high",
+                           "source_ref":null,"note":"n"},
+                          {"key":"windows","label":"Windows","installed_year":1979,"age_years":47,
+                           "typical_life_low":20,"typical_life_high":30,"status":"past_expected",
+                           "life_remaining":0.0,"source":"estimated",
+                           "source_label":"Estimated from year built","confidence":"low",
+                           "source_ref":null,"note":"n"}]}}]}]}
+            """.trimIndent()
+
+        val env = decode<PlaceIntelligence>(json).groups.first().sections.first()
+        assertEquals(PlaceSectionId.HOME_SYSTEMS, env.sectionId)
+        // Band C — the household's own record, gated by the trust ladder.
+        assertEquals(PlaceBand.C, env.band)
+        val d = env.homeSystems!!
+        assertEquals(2, d.systems.size)
+        assertEquals("You told us", d.systems[0].sourceLabel)
+        assertEquals("high", d.systems[0].confidence)
+        // An estimate is never dressed up as a fact.
+        assertEquals("estimated", d.systems[1].source)
+        assertEquals("low", d.systems[1].confidence)
+        assertEquals(1, d.summary.pastExpectedCount)
+    }
+
     // ── Full dashboard payload (captured, T3) ────────────────
 
     @Test
@@ -74,6 +191,14 @@ class PlaceIntelligenceDecodingTest {
         // T3 payload carries 7 groups (identity is T4) and all 18 sections.
         assertEquals(7, intelligence.groups.size)
         val sections = intelligence.groups.flatMap { it.sections }
+        // NOTE: this fixture is a 2026-06-12 capture, taken BEFORE
+        // good_day_to / heat_cold / home_systems were added, so it carries
+        // 18 of the 21 contract sections. The count is asserted against the
+        // fixture's own group totals rather than a magic number, so it
+        // cannot silently drift; the three newer sections are covered by
+        // PlaceIntelligenceDecodingTest's dedicated cases above (inline
+        // payloads) until the fixture is re-captured from a live T3 response.
+        assertEquals(intelligence.groups.sumOf { it.sections.size }, sections.size)
         assertEquals(18, sections.size)
 
         assertEquals(PlaceGroup.TODAY, intelligence.groups.first().groupId)

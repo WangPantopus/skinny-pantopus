@@ -198,6 +198,10 @@ public struct RootTabView: View {
         // Morning/Evening Briefing push — the Today tab consumes it.
         case .hubToday:
             model.selected = .today
+        // `pantopus://place` — the address dashboard is the Place tab's
+        // landing surface; its stack consumes the concrete destination.
+        case .place:
+            model.selected = .place
         case .monthlyReceipt:
             // `monthly_receipt` push — open the profile cover with the
             // receipt card expanded.

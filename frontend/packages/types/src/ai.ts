@@ -375,6 +375,8 @@ export interface UserNotificationPreferences {
   daily_briefing_enabled: boolean;
   daily_briefing_time_local: string;
   daily_briefing_timezone: string;
+  /** When the ask-once morning-briefing prompt was answered (either way). */
+  daily_briefing_prompted_at?: string | null;
   evening_briefing_enabled: boolean;
   evening_briefing_time_local: string;
   weather_alerts_enabled: boolean;

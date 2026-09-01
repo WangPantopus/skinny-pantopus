@@ -2,16 +2,27 @@
 //  PlaceBlockDetailContent.swift
 //  Pantopus
 //
-//  C6 — Your block. Verified-homes density (k-anon bucket), the census
-//  area context, and the permits placeholder (no national source — a
-//  coverage-honest "coming to your area" state).
+//  C6 — Your block. Verified-homes density (k-anon bucket), Block
+//  Founders (the T4 growth surface: permanent founding rank, the
+//  unlock meters, and postcard invites), the census area context, and
+//  the permits placeholder (no national source — a coverage-honest
+//  "coming to your area" state).
 //
 
 import SwiftUI
 
+// swiftlint:disable line_length
+
 struct PlaceBlockDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    @State private var founders: PlaceBlockFoundersViewModel
+
+    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel) {
+        self.intel = intel
+        self.vm = vm
+        _founders = State(initialValue: PlaceBlockFoundersViewModel(homeId: vm.homeId))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,6 +40,21 @@ struct PlaceBlockDetailContent: View {
                 }
                 PlaceSourceNote(name: "Pantopus verified neighbors", asOf: nil)
             }
+
+            PlaceDetailSectionLabel(text: "Block founders")
+            if intel.tier == .t4 {
+                PlaceBlockFoundersSection(vm: founders)
+                    .task { await founders.load() }
+            } else {
+                PlaceLockedCard(
+                    icon: .crown,
+                    title: "Block founders",
+                    reason: "Verify your address to claim your permanent founding place on this block, see what each locked block surface is still waiting for, and mail an invitation to a neighbor.",
+                    cta: "Verify address",
+                    onTap: nil
+                )
+            }
+            PlaceSourceNote(name: "Pantopus verified neighbors", asOf: nil)
 
             if let census = vm.section(.censusContext, in: intel) {
                 PlaceDetailSectionLabel(text: "Neighborhood")

@@ -668,6 +668,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       daily_briefing_enabled: false,
       daily_briefing_time_local: '07:30',
       daily_briefing_timezone: 'America/Los_Angeles',
+      daily_briefing_prompted_at: null,
       evening_briefing_enabled: true,
       evening_briefing_time_local: '18:00',
       weather_alerts_enabled: true,
@@ -698,6 +699,10 @@ const preferencesSchema = Joi.object({
   daily_briefing_enabled: Joi.boolean(),
   daily_briefing_time_local: Joi.string().pattern(/^\d{2}:\d{2}$/),
   daily_briefing_timezone: Joi.string().max(100),
+  // Records that the morning-briefing opt-in was SHOWN. Sent as a boolean so
+  // the server stamps the time — a client-supplied timestamp would let a
+  // skewed clock re-arm or permanently suppress the ask.
+  daily_briefing_prompted: Joi.boolean(),
   evening_briefing_enabled: Joi.boolean(),
   evening_briefing_time_local: Joi.string().pattern(/^\d{2}:\d{2}$/),
   weather_alerts_enabled: Joi.boolean(),
@@ -728,10 +733,18 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
       }
     }
 
+    // `daily_briefing_prompted` is a client-facing boolean; the stored
+    // value is a server-stamped timestamp. Translate it here so a skewed
+    // client clock can neither re-arm the ask nor suppress it forever.
+    const { daily_briefing_prompted: prompted, ...rest } = updates;
+    const patch = { ...rest };
+    if (prompted === true) patch.daily_briefing_prompted_at = new Date().toISOString();
+    if (prompted === false) patch.daily_briefing_prompted_at = null;
+
     const { data, error } = await supabaseAdmin
       .from('UserNotificationPreferences')
       .upsert(
-        { user_id: userId, ...updates, updated_at: new Date().toISOString() },
+        { user_id: userId, ...patch, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
       .select('*')

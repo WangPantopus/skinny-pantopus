@@ -60,11 +60,41 @@ const homeCreationLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id || req.ip,
-  // The '/:homeId/scheduling/**' skip matters: this limiter is mounted on ALL of /api/homes,
-  // so without it every home-scoped Calendarly POST (create event type, block, workflow…)
-  // burned the 5-per-hour home-CREATION budget and 429'd ordinary scheduling setup.
-  skip: (req) => req.method !== 'POST' || req.path === '/check-address' || /^\/[^/]+\/scheduling(\/|$)/.test(req.path),
+  // Count ONLY the actual home-creation request. This limiter is mounted on
+  // ALL of /api/homes, and the old blocklist-style skip ('/check-address',
+  // then '/:homeId/scheduling/**' when Calendarly hit it) meant every NEW
+  // home-scoped POST silently burned the 5-per-hour home-CREATION budget —
+  // the Wave 1 claim/fridge-card issue AND revoke endpoints 429'd behind
+  // their own dedicated limiters, locking a manager out of revoking a
+  // leaked card. Home creation is exactly `POST /api/homes` (path '/' at
+  // this mount); everything deeper carries its own limiter.
+  skip: (req) => req.method !== 'POST' || (req.path !== '/' && req.path !== ''),
   message: { error: 'Too many home creation requests. Please try again later.' },
+});
+
+/**
+ * Limiter for home-scoped endpoints that send email or spend a vendor
+ * call: invites (an email to an address the sender types) and the
+ * ATTOM/OpenAI-backed property suggestions.
+ *
+ * These used to be covered incidentally by homeCreationLimiter, which
+ * was mounted on ALL of /api/homes. Narrowing that limiter to the one
+ * request it actually names (POST /api/homes) was correct — it was
+ * 429ing ordinary scheduling and safety actions — but it silently took
+ * the only limit off these two, leaving a verified user able to fire
+ * unbounded invite emails. Named explicitly here so the coverage is
+ * visible at the route rather than inherited from a mount.
+ *
+ * 20 per hour per user: far above real use, far below a mail blast.
+ */
+const homeOutboundLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  skip: (req) => req.method !== 'POST',
+  message: { error: 'Too many requests. Please try again later.' },
 });
 
 /**
@@ -295,6 +325,36 @@ const residencyLetterIssueLimiter = rateLimit({
 });
 
 /**
+ * Limiter for residency-claim issuance.
+ * Claims are cheap rows (no PDF) and short-lived by design, so the normal
+ * pattern is a few per errand; 30/day stops scripted issuance without
+ * getting in the way of a busy move week.
+ */
+const residencyClaimIssueLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: { error: 'Too many claims issued today. Please try again tomorrow.' },
+});
+
+/**
+ * Limiter for fridge-card issuance — its own bucket, so a busy claim
+ * week can never eat the card budget (or show a claims-worded 429 on
+ * the card endpoint). Cards are durable household artifacts; 10/day
+ * only stops runaway issuance.
+ */
+const fridgeCardIssueLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: { error: 'Too many cards issued today. Please try again tomorrow.' },
+});
+
+/**
  * Limiter for public (unauthenticated) Calendarly booking writes — create / reschedule / cancel
  * via /api/public/book and /api/public/booking. Tighter than the read previewLimiter and keyed
  * per-user-or-IP, since these create rows, fire payment intents, and send email. Skips reads.
@@ -316,6 +376,7 @@ module.exports = {
   bookingWriteLimiter,
   contentCreationLimiter,
   homeCreationLimiter,
+  homeOutboundLimiter,
   ownershipClaimLimiter,
   postcardLimiter,
   verificationAttemptLimiter,
@@ -331,4 +392,6 @@ module.exports = {
   personaFollowLimiter,
   broadcastPublishLimiter,
   residencyLetterIssueLimiter,
+  residencyClaimIssueLimiter,
+  fridgeCardIssueLimiter,
 };

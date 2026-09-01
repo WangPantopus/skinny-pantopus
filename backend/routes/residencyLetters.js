@@ -27,22 +27,9 @@ const router = express.Router();
 
 const verifyToken = require('../middleware/verifyToken');
 const { residencyLetterIssueLimiter } = require('../middleware/rateLimiter');
-const { checkHomePermission } = require('../utils/homePermissions');
+const { checkHomePermission, isVerifiedResident } = require('../utils/homePermissions');
 const residencyLetterService = require('../services/residencyLetterService');
 const logger = require('../utils/logger');
-
-function isVerifiedResident(access) {
-  if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified') {
-    return false;
-  }
-  // A residency letter is a dated attestation to landlords, schools and the
-  // DMV. When expiry enforcement is on (address.enforce_verification_expiry),
-  // a verification past its validity window may not mint a fresh one — the
-  // holder re-verifies first. Rows with no verified_at predate the column and
-  // are never treated as stale.
-  const verificationAge = require('../utils/verificationAge');
-  return !verificationAge.staleAffectsTrust(access.occupancy.verified_at);
-}
 
 // POST /api/homes/:id/residency-letters — issue
 router.post('/:id/residency-letters', verifyToken, residencyLetterIssueLimiter, async (req, res) => {

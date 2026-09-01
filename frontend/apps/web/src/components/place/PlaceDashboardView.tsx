@@ -16,6 +16,8 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import Link from 'next/link';
+import { Compass, ChevronRight } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import { derivePulse, renderSection, renderVerifyLocked } from './presentation';
@@ -126,6 +128,32 @@ export default function PlaceDashboardView({
           <Group label="Locked until you verify">{renderVerifyLocked(openVerify)}</Group>
         ) : null}
         {showIdentity ? <IdentityGroup /> : null}
+
+        {/*
+          THE ONLY WAY INTO SCOUT ON A PHONE.
+          The nav rail that carries it is `hidden lg:block`, so without
+          this row the surface existed and was unreachable on the device
+          most of this product is used on. It sits last on purpose: the
+          dashboard is about the place you live, and this is the one link
+          that is about somewhere else.
+        */}
+        <Link
+          href="/app/place/scout"
+          className="flex items-center gap-3 mt-6 p-4 rounded-2xl bg-app-surface border border-app-border shadow-sm hover:bg-app-hover transition"
+        >
+          <span className="inline-flex items-center justify-center shrink-0 w-11 h-11 rounded-xl bg-app-home-bg text-app-home">
+            <Compass size={22} strokeWidth={2} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">
+              Looking at somewhere else?
+            </span>
+            <span className="block text-[12.5px] text-app-text-muted mt-0.5">
+              Check an address you are considering, and what to ask before you sign
+            </span>
+          </span>
+          <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+        </Link>
       </div>
 
       {showVerify ? (

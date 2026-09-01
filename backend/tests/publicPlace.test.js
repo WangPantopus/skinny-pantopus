@@ -9,7 +9,8 @@
  *     no DB writes at all (caches are in-memory, location-keyed, anonymous);
  *   • flood degrades independently of the Census tract lookup, and Walk Score
  *     is never fetched;
- *   • a non-US / ungeocodable address degrades to `unsupported_region` with
+ *   • a non-US address degrades to `unsupported_region` and an unreadable one
+ *     to `could_not_place` — DIFFERENT answers — with
  *     HTTP 200 — never a 500;
  *   • repeat requests are served from the in-memory cache (no second Mapbox /
  *     FEMA / Census round-trip).
@@ -196,7 +197,9 @@ describe('GET /api/public/place', () => {
       const density = res.body.free.density;
       expect(typeof density.bucket).toBe('string');
       expect(['none', 'forming', 'few', 'growing']).toContain(density.bucket);
-      expect(density.bucket).toBe('few'); // seeded count = 5
+      // Seeded count = 5, which is below the k-anon floor (10) and so must
+      // be indistinguishable from a count of 1.
+      expect(density.bucket).toBe('forming');
       // The raw count (5) must never appear anywhere on the density object.
       expect(density).not.toHaveProperty('verified_users_count');
       expect(density).not.toHaveProperty('count');
@@ -244,7 +247,8 @@ describe('GET /api/public/place', () => {
       expect(m.environmental_hazards).toMatchObject({ status: 'ready', data: { facilities_within_mile: 2 } });
       expect(m.flood).toMatchObject({ status: 'ready', data: { zone: 'X', risk_level: 'minimal', in_sfha: false } });
       expect(m.census_context).toMatchObject({ status: 'ready', data: { median_year_built: 1985 } });
-      expect(m.block_density).toMatchObject({ status: 'ready', data: { bucket: 'few' } });
+      // Seeded count is 5: below the audited k-anon floor it reads `forming` (PR 353 made the public floor universal).
+      expect(m.block_density).toMatchObject({ status: 'ready', data: { bucket: 'forming' } });
     });
 
     it('never shows a zero on the density card — below the floor it is an invitation', async () => {
@@ -329,13 +333,24 @@ describe('GET /api/public/place', () => {
   });
 
   describe('density buckets are floored server-side', () => {
+    // This endpoint used to carry its own thresholds ({growing:10, few:3,
+    // forming:1}) — a third implementation of the k-anon flooring, and the
+    // loosest of the three on the only UNAUTHENTICATED surface: a public
+    // `forming` meant the cell held exactly 1–2 verified users. It now
+    // shares services/place/densityReader, so counts below K_ANON_MIN (10)
+    // are indistinguishable from one another here too.
+    //
+    // Strictly more conservative than before: nothing that was private
+    // became public, and cells of 3–9 stopped being separable from 1–2.
     const cases = [
       [0, 'none'],
       [1, 'forming'],
       [2, 'forming'],
-      [3, 'few'],
-      [9, 'few'],
-      [10, 'growing'],
+      [3, 'forming'],
+      [9, 'forming'],
+      [10, 'few'],
+      [24, 'few'],
+      [25, 'growing'],
       [250, 'growing'],
     ];
     it.each(cases)('count %i → bucket "%s" (no number leaked)', async (count, expected) => {
@@ -382,9 +397,9 @@ describe('GET /api/public/place', () => {
       await request(app).get('/api/public/place').query({ address: '1421 SE Oak St' });
       expect(geo.forwardGeocode.mock.calls.length).toBe(1);
       expect(countFetch('hazards.fema.gov')).toBe(1);
-      // Census geocoder: the tract lookup, the civic layers=all lookup, and
-      // ONE single-flighted county lookup shared by radon / rent / water.
-      expect(countFetch('geocoding.geo.census.gov')).toBe(3);
+      // Census geocoder: ONE shared tract resolution (teaser + money lead +
+      // county for radon / rent / water) plus the civic layers=all lookup.
+      expect(countFetch('geocoding.geo.census.gov')).toBe(2);
       expect(countFetch('api.census.gov')).toBe(1);
       const firstPass = {
         usgs: countFetch('earthquake.usgs.gov'),
@@ -403,7 +418,7 @@ describe('GET /api/public/place', () => {
       // the exception by design: they are live and cached by their providers.)
       expect(geo.forwardGeocode.mock.calls.length).toBe(1);      // Mapbox (billed)
       expect(countFetch('hazards.fema.gov')).toBe(1);            // FEMA flood
-      expect(countFetch('geocoding.geo.census.gov')).toBe(3);    // Census geocoder (tract + civic + county)
+      expect(countFetch('geocoding.geo.census.gov')).toBe(2);    // Census geocoder (shared tract + civic)
       expect(countFetch('api.census.gov')).toBe(1);              // Census ACS
       expect(countFetch('earthquake.usgs.gov')).toBe(firstPass.usgs);
       expect(countFetch('imagery.geoplatform.gov')).toBe(firstPass.whp);
@@ -413,12 +428,13 @@ describe('GET /api/public/place', () => {
     it('still returns correct data on the cached (second) request', async () => {
       const app = buildApp();
       await request(app).get('/api/public/place').query({ address: '1421 SE Oak St' });
-      const res = await request(app).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
 
       expect(res.body.status).toBe('ready');
       expect(res.body.free.flood).toMatchObject({ status: 'ready', zone: 'X' });
       expect(res.body.free.area).toMatchObject({ status: 'ready', median_year_built: 1985 });
-      expect(res.body.free.density.bucket).toBe('few');
+      // Seeded count 5 is below the k-anon floor (10) — see the bucket table.
+      expect(res.body.free.density.bucket).toBe('forming');
     });
   });
 
@@ -431,7 +447,8 @@ describe('GET /api/public/place', () => {
       expect(res.body.status).toBe('partial');
       expect(res.body.free.flood.status).toBe('unavailable');
       expect(res.body.free.area.status).toBe('ready');
-      expect(res.body.free.density.bucket).toBe('few');
+      // Seeded count 5 is below the k-anon floor (10) — see the bucket table.
+      expect(res.body.free.density.bucket).toBe('forming');
     });
 
     it('returns partial when the Census area teaser is unavailable', async () => {
@@ -455,42 +472,57 @@ describe('GET /api/public/place', () => {
     });
   });
 
-  describe('unsupported_region — never a 500', () => {
-    it('handles a non-US address (geocoder returns nothing → throws)', async () => {
+  describe('the two non-ready answers are two different answers', () => {
+    // These tests used to PIN THE CONFLATION: every geocoder failure was
+    // asserted to yield `unsupported_region`. The never-a-500 goal was
+    // right; the geographic laundering was not. A rejected geocode is a
+    // failure to READ the address, and telling a US resident during an
+    // outage that the product is not for them is the same class of
+    // falsehood the sibling routes were fixed for.
+    it('a geocoder that throws is "could not place", not a geographic denial', async () => {
       geo.forwardGeocode.mockRejectedValue(new Error('No result for address'));
-      const res = await request(buildApp()).get('/api/public/place').query({ address: '221B Baker St, London' });
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('unsupported_region');
-      expect(res.body.region).toBeNull();
-      expect(res.body.message).toMatch(/U\.S\.-only/i);
+      expect(res.body.status).toBe('could_not_place');
+      expect(res.body.message).toMatch(/city and state/i);
+      expect(res.body.message).not.toMatch(/U\.S\.-only/i);
     });
 
-    it('handles an ungeocodable address (no result object)', async () => {
+    it('a geocoder that returns nothing is also "could not place"', async () => {
       geo.forwardGeocode.mockResolvedValue(null);
       const res = await request(buildApp()).get('/api/public/place').query({ address: 'asdfghjkl' });
 
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('unsupported_region');
+      expect(res.body.status).toBe('could_not_place');
+      expect(res.body.message).not.toMatch(/U\.S\.-only/i);
     });
 
-    it('handles a resolved point outside US coverage', async () => {
+    it('a point resolved OUTSIDE the US is the only geographic denial', async () => {
       // Valid lat/lng but in London — fails the US bounding-box guard.
+      // This is the one case the "U.S.-only" copy is true for.
       geo.forwardGeocode.mockResolvedValue({ latitude: 51.5237, longitude: -0.1585, city: 'London', state: 'England' });
       const res = await request(buildApp()).get('/api/public/place').query({ address: '221B Baker St' });
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('unsupported_region');
+      expect(res.body.message).toMatch(/U\.S\.-only/i);
       // A non-US lookup must not reach any external data source.
       expect(attomWasCalled()).toBe(false);
       expect(countFetch('hazards.fema.gov')).toBe(0);
       expect(countFetch('api.census.gov')).toBe(0);
     });
 
+    it('neither answer is ever a 500', async () => {
+      geo.forwardGeocode.mockRejectedValue(new Error('boom'));
+      const res = await request(buildApp()).get('/api/public/place').query({ address: 'x' });
+      expect(res.status).toBe(200);
+    });
+
     it('does not cache a transient geocoder failure (a retry can still succeed)', async () => {
       geo.forwardGeocode.mockRejectedValue(new Error('boom'));
       const first = await request(buildApp()).get('/api/public/place').query({ address: 'somewhere' });
-      expect(first.body.status).toBe('unsupported_region');
+      expect(first.body.status).toBe('could_not_place');
 
       geo.forwardGeocode.mockResolvedValue({ ...PORTLAND });
       const second = await request(buildApp()).get('/api/public/place').query({ address: 'somewhere' });
@@ -511,4 +543,145 @@ describe('GET /api/public/place', () => {
       expect(res.status).toBe(400);
     });
   });
+});
+
+// ── Wave 4: the money-first lead ─────────────────────────────
+// The preview used to open with data tiles. It now leads with a real
+// dollar figure when one is available for the address — the highest-
+// converting address ask there is — without ATTOM, an account, or any
+// persistence. The honesty rules are the point: every figure states its
+// scope, a benchmark is never a quote, and nothing is invented.
+describe('the money lead', () => {
+  test('leads with the tract flood-premium band when one is warmed', async () => {
+    seedTable('PlaceSectionCache', [{
+      cache_key: 'tract:41051001902',
+      section_id: '_nfip_tract',
+      payload: { policy_count: 128, premium_p25: 480, premium_median: 760, premium_p75: 1240, window_months: 24, coverage: 'full' },
+      fetched_at: '2026-08-01T00:00:00.000Z',
+      expires_at: '2026-11-01T00:00:00.000Z',
+    }]);
+
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+    const lead = res.body.money_lead;
+    expect(lead).toBeTruthy();
+    expect(lead.kind).toBe('flood_premium');
+    expect(lead.headline).toMatch(/\$480–\$1,240 a year/);
+    // Scope stated, and never sold as a quote.
+    expect(lead.scope).toBe('census tract');
+    expect(lead.detail).toMatch(/not a quote/i);
+    expect(lead.headline).not.toMatch(/your (home|policy|premium)/i);
+  });
+
+  test('falls back to the tiles rather than inventing a figure', async () => {
+    // No NFIP benchmark and no HUD row for this county.
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+    expect(res.body.money_lead).toBeNull();
+    // The preview still works — the tiles carry it exactly as before.
+    expect(res.body.free.flood).toBeTruthy();
+    expect(res.body.free.density).toBeTruthy();
+  });
+
+  // ── Every figure in the rent lead must come off the HUD row ──
+  //
+  // HUD prices all but ~14 US counties at a SINGLE 2-bedroom number:
+  // fmr_hi[2] === fmr_lo[2] in 3,209 of the 3,223 rows migration 158
+  // seeds. The lead computed `Math.max(fmr_hi[2], lo * 1.2)`, so for
+  // 99.6% of the country it rendered an upper bound HUD never published,
+  // under a bare "HUD Fair Market Rents" attribution — on a branch whose
+  // own comment promises the preview "falls back to the tiles rather
+  // than inventing a number". The T1 dashboard section does extend a
+  // single figure by 20%, but says so in the same sentence; the
+  // anonymous lead had no such clause.
+  test('a county HUD prices at ONE number is shown as one number', async () => {
+    seedTable('HudFmr', [{
+      county_fips: '41051', fiscal_year: 2026, county_name: 'Multnomah County', state_abbr: 'OR',
+      area_name: 'Portland', fmr_lo: [1400, 1600, 1922, 2400, 2800], fmr_hi: [1400, 1600, 1922, 2400, 2800],
+    }]);
+
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    const lead = res.body.money_lead;
+    expect(lead.kind).toBe('rent_band');
+    expect(lead.low).toBe(1922);
+    // 1922 * 1.2 = 2306 — a figure HUD never published.
+    expect(lead.high).toBe(1922);
+    expect(lead.headline).not.toContain('2,306');
+
+    // Stronger and drift-proof: every dollar figure in the rendered copy
+    // must appear somewhere in the HUD row it cites.
+    const hudFigures = new Set([1400, 1600, 1922, 2400, 2800].map((n) => n.toLocaleString('en-US')));
+    for (const shown of lead.headline.match(/\$[\d,]+/g) || []) {
+      expect(hudFigures).toContain(shown.slice(1));
+    }
+  });
+
+  test('a county HUD DOES publish a range for keeps HUD’s own upper figure', async () => {
+    // Cumberland County, ME is one of the ~14. Its real high is 2130;
+    // the old Math.max discarded that in favour of 1833 * 1.2 = 2200.
+    seedTable('HudFmr', [{
+      county_fips: '41051', fiscal_year: 2026, county_name: 'Cumberland County', state_abbr: 'ME',
+      area_name: 'Portland', fmr_lo: [1400, 1600, 1833, 2400, 2800], fmr_hi: [1400, 1600, 2130, 2400, 2800],
+    }]);
+
+    const lead = (await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' })).body.money_lead;
+    expect(lead.low).toBe(1833);
+    expect(lead.high).toBe(2130);
+    expect(lead.headline).not.toContain('2,200');
+  });
+
+  test('an anonymous view does not take a slot in the NFIP warm queue', async () => {
+    // The warm job pulls 3 tracts per run, 12 runs an hour, FIFO on the
+    // pending lane. Letting drive-by previews enqueue put anonymous
+    // traffic in front of tracts where someone actually lives — reads
+    // never gate on expiry, so the visible effect is a benchmark that
+    // quietly stops being refreshed rather than one that disappears.
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+
+    const pending = getTable('PlaceSectionCache')
+      .filter((r) => r.section_id === '_nfip_tract' && r.payload && r.payload.pending);
+    expect(pending).toEqual([]);
+  });
+
+  test('a geocoder that cannot resolve the tract is called ONCE, not three times', async () => {
+    // The census teaser and the money lead share one tract resolution.
+    // Passing the resolved VALUE made `null` — "tried, could not place
+    // it" — indistinguishable from "no hint given", so both consumers
+    // re-resolved and a failing geocoder took three round trips per
+    // request, at the exact moment it was least able to serve them.
+    installFetch({ geocoderOk: false });
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+    // ONE shared tract resolution (teaser + money lead + county) — the civic
+    // districts layer is a distinct layers=all query on the same host.
+    expect(countFetch('geocoding.geo.census.gov')).toBe(2);
+  });
+
+  test('never leaks a count below the density floor alongside the lead', async () => {
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(JSON.stringify(res.body)).not.toContain('verified_users_count');
+    expect(res.body.free.density.bucket).toBeDefined();
+  });
+});
+
+// Regression: the NFIP quantile returns a RAW OpenFEMA premium, which
+// carries cents. Both native clients type money_lead.low/high as Int, so
+// a fractional value fails the decode and takes the entire preview down.
+test('the money lead is always whole dollars, even from fractional premiums', async () => {
+  seedTable('PlaceSectionCache', [{
+    cache_key: 'tract:41051001902',
+    section_id: '_nfip_tract',
+    payload: { policy_count: 128, premium_p25: 480.5, premium_median: 760.25, premium_p75: 1243.75, window_months: 24, coverage: 'full' },
+    fetched_at: '2026-08-01T00:00:00.000Z',
+    expires_at: '2026-11-01T00:00:00.000Z',
+  }]);
+
+  const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+  const lead = res.body.money_lead;
+  expect(Number.isInteger(lead.low)).toBe(true);
+  expect(Number.isInteger(lead.high)).toBe(true);
+  // And the headline must not print a stray decimal.
+  expect(lead.headline).not.toMatch(/\.\d/);
+  expect(lead.headline).toMatch(/\$481–\$1,244 a year/);
 });

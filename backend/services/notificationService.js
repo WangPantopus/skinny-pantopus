@@ -222,6 +222,8 @@ const HOME_TYPES = new Set([
   'new_ownership_claim', 'ownership_dispute',
   'challenge_window_opened', 'ownership_transfer_received',
   'tenant_request',
+  // Home Record Watch (Wave 2b) — governed by the home-reminders toggle.
+  'rate_watch',
 ]);
 const MAIL_TYPES = new Set([
   'mail_new', 'mail_summary', 'mail_urgent', 'mail_interrupt',

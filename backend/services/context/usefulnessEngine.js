@@ -12,6 +12,47 @@ const logger = require('../../utils/logger');
 const MAX_SIGNALS = 5;
 const RECENT_EXACT_LOOKBACK = 3;
 
+// ── Cost of inaction ────────────────────────────────────────────────
+//
+// The ranking score answers "how interesting is this?". That is the right
+// question for the Hub card, which the user chose to open. It is the wrong
+// question for a push, which interrupts them.
+//
+// This answers the push question instead: what does it COST the user if
+// they don't learn this in the next day? A missed bill is a late fee. A
+// wind warning is a broken fence. A seasonal gutter tip costs nothing —
+// it is equally true tomorrow, and next week.
+//
+// The distinction matters because a seasonal tip scores ~0.224, which
+// clears the 0.20 ranking bar, so without this the product pushes "clean
+// your gutters" on every otherwise-quiet day. A notification channel
+// only survives if the user never regrets opening it.
+//
+// 0 = nothing is lost by not knowing · 1 = real money, safety, or a
+// deadline passes.
+const COST_OF_INACTION = {
+  alert: 1.00,          // severe weather — property and safety
+  bill_due: 0.85,       // a late fee is a hard dollar amount
+  gig: 0.75,            // a paid commitment with a counterparty
+  calendar: 0.70,       // an appointment that will not repeat
+  temperature: 0.65,    // only generated for extremes — pipes, health
+  task_due: 0.55,
+  mail: 0.55,           // urgent mail carries deadlines
+  aqi: 0.50,            // only generated when noteworthy
+  precipitation: 0.45,  // plans change, things get wet
+  local_update: 0.30,   // a nearby change worth knowing today
+  seasonal: 0.10,       // equally true tomorrow
+  evening_tip: 0.05,
+  weather: 0.05,        // the lock screen already shows this
+};
+
+/** What it costs the user not to know this signal today, 0–1. */
+function costOfInaction(signal) {
+  if (!signal) return 0;
+  const base = COST_OF_INACTION[signal.kind];
+  return typeof base === 'number' ? base : 0.20; // unknown kinds stay below the push bar
+}
+
 // ── Signal generators ───────────────────────────────────────────────
 
 /**
@@ -498,7 +539,10 @@ function rankSignals(inputs) {
     ...generateSeasonalSignals(seasonal, { isWeekend }),
   ]
     .map((signal) => applyHistoryAdjustments(signal, recentBriefings))
-    .filter(Boolean);
+    .filter(Boolean)
+    // Ranking order is unchanged — this only annotates each signal with
+    // what it costs to miss, which the push gate reads. See COST_OF_INACTION.
+    .map((signal) => ({ ...signal, cost_of_inaction: costOfInaction(signal) }));
 
   // Sort by score descending, cap at MAX_SIGNALS
   candidates.sort((a, b) => b.score - a.score);
@@ -528,4 +572,4 @@ function rankSignals(inputs) {
   };
 }
 
-module.exports = { rankSignals, computeDisplayMode };
+module.exports = { rankSignals, computeDisplayMode, costOfInaction, COST_OF_INACTION };

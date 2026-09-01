@@ -931,6 +931,27 @@ public struct HubTabRoot: View {
             path.append(.mailboxRoot)
             path.append(.vacationHold)
             _ = router.consume()
+        case let .place(homeId, slug):
+            // `pantopus://place` — the destination every Place-derived push
+            // carries. Before this, Place had no deep link at all: the Home
+            // tab auto-landed on it once per launch and there was no way
+            // back after a swipe, while briefing pushes routed to `/hub`.
+            //
+            // Server-sent links carry the home id, so the common path pushes
+            // the dashboard straight away. A bare link has to resolve the
+            // primary home the same way the auto-land does — the `.task`
+            // auto-land only fires on an empty stack, so it cannot be relied
+            // on for a link arriving mid-session.
+            _ = router.consume()
+            if let homeId, !homeId.isEmpty {
+                pushPlace(homeId: homeId, slug: slug)
+            } else {
+                Task {
+                    if let resolved = await Self.primaryHomeId() {
+                        pushPlace(homeId: resolved, slug: slug)
+                    }
+                }
+            }
         case .mailDay:
             // pantopus://mailbox/mailday lands on the Mailbox root first
             // so Back walks back through the drawer view, then pushes
@@ -3052,6 +3073,17 @@ public struct HubTabRoot: View {
     /// W3 — the primary home id used to auto-land the Home tab on Place.
     /// Prefers the verified primary owner, else the first home; nil when
     /// the user has no home (Hub stays the landing).
+    /// Push the Place dashboard, and a group-detail page on top when the
+    /// link named one. The dashboard always goes on first so Back lands
+    /// there rather than leaving the stack — matching `.mailDay` above.
+    /// An unrecognised slug degrades to the dashboard rather than a dead end.
+    private func pushPlace(homeId: String, slug: String?) {
+        path.append(.placeDashboard(homeId: homeId))
+        if let slug, let group = PlaceDetailGroup(rawValue: slug) {
+            path.append(.placeDetail(homeId: homeId, group: group))
+        }
+    }
+
     private static func primaryHomeId() async -> String? {
         guard let response: MyHomesResponse = try? await APIClient.shared.request(
             HomesEndpoints.myHomes()

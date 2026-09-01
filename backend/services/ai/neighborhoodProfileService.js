@@ -58,12 +58,38 @@ async function timedFetch(url, opts = {}) {
     return res;
   } catch (err) {
     clearTimeout(timeout);
+    // ENDPOINT ONLY, NEVER THE QUERY STRING.
+    //
+    // `url.slice(0, 120)` looked harmless and was not: these URLs carry
+    // the exact coordinates as `?x=…&y=…`, well inside the first 120
+    // characters. So the coordinate meta fields elsewhere in this file
+    // were coarsened to ~110m while the log line beside them still
+    // printed the full-precision original.
+    //
+    // It matters because apm.js logs `user_id` for any request over
+    // 500ms, and a Scout report — which fans out to FEMA, the Census
+    // Bureau and the EPA — almost always is. The two lines land seconds
+    // apart in the same stream, and together they reconstruct "this
+    // account looked at this building".
+    const endpoint = safeEndpoint(url);
     if (err.name === 'AbortError') {
-      logger.warn('Neighborhood profile fetch timeout', { url: url.slice(0, 120) });
+      logger.warn('Neighborhood profile fetch timeout', { endpoint });
     } else {
-      logger.error('Neighborhood profile fetch error', { url: url.slice(0, 120), error: err.message });
+      logger.error('Neighborhood profile fetch error', { endpoint, error: err.message });
     }
     return null;
+  }
+}
+
+/** Host + path of a URL, with the query string dropped. */
+function safeEndpoint(url) {
+  try {
+    const u = new URL(String(url));
+    return `${u.host}${u.pathname}`;
+  } catch {
+    // Not parseable — return nothing rather than risk printing the raw
+    // string, which is the thing we are trying not to print.
+    return 'unparseable-url';
   }
 }
 
@@ -75,12 +101,25 @@ async function timedFetch(url, opts = {}) {
  * @param {number} lng
  * @returns {Promise<{ tractId: string, stateCode: string, countyCode: string }|null>}
  */
+// Log WHERE a geocode failed, never WHICH BUILDING.
+//
+// These lines carried exact { lat, lng } — finer than anything the cache
+// stores (geohash-7, ~150m) and finer than the request line itself. On
+// Scout and the anonymous preview the coordinate IS the address a person
+// typed, so a warn-level log of a provider hiccup was quietly the most
+// precise record of the lookup anywhere in the system. Three decimal
+// places is ~110m: enough to tell Portland from Brooklyn when reading a
+// log, not enough to name a house.
+function coarse(lat, lng) {
+  return { near: `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}` };
+}
+
 async function geocodeToTract(lat, lng) {
   const url = `https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=${lng}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&format=json`;
 
   const res = await timedFetch(url);
   if (!res || !res.ok) {
-    logger.warn('Census geocoder failed', { lat, lng, status: res?.status });
+    logger.warn('Census geocoder failed', { ...coarse(lat, lng), status: res?.status });
     return null;
   }
 
@@ -90,7 +129,7 @@ async function geocodeToTract(lat, lng) {
     const tracts = geographies?.['Census Tracts'] || geographies?.['2020 Census Tracts'] || [];
 
     if (tracts.length === 0) {
-      logger.warn('Census geocoder returned no tracts', { lat, lng });
+      logger.warn('Census geocoder returned no tracts', coarse(lat, lng));
       return null;
     }
 
@@ -102,7 +141,7 @@ async function geocodeToTract(lat, lng) {
 
     return { tractId, stateCode, countyCode };
   } catch (err) {
-    logger.error('Census geocoder parse error', { lat, lng, error: err.message });
+    logger.error('Census geocoder parse error', { ...coarse(lat, lng), error: err.message });
     return null;
   }
 }

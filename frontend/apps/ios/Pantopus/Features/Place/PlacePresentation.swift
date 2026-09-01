@@ -83,6 +83,24 @@ enum PlacePresentation {
         return f.string(from: d)
     }
 
+    /// "Mar 2023" from a bare calendar month ("2023-03"). NEVER routed
+    /// through an instant: midnight-UTC-on-the-1st formatted in a
+    /// US-local zone is the previous day — every US timezone rendered
+    /// the user's one entered fact as the WRONG month.
+    static func fmtYearMonth(_ yearMonth: String?) -> String? {
+        guard let raw = yearMonth?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = TimeZone(identifier: "UTC")
+        parse.dateFormat = "yyyy-MM"
+        guard let date = parse.date(from: raw) else { return nil }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "en_US_POSIX")
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.dateFormat = "MMM yyyy"
+        return out.string(from: date)
+    }
+
     /// Parses a LOCAL wall-clock datetime with no zone or seconds
     /// ("2026-06-12T05:19") — the shape sunrise/sunset arrive in.
     private static let localDateTimeFormatter: DateFormatter = {
@@ -128,6 +146,18 @@ enum PlacePresentation {
         }
     }
 
+    /// The viewer's Real Rent standing — a band position only. Never a
+    /// rank and never a headcount of who pays more, which would be a
+    /// count of identifiable households.
+    static func realRentStandingChip(_ standing: PlaceRealRentStanding?) -> PlaceChipModel? {
+        switch standing {
+        case .belowBand: PlaceChipModel(tone: .success, text: "Below the band", icon: .trendingDown)
+        case .aboveBand: PlaceChipModel(tone: .warning, text: "Above the band", icon: .trendingUp)
+        case .inBand: PlaceChipModel(tone: .neutral, text: "In the band")
+        case .unknown, .none: nil
+        }
+    }
+
     // ── per-section display config (icon/title/layout) ─────────
 
     static func config(for id: PlaceSectionID) -> PlaceSectionDisplayConfig {
@@ -136,8 +166,11 @@ enum PlacePresentation {
         case .airQuality: .init(icon: .wind, title: "Air quality", inline: true)
         case .alerts: .init(icon: .bell, title: "Alerts", inline: true)
         case .sunriseSunset: .init(icon: .sunrise, title: "Sunrise & sunset", inline: true)
+        case .goodDayTo: .init(icon: .listChecks, title: "Good day to\u{2026}", inline: true)
         case .yourHome: .init(icon: .home, title: "Your home", sparkline: true)
+        case .homeSystems: .init(icon: .wrench, title: "Systems", inline: true)
         case .flood: .init(icon: .waves, title: "Flood", inline: true)
+        case .heatCold: .init(icon: .sun, title: "Heat & cold", inline: true)
         case .seismic: .init(icon: .activity, title: "Earthquake", inline: true)
         case .wildfire: .init(icon: .flame, title: "Wildfire", inline: true)
         case .leadRadon: .init(icon: .testTube, title: "Lead & radon")
@@ -148,6 +181,8 @@ enum PlacePresentation {
         case .billBenchmark: .init(icon: .zap, title: "Bill benchmark")
         case .incentives: .init(icon: .badgePercent, title: "Incentives")
         case .rentBand: .init(icon: .building2, title: "Rent band")
+        case .realRent: .init(icon: .handCoins, title: "Real rent on your block")
+        case .exemptionCheck: .init(icon: .landmark, title: "Homestead exemption")
         case .civicDistricts: .init(icon: .landmark, title: "Your districts")
         case .civicElection: .init(icon: .vote, title: "Next election", inline: true)
         case .unknown: .init(icon: .mapPin, title: "Place")
@@ -184,6 +219,45 @@ enum PlacePresentation {
         case .sunriseSunset:
             guard let d = env.sunriseSunset else { return .init() }
             return .init(value: "\(fmtSunClock(d.sunrise)) · \(fmtSunClock(d.sunset))")
+        case .goodDayTo:
+            guard let d = env.goodDayTo else { return .init() }
+            // Lead with what the row says yes to; a row of no's still reads
+            // usefully rather than rendering blank.
+            let yes = d.tiles.filter { $0.verdict == .yes }
+            if yes.isEmpty {
+                return .init(value: "Nothing outdoors today", statusDot: Theme.Color.warning)
+            }
+            return .init(
+                value: yes.prefix(2).map { $0.label.lowercased() }.joined(separator: ", "),
+                statusDot: Theme.Color.home
+            )
+        case .homeSystems:
+            guard let d = env.homeSystems else { return .init() }
+            if d.summary.pastExpectedCount > 0 {
+                return .init(
+                    value: "\(d.summary.pastExpectedCount) past expected life",
+                    statusDot: Theme.Color.error
+                )
+            }
+            if d.summary.agingCount > 0 {
+                return .init(value: "\(d.summary.agingCount) aging", statusDot: Theme.Color.warning)
+            }
+            return .init(value: "All within expected life", statusDot: Theme.Color.home)
+        case .heatCold:
+            guard let d = env.heatCold else { return .init() }
+            switch d.mode {
+            case "cold":
+                return .init(value: "Freeze expected", statusDot: Theme.Color.error)
+            case "heat":
+                let label = d.heatDays.first { $0.level == d.peakLevel }?.label ?? "Elevated"
+                return .init(
+                    value: "\(label) heat risk",
+                    statusDot: (d.peakLevel ?? 0) >= 3 ? Theme.Color.error : Theme.Color.warning
+                )
+            default:
+                // `none` is the honest common case, not a missing reading.
+                return .init(value: "Nothing expected", statusDot: Theme.Color.home)
+            }
         case .yourHome:
             guard let d = env.yourHome else { return .init() }
             var parts: [String] = []
@@ -239,6 +313,33 @@ enum PlacePresentation {
             let lo = money(d.bandLow) ?? ""
             let hi = money(d.bandHigh) ?? ""
             return .init(value: "\(d.bedrooms)BR market band \(lo)–\(hi)")
+        case .realRent:
+            guard let d = env.realRent else { return .init() }
+            // The server sentence is the reading in BOTH states —
+            // `building` is a true statement of the block's progress, not
+            // an empty state. Amounts only ever ride the ready state.
+            guard d.state == .ready else {
+                return .init(
+                    value: d.summary,
+                    chip: PlaceChipModel(tone: .sky, text: "\(d.reports) of \(d.needed)")
+                )
+            }
+            // No chip when ready: this reading is the SECTION's state,
+            // never the viewer's own position — that chip is detail-only.
+            return .init(value: d.summary)
+        case .exemptionCheck:
+            guard let d = env.exemptionCheck else { return .init() }
+            switch d.filingStatus {
+            case .onFile:
+                return .init(value: "Exemption on file", chip: PlaceChipModel(tone: .success, text: "On file", icon: .badgeCheck))
+            case .noneOnFile:
+                return .init(
+                    value: "Nothing on file — worth checking",
+                    chip: PlaceChipModel(tone: .warning, text: "Not filed", icon: .alertCircle)
+                )
+            case .unknown:
+                return .init(value: "Not reported by this county")
+            }
         case .civicDistricts:
             guard let d = env.civicDistricts else { return .init() }
             let n = d.districts.count

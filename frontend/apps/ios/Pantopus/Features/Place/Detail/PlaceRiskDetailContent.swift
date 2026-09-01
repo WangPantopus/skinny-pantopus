@@ -12,9 +12,28 @@ import SwiftUI
 struct PlaceRiskDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    @State private var fridge: PlaceFridgeCardViewModel
+
+    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel) {
+        self.intel = intel
+        self.vm = vm
+        _fridge = State(initialValue: PlaceFridgeCardViewModel(homeId: vm.homeId))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Heat & cold leads: it is the only thing here with a forecast
+            // horizon short enough to act on today. The rest are standing facts.
+            if let heat = vm.section(.heatCold, in: intel) {
+                PlaceDetailSectionLabel(text: "Heat & cold")
+                if let data = heat.heatCold, heat.status == .ready || heat.status == .stale {
+                    HeatColdCard(data: data)
+                    PlaceSourceNote(name: heat.source ?? "", asOf: "7-day forecast")
+                } else {
+                    vm.fallbackCard(heat)
+                }
+            }
+
             PlaceDetailSectionLabel(text: "Flood & hazards")
             VStack(spacing: 8) {
                 if let flood = vm.section(.flood, in: intel) { riskCard(flood) }
@@ -38,6 +57,20 @@ struct PlaceRiskDetailContent: View {
             PlaceDetailSectionLabel(text: "Emergency plan")
             EmergencyChecklist()
             PlaceSourceNote(name: "Ready.gov · American Red Cross", asOf: nil)
+
+            PlaceDetailSectionLabel(text: "Fridge card")
+            if intel.tier == .t4 {
+                PlaceFridgeCardSection(vm: fridge)
+                    .task { await fridge.load() }
+            } else {
+                PlaceLockedCard(
+                    icon: .heartPulse,
+                    title: "The 911-ready household card",
+                    reason: "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
+                    cta: "Verify address",
+                    onTap: nil
+                )
+            }
         }
     }
 
@@ -67,11 +100,49 @@ struct PlaceRiskDetailContent: View {
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
+                    if let nfip = env.flood?.nfip {
+                        nfipBlock(nfip)
+                    }
                 }
             }
         } else {
             vm.fallbackCard(env)
         }
+    }
+
+    // Wave 2 — what flood policies in this tract actually cost. Absent
+    // while the benchmark warms or sits below the 10-policy floor, so
+    // the card degrades to zone-only. A benchmark, never a quote.
+    @ViewBuilder
+    private func nfipBlock(_ nfip: PlaceFloodNfipData) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Divider()
+            Text("What flood policies near you cost")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .textCase(.uppercase)
+            let band = "\(PlacePresentation.money(nfip.premiumP25) ?? "")–\(PlacePresentation.money(nfip.premiumP75) ?? "")"
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(band)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+                Text("/yr · median \(PlacePresentation.money(nfip.premiumMedian) ?? "")")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            Text(nfipCaption(nfip))
+                .pantopusTextStyle(.caption)
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
+        }
+        .padding(.top, 2)
+    }
+
+    private func nfipCaption(_ nfip: PlaceFloodNfipData) -> String {
+        let sampled = nfip.coverage == "partial" ? " (sampled)" : ""
+        return "Real NFIP premiums for the \(nfip.policyCount) policies written in your census tract "
+            + "over the last \(nfip.windowMonths) months\(sampled). "
+            + "A benchmark, not a quote — premiums vary house to house."
     }
 
     private func riskSummary(_ env: PlaceSectionEnvelope) -> String? {
@@ -241,5 +312,86 @@ private struct EmergencyChecklist: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Heat & cold — the 7-day NWS HeatRisk strip plus the verdict.
+///
+/// Level colours are the published HeatRisk ramp: a data-viz scale with no
+/// token equivalent, the same treatment the EPA AQI bands get. Outside
+/// CONUS the strip is replaced by a coverage note — `heatCovered == false`
+/// is a GAP, not a reading of zero, and must never imply calm.
+private struct HeatColdCard: View {
+    let data: PlaceHeatColdData
+
+    private static let levelColors: [Color] = [
+        Color(red: 0.776, green: 0.894, blue: 0.706),
+        Color(red: 1.0, green: 0.918, blue: 0.380),
+        Color(red: 1.0, green: 0.639, blue: 0.247),
+        Color(red: 0.910, green: 0.267, blue: 0.180),
+        Color(red: 0.541, green: 0.169, blue: 0.886),
+    ]
+
+    private var tone: Color {
+        if data.mode == "none" { return Theme.Color.appTextSecondary }
+        if data.mode == "cold" || (data.peakLevel ?? 0) >= 3 { return Theme.Color.error }
+        return Theme.Color.warning
+    }
+
+    private func weekday(_ date: String, isFirst: Bool) -> String {
+        if isFirst { return "Today" }
+        let parts = date.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return "" }
+        var comps = DateComponents()
+        comps.year = parts[0]; comps.month = parts[1]; comps.day = parts[2]
+        guard let d = Calendar(identifier: .gregorian).date(from: comps) else { return "" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEE"
+        return fmt.string(from: d)
+    }
+
+    var body: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(data.headline)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .foregroundStyle(tone)
+                    if !data.guidance.isEmpty {
+                        Text(data.guidance)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextStrong)
+                    }
+                }
+
+                if data.heatCovered, !data.heatDays.isEmpty {
+                    HStack(alignment: .bottom, spacing: 6) {
+                        ForEach(Array(data.heatDays.prefix(7).enumerated()), id: \.element.date) { idx, day in
+                            VStack(spacing: 4) {
+                                Text(weekday(day.date, isFirst: idx == 0))
+                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .foregroundStyle(Theme.Color.appTextSecondary)
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Self.levelColors[min(max(day.level, 0), 4)])
+                                    .frame(height: idx == 0 ? 34 : 22)
+                                Text("\(day.level)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.Color.appTextMuted)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(weekday(day.date, isFirst: idx == 0)): \(day.label)")
+                        }
+                    }
+                    Text("NWS HeatRisk, 0 (little to none) to 4 (extreme). Experimental product.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                } else {
+                    Text("NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
+        }
     }
 }

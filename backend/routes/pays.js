@@ -951,11 +951,17 @@ router.post('/:paymentId/admin-refund', verifyToken, requireAdmin, validate(admi
     const adminUserId = req.user.id;
     const { amount, reason, description } = req.body;
 
+    // `maybeSingle`, not `single`: real PostgREST reports zero rows from
+    // `.single()` as an ERROR (PGRST116), so the guard below answered a
+    // missing payment with 500 "Failed to fetch payment" instead of the
+    // 404 three lines further down. The test suite did not catch it
+    // because the in-memory mock collapsed the two terminals; it models
+    // them separately now, which is what surfaced this.
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from('Payment')
       .select('*')
       .eq('id', paymentId)
-      .single();
+      .maybeSingle();
 
     if (paymentError) {
       logger.error('Admin refund: error fetching payment', { error: paymentError.message, paymentId });

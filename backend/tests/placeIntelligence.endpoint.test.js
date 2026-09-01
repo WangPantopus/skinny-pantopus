@@ -79,6 +79,51 @@ function defaultHubToday() {
   };
 }
 
+// The `detail: true` shape — what the providers actually cache and what
+// getHubToday now passes through instead of dropping at the block step.
+function detailedHubToday() {
+  return {
+    fetched_at: '2026-06-07T09:12:00.000Z',
+    weather: {
+      current_temp_f: 62,
+      condition_code: 'clear',
+      condition_label: 'Clear',
+      high_f: 68,
+      low_f: 49,
+      precipitation_next_6h: false,
+      precipitation_start_at: null,
+      feels_like_f: 59,
+      humidity_pct: 71,
+      uv_index: 4,
+      dew_point_f: null,
+      wind_mph: 6,
+      hourly: [
+        { datetime_utc: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'mostly_clear', precip_chance_pct: 5 },
+        { datetime_utc: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance_pct: 70 },
+        // Dropped: no usable temperature.
+        { datetime_utc: '2026-06-07T12:00:00.000Z', temp_f: null, condition_code: 'rain', precip_chance_pct: 80 },
+      ],
+      daily: [
+        { date: '2026-06-07', high_f: 68, low_f: 49, condition_code: 'clear', precip_chance_pct: 10 },
+        { date: '2026-06-08', high_f: 71, low_f: 52, condition_code: 'partly', precip_chance_pct: 20 },
+        // Dropped: the contract types both bounds as non-null numbers.
+        { date: '2026-06-09', high_f: 74, low_f: null, condition_code: 'clear', precip_chance_pct: 0 },
+      ],
+    },
+    aqi: { index: 38, category: 'Good', is_noteworthy: false, dominant_pollutant: 'PM2.5' },
+    alerts: [{
+      id: 'NWS-1',
+      severity: 'severe',
+      title: 'Wind Advisory',
+      starts_at: '2026-06-07T14:00:00.000Z',
+      ends_at: '2026-06-08T02:00:00.000Z',
+      headline: 'Wind Advisory issued June 7 at 7:00AM PDT until June 7 at 7:00PM PDT',
+      description: 'Southwest winds 20 to 30 mph with gusts up to 45 mph expected.',
+      instruction: 'Secure loose outdoor objects and use extra care when driving.',
+    }],
+  };
+}
+
 function defaultNeighborhoodProfile() {
   return {
     profile: {
@@ -126,6 +171,213 @@ describe('GET /api/homes/:id/intelligence', () => {
   afterAll(() => {
     if (savedAttomKey === undefined) delete process.env.ATTOM_API_KEY;
     else process.env.ATTOM_API_KEY = savedAttomKey;
+  });
+
+  // ── Regression: the Today section used to hardcode `hourly: []`,
+  // `daily: []`, `feels_like_f: null` and `dominant_pollutant: null`, and
+  // set both the alert headline and description to the alert title —
+  // discarding data the providers had already fetched and cached. These
+  // assertions fail against that behavior.
+  describe('Today section carries the full already-fetched payload', () => {
+    beforeEach(() => {
+      providerOrchestrator.getHubToday.mockResolvedValue(detailedHubToday());
+      seedHome();
+    });
+
+    test('fetches the provider payload exactly ONCE per request', async () => {
+      // composeToday and composeHeatCold both need it, and both used to call
+      // getHubToday themselves. The 2-minute memo does not absorb that: the
+      // cache entry is written only after the pipeline completes and the
+      // composers run concurrently, so every request made two full provider
+      // round-trips.
+      await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+      expect(providerOrchestrator.getHubToday).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not fetch the provider payload when no section needs it', async () => {
+      await request(app)
+        .get(`/api/homes/${HOME_ID}/intelligence?sections=flood`)
+        .set('x-test-user-id', USER);
+      expect(providerOrchestrator.getHubToday).not.toHaveBeenCalled();
+    });
+
+    test('requests the detail payload anchored to the REQUESTED home', async () => {
+      await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=weather`).set('x-test-user-id', USER);
+      // atLocation is the fix for the wrong-city bug: the hub payload used
+      // to resolve from the viewer's location (custom pin / primary home),
+      // which put one city's freeze guidance on another city's dashboard.
+      expect(providerOrchestrator.getHubToday).toHaveBeenCalledWith(USER, expect.objectContaining({
+        detail: true,
+        atLocation: expect.objectContaining({ latitude: 45.51, longitude: -122.65, homeId: HOME_ID }),
+      }));
+    });
+
+    test('weather carries feels-like plus the hourly and daily forecasts', async () => {
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+      const w = sectionsById(res.body).weather;
+
+      expect(w.status).toBe('ready');
+      expect(w.data.feels_like_f).toBe(59);
+
+      // Rows without a usable temperature are dropped, not rendered as gaps.
+      expect(w.data.hourly).toEqual([
+        { time: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'partly_cloudy', precip_chance: 5 },
+        { time: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance: 70 },
+      ]);
+
+      // A day missing either bound is dropped — the contract types both as numbers.
+      expect(w.data.daily).toEqual([
+        { date: '2026-06-07', condition_code: 'clear', high_f: 68, low_f: 49, precip_chance: 10 },
+        { date: '2026-06-08', condition_code: 'partly_cloudy', high_f: 71, low_f: 52, precip_chance: 20 },
+      ]);
+    });
+
+    test('air quality names the dominant pollutant as a machine token', async () => {
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+      expect(sectionsById(res.body).air_quality.data.dominant_pollutant).toBe('pm25');
+    });
+
+    test('alerts carry the real headline and the description plus instruction', async () => {
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+      const alert = sectionsById(res.body).alerts.data.active[0];
+
+      expect(alert.event).toBe('Wind Advisory');
+      expect(alert.severity).toBe('warning');
+      expect(alert.headline).toBe('Wind Advisory issued June 7 at 7:00AM PDT until June 7 at 7:00PM PDT');
+      expect(alert.headline).not.toBe(alert.event);
+      expect(alert.description).toContain('gusts up to 45 mph');
+      // The protective-action instruction is the actionable half — kept.
+      expect(alert.description).toContain('Secure loose outdoor objects');
+    });
+
+    test('degrades to empty arrays when the provider returns no forecast', async () => {
+      providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+      const w = sectionsById(res.body).weather;
+
+      expect(w.status).toBe('ready');
+      expect(w.data.hourly).toEqual([]);
+      expect(w.data.daily).toEqual([]);
+      expect(w.data.feels_like_f).toBeNull();
+      expect(sectionsById(res.body).air_quality.data.dominant_pollutant).toBeNull();
+    });
+  });
+
+  // Regression: the dashboard used to floor density with its own inline copy
+  // of the k-anon logic (k=10) while the audited helper (k=5) had no callers
+  // at all. Two implementations of one privacy primitive is itself a leak —
+  // the same cell reporting different buckets on two surfaces narrows the
+  // count by comparison. These pin the single reconciled floor.
+  describe('block density uses one k-anon floor', () => {
+    const { K_ANON_MIN, FEW_MAX } = require('../services/place/densityReader');
+
+    async function bucketFor(count) {
+      seedHome();
+      seedTable('NeighborhoodPreview', [{ geohash: GEOHASH, verified_users_count: count }]);
+      const res = await request(app)
+        .get(`/api/homes/${HOME_ID}/intelligence?sections=block_density`)
+        .set('x-test-user-id', USER);
+      return sectionsById(res.body).block_density.data.bucket;
+    }
+
+    test('floors everything below the k-anon minimum to "forming"', async () => {
+      expect(await bucketFor(1)).toBe('forming');
+      expect(await bucketFor(K_ANON_MIN - 1)).toBe('forming');
+    });
+
+    test('opens the "few" band exactly at the floor', async () => {
+      expect(await bucketFor(K_ANON_MIN)).toBe('few');
+      expect(await bucketFor(FEW_MAX)).toBe('few');
+    });
+
+    test('reads as "growing" above the band', async () => {
+      expect(await bucketFor(FEW_MAX + 1)).toBe('growing');
+    });
+
+    test('never returns the raw count', async () => {
+      seedHome();
+      seedTable('NeighborhoodPreview', [{ geohash: GEOHASH, verified_users_count: 17 }]);
+      const res = await request(app)
+        .get(`/api/homes/${HOME_ID}/intelligence?sections=block_density`)
+        .set('x-test-user-id', USER);
+      const data = sectionsById(res.body).block_density.data;
+      expect(Object.keys(data).sort()).toEqual(['bucket', 'label']);
+      expect(JSON.stringify(data)).not.toContain('17');
+    });
+  });
+
+  // Regression: bill_type was hardcoded to 'electric' on BOTH the benchmark
+  // read and the own-amount read, while the refresh job has always grouped
+  // by type — so gas/water/internet benchmarks were computed and ignored.
+  describe('bill benchmark picks a bill it can actually compare', () => {
+    function seedBenchmarks(rows) {
+      seedTable('BillBenchmark', rows.map((r) => ({ geohash: GEOHASH, ...r })));
+    }
+
+    async function benchmark() {
+      const res = await request(app)
+        .get(`/api/homes/${HOME_ID}/intelligence?sections=bill_benchmark`)
+        .set('x-test-user-id', USER);
+      return sectionsById(res.body).bill_benchmark;
+    }
+
+    beforeEach(() => seedHome());
+
+    test('surfaces a non-electric benchmark that used to be ignored', async () => {
+      seedBenchmarks([
+        { bill_type: 'internet', avg_amount_cents: 7000, household_count: 14 },
+        { bill_type: 'internet', avg_amount_cents: 9000, household_count: 14 },
+      ]);
+
+      const s = await benchmark();
+      expect(s.status).toBe('ready');
+      expect(s.data.utility).toBe('internet');
+      expect(s.data.summary).toContain('internet');
+    });
+
+    test('prefers the type the resident can be compared on', async () => {
+      // Electric has the bigger cohort, but the resident only logs internet —
+      // and a comparison is the whole point of the section.
+      seedBenchmarks([
+        { bill_type: 'electric', avg_amount_cents: 16000, household_count: 40 },
+        { bill_type: 'electric', avg_amount_cents: 20000, household_count: 40 },
+        { bill_type: 'internet', avg_amount_cents: 7000, household_count: 12 },
+        { bill_type: 'internet', avg_amount_cents: 9000, household_count: 12 },
+      ]);
+      seedTable('HomeBill', [{ home_id: HOME_ID, bill_type: 'internet', amount: 6000 }]);
+
+      const s = await benchmark();
+      expect(s.data.utility).toBe('internet');
+      expect(s.data.your_amount).toBe(60);
+      expect(s.data.comparison).toBe('lower');
+      expect(s.data.summary).toContain('internet');
+    });
+
+    test('falls back to the largest cohort when nothing is comparable', async () => {
+      seedBenchmarks([
+        { bill_type: 'water', avg_amount_cents: 4000, household_count: 11 },
+        { bill_type: 'electric', avg_amount_cents: 16000, household_count: 40 },
+      ]);
+
+      expect((await benchmark()).data.utility).toBe('electric');
+    });
+
+    test('never benchmarks rent or mortgage', async () => {
+      // Wildly home-specific: comparing them tells the resident nothing, and
+      // rent already has its own section from HUD Fair Market Rents.
+      seedBenchmarks([
+        { bill_type: 'rent', avg_amount_cents: 210000, household_count: 30 },
+        { bill_type: 'mortgage', avg_amount_cents: 320000, household_count: 30 },
+      ]);
+      seedTable('HomeBill', [{ home_id: HOME_ID, bill_type: 'rent', amount: 200000 }]);
+
+      expect((await benchmark()).status).toBe('unavailable');
+    });
+
+    test('still honours the k-anon cohort floor', async () => {
+      seedBenchmarks([{ bill_type: 'gas', avg_amount_cents: 5000, household_count: 4 }]);
+      expect((await benchmark()).status).toBe('unavailable');
+    });
   });
 
   test('composes the grouped contract with per-section status', async () => {
@@ -292,5 +544,57 @@ describe('GET /api/homes/:id/intelligence', () => {
     seedHome();
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', OTHER);
     expect(res.status).toBe(403);
+  });
+
+  // real_rent is the FIRST section to use Band D (the proven-resident
+  // tier). The band machinery existed but had never carried a section,
+  // so these pin that the gate actually bites — a claimed-but-unverified
+  // owner must not see what the block pays, and must not be able to
+  // infer the block's progress either.
+  describe('real_rent — the first Band D section', () => {
+    test('a claimed-but-unverified owner gets a locked envelope with no data', async () => {
+      seedHome();
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+
+      expect(res.body.tier).toBe('T3');
+      const realRent = sectionsById(res.body).real_rent;
+      expect(realRent).toBeDefined();
+      expect(realRent.access).toBe('locked');
+      expect(realRent.data).toBeNull();
+      // Not even the block's progress leaks below the tier.
+      expect(JSON.stringify(realRent)).not.toContain('reports');
+      expect(realRent.unavailable_reason).toMatch(/verify your address/i);
+    });
+
+    test('a verified resident gets the section, in its honest building state', async () => {
+      seedHome({ owner_id: 'someone-else' });
+      seedTable('HomeOccupancy', [{
+        id: 'occ-1',
+        home_id: HOME_ID,
+        user_id: USER,
+        is_active: true,
+        start_at: null,
+        end_at: null,
+        verification_status: 'verified',
+        role_base: 'member',
+      }]);
+
+      const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
+
+      expect(res.body.tier).toBe('T4');
+      const realRent = sectionsById(res.body).real_rent;
+      expect(realRent.access).toBe('available');
+      // An empty block is 'building' with progress — never an error and
+      // never an empty state.
+      expect(realRent.status).toBe('partial');
+      expect(realRent.data.state).toBe('building');
+      expect(realRent.data.reports).toBe(0);
+      expect(realRent.data.needed).toBe(10);
+      expect(realRent.data.summary).toMatch(/first/i);
+      // Below the floor NOTHING about money is present.
+      expect(realRent.data.rent_median).toBeNull();
+      expect(realRent.data.rent_p25).toBeNull();
+      expect(realRent.data.sample_size).toBeNull();
+    });
   });
 });

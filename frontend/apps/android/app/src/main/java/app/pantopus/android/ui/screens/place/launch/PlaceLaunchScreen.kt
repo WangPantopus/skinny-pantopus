@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceGroup
+import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlacePreviewLockedSection
 import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
@@ -47,6 +49,7 @@ import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 
 @Composable
 fun PlaceLaunchScreen(
@@ -296,6 +299,10 @@ private fun PreviewBody(
                         color = PantopusColors.appText,
                     )
                 }
+                // A real dollar band when one exists for this address,
+                // and nothing at all when it does not — the tiles carry
+                // the page as before. Never synthesized client-side.
+                preview.moneyLead?.takeIf { it.isRenderable }?.let { MoneyLeadCard(it) }
                 preview.free?.let { free ->
                     PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
                     PlaceSectionCard(
@@ -351,6 +358,78 @@ private fun PreviewBody(
         }
     }
 }
+
+/**
+ * The preview's lead figure (Wave 4). Present only when the backend
+ * had a real benchmark — a census-tract NFIP premium band or a county
+ * HUD fair-market rent — and it carries the scope it is true at so the
+ * reader is not sold a county estimate as their own bill.
+ */
+@Composable
+private fun MoneyLeadCard(lead: PlaceMoneyLead) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .placeCard()
+                .padding(Spacing.s4)
+                .padding(top = 14.dp)
+                .testTag("place.preview.moneyLead"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(PantopusColors.homeBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(PantopusIcon.DollarSign, null, size = 19.dp, strokeWidth = 2f, tint = PantopusColors.home)
+            }
+            Text(
+                lead.headline,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 20.sp,
+                color = PantopusColors.appText,
+            )
+        }
+        // Guarded, the way iOS already guards them: an empty string here
+        // rendered a bare gap where a disclosure belongs.
+        if (lead.detail.isNotEmpty()) {
+            Text(lead.detail, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.appTextSecondary)
+        }
+        // The scope disclosure, rendered STRUCTURALLY rather than trusted
+        // to prose. Every `kind` the server emits today also puts the
+        // scope in `detail`, so this is belt-and-braces — but a dollar
+        // figure is the most believable thing on the page and the easiest
+        // to read as being about THIS home, and the day a lead ships whose
+        // `detail` omits it the figure would stand alone. Web has shown
+        // this since Wave 4; both native clients decoded it and rendered
+        // neither.
+        val footer = scopeFooter(lead)
+        if (footer.isNotEmpty()) {
+            Text(
+                footer,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = PantopusColors.appTextMuted,
+                modifier = Modifier.testTag("place.preview.moneyLead.scope"),
+            )
+        }
+    }
+}
+
+/**
+ * "FEMA · OpenFEMA NFIP policies · census tract-level, not this home"
+ *
+ * Mirrors the web footer and the iOS one. Either half may be absent, so
+ * the parts are joined rather than formatted into a fixed template — an
+ * empty source must not leave a leading separator.
+ */
+private fun scopeFooter(lead: PlaceMoneyLead): String =
+    listOfNotNull(
+        lead.source.takeIf { it.isNotEmpty() },
+        lead.scope.takeIf { it.isNotEmpty() }?.let { "$it-level, not this home" },
+    ).joinToString(" · ")
 
 @Composable
 private fun LockedPreviewCard(

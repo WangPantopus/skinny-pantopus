@@ -8,6 +8,12 @@ export const identitySearch = {
   searchProfiles: jest.fn(),
 };
 
+// Public address typeahead (services/geo) — the signed-out funnel's input.
+export const geo = {
+  autocomplete: jest.fn(),
+  autocompleteWithAbort: jest.fn(),
+};
+
 // P1.6 — audience-profile surface mocks. Tests stub these via mockResolvedValue.
 export const personas = {
   getMyPersona: jest.fn(),
@@ -24,9 +30,12 @@ export const personas = {
 export const chat = {
   getUnifiedConversations: jest.fn(),
 };
-// Hub prefetcher uses api.hub.getHub.
+// Hub prefetcher uses api.hub.getHub; the briefing opt-in card reads
+// and writes preferences through the client (CSRF header lives there).
 export const hub = {
   getHub: jest.fn(),
+  getHubPreferences: jest.fn(),
+  updateHubPreferences: jest.fn(),
 };
 
 export const broadcast = {
@@ -112,6 +121,69 @@ export const homes = {
 export const place = {
   getPlaceIntelligence: jest.fn(),
   getPublicPlacePreview: jest.fn(),
+  putHomeSystem: jest.fn(),
+};
+// Place — residency letters (Phase 1) + scoped live claims (Wave 1).
+export const residencyLetters = {
+  issueResidencyLetter: jest.fn(),
+  listResidencyLetters: jest.fn(),
+  getResidencyLetterPdf: jest.fn(),
+  revokeResidencyLetter: jest.fn(),
+  verifyResidencyLetter: jest.fn(),
+};
+// The component builds its duration picker from this constant at module
+// scope, so the mock must export the real value.
+export const RESIDENCY_CLAIM_EXPIRY_DAYS = [1, 7, 30, 90] as const;
+export const residencyClaims = {
+  issueResidencyClaim: jest.fn(),
+  listResidencyClaims: jest.fn(),
+  listResidencyClaimViews: jest.fn(),
+  revokeResidencyClaim: jest.fn(),
+  verifyResidencyClaim: jest.fn(),
+};
+// Place — 911-ready household fridge cards (Wave 1, #2).
+export const fridgeCards = {
+  issueFridgeCard: jest.fn(),
+  listFridgeCards: jest.fn(),
+  revokeFridgeCard: jest.fn(),
+  getPublicFridgeCard: jest.fn(),
+};
+// Home profile bits the fridge-card composer seeds from.
+export const homeProfile = {
+  getHomeEmergencies: jest.fn(),
+};
+// Place — Block Founders growth mechanic (Wave 3).
+export const blockFounders = {
+  getBlockStatus: jest.fn(),
+  sendBlockInvite: jest.fn(),
+  redeemInviteOptOut: jest.fn(),
+};
+// Place — the Real Rent Benchmark, resident contribution half (Wave 3).
+export const realRent = {
+  getRentReport: jest.fn(),
+  setRentReport: jest.fn(),
+  deleteRentReport: jest.fn(),
+};
+// Place — Unlisted: the address-removal surface (Wave 4).
+export const scout = {
+  getScoutReport: jest.fn(),
+};
+
+export const unlisted = {
+  getPublicUnlisted: jest.fn(),
+  getHomeUnlisted: jest.fn(),
+  setRemovalStatus: jest.fn(),
+};
+export const UNLISTED_REMOVAL_STATUSES = ['todo', 'requested', 'confirmed', 'relisted'] as const;
+// Place — mailbox reality check (Wave 1, #3).
+export const mailboxCheck = {
+  getMailboxCheck: jest.fn(),
+};
+// Place — home record watch, rate-watch half (Wave 2b).
+export const recordWatch = {
+  setRecordWatch: jest.fn(),
+  getRecordWatch: jest.fn(),
+  deleteRecordWatch: jest.fn(),
 };
 export const businesses = {
   getMyBusinesses: jest.fn(),
@@ -124,6 +196,9 @@ export const professional = {
 };
 
 export const getAuthToken = jest.fn();
+// Wedge Phase 1 funnel beacons (fire-and-forget from /start).
+export const recordFunnelEvent = jest.fn();
+export const getFunnelAnonId = jest.fn(() => 'anon-test');
 export const clearAuthToken = jest.fn();
 export const refreshAuthSession = jest.fn();
 

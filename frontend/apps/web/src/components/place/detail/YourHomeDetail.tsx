@@ -11,8 +11,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as api from '@pantopus/api';
 import type { LucideIcon } from 'lucide-react';
-import type { PlaceIntelligence, PlaceYourHomeData } from '@pantopus/types';
+import type { PlaceIntelligence, PlaceYourHomeData, PlaceHomeSystemsData, PlaceHomeSystem } from '@pantopus/types';
 import {
   Calendar,
   Ruler,
@@ -25,6 +26,7 @@ import {
   Lock,
   FileText,
   ChevronRight,
+  Wrench,
 } from 'lucide-react';
 import { SectionCard, LockedCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
@@ -280,9 +282,134 @@ function MortgageEquity({ homeId, homeValue }: { homeId: string | null; homeValu
   );
 }
 
+// ── Systems Ledger ──────────────────────────────────────────
+// The record that compounds. Every tile shows HOW its year is known, so
+// an estimate is never dressed up as a fact — and "It was replaced"
+// resolves without a transaction, because a household must be able to fix
+// its own record without being routed through the marketplace first.
+const SYSTEM_STATUS_TONE: Record<PlaceHomeSystem['status'], { bar: string; text: string }> = {
+  ok: { bar: 'bg-app-success', text: 'text-app-text-secondary' },
+  aging: { bar: 'bg-app-warning', text: 'text-app-warning' },
+  past_expected: { bar: 'bg-app-error', text: 'text-app-error' },
+  unknown: { bar: 'bg-app-border-strong', text: 'text-app-text-muted' },
+};
+
+function SystemRow({ system, onReplaced, isLast }: {
+  system: PlaceHomeSystem;
+  onReplaced: (key: string) => void;
+  isLast: boolean;
+}) {
+  const tone = SYSTEM_STATUS_TONE[system.status];
+  const pct = system.life_remaining === null ? 0 : Math.round(system.life_remaining * 100);
+
+  return (
+    <div className={`px-4 py-3 ${isLast ? '' : 'border-b border-app-border-subtle'}`}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[14.5px] font-semibold text-app-text">{system.label}</span>
+        <span className={`text-[12.5px] font-semibold ${tone.text}`}>
+          {system.installed_year === null
+            ? 'Year unknown'
+            : `${system.installed_year} · ${system.age_years} yr${system.age_years === 1 ? '' : 's'}`}
+        </span>
+      </div>
+
+      <div className="h-[5px] rounded-full bg-app-surface-sunken mt-2 overflow-hidden">
+        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mt-2">
+        <span className="text-[11.5px] text-app-text-muted">
+          {/* Provenance is never hidden — a derived year says so. */}
+          {system.source_label} · typical {system.typical_life_low}–{system.typical_life_high} yrs
+        </span>
+        <button
+          type="button"
+          onClick={() => onReplaced(system.key)}
+          className="text-[12px] font-semibold text-primary-500 hover:underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 rounded"
+        >
+          It was replaced
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SystemsCard({ data, homeId }: { data: PlaceHomeSystemsData; homeId: string | null }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [year, setYear] = useState('');
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(key: string) {
+    if (!homeId) return;
+    const parsed = Number(year);
+    if (!Number.isInteger(parsed) || parsed < 1700 || parsed > new Date().getFullYear() + 1) {
+      setError('Enter a four-digit year.');
+      return;
+    }
+    setError(null);
+    try {
+      // Through the api client, not a raw fetch: cookie-session writes
+      // need the x-csrf-token header the client injects — the raw PUT
+      // 403'd on every attempt and "Try again" could never succeed.
+      await api.place.putHomeSystem(homeId, key, parsed);
+      setSaved(key);
+      setEditing(null);
+      setYear('');
+    } catch {
+      setError("That didn't save. Try again.");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-4 pt-3.5 pb-1 text-[13.5px] text-app-text-strong">{data.summary.headline}</div>
+        {data.systems.map((s, i) => (
+          <div key={s.key}>
+            <SystemRow
+              system={s}
+              isLast={i === data.systems.length - 1 && editing !== s.key}
+              onReplaced={(k) => { setEditing(editing === k ? null : k); setYear(''); setError(null); }}
+            />
+            {editing === s.key ? (
+              <div className="px-4 pb-3 flex items-center gap-2">
+                <label className="sr-only" htmlFor={`year-${s.key}`}>Year {s.label.toLowerCase()} was replaced</label>
+                <input
+                  id={`year-${s.key}`}
+                  inputMode="numeric"
+                  placeholder="Year replaced"
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="w-32 text-[13.5px] px-2.5 py-1.5 rounded-lg border border-app-border bg-app-surface text-app-text"
+                />
+                <button
+                  type="button"
+                  onClick={() => save(s.key)}
+                  className="text-[13px] font-semibold px-3 py-1.5 rounded-lg bg-primary-500 text-white"
+                >
+                  Save
+                </button>
+                {error ? <span className="text-[12px] text-app-error">{error}</span> : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {saved ? (
+        <div className="text-[12.5px] text-app-success px-1">Saved. Reload to see the updated record.</div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function YourHomeDetail({ intelligence, homeId }: { intelligence: PlaceIntelligence; homeId: string | null }) {
   const router = useRouter();
   const home = findPlaceSection(intelligence, 'your_home');
+  const systems = findPlaceSection(intelligence, 'home_systems');
+  const systemsReady = systems
+    && (systems.status === 'ready' || systems.status === 'stale' || systems.status === 'partial')
+    && systems.data;
   const ready = home && (home.status === 'ready' || home.status === 'stale' || home.status === 'partial') && home.data;
   const data = ready ? (home!.data as PlaceYourHomeData) : null;
   const locked = home?.access === 'locked';
@@ -334,6 +461,19 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
                 <MortgageEquity homeId={homeId} homeValue={data.estimated_value} />
               </>
             ) : null}
+          </>
+        )}
+
+        {systemsReady ? (
+          <>
+            <DetailSectionLabel>Systems</DetailSectionLabel>
+            <SystemsCard data={systems!.data as PlaceHomeSystemsData} homeId={homeId} />
+            {systems?.source ? <SourceNote name={systems.source} asOf="typical service life" /> : null}
+          </>
+        ) : systems?.access === 'locked' ? null : (
+          <>
+            <DetailSectionLabel>Systems</DetailSectionLabel>
+            <SectionCard icon={Wrench} title="Systems" state={systems ? statusToState(systems.status) : 'unavailable'} caption={systems?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
           </>
         )}
 

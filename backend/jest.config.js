@@ -15,7 +15,10 @@ module.exports = {
     '^\\.\/logger$': '<rootDir>/tests/__mocks__/logger.js',
     '^../../config/supabaseAdmin$': '<rootDir>/tests/__mocks__/supabaseAdmin.js',
     '^../../utils/logger$': '<rootDir>/tests/__mocks__/logger.js',
+    // Providers under services/context/providers/ reach three levels up.
+    // Without this the real winston loads and throws in the test env.
     '^../../../utils/logger$': '<rootDir>/tests/__mocks__/logger.js',
+    '^../../../config/supabaseAdmin$': '<rootDir>/tests/__mocks__/supabaseAdmin.js',
     '^../services/notificationService$': '<rootDir>/tests/__mocks__/notificationService.js',
     '^../../services/notificationService$': '<rootDir>/tests/__mocks__/notificationService.js',
     '^../notificationService$': '<rootDir>/tests/__mocks__/notificationService.js',

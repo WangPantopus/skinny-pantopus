@@ -134,8 +134,54 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
   }
 }
 
+/**
+ * The janitor migration 156 promised ("expired rows are kept until
+ * overwritten … a future job"). Stale-serving is a feature, so only rows
+ * a full `graceDays` PAST expiry are removed — nothing refreshed them in
+ * a month, so nothing is reading them either. Batched deletes keep any
+ * single run cheap; call it from a job, not a request path.
+ *
+ * @returns {Promise<number>} rows deleted this run.
+ */
+async function cleanupLongExpired({ graceDays = 30, batch = 500, maxBatches = 4 } = {}) {
+  const cutoff = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000).toISOString();
+  let deleted = 0;
+  for (let i = 0; i < maxBatches; i++) {
+    const { data: rows, error } = await supabaseAdmin
+      .from(TABLE)
+      .select('id')
+      .lt('expires_at', cutoff)
+      .order('expires_at', { ascending: true })
+      .limit(batch);
+    if (error) {
+      if (isMissingTableError(error)) warnMissingTableOnce('cleanup', error);
+      else logger.warn('placeSectionCache: cleanup scan failed', { error: error.message });
+      return deleted;
+    }
+    if (!rows || rows.length === 0) break;
+    const { error: delErr } = await supabaseAdmin
+      .from(TABLE)
+      .delete()
+      .in('id', rows.map((r) => r.id));
+    if (delErr) {
+      logger.warn('placeSectionCache: cleanup delete failed', { error: delErr.message });
+      return deleted;
+    }
+    deleted += rows.length;
+    if (rows.length < batch) break;
+  }
+  if (deleted > 0) logger.info('placeSectionCache: janitor removed long-expired rows', { deleted });
+  return deleted;
+}
+
 module.exports = {
   readThrough,
+  cleanupLongExpired,
+  // Direct row access for cache-only composition patterns (NFIP: the
+  // provider is too slow for the request path, so a background job owns
+  // the fetch and the composer only ever reads/marks rows).
+  readRow,
+  writeRow,
   // Exported for testing/janitor use.
   _internals: { isMissingTableError },
 };

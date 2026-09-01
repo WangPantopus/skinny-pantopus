@@ -288,9 +288,16 @@ async function compose({ homeId, userId }) {
   }
 
   // 4. Seasonal context (deterministic, never fails)
+  //
+  // The home's coordinates decide whether the engine's region-specific copy
+  // applies. Omitting them satisfied the old `!hasCoords ||` gate, so this
+  // composer served Portland-specific tips to homes anywhere in the country.
   const seasonalCtx = getSeasonalContext({
     homeYearBuilt: propertyProfile?.year_built || home.year_built || null,
     homePropertyType: propertyProfile?.property_type || home.home_type || null,
+    ...(home.map_center_lat != null && home.map_center_lng != null
+      ? { latitude: Number(home.map_center_lat), longitude: Number(home.map_center_lng) }
+      : {}),
   });
 
   // 5. Build signals

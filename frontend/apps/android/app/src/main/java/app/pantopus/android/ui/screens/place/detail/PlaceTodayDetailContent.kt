@@ -2,6 +2,8 @@ package app.pantopus.android.ui.screens.place.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +14,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,7 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.PlaceAirQualityData
+import app.pantopus.android.data.api.models.place.PlaceGoodDayTile
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSunriseSunsetData
@@ -38,6 +48,9 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import kotlin.math.roundToInt
 
+/** The row shows at most five tiles; the rest stay in the group page. */
+private const val GOOD_DAY_TILE_CAP = 5
+
 @Composable
 fun PlaceTodayDetailContent(intel: PlaceIntelligence) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
@@ -49,6 +62,16 @@ fun PlaceTodayDetailContent(intel: PlaceIntelligence) {
         } else {
             PlaceDetailFallbackCard(env)
         }
+    }
+    intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
+        val data = env.goodDayTo
+        if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
+            PlaceDetailSectionLabel("Good day to\u2026")
+            GoodDayRow(data.tiles)
+            PlaceSourceNote("Derived from today's conditions", PlacePresentation.fmtTime(env.asOf))
+        }
+        // Deliberately silent when there is nothing to answer: an empty
+        // verdict row is worse than no row.
     }
     intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
         PlaceDetailSectionLabel("Air quality")
@@ -80,6 +103,65 @@ fun PlaceTodayDetailContent(intel: PlaceIntelligence) {
         PlaceComingSoonRow(PantopusIcon.Flower2, "Pollen & allergens", "Daily pollen count for your area")
         PlaceComingSoonRow(PantopusIcon.Trash, "Trash & recycling", "Your pickup schedule")
         PlaceComingSoonRow(PantopusIcon.ZapOff, "Power outages", "Live status for your block")
+    }
+}
+
+/**
+ * "Good day to…" — verdicts, not readings. Tapping a tile reveals the
+ * numbers behind it: an opinionated tile that won't show its inputs is
+ * worse than no tile, because one visibly wrong verdict discredits every
+ * other card here.
+ */
+@Composable
+private fun GoodDayRow(tiles: List<PlaceGoodDayTile>) {
+    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    val shown = tiles.take(GOOD_DAY_TILE_CAP)
+    val open = shown.firstOrNull { it.id == openId }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            shown.forEach { tile ->
+                val tint =
+                    when (tile.verdict) {
+                        GoodDayVerdict.YES -> PantopusColors.home
+                        GoodDayVerdict.CAUTION -> PantopusColors.warning
+                        else -> PantopusColors.appTextMuted
+                    }
+                Column(
+                    modifier =
+                        Modifier
+                            .width(108.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(PantopusColors.appSurface)
+                            .clickable { openId = if (openId == tile.id) null else tile.id }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(tile.glyph, fontSize = 19.sp)
+                    Text(
+                        tile.label,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                    Text(tile.answer, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tint)
+                }
+            }
+        }
+        if (open != null) {
+            PlaceDetailCard {
+                Text(
+                    open.label,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextSecondary,
+                )
+                Text(open.because, fontSize = 13.5.sp, color = PantopusColors.appTextStrong)
+            }
+        }
     }
 }
 

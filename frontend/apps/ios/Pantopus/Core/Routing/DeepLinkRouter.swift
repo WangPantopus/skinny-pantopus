@@ -89,6 +89,23 @@ final class DeepLinkRouter {
         /// server state once the persistence layer lands; today the
         /// view-model seeds the scheduling form).
         case vacationHold
+        /// `pantopus://place` — the address dashboard, and the destination
+        /// every Place-derived push should carry.
+        ///
+        /// Both clients auto-land the Home tab on Place, but until now there
+        /// was no way to *return* to it: once the user swiped back, Place was
+        /// unreachable until relaunch, and every briefing/alert push routed
+        /// to `/hub` — the secondary surface.
+        ///
+        /// `homeId` is optional. Server-sent links always carry it (the
+        /// briefing already resolves the home to pick a location), so the
+        /// common path opens the dashboard directly. A bare link falls back
+        /// to the Home tab, whose landing resolver picks the primary home.
+        ///
+        /// `slug` opens a group-detail page — one of `today`, `your-home`,
+        /// `risk`, `block`, `money`, `civic`, `identity`. An unknown slug
+        /// degrades to the dashboard rather than a dead end.
+        case place(homeId: String?, slug: String?)
         /// `pantopus://mailbox/mailday` — the A13.16 My Mail Day editor.
         /// Routed via the mailbox stack so Back returns to the mailbox
         /// root.
@@ -457,6 +474,8 @@ final class DeepLinkRouter {
             return .beacons
         case "discover-hub", "discover_hub", "discoverhub":
             return .discoverHub
+        case "place":
+            return placeDestination(url: url, segments: segments, idQuery: idQuery, comps: comps)
         case "mailbox":
             return mailboxDestination(url: url, segments: segments, idQuery: idQuery)
         case "wallet":
@@ -554,6 +573,33 @@ final class DeepLinkRouter {
             return .editBusinessPage(businessId: id)
         }
         return .businessOwner(businessId: id)
+    }
+
+    /// The group-detail slugs the Place stack understands (mirrors
+    /// `PlaceDetailGroup.slug`). Kept in the router so link parsing never
+    /// depends on feature code; an unrecognised slug degrades to the dashboard.
+    private static let placeDetailSlugs: Set<String> =
+        ["today", "your-home", "risk", "block", "money", "civic", "identity"]
+
+    /// `pantopus://place`                       → dashboard (home resolved client-side)
+    /// `pantopus://place?id=<homeId>`           → that home's dashboard
+    /// `pantopus://place/<homeId>`              → same
+    /// `pantopus://place/<homeId>/<slug>`       → a group-detail page
+    /// `pantopus://place?id=<homeId>&section=<slug>`
+    private func placeDestination(
+        url: URL,
+        segments: [String],
+        idQuery: String?,
+        comps: URLComponents?
+    ) -> Destination {
+        let pathHomeId = segments.dropFirst().first.flatMap { $0.isEmpty ? nil : $0 }
+        let homeId = pathHomeId ?? idQuery.flatMap { $0.isEmpty ? nil : $0 }
+
+        let pathSlug = segments.dropFirst(2).first.flatMap { $0.isEmpty ? nil : $0 }
+        let rawSlug = pathSlug ?? queryValue("section", in: comps)
+        let slug = rawSlug.flatMap { Self.placeDetailSlugs.contains($0) ? $0 : nil }
+
+        return .place(homeId: homeId, slug: slug)
     }
 
     private func mailboxDestination(url: URL, segments: [String], idQuery: String?) -> Destination {

@@ -14,6 +14,19 @@ export function resolveWebNotificationPath(link: string | null | undefined): str
   }
 
   if (path.startsWith('/homes/')) return `/app${path}`;
+
+  // Job links use the mobile deep-link vocabulary — bare hosts with no
+  // /app prefix (the mobile routers discard an unknown `app` host).
+  // Mail Day: '/mailbox' → the web mailbox surface.
+  if (path === '/mailbox' || path.startsWith('/mailbox/') || path.startsWith('/mailbox?')) {
+    return `/app${path}`;
+  }
+  // Place: '/place?section=money' → the web group-detail route.
+  if (path === '/place' || path.startsWith('/place?')) {
+    const section = path.match(/[?&]section=([a-z-]+)/i);
+    return section ? `/app/place/${section[1]}` : '/app/place';
+  }
+
   return path;
 }
 

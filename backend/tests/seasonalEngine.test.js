@@ -13,6 +13,16 @@ function dateOf(month, day) {
   return new Date(2026, month - 1, day);
 }
 
+// Portland OR — inside the two supported PNW circles.
+//
+// The tips carry region-specific statistics ("Portland/Vancouver averages
+// 3–5 ice events per winter"), so they are only served when we KNOW the home
+// is in the region. These used to be reachable with no coordinates at all,
+// which is how `home.js` and `homeHealthService` ended up serving Portland
+// copy to homes in Phoenix. Testing tip content now means supplying a
+// location, the same as production does.
+const PNW = { latitude: 45.5152, longitude: -122.6784 };
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe('SeasonalEngine', () => {
@@ -42,25 +52,25 @@ describe('SeasonalEngine', () => {
 
   describe('overlap periods', () => {
     it('November returns both fall_prep and holiday_season', () => {
-      const ctx = getSeasonalContext({ date: dateOf(11, 1) });
+      const ctx = getSeasonalContext({ date: dateOf(11, 1), ...PNW });
       expect(ctx.active_seasons).toContain('fall_prep');
       expect(ctx.active_seasons).toContain('holiday_season');
     });
 
     it('December 15 returns winter_ice and holiday_season', () => {
-      const ctx = getSeasonalContext({ date: dateOf(12, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(12, 15), ...PNW });
       expect(ctx.active_seasons).toContain('winter_ice');
       expect(ctx.active_seasons).toContain('holiday_season');
     });
 
     it('July 20 returns summer_dry and smoke_season', () => {
-      const ctx = getSeasonalContext({ date: dateOf(7, 20) });
+      const ctx = getSeasonalContext({ date: dateOf(7, 20), ...PNW });
       expect(ctx.active_seasons).toContain('summer_dry');
       expect(ctx.active_seasons).toContain('smoke_season');
     });
 
     it('September returns smoke_season and fall_prep', () => {
-      const ctx = getSeasonalContext({ date: dateOf(9, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(9, 15), ...PNW });
       expect(ctx.active_seasons).toContain('smoke_season');
       expect(ctx.active_seasons).toContain('fall_prep');
     });
@@ -68,22 +78,22 @@ describe('SeasonalEngine', () => {
 
   describe('primary season selection', () => {
     it('smoke_season takes priority over summer_dry in July', () => {
-      const ctx = getSeasonalContext({ date: dateOf(7, 20) });
+      const ctx = getSeasonalContext({ date: dateOf(7, 20), ...PNW });
       expect(ctx.primary_season).toBe('smoke_season');
     });
 
     it('smoke_season takes priority over fall_prep in September', () => {
-      const ctx = getSeasonalContext({ date: dateOf(9, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(9, 15), ...PNW });
       expect(ctx.primary_season).toBe('smoke_season');
     });
 
     it('winter_ice takes priority over holiday_season in December', () => {
-      const ctx = getSeasonalContext({ date: dateOf(12, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(12, 15), ...PNW });
       expect(ctx.primary_season).toBe('winter_ice');
     });
 
     it('fall_prep takes priority over holiday_season in November', () => {
-      const ctx = getSeasonalContext({ date: dateOf(11, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(11, 15), ...PNW });
       expect(ctx.primary_season).toBe('fall_prep');
     });
   });
@@ -92,6 +102,7 @@ describe('SeasonalEngine', () => {
     it('pre-1990 home gets age-specific tip in fall_prep', () => {
       const ctx = getSeasonalContext({
         date: dateOf(10, 15),
+        ...PNW,
         homeYearBuilt: 1978,
       });
       expect(ctx.home_specific_tip).toBeDefined();
@@ -102,6 +113,7 @@ describe('SeasonalEngine', () => {
     it('post-2010 home gets newer-home tip in fall_prep', () => {
       const ctx = getSeasonalContext({
         date: dateOf(10, 15),
+        ...PNW,
         homeYearBuilt: 2020,
       });
       expect(ctx.home_specific_tip).toBeDefined();
@@ -111,6 +123,7 @@ describe('SeasonalEngine', () => {
     it('pre-1990 home gets pipe-specific tip in winter_ice', () => {
       const ctx = getSeasonalContext({
         date: dateOf(1, 15),
+        ...PNW,
         homeYearBuilt: 1975,
       });
       expect(ctx.home_specific_tip).toContain('1975');
@@ -120,6 +133,7 @@ describe('SeasonalEngine', () => {
     it('pre-2000 home gets smoke-specific tip in smoke_season', () => {
       const ctx = getSeasonalContext({
         date: dateOf(8, 15),
+        ...PNW,
         homeYearBuilt: 1995,
       });
       expect(ctx.home_specific_tip).toContain('1995');
@@ -128,6 +142,7 @@ describe('SeasonalEngine', () => {
     it('post-2010 home gets newer-home smoke tip', () => {
       const ctx = getSeasonalContext({
         date: dateOf(8, 15),
+        ...PNW,
         homeYearBuilt: 2022,
       });
       expect(ctx.home_specific_tip).toContain('newer');
@@ -136,19 +151,19 @@ describe('SeasonalEngine', () => {
 
   describe('null homeYearBuilt returns valid generic tip', () => {
     it('returns a seasonal_tip without homeYearBuilt', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(ctx.seasonal_tip).toBeDefined();
       expect(typeof ctx.seasonal_tip).toBe('string');
       expect(ctx.seasonal_tip.length).toBeGreaterThan(0);
     });
 
     it('returns null home_specific_tip when no homeYearBuilt', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(ctx.home_specific_tip).toBeNull();
     });
 
     it('still returns valid first_action_nudge without homeYearBuilt', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(ctx.first_action_nudge).toBeDefined();
       expect(ctx.first_action_nudge.prompt).toBeDefined();
       expect(ctx.first_action_nudge.gig_category).toBeDefined();
@@ -166,7 +181,7 @@ describe('SeasonalEngine', () => {
 
     for (const { season, month, gig_category } of nudgeCases) {
       it(`${season} suggests "${gig_category}" gig category`, () => {
-        const ctx = getSeasonalContext({ date: dateOf(month, 15) });
+        const ctx = getSeasonalContext({ date: dateOf(month, 15), ...PNW });
         expect(ctx.first_action_nudge.gig_category).toBe(gig_category);
         expect(ctx.first_action_nudge.prompt).toContain('Post a gig');
         expect(ctx.first_action_nudge.gig_title_suggestion).toBeDefined();
@@ -177,13 +192,13 @@ describe('SeasonalEngine', () => {
 
   describe('suggested_gig_categories', () => {
     it('returns an array of categories', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(Array.isArray(ctx.suggested_gig_categories)).toBe(true);
       expect(ctx.suggested_gig_categories.length).toBeGreaterThan(0);
     });
 
     it('fall_prep includes Gardening and Handyman', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(ctx.suggested_gig_categories).toContain('Gardening');
       expect(ctx.suggested_gig_categories).toContain('Handyman');
     });
@@ -191,29 +206,29 @@ describe('SeasonalEngine', () => {
 
   describe('urgency levels', () => {
     it('winter_ice has high urgency', () => {
-      const ctx = getSeasonalContext({ date: dateOf(1, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PNW });
       expect(ctx.urgency).toBe('high');
     });
 
     it('smoke_season has high urgency', () => {
-      const ctx = getSeasonalContext({ date: dateOf(8, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(8, 15), ...PNW });
       expect(ctx.urgency).toBe('high');
     });
 
     it('spring_cleanup has moderate urgency', () => {
-      const ctx = getSeasonalContext({ date: dateOf(3, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(3, 15), ...PNW });
       expect(ctx.urgency).toBe('moderate');
     });
 
     it('early_summer has low urgency', () => {
-      const ctx = getSeasonalContext({ date: dateOf(5, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(5, 15), ...PNW });
       expect(ctx.urgency).toBe('low');
     });
   });
 
   describe('return shape', () => {
     it('has all required fields', () => {
-      const ctx = getSeasonalContext({ date: dateOf(10, 15) });
+      const ctx = getSeasonalContext({ date: dateOf(10, 15), ...PNW });
       expect(ctx).toHaveProperty('active_seasons');
       expect(ctx).toHaveProperty('primary_season');
       expect(ctx).toHaveProperty('seasonal_tip');
@@ -229,7 +244,7 @@ describe('SeasonalEngine', () => {
 
   describe('defaults', () => {
     it('uses current date when no date provided', () => {
-      const ctx = getSeasonalContext();
+      const ctx = getSeasonalContext({ ...PNW });
       expect(ctx.active_seasons.length).toBeGreaterThan(0);
       expect(ctx.primary_season).toBeDefined();
     });
@@ -239,9 +254,59 @@ describe('SeasonalEngine', () => {
     it('condo in winter gets condo-specific tip', () => {
       const ctx = getSeasonalContext({
         date: dateOf(1, 15),
+        ...PNW,
         homePropertyType: 'condo',
       });
       expect(ctx.seasonal_tip).toContain('walkway');
     });
+  });
+});
+
+// ── Regression: the region gate ───────────────────────────────────────────
+//
+// The gate read `!hasCoords || isSupportedSeasonalRegion(options)`, which
+// failed in two symmetrical directions:
+//   with coords outside the PNW → everything returned null, so Hub, the
+//     briefing, the pulse and the home-health score silently lost the whole
+//     seasonal signal class for every user in the country;
+//   without coords → the gate PASSED, so home.js (seasonal-checklist) and
+//     homeHealthService served Portland statistics to every home in the US.
+describe('region gating', () => {
+  const PHOENIX = { latitude: 33.4484, longitude: -112.0740 };
+
+  it('never serves Portland-specific copy to a home outside the region', () => {
+    const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PHOENIX });
+    expect(ctx.is_relevant_region).toBe(false);
+    expect(ctx.seasonal_tip).toBeNull();
+    expect(ctx.home_specific_tip).toBeNull();
+    expect(ctx.first_action_nudge).toBeNull();
+    expect(ctx.suggested_gig_categories).toEqual([]);
+  });
+
+  it('fails closed when the caller supplies no location at all', () => {
+    // This is how home.js and homeHealthService call it. Without
+    // coordinates we cannot know the region, so we must not claim it.
+    const ctx = getSeasonalContext({ date: dateOf(1, 15) });
+    expect(ctx.is_relevant_region).toBe(false);
+    expect(ctx.seasonal_tip).toBeNull();
+    expect(ctx.home_specific_tip).toBeNull();
+  });
+
+  it('still resolves the season nationally, so the checklist keeps working', () => {
+    // The month-based calendar is generic; only the tip copy is regional.
+    // Previously an out-of-region home got primary_season: null, which took
+    // the seasonal checklist and home-health score down with it.
+    for (const loc of [PHOENIX, {}, { latitude: 40.7128, longitude: -74.0060 }]) {
+      const ctx = getSeasonalContext({ date: dateOf(1, 15), ...loc });
+      expect(ctx.primary_season).toBe('winter_ice');
+      expect(ctx.active_seasons).toContain('winter_ice');
+      expect(ctx.urgency).toBe('high');
+    }
+  });
+
+  it('still serves the regional tip inside the region', () => {
+    const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PNW });
+    expect(ctx.is_relevant_region).toBe(true);
+    expect(ctx.seasonal_tip).toBeTruthy();
   });
 });

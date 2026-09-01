@@ -288,6 +288,14 @@ function createQueryBuilder(tableName) {
   let updatePayload = null;
   let insertPayload = null;
   let isSingle = false;
+  // `.single()` and `.maybeSingle()` differ in ONE way that production
+  // code branches on: real PostgREST reports zero rows from `.single()`
+  // as an ERROR (code PGRST116), while `.maybeSingle()` puts null in
+  // `data` and leaves `error` null. Collapsing them here meant a test
+  // could not tell the two apart — which is exactly why swapping a
+  // route's `maybeSingle` for `single` did not fail the suite, even
+  // though in production it turns "no such home" into a 500.
+  let isStrictSingle = false;
   let isUpsert = false;
   let upsertOnConflict = null;
   let isCountMode = false;
@@ -492,10 +500,12 @@ function createQueryBuilder(tableName) {
     },
     single() {
       isSingle = true;
+      isStrictSingle = true;
       return builder;
     },
     maybeSingle() {
       isSingle = true;
+      isStrictSingle = false;
       return builder;
     },
     // INSERT
@@ -698,7 +708,11 @@ function createQueryBuilder(tableName) {
       const projectedMatched = matched.map(projectOut);
       let result;
       if (isSingle) {
-        result = { data: projectedMatched[0] || null, error: null };
+        const only = projectedMatched[0] || null;
+        result = only === null && isStrictSingle
+          // What real PostgREST returns for `.single()` with no rows.
+          ? { data: null, error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: 'The result contains 0 rows' } }
+          : { data: only, error: null };
       } else {
         result = { data: isHeadMode ? null : projectedMatched, error: null };
       }

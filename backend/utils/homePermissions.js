@@ -153,11 +153,44 @@ async function getUserAccess(homeId, userId) {
  */
 async function checkHomePermission(homeId, userId, permission = null) {
   // Check ownership
-  const { data: home } = await supabaseAdmin
+  // `.maybeSingle()`, NOT `.single()`.
+  //
+  // `.single()` signals "zero rows" as an ERROR (PGRST116), so the
+  // readFailed guard below turned "this home does not exist" — an
+  // ordinary 404/403 — into a database-failure 500. That is a regression
+  // this same wave introduced while fixing the opposite problem, and it
+  // is the reason to prefer maybeSingle: it puts "no row" in `data` and
+  // reserves `error` for things that actually went wrong.
+  const { data: home, error: homeError } = await supabaseAdmin
     .from('Home')
     .select('owner_id')
     .eq('id', homeId)
-    .single();
+    .maybeSingle();
+
+  // A DATABASE FAILURE IS NOT A PERMISSION DECISION.
+  //
+  // PostgREST resolves rather than rejects on a transport failure or a
+  // non-2xx, so `data` is null both when the home does not exist and when
+  // we could not find out. Collapsing them denies access, and every
+  // caller renders that as "You do not have access to this place." — told
+  // to a resident, about their own home, because a query timed out.
+  //
+  // `readFailed` is ADDITIVE: 19 call sites read this return value, and
+  // all of them keep today's behaviour (deny) unless they opt in. Callers
+  // that can distinguish should return 500 rather than 403, which is also
+  // what gets the request auto-retried by the native clients instead of
+  // parked behind a manual Try again.
+  // PGRST116 is `.single()`'s "zero rows" signal, not a failure. The read
+  // above uses maybeSingle so it should never appear — this is belt and
+  // braces for the next person who switches it back, because the cost of
+  // getting it wrong is a 500 on every request for a home that simply
+  // does not exist.
+  if (homeError && homeError.code !== 'PGRST116') {
+    logger.error('homePermissions: home read failed', { homeId, userId, error: homeError.message });
+    return {
+      hasAccess: false, isOwner: false, occupancy: null, permissions: [], readFailed: true,
+    };
+  }
 
   if (!home) return { hasAccess: false, isOwner: false, occupancy: null };
 
@@ -529,11 +562,33 @@ async function applyOccupancyTemplate(homeId, userId, roleBase, verificationStat
   return { occupancy, template: result };
 }
 
+/**
+ * The T4 gate, stated once: does this access result carry a VERIFIED
+ * occupancy? Every surface that issues an attested artifact (residency
+ * letters, residency claims, fridge cards) must use this same check —
+ * duplicated trust gates are how privacy primitives drift.
+ * @param {{ occupancy?: object|null }} access - from checkHomePermission
+ * @returns {boolean}
+ */
+function isVerifiedResident(access) {
+  if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified') {
+    return false;
+  }
+  // Attestations (residency letters, live residency claims, fridge cards)
+  // are dated. When expiry enforcement is on
+  // (address.enforce_verification_expiry), a verification past its validity
+  // window may not mint a fresh one — the holder re-verifies first. Rows
+  // with no verified_at predate the column and are never treated as stale.
+  const verificationAge = require('./verificationAge');
+  return !verificationAge.staleAffectsTrust(access.occupancy.verified_at);
+}
+
 module.exports = {
   hasPermission,
   getUserAccess,
   checkHomePermission,
   getActiveOccupancy,
+  isVerifiedResident,
   isVerifiedOwner,
   mapLegacyRole,
   getRoleRank,

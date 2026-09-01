@@ -123,6 +123,9 @@ describe('a stale verification cannot mint a fresh letter (flag-gated)', () => {
 
   jest.mock('../../utils/homePermissions', () => ({
     checkHomePermission: jest.fn(),
+    // The stale-aware resident check is shared from the real module (it is
+    // the behaviour under test); only the permission lookup is stubbed.
+    isVerifiedResident: jest.requireActual('../../utils/homePermissions').isVerifiedResident,
     isVerifiedOwner: jest.fn().mockResolvedValue({ isOwner: false }),
     mapLegacyRole: jest.fn((r) => r),
     writeAuditLog: jest.fn().mockResolvedValue(undefined),

@@ -14,9 +14,12 @@
  */
 
 jest.mock('../../middleware/rateLimiter', () => {
-  const noop = (_req, _res, next) => next();
+  // A Proxy, not a hand-listed set: an exhaustive mock silently
+  // breaks ("argument handler must be a function") the moment a
+  // route uses a limiter the list forgot.
+  const noop = (req, res, next) => next();
   return new Proxy({}, { get: () => noop });
-});
+});;
 
 const express = require('express');
 const request = require('supertest');

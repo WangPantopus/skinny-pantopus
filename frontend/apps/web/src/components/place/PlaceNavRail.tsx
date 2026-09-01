@@ -22,6 +22,7 @@ import {
   Landmark,
   BadgeCheck,
   Activity,
+  Compass,
 } from 'lucide-react';
 
 export interface PlaceNavRailProps {
@@ -68,6 +69,18 @@ export default function PlaceNavRail({ active }: PlaceNavRailProps) {
         })}
       </ul>
       <div className="mt-3 pt-3 border-t border-app-border-subtle">
+        <Link
+          href="/app/place/scout"
+          aria-current={active === 'scout' ? 'page' : undefined}
+          className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-semibold -tracking-[0.005em] transition-colors ${
+            active === 'scout'
+              ? 'bg-app-home-bg text-app-home'
+              : 'text-app-text-secondary hover:bg-app-hover hover:text-app-text'
+          }`}
+        >
+          <Compass size={17} strokeWidth={2} className={active === 'scout' ? 'text-app-home' : 'text-app-text-muted'} />
+          Before you sign
+        </Link>
         <Link
           href="/app/place/pulse"
           aria-current={active === 'pulse' ? 'page' : undefined}

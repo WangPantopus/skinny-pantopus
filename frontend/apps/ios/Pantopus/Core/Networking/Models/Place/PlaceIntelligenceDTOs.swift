@@ -151,8 +151,11 @@ public enum PlaceSectionID: Sendable, Hashable {
     case airQuality
     case alerts
     case sunriseSunset
+    case goodDayTo
     case yourHome
+    case homeSystems
     case flood
+    case heatCold
     case seismic
     case wildfire
     case leadRadon
@@ -163,6 +166,8 @@ public enum PlaceSectionID: Sendable, Hashable {
     case billBenchmark
     case incentives
     case rentBand
+    case realRent
+    case exemptionCheck
     case civicDistricts
     case civicElection
     case unknown(String)
@@ -173,8 +178,11 @@ public enum PlaceSectionID: Sendable, Hashable {
         case "air_quality": self = .airQuality
         case "alerts": self = .alerts
         case "sunrise_sunset": self = .sunriseSunset
+        case "good_day_to": self = .goodDayTo
         case "your_home": self = .yourHome
+        case "home_systems": self = .homeSystems
         case "flood": self = .flood
+        case "heat_cold": self = .heatCold
         case "seismic": self = .seismic
         case "wildfire": self = .wildfire
         case "lead_radon": self = .leadRadon
@@ -185,6 +193,8 @@ public enum PlaceSectionID: Sendable, Hashable {
         case "bill_benchmark": self = .billBenchmark
         case "incentives": self = .incentives
         case "rent_band": self = .rentBand
+        case "real_rent": self = .realRent
+        case "exemption_check": self = .exemptionCheck
         case "civic_districts": self = .civicDistricts
         case "civic_election": self = .civicElection
         default: self = .unknown(rawValue)
@@ -197,8 +207,11 @@ public enum PlaceSectionID: Sendable, Hashable {
         case .airQuality: "air_quality"
         case .alerts: "alerts"
         case .sunriseSunset: "sunrise_sunset"
+        case .goodDayTo: "good_day_to"
         case .yourHome: "your_home"
+        case .homeSystems: "home_systems"
         case .flood: "flood"
+        case .heatCold: "heat_cold"
         case .seismic: "seismic"
         case .wildfire: "wildfire"
         case .leadRadon: "lead_radon"
@@ -209,6 +222,8 @@ public enum PlaceSectionID: Sendable, Hashable {
         case .billBenchmark: "bill_benchmark"
         case .incentives: "incentives"
         case .rentBand: "rent_band"
+        case .realRent: "real_rent"
+        case .exemptionCheck: "exemption_check"
         case .civicDistricts: "civic_districts"
         case .civicElection: "civic_election"
         case let .unknown(raw): raw
@@ -408,6 +423,35 @@ extension FloodRiskLevel: Decodable {
 }
 
 /// Launch layer #3 — Flood (FEMA National Flood Hazard Layer).
+/// Wave 2 — what flood policies in this census tract actually cost:
+/// count + quartiles of real NFIP premiums over the last
+/// `windowMonths`. A benchmark, never a quote. Absent while the
+/// tract's benchmark is warming or suppressed below the 10-policy
+/// floor — the card degrades to zone-only.
+public struct PlaceFloodNfipData: Decodable, Sendable, Hashable {
+    public let policyCount: Int
+    public let premiumP25: Double
+    public let premiumMedian: Double
+    public let premiumP75: Double
+    /// Median Risk Rating 2.0 full-risk premium, where reported.
+    public let fullRiskMedian: Double?
+    public let windowMonths: Int
+    /// "partial" when the tract's policy list was row-capped at fetch.
+    public let coverage: String
+    public let asOf: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case policyCount = "policy_count"
+        case premiumP25 = "premium_p25"
+        case premiumMedian = "premium_median"
+        case premiumP75 = "premium_p75"
+        case fullRiskMedian = "full_risk_median"
+        case windowMonths = "window_months"
+        case coverage
+        case asOf = "as_of"
+    }
+}
+
 public struct PlaceFloodData: Decodable, Sendable, Hashable {
     /// FEMA zone code, e.g. "X".
     public let zone: String
@@ -420,6 +464,8 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
     public let insuranceRequired: Bool
     /// Plain "what this means" copy.
     public let plainMeaning: String
+    /// Wave 2 — the tract's NFIP premium benchmark, when warmed.
+    public let nfip: PlaceFloodNfipData?
 
     private enum CodingKeys: String, CodingKey {
         case zone
@@ -428,6 +474,7 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
         case inSfha = "in_sfha"
         case insuranceRequired = "insurance_required"
         case plainMeaning = "plain_meaning"
+        case nfip
     }
 }
 
@@ -605,10 +652,17 @@ public struct PlaceCensusContextData: Decodable, Sendable, Hashable {
 
 // MARK: - Money signals payloads
 
+/// Bill types worth comparing against neighbors — the area-service bills.
+/// Rent and mortgage are deliberately excluded: they are home-specific, and
+/// rent has its own section from HUD Fair Market Rents.
 public enum BillUtilityKind: String, Sendable, Hashable {
     case electric
     case gas
     case water
+    case sewer
+    case trash
+    case internet
+    case cable
     case unknown
 }
 
@@ -725,6 +779,165 @@ public struct PlaceRentBandData: Decodable, Sendable, Hashable {
         case bandHigh = "band_high"
         case marketLow = "market_low"
         case marketHigh = "market_high"
+    }
+}
+
+// MARK: - Real Rent benchmark (Wave 3, band D)
+
+/// The block's own state. `building` is a first-class PRODUCT state, not
+/// an empty one: a true statement of the block's progress toward its own
+/// benchmark. A state this build has never heard of falls back to
+/// `.unknown`, which the UI renders as progress — never as a benchmark,
+/// so an unrecognized state can never imply amounts.
+public enum PlaceRealRentState: String, Decodable, Sendable, Hashable {
+    case building
+    case ready
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlaceRealRentState(rawValue: raw) ?? .unknown
+    }
+}
+
+/// Which reports the benchmark pooled. Degradation is explicit by
+/// contract — a studio is never quietly priced against a four-bedroom —
+/// so an unrecognized scope must NOT be presented as a bedroom match.
+public enum PlaceRealRentScope: String, Decodable, Sendable, Hashable {
+    case bedrooms
+    case allSizes = "all_sizes"
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlaceRealRentScope(rawValue: raw) ?? .unknown
+    }
+}
+
+/// The viewer's position in the band — a band position ONLY. Never a
+/// rank, never a headcount of who pays more (that would be a count of
+/// identifiable households).
+public enum PlaceRealRentStanding: String, Decodable, Sendable, Hashable {
+    case belowBand = "below_band"
+    case inBand = "in_band"
+    case aboveBand = "above_band"
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlaceRealRentStanding(rawValue: raw) ?? .unknown
+    }
+}
+
+/// What VERIFIED NEIGHBORS ON THIS BLOCK actually pay.
+///
+/// Not to be conflated with `rent_band`, which is HUD's Fair Market
+/// Rent — a 40th-percentile estimate for an entire COUNTY. This is real
+/// monthly rents from residents who proved they live here, behind the
+/// same k>=10 floor every block aggregate uses: quartiles and a sample
+/// size, never a row and never a per-home figure.
+public struct PlaceRealRentData: Decodable, Sendable, Hashable {
+    public let state: PlaceRealRentState
+    /// Reports in the cell (`building`) or the pooled sample (`ready`).
+    public let reports: Int
+    /// The k-anonymity floor — 10.
+    public let needed: Int
+    /// Nil while building.
+    public let scope: PlaceRealRentScope?
+    /// Only set when `scope == .bedrooms`.
+    public let bedrooms: Int?
+    public let sampleSize: Int?
+    /// Whole dollars per month.
+    public let rentP25: Double?
+    public let rentMedian: Double?
+    public let rentP75: Double?
+    /// The viewer's own contribution, whole dollars — nil until they report.
+    public let yourRent: Double?
+    public let standing: PlaceRealRentStanding?
+    /// Server-composed sentence — always present, in every state.
+    public let summary: String
+
+    private enum CodingKeys: String, CodingKey {
+        case state, reports, needed, scope, bedrooms, standing, summary
+        case sampleSize = "sample_size"
+        case rentP25 = "rent_p25"
+        case rentMedian = "rent_median"
+        case rentP75 = "rent_p75"
+        case yourRent = "your_rent"
+    }
+}
+
+// MARK: - Exemption check (Wave 2)
+
+/// The honesty ladder: `unknown` (county feed carries no exemption
+/// structure) is NEVER presented as "none on file". Falls back to
+/// `.unknown` so a server-side vocabulary addition cannot break an
+/// older build.
+public enum ExemptionFilingStatus: String, Decodable, Sendable, Hashable {
+    case onFile = "on_file"
+    case noneOnFile = "none_on_file"
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ExemptionFilingStatus(rawValue: raw) ?? .unknown
+    }
+}
+
+/// The Over-Assessment Radar stance (±5% bands). Same fallback rule.
+public enum AssessmentStance: String, Decodable, Sendable, Hashable {
+    case above
+    case near
+    case below
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AssessmentStance(rawValue: raw) ?? .unknown
+    }
+}
+
+/// County assessed total vs the county's own market total — null on
+/// the wire when either total is missing (half a comparison is no
+/// comparison). Informational, never advice.
+public struct PlaceAssessmentSignal: Decodable, Sendable, Hashable {
+    public let assessedValue: Double
+    public let marketValue: Double
+    public let ratioPct: Double
+    public let stance: AssessmentStance
+
+    private enum CodingKeys: String, CodingKey {
+        case assessedValue = "assessed_value"
+        case marketValue = "market_value"
+        case ratioPct = "ratio_pct"
+        case stance
+    }
+}
+
+public struct PlaceExemptionStateProgram: Decodable, Sendable, Hashable {
+    public let state: String?
+    public let label: String
+    /// "application" | "varies" | "none_general".
+    public let filing: String
+    public let note: String
+    /// False → the conservative check-your-county default.
+    public let curated: Bool
+}
+
+public struct PlaceExemptionCheckData: Decodable, Sendable, Hashable {
+    public let filingStatus: ExemptionFilingStatus
+    /// Labels as the assessor feed reports them, e.g. "Homestead".
+    public let exemptions: [String]
+    public let homesteadOnFile: Bool
+    public let assessmentSignal: PlaceAssessmentSignal?
+    public let stateProgram: PlaceExemptionStateProgram
+
+    private enum CodingKeys: String, CodingKey {
+        case filingStatus = "filing_status"
+        case exemptions
+        case homesteadOnFile = "homestead_on_file"
+        case assessmentSignal = "assessment_signal"
+        case stateProgram = "state_program"
     }
 }
 
@@ -858,6 +1071,158 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
     }
 }
 
+// MARK: - Good day to…
+
+/// A verdict on one everyday question. `.unknown` keeps a server-side
+/// vocabulary addition from breaking an older build.
+public enum GoodDayVerdict: String, Decodable, Sendable, Hashable {
+    case yes
+    case caution
+    case no
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = GoodDayVerdict(rawValue: raw) ?? .unknown
+    }
+}
+
+public struct PlaceGoodDayTile: Decodable, Sendable, Hashable {
+    /// Stable id, e.g. "open_windows".
+    public let id: String
+    public let label: String
+    /// Display glyph (emoji) — the server picks it so all clients agree.
+    public let glyph: String
+    public let verdict: GoodDayVerdict
+    /// The short answer, e.g. "Yes — until 3pm".
+    public let answer: String
+    /// The reasoning WITH the actual numbers. An opinionated tile that
+    /// won't show its inputs is not trustworthy, so this always renders.
+    public let because: String
+}
+
+/// "Good day to…" — verdicts, not readings. Computed from the weather/AQI
+/// payload already fetched for the Today layers crossed with the home's
+/// own facts, so it costs no additional provider call.
+public struct PlaceGoodDayData: Decodable, Sendable, Hashable {
+    public let tiles: [PlaceGoodDayTile]
+}
+
+// MARK: - Heat & cold
+
+/// NWS HeatRisk index: 0 little-to-none → 4 extreme.
+public struct PlaceHeatRiskDay: Decodable, Sendable, Hashable {
+    public let date: String
+    /// 1-based day index in the NWS 7-day series.
+    public let day: Int
+    public let level: Int
+    public let label: String
+    /// The published meaning of this level.
+    public let meaning: String
+}
+
+public struct PlaceFreezeWindow: Decodable, Sendable, Hashable {
+    public let starts: String
+    public let ends: String
+    /// Contiguous hours at or below freezing.
+    public let hours: Int
+    public let minTempF: Int
+
+    enum CodingKeys: String, CodingKey {
+        case starts, ends, hours
+        case minTempF = "min_temp_f"
+    }
+}
+
+/// Heat & cold — the seasonal spine, nationally.
+///
+/// `heatCovered` is false outside CONUS, where HeatRisk has no data. That
+/// is a coverage gap, NOT a reading of zero, and the card must say so
+/// rather than imply calm.
+public struct PlaceHeatColdData: Decodable, Sendable, Hashable {
+    /// "heat" | "cold" | "none" — `none` is the honest common case.
+    public let mode: String
+    public let heatDays: [PlaceHeatRiskDay]
+    public let heatCovered: Bool
+    public let peakLevel: Int?
+    public let peakDate: String?
+    public let freeze: PlaceFreezeWindow?
+    public let headline: String
+    /// The home-conditioned instruction. Empty when there is nothing to do.
+    public let guidance: String
+    public let sourceNote: String
+
+    enum CodingKeys: String, CodingKey {
+        case mode, freeze, headline, guidance
+        case heatDays = "heat_days"
+        case heatCovered = "heat_covered"
+        case peakLevel = "peak_level"
+        case peakDate = "peak_date"
+        case sourceNote = "source_note"
+    }
+}
+
+// MARK: - Systems Ledger (Band C)
+
+/// One building system in the household's own record.
+///
+/// Every system is seeded from the build year so the ledger is never
+/// blank, and each carries HOW it is known: an estimate is never dressed
+/// up as a fact, and a resident's correction outranks anything derived.
+public struct PlaceHomeSystem: Decodable, Sendable, Hashable {
+    public let key: String
+    public let label: String
+    public let installedYear: Int?
+    public let ageYears: Int?
+    /// Typical service life range, in years. A range, not a prediction.
+    public let typicalLifeLow: Int
+    public let typicalLifeHigh: Int
+    /// "ok" | "aging" | "past_expected" | "unknown".
+    public let status: String
+    /// 0–1 for the remaining-life bar; nil when the year is unknown.
+    public let lifeRemaining: Double?
+    /// "estimated" | "permit" | "marketplace" | "resident".
+    public let source: String
+    /// Provenance chip copy, e.g. "Estimated from year built".
+    public let sourceLabel: String
+    public let confidence: String
+    public let sourceRef: String?
+    public let note: String
+
+    enum CodingKeys: String, CodingKey {
+        case key, label, status, source, confidence, note
+        case installedYear = "installed_year"
+        case ageYears = "age_years"
+        case typicalLifeLow = "typical_life_low"
+        case typicalLifeHigh = "typical_life_high"
+        case lifeRemaining = "life_remaining"
+        case sourceLabel = "source_label"
+        case sourceRef = "source_ref"
+    }
+}
+
+public struct PlaceHomeSystemsSummary: Decodable, Sendable, Hashable {
+    public let pastExpectedCount: Int
+    public let agingCount: Int
+    /// How much of the ledger rests on evidence rather than a prior.
+    public let confirmedCount: Int
+    public let totalCount: Int
+    public let headline: String
+
+    enum CodingKeys: String, CodingKey {
+        case headline
+        case pastExpectedCount = "past_expected_count"
+        case agingCount = "aging_count"
+        case confirmedCount = "confirmed_count"
+        case totalCount = "total_count"
+    }
+}
+
+public struct PlaceHomeSystemsData: Decodable, Sendable, Hashable {
+    public let systems: [PlaceHomeSystem]
+    public let summary: PlaceHomeSystemsSummary
+}
+
 // MARK: - Section payload union
 
 /// Typed payload for a section envelope — one case per launch-set id.
@@ -866,8 +1231,11 @@ public enum PlaceSectionData: Sendable, Hashable {
     case airQuality(PlaceAirQualityData)
     case alerts(PlaceAlertsData)
     case sunriseSunset(PlaceSunriseSunsetData)
+    case goodDayTo(PlaceGoodDayData)
     case yourHome(PlaceYourHomeData)
+    case homeSystems(PlaceHomeSystemsData)
     case flood(PlaceFloodData)
+    case heatCold(PlaceHeatColdData)
     case seismic(PlaceSeismicData)
     case wildfire(PlaceWildfireData)
     case leadRadon(PlaceLeadRadonData)
@@ -878,6 +1246,8 @@ public enum PlaceSectionData: Sendable, Hashable {
     case billBenchmark(PlaceBillBenchmarkData)
     case incentives(PlaceIncentivesData)
     case rentBand(PlaceRentBandData)
+    case realRent(PlaceRealRentData)
+    case exemptionCheck(PlaceExemptionCheckData)
     case civicDistricts(PlaceCivicDistrictsData)
     case civicElection(PlaceCivicElectionData)
 }
@@ -940,8 +1310,11 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         case .airQuality: return payload(PlaceAirQualityData.self).map(PlaceSectionData.airQuality)
         case .alerts: return payload(PlaceAlertsData.self).map(PlaceSectionData.alerts)
         case .sunriseSunset: return payload(PlaceSunriseSunsetData.self).map(PlaceSectionData.sunriseSunset)
+        case .goodDayTo: return payload(PlaceGoodDayData.self).map(PlaceSectionData.goodDayTo)
         case .yourHome: return payload(PlaceYourHomeData.self).map(PlaceSectionData.yourHome)
+        case .homeSystems: return payload(PlaceHomeSystemsData.self).map(PlaceSectionData.homeSystems)
         case .flood: return payload(PlaceFloodData.self).map(PlaceSectionData.flood)
+        case .heatCold: return payload(PlaceHeatColdData.self).map(PlaceSectionData.heatCold)
         case .seismic: return payload(PlaceSeismicData.self).map(PlaceSectionData.seismic)
         case .wildfire: return payload(PlaceWildfireData.self).map(PlaceSectionData.wildfire)
         case .leadRadon: return payload(PlaceLeadRadonData.self).map(PlaceSectionData.leadRadon)
@@ -953,6 +1326,8 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         case .billBenchmark: return payload(PlaceBillBenchmarkData.self).map(PlaceSectionData.billBenchmark)
         case .incentives: return payload(PlaceIncentivesData.self).map(PlaceSectionData.incentives)
         case .rentBand: return payload(PlaceRentBandData.self).map(PlaceSectionData.rentBand)
+        case .realRent: return payload(PlaceRealRentData.self).map(PlaceSectionData.realRent)
+        case .exemptionCheck: return payload(PlaceExemptionCheckData.self).map(PlaceSectionData.exemptionCheck)
         case .civicDistricts: return payload(PlaceCivicDistrictsData.self).map(PlaceSectionData.civicDistricts)
         case .civicElection: return payload(PlaceCivicElectionData.self).map(PlaceSectionData.civicElection)
         case .unknown: return nil
@@ -965,6 +1340,21 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
 public extension PlaceSectionEnvelope {
     var weather: PlaceWeatherData? {
         if case let .weather(d) = data { return d }
+        return nil
+    }
+
+    var goodDayTo: PlaceGoodDayData? {
+        if case let .goodDayTo(d) = data { return d }
+        return nil
+    }
+
+    var homeSystems: PlaceHomeSystemsData? {
+        if case let .homeSystems(d) = data { return d }
+        return nil
+    }
+
+    var heatCold: PlaceHeatColdData? {
+        if case let .heatCold(d) = data { return d }
         return nil
     }
 
@@ -1043,6 +1433,16 @@ public extension PlaceSectionEnvelope {
         return nil
     }
 
+    var realRent: PlaceRealRentData? {
+        if case let .realRent(d) = data { return d }
+        return nil
+    }
+
+    var exemptionCheck: PlaceExemptionCheckData? {
+        if case let .exemptionCheck(d) = data { return d }
+        return nil
+    }
+
     var civicDistricts: PlaceCivicDistrictsData? {
         if case let .civicDistricts(d) = data { return d }
         return nil
@@ -1105,6 +1505,10 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
 public enum PlacePreviewStatus: String, Sendable, Hashable {
     case ready
     case partial
+    /// We could not read an address out of what was typed. NOT the same
+    /// as `unsupportedRegion` — rendering the two alike told every US
+    /// visitor during a geocoder outage that the product was not for them.
+    case couldNotPlace = "could_not_place"
     case unsupportedRegion = "unsupported_region"
     case unknown
 }
@@ -1200,6 +1604,57 @@ public struct PlacePreviewFree: Decodable, Sendable, Hashable {
 /// `GET /api/public/place?address=` — the anonymous, address-only
 /// preview. Non-persistent (no DB writes): close and reopen still hits
 /// the wall.
+/// Which real figure the preview's money lead is built from.
+public enum PlaceMoneyLeadKind: String, Sendable, Hashable {
+    case floodPremium = "flood_premium"
+    case rentBand = "rent_band"
+    case unknown
+}
+
+extension PlaceMoneyLeadKind: Decodable {
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlaceMoneyLeadKind(rawValue: raw) ?? .unknown
+    }
+}
+
+/// The preview's lead figure (Wave 4) — a real dollar band from FEMA's
+/// NFIP policies or HUD's fair market rents, carrying the SCOPE it is
+/// actually true at ("census tract", "county"), because a county
+/// estimate sold as this home's bill is the easiest overclaim on the
+/// page. `money_lead` is null when no figure was available, and the
+/// tiles then carry the preview exactly as before. NEVER synthesize one
+/// client-side: the whole point is that this figure is real.
+public struct PlaceMoneyLead: Decodable, Sendable, Hashable {
+    public let kind: PlaceMoneyLeadKind
+    public let headline: String
+    public let detail: String
+    public let low: Int
+    public let high: Int
+    /// "census tract" or "county" — how specific the figure really is.
+    public let scope: String
+    public let source: String
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, headline, detail, low, high, scope, source
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decodeIfPresent(PlaceMoneyLeadKind.self, forKey: .kind) ?? .unknown
+        headline = try container.decodeIfPresent(String.self, forKey: .headline) ?? ""
+        detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        low = try container.decodeIfPresent(Int.self, forKey: .low) ?? 0
+        high = try container.decodeIfPresent(Int.self, forKey: .high) ?? 0
+        scope = try container.decodeIfPresent(String.self, forKey: .scope) ?? ""
+        source = try container.decodeIfPresent(String.self, forKey: .source) ?? ""
+    }
+
+    /// The server writes the sentence; we only decide whether there is
+    /// one to show. An empty headline is nothing to lead with.
+    public var isRenderable: Bool { !headline.isEmpty }
+}
+
 public struct PlacePreview: Decodable, Sendable, Hashable {
     public let status: PlacePreviewStatus
     /// Always "preview".
@@ -1209,7 +1664,15 @@ public struct PlacePreview: Decodable, Sendable, Hashable {
     /// Present on `unsupportedRegion`.
     public let message: String?
     public let place: PlacePreviewPlaceRef?
+    /// nil ⇒ no figure was available. Fall back to the tiles; never
+    /// invent one.
+    public let moneyLead: PlaceMoneyLead?
     public let free: PlacePreviewFree?
     public let locked: [PlacePreviewLockedSection]?
     public let disclaimer: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, tier, region, message, place, free, locked, disclaimer
+        case moneyLead = "money_lead"
+    }
 }

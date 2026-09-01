@@ -33,6 +33,22 @@ class MockMailProvider {
    * @param {string} [templateId]
    * @returns {Promise<{vendorJobId: string, status: string}>}
    */
+  /** Dev-mode counterpart of LobMailProvider.sendCustomPostcard. */
+  async sendCustomPostcard(address, card) {
+    const vendorJobId = `mock_psc_${crypto.randomBytes(8).toString('hex')}`;
+    this.sentPostcards.push({
+      vendorJobId,
+      address,
+      description: (card && card.description) || 'Pantopus postcard',
+      sentAt: new Date().toISOString(),
+    });
+    logger.info('MockMailProvider: custom postcard "sent" (dev mode)', {
+      vendorJobId,
+      to: `${address.line1}, ${address.city}, ${address.state} ${address.zip}`,
+    });
+    return { vendorJobId, status: 'created' };
+  }
+
   async sendPostcard(address, code, templateId) {
     const vendorJobId = `mock_psc_${crypto.randomBytes(8).toString('hex')}`;
 

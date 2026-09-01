@@ -137,6 +137,38 @@ struct PlaceFactCell: View {
     }
 }
 
+// MARK: - Progress toward a k-anonymity floor
+
+/// A "N of M" unlock track — the Real Rent build-up and the Block
+/// Founders meters both read one. Never draws past full (the server
+/// clamps `current` too), and a zero reading draws an empty track
+/// rather than a misleading sliver.
+struct PlaceProgressBar: View {
+    let current: Int
+    let needed: Int
+    var tone: Color = Theme.Color.primary600
+
+    private var fraction: Double {
+        guard needed > 0 else { return 0 }
+        return min(max(Double(current) / Double(needed), 0), 1)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.Color.appSurfaceSunken)
+                if fraction > 0 {
+                    Capsule()
+                        .fill(tone)
+                        .frame(width: max(proxy.size.width * fraction, 6))
+                }
+            }
+        }
+        .frame(height: 7)
+        .accessibilityLabel("\(current) of \(needed)")
+    }
+}
+
 // MARK: - "Coming soon" placeholder row (uncovered/BUILD_PENDING)
 
 struct PlaceComingSoonRow: View {

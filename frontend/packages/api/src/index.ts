@@ -297,6 +297,7 @@ export type {
   PlacePreviewAha,
   PlacePreviewAhaTone,
   PlacePreviewLockedSection,
+  PlacePreviewMoneyLead,
 } from './endpoints/place';
 
 // Neighborhood — the density-gated door (four-tab IA, wedge Phase 1)
@@ -317,6 +318,84 @@ export type {
   ResidencyLetterAddress,
   ResidencyLetterVerification,
 } from './endpoints/residencyLetters';
+
+// Place — scoped live residency claims (Wave 1, Residency Pass)
+export * as residencyClaims from './endpoints/residencyClaims';
+export { RESIDENCY_CLAIM_EXPIRY_DAYS } from './endpoints/residencyClaims';
+export type {
+  ResidencyClaim,
+  ResidencyClaimScope,
+  ResidencyClaimStatus,
+  ResidencyClaimLiveStatus,
+  ResidencyClaimExpiryDays,
+  ResidencyClaimView,
+  ResidencyClaimVerification,
+} from './endpoints/residencyClaims';
+
+// Place — 911-ready household fridge cards (Wave 1, #2)
+export * as fridgeCards from './endpoints/fridgeCards';
+export type {
+  FridgeCard,
+  FridgeCardSectionKey,
+  FridgeCardStatus,
+  FridgeCardItem,
+  FridgeCardSection,
+  FridgeCardContent,
+  FridgeCardPublic,
+} from './endpoints/fridgeCards';
+
+// Place — mailbox reality check (Wave 1, #3)
+export * as mailboxCheck from './endpoints/mailboxCheck';
+export type {
+  MailboxCheck,
+  MailboxCheckVerdict,
+  MailboxFinding,
+  MailboxFindingSeverity,
+  MailboxPhysicalStatus,
+} from './endpoints/mailboxCheck';
+
+// Place — home record watch, rate-watch half (Wave 2b)
+export * as recordWatch from './endpoints/recordWatch';
+export type { RecordWatch, RecordWatchEvaluation } from './endpoints/recordWatch';
+
+// Place — Block Founders growth mechanic (Wave 3)
+export * as blockFounders from './endpoints/blockFounders';
+export type { BlockStatus, BlockMeter, BlockInviteRecipient, BlockInviteResult } from './endpoints/blockFounders';
+
+// Place — the Real Rent Benchmark, resident contribution half (Wave 3)
+export * as realRent from './endpoints/realRent';
+export type { RentReport } from './endpoints/realRent';
+
+// Place — Unlisted: the address-removal surface (Wave 4)
+export * as unlisted from './endpoints/unlisted';
+export { UNLISTED_REMOVAL_STATUSES } from './endpoints/unlisted';
+export type {
+  UnlistedProfile,
+  UnlistedHomeProfile,
+  UnlistedStateProgram,
+  UnlistedBroker,
+  UnlistedBrokerGroup,
+  UnlistedRemoval,
+  UnlistedRemovalStatus,
+  UnlistedRemovalMethod,
+  PublicUnlisted,
+} from './endpoints/unlisted';
+
+// Place — Before-You-Sign Scout: an address you do NOT live at (Wave 5)
+export * as scout from './endpoints/scout';
+export type {
+  ScoutStatus,
+  ScoutResponse,
+  ScoutReport,
+  ScoutPlace,
+  ScoutFlood,
+  ScoutFloodCost,
+  ScoutRadon,
+  ScoutWater,
+  ScoutRent,
+  ScoutAsk,
+  ScoutOptions,
+} from './endpoints/scout';
 
 // Place — verified-only neighbor messaging (W2.6)
 export * as neighborMessages from './endpoints/neighborMessages';

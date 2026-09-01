@@ -9,7 +9,7 @@
 //   - retryCaptureFailures        → every 15 minutes at :05/:20/:35/:50
 //   - expireUncapturedAuths      → daily at 3:00 AM
 //   - autoArchivePosts           → daily at 4:00 AM
-//   - mailDayNotification        → daily at 8:00 AM
+//   - mailDayNotification        → every 15 minutes
 //   - mailInterruptNotification  → every 5 minutes
 //   - mailPartyExpiry            → every minute (Phase 2)
 //   - earnRiskReview             → every 15 minutes (Phase 2)
@@ -73,6 +73,8 @@ const draftBusinessReminder = require('./draftBusinessReminder');
 const mailEscrowExpiry = require('./mailEscrowExpiry');
 // Home intelligence jobs
 const billBenchmarkRefresh = require('./billBenchmarkRefresh');
+const nfipTractWarm = require('./nfipTractWarm');
+const rateWatchEvaluate = require('./rateWatchEvaluate');
 // Monthly receipt
 const monthlyReceiptJob = require('./monthlyReceiptJob');
 // Neighborhood density
@@ -174,10 +176,13 @@ function startJobs() {
   });
 
   // ─── Mail Day Notification ───
-  // Runs daily at 8:00 AM UTC (default; per-user time checked inside job).
-  // Builds a summary of each user's mailbox and logs a mail_day_notification
-  // event. Phase 2 will wire to actual push notifications.
-  cron.schedule('0 8 * * *', wrapJob('mailDayNotification', mailDayNotification), {
+  // Runs every 15 minutes — the send is triggered by mail actually being
+  // scanned, not by the clock. Each run picks up users who have unreviewed
+  // pieces today and are currently inside their own local daytime window;
+  // MailDaySession.notified_at keeps that to exactly one push per user per
+  // mail day. (It previously ran once at 08:00 UTC — 1am Pacific — which
+  // is both the wrong hour and before most mail is scanned.)
+  cron.schedule('*/15 * * * *', wrapJob('mailDayNotification', mailDayNotification), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -456,6 +461,25 @@ function startJobs() {
     timezone: 'UTC',
   });
 
+  // ─── NFIP Tract Warm (Home Intelligence) ───
+  // Runs every 15 minutes at :08/:23/:38/:53.
+  // Fetches OpenFEMA NFIP premium benchmarks for tracts the flood
+  // composer marked pending (the API is too slow for the request path).
+  // Up to 3 tracts per run; results cache 90 days.
+  cron.schedule('8,23,38,53 * * * *', wrapJob('nfipTractWarm', nfipTractWarm), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Rate Watch Evaluate (Home Record Watch) ───
+  // Runs Fridays at 02:00 UTC — the PMMS survey publishes Thursdays,
+  // so one weekly evaluation sees each fresh reading. Alerts are
+  // idempotent via claim-before-send on the watch row.
+  cron.schedule('0 2 * * 5', wrapJob('rateWatchEvaluate', rateWatchEvaluate), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Monthly Receipt ───
   // Runs on the 1st of each month at 9:00 AM PT (17:00 UTC).
   // Computes personalized monthly summaries for active users,
@@ -521,7 +545,7 @@ function startJobs() {
       { name: 'retryCaptureFailures', schedule: 'every 15 minutes at :05/:20/:35/:50' },
       { name: 'expireUncapturedAuthorizations', schedule: 'daily at 3:00 AM UTC' },
       { name: 'autoArchivePosts', schedule: 'daily at 4:00 AM UTC' },
-      { name: 'mailDayNotification', schedule: 'daily at 8:00 AM UTC' },
+      { name: 'mailDayNotification', schedule: 'every 15 minutes' },
       { name: 'mailInterruptNotification', schedule: 'every 5 minutes' },
       { name: 'mailPartyExpiry', schedule: 'every minute' },
       { name: 'earnRiskReview', schedule: 'every 15 minutes' },
@@ -552,6 +576,8 @@ function startJobs() {
       { name: 'draftBusinessReminder', schedule: 'daily at 10:00 AM UTC' },
       { name: 'mailEscrowExpiry', schedule: 'daily at 6:00 AM UTC' },
       { name: 'billBenchmarkRefresh', schedule: 'every 6 hours at :05' },
+      { name: 'nfipTractWarm', schedule: 'every 15 minutes at :08/:23/:38/:53' },
+      { name: 'rateWatchEvaluate', schedule: 'Fridays at 02:00 UTC' },
       { name: 'monthlyReceiptJob', schedule: '1st of month at 9:00 AM PT (17:00 UTC)' },
       { name: 'neighborhoodPreviewRefresh', schedule: 'every 15 minutes at :02/:17/:32/:47' },
       { name: 'checkAndAlertStuckPayments', schedule: 'every 15 minutes at :12/:27/:42/:57' },

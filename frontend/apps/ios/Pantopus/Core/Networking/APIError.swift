@@ -65,6 +65,18 @@ public enum APIError: Error, LocalizedError, Sendable {
         .networkConnectionLost, .dnsLookupFailed, .notConnectedToInternet
     ]
 
+    /// The backend's machine `code` from an error body, when one survives.
+    ///
+    /// Only `clientError` / `server` carry a body — `unauthorized`,
+    /// `forbidden` and `notFound` are mapped by status alone and drop it,
+    /// so a caller that needs to tell `VERIFICATION_REQUIRED` from a plain
+    /// 403 must match the CASE as well as this code.
+    static func code(in body: String?) -> String? {
+        guard let body, let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["code"] as? String
+    }
+
     /// Turn a raw 4xx JSON body into a short user-facing string.
     static func friendlyClientMessage(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }

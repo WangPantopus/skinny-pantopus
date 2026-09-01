@@ -298,6 +298,7 @@ import app.pantopus.android.ui.screens.notifications.NotificationsZone
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
 import app.pantopus.android.ui.screens.persona_dm.PersonaDmThreadScreen
+import app.pantopus.android.ui.screens.place.DeepLinkPlaceResolverViewModel
 import app.pantopus.android.ui.screens.place.HomeLanding
 import app.pantopus.android.ui.screens.place.HomeTabHostViewModel
 import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
@@ -1919,6 +1920,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // dispatch to the matching screen. Mirrors the iOS T4.1 routing
     // table from `docs/07-frontend-mobile-app.md §9`.
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
+    // Fetches nothing until a bare Place link actually needs the primary home.
+    val deepLinkPlaceResolver: DeepLinkPlaceResolverViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
         when (val pending = pendingDeepLink) {
             null -> Unit
@@ -2075,6 +2078,42 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // into the Vacation hold screen.
                 navController.navigate(ChildRoutes.MAILBOX_ROOT)
                 navController.navigate(ChildRoutes.MAILBOX_VACATION)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.Place -> {
+                // Server-sent Place links carry the home id, so the common
+                // path goes straight to the dashboard (and to a group-detail
+                // page when the push names one). A bare link resolves the
+                // primary home first — iOS parity: the same push must land
+                // on the same page, slug included; dropping to the generic
+                // Home tab loses the section the push named (the rate-watch
+                // push is exactly `/place?section=money`).
+                val homeId = pending.homeId
+                if (homeId.isNullOrBlank()) {
+                    val resolved = deepLinkPlaceResolver.primaryHomeId()
+                    if (resolved != null) {
+                        navController.navigate(ChildRoutes.placeDashboard(resolved))
+                        val slug = pending.slug
+                        if (!slug.isNullOrBlank()) {
+                            navController.navigate(ChildRoutes.placeDetail(resolved, slug))
+                        }
+                    } else {
+                        // No home at all — the Home tab is the safe landing.
+                        navController.navigate(PantopusRoute.Home.path) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                } else {
+                    navController.navigate(ChildRoutes.placeDashboard(homeId))
+                    val slug = pending.slug
+                    if (!slug.isNullOrBlank()) {
+                        // Pushed on top of the dashboard so Back lands there
+                        // rather than leaving the stack, matching MailDay below.
+                        navController.navigate(ChildRoutes.placeDetail(homeId, slug))
+                    }
+                }
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.MailDay -> {

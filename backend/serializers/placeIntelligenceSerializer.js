@@ -47,9 +47,20 @@ const PLACE_SECTION_META = {
   air_quality: { group: 'today', band: 'A', source: 'AirNow · EPA', layer: 2 },
   alerts: { group: 'today', band: 'A', source: 'National Weather Service', layer: null },
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo', layer: null },
+  // Verdicts, not readings — derived from the weather/AQI payload already
+  // fetched for the two layers above, crossed with the home's own facts.
+  good_day_to: { group: 'today', band: 'A', source: 'Pantopus · derived from today\'s conditions', layer: null },
   // Band B (W0.2) — exact property facts + valuation (ATTOM).
   your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM', layer: null },
+  // Band C — the household's OWN record, the first section in that band.
+  // Seeded from the build year so it is never blank; each row carries how
+  // it is known so an estimate is never dressed up as a fact.
+  home_systems: { group: 'your_home', band: 'C', source: 'Your household record', layer: null },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer', layer: 3 },
+  // Heat from NWS HeatRisk (CONUS); cold derived from the temperature
+  // forecast already fetched for `weather`. The national replacement for
+  // seasonalEngine's two-city gate.
+  heat_cold: { group: 'risk_readiness', band: 'A', source: 'NWS HeatRisk · National Weather Service', layer: null },
   // Phase 4 — the deferred half of risk & readiness.
   seismic: { group: 'risk_readiness', band: 'A', source: 'USGS seismic design values (ASCE 7-22)', layer: null },
   wildfire: { group: 'risk_readiness', band: 'A', source: 'USFS Wildfire Hazard Potential', layer: null },
@@ -60,7 +71,22 @@ const PLACE_SECTION_META = {
   census_context: { group: 'your_block', band: 'A', source: 'U.S. Census · American Community Survey', layer: 4 },
   bill_benchmark: { group: 'money_signals', band: 'A', source: 'Pantopus · peer comparison', layer: 12 },
   incentives: { group: 'money_signals', band: 'A', source: 'DSIRE', layer: 10 },
-  rent_band: { group: 'money_signals', band: 'A', source: 'HUD Fair Market Rents', layer: 9 },
+  // The "county-wide estimate" qualifier is part of the SOURCE, not the
+  // card: rent_band now sits next to real_rent (this block's verified
+  // residents) and the two must never read as one number. Stated once
+  // here so all three clients say the same thing — mobile had begun
+  // hardcoding its own variant.
+  rent_band: { group: 'money_signals', band: 'A', source: 'HUD Fair Market Rents · county-wide estimate', layer: 9 },
+  // Wave 3 — what neighbors ACTUALLY pay, from verified residents of
+  // this geohash-6 block, behind a k>=10 floor. The FIRST Band D
+  // section: D is the proven-resident tier, and a benchmark built from
+  // residents who proved they live here is only honest to serve to
+  // someone who did the same. The Block Founders meter counts toward
+  // exactly this unlock.
+  real_rent: { group: 'money_signals', band: 'D', source: 'Pantopus · verified neighbors on your block', layer: null },
+  // Wave 2 — homestead-style exemption on the parcel's assessor line.
+  // Band B: the answer needs the exact parcel record (ATTOM).
+  exemption_check: { group: 'money_signals', band: 'B', source: 'County records · ATTOM', layer: null },
   civic_districts: { group: 'civic', band: 'A', source: 'Google Civic Information', layer: 8 },
   civic_election: { group: 'civic', band: 'A', source: 'Official county elections', layer: 8 },
 };

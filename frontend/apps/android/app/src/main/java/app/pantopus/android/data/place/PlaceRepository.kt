@@ -3,29 +3,60 @@ package app.pantopus.android.data.place
 import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
 import app.pantopus.android.data.api.models.geo.GeoNearbyPlacesResponse
 import app.pantopus.android.data.api.models.geo.GeoPlaceSearchResponse
+import app.pantopus.android.data.api.models.homes.GetHomeEmergenciesResponse
+import app.pantopus.android.data.api.models.place.BlockInviteRecipient
+import app.pantopus.android.data.api.models.place.BlockInviteRequest
+import app.pantopus.android.data.api.models.place.BlockInviteResult
+import app.pantopus.android.data.api.models.place.BlockStatusResponse
+import app.pantopus.android.data.api.models.place.FridgeCardResponse
+import app.pantopus.android.data.api.models.place.FridgeCardsResponse
+import app.pantopus.android.data.api.models.place.HomeUnlistedResponse
+import app.pantopus.android.data.api.models.place.IssueFridgeCardRequest
+import app.pantopus.android.data.api.models.place.IssueResidencyClaimRequest
 import app.pantopus.android.data.api.models.place.IssueResidencyLetterRequest
+import app.pantopus.android.data.api.models.place.MailboxCheckResponse
 import app.pantopus.android.data.api.models.place.NeighborMessageAck
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplates
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.place.PublicUnlistedResponse
 import app.pantopus.android.data.api.models.place.ReceivedNeighborMessage
 import app.pantopus.android.data.api.models.place.ReceivedNeighborMessagesResponse
+import app.pantopus.android.data.api.models.place.RecordWatchResponse
+import app.pantopus.android.data.api.models.place.RemoveRecordWatchResponse
+import app.pantopus.android.data.api.models.place.RemoveRentReportResponse
+import app.pantopus.android.data.api.models.place.RentReportResponse
 import app.pantopus.android.data.api.models.place.ReplyNeighborMessageRequest
 import app.pantopus.android.data.api.models.place.ReportNeighborMessageRequest
+import app.pantopus.android.data.api.models.place.ResidencyClaimResponse
+import app.pantopus.android.data.api.models.place.ResidencyClaimsResponse
 import app.pantopus.android.data.api.models.place.ResidencyLetterResponse
 import app.pantopus.android.data.api.models.place.ResidencyLetterVerification
 import app.pantopus.android.data.api.models.place.ResidencyLettersResponse
 import app.pantopus.android.data.api.models.place.SendNeighborMessageRequest
 import app.pantopus.android.data.api.models.place.SentNeighborMessage
+import app.pantopus.android.data.api.models.place.SetRecordWatchRequest
+import app.pantopus.android.data.api.models.place.SetRentReportRequest
+import app.pantopus.android.data.api.models.place.SetUnlistedRemovalRequest
+import app.pantopus.android.data.api.models.place.UnlistedRemovalResponse
+import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.AIApi
+import app.pantopus.android.data.api.services.BlockFoundersApi
+import app.pantopus.android.data.api.services.FridgeCardsApi
 import app.pantopus.android.data.api.services.GeoApi
+import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.api.services.MailboxCheckApi
 import app.pantopus.android.data.api.services.NeighborMessagesApi
 import app.pantopus.android.data.api.services.PlaceApi
+import app.pantopus.android.data.api.services.RealRentApi
+import app.pantopus.android.data.api.services.RecordWatchApi
+import app.pantopus.android.data.api.services.ResidencyClaimsApi
 import app.pantopus.android.data.api.services.ResidencyLettersApi
+import app.pantopus.android.data.api.services.UnlistedApi
 import okhttp3.ResponseBody
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,14 +68,25 @@ import javax.inject.Singleton
  * route on the `NetworkResult` taxonomy.
  */
 @Singleton
+// A deliberately flat façade over the Place feature's five APIs —
+// cohesive by design; the count grows one wave at a time.
+@Suppress("TooManyFunctions", "LongParameterList")
 class PlaceRepository
     @Inject
     constructor(
         private val placeApi: PlaceApi,
         private val neighborMessagesApi: NeighborMessagesApi,
+        private val residencyClaimsApi: ResidencyClaimsApi,
         private val residencyLettersApi: ResidencyLettersApi,
+        private val fridgeCardsApi: FridgeCardsApi,
+        private val mailboxCheckApi: MailboxCheckApi,
+        private val recordWatchApi: RecordWatchApi,
+        private val realRentApi: RealRentApi,
+        private val blockFoundersApi: BlockFoundersApi,
+        private val unlistedApi: UnlistedApi,
         private val aiApi: AIApi,
         private val geoApi: GeoApi,
+        private val homesApi: HomesApi,
     ) {
         /** Address typeahead for the signed-out funnel (keyless). */
         suspend fun geoAutocomplete(query: String): NetworkResult<GeoAutocompleteResponse> = safeApiCall { geoApi.autocomplete(query) }
@@ -145,4 +187,117 @@ class PlaceRepository
         /** Anonymous third-party letter check (no auth required). */
         suspend fun verifyResidencyLetter(code: String): NetworkResult<ResidencyLetterVerification> =
             safeApiCall { residencyLettersApi.publicVerify(code) }
+
+        // ── Residency Pass — scoped live claims (Wave 1) ─────────
+
+        suspend fun residencyClaims(homeId: String): NetworkResult<ResidencyClaimsResponse> =
+            safeApiCall { residencyClaimsApi.list(homeId) }
+
+        suspend fun issueResidencyClaim(
+            homeId: String,
+            scope: String,
+            expiresInDays: Int,
+        ): NetworkResult<ResidencyClaimResponse> =
+            safeApiCall { residencyClaimsApi.issue(homeId, IssueResidencyClaimRequest(scope, expiresInDays)) }
+
+        suspend fun revokeResidencyClaim(
+            homeId: String,
+            claimId: String,
+        ): NetworkResult<ResidencyClaimResponse> = safeApiCall { residencyClaimsApi.revoke(homeId, claimId) }
+
+        /** The home's existing emergency info — the fridge-card utilities pre-seed. */
+        suspend fun homeEmergencies(homeId: String): NetworkResult<GetHomeEmergenciesResponse> =
+            safeApiCall { homesApi.getHomeEmergencies(homeId) }
+
+        // ── Fridge cards — the 911-ready household card (Wave 1) ─
+
+        suspend fun fridgeCards(homeId: String): NetworkResult<FridgeCardsResponse> = safeApiCall { fridgeCardsApi.list(homeId) }
+
+        suspend fun issueFridgeCard(
+            homeId: String,
+            body: IssueFridgeCardRequest,
+        ): NetworkResult<FridgeCardResponse> = safeApiCall { fridgeCardsApi.issue(homeId, body) }
+
+        suspend fun revokeFridgeCard(
+            homeId: String,
+            cardId: String,
+        ): NetworkResult<FridgeCardResponse> = safeApiCall { fridgeCardsApi.revoke(homeId, cardId) }
+
+        /** The mailbox reality check (Wave 1, #3) — read-only diagnostic. */
+        suspend fun mailboxCheck(homeId: String): NetworkResult<MailboxCheckResponse> = safeApiCall { mailboxCheckApi.check(homeId) }
+
+        // ── Home Record Watch, rate-watch half (Wave 2b) ─────────
+
+        suspend fun recordWatch(homeId: String): NetworkResult<RecordWatchResponse> = safeApiCall { recordWatchApi.get(homeId) }
+
+        suspend fun setRecordWatch(
+            homeId: String,
+            loanRecordedMonth: String,
+        ): NetworkResult<RecordWatchResponse> = safeApiCall { recordWatchApi.set(homeId, SetRecordWatchRequest(loanRecordedMonth)) }
+
+        suspend fun removeRecordWatch(homeId: String): NetworkResult<RemoveRecordWatchResponse> =
+            safeApiCall { recordWatchApi.remove(homeId) }
+
+        // ── Real Rent Benchmark — the contribution (Wave 3, T4) ──
+        // The block aggregate is NOT here; it rides the intelligence
+        // contract's `real_rent` section behind the k>=10 floor.
+
+        suspend fun rentReport(homeId: String): NetworkResult<RentReportResponse> = safeApiCall { realRentApi.get(homeId) }
+
+        /**
+         * Writing is gated to a VERIFIED resident, and the route's 403
+         * sentence ("Verify your address to add your rent…") is the next
+         * step, not a dead end — so this call opts into carrying the
+         * server's 403 body through instead of the canned
+         * "You don't have permission to do that."
+         */
+        suspend fun setRentReport(
+            homeId: String,
+            monthlyRent: Int,
+            bedrooms: Int? = null,
+        ): NetworkResult<RentReportResponse> =
+            safeApiCall(surfaceForbiddenBody = true) {
+                realRentApi.set(homeId, SetRentReportRequest(monthlyRent, bedrooms))
+            }
+
+        suspend fun removeRentReport(homeId: String): NetworkResult<RemoveRentReportResponse> =
+            safeApiCall(surfaceForbiddenBody = true) { realRentApi.remove(homeId) }
+
+        // ── Block Founders — rank, meters, postcard invites (T4) ─
+
+        suspend fun blockFounders(homeId: String): NetworkResult<BlockStatusResponse> = safeApiCall { blockFoundersApi.status(homeId) }
+
+        suspend fun sendBlockInvite(
+            homeId: String,
+            recipient: BlockInviteRecipient,
+        ): NetworkResult<BlockInviteResult> = safeApiCall { blockFoundersApi.invite(homeId, BlockInviteRequest(recipient)) }
+
+        // ── Unlisted — the state escape hatch + removal paths (T1+) ─
+        // We never query the broker sites: a lookup would disclose the
+        // address to the very companies the caller is leaving. Nothing
+        // here asks, or answers, whether someone IS listed.
+
+        /**
+         * The state profile plus the CALLER's own progress. Gated on
+         * home access, not verification. `unlisted.removals` is null
+         * when the progress read failed — distinct from the empty list.
+         */
+        suspend fun unlisted(homeId: String): NetworkResult<HomeUnlistedResponse> = safeApiCall { unlistedApi.forHome(homeId) }
+
+        /** The anonymous, address-only profile. Persists nothing. */
+        suspend fun publicUnlisted(address: String): NetworkResult<PublicUnlistedResponse> =
+            safeApiCall { unlistedApi.publicUnlisted(address) }
+
+        /**
+         * Record a step. [status] must be sendable — UNKNOWN is a decode
+         * fallback, never a value the server accepts (`BAD_STATUS`).
+         */
+        suspend fun setUnlistedRemoval(
+            homeId: String,
+            brokerId: String,
+            status: UnlistedRemovalStatus,
+        ): NetworkResult<UnlistedRemovalResponse> =
+            safeApiCall {
+                unlistedApi.setRemoval(homeId, brokerId, SetUnlistedRemovalRequest(status.wire))
+            }
     }

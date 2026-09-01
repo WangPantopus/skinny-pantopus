@@ -86,8 +86,23 @@ const unavailable = (ids, reason = SLOW_REASON) =>
 // Returns envelopes for the layers that need a provider round-trip.
 // Flood / census / density are assembled by the route (it already has
 // them) via assemblePreviewSections.
-async function composePreviewSections({ lat, lng, city = null, state = null }) {
+async function composePreviewSections({ lat, lng, city = null, state = null, resolveTract = null }) {
   const gh6 = encodeGeohash(lat, lng, 6);
+  // The route resolves the tract ONCE (a thunk shared with the census
+  // teaser and the money lead); county falls out of it for free, so the
+  // radon / rent / water adapters never re-geocode the point.
+  // null = no shared resolution offered (adapters may geocode themselves);
+  // '' = shared resolution ran and failed (adapters must NOT retry it).
+  let countyFips = null;
+  if (typeof resolveTract === 'function') {
+    countyFips = '';
+    try {
+      const tract = await resolveTract();
+      if (tract && tract.stateCode && tract.countyCode) countyFips = `${tract.stateCode}${tract.countyCode}`;
+    } catch {
+      countyFips = '';
+    }
+  }
   // The adapters take a "home"; this one is a point with a geohash for
   // an id (their warn-logs print it) and no exact-record fields.
   const home = {
@@ -98,6 +113,7 @@ async function composePreviewSections({ lat, lng, city = null, state = null }) {
     state,
     year_built: null,
     bedrooms: null,
+    county_fips: countyFips,
   };
   const ms = sectionBudgetMs();
   const tasks = [

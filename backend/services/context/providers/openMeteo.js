@@ -123,6 +123,34 @@ function buildUrl(lat, lng) {
 // ── Normalizers ─────────────────────────────────────────────────────
 
 /**
+ * Open-Meteo is queried with `timezone=auto`, which makes it return NAIVE
+ * LOCAL timestamps ("2026-08-19T22:00") with the offset carried separately
+ * in `utc_offset_seconds`. Passed through verbatim into a field named
+ * `datetime_utc`, those strings parse as the SERVER's local time, so every
+ * consumer that treats the value as an instant is wrong by the difference
+ * between the server's zone and the home's — silently, and only on the
+ * Open-Meteo fallback path (WeatherKit returns real Z-suffixed instants).
+ *
+ * `timezone=auto` still has to stay: sunrise/sunset and the daily
+ * boundaries are only meaningful in the home's own zone. So the fix is to
+ * reconstruct the absolute instant here, at the source, rather than asking
+ * every downstream reader to know about the offset.
+ *
+ * @param {string|null} naiveLocal  e.g. "2026-08-19T22:00"
+ * @param {number} offsetSeconds    utc_offset_seconds from the response
+ * @returns {string} ISO 8601 with a Z designator, or '' when unusable.
+ */
+function localToUtcIso(naiveLocal, offsetSeconds) {
+  if (!naiveLocal || typeof naiveLocal !== 'string') return '';
+  // Already absolute (a zone designator present) — leave it alone.
+  if (/[Zz]$|[+-]\d{2}:?\d{2}$/.test(naiveLocal)) return naiveLocal;
+  const asIfUtc = Date.parse(`${naiveLocal}Z`);
+  if (!Number.isFinite(asIfUtc)) return '';
+  const offset = Number.isFinite(Number(offsetSeconds)) ? Number(offsetSeconds) : 0;
+  return new Date(asIfUtc - offset * 1000).toISOString();
+}
+
+/**
  * Normalize Open-Meteo current block into WeatherCurrent.
  */
 function normalizeCurrent(c) {
@@ -149,7 +177,7 @@ function normalizeCurrent(c) {
  * Normalize Open-Meteo hourly arrays into WeatherHourly[].
  * Open-Meteo returns parallel arrays: hourly.time[], hourly.temperature_2m[], etc.
  */
-function normalizeHourly(h) {
+function normalizeHourly(h, offsetSeconds) {
   if (!h?.time) return [];
   const len = Math.min(h.time.length, 24);
   const result = [];
@@ -157,7 +185,7 @@ function normalizeHourly(h) {
     const wmoCode = h.weather_code?.[i];
     const cond = mapWmoCode(wmoCode);
     result.push({
-      datetime_utc: h.time[i] || '',
+      datetime_utc: localToUtcIso(h.time[i], offsetSeconds),
       temp_f: roundOrNull(h.temperature_2m?.[i]),
       condition_code: cond.code,
       condition_label: cond.label,
@@ -173,7 +201,7 @@ function normalizeHourly(h) {
 /**
  * Normalize Open-Meteo daily arrays into WeatherDaily[].
  */
-function normalizeDaily(d) {
+function normalizeDaily(d, offsetSeconds) {
   if (!d?.time) return [];
   const len = Math.min(d.time.length, 7);
   const result = [];
@@ -186,8 +214,8 @@ function normalizeDaily(d) {
       condition_code: cond.code,
       condition_label: cond.label,
       precip_chance_pct: roundOrNull(d.precipitation_probability_max?.[i]),
-      sunrise_utc: d.sunrise?.[i] || null,
-      sunset_utc: d.sunset?.[i] || null,
+      sunrise_utc: localToUtcIso(d.sunrise?.[i], offsetSeconds) || null,
+      sunset_utc: localToUtcIso(d.sunset?.[i], offsetSeconds) || null,
       uv_index_max: d.uv_index_max?.[i] ?? null,
     });
   }
@@ -255,8 +283,9 @@ async function fetchWeather(latitude, longitude) {
     const fetchedAt = new Date().toISOString();
 
     const current = normalizeCurrent(raw.current);
-    const hourly = normalizeHourly(raw.hourly);
-    const daily = normalizeDaily(raw.daily);
+    const offsetSeconds = raw.utc_offset_seconds;
+    const hourly = normalizeHourly(raw.hourly, offsetSeconds);
+    const daily = normalizeDaily(raw.daily, offsetSeconds);
 
     // ── Cache each data set ──
     await Promise.all([
@@ -299,3 +328,6 @@ async function readStale(geohash) {
 }
 
 module.exports = { fetchWeather, PROVIDER, WMO_CODE_MAP };
+// Exported for unit testing — the timezone reconstruction is the whole
+// correctness of every hour-based tile on the Open-Meteo path.
+module.exports.localToUtcIso = localToUtcIso;

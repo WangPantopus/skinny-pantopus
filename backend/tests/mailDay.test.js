@@ -262,3 +262,41 @@ describe('yesterday recap', () => {
     expect(res.body.streak_days).toBe(4);
   });
 });
+
+// ── Regression: materialization must not fail silently ───────
+// Migration 170 shipped the dedup invariant as a PARTIAL unique index,
+// which Postgres cannot infer from `ON CONFLICT (cols)` — every upsert
+// raised 42P10. The result was unchecked, so ensureTodayItems returned
+// a success count for zero rows written and Mail Day was dead: an empty
+// triage screen and no daily push, on every client, for everyone.
+describe('ensureTodayItems reports write failures', () => {
+  test('a failed upsert returns 0, never a phantom success count', async () => {
+    const { ensureTodayItems } = require('../services/mailDayService');
+    const supabaseAdmin = require('../config/supabaseAdmin');
+    const realFrom = supabaseAdmin.from;
+
+    seedTable('HomeOccupancy', [{ id: 'o1', home_id: 'h1', user_id: 'u1', is_active: true }]);
+    seedTable('Mail', [{ id: 'm1', subject: 'A bill', category: 'bill', created_at: '2026-08-26T00:00:00.000Z' }]);
+    seedTable('MailRoutingQueue', [{
+      id: 'q1', home_id: 'h1', mail_id: 'm1', resolved: false, best_match_confidence: 0.9,
+      Mail: { id: 'm1', subject: 'A bill', category: 'bill', created_at: '2026-08-26T00:00:00.000Z' },
+    }]);
+
+    // Make only the MailDayItem upsert fail, exactly as 42P10 would.
+    supabaseAdmin.from = (table) => {
+      const builder = realFrom.call(supabaseAdmin, table);
+      if (table !== 'MailDayItem') return builder;
+      const original = builder.upsert && builder.upsert.bind(builder);
+      builder.upsert = original
+        ? () => Promise.resolve({ data: null, error: { code: '42P10', message: 'no unique or exclusion constraint matching the ON CONFLICT specification' } })
+        : builder.upsert;
+      return builder;
+    };
+    try {
+      const written = await ensureTodayItems('u1', new Date().toISOString().slice(0, 10));
+      expect(written).toBe(0);
+    } finally {
+      supabaseAdmin.from = realFrom;
+    }
+  });
+});

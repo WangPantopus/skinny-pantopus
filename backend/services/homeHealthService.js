@@ -146,8 +146,30 @@ const DIMENSION_ROUTES = {
 async function computeHealthScore(homeId) {
   const start = Date.now();
 
-  // Determine current season for checklist query
-  const seasonalCtx = getSeasonalContext();
+  // Determine current season for checklist query.
+  //
+  // The home's coordinates are passed so the seasonal engine can tell
+  // whether its region-specific copy applies here. Calling without them
+  // used to satisfy the old `!hasCoords ||` gate, which served Portland
+  // ice statistics to every home in the country. The season itself is
+  // month-based and resolves regardless, so the checklist query below is
+  // unaffected either way.
+  let homeCoords = null;
+  try {
+    const { data: homeRow } = await supabaseAdmin
+      .from('Home')
+      .select('map_center_lat, map_center_lng')
+      .eq('id', homeId)
+      .maybeSingle();
+    if (homeRow && homeRow.map_center_lat != null && homeRow.map_center_lng != null) {
+      homeCoords = { latitude: Number(homeRow.map_center_lat), longitude: Number(homeRow.map_center_lng) };
+    }
+  } catch {
+    // Non-fatal: without coordinates the engine simply withholds the
+    // regional tip rather than guessing.
+  }
+
+  const seasonalCtx = getSeasonalContext({ ...(homeCoords || {}) });
   const currentYear = new Date().getFullYear();
   const seasonKey = seasonalCtx.primary_season;
 

@@ -44,6 +44,12 @@ final class PlaceIntelligenceDecodingTests: XCTestCase {
         // 18-section launch set.
         XCTAssertEqual(intelligence.groups.count, 7)
         let sections = intelligence.groups.flatMap(\.sections)
+        // NOTE: this fixture is a 2026-06-12 capture, taken BEFORE
+        // good_day_to / heat_cold / home_systems were added, so it carries
+        // 18 of the 21 contract sections. The three newer sections are
+        // covered by PlaceSectionsDecodingTests (inline payloads) until this
+        // fixture is re-captured from a live T3 response.
+        XCTAssertEqual(sections.count, intelligence.groups.reduce(0) { $0 + $1.sections.count })
         XCTAssertEqual(sections.count, 18)
 
         // Group labels are server-rendered.

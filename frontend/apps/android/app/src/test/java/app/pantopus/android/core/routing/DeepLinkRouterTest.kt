@@ -474,6 +474,78 @@ class DeepLinkRouterTest {
 
     // ---- A13.16 My Mail Day ----
 
+    // ── Place ─────────────────────────────────────────────────────
+    // Neither client had a Place destination, so every Place-derived push
+    // routed to /hub and Place was unreachable after a back-swipe.
+
+    @Test
+    fun place_bare_link_defers_home_resolution_to_the_client() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = null, slug = null),
+            DeepLinkRouter.resolveString("pantopus://place"),
+        )
+    }
+
+    @Test
+    fun place_takes_home_id_from_the_path() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = null),
+            DeepLinkRouter.resolveString("pantopus://place/home-1"),
+        )
+    }
+
+    @Test
+    fun place_takes_home_id_from_the_id_query() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = null),
+            DeepLinkRouter.resolveString("pantopus://place?id=home-1"),
+        )
+    }
+
+    @Test
+    fun place_opens_a_group_detail_page_from_the_path() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = "risk"),
+            DeepLinkRouter.resolveString("pantopus://place/home-1/risk"),
+        )
+    }
+
+    @Test
+    fun place_opens_a_group_detail_page_from_the_section_query() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = "today"),
+            DeepLinkRouter.resolveString("pantopus://place?id=home-1&section=today"),
+        )
+    }
+
+    @Test
+    fun place_degrades_an_unknown_slug_to_the_dashboard() {
+        // A server that learns a new section must not produce a dead link
+        // on a client that predates it.
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = null),
+            DeepLinkRouter.resolveString("pantopus://place/home-1/not-a-real-group"),
+        )
+    }
+
+    @Test
+    fun place_accepts_every_shipped_group_slug() {
+        listOf("today", "your-home", "risk", "block", "money", "civic", "identity").forEach { slug ->
+            assertEquals(
+                DeepLinkRouter.Destination.Place(homeId = "h", slug = slug),
+                DeepLinkRouter.resolveString("pantopus://place/h/$slug"),
+            )
+        }
+    }
+
+    @Test
+    fun place_https_host() {
+        assertEquals(
+            DeepLinkRouter.Destination.Place(homeId = "home-1", slug = "money"),
+            DeepLinkRouter.resolveString("https://pantopus.app/place/home-1/money"),
+        )
+    }
+
     @Test
     fun mail_day_custom_scheme() {
         assertEquals(DeepLinkRouter.Destination.MailDay, DeepLinkRouter.resolveString("pantopus://mailbox/mailday"))

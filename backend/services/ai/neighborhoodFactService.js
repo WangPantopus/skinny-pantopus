@@ -605,9 +605,25 @@ async function generateNeighborhoodFacts(geohash, options = {}) {
   const medianYear = median(yearBuiltValues);
 
   // 3. Get seasonal context (deterministic, no external calls)
+  //
+  // The cell centre is passed so the seasonal engine can tell whether its
+  // region-specific copy applies. This caller was missed when the gate was
+  // rewritten from `!hasCoords || inRegion` to `hasCoords && inRegion`, so
+  // it was left permanently out-of-region — including inside Portland, the
+  // region the copy is actually about — silently emptying every seasonal
+  // fact and degrading the community-question category.
+  const seasonalBbox = decodeGeohashBbox(geohash);
+  const seasonalCoords = seasonalBbox
+    ? {
+      latitude: (seasonalBbox.minLat + seasonalBbox.maxLat) / 2,
+      longitude: (seasonalBbox.minLng + seasonalBbox.maxLng) / 2,
+    }
+    : {};
+
   const seasonalCtx = getSeasonalContext({
     date,
     homeYearBuilt: medianYear,
+    ...seasonalCoords,
   });
 
   // 4. Generate facts by category

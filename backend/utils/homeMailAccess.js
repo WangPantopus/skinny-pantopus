@@ -50,6 +50,23 @@ const MAIL_TRUSTED_VERIFICATION_STATUSES = ['verified', 'provisional', 'provisio
  */
 async function getAccessibleHomeIds(userId) {
   if (!userId) return [];
+  try {
+    return await trustedHomeIdsOrThrow(userId);
+  } catch (error) {
+    logger.error('getAccessibleHomeIds: failing closed', { userId, error: error.message });
+    return [];
+  }
+}
+
+/**
+ * The hardened query itself: active occupancies in a trusted, unexpired
+ * verification state. THROWS on a read failure so callers can choose their
+ * own failure semantics — `getAccessibleHomeIds` fails closed to [], while
+ * Mail Day's service returns null to keep "no homes" distinct from "the read
+ * broke" (the invisible-failure bug that once killed Mail Day).
+ */
+async function trustedHomeIdsOrThrow(userId) {
+  if (!userId) return [];
 
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
@@ -58,10 +75,7 @@ async function getAccessibleHomeIds(userId) {
     .eq('is_active', true)
     .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
 
-  if (error) {
-    logger.error('getAccessibleHomeIds: failing closed', { userId, error: error.message });
-    return [];
-  }
+  if (error) throw new Error(error.message);
 
   // Expiry (behind address.enforce_verification_expiry): a 'verified' row past
   // its validity window loses this surface until re-verified — mail is the
@@ -78,4 +92,5 @@ async function getAccessibleHomeIds(userId) {
   return [...new Set(trusted.map((r) => r.home_id).filter(Boolean))];
 }
 
-module.exports = { getAccessibleHomeIds };
+module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow,
+};

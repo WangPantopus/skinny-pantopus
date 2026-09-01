@@ -30,17 +30,19 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+// Shared with jobs/mailDayNotification.js — this backfill used to live here
+// with a single caller, which made GET /today the only writer of
+// MailDayItem and silently gated the daily push on having opened the screen.
+const { ensureTodayItems, getAccessibleHomeIds, kindFor } = require('../services/mailDayService');
 
 const UNDO_SECONDS = 5;
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ============ HELPERS (mirrors of the mailboxV2 primitives) ============
-
 
 async function logMailEvent(eventType, mailId, userId, metadata = {}) {
   try {
@@ -96,19 +98,6 @@ function tintForAvatar(avatar) {
   return avatar === 'household_green' ? 'household_home' : 'person_primary';
 }
 
-// Mirror of the Android `kindFor` mapping (mail object type / category →
-// the faux-photo MailDayKind the screen renders).
-function kindFor(objectType, category) {
-  if (category && String(category).toLowerCase().includes('bill')) return 'bill';
-  switch (objectType) {
-    case 'package': return 'package';
-    case 'postcard': return 'postcard';
-    case 'booklet': return 'magazine';
-    case 'bundle': return 'flyer';
-    default: return 'envelope';
-  }
-}
-
 // ============ SERIALIZERS (snake_case mirror of MailDayContent) ============
 
 function serializeUnreviewed(row) {
@@ -154,7 +143,11 @@ async function currentStreak(userId, today) {
     .eq('user_id', userId)
     .eq('day_date', today)
     .maybeSingle();
-  if (todaySession) return todaySession.streak_days || 0;
+  // Only trust today's row once the day is FINISHED. The notification job
+  // now claims the day by creating this row before the user has triaged
+  // anything, and `streak_days` defaults to 0 — so returning it on mere
+  // existence would blank a live streak for every notified user, all day.
+  if (todaySession && todaySession.finished_at) return todaySession.streak_days || 0;
 
   const { data: ySession } = await supabaseAdmin
     .from('MailDaySession')
@@ -227,8 +220,9 @@ async function yesterdayRecap(userId, today) {
  */
 async function setupNudges(userId) {
   let aliasCount = 0;
+  // null = the occupancy read failed (distinct from [] = no homes).
   const homeIds = await getAccessibleHomeIds(userId);
-  if (homeIds.length > 0) {
+  if (homeIds && homeIds.length > 0) {
     const { count } = await supabaseAdmin
       .from('MailAlias')
       .select('*', { count: 'exact', head: true })
@@ -254,54 +248,6 @@ async function setupNudges(userId) {
  * digital routing queue into today's triage (reuse of the /pending source).
  * Idempotent — only runs when today is empty. Never throws.
  */
-async function ensureTodayItems(userId, today) {
-  try {
-    const { data: existing } = await supabaseAdmin
-      .from('MailDayItem')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('day_date', today);
-    if (existing && existing.length > 0) return;
-
-    const homeIds = await getAccessibleHomeIds(userId);
-    if (homeIds.length === 0) return;
-
-    const { data: queue } = await supabaseAdmin
-      .from('MailRoutingQueue')
-      .select('*, Mail!inner(*)')
-      .in('home_id', homeIds)
-      .eq('resolved', false);
-    const rows = queue || [];
-    if (rows.length === 0) return;
-
-    const nowIso = new Date().toISOString();
-    const inserts = rows.map((q) => {
-      const mail = q.Mail || {};
-      return {
-        user_id: userId,
-        home_id: q.home_id || null,
-        mail_id: q.mail_id,
-        kind: kindFor(mail.mail_object_type, mail.category),
-        label: (mail.subject && String(mail.subject).trim()) || 'Mail',
-        sender: mail.sender_display || mail.sender_business_name || null,
-        suggested_name: q.recipient_name_raw || mail.recipient_name || '',
-        suggested_avatar: 'personal_sky',
-        confidence_percent: Math.round(Math.min(1, Math.max(0, q.best_match_confidence || 0)) * 100),
-        secondary_label: 'Other',
-        status: 'unreviewed',
-        action: null,
-        day_date: today,
-        scanned_at: mail.created_at || nowIso,
-        created_at: nowIso,
-        updated_at: nowIso,
-      };
-    });
-    await supabaseAdmin.from('MailDayItem').insert(inserts);
-  } catch (err) {
-    logger.warn('Mail day backfill failed (non-fatal)', { error: err.message });
-  }
-}
-
 /**
  * When a triaged piece is linked to a digital `Mail`, reuse the resolve
  * primitive: route the Mail + clear its `MailRoutingQueue` row so it doesn't

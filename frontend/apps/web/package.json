@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint ./src/",
     "type-check": "tsc --noEmit",
+    "type-check:gate": "node scripts/typecheck-gate.mjs",
+    "type-check:baseline": "node scripts/typecheck-gate.mjs --update",
     "test": "jest --forceExit",
     "test:e2e": "playwright test"
   },

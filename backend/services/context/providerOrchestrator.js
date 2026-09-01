@@ -7,7 +7,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { resolveLocation } = require('./locationResolver');
+const { resolveLocation, locationFromCoordinates } = require('./locationResolver');
 const { fetchWeather } = require('./weatherProvider');
 const { fetchAQI } = require('./aqiProvider');
 const { fetchAlerts } = require('./alertsProvider');
@@ -80,6 +80,11 @@ function filterHistoryForLocation(recentBriefings, geohash) {
   return matching.length ? matching : recentBriefings;
 }
 
+// The morning push must clear both bars — see the interrupt gate in
+// composeMorningBriefing for why one bar was not enough.
+const MIN_PUSH_SCORE = 0.20;
+const MIN_PUSH_COST = 0.25;
+
 function emptyBriefingResult(skipReason = 'no_location') {
   return {
     text: '',
@@ -87,6 +92,9 @@ function emptyBriefingResult(skipReason = 'no_location') {
     tokens_used: 0,
     signals_snapshot: [],
     location_geohash: null,
+    // The home the briefing was composed for. Carried so the push can deep
+    // link straight to that home's Place dashboard instead of /hub.
+    home_id: null,
     should_send: false,
     skip_reason: skipReason,
   };
@@ -127,13 +135,25 @@ const EMPTY_HUB_RESULT = {
 // ── Hub Today ───────────────────────────────────────────────────────
 
 // ── In-memory cache for getHubToday (per-user, short TTL) ──────────────
-const _hubTodayCache = new Map(); // Map<userId, { result, expiresAt }>
+// Keyed by user AND shape: the `detail` payload is a strict superset of
+// the Hub card's, so serving one for the other would either leak forecast
+// weight into the Hub card or starve Place of the arrays it needs.
+const _hubTodayCache = new Map(); // Map<cacheKey, { result, expiresAt }>
 const HUB_TODAY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const HUB_TODAY_CACHE_MAX = 200;
 
+function hubCacheKey(userId, detail, geohash) {
+  const base = detail ? `${userId}:detail` : String(userId);
+  // An explicit-coordinates payload is about a PLACE, not the user's
+  // resolved location — keyed by geohash5 so a user flipping between two
+  // homes never gets one home's forecast served for the other.
+  return geohash ? `${base}@${geohash}` : base;
+}
+
 function clearHubTodayCache(userId) {
   if (userId) {
-    _hubTodayCache.delete(userId);
+    _hubTodayCache.delete(hubCacheKey(userId, false));
+    _hubTodayCache.delete(hubCacheKey(userId, true));
   } else {
     _hubTodayCache.clear();
   }
@@ -143,16 +163,33 @@ function clearHubTodayCache(userId) {
  * Get the Hub Today card payload for a user.
  *
  * @param {string} userId
+ * @param {object}  [options]
+ * @param {boolean} [options.detail=false]  Include the fields the Hub card
+ *   does not render but Place Intelligence does: the hourly/daily forecast
+ *   arrays, feels-like/humidity/UV/dew point, the AQI's dominant pollutant,
+ *   and each alert's real headline/description/instruction. These are
+ *   already fetched and cached by the providers on every call; without this
+ *   flag they are simply dropped on the floor at the block-building step.
+ * @param {object} [options.atLocation]  Anchor the payload to EXPLICIT
+ *   coordinates ({latitude, longitude, label?, homeId?}) instead of the
+ *   user's resolved location. The Place Intelligence path passes the
+ *   requested home here — a landlord in Portland opening their Phoenix
+ *   rental must get Phoenix weather, freeze guidance, and alerts, not
+ *   Portland's. Invalid coordinates fall back to the user's location.
  * @returns {Promise<Object>} HubTodayResult
  */
-async function getHubToday(userId) {
+async function getHubToday(userId, options = {}) {
+  const detail = options.detail === true;
+  const atLocation = options.atLocation ? locationFromCoordinates(options.atLocation) : null;
+  const cacheKey = hubCacheKey(userId, detail, atLocation && atLocation.geohash);
+
   // Check in-memory cache first
-  const cached = _hubTodayCache.get(userId);
+  const cached = _hubTodayCache.get(cacheKey);
   if (cached) {
     if (Date.now() < cached.expiresAt) {
       return cached.result;
     }
-    _hubTodayCache.delete(userId); // evict expired entry
+    _hubTodayCache.delete(cacheKey); // evict expired entry
   }
 
   const startMs = Date.now();
@@ -162,8 +199,8 @@ async function getHubToday(userId) {
   const partialFailures = [];
   let cacheHits = 0;
 
-  // 1. Resolve location
-  const location = await resolveLocation(userId);
+  // 1. Resolve location — an explicit anchor wins outright.
+  const location = atLocation || await resolveLocation(userId);
 
   if (location.source === 'none') {
     return {
@@ -259,6 +296,15 @@ async function getHubToday(userId) {
     low_f: weather.daily?.[0]?.low_f ?? null,
     precipitation_next_6h: hasPrecipNext6h(weather.hourly),
     precipitation_start_at: findPrecipStart(weather.hourly),
+    ...(detail ? {
+      feels_like_f: weather.current.feels_like_f ?? null,
+      humidity_pct: weather.current.humidity_pct ?? null,
+      uv_index: weather.current.uv_index ?? null,
+      dew_point_f: weather.current.dew_point_f ?? null,
+      wind_mph: weather.current.wind_mph ?? null,
+      hourly: weather.hourly || [],
+      daily: weather.daily || [],
+    } : {}),
   } : null;
 
   // 7. Build AQI block
@@ -266,6 +312,7 @@ async function getHubToday(userId) {
     index: aqi.aqi,
     category: aqi.category,
     is_noteworthy: aqi.is_noteworthy,
+    ...(detail ? { dominant_pollutant: aqi.pollutant ?? null } : {}),
   } : null;
 
   // 8. Build alerts list
@@ -277,6 +324,11 @@ async function getHubToday(userId) {
     ends_at: a.expires,
     details_url: a.details_url || '',
     source: a.source || '',
+    ...(detail ? {
+      headline: a.headline || '',
+      description: a.description || '',
+      instruction: a.instruction || '',
+    } : {}),
   }));
 
   // 9. Build signals for client
@@ -346,7 +398,7 @@ async function getHubToday(userId) {
   }
 
   // Cache successful result
-  _hubTodayCache.set(userId, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
     const firstKey = _hubTodayCache.keys().next().value;
     _hubTodayCache.delete(firstKey);
@@ -443,13 +495,30 @@ async function composeMorningBriefing(userId, location) {
     }
   }
 
-  const topScore = rankedOutput.signals[0]?.score || 0;
-  const hasWeather = weather?.current?.temp_f != null;
-  if (topScore < 0.20 && !hasWeather) {
+  // ── The interrupt gate ───────────────────────────────────────────
+  //
+  // This previously read `topScore < 0.20 && !hasWeather`. Weather is
+  // essentially always resolvable, so `!hasWeather` was false and the
+  // guard never fired: every user got a push every single day, including
+  // days whose entire content was the temperature. Worse, a seasonal tip
+  // scores ~0.224 — just over the ranking bar — so a quiet day inside a
+  // supported region pushed "clean your gutters".
+  //
+  // A push now has to earn the interruption on BOTH axes: it must rank
+  // well enough to be the day's lead, and not knowing it must actually
+  // cost the user something (see COST_OF_INACTION). Weather alone and a
+  // seasonal tip both fail the second test, which is the point — the
+  // lock screen already shows the temperature, and the gutters will
+  // still need clearing tomorrow.
+  const top = rankedOutput.signals[0] || null;
+  const topScore = top?.score || 0;
+  const topCost = top?.cost_of_inaction ?? 0;
+  if (!top || topScore < MIN_PUSH_SCORE || topCost < MIN_PUSH_COST) {
     return {
       ...emptyBriefingResult('low_signal_day'),
       signals_snapshot: rankedOutput.signals,
       location_geohash: location.geohash,
+      home_id: location.homeId || null,
     };
   }
 
@@ -472,6 +541,7 @@ async function composeMorningBriefing(userId, location) {
     tokens_used: briefing.tokens_used + localUpdateTokens,
     signals_snapshot: briefingSignals,
     location_geohash: location.geohash,
+    home_id: location.homeId || null,
     should_send: true,
     skip_reason: null,
   };
@@ -560,6 +630,7 @@ async function composeEveningBriefing(userId, location) {
     tokens_used: briefing.tokens_used + localUpdateTokens,
     signals_snapshot: signals,
     location_geohash: location.geohash,
+    home_id: location.homeId || null,
     should_send: true,
     skip_reason: null,
   };

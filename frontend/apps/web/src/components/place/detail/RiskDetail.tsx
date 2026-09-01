@@ -10,11 +10,14 @@
 
 'use client';
 
+import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type {
   PlaceIntelligence,
   PlaceFloodData,
   FloodRiskLevel,
+  PlaceHeatColdData,
+  PlaceHeatRiskDay,
   PlaceSeismicData,
   PlaceWildfireData,
   PlaceLeadRadonData,
@@ -23,6 +26,7 @@ import type {
 } from '@pantopus/types';
 import {
   Waves,
+  Thermometer,
   ShieldCheck,
   TriangleAlert,
   Activity,
@@ -35,12 +39,16 @@ import {
   TestTube,
   GlassWater,
   Factory,
+  HeartPulse,
+  ChevronRight,
 } from 'lucide-react';
 import Chip, { type ChipVariant } from '@/components/archetypes/primitives/Chip';
-import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
+import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote, LockedCard } from '@/components/archetypes/place';
+import { useRouter } from 'next/navigation';
 import { findPlaceSection, detailAddress } from './sections';
 import { statusToState } from './format';
 import { useLocalDraft } from './useLocalDraft';
+import FridgeCardLeaf from './FridgeCardLeaf';
 
 const FLOOD_CHIP: Record<FloodRiskLevel, { label: string; variant: ChipVariant; icon: LucideIcon }> = {
   minimal: { label: 'Minimal risk', variant: 'success', icon: ShieldCheck },
@@ -67,6 +75,22 @@ function FloodCard({ data }: { data: PlaceFloodData }) {
       {data.plain_meaning ? (
         <div className="text-[14px] text-app-text-strong leading-5 mt-[15px] pt-[15px] border-t border-app-border-subtle">
           <span className="font-semibold">What this means:</span> {data.plain_meaning}
+        </div>
+      ) : null}
+      {data.nfip ? (
+        <div className="mt-[15px] pt-[15px] border-t border-app-border-subtle">
+          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted">
+            What flood policies near you cost
+          </div>
+          <div className="flex items-baseline gap-1.5 mt-1.5">
+            <span className="text-[22px] font-bold -tracking-[0.015em] text-app-text">
+              ${data.nfip.premium_p25.toLocaleString()}–${data.nfip.premium_p75.toLocaleString()}
+            </span>
+            <span className="text-[13px] text-app-text-secondary">/yr · median ${data.nfip.premium_median.toLocaleString()}</span>
+          </div>
+          <div className="text-[12.5px] text-app-text-muted leading-[18px] mt-1">
+            Real NFIP premiums for the {data.nfip.policy_count.toLocaleString()} policies written in your census tract over the last {data.nfip.window_months} months{data.nfip.coverage === 'partial' ? ' (sampled)' : ''}. A benchmark, not a quote — premiums vary house to house, and private flood policies aren&apos;t included.
+          </div>
         </div>
       ) : null}
     </div>
@@ -310,10 +334,87 @@ function EmergencyPlan({ homeId }: { homeId: string | null }) {
   );
 }
 
+// ── Heat & cold ─────────────────────────────────────────────
+// The 7-day HeatRisk strip plus the verdict. Levels use the published
+// NWS HeatRisk scale colors — a data-viz ramp with no token equivalent,
+// the same treatment the EPA AQI bands get in TodayDetail.
+const HEAT_RISK_COLORS = ['#C6E4B4', '#FFEA61', '#FFA33F', '#E8442E', '#8A2BE2'];
+
+function HeatDayCell({ day, isFirst }: { day: PlaceHeatRiskDay; isFirst: boolean }) {
+  const d = new Date(`${day.date}T12:00:00Z`);
+  const label = isFirst
+    ? 'Today'
+    : new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(d);
+  return (
+    <div className="flex-1 min-w-[38px] flex flex-col items-center gap-1.5">
+      <span className="text-[12px] font-semibold text-app-text-secondary">{label}</span>
+      <span
+        role="img"
+        aria-label={`${label}: ${day.label} — ${day.meaning}`}
+        className={`w-full rounded-md ${isFirst ? 'h-9' : 'h-6'}`}
+        style={{ backgroundColor: HEAT_RISK_COLORS[day.level] ?? HEAT_RISK_COLORS[0] }}
+        title={`${day.label} — ${day.meaning}`}
+      />
+      <span className="text-[11px] text-app-text-muted">{day.level}</span>
+    </div>
+  );
+}
+
+function HeatColdCard({ data }: { data: PlaceHeatColdData }) {
+  const tone =
+    data.mode === 'none'
+      ? 'text-app-text-secondary'
+      : (data.peak_level ?? 0) >= 3 || data.mode === 'cold'
+        ? 'text-app-error'
+        : 'text-app-warning';
+
+  return (
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px] flex flex-col gap-3">
+      <div>
+        <div className={`text-[15.5px] font-semibold leading-[21px] ${tone}`}>{data.headline}</div>
+        {data.guidance ? (
+          <div className="text-[13.5px] text-app-text-strong leading-[19px] mt-1.5">{data.guidance}</div>
+        ) : null}
+      </div>
+
+      {data.heat_covered && data.heat_days.length > 0 ? (
+        <>
+          <div className="flex gap-1.5 items-end">
+            {data.heat_days.slice(0, 7).map((d, i) => (
+              <HeatDayCell key={d.date} day={d} isFirst={i === 0} />
+            ))}
+          </div>
+          {(() => {
+            // The worst day's meaning as visible text — hover titles are
+            // invisible on touch and to most assistive tech.
+            const peak = data.heat_days.reduce((a, d) => (d.level > a.level ? d : a), data.heat_days[0]);
+            return peak && peak.level >= 1 ? (
+              <div className="text-[12.5px] text-app-text-strong leading-[18px]">
+                {peak.label}: {peak.meaning}
+              </div>
+            ) : null;
+          })()}
+          <div className="text-[11.5px] text-app-text-muted">
+            NWS HeatRisk, 0 (little to none) to 4 (extreme). Experimental product.
+          </div>
+        </>
+      ) : (
+        <div className="text-[12.5px] text-app-text-muted">
+          NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.
+        </div>
+      )}
+    </div>
+  );
+}
+
 const isReady = (s: { status: string; data: unknown } | null | undefined) =>
   Boolean(s && (s.status === 'ready' || s.status === 'stale' || s.status === 'partial') && s.data);
 
 export default function RiskDetail({ intelligence, homeId }: { intelligence: PlaceIntelligence; homeId: string | null }) {
+  const router = useRouter();
+  const [fridgeCardOpen, setFridgeCardOpen] = useState(false);
+  const verified = intelligence.tier === 'T4';
+  const heatCold = findPlaceSection(intelligence, 'heat_cold');
   const flood = findPlaceSection(intelligence, 'flood');
   const floodReady = isReady(flood);
   const seismic = findPlaceSection(intelligence, 'seismic');
@@ -322,10 +423,28 @@ export default function RiskDetail({ intelligence, homeId }: { intelligence: Pla
   const water = findPlaceSection(intelligence, 'drinking_water');
   const hazards = findPlaceSection(intelligence, 'environmental_hazards');
 
+  if (fridgeCardOpen && verified && homeId) {
+    return (
+      <FridgeCardLeaf
+        homeId={homeId}
+        address={detailAddress(intelligence.place)}
+        onBack={() => setFridgeCardOpen(false)}
+      />
+    );
+  }
+
   return (
     <>
       <DetailHeader title="Risk & readiness" address={detailAddress(intelligence.place)} />
       <div className="px-4 sm:px-5 pt-1 pb-16">
+        <DetailSectionLabel>Heat &amp; cold</DetailSectionLabel>
+        {isReady(heatCold) ? (
+          <HeatColdCard data={heatCold!.data as PlaceHeatColdData} />
+        ) : (
+          <SectionCard icon={Thermometer} title="Heat &amp; cold" state={heatCold ? statusToState(heatCold.status) : 'unavailable'} caption={heatCold?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+        )}
+        {heatCold?.source ? <SourceNote name={heatCold.source} asOf="7-day forecast" /> : null}
+
         <DetailSectionLabel>Flood</DetailSectionLabel>
         {floodReady ? (
           <FloodCard data={flood!.data as PlaceFloodData} />
@@ -376,6 +495,32 @@ export default function RiskDetail({ intelligence, homeId }: { intelligence: Pla
         <DetailSectionLabel>Emergency plan</DetailSectionLabel>
         <EmergencyPlan homeId={homeId} />
         <SourceNote name="Recommended items from Ready.gov & American Red Cross" />
+
+        <DetailSectionLabel>Fridge card</DetailSectionLabel>
+        {verified && homeId ? (
+          <button
+            type="button"
+            onClick={() => setFridgeCardOpen(true)}
+            className="w-full flex items-center gap-3.5 bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 text-left hover:bg-app-hover transition"
+          >
+            <span className="w-11 h-11 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
+              <HeartPulse size={22} strokeWidth={2} className="text-primary-600" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">The 911-ready household card</div>
+              <div className="text-[12.5px] text-app-text-muted mt-0.5">Your exact address, allergies, meds, pets, shutoffs — for whoever&apos;s at your house</div>
+            </div>
+            <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+          </button>
+        ) : (
+          <LockedCard
+            icon={HeartPulse}
+            title="The 911-ready household card"
+            reason="Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911."
+            cta="Verify address"
+            onCta={() => homeId && router.push(`/app/homes/${homeId}/verify-postcard`)}
+          />
+        )}
 
         <InfoNote>
           Informational, not emergency instructions. In a real emergency, call 911 and follow guidance from local officials.

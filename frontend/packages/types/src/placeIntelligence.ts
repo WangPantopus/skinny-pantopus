@@ -193,11 +193,69 @@ export interface PlaceSunriseSunsetData {
   daylight_minutes: number;
 }
 
+/**
+ * A verdict on one everyday question.
+ *   yes     — go ahead
+ *   caution — conditionally, with a stated limit
+ *   no      — don't, with the reason
+ */
+export type GoodDayVerdict = 'yes' | 'caution' | 'no';
+
+export interface PlaceGoodDayTile {
+  /** Stable id, e.g. "open_windows". Clients key icons/analytics off this. */
+  id: string;
+  /** The verb, e.g. "Open windows". */
+  label: string;
+  /** Display glyph (emoji) — the server picks it so all clients agree. */
+  glyph: string;
+  verdict: GoodDayVerdict;
+  /** The short answer, e.g. "Yes — until 3pm". */
+  answer: string;
+  /**
+   * The reasoning WITH the actual numbers, e.g. "AQI 38 and 64–72°F
+   * through 3pm." Shown on tap. An opinionated tile that won't show its
+   * inputs is not trustworthy, so this is required, never empty.
+   */
+  because: string;
+}
+
+/**
+ * "Good day to…" — verdicts, not readings.
+ *
+ * Every tile is computed from data already fetched for `weather` and
+ * `air_quality` (the hourly/daily forecast, feels-like, UV, AQI) crossed
+ * with the home's own facts, so it costs no additional provider call.
+ * The tile set is deliberately small: a row of five is a glance, a row of
+ * twelve is noise.
+ */
+export interface PlaceGoodDayData {
+  tiles: PlaceGoodDayTile[];
+}
+
 // ── Risk & readiness ─────────────────────────────────────────
 
 export type FloodRiskLevel = 'minimal' | 'moderate' | 'high';
 
 /** Launch layer #3 — Flood (FEMA National Flood Hazard Layer). */
+/**
+ * Wave 2 — what flood policies in this census tract actually cost:
+ * count + quartiles of real NFIP premiums (OpenFEMA NFIP Policies v3),
+ * computed over the last `window_months` of policy effective dates.
+ * A benchmark, never a quote — Risk Rating 2.0 varies within a tract.
+ */
+export interface PlaceFloodNfipData {
+  policy_count: number;
+  premium_p25: number;
+  premium_median: number;
+  premium_p75: number;
+  /** Median Risk Rating 2.0 full-risk premium, where reported. */
+  full_risk_median: number | null;
+  window_months: number;
+  /** 'partial' when the tract's policy list was row-capped at fetch. */
+  coverage: 'full' | 'partial';
+  as_of: string | null;
+}
+
 export interface PlaceFloodData {
   /** FEMA zone code, e.g. "X". */
   zone: string;
@@ -210,6 +268,98 @@ export interface PlaceFloodData {
   insurance_required: boolean;
   /** Plain "what this means" copy. */
   plain_meaning: string;
+  /**
+   * Absent while the tract's benchmark is still warming (background
+   * job) or suppressed below the 10-policy floor — the card degrades
+   * to zone-only.
+   */
+  nfip?: PlaceFloodNfipData;
+}
+
+/**
+ * Wave 2 — homestead exemption on the parcel's assessor line.
+ * `filing_status` is an honesty ladder: `unknown` (county feed carries
+ * no exemption structure) is NEVER presented as "none on file".
+ */
+export interface PlaceExemptionCheckData {
+  filing_status: 'on_file' | 'none_on_file' | 'unknown';
+  /** Labels as the assessor feed reports them, e.g. "Homestead". */
+  exemptions: string[];
+  homestead_on_file: boolean;
+  /**
+   * Wave 2b — the Over-Assessment Radar: the county's assessed total vs
+   * its own market total (±5% stance bands). Null when either total is
+   * missing from the feed. Informational, never advice.
+   */
+  assessment_signal: {
+    assessed_value: number;
+    market_value: number;
+    ratio_pct: number;
+    stance: 'above' | 'near' | 'below';
+  } | null;
+  state_program: {
+    state: string | null;
+    label: string;
+    /** 'application' | 'varies' | 'none_general' */
+    filing: 'application' | 'varies' | 'none_general';
+    note: string;
+    /** False → the conservative check-your-county default. */
+    curated: boolean;
+  };
+}
+
+/** NWS HeatRisk index: 0 Little to none → 4 Extreme. */
+export type HeatRiskLevel = 0 | 1 | 2 | 3 | 4;
+
+export interface PlaceHeatRiskDay {
+  /** ISO 8601 date. */
+  date: string;
+  /** 1-based day index in the NWS 7-day series. */
+  day: number;
+  level: HeatRiskLevel;
+  /** e.g. "Major". */
+  label: string;
+  /** The published meaning of this level. */
+  meaning: string;
+}
+
+export interface PlaceFreezeWindow {
+  /** ISO 8601. */
+  starts: string;
+  /** ISO 8601. */
+  ends: string;
+  /** Contiguous hours at or below freezing. */
+  hours: number;
+  min_temp_f: number;
+}
+
+/**
+ * Heat & cold — the seasonal spine, nationally.
+ *
+ * Heat comes from NWS HeatRisk (CONUS, 7 days); cold is derived from the
+ * temperature forecast already fetched for `weather`, so the freeze half
+ * costs no additional provider call. `mode` says which one leads today —
+ * `none` is the honest answer on the ~340 days a year when neither is
+ * worth acting on.
+ *
+ * `heat_covered` is false outside CONUS (Alaska, Hawaii, the
+ * territories), where HeatRisk has no data. That is a coverage gap, not
+ * a reading of zero, and the card must say so.
+ */
+export interface PlaceHeatColdData {
+  mode: 'heat' | 'cold' | 'none';
+  heat_days: PlaceHeatRiskDay[];
+  heat_covered: boolean;
+  peak_level: HeatRiskLevel | null;
+  /** ISO 8601 date of the peak heat day. */
+  peak_date: string | null;
+  freeze: PlaceFreezeWindow | null;
+  /** The verdict, e.g. "Hard freeze, 19°F for 9 hours starting Tue 11pm." */
+  headline: string;
+  /** The home-conditioned instruction. Empty when there is nothing to do. */
+  guidance: string;
+  /** Which forecast the headline came from. */
+  source_note: string;
 }
 
 /** ASCE 7 seismic design categories (A lowest demand → E highest). */
@@ -325,7 +475,17 @@ export interface PlaceCensusContextData {
 
 // ── Money signals ────────────────────────────────────────────
 
-export type BillUtilityKind = 'electric' | 'gas' | 'water';
+/**
+ * Bill types worth comparing against neighbors.
+ *
+ * Deliberately the area-service bills only. Rent and mortgage are excluded
+ * because they are wildly home-specific — comparing them tells a resident
+ * nothing useful, and rent already has its own `rent_band` section from HUD
+ * Fair Market Rents. HOA and insurance are property-specific for the same
+ * reason.
+ */
+export type BillUtilityKind =
+  | 'electric' | 'gas' | 'water' | 'sewer' | 'trash' | 'internet' | 'cable';
 export type BenchmarkComparison = 'lower' | 'typical' | 'higher';
 
 /** Launch layer #12 — Bill benchmark (peer-relative; informational). */
@@ -372,6 +532,63 @@ export interface PlaceRentBandData {
   market_high: number;
   /** e.g. "FY 2026". */
   period: string;
+  summary: string;
+}
+
+/**
+ * Which homes the block benchmark was computed over. Scope degrades
+ * explicitly rather than widening in silence, so a studio is never
+ * quietly priced against a four-bedroom.
+ */
+export type RealRentScope = 'bedrooms' | 'all_sizes';
+
+/**
+ * The viewer's position in the block band — a band position ONLY.
+ * Never a rank and never a headcount of who pays more or less: that
+ * would be a count of identifiable households.
+ */
+export type RealRentStanding = 'below_band' | 'in_band' | 'above_band';
+
+/**
+ * `building` — the block is under the k≥10 reporting floor, so the
+ * payload carries progress and no amounts. That is the product, not an
+ * empty state: it is a true statement about the block's progress toward
+ * its own benchmark, and it is what makes a Block Founders invite mean
+ * something. `ready` — the band is live.
+ */
+export type RealRentState = 'building' | 'ready';
+
+/**
+ * Wave 3 — the Real Rent Benchmark: what VERIFIED neighbors on this
+ * block actually pay, in whole dollars per month.
+ *
+ * Deliberately NOT `rent_band`, which is HUD's Fair Market Rent — a
+ * 40th-percentile estimate for an entire COUNTY. This is real rents
+ * reported by residents who PROVED they live on this block, which is
+ * the one claim no listings site can make. Both sit in Money signals
+ * and the copy must never conflate them.
+ *
+ * Band D (T4 / proven resident); quartiles and a sample size only,
+ * never a row and never a per-neighbor figure.
+ */
+export interface PlaceRealRentData {
+  state: RealRentState;
+  /** Reports in the cell (building), or the sample size (ready). */
+  reports: number;
+  /** The k floor — 10. */
+  needed: number;
+  scope: RealRentScope | null;
+  /** Only set when `scope` is 'bedrooms'. */
+  bedrooms: number | null;
+  sample_size: number | null;
+  /** Whole dollars per month; null while building. */
+  rent_p25: number | null;
+  rent_median: number | null;
+  rent_p75: number | null;
+  /** The viewer's own contribution, in dollars; null until they report. */
+  your_rent: number | null;
+  standing: RealRentStanding | null;
+  /** Server-composed sentence — always present, in both states. */
   summary: string;
 }
 
@@ -459,6 +676,59 @@ export interface PlaceYourHomeData {
 }
 
 // ════════════════════════════════════════════════════════════
+// BAND-C SECTION — the household's own record
+// ════════════════════════════════════════════════════════════
+
+/** How a system's install year is known. Never presented as a bare fact. */
+export type HomeSystemSource = 'estimated' | 'permit' | 'marketplace' | 'resident';
+
+export type HomeSystemStatus = 'ok' | 'aging' | 'past_expected' | 'unknown';
+
+export interface PlaceHomeSystem {
+  /** Stable key, e.g. "water_heater". */
+  key: string;
+  label: string;
+  installed_year: number | null;
+  age_years: number | null;
+  /** Typical service life range, in years. A range, not a prediction. */
+  typical_life_low: number;
+  typical_life_high: number;
+  status: HomeSystemStatus;
+  /** 0–1 for the remaining-life bar; null when the year is unknown. */
+  life_remaining: number | null;
+  source: HomeSystemSource;
+  /** Provenance chip copy, e.g. "Estimated from year built". */
+  source_label: string;
+  confidence: 'low' | 'medium' | 'high';
+  /** Permit number, gig id, etc. */
+  source_ref: string | null;
+  /** What the typical range means for this system. */
+  note: string;
+}
+
+export interface PlaceHomeSystemsSummary {
+  past_expected_count: number;
+  aging_count: number;
+  /** How much of the ledger rests on evidence rather than a prior. */
+  confirmed_count: number;
+  total_count: number;
+  headline: string;
+}
+
+/**
+ * Systems Ledger — the six major building systems, with provenance.
+ *
+ * Band C: the household's own record, not a public fact about the place.
+ * Every system is seeded from the build year so the ledger is never
+ * blank, and each carries HOW it is known — an estimate is never dressed
+ * up as a fact, and a resident's correction outranks anything derived.
+ */
+export interface PlaceHomeSystemsData {
+  systems: PlaceHomeSystem[];
+  summary: PlaceHomeSystemsSummary;
+}
+
+// ════════════════════════════════════════════════════════════
 // SECTION ENVELOPE + RESPONSE
 // ════════════════════════════════════════════════════════════
 
@@ -468,7 +738,9 @@ export interface PlaceSectionDataMap {
   air_quality: PlaceAirQualityData;
   alerts: PlaceAlertsData;
   sunrise_sunset: PlaceSunriseSunsetData;
+  good_day_to: PlaceGoodDayData;
   flood: PlaceFloodData;
+  heat_cold: PlaceHeatColdData;
   seismic: PlaceSeismicData;
   wildfire: PlaceWildfireData;
   lead_radon: PlaceLeadRadonData;
@@ -479,10 +751,13 @@ export interface PlaceSectionDataMap {
   bill_benchmark: PlaceBillBenchmarkData;
   incentives: PlaceIncentivesData;
   rent_band: PlaceRentBandData;
+  real_rent: PlaceRealRentData;
+  exemption_check: PlaceExemptionCheckData;
   civic_districts: PlaceCivicDistrictsData;
   civic_election: PlaceCivicElectionData;
   // Band B (W0.2) — exact property facts + valuation.
   your_home: PlaceYourHomeData;
+  home_systems: PlaceHomeSystemsData;
 }
 
 export type PlaceSectionId = keyof PlaceSectionDataMap;
@@ -492,8 +767,11 @@ export const PLACE_SECTION_IDS = [
   'air_quality',
   'alerts',
   'sunrise_sunset',
+  'good_day_to',
   'your_home',
+  'home_systems',
   'flood',
+  'heat_cold',
   'seismic',
   'wildfire',
   'lead_radon',
@@ -504,6 +782,8 @@ export const PLACE_SECTION_IDS = [
   'bill_benchmark',
   'incentives',
   'rent_band',
+  'real_rent',
+  'exemption_check',
   'civic_districts',
   'civic_election',
 ] as const satisfies readonly PlaceSectionId[];
@@ -523,8 +803,11 @@ export const PLACE_SECTION_META: Record<PlaceSectionId, PlaceSectionMeta> = {
   air_quality: { group: 'today', band: 'A', source: 'AirNow · EPA', layer: 2 },
   alerts: { group: 'today', band: 'A', source: 'National Weather Service', layer: null },
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo', layer: null },
+  good_day_to: { group: 'today', band: 'A', source: 'Pantopus · derived from today\'s conditions', layer: null },
   your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM', layer: null },
+  home_systems: { group: 'your_home', band: 'C', source: 'Your household record', layer: null },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer', layer: 3 },
+  heat_cold: { group: 'risk_readiness', band: 'A', source: 'NWS HeatRisk · National Weather Service', layer: null },
   seismic: { group: 'risk_readiness', band: 'A', source: 'USGS seismic design values (ASCE 7-22)', layer: null },
   wildfire: { group: 'risk_readiness', band: 'A', source: 'USFS Wildfire Hazard Potential', layer: null },
   lead_radon: { group: 'health_environment', band: 'A', source: 'EPA radon zones · HUD lead-paint rules', layer: 6 },
@@ -535,6 +818,8 @@ export const PLACE_SECTION_META: Record<PlaceSectionId, PlaceSectionMeta> = {
   bill_benchmark: { group: 'money_signals', band: 'A', source: 'Pantopus · peer comparison', layer: 12 },
   incentives: { group: 'money_signals', band: 'A', source: 'DSIRE', layer: 10 },
   rent_band: { group: 'money_signals', band: 'A', source: 'HUD Fair Market Rents', layer: 9 },
+  real_rent: { group: 'money_signals', band: 'D', source: 'Pantopus · verified neighbors on your block', layer: null },
+  exemption_check: { group: 'money_signals', band: 'B', source: 'County records · ATTOM', layer: null },
   civic_districts: { group: 'civic', band: 'A', source: 'Google Civic Information', layer: 8 },
   civic_election: { group: 'civic', band: 'A', source: 'Official county elections', layer: 8 },
 };

@@ -1000,6 +1000,70 @@ describe('Provider Orchestrator', () => {
     expect(result.tokens_used).toBe(11);
   });
 
+  // ── The interrupt gate ────────────────────────────────────────
+  // The guard used to read `topScore < 0.20 && !hasWeather`. Weather is
+  // essentially always resolvable, so the guard never fired and every
+  // user got a push every day. A seasonal tip scores ~0.224 — over the
+  // ranking bar — so quiet days pushed "clean your gutters".
+  describe('interrupt gate', () => {
+    function quietDay() {
+      const { fetchWeather } = require('../services/context/weatherProvider');
+      const { fetchAQI } = require('../services/context/aqiProvider');
+      // Calm weather: no precip signal, no temperature extreme.
+      fetchWeather.mockResolvedValue({
+        ...MOCK_WEATHER,
+        current: { ...MOCK_WEATHER.current, temp_f: 62, condition_code: 'clear', condition_label: 'Clear' },
+        hourly: MOCK_WEATHER.hourly.map((h) => ({ ...h, precip_chance_pct: 5 })),
+      });
+      fetchAQI.mockResolvedValue(MOCK_AQI_GOOD);
+    }
+
+    test('does not push on a day whose only content is a seasonal tip', async () => {
+      quietDay();
+      const result = await composeDailyBriefing(MOCK_USER_ID);
+
+      expect(result.should_send).toBe(false);
+      expect(result.skip_reason).toBe('low_signal_day');
+      // The seasonal tip still ranks — it is simply not worth interrupting for.
+      const seasonal = result.signals_snapshot.find((s) => s.kind === 'seasonal');
+      if (seasonal) {
+        expect(seasonal.score).toBeGreaterThan(0.20);
+        expect(seasonal.cost_of_inaction).toBeLessThan(0.25);
+      }
+    });
+
+    test('weather being available is not by itself a reason to push', async () => {
+      quietDay();
+      const { getSeasonalContext } = require('../services/ai/seasonalEngine');
+      getSeasonalContext.mockReturnValue({
+        active_seasons: [], primary_season: null, seasonal_tip: null,
+        home_specific_tip: null, urgency: 'low', is_relevant_region: false,
+      });
+
+      const result = await composeDailyBriefing(MOCK_USER_ID);
+      expect(result.should_send).toBe(false);
+      expect(result.skip_reason).toBe('low_signal_day');
+    });
+
+    test('still pushes when something genuinely costly is happening', async () => {
+      const { fetchAlerts } = require('../services/context/alertsProvider');
+      fetchAlerts.mockResolvedValue(MOCK_ALERT);
+
+      const result = await composeDailyBriefing(MOCK_USER_ID);
+      expect(result.should_send).toBe(true);
+      expect(result.signals_snapshot[0].kind).toBe('alert');
+      expect(result.signals_snapshot[0].cost_of_inaction).toBe(1);
+    });
+
+    test('sends exactly one signal, never a digest', async () => {
+      const { fetchAlerts } = require('../services/context/alertsProvider');
+      fetchAlerts.mockResolvedValue(MOCK_ALERT);
+
+      const result = await composeDailyBriefing(MOCK_USER_ID);
+      expect(result.signals_snapshot).toHaveLength(1);
+    });
+  });
+
   test('composeScheduledBriefing avoids local-update fetch when evening has a stronger signal', async () => {
     const { fetchAlerts } = require('../services/context/alertsProvider');
     const { getLocalUpdateContext } = require('../services/context/localUpdateProvider');
@@ -1022,3 +1086,4 @@ describe('Provider Orchestrator', () => {
     expect(getLocalUpdateContext).not.toHaveBeenCalled();
   });
 });
+

@@ -77,6 +77,22 @@ export const queryKeys = {
     ['place', 'neighbor-messages', id] as const,
   residencyLetters: (homeId: string) =>
     ['place', 'residency-letters', homeId] as const,
+  residencyClaims: (homeId: string) =>
+    ['place', 'residency-claims', homeId] as const,
+  residencyClaimViews: (homeId: string, claimId: string) =>
+    ['place', 'residency-claims', homeId, claimId, 'views'] as const,
+  fridgeCards: (homeId: string) =>
+    ['place', 'fridge-cards', homeId] as const,
+  mailboxCheck: (homeId: string) =>
+    ['place', 'mailbox-check', homeId] as const,
+  recordWatch: (homeId: string) =>
+    ['place', 'record-watch', homeId] as const,
+  blockFounders: (homeId: string) =>
+    ['place', 'block-founders', homeId] as const,
+  rentReport: (homeId: string) =>
+    ['place', 'rent-report', homeId] as const,
+  unlisted: (homeId: string) =>
+    ['place', 'unlisted', homeId] as const,
 
   // ── Businesses ────────────────────────────────────────────
   businessDetail: (id: string) =>

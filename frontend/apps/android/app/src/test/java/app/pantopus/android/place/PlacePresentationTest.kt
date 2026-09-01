@@ -52,6 +52,19 @@ class PlacePresentationTest {
     }
 
     @Test
+    fun `fmtYearMonth never shifts a calendar month through a timezone`() {
+        // Regression: "YYYY-MM" + "-01T00:00:00Z" formatted in a US-local
+        // zone rendered the PREVIOUS month — the user's one entered fact
+        // shown wrong, and the PMMS baseline attributed to the wrong month.
+        assertEquals("Mar 2023", PlacePresentation.fmtYearMonth("2023-03"))
+        assertEquals("Jan 2026", PlacePresentation.fmtYearMonth("2026-01"))
+        assertEquals("Dec 2025", PlacePresentation.fmtYearMonth("2025-12"))
+        assertEquals(null, PlacePresentation.fmtYearMonth("2023-13"))
+        assertEquals(null, PlacePresentation.fmtYearMonth("not-a-month"))
+        assertEquals(null, PlacePresentation.fmtYearMonth(null))
+    }
+
+    @Test
     fun `sunrise sunset formats local wall clock`() {
         // Sunrise/sunset arrive as zone-less local times ("…T05:19").
         val reading = PlacePresentation.reading(fixture().section(PlaceSectionId.SUNRISE_SUNSET))

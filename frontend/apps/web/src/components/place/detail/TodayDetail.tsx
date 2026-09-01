@@ -9,6 +9,9 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
+import * as api from '@pantopus/api';
+import { toast } from '@/components/ui/toast-store';
 import type { LucideIcon } from 'lucide-react';
 import type {
   PlaceIntelligence,
@@ -18,6 +21,8 @@ import type {
   PlaceAlertsData,
   PlaceWeatherAlert,
   PlaceSunriseSunsetData,
+  PlaceGoodDayData,
+  GoodDayVerdict,
   WeatherConditionCode,
   AirQualityCategory,
 } from '@pantopus/types';
@@ -37,6 +42,7 @@ import {
   Flower2,
   Trash2,
   ZapOff,
+  BellRing,
 } from 'lucide-react';
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
@@ -354,11 +360,179 @@ function SunCard({ data }: { data: PlaceSunriseSunsetData }) {
   );
 }
 
+// ── Good day to… ────────────────────────────────────────────
+// Verdicts, not readings. Each tile answers one everyday question and
+// shows the numbers behind it on tap — an opinionated tile that won't
+// show its inputs is worse than no tile, because one visibly wrong
+// verdict discredits every other card here.
+const VERDICT_TINT: Record<GoodDayVerdict, { chip: string; frame: string }> = {
+  yes: { chip: 'text-app-success', frame: 'border-app-success-light' },
+  caution: { chip: 'text-app-warning', frame: 'border-app-warning-light' },
+  no: { chip: 'text-app-text-muted', frame: 'border-app-border' },
+};
+
+function GoodDayRow({ data }: { data: PlaceGoodDayData }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const tiles = data.tiles.slice(0, 5);
+  if (tiles.length === 0) return null;
+  const open = tiles.find((t) => t.id === openId) ?? null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex overflow-x-auto gap-2 pb-0.5 -mx-1 px-1">
+        {tiles.map((tile) => {
+          // Fallback, not a raw index — an unknown verdict would throw
+          // on .frame and blank the Today page.
+          const tint = VERDICT_TINT[tile.verdict] ?? VERDICT_TINT.no;
+          const isOpen = tile.id === openId;
+          return (
+            <button
+              key={tile.id}
+              type="button"
+              aria-expanded={isOpen}
+              onClick={() => setOpenId(isOpen ? null : tile.id)}
+              className={`flex-none w-[104px] flex flex-col items-start gap-1.5 rounded-2xl border bg-app-surface shadow-sm px-3 py-3 text-left transition-colors hover:bg-app-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 ${isOpen ? 'border-app-border-strong' : tint.frame}`}
+            >
+              <span className="text-[19px] leading-none" aria-hidden="true">{tile.glyph}</span>
+              <span className="text-[12.5px] font-semibold text-app-text-secondary leading-tight">{tile.label}</span>
+              <span className={`text-[13px] font-semibold leading-tight ${tint.chip}`}>{tile.answer}</span>
+            </button>
+          );
+        })}
+      </div>
+      {open ? (
+        <div className="bg-app-surface-sunken border border-app-border-subtle rounded-xl px-3.5 py-2.5">
+          <div className="text-[12px] font-semibold text-app-text-secondary mb-0.5">{open.label}</div>
+          <div className="text-[13.5px] text-app-text-strong leading-[19px]">{open.because}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Morning briefing opt-in ─────────────────────────────────
+// `daily_briefing_enabled` defaults false while the evening one defaults
+// true, so the morning briefing has effectively never shipped — the
+// control sits in Settings → Notifications where almost nobody finds it.
+//
+// The fix is deliberately not to flip the default: turning on a push for
+// existing users without asking is exactly how a notification channel
+// gets burned. Instead the product asks once, here, where the briefing's
+// own content lives — with the time visible, and taking "no" permanently.
+const BRIEFING_TIMES = ['06:30', '07:00', '07:30', '08:00', '08:30'];
+
+function BriefingOptIn() {
+  const [show, setShow] = useState(false);
+  const [time, setTime] = useState('07:30');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<'on' | 'off' | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Through the api client, not a raw fetch: cookie-session writes
+        // need the x-csrf-token header the client injects, and the reads
+        // gain its 401-refresh handling.
+        const { preferences } = await api.hub.getHubPreferences();
+        // Ask only when it is off AND we have never asked. Both a yes and a
+        // no stamp `daily_briefing_prompted_at`, so this never returns.
+        if (cancelled) return;
+        if (!preferences?.daily_briefing_enabled && !preferences?.daily_briefing_prompted_at) {
+          if (preferences?.daily_briefing_time_local) setTime(preferences.daily_briefing_time_local);
+          setShow(true);
+        }
+      } catch {
+        // A failed preference read simply means no prompt — never a broken card.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function answer(enabled: boolean) {
+    setBusy(true);
+    try {
+      await api.hub.updateHubPreferences({
+        daily_briefing_enabled: enabled,
+        ...(enabled ? { daily_briefing_time_local: time } : {}),
+        daily_briefing_prompted: true,
+      });
+      // Success state only AFTER the server accepted the write — a raw
+      // fetch here used to 403 on CSRF and show "briefing on" anyway.
+      setDone(enabled ? 'on' : 'off');
+      setShow(false);
+    } catch {
+      toast.error('That didn’t save — try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done === 'on') {
+    return (
+      <div className="bg-app-success-bg border border-app-success-light rounded-2xl px-4 py-3 text-[13.5px] text-app-text-strong">
+        Morning briefing on, around {time}. Change it any time in Settings → Notifications.
+      </div>
+    );
+  }
+  if (!show) return null;
+
+  return (
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px] flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <span className="w-9 h-9 rounded-[11px] bg-app-info-bg flex items-center justify-center shrink-0">
+          <BellRing size={18} strokeWidth={2} className="text-app-info" />
+        </span>
+        <div>
+          <div className="text-[15px] font-semibold text-app-text">A morning heads-up?</div>
+          <div className="text-[13.5px] text-app-text-secondary leading-[19px] mt-0.5">
+            One line, once a day, and only when something here actually needs you —
+            a warning, a bill, a freeze. Nothing on a quiet day.
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <label htmlFor="briefing-time" className="text-[12.5px] text-app-text-secondary">Send around</label>
+        <select
+          id="briefing-time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="text-[13px] px-2.5 py-1.5 rounded-lg border border-app-border bg-app-surface text-app-text"
+        >
+          {BRIEFING_TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => answer(true)}
+          className="text-[13.5px] font-semibold px-3.5 py-2 rounded-lg bg-primary-500 text-white disabled:opacity-60"
+        >
+          Turn it on
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => answer(false)}
+          className="text-[13.5px] font-semibold px-3.5 py-2 rounded-lg border border-app-border text-app-text-secondary disabled:opacity-60"
+        >
+          No thanks
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TodayDetail({ intelligence }: { intelligence: PlaceIntelligence }) {
   const weather = findPlaceSection(intelligence, 'weather');
   const aqi = findPlaceSection(intelligence, 'air_quality');
   const alerts = findPlaceSection(intelligence, 'alerts');
   const sun = findPlaceSection(intelligence, 'sunrise_sunset');
+  const goodDay = findPlaceSection(intelligence, 'good_day_to');
+  const goodDayReady = goodDay && (goodDay.status === 'ready' || goodDay.status === 'stale' || goodDay.status === 'partial') && goodDay.data;
 
   const weatherReady = weather && (weather.status === 'ready' || weather.status === 'stale' || weather.status === 'partial') && weather.data;
   const aqiReady = aqi && (aqi.status === 'ready' || aqi.status === 'stale' || aqi.status === 'partial') && aqi.data;
@@ -369,6 +543,8 @@ export default function TodayDetail({ intelligence }: { intelligence: PlaceIntel
     <>
       <DetailHeader title="Today" address={detailAddress(intelligence.place)} />
       <div className="px-4 sm:px-5 pt-1 pb-16">
+        <div className="mt-2"><BriefingOptIn /></div>
+
         <DetailSectionLabel>Weather</DetailSectionLabel>
         {weatherReady ? (
           <div className="flex flex-col gap-2.5">
@@ -380,6 +556,14 @@ export default function TodayDetail({ intelligence }: { intelligence: PlaceIntel
           <SectionCard icon={CloudSun} title="Weather" state={weather ? statusToState(weather.status) : 'unavailable'} caption={weather?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
         )}
         {weather?.source ? <SourceNote name={weather.source} asOf={fmtTime(weather.as_of) ? `as of ${fmtTime(weather.as_of)}` : undefined} /> : null}
+
+        {goodDayReady ? (
+          <>
+            <DetailSectionLabel>Good day to…</DetailSectionLabel>
+            <GoodDayRow data={goodDay!.data as PlaceGoodDayData} />
+            {goodDay?.source ? <SourceNote name={goodDay.source} asOf={fmtTime(goodDay.as_of) ? `as of ${fmtTime(goodDay.as_of)}` : undefined} /> : null}
+          </>
+        ) : null}
 
         <DetailSectionLabel>Air quality</DetailSectionLabel>
         {aqiReady ? (

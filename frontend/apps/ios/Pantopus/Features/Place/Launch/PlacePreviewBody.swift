@@ -25,6 +25,13 @@ struct PlacePreviewBody: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     previewHero
+                    // A real dollar band when the backend had one for
+                    // this address, and nothing at all when it did not —
+                    // the tiles carry the page as before. Never
+                    // synthesized client-side.
+                    if let lead = preview.moneyLead, lead.isRenderable {
+                        moneyLeadCard(lead)
+                    }
                     if let free = preview.free {
                         freeSections(free)
                     }
@@ -85,6 +92,68 @@ struct PlacePreviewBody: View {
         .placeCard()
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    /// "FEMA · OpenFEMA NFIP policies · census tract-level, not this home"
+    ///
+    /// Mirrors the web footer. Either half may be absent, so the parts are
+    /// joined rather than formatted into a fixed template — an empty
+    /// source must not leave a leading separator.
+    private func scopeFooter(_ lead: PlaceMoneyLead) -> String {
+        var parts: [String] = []
+        if !lead.source.isEmpty { parts.append(lead.source) }
+        if !lead.scope.isEmpty { parts.append("\(lead.scope)-level, not this home") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The lead figure. `detail` and `source` are the server's own words
+    /// and are rendered whole: between them they say what the number is
+    /// measured over and that it is a benchmark, not a quote. Dropping
+    /// either turns an honest band into a claim about this home.
+    private func moneyLeadCard(_ lead: PlaceMoneyLead) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.Color.homeBg)
+                    Icon(.dollarSign, size: 19, strokeWidth: 2, color: Theme.Color.home)
+                }
+                .frame(width: 34, height: 34)
+                Text(lead.headline)
+                    .font(.system(size: 15, weight: .bold))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !lead.detail.isEmpty {
+                Text(lead.detail)
+                    .font(.system(size: 13))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // The scope disclosure, rendered STRUCTURALLY rather than
+            // trusted to prose. Today every `kind` the server emits puts
+            // the scope in `detail` too, so this is belt-and-braces — but
+            // the whole point of the money lead is that a dollar figure
+            // is the most believable thing on the page and the easiest to
+            // read as being about THIS home. The day a lead ships whose
+            // `detail` omits it, the figure would stand alone. Web has
+            // shown this since Wave 4; both native clients decoded
+            // `scope` and rendered neither.
+            if !lead.source.isEmpty || !lead.scope.isEmpty {
+                Text(scopeFooter(lead))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("place.preview.moneyLead.scope")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.s4)
+        .placeCard()
+        .padding(.top, 14)
+        .accessibilityIdentifier("place.preview.moneyLead")
     }
 
     @ViewBuilder

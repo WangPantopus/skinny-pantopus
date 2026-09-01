@@ -51,3 +51,24 @@ export function statusToState(status: PlaceSectionStatus): PlaceSectionState {
 export function isLocked(access: 'available' | 'preview' | 'locked'): boolean {
   return access === 'locked';
 }
+
+/**
+ * The server's own message off whatever a failed request threw.
+ *
+ * The API client's interceptor rejects with a PLAIN OBJECT
+ * (`{ message, code, statusCode, ... }`), never an `Error` — so the
+ * common `err instanceof Error ? err.message : fallback` reads false on
+ * every server failure and silently swallows the message. That matters
+ * wherever the route has coded, actionable failures: the rent
+ * contribution's 403 `VERIFICATION_REQUIRED` and 400 `BAD_AMOUNT` both
+ * carry copy the resident needs, and both would otherwise be replaced
+ * by a generic "could not save".
+ */
+export function apiErrorText(err: unknown, fallback: string): string {
+  if (typeof err === 'string' && err.trim()) return err.trim();
+  if (err && typeof err === 'object') {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  }
+  return fallback;
+}

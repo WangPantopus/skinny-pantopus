@@ -4,8 +4,11 @@
 //
 //  C3 — Today / Environment detail. NowCard (current conditions),
 //  AQI card with the scale, active-alerts list, sunrise/sunset, and the
-//  "coming soon" daily layers. Hourly/forecast arrays arrive empty from
-//  the backend, so those strips are omitted (parity with the web).
+//  "coming soon" daily layers, plus the "Good day to…" verdict row.
+//
+//  The hourly/daily forecast arrays used to arrive empty (the backend
+//  hardcoded them), which is why the strips were omitted here. They are
+//  populated now; adding those strips is outstanding parity work.
 //
 
 import SwiftUI
@@ -26,6 +29,20 @@ struct PlaceTodayDetailContent: View {
                 } else {
                     vm.fallbackCard(weather)
                 }
+            }
+
+            // Verdicts, not readings. Silent when there is nothing to
+            // answer — an empty verdict row is worse than no row.
+            if let goodDay = vm.section(.goodDayTo, in: intel),
+               let data = goodDay.goodDayTo,
+               !data.tiles.isEmpty,
+               goodDay.status == .ready || goodDay.status == .stale {
+                PlaceDetailSectionLabel(text: "Good day to…")
+                GoodDayRow(tiles: data.tiles)
+                PlaceSourceNote(
+                    name: "Derived from today's conditions",
+                    asOf: PlacePresentation.fmtTime(goodDay.asOf)
+                )
             }
 
             if let aqi = vm.section(.airQuality, in: intel) {
@@ -251,6 +268,69 @@ private struct AlertRow: View {
 }
 
 // MARK: - Sun card
+
+/// "Good day to…" — a row of verdicts. Tapping one reveals the numbers
+/// behind it: an opinionated tile that won't show its inputs is worse than
+/// no tile, because one visibly wrong verdict discredits every other card.
+private struct GoodDayRow: View {
+    let tiles: [PlaceGoodDayTile]
+    @State private var openID: String?
+
+    private var shown: [PlaceGoodDayTile] { Array(tiles.prefix(5)) }
+    private var open: PlaceGoodDayTile? { shown.first { $0.id == openID } }
+
+    private func tint(_ verdict: GoodDayVerdict) -> Color {
+        switch verdict {
+        case .yes: Theme.Color.home
+        case .caution: Theme.Color.warning
+        default: Theme.Color.appTextMuted
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(shown, id: \.id) { tile in
+                        Button {
+                            openID = openID == tile.id ? nil : tile.id
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(tile.glyph).font(.system(size: 19))
+                                Text(tile.label)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundStyle(Theme.Color.appTextSecondary)
+                                Text(tile.answer)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(tint(tile.verdict))
+                            }
+                            .frame(width: 108, alignment: .leading)
+                            .padding(12)
+                            .background(Theme.Color.appSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(tile.label): \(tile.answer)")
+                        .accessibilityHint(tile.because)
+                    }
+                }
+            }
+
+            if let open {
+                PlaceDetailCard {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(open.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Text(open.because)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextStrong)
+                    }
+                }
+            }
+        }
+    }
+}
 
 private struct SunCard: View {
     let data: PlaceSunriseSunsetData
