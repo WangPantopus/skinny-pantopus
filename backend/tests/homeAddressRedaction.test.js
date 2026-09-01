@@ -96,7 +96,7 @@ describe('GET /api/homes/:id/public-profile', () => {
     expect(res.body.home.address_redacted).toBe(false);
   });
 
-  it('still lets the user-B join flow see a verified home (redacted) when it is not public', async () => {
+  it('refuses a stranger a private home even when it has a verified owner (no join probe since PR 351)', async () => {
     resetTables();
     seedHome();
     seedTable('Home', [{ ...(require('./__mocks__/supabaseAdmin').getTable('Home')[0]), visibility: 'private' }]);
@@ -104,9 +104,7 @@ describe('GET /api/homes/:id/public-profile', () => {
     const res = await request(makeApp())
       .get(`/api/homes/${HOME_ID}/public-profile`)
       .set('x-test-user-id', OUTSIDER);
-    expect(res.status).toBe(200);
-    expect(res.body.home.address).toBe('NE Birch St');
-    expect(res.body.home.address_redacted).toBe(true);
+    expect(res.status).toBe(403);
   });
 });
 

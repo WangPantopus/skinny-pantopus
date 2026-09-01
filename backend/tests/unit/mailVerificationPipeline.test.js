@@ -96,12 +96,17 @@ function seedHome(overrides = {}) {
 }
 
 /**
- * Extract the plaintext verification code from the MailVerificationJob metadata.
+ * Extract the plaintext verification code.
+ *
+ * The code is deliberately NOT persisted — RLS lets the requesting user read
+ * their own MailVerificationJob row, so a stored code would defeat the hash.
+ * It is handed to the mail vendor in memory, so the dispatch call is the only
+ * place a test can observe it.
  */
 function extractCode() {
-  const jobs = getTable('MailVerificationJob');
-  const latest = jobs[jobs.length - 1];
-  return latest.metadata.code;
+  const calls = mockDispatchPostcard.mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  return calls[calls.length - 1][1];
 }
 
 /**
@@ -357,6 +362,7 @@ describe('rate limiting', () => {
 describe('resend rotates code', () => {
   test('resend generates new code and invalidates old', async () => {
     seedDeliverableAddress();
+    seedHome(); // confirmCode now reports failure if no occupancy can be attached
 
     const startResult = await service.startVerification('user-1', 'addr-1');
     const originalCode = extractCode();
@@ -449,7 +455,7 @@ describe('resend rotates code', () => {
 // ============================================================
 
 describe('household conflict', () => {
-  test('blocks start when home has verified authority with active admin occupancy', async () => {
+  test('blocks start when the address already has an active occupant', async () => {
     seedDeliverableAddress();
     seedHome();
 
@@ -478,7 +484,7 @@ describe('household conflict', () => {
     const result = await service.startVerification('user-1', 'addr-1');
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/conflict|authority|household/i);
+    expect(result.error).toMatch(/already lives at this address/i);
   });
 
   test('does not block when authority exists but occupancy is inactive', async () => {

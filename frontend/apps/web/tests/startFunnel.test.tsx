@@ -1,8 +1,8 @@
 // ============================================================
 // Phase 7 — the signed-out /start funnel. The acquisition front door
 // previously had zero coverage. These exercise the funnel's states:
-// hero gating, the address autocomplete, the T0 preview (free subset
-// live + locked teasers + wall), the non-US branch, and the lookup
+// hero gating, the address autocomplete, the T0 preview (aha card +
+// every free layer + the Band-B locked card + the wall), the non-US branch, and the lookup
 // error path. Fetching is mocked; this is the client behavior.
 // ============================================================
 
@@ -19,6 +19,9 @@ const mockPreview = jest.fn();
 jest.mock('@pantopus/api', () => ({
   geo: { autocompleteWithAbort: (...args: unknown[]) => mockAutocomplete(...args) },
   place: { getPublicPlacePreview: (...args: unknown[]) => mockPreview(...args) },
+  // Wedge Phase 1 funnel beacons — fire-and-forget from the funnel.
+  recordFunnelEvent: jest.fn(),
+  getFunnelAnonId: jest.fn(() => 'anon-test'),
 }));
 
 jest.mock('@/lib/publicShare', () => ({
@@ -47,6 +50,12 @@ const SUGGESTION = {
   kind: 'address',
 };
 
+// Wedge Phase 1.5 (D1): the preview carries every free Band-A layer as
+// section envelopes plus one aha card; only Band B stays locked.
+const section = (id: string, group: string, data: unknown) => ({
+  id, group, band: 'A', access: 'available', status: 'ready',
+  as_of: '2026-09-01T14:00:00.000Z', source: 'test', coverage: 'full', unavailable_reason: null, data,
+});
 const READY_PREVIEW = {
   status: 'ready',
   tier: 'preview',
@@ -54,11 +63,24 @@ const READY_PREVIEW = {
   place: { address: '4080 NE Tacoma Ct', city: 'Camas', state: 'WA', zipcode: '98607' },
   free: {
     flood: { status: 'ready', zone: 'X', description: 'Minimal flood risk', source: 'FEMA' },
-    density: { status: 'ready', bucket: 'forming', label: 'Your block is starting to form', source: 'Pantopus' },
+    density: { status: 'ready', bucket: 'none', label: 'Founding Neighbor slots are open here', source: 'Pantopus' },
     area: { status: 'ready', median_year_built: 2004, median_home_value: 646200, note: '', source: 'Census' },
   },
+  aha: {
+    section_id: 'wildfire',
+    tone: 'alert',
+    grade: 'High',
+    headline: 'High wildfire hazard around this address',
+    detail: 'High wildfire hazard potential for the vegetation around this point.',
+    follow_up: 'Claim it to get smoke-day and burn-ban alerts every morning.',
+  },
+  sections: [
+    section('flood', 'risk_readiness', { zone: 'X', zone_label: 'Zone X', risk_level: 'minimal', in_sfha: false, insurance_required: false, plain_meaning: 'Minimal flood risk' }),
+    section('wildfire', 'risk_readiness', { hazard_class: 4, hazard_label: 'High', burnable: true, summary: 'High wildfire hazard potential.', disclaimer: '' }),
+    section('block_density', 'your_block', { bucket: 'none', label: 'Founding Neighbor slots are open here' }),
+  ],
   locked: [
-    { id: 'daily', group: 'today', title: 'Daily conditions', band: 'A', unlock: 'account', reason: 'Create an account for daily weather.' },
+    { id: 'home_details', group: 'your_home', title: 'Home details & value', band: 'B', unlock: 'claim', reason: "Claim this address to see the home's exact record and value." },
   ],
   disclaimer: 'A free, one-time look.',
 };
@@ -87,23 +109,27 @@ describe('StartFunnel — hero', () => {
 });
 
 describe('StartFunnel — T0 preview', () => {
-  it('shows the free subset, locked teasers, and the wall after lookup', async () => {
+  it('shows the aha card, the free layers, the one locked layer, the promise, and the wall', async () => {
     mockPreview.mockResolvedValue(READY_PREVIEW);
     renderFunnel();
     await selectAddressAndSubmit();
 
-    // Free subset is live…
-    expect(await screen.findByText(/zone x/i)).toBeInTheDocument();
-    expect(screen.getByText(/your block is starting to form/i)).toBeInTheDocument();
-    // …locked sections tease with the account CTA…
-    expect(screen.getByText('Daily conditions')).toBeInTheDocument();
+    // The aha card leads…
+    expect(await screen.findByText(/high wildfire hazard around this address/i)).toBeInTheDocument();
+    // …the free layers render through the dashboard's section cards…
+    expect(screen.getByText(/minimal risk/i)).toBeInTheDocument();
+    // …the density card never shows a zero…
+    expect(screen.getByText(/founding neighbor slots are open here/i)).toBeInTheDocument();
+    // …only Band B is locked…
+    expect(screen.getByText('Home details & value')).toBeInTheDocument();
+    // …the privacy promise sits above the wall…
+    expect(screen.getByText(/never a house number or unit/i)).toBeInTheDocument();
     // …and the wall is pinned underneath.
-    expect(screen.getByText(/create a free account to save this place/i)).toBeInTheDocument();
+    expect(screen.getByText(/this address has one page\. claim it, free\./i)).toBeInTheDocument();
 
-    // The wall routes to register and stashes the pending place. (Both the
-    // locked-card CTA and the wall button say "Create account" — the wall
-    // bar's is last in the document.)
-    const ctas = screen.getAllByRole('button', { name: /create account/i });
+    // The wall routes to register and stashes the pending place. (The
+    // wall bar's button is last in the document.)
+    const ctas = screen.getAllByRole('button', { name: /^claim it$/i });
     fireEvent.click(ctas[ctas.length - 1]);
     expect(push).toHaveBeenCalledWith(expect.stringContaining('/register'));
     expect(sessionStorage.length).toBeGreaterThan(0);

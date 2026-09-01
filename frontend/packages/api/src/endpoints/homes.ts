@@ -138,6 +138,8 @@ export async function createHome(data: {
   year_built?: number;
   move_in_date?: string;
   is_owner?: boolean;
+  /** "My home doesn't have a unit number" — clears only a MISSING_UNIT refusal. */
+  no_unit_attestation?: boolean;
   role?: 'owner' | 'renter' | 'household' | 'property_manager' | 'guest';
   visibility?: 'private' | 'members' | 'public_preview';
   name?: string;

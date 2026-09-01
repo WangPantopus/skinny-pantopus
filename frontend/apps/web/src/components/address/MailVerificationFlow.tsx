@@ -42,10 +42,26 @@ function formatDate(iso: string): string {
   });
 }
 
+/**
+ * Human-readable remaining time.
+ *
+ * UX-07: this used to be minutes:seconds with no larger bucket, so the resend
+ * cooldown — 48 hours — rendered as "2880:00" ticking down by one second, which
+ * reads as a bug rather than a wait. Anything at hour scale is now shown in
+ * hours and days.
+ */
 function formatCountdown(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
+  const total = Math.max(0, Math.floor(seconds));
+
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  if (minutes > 0) return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  return `${secs}s`;
 }
 
 // ── Icons ──────────────────────────────────────────────────
@@ -758,3 +774,6 @@ export default function MailVerificationFlow({
     />
   );
 }
+
+// Exported for testing.
+export { formatCountdown };

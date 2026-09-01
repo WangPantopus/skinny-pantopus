@@ -1,8 +1,25 @@
+// CST-01: every endpoint here proxies a per-request billed geocoding API.
+// They were previously mounted unauthenticated and unmetered, so anyone with
+// curl could run up the bill indefinitely. All three are now metered.
+//
+// Authentication is deliberately NOT the control on /autocomplete and
+// /resolve. The signed-out acquisition funnel runs on exactly those two:
+// /start renders StartFunnel -> components/place/AddressAutocomplete ("public
+// typeahead for the signed-out funnel"), and the iOS and Android launch
+// screens do the same. Requiring a session there 401s every keystroke on the
+// public landing page — and on web the 401 triggers the client's
+// refresh-then-redirect, throwing anonymous visitors to /login. The
+// denial-of-wallet control is the meter, so anonymous callers keep access at a
+// tighter per-IP budget. /reverse has no signed-out caller and still requires
+// a session.
 const express = require('express');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { geoCache } = require('../utils/geoCache');
 const geoProvider = require('../services/geo');
+const verifyToken = require('../middleware/verifyToken');
+const optionalAuth = require('../middleware/optionalAuth');
+const { geocodeLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
 /** Label for geo provider in log events. */
@@ -36,7 +53,7 @@ function logResponse(startTime, fields) {
 
 // ── GET /geo/autocomplete?q=... ──────────────────────────────
 
-router.get('/autocomplete', async (req, res) => {
+router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const q = (req.query.q || '').toString().trim();
@@ -117,7 +134,7 @@ router.get('/autocomplete', async (req, res) => {
 
 // ── POST /geo/resolve { suggestion_id } ──────────────────────
 
-router.post('/resolve', async (req, res) => {
+router.post('/resolve', optionalAuth, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const suggestionId = (req.body?.suggestion_id || '').toString().trim();
@@ -182,7 +199,7 @@ router.post('/resolve', async (req, res) => {
 
 // ── GET /geo/reverse?lat=..&lon=.. ───────────────────────────
 
-router.get('/reverse', async (req, res) => {
+router.get('/reverse', verifyToken, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
 

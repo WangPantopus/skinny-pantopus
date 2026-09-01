@@ -395,12 +395,19 @@ describe('LobMailProvider', () => {
       expect(html).toContain('Current Resident');
     });
 
-    test('back HTML contains code and QR URL', () => {
+    test('back HTML contains code and verify URL', () => {
       const html = buildBackHtml('654321', 'pantopus://verify?code=654321');
       expect(html).toContain('654321');
       expect(html).toContain('Your Verification Code');
       expect(html).toContain('pantopus://verify');
-      expect(html).toContain('QR Code');
+    });
+
+    test('back HTML never sends the code to a third-party image host', () => {
+      const html = buildBackHtml('654321', 'pantopus://verify?code=654321');
+      // A remote <img> would leak the live code in a URL query string to a
+      // vendor we have no contract with.
+      expect(html).not.toContain('qrserver.com');
+      expect(html).not.toMatch(/<img[^>]+src=["']https?:/i);
     });
 
     test('back HTML includes expiry instruction', () => {
@@ -672,7 +679,7 @@ describe('MailVendorService', () => {
       expect(result.error).toContain('Address not found');
     });
 
-    test('returns error when code missing from metadata', async () => {
+    test('returns error when no code is supplied and none is persisted', async () => {
       seedTable('HomeAddress', [{
         id: 'addr-1',
         address_hash: 'h',
@@ -701,7 +708,7 @@ describe('MailVendorService', () => {
 
       const result = await service.dispatchPostcard('job-no-code');
       expect(result.success).toBe(false);
-      expect(result.error).toContain('code not found');
+      expect(result.error).toContain('code not supplied');
     });
 
     test('handles provider error gracefully', async () => {
@@ -959,7 +966,7 @@ describe('Lob webhook route', () => {
     return {
       body: Buffer.from(bodyStr),
       headers: {
-        'lob-signature-timestamp': '1234567890',
+        'lob-signature-timestamp': String(Date.now()),
         'lob-signature': 'valid_sig',
         ...headers,
       },
@@ -977,7 +984,10 @@ describe('Lob webhook route', () => {
   }
 
   beforeEach(() => {
-    lobMailProvider.webhookSecret = '';
+    // The handler now fails closed without a secret, so the default posture
+    // for the behavioural tests is "properly configured".
+    lobMailProvider.webhookSecret = 'whsec_test';
+    lobMailProvider.verifyWebhookSignature.mockReturnValue(true);
     mailVendorService.processWebhookEvent.mockResolvedValue({ success: true });
   });
 
@@ -1085,7 +1095,8 @@ describe('Lob webhook route', () => {
     expect(res._json.error).toContain('Missing signature');
   });
 
-  test('skips signature verification when no secret', async () => {
+  // SEC-11 — the handler must never process an unauthenticated webhook.
+  test('rejects the request when no secret is configured (fails closed)', async () => {
     lobMailProvider.webhookSecret = '';
 
     const event = {
@@ -1097,8 +1108,33 @@ describe('Lob webhook route', () => {
     const res = mockRes();
     await handler(req, res);
 
+    expect(res._status).toBe(503);
     expect(lobMailProvider.verifyWebhookSignature).not.toHaveBeenCalled();
-    expect(res._status).toBe(200);
+    expect(mailVendorService.processWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  test('rejects a stale timestamp (replay protection)', async () => {
+    const req = mockReq(
+      { event_type: { id: 'postcard.mailed' }, body: { id: 'psc_1' } },
+      { 'lob-signature-timestamp': String(Date.now() - 20 * 60 * 1000) },
+    );
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(400);
+    expect(mailVendorService.processWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  test('rejects a missing signature header', async () => {
+    const req = mockReq(
+      { event_type: { id: 'postcard.mailed' }, body: { id: 'psc_1' } },
+      { 'lob-signature': undefined },
+    );
+    const res = mockRes();
+    await handler(req, res);
+
+    expect(res._status).toBe(400);
+    expect(mailVendorService.processWebhookEvent).not.toHaveBeenCalled();
   });
 
   test('returns 200 even when processWebhookEvent fails', async () => {

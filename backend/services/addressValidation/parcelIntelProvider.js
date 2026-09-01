@@ -1,4 +1,5 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
+const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const logger = require('../../utils/logger');
 const addressConfig = require('../../config/addressVerification');
 
@@ -163,7 +164,7 @@ class ParcelIntelProvider {
   }
 
   isFeatureEnabled() {
-    return !!addressConfig.rollout.enableParcelProvider;
+    return !!getRolloutFlag('enableParcelProvider');
   }
 
   isAvailable() {

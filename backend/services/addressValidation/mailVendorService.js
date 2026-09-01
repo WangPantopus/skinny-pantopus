@@ -10,7 +10,7 @@
  *
  * Usage:
  *   const mailVendorService = require('./mailVendorService');
- *   await mailVendorService.dispatchPostcard(jobId);
+ *   await mailVendorService.dispatchPostcard(jobId, code);
  *   const status = await mailVendorService.pollJobStatus(vendorJobId);
  */
 
@@ -18,6 +18,14 @@ const logger = require('../../utils/logger');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
+const observability = require('./addressVerificationObservability');
+
+/** Remove any persisted plaintext code from a metadata blob. */
+function stripCode(metadata) {
+  if (!metadata || typeof metadata !== 'object') return metadata;
+  const { code, ...rest } = metadata;
+  return rest;
+}
 
 class MailVendorService {
   /**
@@ -37,10 +45,15 @@ class MailVendorService {
    * Reads the job record, sends via the active provider, then updates
    * the job with vendor_job_id, vendor, vendor_status, and sent_at.
    *
+   * The verification code is passed in memory by the caller and is never
+   * persisted: storing it alongside the hash would defeat the hash, because
+   * RLS lets the requesting user read their own MailVerificationJob row.
+   *
    * @param {string} jobId - MailVerificationJob.id
+   * @param {string} [code] - the plaintext code, held only for this call
    * @returns {Promise<{success: boolean, error?: string, vendorJobId?: string}>}
    */
-  async dispatchPostcard(jobId) {
+  async dispatchPostcard(jobId, code) {
     // ── 1. Fetch the job ────────────────────────────────────
     const { data: job, error: jobErr } = await supabaseAdmin
       .from('MailVerificationJob')
@@ -87,10 +100,17 @@ class MailVendorService {
       zip: address.postal_code,
     };
 
-    // ── 3. Extract code from job metadata ───────────────────
-    const code = job.metadata?.code;
-    if (!code) {
-      return { success: false, error: 'Verification code not found in job metadata' };
+    // ── 3. Resolve the code ─────────────────────────────────
+    // Supplied by the caller. Legacy rows created before the code was removed
+    // from metadata still carry one; accept it so in-flight jobs drain, but
+    // record that it happened.
+    let effectiveCode = code;
+    if (!effectiveCode && job.metadata?.code) {
+      effectiveCode = job.metadata.code;
+      logger.warn('MailVendorService.dispatchPostcard: using legacy persisted code', { jobId });
+    }
+    if (!effectiveCode) {
+      return { success: false, error: 'Verification code not supplied for dispatch' };
     }
 
     // ── 4. Send via provider ────────────────────────────────
@@ -99,7 +119,7 @@ class MailVendorService {
 
     let result;
     try {
-      result = await provider.sendPostcard(normalizedAddress, code, job.template_id);
+      result = await provider.sendPostcard(normalizedAddress, effectiveCode, job.template_id);
     } catch (err) {
       logger.error('MailVendorService.dispatchPostcard: provider error', {
         jobId,
@@ -113,7 +133,7 @@ class MailVendorService {
         .update({
           vendor: providerName,
           vendor_status: 'failed',
-          metadata: { ...job.metadata, dispatch_error: err.message },
+          metadata: { ...stripCode(job.metadata), dispatch_error: err.message },
           updated_at: new Date().toISOString(),
         })
         .eq('id', jobId);
@@ -249,6 +269,15 @@ class MailVendorService {
       vendorJobId,
       eventType,
       newStatus,
+    });
+
+    // The delivery signal was previously collected from Lob and discarded.
+    await observability.recordMailLifecycleEvent({
+      step: 'vendor_status',
+      status: newStatus,
+      attemptId: job.attempt_id,
+      vendor: job.vendor || null,
+      detail: { event_type: eventType },
     });
 
     return { success: true };

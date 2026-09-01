@@ -312,6 +312,59 @@ async function recordValidationOutcome({ addressId, verdict, trigger = 'unknown'
   ]);
 }
 
+/**
+ * Record a step in the physical-mail verification lifecycle.
+ *
+ * REL/PRV — grepping this module for "mail" previously returned nothing. The
+ * one channel that costs real money and takes real days emitted no events at
+ * all, so there was no way to answer "how many postcards did we send", "how
+ * many were delivered", or "how many codes were never redeemed" — and no way to
+ * notice the mail channel was non-functional, which it was.
+ *
+ * Never accepts the code itself. The event row is operational telemetry, and a
+ * code is a bearer credential for an address.
+ *
+ * @param {object} params
+ * @param {string} params.step   e.g. 'start', 'dispatch', 'delivered', 'confirm'
+ * @param {string} params.status e.g. 'ok', 'failed', 'expired', 'locked'
+ * @param {string} [params.addressId]
+ * @param {string} [params.attemptId]
+ * @param {string} [params.vendor]
+ * @param {string[]} [params.reasons]
+ * @param {object} [params.detail] additional non-sensitive context
+ */
+async function recordMailLifecycleEvent({
+  step,
+  status,
+  addressId = null,
+  attemptId = null,
+  vendor = null,
+  reasons = [],
+  detail = {},
+}) {
+  if (!step || !status) return;
+
+  logger.info('addressValidation.mailLifecycle', {
+    step,
+    status,
+    address_id: addressId,
+    attempt_id: attemptId,
+    vendor,
+  });
+
+  // Defensive: a caller must never be able to persist a code through here.
+  const { code, ...safeDetail } = detail || {};
+
+  await insertEvents([{
+    address_id: addressId,
+    event_type: `mail_${step}`,
+    provider: vendor,
+    status,
+    reasons: safeArray(reasons),
+    raw_response: { attempt_id: attemptId, ...safeDetail },
+  }]);
+}
+
 async function recordCreateHomeOutcome(outcome) {
   recordCreateHomeMetrics(outcome);
   logger.info('addressValidation.createHomeOutcome', {
@@ -331,5 +384,6 @@ async function recordCreateHomeOutcome(outcome) {
 module.exports = {
   recordPipelineAudit,
   recordValidationOutcome,
+  recordMailLifecycleEvent,
   recordCreateHomeOutcome,
 };

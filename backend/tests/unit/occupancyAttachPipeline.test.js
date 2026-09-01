@@ -141,11 +141,13 @@ beforeEach(() => {
 // ============================================================
 
 describe('no claim = no occupancy', () => {
-  test('mail_code without verified claim is rejected', async () => {
+  test('mail_code attaches without a claim - the mailed code is the proof', async () => {
     seedHome();
     seedAddress();
-    // No AddressClaim seeded
-
+    // No AddressClaim seeded. confirmCode only calls attach after a
+    // timing-safe match against the hash of a physically mailed code;
+    // demanding a verified AddressClaim on top was circular and made every
+    // correct postcard code fail here.
     const result = await service.attach({
       homeId: 'home-1',
       userId: 'user-1',
@@ -153,8 +155,8 @@ describe('no claim = no occupancy', () => {
       claimType: 'resident',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/No verified address claim/);
+    expect(result.success).toBe(true);
+    expect(result.occupancy.role_base).toBe('member');
   });
 
   test('autocomplete_ok without verified claim is rejected', async () => {
@@ -181,7 +183,7 @@ describe('no claim = no occupancy', () => {
     const result = await service.attach({
       homeId: 'home-1',
       userId: 'user-1',
-      method: 'mail_code',
+      method: 'autocomplete_ok',
       claimType: 'resident',
     });
 
@@ -511,10 +513,13 @@ describe('admin_approval policy = pending occupancy', () => {
       can_manage_home: true,
     });
 
+    // mail_code cannot reach this state - startVerification's household
+    // conflict gate refuses to mail a code to any occupied address - so the
+    // policy contract is exercised through the self-serve method.
     const result = await service.attach({
       homeId: 'home-1',
       userId: 'user-1',
-      method: 'mail_code',
+      method: 'autocomplete_ok',
       claimType: 'resident',
     });
 

@@ -7,7 +7,12 @@ jest.mock('winston', () => {
   return {
     createLogger: () => logger,
     addColors: () => {},
-    format: new Proxy({}, { get: () => fmt }),
+    // `format` has to be callable as well as indexable: utils/logger.js builds a
+    // custom format with `winston.format(fn)` (the PRV-09 log redaction) and
+    // then invokes the result, so a Proxy over a plain object threw
+    // "winston.format is not a function". Proxy a function instead and give it
+    // an apply trap.
+    format: new Proxy(function format() {}, { get: () => fmt, apply: () => fmt }),
     transports: { Console: function Console() {}, File: function File() {} },
   };
 });

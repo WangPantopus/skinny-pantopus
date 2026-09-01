@@ -49,13 +49,14 @@ jest.mock('../../services/notificationService', () => ({
 }));
 
 // ── Mock rate limiters ──────────────────────────────────────
-jest.mock('../../middleware/rateLimiter', () => ({
-  globalWriteLimiter: (req, res, next) => next(),
-  ownershipClaimLimiter: (req, res, next) => next(),
-  landlordLeaseLimiter: (req, res, next) => next(),
-  addressValidationLimiter: (req, res, next) => next(),
-  addressClaimLimiter: (req, res, next) => next(),
-}));
+jest.mock('../../middleware/rateLimiter', () => {
+  const passthrough = (_req, _res, next) => next();
+  // Any limiter name resolves to a passthrough, so adding a new limiter to the
+  // real module never breaks this suite with "handler must be a function".
+  return new Proxy({}, {
+    get: (_target, prop) => (prop === '__esModule' ? false : passthrough),
+  });
+});
 
 // ── Mock verifyToken ────────────────────────────────────────
 jest.mock('../../middleware/verifyToken', () => {

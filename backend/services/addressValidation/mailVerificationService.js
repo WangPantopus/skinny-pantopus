@@ -21,6 +21,7 @@ const logger = require('../../utils/logger');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const addressConfig = require('../../config/addressVerification');
 const mailVendorService = require('./mailVendorService');
+const observability = require('./addressVerificationObservability');
 
 // ── Constants (from config, with env-var overrides) ──────────
 
@@ -46,6 +47,9 @@ const USER_RATE_WINDOW_HOURS = mv.userRateWindowHours;
 const ADDRESS_RATE_LIMIT = mv.addressRateLimit;
 const ADDRESS_RATE_WINDOW_DAYS = mv.addressRateWindowDays;
 
+/** Max attempts one user may make against one address inside the address window. */
+const USER_ADDRESS_RATE_LIMIT = mv.userAddressRateLimit;
+
 /** Active attempt statuses (not terminal). */
 const ACTIVE_STATUSES = ['created', 'sent', 'delivered_unknown'];
 
@@ -69,13 +73,13 @@ class MailVerificationService {
       .eq('id', attemptId);
   }
 
-  async _dispatchVerificationJob(jobId, context = {}) {
+  async _dispatchVerificationJob(jobId, code, context = {}) {
     if (!jobId) {
       return { success: false, error: 'Mail verification job not found' };
     }
 
     try {
-      return await mailVendorService.dispatchPostcard(jobId);
+      return await mailVendorService.dispatchPostcard(jobId, code);
     } catch (error) {
       logger.error('MailVerificationService: dispatch failed unexpectedly', {
         ...context,
@@ -122,7 +126,7 @@ class MailVerificationService {
     }
 
     // ── 2. Check for household authority conflict ────────────
-    const conflictCheck = await this._checkHouseholdConflict(addressId);
+    const conflictCheck = await this._checkHouseholdConflict(addressId, userId);
     if (conflictCheck.blocked) {
       return { success: false, error: conflictCheck.reason };
     }
@@ -136,6 +140,12 @@ class MailVerificationService {
     // ── 4. Address rate limit (5 attempts per 7 days) ───────
     const addressRateCheck = await this._checkAddressRateLimit(addressId);
     if (addressRateCheck.exceeded) {
+      return { success: false, error: 'Rate limit exceeded: too many verification attempts for this address.' };
+    }
+
+    // ── 4b. This user's share of that address's budget ──────
+    const userAddressCheck = await this._checkUserAddressRateLimit(userId, addressId);
+    if (userAddressCheck.exceeded) {
       return { success: false, error: 'Rate limit exceeded: too many verification attempts for this address.' };
     }
 
@@ -201,10 +211,9 @@ class MailVerificationService {
       .insert({
         attempt_id: attempt.id,
         vendor: 'pending',
-        template_id: 'address_verification_v1',
+        template_id: addressConfig.lob.postcardTemplateId || null,
         vendor_status: 'pending',
         metadata: {
-          code,
           address_id: addressId,
           unit: unit || null,
         },
@@ -222,7 +231,7 @@ class MailVerificationService {
       return { success: false, error: 'Failed to create mail verification job' };
     }
 
-    const dispatchResult = await this._dispatchVerificationJob(job?.id, {
+    const dispatchResult = await this._dispatchVerificationJob(job?.id, code, {
       attemptId: attempt.id,
       addressId,
       userId,
@@ -235,12 +244,28 @@ class MailVerificationService {
         jobId: job?.id || null,
         error: dispatchResult.error,
       });
+      await observability.recordMailLifecycleEvent({
+        step: 'dispatch',
+        status: 'failed',
+        addressId,
+        attemptId: attempt.id,
+        reasons: [dispatchResult.error || 'dispatch_failed'],
+      });
+
       await this._deleteAttemptArtifacts(attempt.id);
       return { success: false, error: 'Failed to send verification mail' };
     }
 
     logger.info('MailVerificationService.startVerification: created', {
       userId, addressId, attemptId: attempt.id,
+    });
+
+    await observability.recordMailLifecycleEvent({
+      step: 'start',
+      status: 'ok',
+      addressId,
+      attemptId: attempt.id,
+      detail: { unit_supplied: !!unit },
     });
 
     return {
@@ -380,10 +405,9 @@ class MailVerificationService {
       .insert({
         attempt_id: attemptId,
         vendor: 'pending',
-        template_id: 'address_verification_v1',
+        template_id: addressConfig.lob.postcardTemplateId || null,
         vendor_status: 'pending',
         metadata: {
-          code: newCode,
           address_id: attempt.address_id,
           resend_number: token.resend_count + 1,
         },
@@ -421,7 +445,7 @@ class MailVerificationService {
       return { success: false, error: 'Failed to create mail verification job' };
     }
 
-    const dispatchResult = await this._dispatchVerificationJob(job?.id, {
+    const dispatchResult = await this._dispatchVerificationJob(job?.id, newCode, {
       attemptId,
       addressId: attempt.address_id,
       userId,
@@ -587,27 +611,61 @@ class MailVerificationService {
       return { verified: false, error: 'Verification token not found' };
     }
 
-    // ── 4. Increment attempt count ───────────────────────────
-    const newAttemptCount = token.attempt_count + 1;
-
-    // ── 5. Check lockout (before comparison) ─────────────────
+    // ── 4. Check lockout (before comparison) ─────────────────
     if (token.attempt_count >= token.max_attempts) {
       await supabaseAdmin
         .from('AddressVerificationAttempt')
         .update({ status: 'locked', updated_at: new Date().toISOString() })
         .eq('id', attemptId);
+
+      await observability.recordMailLifecycleEvent({
+        step: 'confirm',
+        status: 'locked',
+        attemptId,
+        reasons: ['max_attempts_exceeded'],
+      });
+
       return { verified: false, locked: true, error: 'Too many attempts. Request a new code.' };
+    }
+
+    // ── 5. Claim the attempt atomically ──────────────────────
+    // SEC-04: this used to be a read-modify-write — read attempt_count, then
+    // write attempt_count + 1. Concurrent guesses all read the same value and
+    // all wrote the same value, so N parallel requests cost a single
+    // increment and the 900,000-code space could be sprayed cheaply.
+    //
+    // The extra .eq('attempt_count', ...) makes this a compare-and-swap: the
+    // row matches only if nobody else has incremented since we read it. A
+    // caller that loses the race is refused rather than retried, so running
+    // guesses in parallel is strictly worse for an attacker than running them
+    // serially — which the lockout already bounds.
+    const newAttemptCount = token.attempt_count + 1;
+    const { data: claimed, error: claimErr } = await supabaseAdmin
+      .from('AddressVerificationToken')
+      .update({ attempt_count: newAttemptCount })
+      .eq('id', token.id)
+      .eq('attempt_count', token.attempt_count)
+      .select('id');
+
+    // Fail closed on both arms. If the increment errored, `claimed` is null and
+    // a `Array.isArray(claimed)` guard alone would fall through to the
+    // comparison — handing out a free, uncounted guess on every DB error and
+    // taking the 900,000-code space back out of the lockout's reach.
+    if (claimErr || !Array.isArray(claimed) || claimed.length === 0) {
+      if (claimErr) {
+        logger.error('MailVerificationService.confirmCode: attempt claim failed', {
+          attemptId, error: claimErr.message,
+        });
+      }
+      return {
+        verified: false,
+        error: 'Another verification attempt is in progress. Please try again.',
+      };
     }
 
     // ── 6. Compare code (timing-safe) ────────────────────────
     const submittedHash = this._hashCode(code);
     const match = this._timingSafeCompare(submittedHash, token.code_hash);
-
-    // Always increment attempt_count regardless of result
-    await supabaseAdmin
-      .from('AddressVerificationToken')
-      .update({ attempt_count: newAttemptCount })
-      .eq('id', token.id);
 
     if (!match) {
       // Check if this attempt now triggers lockout
@@ -636,16 +694,76 @@ class MailVerificationService {
       .update({ used_at: new Date().toISOString() })
       .eq('id', token.id);
 
+    // Possession of the mailed code is the strongest self-service proof the
+    // system has, so record it on the claim ledger: any pending AddressClaim
+    // this user holds on the address becomes verified/mail_code. Best-effort -
+    // the attach below does not depend on it (mail_code is an escalated
+    // method), but leaving the claim 'pending' after the mail proved it would
+    // make the ledger disagree with the occupancy forever.
+    try {
+      await supabaseAdmin
+        .from('AddressClaim')
+        .update({
+          claim_status: 'verified',
+          verification_method: 'mail_code',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('address_id', attempt.address_id)
+        .eq('claim_status', 'pending');
+    } catch (claimErr) {
+      logger.warn('MailVerificationService.confirmCode: claim stamp failed (non-fatal)', {
+        userId, addressId: attempt.address_id, error: claimErr.message,
+      });
+    }
+
     // ── 8. Create/update HomeOccupancy ───────────────────────
     const occupancyResult = await this._attachOccupancy(userId, attempt.address_id);
+
+    // SCN-06: this used to return verified:true with occupancy_id:null when the
+    // attach silently no-opped — because the Home had been deleted mid-flight,
+    // or the address had duplicate homes and .maybeSingle() returned null. The
+    // user typed the right code, saw a success screen, and had no residency and
+    // no way to tell. Report the partial state honestly.
+    //
+    // The attempt stays 'verified' either way: the code was genuinely proven,
+    // and must not become replayable just because the follow-up failed.
+    if (!occupancyResult.occupancy_id) {
+      logger.error('MailVerificationService.confirmCode: verified but no occupancy attached', {
+        attemptId, userId, addressId: attempt.address_id,
+      });
+
+      await observability.recordMailLifecycleEvent({
+        step: 'confirm',
+        status: 'partial',
+        addressId: attempt.address_id,
+        attemptId,
+        reasons: ['no_occupancy_attached'],
+      });
+
+      return {
+        verified: false,
+        code_accepted: true,
+        needs_support: true,
+        error: 'Your code was correct, but we could not finish setting up your home. '
+          + 'Please contact support — you will not need to request another code.',
+      };
+    }
 
     logger.info('MailVerificationService.confirmCode: verified', {
       attemptId, userId, occupancyId: occupancyResult.occupancy_id,
     });
 
+    await observability.recordMailLifecycleEvent({
+      step: 'confirm',
+      status: 'ok',
+      addressId: attempt.address_id,
+      attemptId,
+    });
+
     return {
       verified: true,
-      occupancy_id: occupancyResult.occupancy_id || null,
+      occupancy_id: occupancyResult.occupancy_id,
     };
   }
 
@@ -666,8 +784,12 @@ class MailVerificationService {
       .gte('created_at', cutoff.toISOString());
 
     if (error) {
-      logger.warn('MailVerificationService._checkUserRateLimit: error', { error: error.message });
-      return { exceeded: false }; // fail open
+      // SEC-08: fail CLOSED. Every bypass of this limit costs a physical
+      // postcard, so a transient DB error must not become free mail.
+      logger.error('MailVerificationService._checkUserRateLimit: failing closed', {
+        error: error.message,
+      });
+      return { exceeded: true };
     }
 
     return { exceeded: count >= USER_RATE_LIMIT };
@@ -678,6 +800,33 @@ class MailVerificationService {
    * @param {string} addressId
    * @returns {Promise<{exceeded: boolean}>}
    */
+  /**
+   * How much of a single address's budget one user may consume.
+   *
+   * SEC-06: the address budget was keyed on address_id alone, so a handful of
+   * throwaway accounts could exhaust a victim's budget and lock the genuine
+   * resident out of verifying their own home (and bill us for the postcards).
+   */
+  async _checkUserAddressRateLimit(userId, addressId) {
+    const cutoff = new Date(Date.now() - ADDRESS_RATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const { count, error } = await supabaseAdmin
+      .from('AddressVerificationAttempt')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('address_id', addressId)
+      .gte('created_at', cutoff.toISOString());
+
+    if (error) {
+      logger.error('MailVerificationService._checkUserAddressRateLimit: failing closed', {
+        error: error.message,
+      });
+      return { exceeded: true };
+    }
+
+    return { exceeded: count >= USER_ADDRESS_RATE_LIMIT };
+  }
+
   async _checkAddressRateLimit(addressId) {
     const cutoff = new Date(Date.now() - ADDRESS_RATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
@@ -688,8 +837,10 @@ class MailVerificationService {
       .gte('created_at', cutoff.toISOString());
 
     if (error) {
-      logger.warn('MailVerificationService._checkAddressRateLimit: error', { error: error.message });
-      return { exceeded: false };
+      logger.error('MailVerificationService._checkAddressRateLimit: failing closed', {
+        error: error.message,
+      });
+      return { exceeded: true };
     }
 
     return { exceeded: count >= ADDRESS_RATE_LIMIT };
@@ -705,12 +856,35 @@ class MailVerificationService {
    * @param {string} addressId
    * @returns {Promise<{blocked: boolean, reason?: string}>}
    */
-  async _checkHouseholdConflict(addressId) {
-    // Find homes at this address
-    const { data: homes } = await supabaseAdmin
+  /**
+   * Should a mail-code verification be refused because a household already
+   * lives here?
+   *
+   * SCN-03: this used to key entirely on `HomeAuthority.status === 'verified'`.
+   * Nothing in the codebase can set that status — the landlord/authority path
+   * has no route that calls verifyAuthority — so the list was always empty,
+   * the gate always returned blocked:false, and anyone holding a mailed code
+   * joined an already-occupied household with no approval from anyone living
+   * there. It also used .maybeSingle() on a query that returns one row per
+   * admin, which errors when a home has more than one, failing open exactly
+   * on the busiest households.
+   *
+   * The gate now keys on active occupancy, which is state the system actually
+   * maintains. An address with existing residents routes through the claim and
+   * approval flow instead of self-service mail.
+   */
+  async _checkHouseholdConflict(addressId, userId) {
+    const { data: homes, error: homesErr } = await supabaseAdmin
       .from('Home')
       .select('id')
       .eq('address_id', addressId);
+
+    if (homesErr) {
+      logger.error('MailVerificationService._checkHouseholdConflict: failing closed', {
+        addressId, error: homesErr.message,
+      });
+      return { blocked: true, reason: 'Unable to verify this address right now. Please try again.' };
+    }
 
     if (!homes || homes.length === 0) {
       return { blocked: false };
@@ -718,31 +892,26 @@ class MailVerificationService {
 
     const homeIds = homes.map((h) => h.id);
 
-    // Check for verified authority (owner or manager) on any home
-    const { data: authorities } = await supabaseAdmin
-      .from('HomeAuthority')
-      .select('id, home_id, role, status')
+    const { data: occupants, error: occErr } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('id, user_id, home_id')
       .in('home_id', homeIds)
-      .eq('status', 'verified');
+      .eq('is_active', true);
 
-    if (authorities && authorities.length > 0) {
-      // There's at least one verified authority — check active occupancy
-      for (const auth of authorities) {
-        const { data: occupancy } = await supabaseAdmin
-          .from('HomeOccupancy')
-          .select('id, user_id')
-          .eq('home_id', auth.home_id)
-          .eq('is_active', true)
-          .in('role_base', ['owner', 'admin', 'manager'])
-          .maybeSingle();
+    if (occErr) {
+      logger.error('MailVerificationService._checkHouseholdConflict: occupancy lookup failed', {
+        addressId, error: occErr.message,
+      });
+      return { blocked: true, reason: 'Unable to verify this address right now. Please try again.' };
+    }
 
-        if (occupancy) {
-          return {
-            blocked: true,
-            reason: 'Address is actively controlled by a verified household admin',
-          };
-        }
-      }
+    const others = (occupants || []).filter((o) => o.user_id !== userId);
+    if (others.length > 0) {
+      return {
+        blocked: true,
+        reason: 'Someone already lives at this address on Pantopus. '
+          + 'Ask them to add you, or file a claim for review.',
+      };
     }
 
     return { blocked: false };
@@ -855,6 +1024,7 @@ MailVerificationService.MAX_ATTEMPTS = MAX_ATTEMPTS;
 MailVerificationService.USER_RATE_LIMIT = USER_RATE_LIMIT;
 MailVerificationService.USER_RATE_WINDOW_HOURS = USER_RATE_WINDOW_HOURS;
 MailVerificationService.ADDRESS_RATE_LIMIT = ADDRESS_RATE_LIMIT;
+MailVerificationService.USER_ADDRESS_RATE_LIMIT = USER_ADDRESS_RATE_LIMIT;
 MailVerificationService.ADDRESS_RATE_WINDOW_DAYS = ADDRESS_RATE_WINDOW_DAYS;
 
 module.exports = new MailVerificationService();

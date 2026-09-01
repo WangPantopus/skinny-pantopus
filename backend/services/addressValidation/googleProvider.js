@@ -57,6 +57,7 @@ class GoogleAddressValidationProvider {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(addressConfig.google.timeoutMs),
       });
     } catch (err) {
       logger.error('Google Address Validation API request failed', {

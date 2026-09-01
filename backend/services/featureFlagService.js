@@ -106,10 +106,17 @@ async function setFlag(flagName, updates = {}) {
   for (const key of allowed) {
     if (key in updates) payload[key] = updates[key];
   }
+  // Upsert, not update: flags no longer need a pre-seeded row to be
+  // flippable. For the address rollout flags this is load-bearing — a row's
+  // mere existence overrides the environment variable in
+  // utils/addressRolloutFlags.js, so seeding rows for unflipped flags would
+  // permanently disconnect the env control. Instead, the row is created the
+  // first time an admin actually sets the flag, and deleting it hands control
+  // back to the environment. (flag_name has a full UNIQUE constraint, so the
+  // onConflict target is safe.)
   const { data, error } = await supabaseAdmin
     .from('FeatureFlag')
-    .update(payload)
-    .eq('flag_name', flagName)
+    .upsert({ flag_name: flagName, ...payload }, { onConflict: 'flag_name' })
     .select()
     .maybeSingle();
   invalidateFlagCache(flagName);

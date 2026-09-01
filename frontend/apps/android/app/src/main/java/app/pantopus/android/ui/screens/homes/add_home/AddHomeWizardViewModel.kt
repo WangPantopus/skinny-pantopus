@@ -48,6 +48,11 @@ data class AddHomeUiState(
     val createdHomeId: String? = null,
     val errorMessage: String? = null,
     /**
+     * The address refusal behind [errorMessage], when that is what it is.
+     * Lets the UI offer the right next step instead of a bare retry.
+     */
+    val addressVerificationError: AddressVerificationError? = null,
+    /**
      * `check-address` returned `HOME_FOUND_CLAIMED` — show the two-page
      * confirm modal instead of advancing (RN `useHomeForm.ts:611`).
      */
@@ -834,15 +839,31 @@ open class AddHomeWizardViewModel
                     persistAccessSecrets(homeId)
                     persist()
                 }
-                is NetworkResult.Failure ->
+                is NetworkResult.Failure -> {
+                    // UX-06: a 422 from address verification carries a `code`
+                    // saying exactly what is wrong. Without this the user
+                    // completed every step and got a generic networking string,
+                    // with no idea what to change.
+                    val addressError = AddressVerificationError.from(result.error)
                     _state.update {
                         it.copy(
                             isSubmitting = false,
+                            addressVerificationError = addressError,
                             errorMessage =
-                                result.error.message
+                                addressError?.displayMessage
+                                    ?: result.error.message
                                     ?: "Couldn't add your home. Please try again.",
+                            form =
+                                if (addressError?.isFixableInAddressStep == true) {
+                                    // Send them back to the step that can fix it
+                                    // rather than stranding them on the last screen.
+                                    it.form.copy(step = AddHomeStep.Address.ordinal0)
+                                } else {
+                                    it.form
+                                },
                         )
                     }
+                }
             }
         }
 

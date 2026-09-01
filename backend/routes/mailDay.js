@@ -30,6 +30,7 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
@@ -40,14 +41,6 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 // ============ HELPERS (mirrors of the mailboxV2 primitives) ============
 
-async function getAccessibleHomeIds(userId) {
-  const { data } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('home_id')
-    .eq('user_id', userId)
-    .eq('is_active', true);
-  return (data || []).map((r) => r.home_id);
-}
 
 async function logMailEvent(eventType, mailId, userId, metadata = {}) {
   try {

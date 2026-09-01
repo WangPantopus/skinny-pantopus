@@ -115,7 +115,8 @@ describe('Audience primary-nav tab (P2.2)', () => {
     const audience = await screen.findByTestId('sidebar-audience');
     expect(audience).toHaveAttribute('data-active', 'true');
     // Other primary items must NOT be active when the user is in audience zone.
-    expect(screen.getByRole('button', { name: 'Hub' })).toHaveAttribute('data-active', 'false');
+    // (Four-tab IA: Place is the first primary item; Hub left the nav in wedge Phase 1.)
+    expect(screen.getByRole('button', { name: 'Place' })).toHaveAttribute('data-active', 'false');
   });
 });
 

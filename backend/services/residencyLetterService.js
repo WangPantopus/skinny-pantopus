@@ -209,6 +209,14 @@ function serializeLetter(row) {
  * Issue a letter for the (already T4-gated) resident of a home.
  * @returns {Promise<object>} The serialized letter record.
  */
+/**
+ * How long an issued residency letter stays valid.
+ *
+ * A letter asserts current residency to a third party, so it must lapse on its
+ * own rather than depending on anyone remembering to revoke it.
+ */
+const LETTER_VALIDITY_DAYS = Number(process.env.RESIDENCY_LETTER_VALIDITY_DAYS || 90);
+
 async function issueLetter({ homeId, userId, purpose }) {
   const [{ data: home, error: homeErr }, { data: user, error: userErr }] = await Promise.all([
     supabaseAdmin.from('Home').select('id, address, address2, city, state, zipcode').eq('id', homeId).maybeSingle(),
@@ -244,6 +252,9 @@ async function issueLetter({ homeId, userId, purpose }) {
     purpose: facts.purpose,
     status: 'issued',
     issued_at: issuedAtIso,
+    // SEC-10: letters used to have no expiry at all, so a credential asserting
+    // where someone lives stayed valid forever — long after they moved out.
+    expires_at: new Date(Date.now() + LETTER_VALIDITY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     pdf_sha256: crypto.createHash('sha256').update(pdf).digest('hex'),
     pdf_base64: pdf.toString('base64'),
   };
@@ -313,10 +324,32 @@ async function verifyByCode(code) {
 
   const { data, error } = await supabaseAdmin
     .from('ResidencyLetter')
-    .select('id, status, resident_name, address_line1, city, state, zipcode, purpose, issued_at, revoked_at, verify_count')
+    .select('id, status, resident_name, address_line1, city, state, zipcode, purpose, issued_at, revoked_at, expires_at, verify_count')
     .eq('letter_code', normalized)
     .maybeSingle();
   if (error || !data) return { valid: false };
+
+  // SEC-10: a residency letter is consumed outside our trust boundary and
+  // carries the resident's legal name and full street address. It used to
+  // report valid:true — with all of that content — for revoked letters, and
+  // never expired at all. A letter is only valid while it is issued and
+  // unexpired, and an invalid one discloses nothing beyond why it failed.
+  const expired = data.expires_at && new Date(data.expires_at).getTime() <= Date.now();
+
+  if (data.status !== 'issued' || expired) {
+    const reason = data.status === 'revoked' ? 'revoked' : 'expired';
+
+    // Retire an issued-but-lapsed letter so listings reflect reality.
+    if (expired && data.status === 'issued') {
+      await supabaseAdmin
+        .from('ResidencyLetter')
+        .update({ status: 'expired' })
+        .eq('id', data.id)
+        .eq('status', 'issued');
+    }
+
+    return { valid: false, status: reason };
+  }
 
   // Telemetry (best-effort; the read result is what matters).
   supabaseAdmin
@@ -339,12 +372,48 @@ async function verifyByCode(code) {
     },
     purpose: data.purpose,
     issued_at: data.issued_at,
-    revoked_at: data.revoked_at,
+    expires_at: data.expires_at,
   };
+}
+
+/**
+ * Revoke every outstanding letter a user holds for a home.
+ *
+ * Called when residency ends. Without this, a person who has moved out keeps a
+ * server-attested credential asserting they live there until it lapses.
+ */
+async function revokeLettersForResidency(homeId, userId, reason = 'residency_ended') {
+  const { data, error } = await supabaseAdmin
+    .from('ResidencyLetter')
+    .update({
+      status: 'revoked',
+      revoked_at: new Date().toISOString(),
+      revoke_reason: reason,
+    })
+    .eq('home_id', homeId)
+    .eq('user_id', userId)
+    .eq('status', 'issued')
+    .select('id');
+
+  if (error) {
+    logger.error('residencyLetter: residency revoke failed', {
+      homeId, userId, error: error.message,
+    });
+    return { success: false, error: error.message };
+  }
+
+  if (data && data.length > 0) {
+    logger.info('residencyLetter: revoked on residency end', {
+      homeId, userId, count: data.length, reason,
+    });
+  }
+
+  return { success: true, revoked: data ? data.length : 0 };
 }
 
 module.exports = {
   issueLetter,
+  revokeLettersForResidency,
   listLetters,
   getLetterPdf,
   revokeLetter,

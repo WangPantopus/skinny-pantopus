@@ -215,7 +215,7 @@ describe('attach()', () => {
       const result = await service.attach({
         homeId: 'home-1',
         userId: 'user-1',
-        method: 'mail_code',
+        method: 'autocomplete_ok',
         claimType: 'resident',
       });
 
@@ -231,12 +231,31 @@ describe('attach()', () => {
       const result = await service.attach({
         homeId: 'home-1',
         userId: 'user-1',
-        method: 'mail_code',
+        method: 'autocomplete_ok',
         claimType: 'resident',
       });
 
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/No verified address claim/);
+    });
+
+    test('mail_code does not require a pre-verified claim - the mailed code is the proof', async () => {
+      seedHome();
+      seedAddress();
+      // No claim seeded. confirmCode only calls attach after a timing-safe
+      // match against the hash of a physically mailed code; demanding a
+      // verified AddressClaim on top was circular, and made every correct
+      // postcard code fail with "no verified claim".
+      const result = await service.attach({
+        homeId: 'home-1',
+        userId: 'user-1',
+        method: 'mail_code',
+        claimType: 'resident',
+      });
+
+      expect(result.success).toBe(true);
+      // Still capped at member, never admin.
+      expect(result.occupancy.role_base).toBe('member');
     });
 
     test('bypasses claim check for landlord_invite (escalated)', async () => {
@@ -634,10 +653,13 @@ describe('attach()', () => {
       // Existing occupant creates a household
       seedOccupancy({ id: 'existing-occ', user_id: 'other-user' });
 
+      // mail_code cannot reach this state - startVerification's household
+      // conflict gate blocks a mail start at any occupied address - so the
+      // policy contract is exercised through the self-serve method.
       const result = await service.attach({
         homeId: 'home-1',
         userId: 'user-1',
-        method: 'mail_code',
+        method: 'autocomplete_ok',
         claimType: 'resident',
       });
 
@@ -690,7 +712,7 @@ describe('attach()', () => {
       const result = await service.attach({
         homeId: 'home-1',
         userId: 'user-1',
-        method: 'mail_code',
+        method: 'autocomplete_ok',
         claimType: 'resident',
       });
 
@@ -1061,11 +1083,13 @@ describe('constants', () => {
   });
 
   test('ESCALATED_METHODS contains expected methods', () => {
-    expect(OccupancyAttachService.ESCALATED_METHODS.size).toBe(4);
+    expect(OccupancyAttachService.ESCALATED_METHODS.size).toBe(5);
     expect(OccupancyAttachService.ESCALATED_METHODS.has('landlord_invite')).toBe(true);
     expect(OccupancyAttachService.ESCALATED_METHODS.has('admin_override')).toBe(true);
     expect(OccupancyAttachService.ESCALATED_METHODS.has('owner_bootstrap')).toBe(true);
     expect(OccupancyAttachService.ESCALATED_METHODS.has('owner_invite')).toBe(true);
+    // The mailed code is its own proof; see ESCALATED_METHODS in the service.
+    expect(OccupancyAttachService.ESCALATED_METHODS.has('mail_code')).toBe(true);
   });
 
   test('CLAIM_TYPE_ROLE_MAP maps claim types to roles', () => {

@@ -32,7 +32,16 @@ const residencyLetterService = require('../services/residencyLetterService');
 const logger = require('../utils/logger');
 
 function isVerifiedResident(access) {
-  return Boolean(access && access.occupancy && access.occupancy.verification_status === 'verified');
+  if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified') {
+    return false;
+  }
+  // A residency letter is a dated attestation to landlords, schools and the
+  // DMV. When expiry enforcement is on (address.enforce_verification_expiry),
+  // a verification past its validity window may not mint a fresh one — the
+  // holder re-verifies first. Rows with no verified_at predate the column and
+  // are never treated as stale.
+  const verificationAge = require('../utils/verificationAge');
+  return !verificationAge.staleAffectsTrust(access.occupancy.verified_at);
 }
 
 // POST /api/homes/:id/residency-letters — issue

@@ -58,6 +58,10 @@ function buildFrontHtml(recipientName) {
 </html>`.trim();
 }
 
+// NOTE: deliberately no <img> QR code. Rendering one through a third-party
+// service (api.qrserver.com) would put the live verification code in a URL
+// query string sent to a vendor we have no contract with. If a QR code is
+// wanted, encode it locally and inline it as a data: URI.
 function buildBackHtml(code, qrUrl) {
   return `
 <html>
@@ -85,8 +89,7 @@ function buildBackHtml(code, qrUrl) {
     This code expires in 30 days.
   </div>
   <div class="qr-section">
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(qrUrl)}" width="80" height="80" alt="QR Code">
-    <div class="qr-label">Or scan this QR code</div>
+    <div class="qr-label">Or open this link on your phone</div>
     <div class="qr-url">${qrUrl}</div>
   </div>
 </body>
@@ -94,6 +97,11 @@ function buildBackHtml(code, qrUrl) {
 }
 
 // ── Auth header ──────────────────────────────────────────────
+
+/** Lob template ids are of the form `tmpl_<hex>`. */
+function isLobTemplateId(value) {
+  return typeof value === 'string' && /^tmpl_[A-Za-z0-9]+$/.test(value);
+}
 
 function authHeader(apiKey) {
   return 'Basic ' + Buffer.from(apiKey + ':').toString('base64');
@@ -144,20 +152,31 @@ class LobMailProvider {
       size: POSTCARD_SIZE,
     };
 
-    // Use Lob template IDs if provided, otherwise inline HTML
-    if (templateId) {
+    // Use a Lob template only when a real one is configured. Lob template ids
+    // look like `tmpl_...`; anything else (for example the historical literal
+    // 'address_verification_v1') is not a template and would produce a postcard
+    // with no verification code on it, because the template branch carries the
+    // code in merge_variables rather than in the HTML.
+    if (isLobTemplateId(templateId)) {
       body.front = templateId;
       body.back = templateId;
+      body.merge_variables = { code, verify_url: qrUrl };
     } else {
+      if (templateId) {
+        logger.warn('LobMailProvider.sendPostcard: ignoring non-template template_id', {
+          templateId,
+        });
+      }
       body.front = buildFrontHtml();
       body.back = buildBackHtml(code, qrUrl);
     }
 
-    if (this.env === 'test') {
-      logger.info('LobMailProvider: TEST MODE — code logged for development', {
-        code,
-        addressLine1: address.line1,
-        city: address.city,
+    if (this.env === 'test' && process.env.NODE_ENV !== 'production') {
+      // Never log the code or the recipient address in production: the log is
+      // an unredacted on-disk file (utils/logger.js) and the code is a bearer
+      // credential for the address.
+      logger.info('LobMailProvider: TEST MODE - postcard not really mailed', {
+        codeLength: String(code).length,
         state: address.state,
       });
     }

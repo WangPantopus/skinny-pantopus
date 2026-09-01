@@ -26,11 +26,14 @@ jest.mock('../../utils/homeSecurityPolicy', () => ({
 jest.mock('../../services/propertyDataService', () => ({
   isAvailable: jest.fn(() => false),
 }));
-jest.mock('../../middleware/rateLimiter', () => ({
-  ownershipClaimLimiter: (_req, _res, next) => next(),
-  postcardLimiter: (_req, _res, next) => next(),
-  verificationAttemptLimiter: (_req, _res, next) => next(),
-}));
+jest.mock('../../middleware/rateLimiter', () => {
+  const passthrough = (_req, _res, next) => next();
+  // Any limiter name resolves to a passthrough, so adding a new limiter to the
+  // real module never breaks this suite with "handler must be a function".
+  return new Proxy({}, {
+    get: (_target, prop) => (prop === '__esModule' ? false : passthrough),
+  });
+});
 jest.mock('../../services/occupancyAttachService', () => ({
   attach: jest.fn(async () => ({ success: true, occupancy: { id: 'occ-1' } })),
 }));

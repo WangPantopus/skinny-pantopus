@@ -69,6 +69,7 @@ class SmartyPostalProvider {
       res = await fetch(this._buildUrl(address), {
         method: 'GET',
         headers: this._buildHeaders(),
+        signal: AbortSignal.timeout(addressConfig.smarty.timeoutMs),
       });
     } catch (err) {
       logger.error('SmartyPostalProvider: network error', { error: err.message });

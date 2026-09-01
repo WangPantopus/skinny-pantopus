@@ -18,16 +18,13 @@ const { isConnected, isSearchable, isScopedBlocked } = require('../utils/visibil
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
-<<<<<<< ours
 const { recordFunnelEvent } = require('../services/funnelEvents');
-=======
 // Persistent login & trusted devices (docs/persistent-login/CONTRACT.md)
 const authPolicy = require('../config/authPolicy');
 const { verifyDpop } = require('../middleware/dpop');
 const { requireStepUp, mintStepUpToken } = require('../middleware/stepUp');
 const authDeviceService = require('../services/authDeviceService');
 const authSessionService = require('../services/authSessionService');
->>>>>>> theirs
 
 async function getOrCreateMailPreferences(userId) {
   let { data: prefs, error } = await supabaseAdmin
@@ -2368,7 +2365,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 
     logger.info('Profile fetched', { userId });
 
-    const residency = await getPublicResidencySummary(userId);
+    const residency = await getPublicResidencySummary(userId, req.user?.id || null);
 
     res.json({
       user: {
@@ -3117,7 +3114,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id);
+    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
 
     res.json({
       id: publicUserData.id,
@@ -3894,7 +3891,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id);
+    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
 
     res.json({
       id: publicUserData.id,
@@ -4609,6 +4606,37 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
         error: 'Cannot delete account while you have pending or escrowed payments. Please resolve them first.',
         pendingPaymentCount: escrowPayments.length,
       });
+    }
+
+    // LIF-02: block deletion while this user is the owner of a home that other
+    // people still live in. Home.owner_id now SET NULLs rather than cascading
+    // (migration 188), so the home itself survives — but a household left with
+    // no owner has nobody who can manage members, so make it an explicit
+    // hand-over rather than a silent one. This mirrors the gig and escrow
+    // pre-checks above.
+    const { data: ownedHomes } = await supabaseAdmin
+      .from('Home')
+      .select('id')
+      .eq('owner_id', userId);
+
+    if (ownedHomes && ownedHomes.length > 0) {
+      const homeIds = ownedHomes.map((h) => h.id);
+      const { data: coResidents } = await supabaseAdmin
+        .from('HomeOccupancy')
+        .select('home_id')
+        .in('home_id', homeIds)
+        .eq('is_active', true)
+        .neq('user_id', userId);
+
+      if (coResidents && coResidents.length > 0) {
+        const blocked = [...new Set(coResidents.map((o) => o.home_id))];
+        return res.status(409).json({
+          error: 'Cannot delete account while you own a home that other people live in. '
+            + 'Transfer ownership or remove the other residents first.',
+          code: 'HOME_TRANSFER_REQUIRED',
+          homeCount: blocked.length,
+        });
+      }
     }
 
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────

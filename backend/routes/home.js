@@ -1,4 +1,5 @@
 const express = require('express');
+const { getRolloutFlag } = require('../utils/addressRolloutFlags');
 const router = express.Router();
 const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -10,11 +11,18 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const {
+  generatePostcardCode,
+  hashPostcardCode,
+  dispatchPostcardCode,
+} = require('../utils/postcardDispatch');
+const {
   checkHomePermission,
   isVerifiedOwner,
   mapLegacyRole,
   writeAuditLog,
   applyOccupancyTemplate,
+  getActiveOccupancy,
+  assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { getClaimRiskScore } = require('../utils/homeSecurityPolicy');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
@@ -63,7 +71,36 @@ async function canUserDeleteHomeRecord(homeId, userId, legacyOwnerId) {
     .eq('owner_status', 'verified')
     .eq('is_primary_owner', true)
     .maybeSingle();
-  return !!row;
+  if (row) return true;
+
+  // Creator fallback: owner_id is no longer set at create time (it arrives
+  // with claim approval), so someone who just created a home by mistake would
+  // otherwise be unable to remove it until a deed verified. Allow the creator
+  // to delete only while the home is still theirs alone - no verified owner,
+  // and no other active member who would lose their household.
+  const { data: home } = await supabaseAdmin
+    .from('Home')
+    .select('created_by_user_id')
+    .eq('id', homeId)
+    .maybeSingle();
+  if (!home || home.created_by_user_id !== userId) return false;
+
+  const { data: verifiedOwners } = await supabaseAdmin
+    .from('HomeOwner')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('owner_status', 'verified')
+    .limit(1);
+  if (verifiedOwners && verifiedOwners.length > 0) return false;
+
+  const { data: otherMembers } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('is_active', true)
+    .neq('user_id', userId)
+    .limit(1);
+  return !otherMembers || otherMembers.length === 0;
 }
 
 // ============ VALIDATION SCHEMAS ============
@@ -101,6 +138,9 @@ const createHomeSchema = Joi.object({
   year_built: Joi.number().integer().min(1600).max(2100).optional().allow(null),
   move_in_date: Joi.string().optional().allow('', null),
   is_owner: Joi.boolean().optional(),
+  // "My home doesn't have a unit number" — clears the MISSING_UNIT refusal
+  // only; see the gate in POST / for what it does and does not relax.
+  no_unit_attestation: Joi.boolean().optional(),
   role: Joi.string().valid('owner', 'renter', 'household', 'property_manager', 'guest').optional(),
   description: Joi.string().max(2000).optional().allow('', null),
   entry_instructions: Joi.string().max(2000).optional().allow('', null),
@@ -262,6 +302,42 @@ function getHomeValidationError(verdict) {
     };
   }
 
+  // SCN-04: PO_BOX, MISSING_STREET_NUMBER and UNVERIFIED_STREET_NUMBER had no
+  // handler here and fell through to ADDRESS_VALIDATION_UNAVAILABLE — telling
+  // the user verification was "temporarily unavailable, try again in a moment"
+  // for an address that would never pass, however many times they retried.
+  if (status === AddressVerdictStatus.PO_BOX) {
+    return {
+      error: 'A PO Box cannot be used as a home address.',
+      code: 'ADDRESS_PO_BOX',
+      message: 'Please enter the street address where you live.',
+    };
+  }
+
+  if (status === AddressVerdictStatus.MISSING_STREET_NUMBER) {
+    return {
+      error: 'This address is missing a street number.',
+      code: 'ADDRESS_MISSING_STREET_NUMBER',
+      message: 'Please include the street number and try again.',
+    };
+  }
+
+  if (status === AddressVerdictStatus.UNVERIFIED_STREET_NUMBER) {
+    return {
+      error: 'We could not confirm that street number on this street.',
+      code: 'ADDRESS_UNVERIFIED_STREET_NUMBER',
+      message: 'Please double-check the street number and try again.',
+    };
+  }
+
+  if (status === AddressVerdictStatus.MIXED_USE) {
+    return {
+      error: 'This building has both homes and businesses.',
+      code: 'ADDRESS_STEP_UP_REQUIRED',
+      message: 'We need to confirm you live here before adding this home.',
+    };
+  }
+
   if (status === AddressVerdictStatus.BUSINESS) {
     return {
       error: 'This address appears to be a business or office location, not a home.',
@@ -381,7 +457,7 @@ function getCreateHomeStepUpPolicy(verdict) {
 
   if (
     verdict.status === AddressVerdictStatus.MIXED_USE &&
-    addressConfig.rollout.enforceMixedUseStepUp
+    getRolloutFlag('enforceMixedUseStepUp')
   ) {
     return {
       policy: 'mixed_use',
@@ -391,7 +467,7 @@ function getCreateHomeStepUpPolicy(verdict) {
 
   if (
     verdict.status === AddressVerdictStatus.LOW_CONFIDENCE &&
-    addressConfig.rollout.enforceLowConfidenceStepUp &&
+    getRolloutFlag('enforceLowConfidenceStepUp') &&
     isApprovedLowConfidenceStepUpCase(verdict)
   ) {
     return {
@@ -715,7 +791,7 @@ router.post('/', verifyToken, (req, res, next) => {
 
     const countryVal = country || 'US';
 
-    if (addressConfig.rollout.requireAddressIdForHomeCreate && !requestedAddressId) {
+    if (getRolloutFlag('requireAddressIdForHomeCreate') && !requestedAddressId) {
       await recordCreateHomeOutcomeSafe({
         address_id: null,
         outcome: 'blocked',
@@ -869,9 +945,9 @@ router.post('/', verifyToken, (req, res, next) => {
       const storedInputs = pipelineService.buildStoredDecisionInputs(canonicalAddress);
       addressVerdict = addressDecisionEngine.classify({
         ...storedInputs,
-        use_provider_place_for_business: addressConfig.rollout.enforcePlaceProviderBusiness,
-        use_provider_unit_intelligence: addressConfig.rollout.enableSecondaryProvider,
-        use_provider_parcel_for_classification: addressConfig.rollout.enforceParcelProviderClassification,
+        use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
+        use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+        use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
         provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
       });
 
@@ -915,9 +991,9 @@ router.post('/', verifyToken, (req, res, next) => {
       const storedInputs = pipelineService.buildStoredDecisionInputs(canonicalAddress);
       addressVerdict = addressDecisionEngine.classify({
         ...storedInputs,
-        use_provider_place_for_business: addressConfig.rollout.enforcePlaceProviderBusiness,
-        use_provider_unit_intelligence: addressConfig.rollout.enableSecondaryProvider,
-        use_provider_parcel_for_classification: addressConfig.rollout.enforceParcelProviderClassification,
+        use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
+        use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+        use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
         provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
       });
     } else if (
@@ -978,9 +1054,26 @@ router.post('/', verifyToken, (req, res, next) => {
       stepUpPolicy
       && STEP_UP_ELIGIBLE_HOME_VERDICT_STATUSES.has(addressVerdict?.status)
     );
+
+    // SCN-10: MISSING_UNIT fires when USPS expects a secondary the submitted
+    // address lacks — which is also what a basement, rear, ADU or split-duplex
+    // address looks like, since USPS does not list those units. Those residents
+    // had no way out: the wizard asked for a unit, accepted one, and asked
+    // again. An explicit attestation ("my home doesn't have a unit number")
+    // clears exactly this rung and nothing else — deliverability, BUSINESS,
+    // CONFLICT and the rest still refuse — and it only relaxes address
+    // granularity, not residency: mail verification and household conflict
+    // still gate everything the address unlocks. The attestation is recorded
+    // in the create outcome so review can find serial attesters.
+    const allowCreateWithNoUnitAttestation = !!(
+      req.body.no_unit_attestation === true
+      && addressVerdict?.status === AddressVerdictStatus.MISSING_UNIT
+    );
+
     if (
       addressVerdict &&
       !allowCreateAfterStepUp &&
+      !allowCreateWithNoUnitAttestation &&
       !ALLOWED_HOME_VERDICT_STATUSES.has(addressVerdict.status)
     ) {
       const problem = getHomeValidationError(addressVerdict);
@@ -1054,9 +1147,18 @@ router.post('/', verifyToken, (req, res, next) => {
       country: countryVal,
       address_hash: addressHash,
       address_id: canonicalAddress?.id || requestedAddressId || null,
-      // owner_id is only set for actual owners — renters who create homes get null.
-      // HomeOwner table + HomeOccupancy.role_base are the real ownership authority.
-      owner_id: is_owner ? userId : null,
+      // owner_id is NEVER set from the request. checkHomePermission treats
+      // Home.owner_id === userId as full ownership - every permission, plus
+      // 'ownership.manage', which is what reviews ownership claims - so
+      // setting it here from a self-asserted boolean handed the caller
+      // verified-owner powers (including approving their own claim) at any
+      // address they typed, before any deed was ever uploaded. The pointer is
+      // written by the two claim-approval paths (routes/admin.js,
+      // routes/homeOwnership.js review) when owner_status becomes 'verified',
+      // which is what spec §7.1 ("prevents instant unverified ownership")
+      // requires. Until then the creator holds the pending_doc occupancy
+      // created below, exactly like a renter-creator holds provisional access.
+      owner_id: null,
       name: name || null,
       home_type: home_type || 'house',
       bedrooms: bedrooms != null ? bedrooms : null,
@@ -1084,16 +1186,28 @@ router.post('/', verifyToken, (req, res, next) => {
         : {}),
     };
 
-    // Add location if provided
+    // Add location if provided.
+    //
+    // Provenance is decided by where the coordinates actually came from, not
+    // by what the request claims. This used to stamp geocode_mode 'verified'
+    // (with a body-controlled provider and accuracy) even when `coords` fell
+    // back to the client's own latitude/longitude — and because
+    // shouldBlockCoordinateOverwrite protects 'verified' rows from later
+    // correction, the fake stamp locked the self-asserted pin in. A
+    // client-supplied pin is 'user_asserted', exactly as PATCH records it,
+    // and the reverse-geocode job (Home.coordinate_validation, migration 191)
+    // is the backstop that checks it against the address.
+    const coordsAreCanonical = !!(canonicalAddress
+      && Number.isFinite(canonicalAddress.geocode_lat)
+      && Number.isFinite(canonicalAddress.geocode_lng));
     if (coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
       homeData.location = formatLocationForDB(coords.latitude, coords.longitude);
       homeData.map_center_lat = coords.latitude;
       homeData.map_center_lng = coords.longitude;
-      // Geocode provenance
-      homeData.geocode_provider = req.body.geocode_provider || 'google_validation';
-      homeData.geocode_mode = 'verified';
-      homeData.geocode_accuracy = req.body.geocode_accuracy || 'rooftop';
-      homeData.geocode_place_id = req.body.geocode_place_id || null;
+      homeData.geocode_provider = coordsAreCanonical ? 'google_validation' : 'client';
+      homeData.geocode_mode = coordsAreCanonical ? 'verified' : 'user_asserted';
+      homeData.geocode_accuracy = coordsAreCanonical ? 'rooftop' : null;
+      homeData.geocode_place_id = coordsAreCanonical ? (req.body.geocode_place_id || null) : null;
       homeData.geocode_source_flow = 'home_onboarding';
       homeData.geocode_created_at = new Date().toISOString();
     }
@@ -1164,10 +1278,12 @@ router.post('/', verifyToken, (req, res, next) => {
             geocode_lat: coords?.latitude || null,
             geocode_lng: coords?.longitude || null,
             place_type: normalizedLine2 ? 'unit' : 'single_family',
-            geocode_provider: req.body.geocode_provider || 'google_validation',
-            geocode_mode: 'verified',
-            geocode_accuracy: req.body.geocode_accuracy || 'rooftop',
-            geocode_place_id: req.body.geocode_place_id || null,
+            // Same provenance rule as the Home row above: 'verified' only when
+            // the pipeline produced these coordinates.
+            geocode_provider: coordsAreCanonical ? 'google_validation' : 'client',
+            geocode_mode: coordsAreCanonical ? 'verified' : 'user_asserted',
+            geocode_accuracy: coordsAreCanonical ? 'rooftop' : null,
+            geocode_place_id: coordsAreCanonical ? (req.body.geocode_place_id || null) : null,
             geocode_source_flow: 'home_onboarding',
             geocode_created_at: new Date().toISOString(),
           })
@@ -1427,7 +1543,9 @@ router.post('/', verifyToken, (req, res, next) => {
       address_id: canonicalAddress?.id || response.address_id || requestedAddressId || null,
       outcome: 'created',
       verdict_status: addressVerdict?.status || null,
-      reasons: addressVerdict?.reasons || [],
+      reasons: allowCreateWithNoUnitAttestation
+        ? [...(addressVerdict?.reasons || []), 'no_unit_attestation']
+        : (addressVerdict?.reasons || []),
       code: 'HOME_CREATED',
       status_code: 201,
       validation_path: createHomeValidationPath,
@@ -2016,10 +2134,52 @@ router.post('/invitations/:invitationId/reject', verifyToken, async (req, res) =
     const { invitationId } = req.params;
     const userId = req.user.id;
 
+    // SEC-09: this route read userId and never used it, so any authenticated
+    // account could revoke any invitation by id — enough to block every
+    // household on the platform from adding members. Only the person the
+    // invitation is addressed to, or someone who can manage members on that
+    // home, may reject it.
+    const { data: invite, error: lookupErr } = await supabaseAdmin
+      .from('HomeInvite')
+      .select('id, home_id, invitee_user_id, invitee_email, status')
+      .eq('id', invitationId)
+      .maybeSingle();
+
+    if (lookupErr) {
+      logger.error('Error loading invitation', { error: lookupErr.message });
+      return res.status(500).json({ error: 'Failed to reject invitation' });
+    }
+
+    if (!invite) {
+      return res.status(404).json({ error: 'Invitation not found' });
+    }
+
+    let permitted = invite.invitee_user_id === userId;
+
+    if (!permitted && invite.invitee_email) {
+      const { data: me } = await supabaseAdmin
+        .from('User')
+        .select('email')
+        .eq('id', userId)
+        .maybeSingle();
+      permitted = !!me?.email
+        && me.email.toLowerCase() === invite.invitee_email.toLowerCase();
+    }
+
+    if (!permitted) {
+      const access = await checkHomePermission(invite.home_id, userId, 'members.manage');
+      permitted = access.hasAccess;
+    }
+
+    if (!permitted) {
+      return res.status(403).json({ error: 'Not authorized to reject this invitation' });
+    }
+
     const { error } = await supabaseAdmin
       .from('HomeInvite')
       .update({ status: 'revoked' })
-      .eq('id', invitationId);
+      .eq('id', invitationId)
+      .eq('status', 'pending');
 
     if (error) {
       logger.error('Error rejecting invitation', { error: error.message });
@@ -2462,9 +2622,18 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Home not found' });
     }
 
-    // Public profile can be viewed by: members/owners, public_preview, creator (onboarding/claim UI),
-    // user has a claim (residency/ownership) for this home,
-    // OR the home already has a verified owner (user B claim/join flow before any claim row exists).
+    // Public profile can be viewed by: members/owners, public_preview, creator
+    // (onboarding/claim UI), or a user who has actually filed a claim on this home.
+    //
+    // SEC-01: there used to be a fourth leg — a `verifiedOwnerProbe` that granted
+    // access whenever *the home* had a verified owner, regardless of who was
+    // asking. Since this response carries the full street address and the
+    // owner's real name and photo, that turned any home id into an
+    // address-to-identity lookup for any authenticated account, which is the
+    // exact disclosure the identity firewall exists to prevent. A user who wants
+    // to join a household files a claim first (POST /:id/claim); the pre-claim
+    // conflict signal is served by POST /api/homes/check-address, which returns
+    // no identity.
     const access = await checkHomePermission(homeId, userId);
     const isCreator = Boolean(home.created_by_user_id && home.created_by_user_id === userId);
     // `insider` = may see the exact address (member / creator / claimant).
@@ -2473,20 +2642,11 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
     let insider = access.hasAccess || isCreator;
     let canView = insider || home.visibility === 'public_preview';
     if (!insider) {
-      const [residencyClaim, ownershipClaim, verifiedOwnerProbe] = await Promise.all([
+      const [residencyClaim, ownershipClaim] = await Promise.all([
         supabaseAdmin.from('HomeResidencyClaim').select('id').eq('home_id', homeId).eq('user_id', userId).limit(1).maybeSingle(),
         supabaseAdmin.from('HomeOwnershipClaim').select('id').eq('home_id', homeId).eq('claimant_user_id', userId).limit(1).maybeSingle(),
-        supabaseAdmin
-          .from('HomeOwner')
-          .select('id')
-          .eq('home_id', homeId)
-          .eq('subject_type', 'user')
-          .eq('owner_status', 'verified')
-          .limit(1)
-          .maybeSingle(),
       ]);
       if (residencyClaim.data || ownershipClaim.data) { insider = true; canView = true; }
-      if (verifiedOwnerProbe.data) canView = true;
     }
     if (!canView) {
       return res.status(403).json({ error: 'This home is not publicly discoverable' });
@@ -3151,8 +3311,22 @@ router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) =
     if (req.body.amenities) updates.amenities = req.body.amenities;
 
     if (req.body.location) {
-      const incomingMode = req.body.geocode_mode || (req.body.geocode_provider === 'google_validation' ? 'verified' : undefined);
-      const block = shouldBlockCoordinateOverwrite(existingHome, { geocode_mode: incomingMode }, 'PATCH /api/homes/:id');
+      // CRIT-05: provenance must never be self-asserted. This handler used to
+      // read geocode_mode straight from the request body and default it to
+      // 'verified' with 'rooftop' accuracy, so any member with home.edit could
+      // move a home to arbitrary coordinates and have that pin recorded as a
+      // verified rooftop fix. The overwrite guard then consulted the same
+      // field, so it protected the false value from every subsequent
+      // correction — inverting the guard's purpose.
+      //
+      // A coordinate that did not come from runValidationPipeline is
+      // user-asserted, full stop. 'verified' is reserved for writes originating
+      // in canonicalAddressService.
+      const block = shouldBlockCoordinateOverwrite(
+        existingHome,
+        { geocode_mode: 'user_asserted' },
+        'PATCH /api/homes/:id',
+      );
       if (block.blocked) {
         logger.warn('Home coordinate overwrite blocked', { homeId: id, userId, reason: block.reason });
         // Allow the rest of the update to proceed, just strip coordinate fields
@@ -3161,11 +3335,11 @@ router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) =
           req.body.location.latitude,
           req.body.location.longitude
         );
-        // Geocode provenance
-        updates.geocode_provider = req.body.geocode_provider || 'mapbox';
-        updates.geocode_mode = incomingMode || 'verified';
-        updates.geocode_accuracy = req.body.geocode_accuracy || 'rooftop';
-        updates.geocode_place_id = req.body.geocode_place_id || null;
+        // Geocode provenance — recorded, not accepted.
+        updates.geocode_provider = 'client';
+        updates.geocode_mode = 'user_asserted';
+        updates.geocode_accuracy = 'unknown';
+        updates.geocode_place_id = null;
         updates.geocode_source_flow = 'home_edit';
         updates.geocode_created_at = new Date().toISOString();
       }
@@ -3362,27 +3536,43 @@ router.post('/:id/detach', verifyToken, validate(attachDetachSchema), async (req
       return res.status(403).json({ error: 'You do not have permission to manage members' });
     }
 
-    // Check if user is attached
-    const { data: occupancy, error: checkError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('user_id', userToDetach)
-      .single();
-
-    if (checkError || !occupancy) {
-      return res.status(400).json({ error: 'User is not attached to this home' });
+    // Rank guard: removing an owner is an ownership action, not member
+    // management. Without this, an admin could detach the owner's occupancy
+    // while the Home.owner_id pointer stayed behind — stripped of membership
+    // yet still holding full owner access via checkHomePermission.
+    if (userToDetach !== requestingUserId) {
+      const targetIsPointerOwner = home.owner_id === userToDetach;
+      const { data: targetOwnerRow } = await supabaseAdmin
+        .from('HomeOwner')
+        .select('id')
+        .eq('home_id', homeId)
+        .eq('subject_id', userToDetach)
+        .eq('owner_status', 'verified')
+        .maybeSingle();
+      if ((targetIsPointerOwner || targetOwnerRow) && !detachAccess.isOwner) {
+        return res.status(403).json({ error: 'Only an owner can remove an owner from the home' });
+      }
     }
 
-    // Delete occupancy record
-    const { error: detachError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .delete()
-      .eq('home_id', homeId)
-      .eq('user_id', userToDetach);
+    // LIF-01: go through the single detach chokepoint rather than hard-deleting
+    // the row. detach() deactivates the occupancy (preserving history), clears
+    // the Home.owner_id pointer when the departing user holds it, revokes
+    // outstanding residency letters, and writes the audit entries this route's
+    // raw DELETE used to skip.
+    const occupancyAttachService = require('../services/occupancyAttachService');
+    const detachResult = await occupancyAttachService.detach({
+      homeId,
+      userId: userToDetach,
+      reason: 'removed',
+      actorId: requestingUserId,
+      metadata: { source: 'owner_detach_route' },
+    });
 
-    if (detachError) {
-      logger.error('Error detaching user', { error: detachError.message, homeId, userToDetach });
+    if (!detachResult.success) {
+      if (detachResult.error === 'No active occupancy found') {
+        return res.status(400).json({ error: 'User is not attached to this home' });
+      }
+      logger.error('Error detaching user', { error: detachResult.error, homeId, userToDetach });
       return res.status(500).json({ error: 'Failed to detach user' });
     }
 
@@ -3516,6 +3706,42 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
       .eq('subject_type', 'user')
       .eq('is_primary_owner', false);
 
+    // LIF-01: clear the legacy owner pointer, exactly as
+    // occupancyAttachService.detach does. checkHomePermission treats
+    // Home.owner_id === userId as ownership, so leaving it set here meant the
+    // app's own Move Out button returned 200 while the departed user kept full
+    // administrative control of the home — including deleting it. detach() is
+    // not the single chokepoint the LIF-01 fix assumed: this route writes
+    // HomeOccupancy directly.
+    const { error: clearOwnerErr } = await supabaseAdmin
+      .from('Home')
+      .update({ owner_id: null, updated_at: now })
+      .eq('id', homeId)
+      .eq('owner_id', userId);
+
+    if (clearOwnerErr) {
+      // Do not report success: the occupancy is inactive but the user would
+      // still hold owner-level access, which is the bug this prevents.
+      logger.error('Failed to clear owner_id on move-out', {
+        error: clearOwnerErr.message, homeId, userId,
+      });
+      return res.status(500).json({ error: 'Failed to process move-out' });
+    }
+
+    // LIF-06: a residency letter asserts to landlords, schools and the DMV that
+    // this person lives here. Moving out must retire the credential — it
+    // otherwise stayed valid until its 90-day expiry for a home the user no
+    // longer occupies.
+    try {
+      const residencyLetterService = require('../services/residencyLetterService');
+      await residencyLetterService.revokeLettersForResidency(homeId, userId, 'residency_move_out');
+    } catch (letterErr) {
+      // Never block the move-out itself on this, but make the gap visible.
+      logger.error('Failed to revoke residency letters on move-out', {
+        homeId, userId, error: letterErr.message,
+      });
+    }
+
     // 4. Check if any active authorities remain
     const { count: authorityCount } = await supabaseAdmin
       .from('HomeOccupancy')
@@ -3594,7 +3820,7 @@ router.post('/:id/challenge-member/:occupancyId', verifyToken, async (req, res) 
 
     // 1. Verify caller has members.manage permission
     const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.allowed) {
+    if (!access.hasAccess) {
       return res.status(403).json({ error: 'Not authorized to challenge members' });
     }
 
@@ -6051,6 +6277,30 @@ router.post('/:id/invite', verifyToken, async (req, res) => {
 
     // Validate: manager and service_provider roles require a targeted invite
     const proposedRoleBase = mapLegacyRole(relationship || 'member');
+
+    // SEC-07: an invite could propose `owner`, which mapLegacyRole turns into a
+    // full IAM owner. Combined with the absence of a rank check, an admin
+    // holding can_manage_access could mint an owner ranked above themselves,
+    // taking over the household — and it bypassed the address-claim gate that
+    // ownership is supposed to require. Ownership is transferred through the
+    // claim and transfer flows, never through an invitation.
+    if (proposedRoleBase === 'owner') {
+      return res.status(400).json({
+        error: 'Ownership cannot be granted by invitation. Use the ownership transfer flow.',
+        code: 'OWNER_INVITE_FORBIDDEN',
+      });
+    }
+
+    // The inviter may not propose a role at or above their own rank.
+    const inviterOccupancy = await getActiveOccupancy(homeId, userId);
+    const inviterRoleBase = access.isOwner
+      ? 'owner'
+      : (inviterOccupancy?.role_base || mapLegacyRole(inviterOccupancy?.role) || 'member');
+
+    const rankCheck = assertCanMutateTarget(inviterRoleBase, proposedRoleBase);
+    if (!rankCheck.allowed) {
+      return res.status(403).json({ error: rankCheck.reason });
+    }
     if (isOpenInvite && (proposedRoleBase === 'manager' || proposedRoleBase === 'service_provider')) {
       return res.status(400).json({
         error: 'Property managers and service providers must be invited by email or user ID',
@@ -6638,7 +6888,13 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
  * Provisional users get local/public discovery access.
  * Mailbox and private home surfaces remain locked until verified.
  */
-router.post('/:id/claim', verifyToken, async (req, res) => {
+// postcardLimiter sits AFTER verifyToken so it keys on the user id. The only
+// limiter otherwise covering this route is homeCreationLimiter, which app.js
+// mounts before any authentication runs — keyed on IP, shared with every other
+// home write. The cold-start branch below spends real postage per request, so
+// it gets the same 3-per-hour per-user budget as request-postcard.
+const { postcardLimiter: claimPostcardLimiter } = require('../middleware/rateLimiter');
+router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) => {
   try {
     const homeId = req.params.id;
     const userId = req.user.id;
@@ -6647,7 +6903,7 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
     // Verify home exists
     const { data: home } = await supabaseAdmin
       .from('Home')
-      .select('id, address, city, state')
+      .select('id, address, address2, city, state, zipcode')
       .eq('id', homeId)
       .single();
 
@@ -6773,7 +7029,7 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
 
     } else if (authorityCount === 0) {
       // PATH 2 — External cold-start: no authorities, not the creator
-      const code = generateSafeCode(8);
+      const code = generatePostcardCode();
       const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
 
       const { data: postcard, error: pcError } = await supabaseAdmin
@@ -6781,7 +7037,7 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
         .insert({
           home_id: homeId,
           user_id: userId,
-          code,
+          code_hash: hashPostcardCode(code),
           status: 'pending',
           expires_at: expiresAt,
         })
@@ -6790,6 +7046,24 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
 
       if (pcError) {
         logger.error('Failed to create postcard code for cold-start', { error: pcError.message });
+      }
+
+      // UX-01: actually mail it. This branch used to return "a verification
+      // code will be mailed to this address" while nothing dispatched.
+      const coldStartMail = await dispatchPostcardCode(home, code);
+      if (!coldStartMail.success) {
+        if (postcard?.id) {
+          await supabaseAdmin
+            .from('HomePostcardCode')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('id', postcard.id);
+        }
+        logger.error('Cold-start postcard dispatch failed', {
+          homeId, userId, error: coldStartMail.error,
+        });
+        return res.status(502).json({
+          error: 'We could not send mail to this address right now. Please try again later.',
+        });
       }
 
       await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
@@ -6812,17 +7086,23 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
     } else {
       // PATH 3 — Normal: home has active authorities
 
-      // Check for stale authorities (all inactive for 30+ days)
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: activeAuthUsers } = await supabaseAdmin
-        .from('User')
-        .select('id')
-        .in('id', authorities.map(a => a.user_id))
-        .gt('last_sign_in_at', thirtyDaysAgo);
+      // Check for stale authorities (all inactive for 30+ days).
+      //
+      // LIF-03: this used to filter `User.last_sign_in_at`, a column that does
+      // not exist on the public User table — it lives on auth.users. The query
+      // therefore errored, `activeAuthUsers` was always empty, and EVERY
+      // move-in conflict was classified "all authorities stale" and routed away
+      // from the household. Now that postcards are actually mailed, that
+      // misrouting would let a stranger bypass household approval entirely, so
+      // this reads the real source and fails closed: any uncertainty means the
+      // authorities are treated as active and the household is asked.
+      const authoritiesStale = await allAuthoritiesStale(
+        authorities.map(a => a.user_id), 30,
+      );
 
-      if (!activeAuthUsers || activeAuthUsers.length === 0) {
+      if (authoritiesStale) {
         // All authorities are stale — treat as cold-start (PATH 2 fallback)
-        const code = generateSafeCode(8);
+        const code = generatePostcardCode();
         const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
 
         const { data: postcard, error: pcError } = await supabaseAdmin
@@ -6830,7 +7110,7 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
           .insert({
             home_id: homeId,
             user_id: userId,
-            code,
+            code_hash: hashPostcardCode(code),
             status: 'pending',
             expires_at: expiresAt,
           })
@@ -6839,6 +7119,22 @@ router.post('/:id/claim', verifyToken, async (req, res) => {
 
         if (pcError) {
           logger.error('Failed to create postcard code for stale-authority cold-start', { error: pcError.message });
+        }
+
+        const staleMail = await dispatchPostcardCode(home, code);
+        if (!staleMail.success) {
+          if (postcard?.id) {
+            await supabaseAdmin
+              .from('HomePostcardCode')
+              .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+              .eq('id', postcard.id);
+          }
+          logger.error('Stale-authority postcard dispatch failed', {
+            homeId, userId, error: staleMail.error,
+          });
+          return res.status(502).json({
+            error: 'We could not send mail to this address right now. Please try again later.',
+          });
         }
 
         await applyOccupancyTemplate(homeId, userId, effectiveRole, 'pending_postcard');
@@ -6882,7 +7178,7 @@ router.get('/:id/claims', verifyToken, async (req, res) => {
 
     const { checkHomePermission } = require('../utils/homePermissions');
     const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.allowed) {
+    if (!access.hasAccess) {
       return res.status(403).json({ error: 'Not authorized to view claims' });
     }
 
@@ -6919,7 +7215,7 @@ router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
 
     const { checkHomePermission } = require('../utils/homePermissions');
     const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.allowed) {
+    if (!access.hasAccess) {
       return res.status(403).json({ error: 'Not authorized to approve claims' });
     }
 
@@ -7005,7 +7301,7 @@ router.post('/:id/claim/:claimId/reject', verifyToken, async (req, res) => {
 
     const { checkHomePermission } = require('../utils/homePermissions');
     const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.allowed) {
+    if (!access.hasAccess) {
       return res.status(403).json({ error: 'Not authorized to reject claims' });
     }
 
@@ -7063,15 +7359,37 @@ router.post('/:id/claim/:claimId/reject', verifyToken, async (req, res) => {
  * Helper: Generate a safe alphanumeric code for postcard verification.
  * Excludes confusing characters: 0/O, 1/I/L.
  */
-function generateSafeCode(length) {
-  const safeChars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-  const bytes = crypto.randomBytes(length);
-  let code = '';
-  for (let i = 0; i < length; i++) {
-    code += safeChars[bytes[i] % safeChars.length];
+/**
+ * Are ALL of these users inactive for `days`?
+ *
+ * Fails closed: if any user's activity cannot be determined, they count as
+ * active, so the caller keeps the household in the loop rather than falling
+ * back to a self-service path.
+ */
+async function allAuthoritiesStale(userIds, days) {
+  if (!Array.isArray(userIds) || userIds.length === 0) return false;
+
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+  for (const userId of userIds) {
+    try {
+      const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (error || !data?.user) return false;
+
+      const lastSignIn = data.user.last_sign_in_at;
+      if (!lastSignIn) return false;
+      if (new Date(lastSignIn).getTime() > cutoff) return false;
+    } catch (err) {
+      logger.warn('allAuthoritiesStale: activity lookup failed, treating as active', {
+        userId, error: err.message,
+      });
+      return false;
+    }
   }
-  return code;
+
+  return true;
 }
+
 
 /**
  * Helper: Notify home owners/admins about a new claim.

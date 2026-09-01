@@ -1,4 +1,5 @@
 const logger = require('../../utils/logger');
+const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const addressConfig = require('../../config/addressVerification');
 
 const DETAILS_API_BASE = 'https://places.googleapis.com/v1/places';
@@ -203,7 +204,7 @@ class PlaceClassificationProvider {
   }
 
   isFeatureEnabled() {
-    return !!addressConfig.rollout.enablePlaceProvider;
+    return !!getRolloutFlag('enablePlaceProvider');
   }
 
   isAvailable() {

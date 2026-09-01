@@ -1,5 +1,42 @@
 'use strict';
 
+const crypto = require('crypto');
+
+/**
+ * Key material for coordinate jitter.
+ *
+ * PRV-15: the jitter used to be a deterministic arithmetic function of the true
+ * coordinates (`Math.abs(lat * 1000 + lng * 1000) % 1`). Anyone holding a
+ * published "±500m" point could enumerate candidate true coordinates on a fine
+ * grid, apply the same public transform, and keep the candidate that reproduced
+ * the published value — recovering the exact location the jitter existed to
+ * hide. Keying the offset makes the transform unreproducible without the
+ * secret, while keeping it stable per entity so pins do not flicker on reload.
+ *
+ * Falls back to the service-role key, which is already required for the process
+ * to boot and is stable across restarts, so this needs no new configuration.
+ * Set LOCATION_JITTER_SECRET to rotate it independently.
+ */
+const JITTER_KEY = process.env.LOCATION_JITTER_SECRET
+  || process.env.SUPABASE_SERVICE_ROLE_KEY
+  || 'pantopus-location-jitter-dev-only';
+
+/**
+ * Two independent, stable pseudo-random values in [0, 1) for a coordinate pair.
+ * @returns {[number, number]}
+ */
+function keyedJitterSeeds(lat, lng) {
+  const digest = crypto
+    .createHmac('sha256', JITTER_KEY)
+    .update(`${lat},${lng}`)
+    .digest();
+
+  return [
+    digest.readUInt32BE(0) / 0x100000000,
+    digest.readUInt32BE(4) / 0x100000000,
+  ];
+}
+
 /**
  * Location Privacy Enforcement
  *
@@ -45,12 +82,12 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
 
   switch (precision) {
     case 'approx_area': {
-      // Jitter ±0.005 (~500m). Use a seeded-ish jitter based on the coords
-      // so the same entity always gets the same offset (no flickering on reload).
+      // Jitter ±0.005 (~500m), keyed so the offset is stable for a given
+      // coordinate pair but cannot be recomputed by anyone without the secret.
       if (lat != null && lng != null) {
-        const seed = Math.abs(lat * 1000 + lng * 1000) % 1;
-        const jitterLat = (seed - 0.5) * 0.01;     // ±0.005
-        const jitterLng = ((seed * 7) % 1 - 0.5) * 0.01;
+        const [seedLat, seedLng] = keyedJitterSeeds(lat, lng);
+        const jitterLat = (seedLat - 0.5) * 0.01;  // ±0.005
+        const jitterLng = (seedLng - 0.5) * 0.01;
         obj[latField] = Math.round((lat + jitterLat) * 1000) / 1000;  // 3 decimal places
         obj[lngField] = Math.round((lng + jitterLng) * 1000) / 1000;
       }

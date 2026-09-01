@@ -81,7 +81,7 @@ let _authMocks = {
   }),
   adminSignOut: async () => ({ data: null, error: null }),
   adminGetUserById: async (id) => ({
-    data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [] } },
+    data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [], last_sign_in_at: new Date().toISOString() } },
     error: null,
   }),
   adminUpdateUserById: async (id, attrs) => ({ data: { user: { id, ...attrs } }, error: null }),
@@ -165,7 +165,7 @@ function resetTables() {
     }),
     adminSignOut: async () => ({ data: null, error: null }),
     adminGetUserById: async (id) => ({
-      data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [] } },
+      data: { user: { id, email: 'mock@example.com', app_metadata: { provider: 'email', providers: ['email'] }, identities: [], last_sign_in_at: new Date().toISOString() } },
       error: null,
     }),
     adminUpdateUserById: async (id, attrs) => ({ data: { user: { id, ...attrs } }, error: null }),
@@ -731,6 +731,9 @@ const supabaseAdmin = {
       deleteUser: jest.fn().mockResolvedValue({ data: {}, error: null }),
       generateLink: (...args) => _authMocks.adminGenerateLink(...args),
       signOut: (...args) => _authMocks.adminSignOut(...args),
+      // Activity lookups read auth.users, not the public User table.
+      // Default: a recently-active user, so callers that fail closed on
+      // uncertainty take the "active" branch unless a test says otherwise.
       getUserById: (...args) => _authMocks.adminGetUserById(...args),
       updateUserById: (...args) => _authMocks.adminUpdateUserById(...args),
     },

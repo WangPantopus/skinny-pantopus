@@ -1,4 +1,5 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
+const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const addressConfig = require('../../config/addressVerification');
 const { computeAddressHash } = require('../../utils/normalizeAddress');
 const logger = require('../../utils/logger');
@@ -583,7 +584,7 @@ async function runValidationPipeline(input, options = {}) {
         selectively_invoked: true,
       });
     }
-  } else if (addressConfig.rollout.enableSecondaryProvider) {
+  } else if (getRolloutFlag('enableSecondaryProvider')) {
     pushProviderCall({
       provider: 'secondary_address',
       status: 'not_invoked',
@@ -658,7 +659,7 @@ async function runValidationPipeline(input, options = {}) {
       overlap_types: [],
       trigger,
     });
-  } else if (addressConfig.rollout.enableParcelProvider) {
+  } else if (getRolloutFlag('enableParcelProvider')) {
     pushProviderCall({
       provider: addressConfig.parcelIntel.provider || 'parcel_intel',
       status: 'not_invoked',
@@ -705,11 +706,11 @@ async function runValidationPipeline(input, options = {}) {
     smarty: smartyResult,
     place,
     provider_place: providerPlace,
-    use_provider_place_for_business: addressConfig.rollout.enforcePlaceProviderBusiness,
+    use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
     unit_intelligence: unitIntelligence,
-    use_provider_unit_intelligence: addressConfig.rollout.enableSecondaryProvider,
+    use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
     parcel_intel: parcelIntel,
-    use_provider_parcel_for_classification: addressConfig.rollout.enforceParcelProviderClassification,
+    use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
     provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
     household,
   });

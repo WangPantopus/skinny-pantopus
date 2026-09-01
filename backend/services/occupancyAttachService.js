@@ -17,6 +17,7 @@
  */
 
 const logger = require('../utils/logger');
+const verificationAge = require('../utils/verificationAge');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { writeAuditLog, applyOccupancyTemplate, VERIFIED_TEMPLATES, ALL_FALSE_TEMPLATE } = require('../utils/homePermissions');
 
@@ -38,6 +39,14 @@ const ESCALATED_METHODS = new Set([
   'admin_override',
   'owner_bootstrap',
   'owner_invite',
+  // mail_code carries its own proof: confirmCode only reaches attach after a
+  // timing-safe match against the hash of a code that was physically mailed to
+  // the address. Requiring a pre-verified AddressClaim *on top of that* was
+  // circular - nothing in the mail path creates one, so every correct postcard
+  // code failed here with "no verified claim" and the channel could not
+  // complete a single verification. The role stays capped at 'member' by
+  // VERIFICATION_ROLE_MAP regardless of the claimType passed.
+  'mail_code',
 ]);
 
 /** claim_type → default occupancy role. */
@@ -241,6 +250,60 @@ class OccupancyAttachService {
       return { success: false, error: 'Failed to deactivate occupancy' };
     }
 
+    // LIF-01: clear the legacy ownership pointer when the departing user is
+    // the one it names. checkHomePermission treats Home.owner_id === userId as
+    // ownership, so leaving it set means a moved-out user keeps full
+    // administrative control of the home — including deleting it — forever.
+    // The authoritative ownership record is the HomeOwner table; this column
+    // is only a legacy shortcut.
+    const { data: home, error: homeErr } = await supabaseAdmin
+      .from('Home')
+      .select('owner_id')
+      .eq('id', homeId)
+      .maybeSingle();
+
+    if (homeErr) {
+      logger.error('OccupancyAttachService.detach: home lookup failed', {
+        error: homeErr.message, homeId, userId,
+      });
+      return { success: false, error: 'Failed to deactivate occupancy' };
+    }
+
+    if (home && home.owner_id === userId) {
+      const { error: clearErr } = await supabaseAdmin
+        .from('Home')
+        .update({ owner_id: null, updated_at: now })
+        .eq('id', homeId)
+        .eq('owner_id', userId);
+
+      if (clearErr) {
+        // Do not report success: the occupancy is gone but the user would
+        // still hold owner-level access, which is the bug this prevents.
+        logger.error('OccupancyAttachService.detach: failed to clear owner_id', {
+          error: clearErr.message, homeId, userId,
+        });
+        return { success: false, error: 'Failed to revoke ownership on detach' };
+      }
+
+      await writeAuditLog(homeId, actorId || userId, 'HOME_OWNER_POINTER_CLEARED', 'Home', homeId, {
+        reason,
+        previous_owner_id: userId,
+      });
+    }
+
+    // LIF-06: a residency letter asserts to landlords, schools and the DMV that
+    // this person lives here. Ending residency must retire the credential;
+    // previously it survived move-out, eviction and removal untouched.
+    try {
+      const residencyLetterService = require('./residencyLetterService');
+      await residencyLetterService.revokeLettersForResidency(homeId, userId, `residency_${reason || 'ended'}`);
+    } catch (err) {
+      // Never block the detach itself on this, but make the gap visible.
+      logger.error('OccupancyAttachService.detach: letter revocation failed', {
+        homeId, userId, error: err.message,
+      });
+    }
+
     await writeAuditLog(homeId, actorId || userId, 'OCCUPANCY_DETACHED', 'HomeOccupancy', occupancy.id, {
       reason,
       verification_status: verificationStatus,
@@ -312,14 +375,29 @@ class OccupancyAttachService {
       return { valid: true };
     }
 
-    const query = supabaseAdmin
+    // `claim_type` is a column on HomeOwnershipClaim (migration 031), not on
+    // AddressClaim (migration 067) — PostgREST rejects the whole request with
+    // 42703, and the error used to be discarded, so a schema fault read as
+    // "this user has no verified claim". Every non-escalated attach on a home
+    // with an address_id therefore failed, including the mail-code path
+    // (mailVerificationService._attachOccupancy always resolves a Home *by*
+    // address_id), so a correct postcard code could never produce an occupancy.
+    const { data: claims, error: claimErr } = await supabaseAdmin
       .from('AddressClaim')
-      .select('id, claim_status, verification_method, claim_type')
+      .select('id, claim_status, verification_method')
       .eq('user_id', userId)
       .eq('address_id', addressId)
       .eq('claim_status', 'verified');
 
-    const { data: claims } = await query;
+    if (claimErr) {
+      // A lookup failure is not evidence of anything. Fail closed, but say so,
+      // instead of reporting it as a missing claim and sending the user off to
+      // redo verification they have already completed.
+      logger.error('OccupancyAttachService._validateClaim: claim lookup failed', {
+        userId, addressId, error: claimErr.message,
+      });
+      return { valid: false, error: 'Could not verify your address claim. Please try again.' };
+    }
 
     if (!claims || claims.length === 0) {
       return { valid: false, error: 'No verified address claim found. Complete address verification first.' };
@@ -632,10 +710,16 @@ class OccupancyAttachService {
     if (existing.verification_status !== 'verified' && verificationStatus === 'verified') {
       await supabaseAdmin
         .from('HomeOccupancy')
-        .update({
-          verification_status: 'verified',
-          updated_at: new Date().toISOString(),
-        })
+        .update((() => {
+          // §5.1: record WHEN, so staleness is expressible at all.
+          const verifiedAt = new Date().toISOString();
+          return {
+            verification_status: 'verified',
+            verified_at: verifiedAt,
+            verification_expires_at: verificationAge.expiryFor(verifiedAt),
+            updated_at: verifiedAt,
+          };
+        })())
         .eq('id', existing.id);
     }
 

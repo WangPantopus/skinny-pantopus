@@ -58,6 +58,33 @@ const MAX_PAGE_SIZE = 50;
 /**
  * Resolve the authenticated user's primary home ID from HomeOccupancy or verified HomeOwner / legacy owner_id.
  */
+/**
+ * Resolve the home a proximity query is centred on.
+ *
+ * PRV-16: `viewer_home_id` was taken from the query string with no ownership
+ * check and used directly as the centre of radius queries, so any caller could
+ * run attacker-chosen-radius proximity searches centred on anyone's home —
+ * enough to binary-search a target's location. A supplied id is now honoured
+ * only when the caller actually lives there (it exists so a user with several
+ * homes can pick one); otherwise we fall back to their own resolved home.
+ */
+async function resolveRequestedViewerHomeId(userId, requestedHomeId) {
+  if (requestedHomeId) {
+    const { data: occ } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('home_id')
+      .eq('user_id', userId)
+      .eq('home_id', requestedHomeId)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (occ?.home_id) return occ.home_id;
+  }
+
+  return resolveViewerHomeId(userId);
+}
+
 async function resolveViewerHomeId(userId) {
   // 1. Owner/admin residence (highest priority)
   const { data: ownerOcc } = await supabaseAdmin
@@ -742,10 +769,9 @@ router.get('/:businessId/neighbor-count', verifyToken, async (req, res) => {
     let radiusMiles = parseFloat(req.query.radius_miles) || DEFAULT_RADIUS_MILES;
     radiusMiles = Math.min(Math.max(radiusMiles, 0.25), MAX_RADIUS_MILES);
 
-    let viewerHomeId = req.query.viewer_home_id || null;
-    if (!viewerHomeId) {
-      viewerHomeId = await resolveViewerHomeId(userId);
-    }
+    let viewerHomeId = await resolveRequestedViewerHomeId(
+      userId, req.query.viewer_home_id || null,
+    );
 
     if (!viewerHomeId) {
       return res.json({
@@ -857,10 +883,9 @@ router.get('/:businessId/combined-trust', verifyToken, async (req, res) => {
     let radiusMiles = parseFloat(req.query.radius_miles) || DEFAULT_RADIUS_MILES;
     radiusMiles = Math.min(Math.max(radiusMiles, 0.25), MAX_RADIUS_MILES);
 
-    let viewerHomeId = req.query.viewer_home_id || null;
-    if (!viewerHomeId) {
-      viewerHomeId = await resolveViewerHomeId(userId);
-    }
+    let viewerHomeId = await resolveRequestedViewerHomeId(
+      userId, req.query.viewer_home_id || null,
+    );
 
     if (!viewerHomeId) {
       return res.json({
@@ -964,10 +989,9 @@ router.get('/:businessId/endorsements', verifyToken, async (req, res) => {
     let radiusMiles = parseFloat(req.query.radius_miles) || DEFAULT_RADIUS_MILES;
     radiusMiles = Math.min(Math.max(radiusMiles, 0.25), MAX_RADIUS_MILES);
 
-    let viewerHomeId = req.query.viewer_home_id || null;
-    if (!viewerHomeId) {
-      viewerHomeId = await resolveViewerHomeId(userId);
-    }
+    let viewerHomeId = await resolveRequestedViewerHomeId(
+      userId, req.query.viewer_home_id || null,
+    );
 
     if (!viewerHomeId) {
       return res.json({ count: 0, by_category: [], show: false });

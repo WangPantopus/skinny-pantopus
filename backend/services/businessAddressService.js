@@ -230,8 +230,147 @@ function inferLocationType(input, cmraResult) {
 
 // ── Step 5: Conflict / Duplicate Check ───────────────────────
 
+/**
+ * Does a verified household already live at this address?
+ *
+ * CRIT-01: businessAddressService is a second, complete address-decision engine
+ * that shared computeAddressHash with the residential pipeline and never
+ * consulted it. Its conflict check queried only BusinessLocation, and the
+ * residential side was equally blind in reverse. A user could therefore file a
+ * business at a stranger's — or an ex-partner's — verified home address, and
+ * because a `storefront` location publishes address, city, state, zipcode and
+ * an exact map pin, that address became public. The residential CONFLICT
+ * verdict, the check-address gate and the household-collision detector were all
+ * bypassed simply by using the business endpoint instead.
+ *
+ * The collision was always computable; it was just never computed.
+ */
+/**
+ * Fold an address part for comparison: lowercase, strip punctuation, collapse
+ * whitespace, expand street abbreviations. Punctuation goes FIRST, so that
+ * "St." folds to "street" the same as "St" — computeAddressHash expands before
+ * it ever sees the period, which is exactly the mismatch that let a trailing
+ * full stop walk past this probe.
+ */
+function foldAddressPart(part) {
+  const cleaned = String(part == null ? '' : part)
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const { expandAbbreviations } = require('../utils/normalizeAddress');
+  return expandAbbreviations(cleaned);
+}
+
+/**
+ * Fold a unit designator: "Apt 2", "#2", "Unit 02" and "Ste 2" all become "2".
+ * USPS treats these as the same delivery point; so must the conflict probe.
+ */
+function foldUnit(part) {
+  return foldAddressPart(part)
+    .replace(/\b(apartment|apt|suite|ste|unit|number|num|no|room|rm|floor|fl)\b/g, ' ')
+    .replace(/\b0+(\d)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** One comparable key for a premises. */
+function householdMatchKey(line1, line2, city, state, zip) {
+  const zip5 = String(zip || '').trim().slice(0, 5);
+  return [
+    foldAddressPart(line1),
+    foldUnit(line2),
+    foldAddressPart(city),
+    String(state || '').trim().toUpperCase(),
+    zip5,
+  ].join('|');
+}
+
+async function findHouseholdAtAddress(hash, normalized) {
+  if (!hash) return null;
+
+  // Fast path: identical input hashes identically.
+  const { data: homes, error } = await supabaseAdmin
+    .from('Home')
+    .select('id')
+    .eq('address_hash', hash)
+    .limit(25);
+
+  if (error) {
+    logger.warn('Household conflict probe failed', { error: error.message });
+    // Fail closed: treat an unreadable household table as a possible conflict
+    // rather than publishing someone's home address on the strength of a
+    // failed query.
+    return { unknown: true };
+  }
+
+  let candidateIds = (homes || []).map((h) => h.id);
+
+  // The hash is format-sensitive: Home.address_hash is usually computed from
+  // Google's canonical output while this probe hashes raw input, so
+  // "123 Main St." and "123 Main St" miss each other. Widen with a
+  // field-level pass: candidates by house number + ZIP5, then a
+  // punctuation-insensitive fold comparison. This is a comparison rule local
+  // to the probe — computeAddressHash is untouched, so no stored hash changes.
+  if (normalized && normalized.line1) {
+    const houseNumber = (String(normalized.line1).trim().match(/^\d+/) || [])[0];
+    const zip5 = String(normalized.zip || '').trim().slice(0, 5);
+    if (houseNumber && zip5) {
+      const { data: fieldHomes, error: fieldErr } = await supabaseAdmin
+        .from('Home')
+        .select('id, address, address2, city, state, zipcode')
+        .ilike('address', `${houseNumber} %`)
+        .ilike('zipcode', `${zip5}%`)
+        .limit(50);
+
+      if (fieldErr) {
+        logger.warn('Household conflict field probe failed', { error: fieldErr.message });
+        return { unknown: true };
+      }
+
+      const wanted = householdMatchKey(
+        normalized.line1, normalized.line2, normalized.city, normalized.state, zip5,
+      );
+      const fieldMatches = (fieldHomes || []).filter((h) => (
+        householdMatchKey(h.address, h.address2, h.city, h.state, h.zipcode) === wanted
+      ));
+      candidateIds = [...new Set([...candidateIds, ...fieldMatches.map((h) => h.id)])];
+    }
+  }
+
+  if (candidateIds.length === 0) return null;
+
+  const { data: occupants, error: occErr } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('id')
+    .in('home_id', candidateIds)
+    .eq('is_active', true)
+    .limit(1);
+
+  if (occErr) {
+    logger.warn('Household occupancy probe failed', { error: occErr.message });
+    return { unknown: true };
+  }
+
+  return (occupants && occupants.length > 0) ? { homeIds: candidateIds } : null;
+}
+
 async function checkConflicts(normalized, hash, businessUserId) {
   try {
+    // A residential household at this address is a conflict regardless of what
+    // other businesses are registered there.
+    const household = await findHouseholdAtAddress(hash, normalized);
+    if (household) {
+      return {
+        has_conflict: true,
+        conflicting_location_ids: [],
+        status: 'conflict',
+        reasons: household.unknown
+          ? ['household_check_unavailable']
+          : ['residential_household_at_address'],
+      };
+    }
+
     let query = supabaseAdmin
       .from('BusinessLocation')
       .select('id, business_user_id, address_hash, address2')

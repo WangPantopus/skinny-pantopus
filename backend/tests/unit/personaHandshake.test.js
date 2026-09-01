@@ -17,9 +17,14 @@ const request = require('supertest');
 
 const featureFlagService = require('../../services/featureFlagService');
 jest.mock('../../services/notificationService');
-jest.mock('../../middleware/rateLimiter', () => ({
-  personaFollowLimiter: (_req, _res, next) => next(),
-}));
+jest.mock('../../middleware/rateLimiter', () => {
+  const passthrough = (_req, _res, next) => next();
+  // Any limiter name resolves to a passthrough, so adding a new limiter to the
+  // real module never breaks this suite with "handler must be a function".
+  return new Proxy({}, {
+    get: (_target, prop) => (prop === '__esModule' ? false : passthrough),
+  });
+});
 const notificationService = require('../../services/notificationService');
 const personasRouter = require('../../routes/personas');
 

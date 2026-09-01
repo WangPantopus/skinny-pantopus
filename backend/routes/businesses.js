@@ -1786,13 +1786,49 @@ router.patch('/:businessId/locations/:locationId', verifyToken, validate(updateL
     const body = req.body;
     const updateData = { ...body, updated_at: new Date().toISOString() };
 
-    // Fetch existing geocode_mode to guard verified coordinates
+    // Fetch existing geocode_mode to guard verified coordinates — and the
+    // stored address, so an address edit is re-validated below.
     const { data: existingLoc } = await supabaseAdmin
       .from('BusinessLocation')
-      .select('geocode_mode')
+      .select('geocode_mode, address, address2, city, state, zipcode')
       .eq('id', locationId)
       .eq('business_user_id', businessId)
       .single();
+
+    // CRIT-01, the edit half: creating a location ran the address decision
+    // engine (household conflict included), but PATCH persisted whatever
+    // address it was handed. Create a storefront at your own address, then
+    // edit it to a stranger's verified home — two requests, no probe, and
+    // their address published with an exact map pin. Any address-field change
+    // now takes the same gate as create.
+    const addressFieldChanged = ['address', 'address2', 'city', 'state', 'zipcode']
+      .some((f) => f in body && (body[f] ?? '') !== (existingLoc?.[f] ?? ''));
+    if (addressFieldChanged) {
+      const verdict = await validateBusinessAddress({
+        address: body.address ?? existingLoc?.address ?? '',
+        address2: body.address2 ?? existingLoc?.address2 ?? '',
+        city: body.city ?? existingLoc?.city ?? '',
+        state: body.state ?? existingLoc?.state ?? '',
+        zipcode: body.zipcode ?? existingLoc?.zipcode ?? '',
+        country: body.country || 'US',
+        location_intent: body.location_intent || null,
+        business_user_id: businessId,
+      });
+      const verdictStatus = verdict?.decision?.status;
+      if (verdictStatus === 'conflict') {
+        return res.status(409).json({
+          error: 'This address conflicts with an existing residence or location.',
+          code: 'ADDRESS_CONFLICT',
+        });
+      }
+      // Same hard-failure set the create route refuses.
+      if (['need_suite', 'undeliverable', 'service_error', 'cmra_detected', 'po_box'].includes(verdictStatus)) {
+        return res.status(422).json({
+          error: `Address validation failed: ${verdictStatus}`,
+          code: 'ADDRESS_REJECTED',
+        });
+      }
+    }
 
     let locationChanging = false;
 

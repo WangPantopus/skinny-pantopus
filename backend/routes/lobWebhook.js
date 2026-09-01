@@ -20,6 +20,10 @@ const router = express.Router();
 const logger = require('../utils/logger');
 const lobMailProvider = require('../services/addressValidation/lobMailProvider');
 const mailVendorService = require('../services/addressValidation/mailVendorService');
+const supabaseAdmin = require('../config/supabaseAdmin');
+
+/** How far a webhook timestamp may be from now before it is treated as a replay. */
+const MAX_SIGNATURE_AGE_MS = 5 * 60 * 1000;
 
 router.post('/', async (req, res) => {
   const rawBody = req.body;
@@ -31,18 +35,30 @@ router.post('/', async (req, res) => {
   try {
     const bodyStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
 
-    // ── 2. Verify signature (skip if secret not configured) ──
-    if (lobMailProvider.webhookSecret) {
-      if (!timestamp || !signature) {
-        logger.warn('Lob webhook: missing signature headers');
-        return res.status(400).json({ error: 'Missing signature headers' });
-      }
+    // ── 2. Verify signature — unconditionally ────────────────
+    // Fail closed. If the secret is not configured we cannot authenticate the
+    // caller, so we must refuse rather than trust an unauthenticated POST.
+    if (!lobMailProvider.webhookSecret) {
+      logger.error('Lob webhook: LOB_WEBHOOK_SECRET is not configured; rejecting');
+      return res.status(503).json({ error: 'Webhook not configured' });
+    }
 
-      const valid = lobMailProvider.verifyWebhookSignature(bodyStr, timestamp, signature);
-      if (!valid) {
-        logger.warn('Lob webhook: invalid signature', { timestamp });
-        return res.status(401).json({ error: 'Invalid webhook signature' });
-      }
+    if (!timestamp || !signature) {
+      logger.warn('Lob webhook: missing signature headers');
+      return res.status(400).json({ error: 'Missing signature headers' });
+    }
+
+    // Reject stale timestamps so a captured request cannot be replayed later.
+    const tsMs = Number(timestamp);
+    if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > MAX_SIGNATURE_AGE_MS) {
+      logger.warn('Lob webhook: timestamp outside the accepted window', { timestamp });
+      return res.status(400).json({ error: 'Stale or invalid timestamp' });
+    }
+
+    const valid = lobMailProvider.verifyWebhookSignature(bodyStr, timestamp, signature);
+    if (!valid) {
+      logger.warn('Lob webhook: invalid signature', { timestamp });
+      return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
     event = JSON.parse(bodyStr);
@@ -66,7 +82,34 @@ router.post('/', async (req, res) => {
     eventId: event.id,
   });
 
-  // ── 4. Process the event ──────────────────────────────────
+  // ── 4. De-duplicate ───────────────────────────────────────
+  // Lob retries, and events can arrive out of order or more than once. The
+  // unique index on lob_event_id makes this a single atomic claim.
+  if (event.id) {
+    const { error: dupErr } = await supabaseAdmin
+      .from('LobWebhookEvent')
+      .insert({
+        lob_event_id: event.id,
+        event_type: eventType,
+        postcard_id: postcardId,
+      });
+
+    if (dupErr) {
+      if (dupErr.code === '23505') {
+        logger.info('Lob webhook: duplicate event ignored', { eventId: event.id, eventType });
+        return res.json({ received: true, duplicate: true });
+      }
+      // A failure to record the event means we cannot guarantee
+      // at-most-once processing. Ask Lob to retry rather than risk a
+      // double transition.
+      logger.error('Lob webhook: could not record event', {
+        eventId: event.id, error: dupErr.message,
+      });
+      return res.status(500).json({ error: 'Could not record event' });
+    }
+  }
+
+  // ── 5. Process the event ──────────────────────────────────
   try {
     const result = await mailVendorService.processWebhookEvent(
       postcardId,

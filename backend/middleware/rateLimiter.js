@@ -123,6 +123,33 @@ const authEndpointLimiter = rateLimit({
  * Limiter for address validation calls (Google + Smarty are billed per call).
  * 10 requests per hour per user.
  */
+/**
+ * Limiter for the geocoding proxy (/api/geo).
+ *
+ * CST-01: these endpoints are thin proxies in front of a per-request billed
+ * geocoding API. They were mounted unauthenticated and unmetered, so anyone
+ * with curl could run up the bill indefinitely (denial-of-wallet).
+ *
+ * The meter, not authentication, is the control: /geo/autocomplete and
+ * /geo/resolve carry the signed-out acquisition funnel (the public /start page
+ * and both native launch screens) and cannot require a session.
+ *
+ * The budget is per hour. A debounced typeahead spends roughly one call per
+ * two keystrokes past the 3-character minimum, so entering one address costs
+ * ~5-15 calls: a flat 60 locked a signed-in user out after four or five
+ * addresses, which the Add Home wizard alone can reach. Signed-in callers are
+ * individually accountable and get a realistic budget; anonymous callers share
+ * an IP bucket and get a tighter one.
+ */
+const geocodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: (req) => (req.user?.id ? 300 : 60),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  message: { error: 'Too many location lookups. Please try again later.' },
+});
+
 const addressValidationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   limit: 10,
@@ -283,6 +310,7 @@ const bookingWriteLimiter = rateLimit({
 });
 
 module.exports = {
+  geocodeLimiter,
   globalWriteLimiter,
   financialWriteLimiter,
   bookingWriteLimiter,

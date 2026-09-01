@@ -11,15 +11,17 @@ jest.mock('express', () => {
   const handlers = [];
   const router = function () {};
   router.stack = handlers;
-  router.get = function (path, handler) {
+  // Variadic, like real express: router.get(path, ...middleware, handler).
+  // The final function is the route handler; earlier ones are middleware.
+  router.get = function (path, ...fns) {
     handlers.push({
-      route: { path, methods: { get: true }, stack: [{ handle: handler }] },
+      route: { path, methods: { get: true }, stack: fns.map((handle) => ({ handle })) },
     });
     return router;
   };
-  router.post = function (path, handler) {
+  router.post = function (path, ...fns) {
     handlers.push({
-      route: { path, methods: { post: true }, stack: [{ handle: handler }] },
+      route: { path, methods: { post: true }, stack: fns.map((handle) => ({ handle })) },
     });
     return router;
   };

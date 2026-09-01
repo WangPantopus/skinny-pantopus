@@ -475,15 +475,26 @@ async function applyOccupancyTemplate(homeId, userId, roleBase, verificationStat
   }
 
   // UPSERT into HomeOccupancy
+  const nowIso = new Date().toISOString();
   const upsertData = {
     home_id: homeId,
     user_id: userId,
     role_base: effectiveRoleBase,
     is_active: true,
     verification_status: verificationStatus,
-    updated_at: new Date().toISOString(),
+    updated_at: nowIso,
     ...template,
   };
+
+  // §5.1: stamp WHEN a residency became verified. Without this the system
+  // cannot express "verified 29 months ago" and every trust decision treats a
+  // three-year-old verification the same as this morning's.
+  if (verificationStatus === 'verified') {
+    // eslint-disable-next-line global-require
+    const verificationAge = require('./verificationAge');
+    upsertData.verified_at = nowIso;
+    upsertData.verification_expires_at = verificationAge.expiryFor(nowIso);
+  }
 
   // Include age_band if provided
   if (ageBand) {

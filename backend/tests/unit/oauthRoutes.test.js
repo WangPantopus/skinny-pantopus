@@ -2,11 +2,14 @@ const { resetTables, setAuthMocks, getTable } = require('../__mocks__/supabaseAd
 const mockCreateClient = jest.fn();
 
 // Keep rate limit middleware from interfering with direct handler tests
-jest.mock('../../middleware/rateLimiter', () => ({
-  globalWriteLimiter: (req, _res, next) => next(),
-  addressValidationLimiter: (req, _res, next) => next(),
-  addressClaimLimiter: (req, _res, next) => next(),
-}));
+jest.mock('../../middleware/rateLimiter', () => {
+  const passthrough = (_req, _res, next) => next();
+  // Any limiter name resolves to a passthrough, so adding a new limiter to the
+  // real module never breaks this suite with "handler must be a function".
+  return new Proxy({}, {
+    get: (_target, prop) => (prop === '__esModule' ? false : passthrough),
+  });
+});
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: (...args) => mockCreateClient(...args),

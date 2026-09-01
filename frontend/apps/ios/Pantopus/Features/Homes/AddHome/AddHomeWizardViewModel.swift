@@ -107,6 +107,10 @@ final class AddHomeWizardViewModel: WizardModel {
     /// any successful step transition.
     private(set) var errorMessage: String?
 
+    /// The address refusal behind `errorMessage`, when that is what it is.
+    /// Lets the view offer the right next step instead of a bare retry.
+    private(set) var addressVerificationError: AddressVerificationError?
+
     /// Set once the user reaches the success step, holds the new home's
     /// id so the "View home" CTA can route to the dashboard.
     private(set) var createdHomeId: String?
@@ -805,8 +809,27 @@ final class AddHomeWizardViewModel: WizardModel {
             await persistAccessSecrets(homeId: response.home.id)
             transition(to: .success)
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription
-                ?? "Couldn't add your home. Please try again."
+            // UX-06: a 422 from address verification carries a `code` saying
+            // exactly what is wrong. Without this the user completed every step
+            // and got a generic networking string, with no idea what to change.
+            if let addressError = AddressVerificationError.from(error) {
+                addressVerificationError = addressError
+                if addressError.isFixableInAddressStep {
+                    // Send them back to the step that can actually fix it,
+                    // rather than stranding them on the final screen.
+                    //
+                    // transition(to:) clears errorMessage on every step change,
+                    // so the message has to be set AFTER the move — setting it
+                    // first sent the user back to the address step with nothing
+                    // on screen, which is the same silent failure this replaces.
+                    transition(to: .address)
+                }
+                errorMessage = "\(addressError.message) \(addressError.recoverySuggestion)"
+            } else {
+                addressVerificationError = nil
+                errorMessage = (error as? APIError)?.errorDescription
+                    ?? "Couldn't add your home. Please try again."
+            }
         }
     }
 

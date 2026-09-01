@@ -61,23 +61,12 @@ jest.mock('../../middleware/optionalAuth', () => (req, _res, next) => {
 // limiters (personaFollowLimiter, broadcastPublishLimiter, etc.) that
 // would otherwise reject requests after a few iterations.
 jest.mock('../../middleware/rateLimiter', () => {
-  const noop = (_req, _res, next) => next();
-  return {
-    globalWriteLimiter: noop,
-    financialWriteLimiter: noop,
-    contentCreationLimiter: noop,
-    homeCreationLimiter: noop,
-    ownershipClaimLimiter: noop,
-    postcardLimiter: noop,
-    verificationAttemptLimiter: noop,
-    authEndpointLimiter: noop,
-    landlordLeaseLimiter: noop,
-    addressValidationLimiter: noop,
-    addressClaimLimiter: noop,
-    previewLimiter: noop,
-    personaFollowLimiter: noop,
-    broadcastPublishLimiter: noop,
-  };
+  const passthrough = (_req, _res, next) => next();
+  // Any limiter name resolves to a passthrough, so adding a new limiter to the
+  // real module never breaks this suite with "handler must be a function".
+  return new Proxy({}, {
+    get: (_target, prop) => (prop === '__esModule' ? false : passthrough),
+  });
 });
 
 // ---------------------------------------------------------------------------

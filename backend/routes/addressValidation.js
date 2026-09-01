@@ -10,13 +10,19 @@
  */
 
 const express = require('express');
+const { getRolloutFlag } = require('../utils/addressRolloutFlags');
 const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
-const { addressValidationLimiter, addressClaimLimiter } = require('../middleware/rateLimiter');
+const {
+  addressValidationLimiter,
+  addressClaimLimiter,
+  postcardLimiter,
+  verificationAttemptLimiter,
+} = require('../middleware/rateLimiter');
 const addressConfig = require('../config/addressVerification');
 const googleProvider = require('../services/addressValidation/googleProvider');
 const smartyProvider = require('../services/addressValidation/smartyProvider');
@@ -25,6 +31,7 @@ const decisionEngine = require('../services/addressValidation/addressDecisionEng
 const mailVerificationService = require('../services/addressValidation/mailVerificationService');
 const pipelineService = require('../services/addressValidation/pipelineService');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
+const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { AddressVerdictStatus } = require('../services/addressValidation/types');
 
 // ============================================================
@@ -116,6 +123,15 @@ router.post(
 
       const result = await pipelineService.runValidationPipeline(input, {
         auditContext: { trigger: 'validate' },
+      });
+
+      // SCN-11: six rungs of the ladder emit `manual_review` as their next
+      // action. Nothing used to consume it, so every escalation was a dead end.
+      await addressReviewService.openCase({
+        addressId: result.address_id,
+        userId,
+        verdict: result.verdict,
+        trigger: 'validate',
       });
 
       return res.json({
@@ -277,9 +293,9 @@ router.post(
 
         const verdict = decisionEngine.classify({
           ...storedInputs,
-          use_provider_place_for_business: addressConfig.rollout.enforcePlaceProviderBusiness,
-          use_provider_unit_intelligence: addressConfig.rollout.enableSecondaryProvider,
-          use_provider_parcel_for_classification: addressConfig.rollout.enforceParcelProviderClassification,
+          use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
+          use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+          use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
           provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
         });
 
@@ -300,7 +316,11 @@ router.post(
         storedStatus === AddressVerdictStatus.LOW_CONFIDENCE
       ) {
         claimStatus = 'pending';
-        verificationMethod = 'escalation_required';
+        // ARC-01: 'escalation_required' is not one of the values
+        // AddressClaim_verification_method_chk permits, so even with the
+        // column list corrected this insert would still have been rejected.
+        // A pending claim awaiting review is 'manual_review'.
+        verificationMethod = 'manual_review';
       } else {
         // UNDELIVERABLE, BUSINESS, MISSING_UNIT, SERVICE_ERROR, CONFLICT, etc.
         const verdictMessages = {
@@ -334,14 +354,21 @@ router.post(
       }
 
       // ── Create the AddressClaim ────────────────────────────
+      // ARC-01: this insert used to supply `confidence` and `verdict_status`,
+      // neither of which is a column on AddressClaim (migration 067) — the
+      // table carries a `verdict_snapshot` jsonb instead. PostgREST rejects
+      // unknown columns, so every call to this route 500'd, and this is the
+      // only writer of AddressClaim in the codebase.
       const claim = {
         user_id: userId,
         address_id,
         unit_number: unit || null,
         claim_status: claimStatus,
         verification_method: verificationMethod,
-        confidence: storedConfidence,
-        verdict_status: storedStatus,
+        verdict_snapshot: {
+          status: storedStatus,
+          confidence: storedConfidence,
+        },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -442,6 +469,7 @@ function toMailVerificationResponse(result, fallbackAddressId) {
 router.post(
   '/verify/mail/start',
   verifyToken,
+  postcardLimiter,
   validate(mailStartSchema),
   async (req, res) => {
     const userId = req.user.id;
@@ -511,6 +539,7 @@ async function handleMailResend(req, res) {
 router.post(
   '/verify/mail/:verification_id/resend',
   verifyToken,
+  postcardLimiter,
   handleMailResend,
 );
 
@@ -518,6 +547,7 @@ router.post(
 router.post(
   '/verify/mail/resend',
   verifyToken,
+  postcardLimiter,
   validate(mailResendLegacySchema),
   handleMailResend,
 );
@@ -598,6 +628,7 @@ function mapConfirmResponse(result) {
 router.post(
   '/verify/mail/confirm',
   verifyToken,
+  verificationAttemptLimiter,
   validate(mailConfirmSchema),
   async (req, res) => {
     const userId = req.user.id;

@@ -1,4 +1,5 @@
 const logger = require('../../utils/logger');
+const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const addressConfig = require('../../config/addressVerification');
 
 const SEARCH_SECONDARY_COUNT_URL = 'https://us-enrichment.api.smarty.com/lookup/search/secondary/count';
@@ -123,7 +124,7 @@ class SecondaryAddressProvider {
   }
 
   isFeatureEnabled() {
-    return !!addressConfig.rollout.enableSecondaryProvider;
+    return !!getRolloutFlag('enableSecondaryProvider');
   }
 
   isAvailable() {

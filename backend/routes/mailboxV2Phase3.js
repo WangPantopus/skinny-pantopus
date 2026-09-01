@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -148,14 +149,6 @@ async function logMailEvent(userId, eventType, mailId, metadata = {}) {
   }
 }
 
-async function getAccessibleHomeIds(userId) {
-  const { data } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('home_id')
-    .eq('user_id', userId)
-    .eq('is_active', true);
-  return (data || []).map(r => r.home_id);
-}
 
 function isUuid(value) {
   if (typeof value !== 'string') return false;

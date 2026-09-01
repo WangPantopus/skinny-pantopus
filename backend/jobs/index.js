@@ -58,6 +58,8 @@ const processClaimWindows = require('./processClaimWindows');
 const validateHomeCoordinates = require('./validateHomeCoordinates');
 const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
+const expireAddressVerifications = require('./expireAddressVerifications');
+const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
@@ -358,6 +360,31 @@ function startJobs() {
     timezone: 'UTC',
   });
 
+  // ─── Purge Address Verification Events ───
+  // Runs daily at 03:41 UTC.
+  // Retention for verification telemetry. The table previously grew without
+  // bound and no job touched it.
+  cron.schedule('41 3 * * *', wrapJob(
+    'purgeAddressVerificationEvents',
+    () => purgeAddressVerificationEvents(),
+  ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Expire Address Verifications ───
+  // Runs hourly at :26.
+  // Sweeps mail-verification attempts and postcard codes past their expiry.
+  // Before this existed, no job touched any mail table: an attempt sat at
+  // 'sent' forever, holding a slot in the per-address budget.
+  cron.schedule('26 * * * *', wrapJob(
+    'expireAddressVerifications',
+    () => expireAddressVerifications(),
+  ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Reconcile Home Household Resolution (Household Claim Phase 3) ───
   // Runs every 30 minutes at :14/:44.
   // Recomputes household resolution for homes with ownership-claim activity.
@@ -515,6 +542,8 @@ function startJobs() {
       { name: 'validateHomeCoordinates', schedule: 'every 30 minutes at :12/:42' },
       { name: 'notifyClaimWindowExpiry', schedule: 'every 2 hours at :20' },
       { name: 'expireInitiatedHomeClaims', schedule: 'hourly at :11' },
+      { name: 'expireAddressVerifications', schedule: 'hourly at :26' },
+      { name: 'purgeAddressVerificationEvents', schedule: 'daily at 03:41 UTC' },
       { name: 'reconcileHomeHouseholdResolution', schedule: 'every 30 minutes at :14/:44' },
       { name: 'chatRedactionJob', schedule: 'hourly at :30' },
       { name: 'authRegistryPrune', schedule: 'hourly at :50' },

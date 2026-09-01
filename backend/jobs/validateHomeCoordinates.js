@@ -111,16 +111,12 @@ async function validateHomeCoordinates() {
     .limit(50);
 
   if (error) {
-    const message = error.message || '';
-    // Schema is not ready in this environment yet; skip quietly until the migration lands.
-    if (
-      message.includes('coordinate_validation') ||
-      message.includes('latitude') ||
-      message.includes('longitude')
-    ) {
-      logger.info('[validateCoords] home coordinate validation schema not yet added — skipping');
-      return;
-    }
+    // CRIT-04: this used to special-case a missing `coordinate_validation`
+    // column and return at info level. The column did not exist in any
+    // migration, so that branch was taken every single run: the job never
+    // validated a home, and an operator reading the registry saw a healthy
+    // control. A job that cannot run must fail loudly. The column is added by
+    // migration 191.
     logger.error('[validateCoords] Failed to query homes', { error: error.message });
     return;
   }

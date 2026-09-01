@@ -1,10 +1,17 @@
 const winston = require('winston');
+const { redactLogMeta } = require('./redactLogMeta');
+
+const redactFormat = winston.format((info) => {
+  const { timestamp, level, message, stack, ...meta } = info;
+  return Object.assign(info, redactLogMeta(meta));
+});
 
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
+    redactFormat(),
     winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
       const metaString = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
       const stackString = stack ? `\n${stack}` : '';

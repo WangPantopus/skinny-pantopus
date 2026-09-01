@@ -26,6 +26,11 @@ const { ownershipClaimLimiter, postcardLimiter, verificationAttemptLimiter } = r
 const logger = require('../utils/logger');
 const { findHomeOwnerRowForClaimant } = require('../utils/homeOwnerRowLookup');
 const { getClaimMergeRoleForClaim } = require('../utils/homeClaimMergeRoles');
+const {
+  generatePostcardCode,
+  hashPostcardCode,
+  dispatchPostcardCode,
+} = require('../utils/postcardDispatch');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -2445,6 +2450,35 @@ async function processQuorumExpirations(homeId, actorUserId) {
 // ============================================================
 
 /**
+ * May this user have a verification code mailed to this home?
+ *
+ * True when they already have a relationship with the home (occupancy, owner
+ * row, or a filed residency/ownership claim), or when the home has no active
+ * occupants at all — the cold-start case the postcard flow exists to serve.
+ */
+async function mayRequestPostcard(homeId, userId) {
+  const access = await checkHomePermission(homeId, userId);
+  if (access.hasAccess) return true;
+
+  const { data: claim } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('claimant_user_id', userId)
+    .maybeSingle();
+  if (claim) return true;
+
+  const { count } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('id', { count: 'exact', head: true })
+    .eq('home_id', homeId)
+    .eq('is_active', true);
+
+  return (count || 0) === 0;
+}
+
+
+/**
  * POST /:id/request-postcard - Request a verification code mailed to the home address.
  * Generates a 6-digit code, stores it, and flags for manual mailing.
  * Rate-limited to 1 active pending code per user per home.
@@ -2457,12 +2491,23 @@ router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, r
     // Verify home exists
     const { data: home } = await supabaseAdmin
       .from('Home')
-      .select('id, address, city, state')
+      .select('id, address, city, state, zipcode')
       .eq('id', homeId)
       .single();
 
     if (!home) {
       return res.status(404).json({ error: 'Home not found' });
+    }
+
+    // Authorization. Anyone with a bearer token could previously mail a code to
+    // any address in the system by home id. Require either an existing
+    // relationship with the home, or that the home has no active household yet
+    // (the cold-start case this flow exists to serve).
+    const allowed = await mayRequestPostcard(homeId, userId);
+    if (!allowed) {
+      return res.status(403).json({
+        error: 'You do not have a pending claim on this home.',
+      });
     }
 
     // Check for existing pending code
@@ -2495,15 +2540,17 @@ router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, r
       });
     }
 
-    // Generate 6-digit code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Generate a 6-digit code with a cryptographic RNG and store only its
+    // hash. The cleartext is held in memory just long enough to mail it.
+    const code = generatePostcardCode();
+    const codeHash = hashPostcardCode(code);
 
     const { data: postcard, error } = await supabaseAdmin
       .from('HomePostcardCode')
       .insert({
         home_id: homeId,
         user_id: userId,
-        code,
+        code_hash: codeHash,
         status: 'pending',
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       })
@@ -2515,9 +2562,27 @@ router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, r
       return res.status(500).json({ error: 'Failed to request verification code' });
     }
 
-    // Log for admin/mailing pipeline
+    // Actually mail it. Historically this endpoint wrote an audit row under the
+    // comment "Log for admin/mailing pipeline" and returned 201 claiming the
+    // code had been mailed — no dispatcher existed, so no code was ever sent.
+    const dispatch = await dispatchPostcardCode(home, code);
+    if (!dispatch.success) {
+      // Retire the row so the user is not blocked by a pending code for a
+      // card that was never sent.
+      await supabaseAdmin
+        .from('HomePostcardCode')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', postcard.id);
+
+      logger.error('Postcard dispatch failed', { homeId, userId, error: dispatch.error });
+      return res.status(502).json({
+        error: 'We could not send mail to this address right now. Please try again later.',
+      });
+    }
+
+    // Never record the address itself in the audit payload; reference the home.
     await writeAuditLog(homeId, userId, 'POSTCARD_CODE_REQUESTED', 'HomePostcardCode', postcard.id, {
-      address: `${home.address}, ${home.city}, ${home.state}`,
+      home_id: homeId,
     });
 
     logger.info('Postcard code requested', { homeId, userId, postcardId: postcard.id });
@@ -2586,19 +2651,16 @@ router.post('/:id/verify-postcard', verifyToken, verificationAttemptLimiter, val
     }
 
     // ── TIMING-SAFE COMPARISON ──
-    // Normalize both to uppercase for case-insensitive match
-    const submittedNorm = code.toUpperCase();
-    const storedNorm = (postcard.code || '').toUpperCase();
+    // Only the SHA-256 hash is stored (migration 187). Hashing normalises the
+    // length, so the comparison is a plain fixed-width constant-time check.
+    const submittedHash = hashPostcardCode(code);
+    const storedHash = postcard.code_hash || '';
 
-    // Pad shorter string so buffers are equal length (supports legacy 6-digit + new 8-char)
-    const maxLen = Math.max(submittedNorm.length, storedNorm.length);
-    const submittedBuf = Buffer.alloc(maxLen, 0);
-    const storedBuf = Buffer.alloc(maxLen, 0);
-    Buffer.from(submittedNorm, 'utf8').copy(submittedBuf);
-    Buffer.from(storedNorm, 'utf8').copy(storedBuf);
-
-    const codeMatches = submittedNorm.length === storedNorm.length &&
-      crypto.timingSafeEqual(submittedBuf, storedBuf);
+    const codeMatches = storedHash.length === submittedHash.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(submittedHash, 'utf8'),
+        Buffer.from(storedHash, 'utf8'),
+      );
 
     // Increment attempts AFTER comparison (but always, regardless of result)
     const attempts = currentAttempts + 1;

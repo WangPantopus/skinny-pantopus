@@ -32,7 +32,17 @@ function seedMembership(userId = USER, homeId = HOME_ID) {
   const existing = getTable('HomeOccupancy') || [];
   seedTable('HomeOccupancy', [
     ...existing,
-    { id: `occ-${userId}`, home_id: homeId, user_id: userId, is_active: true, start_at: null, end_at: null },
+    {
+      id: `occ-${userId}`,
+      home_id: homeId,
+      user_id: userId,
+      is_active: true,
+      // getAccessibleHomeIds requires a trusted verification state, not just an
+      // active row — a pending_approval occupancy must not read household mail.
+      verification_status: 'verified',
+      start_at: null,
+      end_at: null,
+    },
   ]);
 }
 

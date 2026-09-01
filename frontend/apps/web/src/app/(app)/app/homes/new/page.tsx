@@ -113,6 +113,9 @@ export default function NewHomePage() {
   const [validatingAddress, setValidatingAddress] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // "My home doesn't have a unit number" — survives the revalidate it triggers,
+  // resets with the address. Sent to the server as no_unit_attestation.
+  const [noUnitAttested, setNoUnitAttested] = useState(false);
 
   // Step 1 — Location
   const [addressText, setAddressText] = useState('');
@@ -183,6 +186,7 @@ export default function NewHomePage() {
 
   const resetAddressValidation = () => {
     setValidatedAddressId(null);
+    setNoUnitAttested(false);
     setAddressCheckResult(null);
     setExistingHomeId(null);
     setIsClaimingExistingHome(false);
@@ -256,6 +260,7 @@ export default function NewHomePage() {
       address_id: validatedAddressId || undefined,
       address: normalized.address,
       unit_number: unit.trim() || undefined,
+      no_unit_attestation: noUnitAttested || undefined,
       city: normalized.city,
       state: normalized.state,
       zip_code: normalized.zipcode,
@@ -372,8 +377,10 @@ export default function NewHomePage() {
   const totalSteps = visibleSteps.length;
   const displayStep = Math.max(1, visibleSteps.findIndex((s) => s.id === step) + 1);
 
-  const verifyAddress = async () => {
+  const verifyAddress = async (opts?: { attestNoUnit?: boolean }) => {
     if (!normalized) return false;
+    const attestedNoUnit = opts?.attestNoUnit || noUnitAttested;
+    if (opts?.attestNoUnit) setNoUnitAttested(true);
 
     setError('');
     setFieldErrors({});
@@ -410,6 +417,11 @@ export default function NewHomePage() {
 
       switch (verdict?.status) {
         case 'MISSING_UNIT':
+          // USPS expects a secondary here — which is also what a basement,
+          // rear, ADU or split-duplex address looks like. With the user's
+          // explicit attestation the server accepts the base address, so fall
+          // through to the success path instead of looping them forever.
+          if (attestedNoUnit) break;
           setValidatedAddressId(null);
           setFieldErrors({ unit_number: 'This address needs a unit or apartment number.' });
           setError('Please fix the highlighted fields.');
@@ -461,8 +473,47 @@ export default function NewHomePage() {
           setValidatedAddressId(null);
           setError('Address verification is temporarily unavailable. Please try again.');
           return false;
-        default:
+        case 'PO_BOX':
+          setValidatedAddressId(null);
+          setFieldErrors({
+            address: 'A PO Box can’t be used as a home address. Please enter the street address where you live.',
+          });
+          setError('Please fix the highlighted fields.');
+          return false;
+        case 'MISSING_STREET_NUMBER':
+          setValidatedAddressId(null);
+          setFieldErrors({ address: 'This address is missing a street number.' });
+          setError('Please fix the highlighted fields.');
+          return false;
+        case 'UNVERIFIED_STREET_NUMBER':
+          setValidatedAddressId(null);
+          setFieldErrors({
+            address: 'We couldn’t confirm that street number on this street. Please double-check it.',
+          });
+          setError('Please fix the highlighted fields.');
+          return false;
+        case 'MIXED_USE':
+          // Deliberately NOT refused here. The server allows MIXED_USE
+          // (ALLOWED_HOME_VERDICT_STATUSES in routes/home.js) and, when
+          // enforceMixedUseStepUp is on, answers createHome with
+          // ADDRESS_STEP_UP_REQUIRED — which handleCreateHomeError already
+          // routes into MailVerificationFlow below. Blocking it at step 1
+          // made both outcomes unreachable and left every resident of a
+          // flat-over-a-shop with an error naming a step the UI never offered.
+          // The server is the authority on this verdict.
           break;
+        case 'OK':
+          break;
+        default:
+          // SCN-12: previously `default: break`, so any status the client did
+          // not recognise — PO_BOX, MISSING_STREET_NUMBER,
+          // UNVERIFIED_STREET_NUMBER and MIXED_USE among them — fell through
+          // and the home was created as though the address had passed. An
+          // unrecognised verdict is a refusal, not a pass: the server knows
+          // something the client does not.
+          setValidatedAddressId(null);
+          setError('We couldn’t verify this address. Please check it and try again.');
+          return false;
       }
 
       if (!validation?.address_id) {
@@ -501,7 +552,7 @@ export default function NewHomePage() {
       setAddressCheckResult(resolvedResult);
       setExistingHomeId(resolvedResult.home_id || conflictFallbackResult?.home_id || null);
 
-      if (resolvedResult.is_multi_unit && !resolvedUnit) {
+      if (resolvedResult.is_multi_unit && !resolvedUnit && !attestedNoUnit) {
         setFieldErrors({ unit_number: 'This address needs a unit or apartment number.' });
         setError('Please fix the highlighted fields.');
         return false;
@@ -581,6 +632,19 @@ export default function NewHomePage() {
     `w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20 ${
       fieldErrors[field] ? 'border-red-300 bg-red-50/40' : 'border-app-border'
     }`;
+
+  /**
+   * Spread onto an input so an invalid field is conveyed to assistive tech,
+   * not only by a red border.
+   *
+   * UX-05: error state was signalled with colour alone (WCAG 1.4.1) and no
+   * aria-invalid, so a screen reader user was never told which field was
+   * rejected — or that one had been.
+   */
+  const fieldA11y = (field: string) =>
+    (fieldErrors[field]
+      ? { 'aria-invalid': true as const, 'aria-describedby': `err-${field}` }
+      : {});
 
   // --- Derived display helpers ---
   const homeTypeLabel = HOME_TYPES.find(t => t.value === homeType)?.label || homeType;
@@ -662,8 +726,17 @@ export default function NewHomePage() {
       {/* Main Content */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-app-surface rounded-xl border border-app-border p-6">
+          {/*
+            UX-05: async verdicts and submit failures were rendered purely
+            visually, so a screen reader user got no indication that anything
+            had gone wrong — the form simply did not advance. role="alert"
+            makes the failure interrupt and be read.
+          */}
           {error ? (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div
+              role="alert"
+              className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"
+            >
               {error}
             </div>
           ) : null}
@@ -673,11 +746,16 @@ export default function NewHomePage() {
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-semibold text-app-text mb-1">Where is your home?</h2>
-                <p className="text-sm text-app-text-secondary">This is always private. Tasks only show approximate location.</p>
+                <p className="text-sm text-app-text-secondary">
+                  Your exact address is only shown to people in your household. Neighbours and
+                  tasks see an approximate area, never the street address.
+                </p>
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-app-text-strong">Home location</div>
+                <div id="home-address-label" className="text-sm font-semibold text-app-text-strong">
+                  Home location
+                </div>
                 <button
                   type="button"
                   onClick={useCurrent}
@@ -698,6 +776,7 @@ export default function NewHomePage() {
                 }}
                 onSelectNormalized={onSelectNormalized}
                 placeholder="Search address…"
+                labelId="home-address-label"
               />
 
               {normalized ? (
@@ -708,15 +787,18 @@ export default function NewHomePage() {
               ) : (
                 <p className="text-sm text-app-text-muted">Start typing, then pick a suggestion to verify.</p>
               )}
-              {fieldErrors.location ? <p className="text-xs text-red-600">{fieldErrors.location}</p> : null}
-              {fieldErrors.address ? <p className="text-xs text-red-600">{fieldErrors.address}</p> : null}
-              {fieldErrors.city ? <p className="text-xs text-red-600">{fieldErrors.city}</p> : null}
-              {fieldErrors.state ? <p className="text-xs text-red-600">{fieldErrors.state}</p> : null}
-              {fieldErrors.zipcode ? <p className="text-xs text-red-600">{fieldErrors.zipcode}</p> : null}
+              {fieldErrors.location ? <p id="err-location" role="alert" className="text-xs text-red-600">{fieldErrors.location}</p> : null}
+              {fieldErrors.address ? <p id="err-address" role="alert" className="text-xs text-red-600">{fieldErrors.address}</p> : null}
+              {fieldErrors.city ? <p id="err-city" role="alert" className="text-xs text-red-600">{fieldErrors.city}</p> : null}
+              {fieldErrors.state ? <p id="err-state" role="alert" className="text-xs text-red-600">{fieldErrors.state}</p> : null}
+              {fieldErrors.zipcode ? <p id="err-zipcode" role="alert" className="text-xs text-red-600">{fieldErrors.zipcode}</p> : null}
 
               <div>
-                <label className="block text-sm font-medium text-app-text-strong mb-2">Unit / Apt # (optional)</label>
+                <label htmlFor="home-unit" className="block text-sm font-medium text-app-text-strong mb-2">
+                  Unit / Apt # (optional)
+                </label>
                 <input
+                  id="home-unit"
                   value={unit}
                   onChange={e => {
                     resetAddressValidation();
@@ -724,8 +806,43 @@ export default function NewHomePage() {
                   }}
                   placeholder="e.g. Apt 12B"
                   className={inputClass('unit_number')}
+                  aria-invalid={fieldErrors.unit_number ? true : undefined}
+                  aria-describedby={
+                    fieldErrors.unit_number ? 'err-unit_number home-unit-hint' : 'home-unit-hint'
+                  }
                 />
-                {fieldErrors.unit_number ? <p className="mt-1 text-xs text-red-600">{fieldErrors.unit_number}</p> : null}
+                {/*
+                  UX-04: the prompt used to say only "this address needs a unit
+                  number", with no indication of the accepted format and no way
+                  forward for someone whose home genuinely has none — which is
+                  an unbreakable loop for basement, rear, ADU and duplex
+                  "Unit 1" addresses that USPS does not list.
+                */}
+                <p id="home-unit-hint" className="mt-1 text-xs text-app-text-secondary">
+                  Apt 12B, Unit 4, Ste 200, #3 — whichever appears on your mail.
+                </p>
+                {fieldErrors.unit_number ? (
+                  <>
+                    <p id="err-unit_number" role="alert" className="mt-1 text-xs text-red-600">
+                      {fieldErrors.unit_number}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.unit_number;
+                          return next;
+                        });
+                        setError('');
+                        void verifyAddress({ attestNoUnit: true });
+                      }}
+                      className="mt-1 text-xs text-app-text-secondary underline underline-offset-2 hover:text-app-text-strong"
+                    >
+                      My home doesn&apos;t have a unit number
+                    </button>
+                  </>
+                ) : null}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
@@ -849,26 +966,30 @@ export default function NewHomePage() {
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bedrooms</label>
                   <input type="number" min="0" value={bedrooms} onChange={e => setBedrooms(e.target.value)} placeholder="—"
-                    className={inputClass('bedrooms')} />
-                  {fieldErrors.bedrooms ? <p className="mt-1 text-xs text-red-600">{fieldErrors.bedrooms}</p> : null}
+                    className={inputClass('bedrooms')}
+                  {...fieldA11y('bedrooms')} />
+                  {fieldErrors.bedrooms ? <p id="err-bedrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bedrooms}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bathrooms</label>
                   <input type="number" min="0" step="0.5" value={bathrooms} onChange={e => setBathrooms(e.target.value)} placeholder="—"
-                    className={inputClass('bathrooms')} />
-                  {fieldErrors.bathrooms ? <p className="mt-1 text-xs text-red-600">{fieldErrors.bathrooms}</p> : null}
+                    className={inputClass('bathrooms')}
+                  {...fieldA11y('bathrooms')} />
+                  {fieldErrors.bathrooms ? <p id="err-bathrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bathrooms}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Sq ft</label>
                   <input type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder="—"
-                    className={inputClass('sq_ft')} />
-                  {fieldErrors.sq_ft ? <p className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
+                    className={inputClass('sq_ft')}
+                  {...fieldA11y('sq_ft')} />
+                  {fieldErrors.sq_ft ? <p id="err-sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Year built</label>
                   <input type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder="—"
-                    className={inputClass('year_built')} />
-                  {fieldErrors.year_built ? <p className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}
+                    className={inputClass('year_built')}
+                  {...fieldA11y('year_built')} />
+                  {fieldErrors.year_built ? <p id="err-year_built" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}
                 </div>
               </div>
 
@@ -881,8 +1002,9 @@ export default function NewHomePage() {
                   onChange={e => setLotSqft(e.target.value)}
                   placeholder="—"
                   className={inputClass('lot_sq_ft')}
+                  {...fieldA11y('lot_sq_ft')}
                 />
-                {fieldErrors.lot_sq_ft ? <p className="mt-1 text-xs text-red-600">{fieldErrors.lot_sq_ft}</p> : null}
+                {fieldErrors.lot_sq_ft ? <p id="err-lot_sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.lot_sq_ft}</p> : null}
               </div>
 
               {/* Description */}
