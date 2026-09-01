@@ -44,7 +44,7 @@ struct ChatShareGigPickerSheet: View {
                                 HStack(spacing: Spacing.s2) {
                                     if let category = gig.category, !category.isEmpty {
                                         Text(category)
-                                            .font(.system(size: 12))
+                                            .pantopusTextStyle(.caption)
                                             .foregroundStyle(Theme.Color.appTextSecondary)
                                     }
                                     if let price = gig.price {
@@ -121,7 +121,7 @@ struct ChatShareListingPickerSheet: View {
                                     HStack(spacing: Spacing.s2) {
                                         if let category = listing.category, !category.isEmpty {
                                             Text(category)
-                                                .font(.system(size: 12))
+                                                .pantopusTextStyle(.caption)
                                                 .foregroundStyle(Theme.Color.appTextSecondary)
                                         }
                                         Text(listing.isFree ? "FREE" : listing.price.map { "$\(Int($0))" } ?? "Make Offer")

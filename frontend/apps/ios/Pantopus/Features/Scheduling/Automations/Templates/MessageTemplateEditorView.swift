@@ -131,7 +131,7 @@ struct MessageTemplateEditorView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Active").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.Color.appText)
                     Text(model.isActive ? "Workflows can use this template." : "Template is paused — no sends.")
-                        .font(.system(size: 12)).foregroundStyle(Theme.Color.appTextSecondary)
+                        .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: Spacing.s2)
                 Toggle("", isOn: $model.isActive)

@@ -346,7 +346,7 @@ public struct YourAudienceView: View {
 
     private var helperText: some View {
         Text("Approve to add someone to their requested tier. Declining is silent — they aren't notified.")
-            .font(.system(size: 12))
+            .pantopusTextStyle(.caption)
             .foregroundStyle(Theme.Color.appTextMuted)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)

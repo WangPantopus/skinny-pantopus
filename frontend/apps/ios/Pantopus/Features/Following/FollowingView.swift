@@ -500,7 +500,7 @@ struct FollowingRowView: View {
                 .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
                 Text(row.bodyText)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .italic(row.bodyIsQuiet)
                     .foregroundStyle(row.bodyIsQuiet ? Theme.Color.appTextMuted : Theme.Color.appTextStrong)
                     .lineLimit(1)

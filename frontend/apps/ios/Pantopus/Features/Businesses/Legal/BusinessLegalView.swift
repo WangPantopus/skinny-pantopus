@@ -181,7 +181,7 @@ public struct BusinessLegalView: View {
                 selfAttestBlock
             } else if let reason = payload.selfAttestBlockedReason {
                 Text(reason)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.warning)
                     .accessibilityIdentifier("businessLegal.attestBlocked")
             }
@@ -190,7 +190,7 @@ public struct BusinessLegalView: View {
                 uploadMenu
             } else {
                 Text("A document is already in review, or this business is fully verified.")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .accessibilityIdentifier("businessLegal.uploadBlocked")
             }
@@ -416,7 +416,7 @@ public struct BusinessLegalView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("Ask the business owner to update the legal name, tax ID or support email.")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

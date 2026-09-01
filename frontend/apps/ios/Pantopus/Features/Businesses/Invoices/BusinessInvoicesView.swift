@@ -223,11 +223,11 @@ public struct BusinessInvoicesView: View {
                 }
                 HStack {
                     Text("Platform fee")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextMuted)
                     Spacer(minLength: Spacing.s2)
                     Text(row.feeLabel)
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
                 .padding(.top, Spacing.s1)

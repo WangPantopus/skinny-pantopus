@@ -53,7 +53,7 @@ public struct PropertyCorrectionView: View {
                 "Tell us what's wrong with the property record. " +
                     "We'll review against county data and owner-confirmed facts."
             )
-            .font(.system(size: 14))
+            .pantopusTextStyle(.small)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .fixedSize(horizontal: false, vertical: true)
 

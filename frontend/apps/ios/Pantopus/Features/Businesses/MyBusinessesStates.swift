@@ -34,7 +34,7 @@ struct MyBusinessesEmptyView: View {
                 disc
                     .padding(.bottom, Spacing.s5)
                 Text("Create your first verified business page")
-                    .font(.system(size: 20, weight: .semibold))
+                    .pantopusTextStyle(.h3)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.bottom, Spacing.s2)
@@ -181,10 +181,10 @@ struct MyBusinessesErrorView: View {
         VStack(spacing: Spacing.s4) {
             Icon(.alertCircle, size: 40, color: Theme.Color.error)
             Text("Couldn't load your businesses")
-                .font(.system(size: 20, weight: .semibold))
+                .pantopusTextStyle(.h3)
                 .foregroundStyle(Theme.Color.appText)
             Text(message)
-                .font(.system(size: 14))
+                .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
             PrimaryButton(title: "Try again") { await MainActor.run { retry() } }

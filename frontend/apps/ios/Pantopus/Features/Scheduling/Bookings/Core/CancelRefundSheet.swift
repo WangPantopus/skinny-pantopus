@@ -213,7 +213,7 @@ struct CancelRefundSheet: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(Theme.Color.appText)
                         Text(viewModel.subtitle)
-                            .font(.system(size: 12))
+                            .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     // Refund-failed banner sits directly under the header (E5 frame 7).

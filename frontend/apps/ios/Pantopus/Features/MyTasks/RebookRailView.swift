@@ -151,7 +151,7 @@ public struct RebookRailView: View {
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text("One tap to rehire")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
         .padding(.horizontal, Spacing.s4)

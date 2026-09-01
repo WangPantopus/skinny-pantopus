@@ -320,7 +320,7 @@ struct WhosFreeView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.Color.info)
                 Text("Everyone's booked up. Try next week to find a shared opening.")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
         }
@@ -363,7 +363,7 @@ struct WhosFreeView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.Color.warning)
                 Text(body)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
         }

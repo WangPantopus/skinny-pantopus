@@ -242,7 +242,7 @@ struct RescheduleReassignSheet: View {
                     .font(.system(size: 14.5, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("Widen the window or message the invitee.")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
             }

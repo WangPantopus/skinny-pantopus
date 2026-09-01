@@ -43,7 +43,7 @@ struct EmptyBlock: View {
                 .padding(.bottom, 3)
 
             Text(message)
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)

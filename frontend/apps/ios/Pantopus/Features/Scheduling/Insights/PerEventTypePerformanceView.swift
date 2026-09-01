@@ -154,7 +154,7 @@ struct PerEventTypePerformanceView: View {
                     HStack(spacing: 8) {
                         Icon(.barChart3, size: 16, color: Theme.Color.appTextMuted)
                         Text("More data needed for trends")
-                            .font(.system(size: 12))
+                            .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
                     .frame(maxWidth: .infinity, minHeight: 64)

@@ -146,7 +146,7 @@ struct BeaconIdentityBlock<Actions: View>: View {
         HStack(spacing: Spacing.s2) {
             if let handle, !handle.isEmpty {
                 Text(handle.hasPrefix("@") ? handle : "@\(handle)")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
             }

@@ -147,7 +147,7 @@ struct ScanNextCard: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(accentDark)
                     Text("Keep unboxing — capture flows back to here")
-                        .font(.system(size: 12, weight: .regular))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

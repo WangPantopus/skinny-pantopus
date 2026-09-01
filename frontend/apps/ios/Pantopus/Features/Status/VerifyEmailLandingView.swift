@@ -99,7 +99,7 @@ struct VerifyEmailLandingView: View {
             )
         ) {
             Text("This only takes a moment.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .accessibilityIdentifier("verifyEmail.verifyingHint")
         }
@@ -184,7 +184,7 @@ struct VerifyEmailLandingView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
                 chrome.body
-                    .font(.system(size: 14))
+                    .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)

@@ -115,7 +115,7 @@ struct BookingRowView: View {
                 }
                 if let eventName {
                     Text(eventName)
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
                 }

@@ -534,7 +534,7 @@ public struct MembershipDetailView: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.calendarClock, size: 15, color: Theme.Color.primary700)
             Text("A tier change is scheduled — it takes effect at the end of this period.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.primary700)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Spacing.s0)
@@ -788,7 +788,7 @@ public struct MembershipDetailView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                     Text(option.priceLabel)
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     Text(option.direction.timingNote)
                         .font(.system(size: 11))

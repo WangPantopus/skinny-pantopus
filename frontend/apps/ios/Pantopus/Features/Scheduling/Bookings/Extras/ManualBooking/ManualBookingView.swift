@@ -178,7 +178,7 @@ struct ManualBookingView: View {
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                     Text("Check your connection and try again.")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .multilineTextAlignment(.center)

@@ -206,7 +206,7 @@ public struct PersonaDmThreadView: View {
                 color: banner.kind == .missed ? Theme.Color.error : Theme.Color.primary700
             )
             Text(banner.text)
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(banner.kind == .missed ? Theme.Color.error : Theme.Color.primary700)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Spacing.s0)
@@ -228,7 +228,7 @@ public struct PersonaDmThreadView: View {
     private func bubbleRow(_ message: PersonaDmMessageContent) -> some View {
         VStack(alignment: message.fromViewer ? .trailing : .leading, spacing: 2) {
             Text(message.body)
-                .font(.system(size: 14))
+                .pantopusTextStyle(.small)
                 .foregroundStyle(
                     message.fromViewer ? Theme.Color.appTextInverse : Theme.Color.appText
                 )
@@ -265,7 +265,7 @@ public struct PersonaDmThreadView: View {
             }
             HStack(alignment: .bottom, spacing: Spacing.s2) {
                 TextField("Type a message…", text: $viewModel.draft, axis: .vertical)
-                    .font(.system(size: 14))
+                    .font(Theme.Font.small)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1...5)
                     .padding(.horizontal, Spacing.s3)

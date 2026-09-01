@@ -129,7 +129,7 @@ struct FollowingActionSheet: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("@\(target.handle)")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: 0)
@@ -181,7 +181,7 @@ struct FollowingActionSheet: View {
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("You can unmute anytime in settings")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: 0)
@@ -250,7 +250,7 @@ struct FollowingActionSheet: View {
                         .foregroundStyle(destructive ? Theme.Color.error : Theme.Color.appText)
                     if let sub {
                         Text(sub)
-                            .font(.system(size: 12))
+                            .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                 }

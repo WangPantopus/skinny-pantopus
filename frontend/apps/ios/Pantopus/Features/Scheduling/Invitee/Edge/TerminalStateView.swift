@@ -222,7 +222,7 @@ private struct TerminalPausedCard: View {
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
             Text("\u{201C}\(note)\u{201D}")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .italic()
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .fixedSize(horizontal: false, vertical: true)

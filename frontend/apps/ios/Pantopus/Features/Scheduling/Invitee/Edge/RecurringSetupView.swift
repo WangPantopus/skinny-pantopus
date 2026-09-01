@@ -206,7 +206,7 @@ struct RecurringSetupView: View {
     private var recapTotalRow: some View {
         HStack {
             Text(recapTotalLeft)
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer()
             if let total = viewModel.totalPriceLabel {

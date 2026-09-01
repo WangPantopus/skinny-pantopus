@@ -1820,7 +1820,7 @@ private struct CreatorUpgradeFanCard: View {
             head
             if let summary = offer.summary {
                 Text(summary)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .lineSpacing(5)
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .fixedSize(horizontal: false, vertical: true)

@@ -119,7 +119,7 @@ public struct BusinessPaymentsView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                 Text(payload.subcopy)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -195,7 +195,7 @@ public struct BusinessPaymentsView: View {
             .accessibilityIdentifier("businessPayments.continueSetup")
         case .verifying:
             Text("Verification pending…")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, Spacing.s3)
@@ -215,7 +215,7 @@ public struct BusinessPaymentsView: View {
                 "This payout account is linked to your business entity. "
                     + "Payments from gigs and services are deposited to it."
             )
-            .font(.system(size: 12))
+            .pantopusTextStyle(.caption)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .fixedSize(horizontal: false, vertical: true)
         }

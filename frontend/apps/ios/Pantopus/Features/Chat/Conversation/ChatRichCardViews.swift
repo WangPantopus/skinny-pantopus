@@ -25,7 +25,7 @@ struct ChatLocationCardView: View {
                             .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.appText)
                     }
                     Text(card.address)
-                        .font(.system(size: 14))
+                        .pantopusTextStyle(.small)
                         .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse.opacity(0.85) : Theme.Color.appTextSecondary)
                         .multilineTextAlignment(.leading)
                 }
@@ -35,7 +35,7 @@ struct ChatLocationCardView: View {
                     .overlay(isOutgoing ? Theme.Color.primary500.opacity(0.5) : Theme.Color.appBorder)
                 HStack(spacing: 6) {
                     Text("🧭")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                     Text("Open in Maps")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)
@@ -106,7 +106,7 @@ struct ChatGigOfferCardView: View {
                     .overlay(isOutgoing ? Theme.Color.primary500.opacity(0.5) : Theme.Color.appBorder)
                 HStack(spacing: 6) {
                     Text("🔗")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                     Text("View Task")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)
@@ -201,7 +201,7 @@ struct ChatListingOfferCardView: View {
                     .overlay(isOutgoing ? Theme.Color.primary500.opacity(0.5) : Theme.Color.appBorder)
                 HStack(spacing: 6) {
                     Text("🔗")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                     Text("View Listing")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(isOutgoing ? Theme.Color.appTextInverse : Theme.Color.primary600)

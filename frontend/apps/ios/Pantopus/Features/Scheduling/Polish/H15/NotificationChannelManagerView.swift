@@ -148,7 +148,7 @@ struct NotificationChannelManagerView: View {
                     channelStatusPill(row.status)
                 }
                 Text(row.detail)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -306,7 +306,7 @@ struct NotificationChannelManagerView: View {
 
             if let toast = viewModel.connectToast {
                 Text(toast)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("scheduling.channelManager.connectToast")

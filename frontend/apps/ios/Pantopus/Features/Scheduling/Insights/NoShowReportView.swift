@@ -81,10 +81,10 @@ struct NoShowReportView: View {
             VStack(alignment: .leading, spacing: 4) {
                 InsightsOverline(text: "No-show rate")
                 Text(model.noShowRateLabel)
-                    .font(.system(size: 30, weight: .bold))
+                    .pantopusTextStyle(.h1)
                     .foregroundStyle(Theme.Color.appText)
                 Text(model.subLabel)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .accessibilityElement(children: .combine)

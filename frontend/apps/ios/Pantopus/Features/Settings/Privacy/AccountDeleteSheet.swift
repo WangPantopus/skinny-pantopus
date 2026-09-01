@@ -55,7 +55,7 @@ public struct AccountDeleteSheet: View {
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s4)
                 Text("This will permanently delete your account, including:")
-                    .font(.system(size: 14))
+                    .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s2)
@@ -96,10 +96,10 @@ public struct AccountDeleteSheet: View {
             ForEach(Self.bulletItems, id: \.self) { item in
                 HStack(alignment: .top, spacing: Spacing.s2) {
                     Text("•")
-                        .font(.system(size: 14))
+                        .pantopusTextStyle(.small)
                         .foregroundStyle(Theme.Color.error)
                     Text(item)
-                        .font(.system(size: 14))
+                        .pantopusTextStyle(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

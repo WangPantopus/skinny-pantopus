@@ -892,7 +892,7 @@ public struct AudienceProfileView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                     Text("Approve requests · manage members")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer()

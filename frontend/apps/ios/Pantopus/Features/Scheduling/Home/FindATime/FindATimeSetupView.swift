@@ -149,7 +149,7 @@ struct FindATimeSetupView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.Color.warning)
                 Text(message)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
         }
@@ -505,7 +505,7 @@ struct FindATimeSetupView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("Composing \(viewModel.composingNames)'s free time")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             VStack(spacing: Spacing.s2) {

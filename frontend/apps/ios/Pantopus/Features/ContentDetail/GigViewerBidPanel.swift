@@ -217,7 +217,7 @@ struct GigViewerBidPanel: View {
                 ? "This bid was accepted — the task details are below."
                 : "This task is no longer taking bid changes."
         )
-        .font(.system(size: 12))
+        .pantopusTextStyle(.caption)
         .foregroundStyle(Theme.Color.appTextSecondary)
         .accessibilityIdentifier("gigDetail.yourBid.settledNote")
     }

@@ -238,7 +238,7 @@ struct BlockOffTimeView: View {
             .background(Theme.Color.warning)
             .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
             Text("This overlaps a \(conflict.bookingLabel). Blocking won't cancel it.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
             Button {

@@ -136,7 +136,7 @@ struct MarkNoShowDialog: View {
     private var noteField: some View {
         @Bindable var viewModel = viewModel
         return TextField("Add a note (optional)", text: $viewModel.note, axis: .vertical)
-            .font(.system(size: 12))
+            .font(Theme.Font.caption)
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, 9)

@@ -38,7 +38,7 @@ public struct LeaveHomeView: View {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     if let errorMessage = viewModel.errorMessage {
                         Text(errorMessage)
-                            .font(.system(size: 14))
+                            .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.error)
                             .accessibilityIdentifier("leaveHomeError")
                     }
@@ -49,7 +49,7 @@ public struct LeaveHomeView: View {
                     Text(
                         "You will lose access to mail, tasks, and household features for this address. You can request to join again later."
                     )
-                    .font(.system(size: 14))
+                    .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }

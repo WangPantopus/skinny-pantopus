@@ -178,7 +178,7 @@ struct MailPartyView: View {
                     )
                 }
                 Text(session.senderDisplay)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
             }
@@ -302,7 +302,7 @@ struct MailPartyView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.center)
             Text(session.senderDisplay)
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             StatusChip(
                 session.status.label,

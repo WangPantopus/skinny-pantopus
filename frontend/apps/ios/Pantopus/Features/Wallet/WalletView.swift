@@ -367,7 +367,7 @@ public struct WalletView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 if let error = viewModel.withdrawError {
                     Text(error)
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.error)
                         .accessibilityIdentifier("wallet.withdrawAmountError")
                 }

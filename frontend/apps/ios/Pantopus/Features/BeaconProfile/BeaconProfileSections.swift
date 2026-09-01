@@ -88,7 +88,7 @@ struct BeaconOwnerAnalyticsStrip: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Your audience")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     Text("\(followerStat) beacons following · View insights")
                         .font(.system(size: 13, weight: .semibold))
@@ -132,7 +132,7 @@ struct BeaconComposeCTA: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                     Text("Post one-way news to your \(audienceLabel.lowercased()).")
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
                 }
@@ -321,7 +321,7 @@ struct BeaconTiersSection: View {
                             .foregroundStyle(Theme.Color.appText)
                         if let detail = tier.detail, !detail.isEmpty {
                             Text(detail)
-                                .font(.system(size: 12))
+                                .pantopusTextStyle(.caption)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                                 .lineLimit(2)
                         }

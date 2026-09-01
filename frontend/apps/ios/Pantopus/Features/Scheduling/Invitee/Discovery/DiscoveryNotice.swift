@@ -87,7 +87,7 @@ struct DiscoveryEmptyCard: View {
                 .frame(maxWidth: 230)
             Text(caption)
                 // Spec EmptyCard body: 12pt, 17px line-height, ~225 max width.
-                .font(.system(size: 12, weight: .regular))
+                .pantopusTextStyle(.caption)
                 .lineSpacing(17 - 12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)

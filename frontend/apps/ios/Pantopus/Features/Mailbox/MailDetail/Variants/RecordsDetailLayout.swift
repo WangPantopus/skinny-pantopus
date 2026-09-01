@@ -225,7 +225,7 @@ private struct RecordsHeroCard: View {
             (Text("Filed in Vault").font(.system(size: 12, weight: .bold))
                 .foregroundColor(Theme.Color.success)
                 + Text(" · \(records.filedAtLabel ?? "")")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundColor(Theme.Color.success))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Spacing.s0)

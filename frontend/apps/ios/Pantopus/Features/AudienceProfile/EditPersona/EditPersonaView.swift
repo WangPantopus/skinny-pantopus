@@ -628,7 +628,7 @@ private struct PersonaTextField: View {
 
     var body: some View {
         TextField(placeholder, text: $text)
-            .font(.system(size: 14))
+            .font(Theme.Font.small)
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
@@ -649,7 +649,7 @@ private struct PersonaBioEditor: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text("What do you post about?")
-                    .font(.system(size: 14))
+                    .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .padding(.horizontal, Spacing.s3 + 2)
                     .padding(.vertical, Spacing.s3)
@@ -657,7 +657,7 @@ private struct PersonaBioEditor: View {
                     .accessibilityHidden(true)
             }
             TextEditor(text: $text)
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, Spacing.s2)

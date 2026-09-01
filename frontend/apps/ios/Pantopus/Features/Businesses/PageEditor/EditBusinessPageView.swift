@@ -593,7 +593,7 @@ struct BizField: View {
                         set: { onChange?($0) }
                     )
                 )
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
                 .keyboardType(keyboardType)
                 .padding(.leading, leading == nil ? Spacing.s3 : 0)

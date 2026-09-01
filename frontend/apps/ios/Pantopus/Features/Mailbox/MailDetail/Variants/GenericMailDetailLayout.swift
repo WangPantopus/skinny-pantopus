@@ -257,7 +257,7 @@ private struct GenericHeroCard: View {
                     + Text(acknowledgedSuffix)
                     .foregroundColor(Theme.Color.success.opacity(0.85))
             )
-            .font(.system(size: 12))
+            .pantopusTextStyle(.caption)
             .foregroundColor(Theme.Color.success)
             Spacer(minLength: Spacing.s0)
         }
@@ -344,7 +344,7 @@ private struct SenderCard: View {
                         .lineLimit(1)
                     if let meta = content.senderMeta, !meta.isEmpty {
                         Text(meta)
-                            .font(.system(size: 12))
+                            .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .lineLimit(2)
                     }

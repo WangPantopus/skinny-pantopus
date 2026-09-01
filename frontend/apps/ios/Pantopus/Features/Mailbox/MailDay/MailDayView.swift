@@ -330,7 +330,7 @@ public struct MailDayView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 Spacer(minLength: Spacing.s0)
                 Text(form.timezone)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .padding(.bottom, Spacing.s2)

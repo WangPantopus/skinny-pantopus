@@ -172,7 +172,7 @@ public struct StatusWaitingBodyView: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("statusHeadline")
             styledSubcopy
-                .font(.system(size: 14))
+                .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 300)

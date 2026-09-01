@@ -686,7 +686,7 @@ struct AutoTextField: View {
 
     var body: some View {
         TextField(placeholder, text: $text)
-            .font(.system(size: 14))
+            .font(Theme.Font.small)
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, 12)
             .frame(height: 42)
@@ -706,14 +706,14 @@ struct AutoTextEditor: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: $text)
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: minHeight)
                 .padding(8)
             if text.isEmpty {
                 Text(placeholder)
-                    .font(.system(size: 14))
+                    .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .padding(.horizontal, 13)
                     .padding(.top, 16)

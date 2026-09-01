@@ -175,7 +175,7 @@ public struct FanInboxView: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                 Text(start.personaTitle)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s0)
@@ -199,7 +199,7 @@ public struct FanInboxView: View {
             .fixedSize(horizontal: false, vertical: true)
 
             TextField("Say hi…", text: $viewModel.draft, axis: .vertical)
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(4...8)
                 .padding(Spacing.s3)

@@ -126,7 +126,7 @@ struct MessagePreviewView: View {
                     Spacer()
                     Text("now").font(.system(size: 10.5)).foregroundStyle(Theme.Color.appTextMuted)
                 }
-                Text(model.filledBody).font(.system(size: 12)).foregroundStyle(Theme.Color.appTextStrong).lineLimit(3)
+                Text(model.filledBody).pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextStrong).lineLimit(3)
             }
         }
         .padding(12)

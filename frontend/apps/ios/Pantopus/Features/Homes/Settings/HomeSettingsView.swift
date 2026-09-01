@@ -73,7 +73,7 @@ struct HomeSettingsIdentityCard: View {
     private var nameRow: some View {
         HStack(spacing: Spacing.s2) {
             Text(identity.homeName)
-                .font(.system(size: 20, weight: .semibold))
+                .pantopusTextStyle(.h3)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityIdentifier("homeSettingsIdentityName")
             if viewModel.canEditHome {

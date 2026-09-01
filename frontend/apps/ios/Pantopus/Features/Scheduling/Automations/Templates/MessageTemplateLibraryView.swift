@@ -67,7 +67,7 @@ struct MessageTemplateLibraryView: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
             TextField("Search templates", text: $model.query)
-                .font(.system(size: 14)).foregroundStyle(Theme.Color.appText).autocorrectionDisabled()
+                .font(Theme.Font.small).foregroundStyle(Theme.Color.appText).autocorrectionDisabled()
         }
         .padding(.horizontal, 12)
         .frame(height: 40)

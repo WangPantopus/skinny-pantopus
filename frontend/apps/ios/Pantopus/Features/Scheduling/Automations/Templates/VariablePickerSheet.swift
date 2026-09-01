@@ -43,7 +43,7 @@ struct VariablePickerSheet: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
             TextField("Search variables", text: $query)
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
                 .autocorrectionDisabled()
         }

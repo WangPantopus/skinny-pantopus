@@ -64,7 +64,7 @@ struct EditProfileAvatarBlock: View {
             if let errorMessage {
                 VStack(spacing: Spacing.s1) {
                     Text(errorMessage)
-                        .font(.system(size: 12))
+                        .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.error)
                         .multilineTextAlignment(.center)
                     Button("Dismiss") { onDismissError() }
@@ -135,7 +135,7 @@ struct EditProfileAvatarBlock: View {
 
     private var initialLabel: some View {
         Text(initial)
-            .font(.system(size: 30, weight: .bold))
+            .pantopusTextStyle(.h1)
             .foregroundStyle(Theme.Color.personal)
     }
 

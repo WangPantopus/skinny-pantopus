@@ -139,7 +139,7 @@ struct ResourceListView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.center)
             Text("Anything members book — rooms, the driveway, tools. Start from a template.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 5)

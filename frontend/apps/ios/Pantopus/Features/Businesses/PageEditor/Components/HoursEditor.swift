@@ -172,7 +172,7 @@ private struct EditHoursRowView: View {
         case .notSet:
             HStack {
                 Text("Not set")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
                 Spacer()
                 Text("Add")

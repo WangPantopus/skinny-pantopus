@@ -204,7 +204,7 @@ struct BookingsInboxView: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
             TextField("Search by name", text: text)
-                .font(.system(size: 14))
+                .font(Theme.Font.small)
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
                 .onSubmit { Task { await viewModel.submitSearch() } }

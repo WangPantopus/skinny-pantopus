@@ -75,7 +75,7 @@ struct SavedPlacesActionSheet: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 Text(target.subtitle)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
             }

@@ -113,7 +113,7 @@ struct PollResponseView: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.info, size: 15, color: Theme.Color.info)
             Text("We pre-filled a \"Can't\" where you're already busy. Change any you can still make.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -264,7 +264,7 @@ struct PollResponseView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.Color.homeDark)
                 Text(closedMessage)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
         }

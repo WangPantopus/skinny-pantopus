@@ -685,7 +685,7 @@ private struct StampCollectionSection: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             if content.earned.isEmpty {
                 Text("Nothing collected yet — keep using your mailbox.")
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
                 VStack(spacing: Spacing.s2) {
@@ -715,7 +715,7 @@ private struct StampCollectionSection: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text("Stamps unlock as you receive, file and act on mail.")
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -728,7 +728,7 @@ private struct StampCollectionSection: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(message)
-                .font(.system(size: 12))
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -882,7 +882,7 @@ private struct ActiveThemePreview: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                 Text(theme.season.label)
-                    .font(.system(size: 12))
+                    .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .padding(Spacing.s5)

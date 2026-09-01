@@ -42,7 +42,7 @@ public struct CancelClaimView: View {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     if let errorMessage = viewModel.errorMessage {
                         Text(errorMessage)
-                            .font(.system(size: 14))
+                            .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.error)
                             .accessibilityIdentifier("cancelClaimError")
                     }
@@ -51,12 +51,12 @@ public struct CancelClaimView: View {
                         Shimmer(width: 320, height: 120, cornerRadius: Radii.lg)
                     case let .error(message):
                         Text(message)
-                            .font(.system(size: 14))
+                            .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.error)
                             .accessibilityIdentifier("cancelClaimLoadError")
                     case .noClaim:
                         Text("No open ownership claim for this home.")
-                            .font(.system(size: 14))
+                            .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     case .ready, .submitting:
                         Text("Cancel this ownership claim?")
@@ -66,7 +66,7 @@ public struct CancelClaimView: View {
                         Text(
                             "Your pending claim will be withdrawn. You can start a new claim later if you still need to verify ownership."
                         )
-                        .font(.system(size: 14))
+                        .pantopusTextStyle(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     }
