@@ -49,3 +49,29 @@ Android
   status-bar inset on top of the root Scaffold's; the Mailbox title sits where it should. Fixed.
 - The signed-out start screen pads the status bar. Fixed.
 - Still open: `MAPS_API_KEY` for the Nearby basemap (founder); the legend wraps at 360dp.
+
+## Design pass in code (same day, after the review)
+
+Built directly on web, SwiftUI and Compose from the prompts in
+`docs/claude-design-prompts-2026-09-02.md`; only the brand mark is left for
+Claude Design.
+
+- **Start page** (all three): brand and a quiet country label in the top bar;
+  headline; the address field and button; then the privacy proof line
+  ("Neighbors see a first name and a street. Never your house number.") and a
+  static, labeled example card in the dashboard's row grammar. Web goes
+  two-column at `lg` and shows "From the card in your mailbox" on `/start?r=`.
+- **First-week card** (all three; new on iOS): a header band in the home tint
+  with a progress bar, one-line payoffs, a check per step, "Set your pickup
+  day" ticking itself from the calendar, a one-line retired state at five of
+  five, and "Not new here" to dismiss. iOS now decodes `move_in_date` and reads
+  the home detail next to the intelligence.
+- **Android Nearby**: legend in two columns at every width; when the build has
+  no Maps key the card draws the 5×5 cells flat on the app surface instead of
+  a blank map.
+- **Today tab**: iOS gets its own screen (`AddressTodayTabView`) for the
+  primary place — weather, good-day chips, the address calendar, air, alerts,
+  sun — with a claim card when there is no place; the hub briefing stays
+  behind the morning-push deep link. The content order and the "At this
+  address" label match on iOS and Android, and the "Coming soon" block is gone
+  from both.

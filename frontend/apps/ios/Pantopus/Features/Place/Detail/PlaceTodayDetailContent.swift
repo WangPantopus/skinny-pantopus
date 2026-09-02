@@ -19,6 +19,9 @@ struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
 
+    // Order (matches Android): what it is like now, what to do with it,
+    // what recurs at this address, then air, alerts and sun. The calendar
+    // is the reason the Today tab exists and sits above the fold.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let weather = vm.section(.weather, in: intel) {
@@ -45,6 +48,18 @@ struct PlaceTodayDetailContent: View {
                 )
             }
 
+            // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
+            if let calendar = vm.section(.addressCalendar, in: intel) {
+                PlaceDetailSectionLabel(text: "At this address")
+                if let data = calendar.addressCalendar,
+                   calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
+                    AddressCalendarCard(homeId: vm.homeId, data: data) { await vm.load() }
+                    PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+                } else {
+                    vm.fallbackCard(calendar)
+                }
+            }
+
             if let aqi = vm.section(.airQuality, in: intel) {
                 PlaceDetailSectionLabel(text: "Air quality")
                 if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
@@ -69,24 +84,6 @@ struct PlaceTodayDetailContent: View {
                 } else {
                     vm.fallbackCard(sun)
                 }
-            }
-
-            // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
-            if let calendar = vm.section(.addressCalendar, in: intel) {
-                PlaceDetailSectionLabel(text: "At this address")
-                if let data = calendar.addressCalendar,
-                   calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                    AddressCalendarCard(homeId: vm.homeId, data: data) { await vm.load() }
-                    PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
-                } else {
-                    vm.fallbackCard(calendar)
-                }
-            }
-
-            PlaceDetailSectionLabel(text: "Coming soon")
-            VStack(spacing: 8) {
-                PlaceComingSoonRow(icon: .flower2, title: "Pollen & allergens", subtitle: "Daily pollen count for your area")
-                PlaceComingSoonRow(icon: .zapOff, title: "Power outages", subtitle: "Live status for your block")
             }
         }
     }

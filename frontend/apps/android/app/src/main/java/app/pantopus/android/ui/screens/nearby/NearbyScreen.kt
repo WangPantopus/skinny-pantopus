@@ -1,5 +1,8 @@
 package app.pantopus.android.ui.screens.nearby
 
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +27,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -164,33 +172,60 @@ fun NearbyCellsMap(cells: NeighborhoodCells) {
                 zoomGesturesEnabled = false,
             )
         }
+    // Without a Maps key (or offline) the Compose map draws a blank tile;
+    // the cells still carry the whole message, so draw them flat instead,
+    // the way web does when tiles are missing.
+    val context = LocalContext.current
+    val hasMapsKey = remember { hasGoogleMapsKey(context) }
     Column(modifier = Modifier.fillMaxWidth().placeCard().testTag("nearbyCellsMap")) {
         Box(modifier = Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))) {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraState,
-                properties = properties,
-                uiSettings = uiSettings,
-            ) {
-                cells.cells.forEach { cell ->
-                    val b = cell.bounds
-                    if (b.size == 2 && b[0].size == 2 && b[1].size == 2) {
-                        val (minLat, minLng) = b[0]
-                        val (maxLat, maxLng) = b[1]
-                        Polygon(
-                            points = listOf(LatLng(minLat, minLng), LatLng(minLat, maxLng), LatLng(maxLat, maxLng), LatLng(maxLat, minLng)),
-                            fillColor = PantopusColors.primary600.copy(alpha = cellFillAlpha(cell.bucket)),
-                            strokeColor = if (cell.isHome) PantopusColors.appText else PantopusColors.primary600.copy(alpha = 0.6f),
-                            strokeWidth = if (cell.isHome) 5f else 2f,
-                        )
+            if (hasMapsKey) {
+                GoogleMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraPositionState = cameraState,
+                    properties = properties,
+                    uiSettings = uiSettings,
+                ) {
+                    cells.cells.forEach { cell ->
+                        val b = cell.bounds
+                        if (b.size == 2 && b[0].size == 2 && b[1].size == 2) {
+                            val (minLat, minLng) = b[0]
+                            val (maxLat, maxLng) = b[1]
+                            Polygon(
+                                points =
+                                    listOf(
+                                        LatLng(minLat, minLng),
+                                        LatLng(minLat, maxLng),
+                                        LatLng(maxLat, maxLng),
+                                        LatLng(maxLat, minLng),
+                                    ),
+                                fillColor = PantopusColors.primary600.copy(alpha = cellFillAlpha(cell.bucket)),
+                                strokeColor = if (cell.isHome) PantopusColors.appText else PantopusColors.primary600.copy(alpha = 0.6f),
+                                strokeWidth = if (cell.isHome) 5f else 2f,
+                            )
+                        }
                     }
                 }
+            } else {
+                FlatCellsGrid(cells, modifier = Modifier.fillMaxSize().testTag("nearbyCellsGridFallback"))
             }
         }
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                CELL_LEGEND_ORDER.forEach { bucket ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        CellsLegend(cells)
+    }
+}
+
+/** Four buckets in two columns at every width: no swatch ever orphans on a wrapped line. */
+@Composable
+private fun CellsLegend(cells: NeighborhoodCells) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        CELL_LEGEND_ORDER.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { bucket ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
                         Box(
                             modifier =
                                 Modifier
@@ -202,20 +237,80 @@ fun NearbyCellsMap(cells: NeighborhoodCells) {
                                         ),
                                     ),
                         )
-                        Text(cells.buckets[bucket] ?: bucket, fontSize = 11.5.sp, color = PantopusColors.appTextSecondary)
+                        Text(
+                            cells.buckets[bucket] ?: bucket,
+                            fontSize = 12.sp,
+                            color = PantopusColors.appTextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
-            Text(
-                "Cells, not rooftops: about a kilometre each, shaded by how many households have verified. " +
-                    "Your cell is outlined. No home is ever a dot.",
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                color = PantopusColors.appTextMuted,
+        }
+        Text(
+            "Cells, not rooftops: about a kilometre each, shaded by how many households have verified. " +
+                "Your cell is outlined. No home is ever a dot.",
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextMuted,
+        )
+    }
+}
+
+/** True when the manifest carries a Google Maps key; the debug build may not. */
+private fun hasGoogleMapsKey(context: Context): Boolean =
+    runCatching {
+        val info = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+        !info.metaData?.getString("com.google.android.geo.API_KEY").isNullOrBlank()
+    }.getOrDefault(false)
+
+/**
+ * The 5×5 cells drawn flat on the app background: same fills, same
+ * outlined home cell, no basemap. Reads exactly like the map version.
+ */
+@Composable
+private fun FlatCellsGrid(
+    cells: NeighborhoodCells,
+    modifier: Modifier = Modifier,
+) {
+    val boxes = cells.cells.filter { it.bounds.size == 2 && it.bounds[0].size == 2 && it.bounds[1].size == 2 }
+    if (boxes.isEmpty()) return
+    val minLat = boxes.minOf { it.bounds[0][0] }
+    val maxLat = boxes.maxOf { it.bounds[1][0] }
+    val minLng = boxes.minOf { it.bounds[0][1] }
+    val maxLng = boxes.maxOf { it.bounds[1][1] }
+    val fill = PantopusColors.primary600
+    val outline = PantopusColors.appText
+    val ground = PantopusColors.appSurfaceSunken
+    Canvas(modifier = modifier.background(ground)) {
+        val latSpan = (maxLat - minLat).takeIf { it > 0 } ?: return@Canvas
+        val lngSpan = (maxLng - minLng).takeIf { it > 0 } ?: return@Canvas
+        // Keep the cells square-ish and centered, whatever the card's aspect.
+        val scale = minOf(size.width / lngSpan.toFloat(), size.height / latSpan.toFloat()) * GRID_INSET
+        val gridW = lngSpan.toFloat() * scale
+        val gridH = latSpan.toFloat() * scale
+        val left = (size.width - gridW) / 2f
+        val top = (size.height - gridH) / 2f
+        val stroke = 1.dp.toPx()
+        boxes.forEach { cell ->
+            val x = left + ((cell.bounds[0][1] - minLng).toFloat() * scale)
+            val w = ((cell.bounds[1][1] - cell.bounds[0][1]).toFloat() * scale)
+            // Latitude grows upward; the canvas grows downward.
+            val y = top + ((maxLat - cell.bounds[1][0]).toFloat() * scale)
+            val h = ((cell.bounds[1][0] - cell.bounds[0][0]).toFloat() * scale)
+            drawRect(color = fill.copy(alpha = cellFillAlpha(cell.bucket)), topLeft = Offset(x, y), size = Size(w, h))
+            drawRect(
+                color = if (cell.isHome) outline else fill.copy(alpha = 0.6f),
+                topLeft = Offset(x, y),
+                size = Size(w, h),
+                style = Stroke(width = if (cell.isHome) stroke * 2.5f else stroke),
             )
         }
     }
 }
+
+private const val GRID_INSET = 0.9f
 
 // ─── The meter ───────────────────────────────────────────────
 

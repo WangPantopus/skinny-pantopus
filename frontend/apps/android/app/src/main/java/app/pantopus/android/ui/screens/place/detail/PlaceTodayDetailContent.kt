@@ -80,6 +80,9 @@ fun PlaceTodayDetailContent(
         // Deliberately silent when there is nothing to answer: an empty
         // verdict row is worse than no row.
     }
+    // The calendar is the reason the Today tab exists; it sits above the
+    // fold, after what it is like now and what to do with it.
+    AddressCalendarSection(intel, viewModel)
     intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
         PlaceDetailSectionLabel("Air quality")
         val data = env.airQuality
@@ -104,12 +107,6 @@ fun PlaceTodayDetailContent(
         } else {
             PlaceDetailFallbackCard(env)
         }
-    }
-    AddressCalendarSection(intel, viewModel)
-    PlaceDetailSectionLabel("Coming soon")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        PlaceComingSoonRow(PantopusIcon.Flower2, "Pollen & allergens", "Daily pollen count for your area")
-        PlaceComingSoonRow(PantopusIcon.ZapOff, "Power outages", "Live status for your block")
     }
 }
 
@@ -409,7 +406,7 @@ private fun AddressCalendarSection(
     viewModel: AddressCalendarActions?,
 ) {
     val env = intel.section(PlaceSectionId.ADDRESS_CALENDAR) ?: return
-    PlaceDetailSectionLabel("Address calendar")
+    PlaceDetailSectionLabel("At this address")
     val data = env.addressCalendar
     if (data != null && env.isLive()) {
         AddressCalendarCard(data, viewModel)

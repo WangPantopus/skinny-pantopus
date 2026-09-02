@@ -255,12 +255,20 @@ public struct TodayTabRoot: View {
 
     public var body: some View {
         NavigationStack {
-            TodayDetailView(
-                viewModel: TodayDetailViewModel(
-                    briefingDeliveryId: briefingDeliveryId,
-                    requestedKind: briefingKind
-                )
-            )
+            Group {
+                // A morning-push deep link opens that briefing; on its own the
+                // tab is the address's day (weather, calendar, air).
+                if briefingDeliveryId != nil {
+                    TodayDetailView(
+                        viewModel: TodayDetailViewModel(
+                            briefingDeliveryId: briefingDeliveryId,
+                            requestedKind: briefingKind
+                        )
+                    )
+                } else {
+                    AddressTodayTabView()
+                }
+            }
             .id(generation)
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("todayTabRoot")

@@ -184,7 +184,8 @@ internal fun PlaceDashboardContent(
                 onOpenMailDay = onOpenMailDay,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
                 // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
-                needsPickupDay = intel.groups.flatMap { it.sections }.firstOrNull { it.addressCalendar != null }?.addressCalendar?.needsPickupDay,
+                needsPickupDay =
+                    intel.groups.flatMap { it.sections }.firstNotNullOfOrNull { it.addressCalendar }?.needsPickupDay,
             )
         }
         item {
