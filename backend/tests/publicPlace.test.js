@@ -330,6 +330,66 @@ describe('GET /api/public/place', () => {
       expect(res.body.aha).toMatchObject({ section_id: null, tone: 'calm' });
     });
 
+    // The three rules the real-data audit (Camas, 2026-09-01) added.
+    it('radon zone 1 outranks seismic design category D (audit: Clark County, WA)', async () => {
+      installFetch({ whp: { value: '1' } });
+      seedTable('CountyRadonZone', [{ county_fips: '41051', zone: 1, county_name: 'Multnomah County' }]);
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      expect(res.body.aha).toMatchObject({ section_id: 'lead_radon', tone: 'alert', grade: 'Radon zone 1' });
+      expect(res.body.aha.headline).toMatch(/highest radon band/);
+      expect(res.body.aha.detail).toMatch(/EPA action level/);
+    });
+
+    it('a construction stormwater permit in noncompliance is a permit lapse; an industrial one is a violation', async () => {
+      installFetch({ whp: { value: '1' }, seismic: { response: { data: { sdc: 'B', sds: 0.3 } } } });
+      const base = global.fetch;
+      const withEcho = (facilities) => {
+        global.fetch = jest.fn((url) => (String(url).includes('echodata.epa.gov')
+          ? Promise.resolve(mockResp({ Results: { QueryRows: String(facilities.length), Facilities: facilities } }))
+          : base(url)));
+      };
+      withEcho([{ FacName: 'SUNSET SHORT PLAT', FacSNCFlg: 'Y', FacNAICSCodes: '237210', FacQtrsWithNC: '11', FacLat: 45.521, FacLong: -122.675 }]);
+      let res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      expect(res.body.aha).toMatchObject({ section_id: 'environmental_hazards', tone: 'watch', grade: 'Permit lapse' });
+      expect(res.body.aha.headline).toMatch(/construction site .* stormwater permit/);
+      const env = res.body.sections.find((x) => x.id === 'environmental_hazards');
+      expect(env.data.facilities[0]).toMatchObject({ construction: true, significant_noncompliance: true });
+      expect(env.data.notable).toMatchObject({ significant_noncompliance: 1, significant_noncompliance_industrial: 0 });
+
+      // Fresh preview (the section cache is a table; the route cache is a map).
+      resetTables();
+      seedTable('NeighborhoodPreview', [{ geohash: PORTLAND_GEOHASH, verified_users_count: 5 }]);
+      publicRouter.__clearPreviewCaches();
+      withEcho([
+        { FacName: 'SUNSET SHORT PLAT', FacSNCFlg: 'Y', FacNAICSCodes: '237210', FacQtrsWithNC: '11', FacLat: 45.521, FacLong: -122.675 },
+        { FacName: 'Acme Plating', FacSNCFlg: 'Y', CAAFlag: 'Y', FacNAICSCodes: '332813', FacQtrsWithNC: '3', FacLat: 45.53, FacLong: -122.68 },
+      ]);
+      res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      // 74 sits one under the alert line on purpose: a mile-away violator is amber, a warning or high fire hazard is red.
+      expect(res.body.aha).toMatchObject({ section_id: 'environmental_hazards', tone: 'watch', grade: 'Violation' });
+      expect(res.body.aha.headline).toMatch(/Acme Plating is in significant noncompliance/);
+      // The industrial site sorts first even with fewer noncompliant quarters.
+      expect(res.body.sections.find((x) => x.id === 'environmental_hazards').data.facilities[0].name).toBe('Acme Plating');
+    });
+
+    it('wildfire reads the burnable land within a quarter mile when the lot itself is developed', async () => {
+      installFetch({ seismic: { response: { data: { sdc: 'B', sds: 0.3 } } } });
+      const base = global.fetch;
+      let whpCalls = 0;
+      global.fetch = jest.fn((url) => {
+        if (!String(url).includes('imagery.geoplatform.gov')) return base(url);
+        whpCalls += 1;
+        // Centre pixel is non-burnable (class 6); the ring around it is class 2.
+        return Promise.resolve(mockResp({ value: whpCalls === 1 ? '6' : '2' }));
+      });
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      const wf = res.body.sections.find((x) => x.id === 'wildfire');
+      expect(wf.status).toBe('ready');
+      expect(wf.data).toMatchObject({ scope: 'nearby', hazard_class: 2, burnable: true });
+      expect(wf.data.summary).toMatch(/quarter mile/);
+      expect(global.fetch.mock.calls.filter(([u]) => String(u).includes('imagery.geoplatform.gov')).length).toBe(9);
+    });
+
     it('is calm for real when nothing nearby is regulated either', async () => {
       installFetch({ whp: { value: '1' }, seismic: { response: { data: { sdc: 'B', sds: 0.3 } } } });
       const base = global.fetch;

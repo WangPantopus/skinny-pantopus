@@ -264,11 +264,12 @@ const AHA_BUILDERS = {
   wildfire(d) {
     const cls = d.burnable ? Number(d.hazard_class) : null;
     const score = cls === 5 ? 92 : cls === 4 ? 85 : cls === 3 ? 55 : cls === 2 ? 12 : 10;
+    const where = d.scope === 'nearby' ? 'within a quarter mile' : 'around this address';
     return {
       score,
       grade: d.hazard_label || null,
       headline: d.burnable
-        ? `${d.hazard_label} wildfire hazard around this address`
+        ? `${d.hazard_label} wildfire hazard ${where}`
         : 'This point is classed as non-burnable land',
       detail: d.summary || '',
       follow_up: cls != null && cls >= 3
@@ -279,12 +280,17 @@ const AHA_BUILDERS = {
   seismic(d) {
     const sdc = String(d.design_category || '').toUpperCase();
     const score = { E: 85, D: 78, C: 45, B: 8, A: 6 }[sdc] ?? 20;
+    const high = sdc === 'D' || sdc === 'E';
     return {
       score,
       grade: sdc ? `Category ${sdc}` : null,
-      headline: sdc ? `Seismic design category ${sdc} at this point` : 'Seismic design demand for this point',
-      detail: d.summary || '',
-      follow_up: sdc === 'D' || sdc === 'E'
+      headline: high
+        ? `Earthquake design category ${sdc}: new homes here are built for high shaking`
+        : sdc ? `Earthquake design category ${sdc} at this point` : 'Earthquake design demand for this point',
+      detail: high
+        ? 'This is the Cascadia zone. Homes built before the modern code often are not bolted to their foundations; a retrofit is the usual fix.'
+        : d.summary || '',
+      follow_up: high
         ? 'Claim it to keep an earthquake-readiness list for this home.'
         : 'Claim it for the full risk picture.',
     };
@@ -292,8 +298,20 @@ const AHA_BUILDERS = {
   lead_radon(d) {
     const zone = Number(d.radon_zone);
     if (!Number.isFinite(zone)) return null;
-    const score = zone === 1 ? 75 : zone === 2 ? 42 : 10;
-    const level = zone === 1 ? 'High' : zone === 2 ? 'Moderate' : 'Low';
+    // Zone 1 outranks a design category: it is the EPA's top band, most
+    // people have never heard it about their county, and the next step
+    // costs a test kit. (Audit 2026-09-01: Clark County, WA is zone 1.)
+    const score = zone === 1 ? 80 : zone === 2 ? 42 : 10;
+    if (zone === 1) {
+      return {
+        score,
+        grade: 'Radon zone 1',
+        headline: 'This county is in the EPA\'s highest radon band',
+        detail: 'Zone 1 means the predicted average indoor level is above the EPA action level. Only a test tells you about this home.',
+        follow_up: 'Claim it and we\'ll remind you when a test kit is due.',
+      };
+    }
+    const level = zone === 2 ? 'Moderate' : 'Low';
     return {
       score,
       grade: `Radon zone ${zone}`,
@@ -304,19 +322,36 @@ const AHA_BUILDERS = {
   },
   environmental_hazards(d) {
     const count = Number(d.facilities_within_mile) || 0;
-    const score = count >= 3 ? 68 : count >= 1 ? 50 : 10;
-    const nearest = Array.isArray(d.facilities) && d.facilities[0];
-    return {
-      score,
-      grade: `${count} nearby`,
-      headline: count === 0
-        ? 'No EPA-regulated facilities within a mile'
-        : `${plural(count, 'EPA-regulated facility', 'EPA-regulated facilities')} within a mile`,
-      detail: nearest
-        ? `Nearest: ${nearest.name}, ${nearest.distance_mi} mi (${nearest.program}). Regulated activity, not contamination.`
-        : d.summary || '',
-      follow_up: 'Claim it to see each one and what it\'s regulated for.',
-    };
+    const n = d.notable || {};
+    const snc = Number(n.significant_noncompliance) || 0;
+    const viol = Number(n.violations_3yr) || 0;
+    const tri = Number(n.toxic_release_reporters) || 0;
+    const top = Array.isArray(d.facilities) && d.facilities[0];
+    // A raw count of permits never leads; violations do.
+    let score = 8;
+    let grade = `${count} nearby`;
+    let headline = count === 0 ? 'No EPA-registered sites within a mile' : `${plural(count, 'EPA-registered site', 'EPA-registered sites')} within a mile`;
+    let detail = 'Permits and inspections on record, no violations. Regulated activity, not contamination.';
+    const sncIndustrial = Number(n.significant_noncompliance_industrial) || 0;
+    if (sncIndustrial > 0 && top && !top.construction) {
+      score = 74; grade = 'Violation';
+      headline = `${top.name} is in significant noncompliance with EPA rules`;
+      detail = `Within a mile of this address. ${viol > 1 ? `${viol} sites nearby had violations in the last 3 years.` : ''}`.trim();
+    } else if (snc > 0 && top) {
+      // A subdivision's stormwater permit, not a smokestack: worth a line, not a headline.
+      score = 46; grade = 'Permit lapse';
+      headline = `A construction site within a mile is out of compliance with its stormwater permit`;
+      detail = `${top.name}. Erosion-control paperwork and inspections, not emissions.`;
+    } else if (viol > 0 && top) {
+      score = 52; grade = plural(viol, 'violation', 'violations');
+      headline = `${plural(viol, 'site', 'sites')} within a mile had EPA violations in the last 3 years`;
+      detail = `Nearest on record: ${top.name}. Regulated activity, not necessarily exposure.`;
+    } else if (tri > 0) {
+      score = 40; grade = `${tri} TRI`;
+      headline = `${plural(tri, 'facility reports', 'facilities report')} toxic releases within a mile`;
+      detail = 'Reporting to the Toxics Release Inventory is disclosure, not a violation.';
+    }
+    return { score, grade, headline, detail, follow_up: 'Claim it to be told when a violation is filed nearby.' };
   },
   drinking_water(d) {
     const n = Number(d.violation_count) || 0;

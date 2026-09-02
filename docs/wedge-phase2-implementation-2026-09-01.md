@@ -69,3 +69,34 @@ Three things the reconciliation surfaced that are decisions, not bugs:
 5. **Calendar feeds** — permit hearings and council agendas as adapters; confirm the Camas waste schedule and flip those rows to `official`.
 6. **Place privacy mirror** (task chip) and a **retention sweep** for any evidence object whose delete failed.
 7. **Android** — tabs, residency door, calendar card, founding tier, Just-moved card.
+
+## The real-data aha audit (Camas, WA — 2026-09-01)
+The Phase 1.5 record deferred "run the aha rule against real addresses". Done, against the live public sources, for four points around **2518 NW Lacamas Dr, Camas, WA 98607** (the Lacamas Dr house, City Hall at 616 NE 4th Ave, the library at 625 NE 4th Ave, Lacamas Lake Lodge at 227 NE Lake Rd). Runner: `backend/tests/audit/ahaAudit.audit.js` — outside the normal suite by name, run with
+
+    npx jest --testMatch '**/tests/audit/*.audit.js' -i
+
+It geocodes through the Census geocoder (no key), hits FEMA / USGS / USFS / EPA ECHO / NWS / Open-Meteo live, and seeds the mock with Clark County's **real** rows from migration 158 (EPA radon zone 1; HUD FY2026 FMR) because those tables are empty locally.
+
+### What the audit found, and what changed
+| Layer | First reading | Why it was wrong | Fix |
+|---|---|---|---|
+| Wildfire | "Not classified as burnable (class null)" on a lot 300 m from Lacamas Lake's forest | USFS WHP is a 270 m raster; the pixel under a house is *developed*, not burnable. | `composeWildfire` now samples 8 points ~400 m out and reports the highest burnable class as `nearby_class`, `scope: 'nearby'`; Lacamas Dr reads **Low (class 2)**, downtown stays non-burnable. |
+| EPA sites | "22 permits within a mile" (raw count) | A permit count is not a hazard; the point is compliance. | `mapEchoFacilities` reads SNC flag, NC quarters, penalties, TRI; `notable` counts; the aha only leads on a violation. |
+| EPA sites (2) | Top site "NIGHTSHADE SHORT PLAT — significant noncompliance" would have scored 74 (alert) | It is a subdivision's **construction stormwater permit** (NAICS 23x): erosion-control paperwork, not emissions. | Facilities carry `construction`; an industrial SNC scores 74, a construction SNC 46 ("out of compliance with its stormwater permit"), and industrial sorts above construction at the same level. |
+| Seismic | "Category D" grade with a flat headline | Region-wide fact; the surprise is what it means. | Headline "Earthquake design category D: new homes here are built for high shaking", Cascadia/bolting detail. |
+| Radon | zone 1 scored 75, losing to seismic D at 78 | Clark County is in the EPA's top band; the fact is unknown to most residents and the next step is a $15 test kit. | Zone 1 now scores **80** with EPA-definition copy ("predicted average indoor level is above the EPA action level"). |
+| County tract | Each county-keyed composer geocoded separately | Three geocoder calls per preview. | Shared `homeCountyFips` (single-flight, `county_fips` hint); two calls. |
+
+### Final readings (all four points, live)
+- **Aha:** "Radon zone 1 — This county is in the EPA's highest radon band" (alert), follow-up "Claim it and we'll remind you when a test kit is due."
+- Flood: Zone X (minimal); Wildfire: Low / non-burnable / Very low; Seismic D; Drinking water: Camas municipal, no health-based violations in 5 years; EPA: 20–27 sites within a mile, 2 SNC (construction plats and the Camas STP, which is the one industrial SNC and reads correctly as such downtown), 1 TRI reporter downtown; Rent band $1,922–$2,306 (FY 2026); no active NWS alerts. Preview time 0.4–1.8 s warm, ~6 s cold.
+
+### Production config the audit exposed (the preview is partial without these)
+- `CENSUS_API_KEY` — the ACS area teaser and the lead-paint half of `lead_radon` (housing age).
+- `AIRNOW_API_KEY` — `air_quality` (today snapshot chip).
+- `GOOGLE_CIVIC_API_KEY` — `civic_election` / districts.
+- Mapbox token — production geocoding (the audit substituted the Census geocoder).
+- Migration **158** applied — `CountyRadonZone` and `HudFmr`; radon, rent band, and the water system's county name all read from it.
+
+### Verification
+- `tests/publicPlace.test.js` gained cases for the three rules (radon 1 over seismic D; construction vs industrial SNC; wildfire buffer scope). Full backend suite green, privacy gates OK.

@@ -488,19 +488,53 @@ function echoResults(data) {
   return results;
 }
 
+// ECHO's default columns (audit, Sep 2026): FacLat but NO FacLong, no
+// per-program flags — what they DO carry is compliance: FacSNCFlg
+// (significant noncompliance), FacQtrsWithNC (quarters with violations in
+// the last 3 years), FacPenaltyCount, FacComplianceStatus, TRIFlag /
+// AIRFlag. Most rows near a suburban home are construction stormwater
+// permits (subdivisions, grading) — regulated activity, not a hazard —
+// so the card counts sites but only *leads* with violations.
+function flag(v) { return String(v || '').trim().toUpperCase() === 'Y'; }
+function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
 function mapEchoFacilities(rows, lat, lng) {
-  return (rows || []).slice(0, 5).map((f) => {
-    const programs = ECHO_PROGRAM_FLAGS.filter(([flag]) => String(f[flag] || '') === 'Y').map(([, label]) => label);
+  const mapped = (rows || []).map((f) => {
     const fLat = Number(f.FacLat);
     const fLng = Number(f.FacLong);
+    const hasCoords = Number.isFinite(fLat) && Number.isFinite(fLng);
+    const programs = ECHO_PROGRAM_FLAGS.filter(([k]) => flag(f[k])).map(([, label]) => label);
+    if (flag(f.TRIFlag)) programs.push('Toxics Release Inventory');
+    if (flag(f.AIRFlag) && !programs.includes('Clean Air Act')) programs.push('Air program');
+    // Construction stormwater permits (NAICS 23x: subdivisions, grading,
+    // short plats) are the bulk of what sits near a suburban home; their
+    // violations are erosion-control lapses, not emissions.
+    const naics = String(f.FacNAICSCodes || '').trim();
+    const construction = /^23/.test(naics) || /\b(SUBDIVISION|SHORT PLAT|PLAT|LOTS?|GRADING|PHASE \d)\b/i.test(String(f.FacName || ''));
     return {
       name: String(f.FacName || 'Regulated facility'),
-      program: programs[0] || 'EPA-regulated',
-      distance_mi: Number.isFinite(fLat) && Number.isFinite(fLng)
-        ? Math.round(haversineMiles(lat, lng, fLat, fLng) * 10) / 10
-        : 1,
+      program: programs[0] || (construction ? 'Construction stormwater permit' : 'EPA-registered'),
+      programs,
+      construction,
+      distance_mi: hasCoords ? Math.round(haversineMiles(lat, lng, fLat, fLng) * 10) / 10 : null,
+      significant_noncompliance: flag(f.FacSNCFlg),
+      violation_quarters_3yr: num(f.FacQtrsWithNC),
+      penalties: num(f.FacPenaltyCount),
+      compliance_status: f.FacComplianceStatus ? String(f.FacComplianceStatus) : null,
+      toxic_release_reporter: flag(f.TRIFlag),
+      last_formal_action: f.FacDateLastFormalAction || null,
     };
   });
+  // Notable first: significant noncompliance, then violations, then TRI, then name.
+  // Notable first — and an industrial site outranks a construction permit
+  // at the same compliance level.
+  mapped.sort((a, b) =>
+    Number(b.significant_noncompliance) - Number(a.significant_noncompliance)
+    || Number(a.construction) - Number(b.construction)
+    || b.violation_quarters_3yr - a.violation_quarters_3yr
+    || Number(b.toxic_release_reporter) - Number(a.toxic_release_reporter)
+    || a.name.localeCompare(b.name));
+  return mapped;
 }
 
 // Two-step ECHO flow: get_facilities answers the COUNT + a QueryID;
@@ -525,15 +559,25 @@ async function fetchEchoFacilities(lat, lng) {
     throw new Error('ECHO returned a count but no facility rows');
   }
 
-  const facilities = mapEchoFacilities(rows, lat, lng);
+  const all = mapEchoFacilities(rows, lat, lng);
+  const snc = all.filter((f) => f.significant_noncompliance).length;
+  const sncIndustrial = all.filter((f) => f.significant_noncompliance && !f.construction).length;
+  const violators = all.filter((f) => f.violation_quarters_3yr > 0).length;
+  const tri = all.filter((f) => f.toxic_release_reporter).length;
+  const parts = [];
+  if (snc) parts.push(`${snc} in significant noncompliance`);
+  if (violators) parts.push(`${violators} with a violation in the last 3 years`);
+  if (tri) parts.push(`${tri} reporting toxic releases`);
   return {
     facilities_within_mile: count,
     radius_mi: 1,
-    facilities,
+    // The top five, notable first — never the whole registry.
+    facilities: all.slice(0, 5),
+    notable: { significant_noncompliance: snc, significant_noncompliance_industrial: sncIndustrial, violations_3yr: violators, toxic_release_reporters: tri },
     summary: count === 0
-      ? 'No EPA-regulated facilities within a mile.'
-      : `${count} EPA-regulated facilit${count === 1 ? 'y' : 'ies'} within a mile — regulated activity nearby, not unsafe exposure.`,
-    disclaimer: 'Presence on EPA registries means regulated activity, not contamination or danger.',
+      ? 'No EPA-registered sites within a mile.'
+      : `${count} EPA-registered site${count === 1 ? '' : 's'} within a mile${parts.length ? ` — ${parts.join(', ')}` : ' — permits and inspections, no violations on record'}.`,
+    disclaimer: 'EPA registration means regulated activity (a permit, an inspection), not contamination or danger.',
   };
 }
 
@@ -944,6 +988,30 @@ const WHP_URL =
   'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/identify';
 const WHP_LABELS = { 1: 'Very low', 2: 'Low', 3: 'Moderate', 4: 'High', 5: 'Very high' };
 
+// One raster pixel for a point. null when the service has no data there.
+async function whpClassAt(lat, lng) {
+  const geometry = JSON.stringify({ x: lng, y: lat, spatialReference: { wkid: 4326 } });
+  const params = new URLSearchParams({ geometry, geometryType: 'esriGeometryPoint', returnGeometry: 'false', f: 'json' });
+  const data = await fetchJson(`${WHP_URL}?${params}`);
+  const raw = data && data.value;
+  if (raw == null || raw === 'NoData') return null;
+  const cls = Number(raw);
+  return Number.isFinite(cls) ? cls : null;
+}
+
+// ~400 m: eight compass points around the home. The aha audit on Camas
+// found the house pixel is always "developed" (class 6) while the land a
+// quarter mile out is what actually burns — the reading a resident wants.
+const WHP_BUFFER_DEG = 0.0036;
+async function whpClassNearby(lat, lng) {
+  const dl = WHP_BUFFER_DEG / Math.cos((lat * Math.PI) / 180);
+  const offsets = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  const samples = await Promise.all(offsets.map(([a, b]) =>
+    whpClassAt(lat + a * WHP_BUFFER_DEG, lng + b * dl).catch(() => null)));
+  const burnable = samples.filter((c) => c != null && c >= 1 && c <= 5);
+  return burnable.length ? Math.max(...burnable) : null;
+}
+
 async function composeWildfire(home) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('wildfire', { status: 'unavailable' })];
@@ -954,19 +1022,12 @@ async function composeWildfire(home) {
       sectionId: 'wildfire',
       ttlMs: 180 * DAY_MS, // WHP is a vintage raster (2023)
       fetch: async () => {
-        const geometry = JSON.stringify({ x: ll.lng, y: ll.lat, spatialReference: { wkid: 4326 } });
-        const params = new URLSearchParams({
-          geometry,
-          geometryType: 'esriGeometryPoint',
-          returnGeometry: 'false',
-          f: 'json',
-        });
-        const data = await fetchJson(`${WHP_URL}?${params}`);
-        const raw = data && data.value;
-        if (raw == null || raw === 'NoData') return null;
-        const cls = Number(raw);
-        if (!Number.isFinite(cls)) return null;
-        return { class: cls };
+        const cls = await whpClassAt(ll.lat, ll.lng);
+        if (cls == null) return null;
+        const atHome = cls >= 1 && cls <= 5;
+        // Developed / water at the house: read the burnable land around it.
+        const nearby = atHome ? null : await whpClassNearby(ll.lat, ll.lng);
+        return { class: cls, nearby_class: nearby };
       },
     });
     if (!payload) {
@@ -977,16 +1038,23 @@ async function composeWildfire(home) {
     }
     const cls = payload.class;
     const burnable = cls >= 1 && cls <= 5;
+    const nearby = payload.nearby_class != null && payload.nearby_class >= 1 && payload.nearby_class <= 5 ? payload.nearby_class : null;
+    const effective = burnable ? cls : nearby;
     return [serializePlaceSection('wildfire', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       data: {
-        hazard_class: burnable ? cls : null,
-        hazard_label: burnable ? WHP_LABELS[cls] : 'Not classified as burnable',
-        burnable,
+        hazard_class: effective,
+        hazard_label: effective != null ? WHP_LABELS[effective] : 'Not classified as burnable',
+        burnable: effective != null,
+        // Where the reading comes from: the point itself, or the land a
+        // quarter mile around a developed lot.
+        scope: burnable ? 'point' : nearby != null ? 'nearby' : 'none',
         summary: burnable
           ? `${WHP_LABELS[cls]} wildfire hazard potential for the vegetation around this point.`
-          : 'This point sits on land the USFS classes as non-burnable (developed or water) — nearby wildlands may still carry risk.',
+          : nearby != null
+            ? `This lot is developed; the burnable land within a quarter mile carries ${WHP_LABELS[nearby].toLowerCase()} wildfire hazard potential.`
+            : 'This point and the land around it are classed as non-burnable (developed or water).',
         disclaimer: 'USFS Wildfire Hazard Potential (2023) — landscape fuel conditions, not a prediction for this home.',
       },
     })];
