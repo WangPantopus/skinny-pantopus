@@ -22,37 +22,30 @@ Nearby cells, 3 mail items. No cloud project was touched.
    `user.name = null`. `AuthenticatedUser` name fields are now nullable; a decoding test
    covers null and missing keys.
 
-## Findings still open (design / UX)
+## Findings from the review, and what was done (second pass, same day)
 
 Web
-- Mobile web hides the four tabs behind the hamburger; there is no bottom tab bar. The IA
-  that native gets on day one is invisible on mobile web.
-- The privacy mirror shows the username (`review_c99a41`) when there is no first name.
-  Show "A neighbor" or the first name only.
-- Place is a long scroll where sparse coverage reads as a wall of "Not available for your
-  area yet". Collapse unavailable sections into one "Coverage is expanding" row.
-- The aha card ("Just moved in?") is a list, not a hero. Web Today repeats the same
-  wildfire-smoke tip three times (summary, banner, signals).
-- `/app/homes/:id/calendar` is the household event calendar, not the address calendar;
-  the address calendar only lives on the Today detail. Link it from Today on web.
-- Three brand marks: green pin (start), blue grid wordmark (web auth), blue house (native auth).
-- The web Nearby basemap is blank behind the grid (no tiles offline); the grid still reads.
+- Mobile web now has a bottom tab bar (`MobileTabBar`, Place · Today · Nearby · Mail) below
+  the md breakpoint; floating buttons lift above it via `--fab-lift`. Fixed.
+- The privacy mirror never falls back to a username: `neighborFacingName` returns the first
+  name or nothing, so the card reads "A resident". Fixed on the shared serializer (all three
+  clients).
+- Place folds two or more empty sections in a group into one "Coverage is expanding here"
+  row that names them. Fixed.
+- Today no longer repeats the seasonal tip: the summary skips `seasonal` signals, the green
+  banner yields to the signal card, and the label is sentence case ("Smoke season"). Fixed.
+- Still open: three brand marks (design call); the household calendar route is not the
+  address calendar (product call); the web Nearby basemap needs tiles online.
 
 iOS
-- Stale "Your session has expired" banner on first launch of a fresh install.
-- "Discard changes?" on an untouched signup form (`isDirty` starts true).
-- Today tab is the hub briefing (fake "3 members" copy, lowercase "smoke season" label),
-  the real address calendar is one tap deeper.
-- Dashboard content scrolls under the status bar.
+- The "session expired" banner clears on dismiss (`AuthManager.sessionEndReason` reset), so
+  it does not come back on the next login screen. Fixed.
+- Sign-up asks "Discard changes?" only once someone has typed (`SignUpViewModel.hasInput`). Fixed.
+- The Place dashboard paints the app background behind the status bar. Fixed.
+- Still open: the Today tab is the hub briefing (product call).
 
 Android
-- Header text overlaps the status bar on the start screen (no top inset).
-- Nearby map is blank: no `MAPS_API_KEY` in the debug build, so the cell overlays have no
-  basemap. The legend wraps awkwardly at 360dp.
-- Mailbox has a ~70dp empty gap above the title.
-- Only the "Me" drawer shows on landing; home and business mail need a drawer tap.
-
-## Recommendation
-
-Fix in this order: mobile-web tab bar, mirror name fallback, Android status-bar inset and
-Mailbox gap, iOS session banner + signup dirty flag, then the Place coverage collapse.
+- Nested top app bars (list-of-rows, My businesses, Resources) no longer add a second
+  status-bar inset on top of the root Scaffold's; the Mailbox title sits where it should. Fixed.
+- The signed-out start screen pads the status bar. Fixed.
+- Still open: `MAPS_API_KEY` for the Nearby basemap (founder); the legend wraps at 360dp.

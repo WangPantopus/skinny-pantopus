@@ -41,6 +41,11 @@ struct PlaceDashboardView: View {
             }
         }
         .background(Theme.Color.appBg)
+        // With the navigation bar hidden the scroll content slid under the
+        // status bar; this zero-height inset paints the app background there.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 0).background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
+        }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }

@@ -165,7 +165,7 @@ export default function UnifiedFAB({
   });
 
   return (
-    <div ref={menuRef} className="fixed bottom-6 right-6 z-50">
+    <div ref={menuRef} className="fixed bottom-[calc(1.5rem+var(--fab-lift,0px))] right-6 z-50">
       {/* Backdrop overlay */}
       {open && (
         <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setOpen(false)} />

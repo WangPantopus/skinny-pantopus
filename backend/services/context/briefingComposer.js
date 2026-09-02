@@ -153,7 +153,9 @@ function composeTemplate(rankedOutput, options = {}) {
   // Convert each signal to a sentence (skip weather/precipitation/temperature
   // signals since the weather intro already covers current conditions)
   const weatherKinds = new Set(['weather', 'precipitation', 'temperature']);
-  const nonWeatherSignals = signals.filter((s) => !weatherKinds.has(s.kind));
+  // The seasonal tip has its own card on every Today surface; repeating it
+  // in the summary made the briefing read the same line three times.
+  const nonWeatherSignals = signals.filter((s) => !weatherKinds.has(s.kind) && s.kind !== 'seasonal');
   const weatherSignals = signals.filter((s) => weatherKinds.has(s.kind));
 
   // Build parts: weather intro first, then notable weather signals, then other signals

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -157,6 +158,9 @@ fun ListOfRowsScreen(
         modifier = Modifier.testTag(LIST_OF_ROWS_TAG),
         topBar = {
             CenterAlignedTopAppBar(
+                // The root tab Scaffold already pads the status bar; without this the
+                // bar sits a second inset lower (Mailbox title floating mid-screen).
+                windowInsets = WindowInsets(0.dp),
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(

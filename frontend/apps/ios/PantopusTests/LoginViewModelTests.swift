@@ -107,6 +107,23 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertNil(vm.securityMessage, "dismissal sticks for this screen instance")
     }
 
+    func testDismissingSecurityMessageClearsTheReasonForLaterScreens() {
+        let store = InMemorySecureStore()
+        let client = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
+        let auth = AuthManager(store: store, apiClient: client, allowSecureEnclave: false)
+        auth.setSessionEndReason(.expired)
+        let vm = LoginViewModel()
+        vm.prepare(using: auth)
+        XCTAssertNotNil(vm.securityMessage)
+
+        vm.dismissSecurityMessage(using: auth)
+
+        XCTAssertNil(auth.sessionEndReason, "a read banner never comes back on the next login screen")
+        let later = LoginViewModel()
+        later.prepare(using: auth)
+        XCTAssertNil(later.securityMessage)
+    }
+
     func testPrepareWithoutHintOrReasonLeavesDefaults() {
         let client = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
         let auth = AuthManager(store: InMemorySecureStore(), apiClient: client, allowSecureEnclave: false)

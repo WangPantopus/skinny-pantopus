@@ -21,7 +21,7 @@ import { Compass, ChevronRight, ShieldCheck } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import JustMovedCard from './JustMovedCard';
-import { derivePulse, renderSection, renderVerifyLocked } from './presentation';
+import { derivePulse, isUnavailableSection, renderSection, renderVerifyLocked, sectionTitle } from './presentation';
 import { IdentityGroup } from './PlaceIdentitySection';
 import VerifyPromptSheet from './VerifyPromptSheet';
 import { GROUP_TO_SLUG } from './detail/sections';
@@ -131,9 +131,22 @@ export default function PlaceDashboardView({
               style={{ animationDelay: `${Math.min(gi, 6) * 55}ms` }}
             >
               <Group label={group.label}>
-                {group.sections.map((section) => (
-                  <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim })}</Fragment>
-                ))}
+                {(() => {
+                  // Two or more empty sections in a group fold into one row;
+                  // a single one keeps its card so the group never looks bare.
+                  const unavailable = group.sections.filter(isUnavailableSection);
+                  const fold = unavailable.length >= 2;
+                  return (
+                    <>
+                      {group.sections
+                        .filter((section) => !fold || !isUnavailableSection(section))
+                        .map((section) => (
+                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim })}</Fragment>
+                        ))}
+                      {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={unavailable[0]?.unavailable_reason ?? null} onOpen={onOpen} /> : null}
+                    </>
+                  );
+                })()}
               </Group>
             </div>
           );
@@ -182,3 +195,32 @@ export default function PlaceDashboardView({
     </div>
   );
 }
+
+/**
+ * One quiet row standing in for every section this address has no data
+ * for yet. Lists them by name so the reader knows what is coming rather
+ * than scrolling past a wall of "Not available for your area yet".
+ */
+function CoverageRow({ titles, reason, onOpen }: { titles: string[]; reason: string | null; onOpen?: () => void }) {
+  const list = titles.length <= 3 ? titles.join(', ') : `${titles.slice(0, 3).join(', ')} and ${titles.length - 3} more`;
+  const body = (
+    <>
+      <div className="flex-1 min-w-0">
+        <div className="text-[15px] font-medium text-app-text">Coverage is expanding here</div>
+        <div className="text-[13px] text-app-text-muted mt-0.5">
+          {list} — {reason ?? 'not published for this area yet. We add sources as they open.'}
+        </div>
+      </div>
+      {onOpen ? <ChevronRight size={18} className="text-app-text-muted flex-shrink-0" aria-hidden /> : null}
+    </>
+  );
+  const cls = 'flex items-center gap-3 rounded-2xl border border-dashed border-app bg-surface-muted px-4 py-3 text-left';
+  return onOpen ? (
+    <button type="button" onClick={onOpen} className={`${cls} w-full`} data-testid="coverage-row">
+      {body}
+    </button>
+  ) : (
+    <div className={cls} data-testid="coverage-row">{body}</div>
+  );
+}
+

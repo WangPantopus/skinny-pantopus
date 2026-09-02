@@ -300,8 +300,10 @@ export default function HubTodayPage() {
               </div>
             )}
 
-            {/* Seasonal tip */}
-            {today.seasonal?.tip && (
+            {/* Seasonal tip — only when the ranked signals did not already
+                surface it as a card (they usually do; showing both read as
+                the same sentence twice). */}
+            {today.seasonal?.tip && !today.signals.some((s) => s.kind === 'seasonal') && (
               <div className="flex items-start gap-2.5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40">
                 <Leaf className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-green-800 dark:text-green-400 leading-relaxed">

@@ -61,11 +61,16 @@ function isWeekend(timezone = 'America/Los_Angeles', now = new Date()) {
   }
 }
 
+function sentenceCase(text) {
+  const s = String(text || '');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 function buildSeasonalInput(seasonal) {
   if (!seasonal?.primary_season) return null;
   return {
     primarySeason: seasonal.primary_season,
-    seasonLabel: seasonal.primary_season.replace(/_/g, ' '),
+    seasonLabel: sentenceCase(seasonal.primary_season.replace(/_/g, ' ')),
     tip: seasonal.seasonal_tip,
     homeTip: seasonal.home_specific_tip,
   };

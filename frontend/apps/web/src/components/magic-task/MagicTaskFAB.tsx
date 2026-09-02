@@ -42,7 +42,7 @@ export default function MagicTaskFAB({ onOpenComposer }: MagicTaskFABProps) {
       onClick={onOpenComposer}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 
+      className={`fixed bottom-[calc(1.5rem+var(--fab-lift,0px))] right-6 z-40 flex items-center gap-2 
         bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700
         text-white rounded-full shadow-lg hover:shadow-xl
         transition-all duration-300 ease-out

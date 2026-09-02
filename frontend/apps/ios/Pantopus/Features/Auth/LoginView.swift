@@ -52,7 +52,7 @@ struct LoginView: View {
                     .padding(.bottom, Spacing.s5)
 
                     if let security = viewModel.securityMessage {
-                        SecuritySignOutBanner(message: security, onDismiss: viewModel.dismissSecurityMessage)
+                        SecuritySignOutBanner(message: security, onDismiss: { viewModel.dismissSecurityMessage(using: auth) })
                             .padding(.horizontal, Spacing.s5)
                             .padding(.bottom, Spacing.s3)
                             .accessibilityIdentifier("loginSessionEndBanner")
@@ -692,9 +692,13 @@ final class LoginViewModel {
         rememberedAccount = auth.rememberedAccounts.first
     }
 
-    func dismissSecurityMessage() {
+    /// Dismissing is final: the reason is cleared on `AuthManager` too, so a
+    /// later login screen (after a trip to sign-up, or the next launch)
+    /// does not resurrect a banner the user already read.
+    func dismissSecurityMessage(using auth: AuthManager? = nil) {
         securityMessage = nil
         didDismissSecurityMessage = true
+        auth?.setSessionEndReason(nil)
     }
 
     /// The backend blocks an unverified sign-in with 403 "Please verify your

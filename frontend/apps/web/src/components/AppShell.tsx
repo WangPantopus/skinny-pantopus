@@ -12,6 +12,7 @@ import { BadgeProvider, useBadges } from '@/contexts/BadgeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { useDesktopNotifications } from '@/hooks/useDesktopNotifications';
 import { NavIcons, HomeIcons, BusinessIcons } from '@/lib/icons';
+import MobileTabBar from '@/components/MobileTabBar';
 import UnifiedFAB from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
@@ -43,6 +44,7 @@ import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
 import { webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
+import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, type LucideIcon } from 'lucide-react';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -203,6 +205,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const bizMatch = pathname.match(/^\/app\/businesses\/([^/]+)/);
   const businessId = bizMatch?.[1] || null;
   const isBusinessContext = !!businessId && businessId !== 'new';
+  const showMobileTabs = isMobile && !isBusinessContext;
 
   const currentTab = searchParams.get('tab') || 'overview';
 
@@ -350,7 +353,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-app text-app">
+    // `--fab-lift` raises every fixed bottom-anchored control (FABs, the
+    // chat launcher) clear of the mobile tab bar; 0 wherever the bar is absent.
+    <div className="min-h-screen bg-app text-app" style={{ '--fab-lift': showMobileTabs ? '64px' : '0px' } as CSSProperties}>
       {/* ═══════════════════════════════════════════════════════
        *  HEADER
        * ═══════════════════════════════════════════════════════ */}
@@ -543,9 +548,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  MAIN CONTENT
        * ═══════════════════════════════════════════════════════ */}
-      <main className="pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0" style={contentStyle}>
+      <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? ' pb-20' : ''}`} style={contentStyle}>
         {children}
       </main>
+
+      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Mail as a
+          bottom bar (the sidebar carries it at md+). Business context keeps
+          its own navigation. */}
+      {showMobileTabs && <MobileTabBar unread={chatUnread} />}
 
       {/* ═══════════════════════════════════════════════════════
        *  UNIFIED FAB + COMPOSER

@@ -145,6 +145,12 @@ public final class SignUpViewModel {
 
     /// Aggregate validity — true when every required field passes and
     /// terms are accepted. Drives the bottom CTA's enabled state.
+    /// True once any field carries user input; drives the discard prompt.
+    public var hasInput: Bool {
+        ![email, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode]
+            .allSatisfy(\.isEmpty) || dateOfBirth != nil || agreedToTerms
+    }
+
     public var isValid: Bool {
         guard agreedToTerms else { return false }
         for field in SignUpField.allCases where validate(field) != nil {

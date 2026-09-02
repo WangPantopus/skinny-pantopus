@@ -38,7 +38,8 @@ struct SignUpView: View {
             rightActionLabel: nil,
             bottomActionLabel: "Create account",
             isValid: viewModel.isValid,
-            isDirty: true,
+            // Only a form someone has typed into asks "Discard changes?" on close.
+            isDirty: viewModel.hasInput,
             isSaving: viewModel.isSubmitting,
             onClose: onClose,
             onCommit: submit

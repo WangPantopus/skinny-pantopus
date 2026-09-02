@@ -39,7 +39,7 @@ export default function QuickCreateFAB(props: QuickCreateFABProps) {
   }, [open]);
 
   return (
-    <div ref={menuRef} className="fixed bottom-6 right-6 z-50">
+    <div ref={menuRef} className="fixed bottom-[calc(1.5rem+var(--fab-lift,0px))] right-6 z-50">
       {/* Action menu */}
       {open && (
         <div className="absolute bottom-16 right-0 bg-app-surface rounded-xl border border-app-border shadow-lg py-2 min-w-[180px] animate-fade-in-up">

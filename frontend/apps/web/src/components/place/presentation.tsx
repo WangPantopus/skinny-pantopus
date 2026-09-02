@@ -413,6 +413,21 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
   },
 };
 
+/** Human title for a section id (the dashboard's coverage row lists these). */
+export function sectionTitle(id: PlaceSectionId): string {
+  return SECTION_CONFIG[id]?.title ?? id.replace(/_/g, ' ');
+}
+
+/**
+ * True when a section has nothing to show for this address and is not a
+ * lock (locks carry their own CTA). The dashboard folds runs of these into
+ * one "coverage is expanding" row instead of a wall of empty cards.
+ */
+export function isUnavailableSection(env: PlaceSection): boolean {
+  if (env.access === 'locked') return false;
+  return statusToState(env.status) === 'unavailable';
+}
+
 // ── envelope status → SectionCard state ─────────────────────
 function statusToState(status: PlaceSectionStatus): PlaceSectionState {
   if (status === 'ready' || status === 'partial') return 'loaded';

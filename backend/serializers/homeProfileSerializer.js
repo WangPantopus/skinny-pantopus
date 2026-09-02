@@ -48,15 +48,27 @@ function fullName(user) {
   return user.name || [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || null;
 }
 
+/**
+ * What an outsider may call this resident: a first name, and nothing else.
+ * A username is never a fallback here — the slim sign-up generates one
+ * (`review_c99a41`) that the person never chose, and it would leak the
+ * email prefix. With no first name the card says "A neighbor".
+ */
+function neighborFacingName(user) {
+  const first = String(user.first_name || '').trim();
+  if (first) return firstNameOnly(first);
+  const name = String(user.name || '').trim();
+  return name ? firstNameOnly(name) : null;
+}
+
 function serializeOwnerForViewer(user, { reveal }) {
   if (!user) return null;
-  const name = fullName(user);
   return {
     id: user.id,
     username: user.username,
-    name: reveal ? name : firstNameOnly(name),
+    name: reveal ? fullName(user) : neighborFacingName(user),
     profile_picture_url: user.profile_picture_url || null,
   };
 }
 
-module.exports = { serializeHomeForViewer, serializeOwnerForViewer, HIDDEN_FROM_OUTSIDERS, fullName };
+module.exports = { serializeHomeForViewer, serializeOwnerForViewer, HIDDEN_FROM_OUTSIDERS, fullName, neighborFacingName };

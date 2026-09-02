@@ -21,6 +21,18 @@ final class SignUpViewModelTests: XCTestCase {
         super.tearDown()
     }
 
+    // MARK: - Discard prompt
+
+    func test_hasInput_is_false_until_someone_types() {
+        let vm = SignUpViewModel()
+        XCTAssertFalse(vm.hasInput, "an untouched form must not ask to discard changes")
+        vm.email = "a@b.co"
+        XCTAssertTrue(vm.hasInput)
+        vm.email = ""
+        vm.agreedToTerms = true
+        XCTAssertTrue(vm.hasInput)
+    }
+
     // MARK: - Validation rules (one test per rule)
 
     func test_email_required_and_format() {

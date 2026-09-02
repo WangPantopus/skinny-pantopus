@@ -51,5 +51,9 @@ it('the serializer reveals to insiders and every hidden item really is hidden fr
   expect(Object.keys(outside)).not.toEqual(expect.arrayContaining(['move_in_date', 'owner_id']));
   expect(HIDDEN_FROM_OUTSIDERS.map((h) => h.key)).toEqual(['house_number', 'zipcode', 'surname', 'household', 'documents', 'move_in']);
   expect(serializeOwnerForViewer({ id: 'u', username: 'x', first_name: 'Ada', last_name: 'Lovelace' }, { reveal: false }).name).toBe('Ada');
+  // A generated username is never what a neighbor sees.
+  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: null, first_name: null }, { reveal: false }).name).toBeNull();
+  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: 'Ada Lovelace' }, { reveal: false }).name).toBe('Ada');
+  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: null }, { reveal: true }).name).toBe('review_c99a41');
   expect(serializeOwnerForViewer(null, { reveal: false })).toBeNull();
 });
