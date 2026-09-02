@@ -83,10 +83,15 @@ struct PlaceLaunchView: View {
 
     // MARK: - A1 hero
 
+    // One job: get a stranger from a postcard or a share card to type their
+    // address. The field is the hero, the proof line answers the privacy
+    // objection, and the example card shows what comes back. Scrolls only
+    // when the keyboard or a small screen makes it.
     private var hero: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 10) {
                 brandLockup
+                regionPill
                 Spacer()
                 Button("Sign in", action: onSignIn)
                     .font(.system(size: 14, weight: .semibold))
@@ -95,10 +100,18 @@ struct PlaceLaunchView: View {
             .padding(.horizontal, 20)
             .padding(.top, Spacing.s2)
 
-            Spacer(minLength: 0)
+            ScrollView(showsIndicators: false) {
+                heroBody
+                    .padding(.horizontal, 24)
+                    .padding(.top, Spacing.s8)
+                    .padding(.bottom, Spacing.s6)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
 
+    private var heroBody: some View {
             VStack(alignment: .leading, spacing: 16) {
-                regionPill
                 Text("See what's true about your address.")
                     .font(.system(size: 31, weight: .bold))
                     .kerning(-0.87)
@@ -115,6 +128,9 @@ struct PlaceLaunchView: View {
                     suggestionList
                 } else {
                     seePlaceButton
+                    privacyProof
+                    exampleCard
+                        .padding(.top, Spacing.s2)
                     Button { onCreateAccount() } label: {
                         Text("Just here to follow someone or browse?")
                             .font(.system(size: 13.5, weight: .medium))
@@ -124,19 +140,100 @@ struct PlaceLaunchView: View {
                     .padding(.top, 4)
                 }
             }
-            .padding(.horizontal, 24)
+    }
 
-            Spacer(minLength: 0)
+    /// The privacy answer where the decision is made: what a neighbor sees,
+    /// and what they never see.
+    private var privacyProof: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Icon(.shieldCheck, size: 15, strokeWidth: 2.1, color: Theme.Color.home)
+                .padding(.top, 2)
+            (Text("Neighbors see a first name and a street. ")
+                + Text("Never your house number.").fontWeight(.semibold).foregroundColor(Theme.Color.appText))
+                .font(.system(size: 13))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+        }
+        .padding(.horizontal, 4)
+        .accessibilityIdentifier("startPrivacyProof")
+    }
 
-            HStack(spacing: 6) {
-                Icon(.lock, size: 13, strokeWidth: 2, color: Theme.Color.appTextMuted)
-                Text("Private by default. Verification builds trust, not exposure.")
-                    .pantopusTextStyle(.caption)
+    /// A glimpse of the answer in the dashboard's own row grammar. Static
+    /// and labeled as an example; nothing here pretends to be the reader's.
+    private var exampleCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("EXAMPLE")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(0.9)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                Spacer()
+                Text("A home in Camas, WA")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
-            .padding(.bottom, Spacing.s6)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            ForEach(Array(Self.exampleReadings.enumerated()), id: \.offset) { index, reading in
+                if index > 0 {
+                    Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1).padding(.leading, 60)
+                }
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.Color.appBg)
+                        Icon(reading.icon, size: 16, strokeWidth: 2, color: Theme.Color.appTextSecondary)
+                    }
+                    .frame(width: 32, height: 32)
+                    Text(reading.label)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 6) {
+                        Circle().fill(reading.tone).frame(width: 6, height: 6)
+                        Text(reading.value)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .lineLimit(1)
+                    }
+                    // The reading wins the width; the short label yields first.
+                    .layoutPriority(1)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+
+            Text("Yours takes about three seconds and stays on this screen until you save it.")
+                .font(.system(size: 12))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
         }
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Example of what an address shows")
+        .accessibilityIdentifier("startExampleCard")
     }
+
+    private struct ExampleReading {
+        let icon: PantopusIcon
+        let label: String
+        let value: String
+        let tone: Color
+    }
+
+    private static let exampleReadings: [ExampleReading] = [
+        ExampleReading(icon: .wind, label: "Air today", value: "Good · AQI 24", tone: Theme.Color.home),
+        ExampleReading(icon: .waves, label: "Flood zone", value: "X · minimal", tone: Theme.Color.home),
+        ExampleReading(icon: .testTube, label: "Radon", value: "Zone 1 · test it", tone: Theme.Color.warning),
+        ExampleReading(icon: .trash2, label: "Next pickup", value: "Tue · garbage + recycling", tone: Theme.Color.appTextMuted),
+    ]
 
     private var brandLockup: some View {
         HStack(spacing: 7) {
@@ -152,18 +249,14 @@ struct PlaceLaunchView: View {
         }
     }
 
+    /// Demoted to the top bar so the address field is the first control.
     private var regionPill: some View {
-        HStack(spacing: 5) {
-            Text("🇺🇸").font(.system(size: 13))
+        HStack(spacing: 4) {
+            Text("🇺🇸").font(.system(size: 11))
             Text("United States")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.appTextSecondary)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Color.appTextMuted)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Theme.Color.appSurface)
-        .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(Theme.Color.appBorder, lineWidth: 1))
     }
 
     private var addressField: some View {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,9 +30,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -103,6 +107,15 @@ private fun Hero(
                 }
                 Text("Pantopus", fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = PantopusColors.appText)
             }
+            // Demoted to the top bar so the address field is the first control.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 10.dp),
+            ) {
+                Text("🇺🇸", fontSize = 11.sp)
+                Text("United States", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
+            }
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 "Sign in",
@@ -113,22 +126,13 @@ private fun Hero(
             )
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier =
-                    Modifier.clip(
-                        CircleShape,
-                    ).background(
-                        PantopusColors.appSurface,
-                    ).border(1.dp, PantopusColors.appBorder, CircleShape).padding(horizontal = 10.dp, vertical = 5.dp),
-            ) {
-                Text("🇺🇸", fontSize = 13.sp)
-                Text("United States", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-            }
+        // One job: get a stranger from a postcard to type their address. The
+        // field is the hero, the proof line answers the privacy objection,
+        // the example card shows what comes back. Scrolls only when it must.
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 32.dp, bottom = 24.dp),
+        ) {
             Text(
                 "See what's true about your address.",
                 fontSize = 31.sp,
@@ -177,6 +181,8 @@ private fun Hero(
                 PrimaryButton(title = "See your place", isLoading = loading, isEnabled = query.isNotBlank(), onClick = {
                     viewModel.loadPreview(query)
                 }, modifier = Modifier.fillMaxWidth())
+                PrivacyProof()
+                ExampleCard(modifier = Modifier.padding(top = 8.dp))
                 Text(
                     "Just here to follow someone or browse?",
                     fontSize = 13.5.sp,
@@ -186,17 +192,105 @@ private fun Hero(
                 )
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.weight(1f))
+/** The privacy answer where the decision is made: what a neighbor sees, and what they never see. */
+@Composable
+private fun PrivacyProof() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).testTag("startPrivacyProof"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        PantopusIconImage(
+            PantopusIcon.ShieldCheck,
+            null,
+            size = 15.dp,
+            strokeWidth = 2.1f,
+            tint = PantopusColors.home,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            buildAnnotatedString {
+                append("Neighbors see a first name and a street. ")
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)) {
+                    append("Never your house number.")
+                }
+            },
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
+}
 
+private data class ExampleReading(val icon: PantopusIcon, val label: String, val value: String, val tone: ExampleTone)
+
+private enum class ExampleTone { GOOD, WATCH, NEUTRAL }
+
+private val exampleReadings =
+    listOf(
+        ExampleReading(PantopusIcon.Wind, "Air today", "Good · AQI 24", ExampleTone.GOOD),
+        ExampleReading(PantopusIcon.Waves, "Flood zone", "X · minimal", ExampleTone.GOOD),
+        ExampleReading(PantopusIcon.TestTube, "Radon", "Zone 1 · test it", ExampleTone.WATCH),
+        ExampleReading(PantopusIcon.Trash2, "Next pickup", "Tue · garbage + recycling", ExampleTone.NEUTRAL),
+    )
+
+/**
+ * A glimpse of the answer in the dashboard's own row grammar. Static and
+ * labeled as an example; nothing here pretends to be the reader's.
+ */
+@Composable
+private fun ExampleCard(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth().placeCard().testTag("startExampleCard")) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PantopusIconImage(PantopusIcon.Lock, null, size = 13.dp, strokeWidth = 2f, tint = PantopusColors.appTextMuted)
-            Text("Private by default. Verification builds trust, not exposure.", fontSize = 12.sp, color = PantopusColors.appTextMuted)
+            Text("EXAMPLE", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.9.sp, color = PantopusColors.appTextMuted)
+            Spacer(modifier = Modifier.weight(1f))
+            Text("A home in Camas, WA", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
         }
+        exampleReadings.forEachIndexed { index, reading ->
+            if (index > 0) HorizontalDivider(color = PantopusColors.appBorderSubtle, modifier = Modifier.padding(start = 60.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(PantopusColors.appBg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PantopusIconImage(reading.icon, null, size = 16.dp, strokeWidth = 2f, tint = PantopusColors.appTextSecondary)
+                }
+                Text(
+                    reading.label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.weight(1f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val dot =
+                        when (reading.tone) {
+                            ExampleTone.GOOD -> PantopusColors.home
+                            ExampleTone.WATCH -> PantopusColors.warning
+                            ExampleTone.NEUTRAL -> PantopusColors.appTextMuted
+                        }
+                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(dot))
+                    Text(reading.value, fontSize = 13.5.sp, color = PantopusColors.appTextSecondary)
+                }
+            }
+        }
+        Text(
+            "Yours takes about three seconds and stays on this screen until you save it.",
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            color = PantopusColors.appTextMuted,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 14.dp),
+        )
     }
 }
 

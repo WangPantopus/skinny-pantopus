@@ -28,6 +28,8 @@ import {
   Lock as LockIcon,
   ArrowRight,
   ShieldCheck,
+  Trash2,
+  Mailbox,
   Smartphone,
   Share2,
   Home,
@@ -67,59 +69,77 @@ function TopBar() {
         </span>
         <span className="text-lg font-bold -tracking-[0.02em] text-app-text">Pantopus</span>
       </div>
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-app-border bg-app-surface px-2.5 py-1 shadow-sm">
-        <Globe size={14} strokeWidth={2} className="text-app-text-secondary" />
-        <span className="text-[12.5px] font-semibold text-app-text-strong -tracking-[0.01em]">United States</span>
+      <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-app-text-muted">
+        <Globe size={13} strokeWidth={2} />
+        <span className="text-[12px] font-medium -tracking-[0.01em]">United States</span>
       </span>
     </div>
   );
 }
 
 // ── The hero step ───────────────────────────────────────────
+//
+// One job: get a stranger from a postcard, a share card or a search to
+// type their address. The field is the hero; the example card shows what
+// comes back (a glimpse, not a second page); the proof line answers the
+// privacy objection before it is raised. Two columns from lg, one below.
 function HeroStep({
   onSelect,
   onClear,
   onSubmit,
   canSubmit,
   onBrowse,
+  fromCard,
 }: {
   onSelect: (p: SelectedAddress) => void;
   onClear: () => void;
   onSubmit: () => void;
   canSubmit: boolean;
   onBrowse: () => void;
+  /** Opened from a mailed card (`/start?r=…`). */
+  fromCard: boolean;
 }) {
   return (
     <div className="flex flex-col min-h-screen pb-8">
       <TopBar />
-      <div className="flex-1 flex flex-col justify-center">
-        <h1 className="text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] font-bold -tracking-[0.028em] text-app-text">
-          See what&apos;s true about your address.
-        </h1>
-        <p className="mt-3.5 text-[15.5px] leading-[23px] text-app-text-secondary -tracking-[0.005em]">
-          Wildfire and flood risk, today&apos;s air, radon, water, who represents you, and the neighbors who&apos;ve
-          proven they&apos;re real. Free, no account.
-        </p>
-
-        <div className="mt-6 flex flex-col gap-2.5">
-          <AddressAutocomplete onSelect={onSelect} onClear={onClear} onSubmit={onSubmit} autoFocus />
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={!canSubmit}
-            className="h-[54px] w-full flex items-center justify-center gap-1.5 rounded-2xl bg-primary-600 text-white text-base font-semibold -tracking-[0.01em] shadow-[var(--shadow-primary)] enabled:hover:bg-primary-700 disabled:opacity-50 transition-colors"
+      <div className="flex-1 flex flex-col justify-center py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-center lg:gap-14">
+        <div>
+          {fromCard ? (
+            <span
+              data-testid="start-from-card"
+              className="inline-flex items-center gap-1.5 rounded-full bg-app-home-bg px-2.5 py-1 text-[12.5px] font-semibold text-app-home"
+            >
+              <Mailbox size={14} strokeWidth={2.25} />
+              From the card in your mailbox
+            </span>
+          ) : null}
+          <h1
+            className={`text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] lg:text-[42px] lg:leading-[48px] font-bold -tracking-[0.028em] text-app-text text-balance ${fromCard ? 'mt-4' : ''}`}
           >
-            See your place
-            <ArrowRight size={17} strokeWidth={2.5} />
-          </button>
+            See what&apos;s true about your address.
+          </h1>
+          <p className="mt-3.5 max-w-[46ch] text-[15.5px] leading-[23px] text-app-text-secondary -tracking-[0.005em]">
+            Wildfire and flood risk, today&apos;s air, radon, water, who represents you, and the neighbors who&apos;ve
+            proven they&apos;re real. Free, no account.
+          </p>
+
+          <div className="mt-6 flex flex-col gap-2.5">
+            <AddressAutocomplete onSelect={onSelect} onClear={onClear} onSubmit={onSubmit} autoFocus />
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={!canSubmit}
+              className="h-[54px] w-full flex items-center justify-center gap-1.5 rounded-2xl bg-primary-600 text-white text-base font-semibold -tracking-[0.01em] shadow-[var(--shadow-primary)] enabled:hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            >
+              See your place
+              <ArrowRight size={17} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          <PrivacyProof />
         </div>
 
-        <div className="mt-4 flex items-start justify-center gap-1.5 px-2">
-          <LockIcon size={13} strokeWidth={2} className="mt-px text-app-text-muted shrink-0" />
-          <span className="text-[12.5px] leading-[17px] text-app-text-secondary text-center">
-            Private by default. Verification builds trust, not exposure.
-          </span>
-        </div>
+        <ExampleReadings className="mt-8 lg:mt-0" />
       </div>
 
       <div className="flex flex-col items-center gap-0.5">
@@ -155,6 +175,69 @@ function HeroStep({
         </Link>
       </div>
     </div>
+  );
+}
+
+// The privacy answer, in the one place a stranger is deciding whether to
+// type their address. Specific beats reassuring: it names what a neighbor
+// sees and what they never see.
+function PrivacyProof() {
+  return (
+    <div className="mt-4 flex items-start gap-2 px-1" data-testid="start-privacy-proof">
+      <ShieldCheck size={15} strokeWidth={2.1} className="mt-[3px] text-app-home shrink-0" />
+      <span className="text-[13px] leading-[19px] text-app-text-secondary">
+        Neighbors see a first name and a street.{' '}
+        <span className="font-semibold text-app-text">Never your house number.</span>
+      </span>
+    </div>
+  );
+}
+
+// A glimpse of the answer, using the dashboard's own row grammar so the
+// real preview feels like more of the same. Static and clearly labeled
+// as an example: no network, no synthesized "your" data.
+const EXAMPLE_READINGS: { icon: LucideIcon; label: string; value: string; tone: 'good' | 'watch' | 'neutral' }[] = [
+  { icon: Wind, label: 'Air today', value: 'Good · AQI 24', tone: 'good' },
+  { icon: Waves, label: 'Flood zone', value: 'X · minimal', tone: 'good' },
+  { icon: TestTube, label: 'Radon', value: 'Zone 1 · test it', tone: 'watch' },
+  { icon: Trash2, label: 'Next pickup', value: 'Tue · garbage + recycling', tone: 'neutral' },
+];
+
+const TONE_DOT: Record<'good' | 'watch' | 'neutral', string> = {
+  good: 'bg-app-home',
+  watch: 'bg-amber-500',
+  neutral: 'bg-app-text-muted',
+};
+
+function ExampleReadings({ className = '' }: { className?: string }) {
+  return (
+    <aside
+      aria-label="Example of what an address shows"
+      data-testid="start-example"
+      className={`rounded-2xl border border-app-border bg-app-surface shadow-sm ${className}`}
+    >
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-app-text-muted">Example</span>
+        <span className="text-[12px] font-medium text-app-text-muted">A home in Camas, WA</span>
+      </div>
+      <ul className="divide-y divide-app-border-subtle">
+        {EXAMPLE_READINGS.map(({ icon: Icon, label, value, tone }) => (
+          <li key={label} className="flex items-center gap-3 px-4 py-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-app-bg text-app-text-secondary">
+              <Icon size={16} strokeWidth={2} />
+            </span>
+            <span className="flex-1 text-[14px] font-medium text-app-text">{label}</span>
+            <span className="inline-flex items-center gap-1.5 text-[13.5px] text-app-text-secondary">
+              <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} aria-hidden />
+              {value}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="px-4 pt-2 pb-3.5 text-[12px] leading-[17px] text-app-text-muted">
+        Yours takes about three seconds and stays on this page until you save it.
+      </p>
+    </aside>
   );
 }
 
@@ -542,6 +625,7 @@ function UnsupportedRegion({ onBrowse }: { onBrowse: () => void }) {
 // ── The funnel ──────────────────────────────────────────────
 export default function StartFunnel() {
   const router = useRouter();
+  const [fromCard, setFromCard] = useState(false);
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
@@ -553,7 +637,10 @@ export default function StartFunnel() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const route = params.get('r') || params.get('route');
-    if (route) api.rememberFunnelRoute(route);
+    if (route) {
+      api.rememberFunnelRoute(route);
+      setFromCard(true);
+    }
     const address = (params.get('address') || '').trim();
     if (!address) return;
     let cancelled = false;
@@ -630,13 +717,14 @@ export default function StartFunnel() {
   if (!submitted) {
     return (
       <div className="min-h-screen bg-app-bg">
-        <div className="mx-auto w-full max-w-[480px] sm:max-w-[540px] px-5">
+        <div className="mx-auto w-full max-w-[480px] sm:max-w-[540px] lg:max-w-[1000px] px-5">
           <HeroStep
             onSelect={setSelected}
             onClear={() => setSelected(null)}
             onSubmit={submit}
             canSubmit={!!selected}
             onBrowse={goBrowse}
+            fromCard={fromCard}
           />
         </div>
       </div>

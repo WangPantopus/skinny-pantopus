@@ -108,6 +108,29 @@ describe('StartFunnel — hero', () => {
     expect(screen.getByText(/see what's true about your address/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /see your place/i })).toBeDisabled();
   });
+
+  // The hero answers the privacy objection and shows a glimpse of the
+  // answer without any network: the example card is static and labeled.
+  it('shows the privacy proof line and a labeled example of the readings', () => {
+    renderFunnel();
+    expect(screen.getByTestId('start-privacy-proof')).toHaveTextContent(/never your house number/i);
+    const example = screen.getByTestId('start-example');
+    expect(example).toHaveTextContent(/example/i);
+    expect(example).toHaveTextContent(/air today/i);
+    expect(example).toHaveTextContent(/next pickup/i);
+    expect(mockPreview).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('start-from-card')).not.toBeInTheDocument();
+  });
+
+  it('shows the postcard chip when opened from a mailed card', () => {
+    window.history.pushState({}, '', '/start?r=eddm-camas-1');
+    try {
+      renderFunnel();
+      expect(screen.getByTestId('start-from-card')).toHaveTextContent(/card in your mailbox/i);
+    } finally {
+      window.history.pushState({}, '', '/start');
+    }
+  });
 });
 
 describe('StartFunnel — T0 preview', () => {
