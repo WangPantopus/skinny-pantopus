@@ -1375,7 +1375,17 @@ router.get('/home-task-media/:homeId/:taskId', verifyToken, async (req, res) => 
  * Upload a document as ownership verification evidence (deed, tax bill, etc.)
  * Stores in S3 and creates/updates HomeVerificationEvidence record.
  */
-router.post('/ownership-evidence/:homeId/:claimId', uploadLimiter, verifyToken, upload.single('file'), validateAndStripUploads, async (req, res) => {
+// Evidence uploads are keyed per USER (after auth), not per IP: the
+// instant verification door must not be throttled by a shared NAT, and a
+// single account must not get 30 tries per IP it can rotate through.
+const evidenceUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => (req.user && req.user.id) || req.ip,
+  message: 'Too many document uploads. Please try again later.',
+});
+
+router.post('/ownership-evidence/:homeId/:claimId', verifyToken, evidenceUploadLimiter, upload.single('file'), validateAndStripUploads, async (req, res) => {
   try {
     const userId = req.user.id;
     const { homeId, claimId } = req.params;
@@ -1464,16 +1474,28 @@ router.post('/ownership-evidence/:homeId/:claimId', uploadLimiter, verifyToken, 
       });
     }
 
-    // BUG 1C: Check for duplicate evidence (same content hash on same claim)
+    // BUG 1C (widened for the instant door): the same document may not be
+    // reused across ANY claim on this home — a bill recycled by a second
+    // claimant is the cheapest possible forgery.
+    const { data: homeClaims } = await supabaseAdmin
+      .from('HomeOwnershipClaim')
+      .select('id')
+      .eq('home_id', homeId);
+    const homeClaimIds = (homeClaims || []).map((c) => c.id);
+    if (!homeClaimIds.includes(claimId)) homeClaimIds.push(claimId);
     const { data: duplicateEvidence } = await supabaseAdmin
       .from('HomeVerificationEvidence')
-      .select('id')
-      .eq('claim_id', claimId)
+      .select('id, claim_id')
+      .in('claim_id', homeClaimIds)
       .contains('metadata', { content_hash: contentHash })
       .maybeSingle();
 
     if (duplicateEvidence) {
-      return res.status(409).json({ error: 'This document has already been uploaded for this claim.' });
+      return res.status(409).json({
+        error: duplicateEvidence.claim_id === claimId
+          ? 'This document has already been uploaded for this claim.'
+          : 'This document has already been submitted for this address.',
+      });
     }
 
     // Upload to S3

@@ -46,15 +46,12 @@ export default function VerifiedSuccess({ onContinue }: VerifiedSuccessProps) {
   const homeId = home?.id ?? null;
   const addressLine = home ? [home.address, home.city].filter(Boolean).join(', ') : 'your home';
 
+  // The prize, as it actually exists after PR 353 (Wedge v2 D4): proof
+  // you live here, your permanent rank on the block, and the mailbox.
   const rows: { icon: LucideIcon; label: string; sub: string; href: string }[] = [
-    {
-      icon: MessageCircle,
-      label: 'Message neighbors',
-      sub: 'Start a conversation with people on your block',
-      href: homeId ? `/app/homes/${homeId}/message` : '/app/chat',
-    },
-    { icon: Mailbox, label: 'Your mailbox', sub: 'Track packages, civic notices, and permits', href: '/app/mailbox' },
-    { icon: FileText, label: 'Generate a residency letter', sub: 'Proof of address, ready to download', href: '/app/identity' },
+    { icon: FileText, label: 'Proof you live here', sub: 'Your badge, a residency letter, and a shareable Residency Pass', href: '/app/place/identity' },
+    { icon: MessageCircle, label: 'Your Block Founder number', sub: 'A permanent rank on your block, and the real rents your verified neighbors pay', href: '/app/place/block' },
+    { icon: Mailbox, label: 'Your mailbox', sub: 'Packages, notices, and the offers that come to this address', href: '/app/mailbox' },
   ];
 
   return (

@@ -15,31 +15,33 @@ import SwiftUI
 // MARK: - Method model
 
 public enum PlaceVerifyMethod: String, CaseIterable, Hashable, Sendable {
-    case mail
-    case records
+    // Two doors with equal billing (Wedge Phase 2, D3): the instant one
+    // first, the postcard as the keepsake, the landlord as the third path.
     case document
+    case mail
+    case landlord
 
     var icon: PantopusIcon {
         switch self {
-        case .mail: .send
-        case .records: .fileSearch
         case .document: .upload
+        case .mail: .send
+        case .landlord: .shieldCheck
         }
     }
 
     var label: String {
         switch self {
-        case .mail: "Mail a code to my address"
-        case .records: "Match property records"
         case .document: "Upload a document"
+        case .mail: "Mail a code to my address"
+        case .landlord: "Confirm with your landlord"
         }
     }
 
     var sub: String {
         switch self {
-        case .mail: "We send a postcard with a code. Most common."
-        case .records: "Instant if your name is on the deed or lease"
-        case .document: "A utility bill, lease, or bank statement"
+        case .document: "A utility bill, lease, or ID. A person reviews it, usually within hours."
+        case .mail: "A postcard with a code, 3–7 days. Yours to keep."
+        case .landlord: "Your landlord confirms that you live here."
         }
     }
 }
@@ -53,10 +55,24 @@ struct PlaceVerifyBenefit: Identifiable {
     }
 }
 
+// The T4 unlocks that actually exist (Wedge v2 D4): proof you live here,
+// your rank on the block, and the rooms only verified neighbors see.
 let placeVerifyBenefits: [PlaceVerifyBenefit] = [
-    .init(icon: .messageCircle, label: "Message your verified neighbors", sub: "Direct messages with the people on your block"),
-    .init(icon: .badgeCheck, label: "Your verified badge", sub: "The address-proven check on your profile"),
-    .init(icon: .mailbox, label: "Your digital mailbox", sub: "Packages, civic notices, and permits in one place")
+    .init(
+        icon: .badgeCheck,
+        label: "Proof you live here",
+        sub: "Your verified badge, a residency letter, and a shareable Residency Pass"
+    ),
+    .init(
+        icon: .mailbox,
+        label: "Your mailbox and your rank",
+        sub: "The digital mailbox opens, and you take a permanent Block Founder number"
+    ),
+    .init(
+        icon: .messageCircle,
+        label: "What only verified neighbors see",
+        sub: "Real rents on your block, neighbor messages, the Fridge Card, rate watch"
+    )
 ]
 
 // MARK: - B1 — the verify sheet
@@ -66,7 +82,7 @@ struct PlaceVerifySheet: View {
     var onStart: (PlaceVerifyMethod) -> Void
     var onClose: () -> Void
 
-    @State private var selected: PlaceVerifyMethod = .mail
+    @State private var selected: PlaceVerifyMethod = .document
 
     var body: some View {
         VStack(spacing: 0) {
@@ -155,7 +171,8 @@ struct PlaceVerifySheet: View {
     private var calmNote: some View {
         HStack(alignment: .top, spacing: 9) {
             Icon(.clock, size: 15, strokeWidth: 2, color: Theme.Color.appTextMuted).padding(.top, 1)
-            Text("This can take a few days. Everything you have now stays available while you wait.")
+            Text("Documents are reviewed by a person, usually within hours; a postcard takes 3–7 days. "
+                + "Everything you have now stays available while you wait.")
                 .font(.system(size: 12.5))
                 .lineSpacing(2)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -376,9 +393,9 @@ struct PlaceVerifyStatusView: View {
 
     private var pendingCopy: String {
         switch method {
-        case .mail: "We've mailed a postcard to your address. Enter the code when it arrives — usually within a few days."
-        case .records: "We're matching your name against the deed and lease records on file. This is usually instant."
-        case .document: "We're reviewing the document you uploaded. We'll let you know shortly."
+        case .document: "A person is reviewing your document — usually within hours, always within a business day."
+        case .mail: "We've mailed a postcard to your address. Enter the code when it arrives — 3–7 days. Keep the card."
+        case .landlord: "We've asked your landlord to confirm that you live here. This usually takes 1–3 business days."
         }
     }
 }

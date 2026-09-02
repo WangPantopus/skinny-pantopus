@@ -13,7 +13,7 @@
 
 import SwiftUI
 
-// swiftlint:disable cyclomatic_complexity
+// swiftlint:disable cyclomatic_complexity file_length type_body_length
 
 // MARK: - Section display config (icon / title / layout, per id)
 
@@ -167,6 +167,7 @@ enum PlacePresentation {
         case .alerts: .init(icon: .bell, title: "Alerts", inline: true)
         case .sunriseSunset: .init(icon: .sunrise, title: "Sunrise & sunset", inline: true)
         case .goodDayTo: .init(icon: .listChecks, title: "Good day to\u{2026}", inline: true)
+        case .addressCalendar: .init(icon: .calendarDays, title: "At this address", inline: true)
         case .yourHome: .init(icon: .home, title: "Your home", sparkline: true)
         case .homeSystems: .init(icon: .wrench, title: "Systems", inline: true)
         case .flood: .init(icon: .waves, title: "Flood", inline: true)
@@ -230,6 +231,16 @@ enum PlacePresentation {
             return .init(
                 value: yes.prefix(2).map { $0.label.lowercased() }.joined(separator: ", "),
                 statusDot: Theme.Color.home
+            )
+        case .addressCalendar:
+            guard let d = env.addressCalendar else { return .init() }
+            guard let next = d.next else {
+                return .init(value: "Nothing in the next two weeks", statusDot: Theme.Color.home)
+            }
+            let when = next.daysUntil == 0 ? "today" : next.daysUntil == 1 ? "tomorrow" : "in \(next.daysUntil) days"
+            return .init(
+                value: "\(next.title) \(when)",
+                statusDot: next.daysUntil <= 1 ? Theme.Color.warning : Theme.Color.home
             )
         case .homeSystems:
             guard let d = env.homeSystems else { return .init() }

@@ -2991,8 +2991,14 @@ public struct HubTabRoot: View {
                     onOpenPulse: { push(.placePulse(homeId: homeId)) },
                     onSelectHome: { id in push(.placeDashboard(homeId: id)) },
                     onAddPlace: { push(.addHome) },
-                    onStartVerify: { method, address in
-                        push(.placeVerifyStatus(homeId: homeId, method: method, address: address))
+                    // The sheet's doors open the REAL flows (Wedge Phase 2, D3);
+                    // the simulated status screen stays only for previews.
+                    onStartVerify: { method, _ in
+                        switch method {
+                        case .document: push(.verifyResidency(homeId: homeId))
+                        case .mail: push(.postcardVerification(homeId: homeId))
+                        case .landlord: push(.verifyLandlord(homeId: homeId))
+                        }
                     },
                     onComposeMessage: { address in
                         push(.neighborCompose(homeId: homeId, address: address, recipient: nil))

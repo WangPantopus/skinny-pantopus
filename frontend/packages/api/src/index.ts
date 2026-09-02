@@ -300,6 +300,11 @@ export type {
   PlacePreviewMoneyLead,
 } from './endpoints/place';
 
+// Address calendar — what recurs at this address (wedge Phase 2, D6)
+export * as addressCalendar from './endpoints/addressCalendar';
+export { getAddressCalendar, setPickupDay, clearPickupDay } from './endpoints/addressCalendar';
+export type { PickupWeekday, AddressCalendarResponse, SetPickupDayResponse } from './endpoints/addressCalendar';
+
 // Neighborhood — the density-gated door (four-tab IA, wedge Phase 1)
 export * as neighborhood from './endpoints/neighborhood';
 export { getNeighborhoodMeter } from './endpoints/neighborhood';

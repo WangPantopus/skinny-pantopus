@@ -639,6 +639,45 @@ public enum HomesEndpoints {
     }
 }
 
+// MARK: - Address calendar (Wedge Phase 2, D6) — backend/routes/addressCalendar.js
+
+public struct SetPickupDayRequest: Encodable, Sendable {
+    /// MO TU WE TH FR SA SU
+    public let weekday: String
+    public let recyclingEveryOtherWeek: Bool
+
+    public init(weekday: String, recyclingEveryOtherWeek: Bool = true) {
+        self.weekday = weekday
+        self.recyclingEveryOtherWeek = recyclingEveryOtherWeek
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case weekday
+        case recyclingEveryOtherWeek = "recycling_every_other_week"
+    }
+}
+
+public struct AddressCalendarResponse: Decodable, Sendable {
+    public let calendar: PlaceAddressCalendarData
+}
+
+public enum AddressCalendarEndpoints {
+    /// `GET /api/homes/:id/calendar`
+    public static func calendar(homeId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/calendar")
+    }
+
+    /// `PUT /api/homes/:id/calendar/pickup-day`
+    public static func setPickupDay(homeId: String, request: SetPickupDayRequest) -> Endpoint {
+        Endpoint(method: .put, path: "/api/homes/\(homeId)/calendar/pickup-day", body: request)
+    }
+
+    /// `DELETE /api/homes/:id/calendar/pickup-day`
+    public static func clearPickupDay(homeId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/homes/\(homeId)/calendar/pickup-day")
+    }
+}
+
 // MARK: - Access codes request bodies
 
 /// POST body for `createAccessSecret`. Mirrors the destructure at

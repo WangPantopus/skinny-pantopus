@@ -18,6 +18,7 @@ const { checkHomePermission, writeAuditLog, applyOccupancyTemplate, mapLegacyRol
 const policy = require('../utils/homeSecurityPolicy');
 const propertyDataService = require('../services/propertyDataService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
+const adminAlerts = require('../services/adminAlerts');
 const homeClaimComparisonService = require('../services/homeClaimComparisonService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
@@ -297,11 +298,17 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
     const homeId = req.params.id;
     const userId = req.user.id;
     const { claim_type, method } = req.body;
+    // The instant door (Wedge Phase 2, D3): a residency claim is reviewed
+    // by a person and never contests ownership, so it skips the owner-only
+    // policy (rental firewall, challenge routing, owner quotas).
+    const isResidencyClaim = claim_type === 'resident';
 
     // Expire claim window if past deadline
     await checkAndExpireClaimWindow(homeId);
 
-    const eligibility = await policy.canSubmitOwnerClaim(homeId, userId);
+    const eligibility = isResidencyClaim
+      ? await policy.canSubmitResidencyClaim(homeId, userId)
+      : await policy.canSubmitOwnerClaim(homeId, userId);
     homeClaimCompatService.logClaimSubmissionDecision({
       source: 'ownership_route',
       homeId,
@@ -314,6 +321,14 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       reasonCount: eligibility.errors?.length || 0,
     });
     if (!eligibility.allowed) {
+      if (isResidencyClaim) {
+        // Opaque, like the owner path — but hand back the active claim so
+        // evidence can still attach to it.
+        return res.status(200).json({
+          message: "We're verifying your residency at this address. You'll be notified when complete.",
+          claim: { id: eligibility.existingClaimId || null, status: 'under_review' },
+        });
+      }
       if (eligibility.blockCode === 'EXISTING_IN_FLIGHT_CLAIM') {
         return res.status(409).json({
           error:
@@ -354,7 +369,7 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
 
     if (!home) return res.status(404).json({ error: 'Home not found' });
 
-    const rentalCheck = policy.evaluateRentalFirewall(home, method);
+    const rentalCheck = isResidencyClaim ? { blocked: false } : policy.evaluateRentalFirewall(home, method);
     if (rentalCheck.blocked) {
       return res.status(200).json({
         message: "We're verifying ownership for this address. You'll be notified when complete.",
@@ -365,7 +380,7 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
     const riskScore = await policy.getClaimRiskScore({ method }, userId);
 
     let initialState = 'submitted';
-    if (home.owner_claim_policy === 'review_required' && !policy.isClaimWindowActive(home)) {
+    if (!isResidencyClaim && home.owner_claim_policy === 'review_required' && !policy.isClaimWindowActive(home)) {
       initialState = 'pending_review';
     }
 
@@ -412,6 +427,37 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
     let responseClaimPhase = claim.claim_phase_v2;
     const responseRoutingClassification = claim.routing_classification;
     let householdResolutionState = await recalculateHouseholdResolutionState(homeId);
+
+    if (isResidencyClaim) {
+      // The Waiting Room tells the truth: an unverified occupancy becomes
+      // "document under review" (the enum value existed, nothing wrote it).
+      // Provisional / postcard states keep what they have.
+      try {
+        await supabaseAdmin
+          .from('HomeOccupancy')
+          .update({ verification_status: 'pending_doc' })
+          .eq('home_id', homeId)
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .eq('verification_status', 'unverified');
+      } catch (occErr) {
+        logger.warn('Residency claim: could not mark occupancy pending_doc (non-fatal)', { homeId, userId, error: occErr.message });
+      }
+      // "Usually within hours" is only true if a person hears about it.
+      adminAlerts.notifyClaimToReview({ claim, home, claimantUserId: userId }).catch(() => {});
+
+      return res.status(201).json({
+        message: "We're verifying your residency at this address. A person reviews documents, usually within hours.",
+        claim: {
+          id: claim.id,
+          status: 'under_review',
+          claim_phase_v2: responseClaimPhase,
+          routing_classification: responseRoutingClassification,
+        },
+        home_resolution: householdResolutionState,
+        next_step: 'upload_evidence',
+      });
+    }
 
     // ── BUG 5A: Property data match — auto-verify against public records ──
     if (method === 'property_data_match' && propertyDataService.isAvailable()) {

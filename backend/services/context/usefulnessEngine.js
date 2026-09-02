@@ -35,6 +35,7 @@ const COST_OF_INACTION = {
   bill_due: 0.85,       // a late fee is a hard dollar amount
   gig: 0.75,            // a paid commitment with a counterparty
   calendar: 0.70,       // an appointment that will not repeat
+  address_calendar: 0.60, // a missed pickup is a week of trash; a tax date is money
   temperature: 0.65,    // only generated for extremes — pipes, health
   task_due: 0.55,
   mail: 0.55,           // urgent mail carries deadlines
@@ -261,6 +262,62 @@ function generateCalendarSignals(internal) {
         data: { event_id: event.id, start_at: event.start_at, event_type: event.event_type },
       };
     });
+}
+
+/**
+ * Address-calendar signals (Wedge Phase 2, D6): what recurs at THIS
+ * address, surfaced the day it matters. A pickup or a tax date inside its
+ * lead window clears the push bar; a council meeting or hearing is worth
+ * a line in the briefing but not a lock-screen interrupt.
+ */
+const PICKUP_KINDS = new Set(['garbage', 'recycling', 'yard_waste', 'bulk_pickup', 'street_sweeping']);
+const MONEY_KINDS = new Set(['property_tax', 'utility_bill']);
+const SAFETY_KINDS = new Set(['burn_ban', 'boil_water', 'road_closure']);
+
+function generateAddressCalendarSignals(addressCalendar) {
+  const upcoming = addressCalendar && Array.isArray(addressCalendar.upcoming) ? addressCalendar.upcoming : [];
+  const out = [];
+  const seen = new Set();
+  for (const e of upcoming) {
+    if (!e || typeof e.days_until !== 'number') continue;
+    const lead = Number.isFinite(e.lead_days) ? e.lead_days : 1;
+    if (e.days_until > lead) continue;
+    if (seen.has(e.kind)) continue; // one line per kind per briefing
+    seen.add(e.kind);
+
+    const when = e.days_until === 0 ? 'today' : e.days_until === 1 ? 'tomorrow' : `in ${e.days_until} days`;
+    let score;
+    let detail;
+    let urgency;
+    if (PICKUP_KINDS.has(e.kind)) {
+      score = 0.62;
+      urgency = e.days_until <= 1 ? 'medium' : 'low';
+      detail = e.days_until === 0 ? `${e.title} is today. Bins out this morning if they aren't yet.` : `${e.title} is ${when}. Bins out the night before.`;
+    } else if (MONEY_KINDS.has(e.kind)) {
+      score = 0.70;
+      urgency = e.days_until <= 3 ? 'high' : 'medium';
+      detail = `${e.title} — ${when}.`;
+    } else if (SAFETY_KINDS.has(e.kind)) {
+      score = 0.66;
+      urgency = 'high';
+      detail = `${e.title} — ${when}.`;
+    } else {
+      score = 0.34; // council, hearings, school, ballots: informational
+      urgency = 'low';
+      detail = `${e.title} — ${when}.`;
+    }
+    out.push({
+      kind: 'address_calendar',
+      score,
+      label: `${e.title} ${when}`,
+      detail: e.confidence === 'unverified' ? `${detail} (Unconfirmed — set your pickup day to make it yours.)` : detail,
+      urgency,
+      source_provider: 'pantopus',
+      action: { label: 'See your calendar', route: '/place/today' },
+      data: { kind: e.kind, date: e.date, days_until: e.days_until, scope: e.scope, confidence: e.confidence },
+    });
+  }
+  return out;
 }
 
 /**
@@ -522,6 +579,7 @@ function rankSignals(inputs) {
     isWeekend,
     recentBriefings = [],
     localUpdates = null,
+    addressCalendar = null,
   } = inputs;
 
   // Generate all candidate signals
@@ -533,6 +591,7 @@ function rankSignals(inputs) {
     ...generateBillSignals(internal),
     ...generateTaskSignals(internal),
     ...generateCalendarSignals(internal),
+    ...generateAddressCalendarSignals(addressCalendar),
     ...generateMailSignals(internal),
     ...generateGigSignals(internal),
     ...generateLocalUpdateSignals(localUpdates, { isWeekend }),
@@ -572,4 +631,5 @@ function rankSignals(inputs) {
   };
 }
 
-module.exports = { rankSignals, computeDisplayMode, costOfInaction, COST_OF_INACTION };
+module.exports = {
+  generateAddressCalendarSignals, rankSignals, computeDisplayMode, costOfInaction, COST_OF_INACTION };

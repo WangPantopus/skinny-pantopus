@@ -46,6 +46,12 @@ jest.mock('../services/ai/seasonalEngine', () => ({
     is_relevant_region: true,
   })),
 }));
+// The address calendar (Wedge Phase 2, D6) has its own suite; this one
+// drives an order-sensitive supabase stub, so keep the calendar out of it.
+jest.mock('../services/addressCalendarService', () => ({
+  composeForHomeId: jest.fn(async () => null),
+  composeForHome: jest.fn(async () => null),
+}));
 
 // ── Test data ──────────────────────────────────────────────────────────────
 
@@ -115,6 +121,7 @@ describe('Location Resolver', () => {
       return { from: mockFrom };
     });
     jest.mock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+    jest.mock('../services/addressCalendarService', () => ({ composeForHomeId: jest.fn(async () => null), composeForHome: jest.fn(async () => null) }));
     resolveLocation = require('../services/context/locationResolver').resolveLocation;
   });
 
@@ -423,6 +430,7 @@ describe('Briefing History Service', () => {
     jest.clearAllMocks();
     jest.mock('../config/supabaseAdmin', () => ({ from: jest.fn() }));
     jest.mock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+    jest.mock('../services/addressCalendarService', () => ({ composeForHomeId: jest.fn(async () => null), composeForHome: jest.fn(async () => null) }));
     getRecentBriefings = require('../services/context/briefingHistoryService').getRecentBriefings;
   });
 
@@ -888,6 +896,7 @@ describe('Provider Orchestrator', () => {
     // Mock all dependencies
     jest.mock('../config/supabaseAdmin', () => ({ from: jest.fn() }));
     jest.mock('../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
+    jest.mock('../services/addressCalendarService', () => ({ composeForHomeId: jest.fn(async () => null), composeForHome: jest.fn(async () => null) }));
     jest.mock('../services/context/locationResolver', () => ({
       resolveLocation: jest.fn(() => ({
         latitude: 45.6, longitude: -122.7, label: 'Near Home', source: 'primary_home',

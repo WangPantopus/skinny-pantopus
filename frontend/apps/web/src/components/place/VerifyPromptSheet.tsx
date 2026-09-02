@@ -56,10 +56,17 @@ interface Method {
 // /app/place (the success reveal) instead of the home dashboard.
 const METHODS: Method[] = [
   {
+    id: 'document',
+    icon: Upload,
+    label: 'Upload a document',
+    sub: 'A utility bill, lease, or ID. A person reviews it, usually within hours.',
+    href: (h) => `/app/homes/${h}/verify-residency?return=place`,
+  },
+  {
     id: 'mail',
     icon: Send,
     label: 'Mail a code to my address',
-    sub: 'We send a postcard with a code. Most common.',
+    sub: 'A postcard with a code, 3–7 days. Yours to keep.',
     href: (h) => `/app/homes/${h}/verify-postcard?return=place`,
   },
   {
@@ -69,21 +76,15 @@ const METHODS: Method[] = [
     sub: 'Your landlord confirms that you live here.',
     href: (h) => `/app/homes/${h}/verify-landlord?return=place`,
   },
-  {
-    id: 'document',
-    icon: Upload,
-    label: 'Upload a document',
-    sub: 'A utility bill, lease, or bank statement.',
-    href: (h) => `/app/homes/${h}/claim-owner/evidence?return=place`,
-  },
 ];
 
-// What verifying adds — the Band-D unlock, framed as a promise (no
-// chevrons; these are not tappable destinations).
+// What verifying adds — the T4 unlocks that actually exist (Wedge v2 D4:
+// the prize is proof you live here, money that's real, and the rooms
+// that open), framed as a promise (no chevrons; not tappable).
 const BENEFITS: { icon: LucideIcon; label: string; sub: string }[] = [
-  { icon: MessageCircle, label: 'Message your verified neighbors', sub: 'Direct messages with the people on your block' },
-  { icon: BadgeCheck, label: 'Your verified badge', sub: 'The address-proven check on your profile' },
-  { icon: Mailbox, label: 'Your digital mailbox', sub: 'Packages, civic notices, and permits in one place' },
+  { icon: BadgeCheck, label: 'Proof you live here', sub: 'Your verified badge, a residency letter, and a shareable Residency Pass' },
+  { icon: Mailbox, label: 'Your mailbox and your rank', sub: 'The digital mailbox opens, and you take a permanent Block Founder number' },
+  { icon: MessageCircle, label: 'What only verified neighbors see', sub: 'Real rents on your block, neighbor messages, the Fridge Card, rate watch' },
 ];
 
 function Overline({ children }: { children: React.ReactNode }) {
@@ -109,7 +110,7 @@ function Radio({ selected }: { selected: boolean }) {
 
 export default function VerifyPromptSheet({ open, onClose, homeId, address }: VerifyPromptSheetProps) {
   const router = useRouter();
-  const [selected, setSelected] = useState<MethodId>('mail');
+  const [selected, setSelected] = useState<MethodId>('document');
 
   const handleStart = () => {
     const method = METHODS.find((m) => m.id === selected) ?? METHODS[0];
@@ -200,7 +201,7 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
       <div className="flex items-start gap-2 px-0.5">
         <Clock size={15} strokeWidth={2} className="shrink-0 mt-0.5 text-app-text-muted" />
         <span className="text-[12.5px] text-app-text-secondary leading-[18px]">
-          This can take a few days. Everything you have now stays available while you wait.
+          Documents are reviewed by a person, usually within hours; a postcard takes 3–7 days. Everything you have now stays available while you wait.
         </span>
       </div>
     </BottomSheet>

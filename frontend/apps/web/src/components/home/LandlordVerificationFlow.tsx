@@ -116,7 +116,7 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
         homeId={homeId}
         onRetry={loadStatus}
         onMailVerify={() => router.push(`/app/homes/${homeId}/verify-postcard`)}
-        onUploadLease={() => router.push(`/app/homes/${homeId}/claim-owner/evidence`)}
+        onUploadLease={() => router.push(`/app/homes/${homeId}/verify-residency`)}
       />
     );
   }
@@ -151,7 +151,7 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
       homeId={homeId}
       onInviteLandlord={() => router.push(`/app/homes/${homeId}/invite-landlord`)}
       onMailVerify={() => router.push(`/app/homes/${homeId}/verify-postcard`)}
-      onUploadLease={() => router.push(`/app/homes/${homeId}/claim-owner/evidence`)}
+      onUploadLease={() => router.push(`/app/homes/${homeId}/verify-residency`)}
       onBack={onBack}
     />
   );

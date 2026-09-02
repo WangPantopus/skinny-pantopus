@@ -50,6 +50,8 @@ const PLACE_SECTION_META = {
   // Verdicts, not readings — derived from the weather/AQI payload already
   // fetched for the two layers above, crossed with the home's own facts.
   good_day_to: { group: 'today', band: 'A', source: 'Pantopus · derived from today\'s conditions', layer: null },
+  // Wedge Phase 2 (D6) — what recurs at THIS address: pickup days, tax dates, council, hearings.
+  address_calendar: { group: 'today', band: 'A', source: 'Pantopus registry · city and state sources', layer: null },
   // Band B (W0.2) — exact property facts + valuation (ATTOM).
   your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM', layer: null },
   // Band C — the household's OWN record, the first section in that band.

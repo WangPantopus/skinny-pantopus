@@ -232,6 +232,46 @@ export interface PlaceGoodDayData {
   tiles: PlaceGoodDayTile[];
 }
 
+/** Address-calendar event kinds (AddressCalendarRule.kind). */
+export type PlaceCalendarKind =
+  | 'garbage' | 'recycling' | 'yard_waste' | 'bulk_pickup' | 'street_sweeping'
+  | 'property_tax' | 'utility_bill' | 'burn_ban' | 'boil_water' | 'road_closure'
+  | 'council' | 'permit_hearing' | 'school' | 'election_deadline' | 'other';
+
+export interface PlaceCalendarEvent {
+  rule_id: string;
+  kind: PlaceCalendarKind;
+  title: string;
+  detail: string | null;
+  /** Calendar date, YYYY-MM-DD, in the home's local time. */
+  date: string;
+  days_until: number;
+  all_day: boolean;
+  lead_days: number;
+  /** Which rule scope produced it — a home rule beats a city default. */
+  scope: 'home' | 'city' | 'county' | 'state';
+  source: string | null;
+  source_url: string | null;
+  /** 'unverified' = seeded by hand; the card says so. */
+  confidence: 'official' | 'unverified';
+}
+
+/**
+ * Wedge Phase 2 (D6) — the address calendar: what recurs at THIS address
+ * over the next two weeks. `needs_pickup_day` is true while garbage /
+ * recycling still come from a city default rather than the household's
+ * own pickup day.
+ */
+export interface PlaceAddressCalendarData {
+  upcoming: PlaceCalendarEvent[];
+  next: PlaceCalendarEvent | null;
+  needs_pickup_day: boolean;
+  window_days: number;
+  rule_count: number;
+  /** The home's local "today", YYYY-MM-DD. */
+  today: string;
+}
+
 // ── Risk & readiness ─────────────────────────────────────────
 
 export type FloodRiskLevel = 'minimal' | 'moderate' | 'high';
@@ -739,6 +779,7 @@ export interface PlaceSectionDataMap {
   alerts: PlaceAlertsData;
   sunrise_sunset: PlaceSunriseSunsetData;
   good_day_to: PlaceGoodDayData;
+  address_calendar: PlaceAddressCalendarData;
   flood: PlaceFloodData;
   heat_cold: PlaceHeatColdData;
   seismic: PlaceSeismicData;
@@ -768,6 +809,7 @@ export const PLACE_SECTION_IDS = [
   'alerts',
   'sunrise_sunset',
   'good_day_to',
+  'address_calendar',
   'your_home',
   'home_systems',
   'flood',
@@ -804,6 +846,7 @@ export const PLACE_SECTION_META: Record<PlaceSectionId, PlaceSectionMeta> = {
   alerts: { group: 'today', band: 'A', source: 'National Weather Service', layer: null },
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo', layer: null },
   good_day_to: { group: 'today', band: 'A', source: 'Pantopus · derived from today\'s conditions', layer: null },
+  address_calendar: { group: 'today', band: 'A', source: 'Pantopus registry · city and state sources', layer: null },
   your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM', layer: null },
   home_systems: { group: 'your_home', band: 'C', source: 'Your household record', layer: null },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer', layer: 3 },

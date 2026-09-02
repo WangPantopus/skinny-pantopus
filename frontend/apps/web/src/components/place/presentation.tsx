@@ -15,6 +15,7 @@ import {
   Bell,
   Sunrise,
   ListChecks,
+  CalendarDays,
   Thermometer,
   Wrench,
   Waves,
@@ -53,6 +54,7 @@ import type {
   PlaceAlertsData,
   PlaceSunriseSunsetData,
   PlaceGoodDayData,
+  PlaceAddressCalendarData,
   PlaceHeatColdData,
   PlaceHomeSystemsData,
   PlaceFloodData,
@@ -188,6 +190,22 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
     format: (data) => {
       const d = data as PlaceSunriseSunsetData;
       return { value: `${fmtSunClock(d.sunrise)} · ${fmtSunClock(d.sunset)}` };
+    },
+  },
+  address_calendar: {
+    icon: CalendarDays,
+    title: 'At this address',
+    inline: true,
+    format: (data) => {
+      const d = data as PlaceAddressCalendarData;
+      const next = d.next;
+      if (!next) return { value: 'Nothing in the next two weeks', statusDot: 'success' };
+      const when = next.days_until === 0 ? 'today' : next.days_until === 1 ? 'tomorrow' : `in ${next.days_until} days`;
+      return {
+        value: `${next.title} ${when}`,
+        statusDot: next.days_until <= 1 ? 'warning' : 'success',
+        caption: d.needs_pickup_day ? 'Set your pickup day to make this yours' : undefined,
+      };
     },
   },
   good_day_to: {

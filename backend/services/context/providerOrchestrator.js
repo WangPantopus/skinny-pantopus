@@ -17,6 +17,7 @@ const { rankSignals } = require('./usefulnessEngine');
 const { composeBriefing, composeTemplate } = require('./briefingComposer');
 const { getRecentBriefings } = require('./briefingHistoryService');
 const { getLocalUpdateContext } = require('./localUpdateProvider');
+const addressCalendarService = require('../addressCalendarService');
 const { buildTomorrowWeatherIntro, selectEveningSignal } = require('./eveningBriefingService');
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -178,6 +179,18 @@ function clearHubTodayCache(userId) {
  *   Portland's. Invalid coordinates fall back to the user's location.
  * @returns {Promise<Object>} HubTodayResult
  */
+// The address calendar for the location's home (Wedge Phase 2, D6) — null
+// when there is no home or the lookup fails; never throws.
+async function fetchAddressCalendar(homeId) {
+  if (!homeId) return null;
+  try {
+    return await addressCalendarService.composeForHomeId(homeId);
+  } catch (err) {
+    logger.warn('orchestrator: address calendar unavailable', { homeId, error: err.message });
+    return null;
+  }
+}
+
 async function getHubToday(userId, options = {}) {
   const detail = options.detail === true;
   const atLocation = options.atLocation ? locationFromCoordinates(options.atLocation) : null;
@@ -214,11 +227,12 @@ async function getHubToday(userId, options = {}) {
 
   // 2. Fetch all data in parallel with per-provider timing
   const fetchStartMs = Date.now();
-  const [weatherResult, aqiResult, alertsResult, internalResult] = await Promise.allSettled([
+  const [weatherResult, aqiResult, alertsResult, internalResult, addressCalendarResult] = await Promise.allSettled([
     fetchWeather(latitude, longitude),
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
+    fetchAddressCalendar(location.homeId),
   ]);
   const fetchMs = Date.now() - fetchStartMs;
 
@@ -232,6 +246,7 @@ async function getHubToday(userId, options = {}) {
     active_gigs: [], unread_notifications: 0,
     collected_at: new Date().toISOString(),
   };
+  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
 
   // Log per-provider status
   const providerTimings = { fetch_total_ms: fetchMs };
@@ -275,6 +290,7 @@ async function getHubToday(userId, options = {}) {
     alerts,
     seasonal: buildSeasonalInput(seasonal),
     internal,
+    addressCalendar,
     timeOfDay: getTimeOfDay(location.timezone),
     isWeekend: isWeekend(location.timezone),
   });
@@ -440,11 +456,12 @@ function defaultInternalContext() {
 
 async function composeMorningBriefing(userId, location) {
   const { latitude, longitude } = location;
-  const [weatherResult, aqiResult, alertsResult, internalResult, recentBriefingsResult] = await Promise.allSettled([
+  const [weatherResult, aqiResult, alertsResult, internalResult, addressCalendarResult, recentBriefingsResult] = await Promise.allSettled([
     fetchWeather(latitude, longitude),
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
+    fetchAddressCalendar(location.homeId),
     getRecentBriefings(userId),
   ]);
 
@@ -453,6 +470,7 @@ async function composeMorningBriefing(userId, location) {
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
   const recentBriefings = recentBriefingsResult.status === 'fulfilled' ? recentBriefingsResult.value : [];
   const internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
+  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
 
   const seasonal = getSeasonalContext({ latitude, longitude });
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
@@ -463,6 +481,7 @@ async function composeMorningBriefing(userId, location) {
     alerts,
     seasonal: buildSeasonalInput(seasonal),
     internal,
+    addressCalendar,
     timeOfDay: 'morning',
     isWeekend: weekend,
     recentBriefings: briefingHistory,
@@ -471,7 +490,7 @@ async function composeMorningBriefing(userId, location) {
   const baselineRankedOutput = rankSignals(baseRankInputs);
   const primarySignalKinds = new Set([
     'alert', 'aqi', 'precipitation', 'temperature',
-    'bill_due', 'task_due', 'calendar', 'mail', 'gig',
+    'bill_due', 'task_due', 'calendar', 'mail', 'gig', 'address_calendar',
   ]);
 
   let localUpdates = null;
@@ -549,10 +568,11 @@ async function composeMorningBriefing(userId, location) {
 
 async function composeEveningBriefing(userId, location) {
   const { latitude, longitude } = location;
-  const [weatherResult, alertsResult, internalResult, recentBriefingsResult] = await Promise.allSettled([
+  const [weatherResult, alertsResult, internalResult, addressCalendarResult, recentBriefingsResult] = await Promise.allSettled([
     fetchWeather(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
+    fetchAddressCalendar(location.homeId),
     getRecentBriefings(userId),
   ]);
 
@@ -560,11 +580,13 @@ async function composeEveningBriefing(userId, location) {
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
   const recentBriefings = recentBriefingsResult.status === 'fulfilled' ? recentBriefingsResult.value : [];
   const internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
+  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
 
   let selectedSignal = selectEveningSignal({
     alerts,
     internal,
+    addressCalendar,
     timeZone: location.timezone,
     recentBriefings: briefingHistory,
     includeEveningTip: false,
@@ -582,6 +604,7 @@ async function composeEveningBriefing(userId, location) {
     selectedSignal = selectEveningSignal({
       alerts,
       internal,
+      addressCalendar,
       timeZone: location.timezone,
       recentBriefings: briefingHistory,
       localUpdates,
@@ -593,6 +616,7 @@ async function composeEveningBriefing(userId, location) {
     selectedSignal = selectEveningSignal({
       alerts,
       internal,
+      addressCalendar,
       timeZone: location.timezone,
       recentBriefings: briefingHistory,
       includeEveningTip: true,

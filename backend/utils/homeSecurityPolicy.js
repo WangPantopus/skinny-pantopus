@@ -51,6 +51,81 @@ const ACTION_RISK_TIERS = {
 // Claim eligibility
 // ============================================================
 
+const MAX_RESIDENCY_CLAIMS_PER_30D = 5;
+
+/**
+ * Eligibility for a RESIDENCY claim (claim_type 'resident') — the instant
+ * verification door (Wedge Phase 2, D3): a resident uploads a utility bill,
+ * lease or ID, and a person reviews it.
+ *
+ * Deliberately NOT the owner policy: no rental firewall (a renter at a
+ * rented address is exactly who this is for), no challenge routing (a
+ * residency claim never contests ownership), no per-home owner-claim quota.
+ * What remains: the home must be active and unrestricted, a per-user
+ * 30-day cap, the rejection cooldown, and one active residency claim per
+ * user per home (an existing one is returned so evidence can attach to it).
+ */
+async function canSubmitResidencyClaim(homeId, userId) {
+  const errors = [];
+
+  const { data: home } = await supabaseAdmin
+    .from('Home')
+    .select('id, security_state, home_status')
+    .eq('id', homeId)
+    .single();
+  if (!home) return { allowed: false, errors: ['Home not found'], blockCode: null, existingClaimId: null };
+
+  if (home.home_status !== 'active') errors.push('Home is not active');
+  if (home.security_state === 'frozen' || home.security_state === 'frozen_silent') {
+    errors.push('Home is currently restricted');
+  }
+
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const { count: userClaimCount } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id', { count: 'exact', head: true })
+    .eq('claimant_user_id', userId)
+    .eq('claim_type', 'resident')
+    .gte('created_at', thirtyDaysAgo.toISOString());
+  if ((userClaimCount || 0) >= MAX_RESIDENCY_CLAIMS_PER_30D) {
+    errors.push('You have reached the maximum number of residency claims for this period');
+  }
+
+  const cooldownDate = new Date(now.getTime() - REJECTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+  const { data: recentRejection } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('claimant_user_id', userId)
+    .eq('claim_type', 'resident')
+    .eq('state', 'rejected')
+    .gte('updated_at', cooldownDate.toISOString())
+    .limit(1)
+    .maybeSingle();
+  if (recentRejection) errors.push('Please wait before submitting another claim for this home');
+
+  const { data: existingActive } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('claimant_user_id', userId)
+    .eq('claim_type', 'resident')
+    .in('state', ['draft', 'submitted', 'pending_review', 'needs_more_info'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return {
+    allowed: errors.length === 0 && !existingActive,
+    errors: existingActive ? [...errors, 'You already have an active residency claim for this home'] : errors,
+    blockCode: existingActive ? 'EXISTING_RESIDENCY_CLAIM' : null,
+    existingClaimId: existingActive ? existingActive.id : null,
+    routingClassification: 'residency_claim',
+    flags: householdClaimConfig.flags,
+  };
+}
+
 async function canSubmitOwnerClaim(homeId, userId) {
   const errors = [];
   let routingClassification = 'standalone_claim';
@@ -449,6 +524,7 @@ async function recalculateTier(claimId) {
 
 module.exports = {
   canSubmitOwnerClaim,
+  canSubmitResidencyClaim,
   getRequiredVerificationTier,
   canOverrideExistingOwners,
   getTierRank,

@@ -35,6 +35,7 @@ const providerOrchestrator = require('./context/providerOrchestrator');
 const neighborhoodProfileService = require('./ai/neighborhoodProfileService');
 const propertyIntelligenceService = require('./ai/propertyIntelligenceService');
 const placeSectionAdapters = require('./placeSectionAdapters');
+const addressCalendarService = require('./addressCalendarService');
 const { getHomePrivacy } = require('./homePrivacyService');
 const { buildGoodDayTiles } = require('./goodDayEngine');
 const { getDensityBucket } = require('./place/densityReader');
@@ -442,6 +443,30 @@ async function composeHeatCold(home, hub) {
     : null;
 
   return placeSectionAdapters.composeHeatCold(home, weather);
+}
+
+// Wedge Phase 2 (D6) — the address calendar. Never throws; a home with no
+// city/state (or no rules in scope yet) is `unavailable`, not an error.
+async function composeAddressCalendar(home) {
+  if (!home || !home.state || !home.city) {
+    return [serializePlaceSection('address_calendar', {
+      status: 'unavailable',
+      unavailableReason: 'We need this home\'s city to look up its calendar.',
+    })];
+  }
+  try {
+    const data = await addressCalendarService.composeForHome(home);
+    if (!data.rule_count) {
+      return [serializePlaceSection('address_calendar', {
+        status: 'unavailable',
+        unavailableReason: `No calendar for ${home.city} yet. Set your pickup day and it starts here.`,
+      })];
+    }
+    return [serializePlaceSection('address_calendar', { asOf: new Date().toISOString(), data })];
+  } catch (err) {
+    logger.warn('placeIntelligence: address_calendar failed', { homeId: home.id, error: err.message });
+    return [serializePlaceSection('address_calendar', { status: 'error' })];
+  }
 }
 
 async function composeNeighborhood(home) {
@@ -897,6 +922,7 @@ async function composeExemptionCheck(home, tier) {
 const COMPOSER_SECTIONS = [
   { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
   { ids: ['sunrise_sunset'], run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
+  { ids: ['address_calendar'], run: ({ home }) => composeAddressCalendar(home) },
   { ids: ['flood', 'census_context'], run: ({ home }) => composeNeighborhood(home) },
   { ids: ['heat_cold'], run: async ({ home, hubPromise }) => composeHeatCold(home, await hubPromise) },
   { ids: ['seismic'], run: ({ home }) => placeSectionAdapters.composeSeismic(home) },

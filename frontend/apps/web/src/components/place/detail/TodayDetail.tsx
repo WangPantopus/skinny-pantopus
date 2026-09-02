@@ -22,6 +22,7 @@ import type {
   PlaceWeatherAlert,
   PlaceSunriseSunsetData,
   PlaceGoodDayData,
+  PlaceAddressCalendarData,
   GoodDayVerdict,
   WeatherConditionCode,
   AirQualityCategory,
@@ -46,6 +47,7 @@ import {
 } from 'lucide-react';
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
+import AddressCalendarCard from './AddressCalendarCard';
 import { fmtTime, statusToState } from './format';
 
 // ── Weather glyphs — condition → lucide icon + token tint ────
@@ -526,7 +528,9 @@ function BriefingOptIn() {
   );
 }
 
-export default function TodayDetail({ intelligence }: { intelligence: PlaceIntelligence }) {
+export default function TodayDetail({ intelligence, homeId = null }: { intelligence: PlaceIntelligence; homeId?: string | null }) {
+  const calendar = findPlaceSection(intelligence, 'address_calendar');
+  const calendarReady = calendar && (calendar.status === 'ready' || calendar.status === 'stale' || calendar.status === 'partial') && calendar.data;
   const weather = findPlaceSection(intelligence, 'weather');
   const aqi = findPlaceSection(intelligence, 'air_quality');
   const alerts = findPlaceSection(intelligence, 'alerts');
@@ -589,10 +593,18 @@ export default function TodayDetail({ intelligence }: { intelligence: PlaceIntel
         )}
         {sun?.source ? <SourceNote name={sun.source} asOf="today" /> : null}
 
+        {/* The address calendar (Wedge Phase 2, D6): what recurs at THIS address. */}
+        <DetailSectionLabel>At this address</DetailSectionLabel>
+        {calendarReady ? (
+          <AddressCalendarCard homeId={homeId} data={calendar!.data as PlaceAddressCalendarData} />
+        ) : (
+          <SectionCard icon={Trash2} title="Pickup days, tax dates, hearings" state={calendar ? statusToState(calendar.status) : 'unavailable'} caption={calendar?.unavailable_reason ?? 'No calendar for this address yet.'} />
+        )}
+        {calendar?.source ? <SourceNote name={calendar.source} asOf="next two weeks" /> : null}
+
         <DetailSectionLabel>Coming soon</DetailSectionLabel>
         <div className="flex flex-col gap-2">
           <ComingSoonRow icon={Flower2} title="Allergen & pollen" sub="Tree, grass, and weed pollen counts" />
-          <ComingSoonRow icon={Trash2} title="Trash & recycling" sub="Your pickup day and what goes out" />
           <ComingSoonRow icon={ZapOff} title="Power outages" sub="Live outage map for your block" />
         </div>
       </div>

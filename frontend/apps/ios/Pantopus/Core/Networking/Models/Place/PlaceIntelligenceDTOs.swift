@@ -152,6 +152,7 @@ public enum PlaceSectionID: Sendable, Hashable {
     case alerts
     case sunriseSunset
     case goodDayTo
+    case addressCalendar
     case yourHome
     case homeSystems
     case flood
@@ -179,6 +180,7 @@ public enum PlaceSectionID: Sendable, Hashable {
         case "alerts": self = .alerts
         case "sunrise_sunset": self = .sunriseSunset
         case "good_day_to": self = .goodDayTo
+        case "address_calendar": self = .addressCalendar
         case "your_home": self = .yourHome
         case "home_systems": self = .homeSystems
         case "flood": self = .flood
@@ -208,6 +210,7 @@ public enum PlaceSectionID: Sendable, Hashable {
         case .alerts: "alerts"
         case .sunriseSunset: "sunrise_sunset"
         case .goodDayTo: "good_day_to"
+        case .addressCalendar: "address_calendar"
         case .yourHome: "your_home"
         case .homeSystems: "home_systems"
         case .flood: "flood"
@@ -1108,6 +1111,58 @@ public struct PlaceGoodDayData: Decodable, Sendable, Hashable {
     public let tiles: [PlaceGoodDayTile]
 }
 
+// MARK: - Address calendar (Wedge Phase 2, D6)
+
+/// One dated event at THIS address: garbage day, a tax date, a council
+/// meeting, a hearing. `scope` says which rule produced it (a home rule
+/// beats a city default); `confidence == "unverified"` means a hand-seeded
+/// default the card should hedge.
+public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
+    public let ruleId: String
+    public let kind: String
+    public let title: String
+    public let detail: String?
+    /// Calendar date, YYYY-MM-DD, in the home's local time.
+    public let date: String
+    public let daysUntil: Int
+    public let allDay: Bool
+    public let leadDays: Int
+    public let scope: String
+    public let source: String?
+    public let sourceUrl: String?
+    public let confidence: String
+
+    public var id: String { "\(ruleId):\(date)" }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, title, detail, date, scope, source, confidence
+        case ruleId = "rule_id"
+        case daysUntil = "days_until"
+        case allDay = "all_day"
+        case leadDays = "lead_days"
+        case sourceUrl = "source_url"
+    }
+}
+
+/// What recurs at this address over the next two weeks.
+/// `needsPickupDay` is true while garbage / recycling still come from a
+/// city default rather than the household's own pickup day.
+public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
+    public let upcoming: [PlaceCalendarEvent]
+    public let next: PlaceCalendarEvent?
+    public let needsPickupDay: Bool
+    public let windowDays: Int
+    public let ruleCount: Int
+    public let today: String
+
+    private enum CodingKeys: String, CodingKey {
+        case upcoming, next, today
+        case needsPickupDay = "needs_pickup_day"
+        case windowDays = "window_days"
+        case ruleCount = "rule_count"
+    }
+}
+
 // MARK: - Heat & cold
 
 /// NWS HeatRisk index: 0 little-to-none → 4 extreme.
@@ -1232,6 +1287,7 @@ public enum PlaceSectionData: Sendable, Hashable {
     case alerts(PlaceAlertsData)
     case sunriseSunset(PlaceSunriseSunsetData)
     case goodDayTo(PlaceGoodDayData)
+    case addressCalendar(PlaceAddressCalendarData)
     case yourHome(PlaceYourHomeData)
     case homeSystems(PlaceHomeSystemsData)
     case flood(PlaceFloodData)
@@ -1311,6 +1367,7 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         case .alerts: return payload(PlaceAlertsData.self).map(PlaceSectionData.alerts)
         case .sunriseSunset: return payload(PlaceSunriseSunsetData.self).map(PlaceSectionData.sunriseSunset)
         case .goodDayTo: return payload(PlaceGoodDayData.self).map(PlaceSectionData.goodDayTo)
+        case .addressCalendar: return payload(PlaceAddressCalendarData.self).map(PlaceSectionData.addressCalendar)
         case .yourHome: return payload(PlaceYourHomeData.self).map(PlaceSectionData.yourHome)
         case .homeSystems: return payload(PlaceHomeSystemsData.self).map(PlaceSectionData.homeSystems)
         case .flood: return payload(PlaceFloodData.self).map(PlaceSectionData.flood)
@@ -1345,6 +1402,11 @@ public extension PlaceSectionEnvelope {
 
     var goodDayTo: PlaceGoodDayData? {
         if case let .goodDayTo(d) = data { return d }
+        return nil
+    }
+
+    var addressCalendar: PlaceAddressCalendarData? {
+        if case let .addressCalendar(d) = data { return d }
         return nil
     }
 
