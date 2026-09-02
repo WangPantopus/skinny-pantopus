@@ -142,10 +142,12 @@ public struct RegisterRequest: Encodable, Sendable, Hashable {
     public let email: String
     public let password: String
     public let phoneNumber: String?
-    public let username: String
-    public let firstName: String
+    /// Optional since the wedge onboarding: the server generates a username
+    /// and names are collected in the claim flow. Absent keys, never "".
+    public let username: String?
+    public let firstName: String?
     public let middleName: String?
-    public let lastName: String
+    public let lastName: String?
     public let dateOfBirth: String?
     public let address: String?
     public let city: String?
@@ -158,10 +160,10 @@ public struct RegisterRequest: Encodable, Sendable, Hashable {
         email: String,
         password: String,
         phoneNumber: String?,
-        username: String,
-        firstName: String,
+        username: String?,
+        firstName: String?,
         middleName: String?,
-        lastName: String,
+        lastName: String?,
         dateOfBirth: String?,
         address: String?,
         city: String?,

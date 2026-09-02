@@ -58,7 +58,7 @@ final class SignUpViewModelTests: XCTestCase {
 
     func test_username_lowercase_3_to_20() {
         let vm = SignUpViewModel()
-        XCTAssertEqual(vm.validate(.username), "Username is required.")
+        XCTAssertNil(vm.validate(.username))
         vm.username = "ab"
         XCTAssertEqual(vm.validate(.username), "Username must be at least 3 characters.")
         vm.username = "Alice"
@@ -75,20 +75,15 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertNil(vm.validate(.username))
     }
 
-    func test_firstName_required() {
+    func test_names_optional_since_the_wedge_slim() {
         let vm = SignUpViewModel()
-        XCTAssertEqual(vm.validate(.firstName), "First name is required.")
-        vm.firstName = "Maria"
         XCTAssertNil(vm.validate(.firstName))
-    }
-
-    func test_lastName_required() {
-        let vm = SignUpViewModel()
-        XCTAssertEqual(vm.validate(.lastName), "Last name is required.")
+        XCTAssertNil(vm.validate(.lastName))
+        vm.firstName = "Maria"
         vm.lastName = "Kowalski"
+        XCTAssertNil(vm.validate(.firstName))
         XCTAssertNil(vm.validate(.lastName))
     }
-
     func test_middleName_optional() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.middleName))
@@ -96,9 +91,9 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertNil(vm.validate(.middleName))
     }
 
-    func test_dateOfBirth_required_and_18_plus() {
+    func test_dateOfBirth_optional_but_18_plus_when_given() {
         let vm = SignUpViewModel()
-        XCTAssertEqual(vm.validate(.dateOfBirth), "Date of birth is required.")
+        XCTAssertNil(vm.validate(.dateOfBirth))
         // 10 years ago — fails 18+.
         vm.dateOfBirth = Calendar.current.date(byAdding: .year, value: -10, to: Date())
         XCTAssertEqual(vm.validate(.dateOfBirth), "You must be at least 18 years old.")
@@ -106,7 +101,6 @@ final class SignUpViewModelTests: XCTestCase {
         vm.dateOfBirth = Calendar.current.date(byAdding: .year, value: -25, to: Date())
         XCTAssertNil(vm.validate(.dateOfBirth))
     }
-
     func test_phone_optional_but_must_be_e164_when_present() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.phoneNumber)) // optional
@@ -119,33 +113,23 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertNil(vm.validate(.phoneNumber))
     }
 
-    func test_address_city_state_zip_required_and_min_length() {
+    func test_address_city_state_zip_optional_but_min_length_when_given() {
         let vm = SignUpViewModel()
-        XCTAssertEqual(vm.validate(.address), "Address is required.")
+        XCTAssertNil(vm.validate(.address))
         vm.address = "12"
         XCTAssertEqual(vm.validate(.address), "Address must be at least 5 characters.")
         vm.address = "123 Main"
         XCTAssertNil(vm.validate(.address))
-
-        XCTAssertEqual(vm.validate(.city), "City is required.")
+        XCTAssertNil(vm.validate(.city))
         vm.city = "C"
         XCTAssertEqual(vm.validate(.city), "City must be at least 2 characters.")
-        vm.city = "Cambridge"
-        XCTAssertNil(vm.validate(.city))
-
-        XCTAssertEqual(vm.validate(.state), "State is required.")
+        XCTAssertNil(vm.validate(.state))
         vm.state = "M"
         XCTAssertEqual(vm.validate(.state), "State must be at least 2 characters.")
-        vm.state = "MA"
-        XCTAssertNil(vm.validate(.state))
-
-        XCTAssertEqual(vm.validate(.zipcode), "ZIP is required.")
+        XCTAssertNil(vm.validate(.zipcode))
         vm.zipcode = "02"
         XCTAssertEqual(vm.validate(.zipcode), "ZIP must be at least 3 characters.")
-        vm.zipcode = "02139"
-        XCTAssertNil(vm.validate(.zipcode))
     }
-
     func test_inviteCode_optional() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.inviteCode))
@@ -153,13 +137,28 @@ final class SignUpViewModelTests: XCTestCase {
 
     // MARK: - Aggregate validity
 
-    func test_isValid_requires_terms_and_all_fields() {
+    func test_isValid_requires_terms_and_the_account_fields_only() {
         let vm = SignUpViewModel()
         XCTAssertFalse(vm.isValid)
-        fillValid(vm)
+        // The slim form: email + password + terms is a complete sign-up.
+        vm.email = "alice@example.com"
+        vm.password = "strongpass1"
+        vm.confirmPassword = "strongpass1"
+        vm.agreedToTerms = true
         XCTAssertTrue(vm.isValid)
         vm.agreedToTerms = false
         XCTAssertFalse(vm.isValid, "Terms must be accepted")
+        // A malformed optional field still blocks.
+        vm.agreedToTerms = true
+        vm.username = "Bad Name!"
+        XCTAssertFalse(vm.isValid)
+    }
+
+    func test_username_optional_but_checked_when_typed() {
+        let vm = SignUpViewModel()
+        XCTAssertNil(vm.validate(.username))
+        vm.username = "ab"
+        XCTAssertEqual(vm.validate(.username), "Username must be at least 3 characters.")
     }
 
     // MARK: - Password strength meter
@@ -231,6 +230,33 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertEqual(body?["lastName"] as? String, "Kowalski")
         XCTAssertEqual(body?["accountType"] as? String, "individual")
         XCTAssertEqual(body?["address"] as? String, "123 Main St")
+    }
+
+    func test_slim_submit_sends_no_empty_profile_keys() async {
+        SequencedURLProtocol.routeResponses["/api/users/register"] = [
+            .status(
+                201,
+                body: """
+                {"message":"ok","requiresEmailVerification":true,
+                 "user":{"id":"u1","email":"a@b.co","username":"gen_1","accountType":"individual",
+                         "role":"user","verified":false,"createdAt":"2026-09-01T00:00:00Z"}}
+                """
+            )
+        ]
+        let client = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
+        let auth = AuthManager(store: InMemorySecureStore(), apiClient: client)
+        let vm = SignUpViewModel()
+        vm.email = "a@b.co"
+        vm.password = "strongpass1"
+        vm.confirmPassword = "strongpass1"
+        vm.agreedToTerms = true
+        await vm.submit(using: auth)
+        let captured = SequencedURLProtocol.capturedRequests.last
+        let body = captured?.httpBodyData().flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        XCTAssertEqual(body?["email"] as? String, "a@b.co")
+        for key in ["username", "firstName", "lastName", "address", "city", "state", "zipcode", "dateOfBirth"] {
+            XCTAssertNil(body?[key], "\(key) must be absent, not empty")
+        }
     }
 
     func test_submit_rolls_back_loading_state_on_error() async {

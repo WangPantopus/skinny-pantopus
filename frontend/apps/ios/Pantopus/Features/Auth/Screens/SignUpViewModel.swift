@@ -109,38 +109,33 @@ public final class SignUpViewModel {
             if confirmPassword.isEmpty { return "Confirm your password." }
             if confirmPassword != password { return "Passwords don't match." }
             return nil
+        // Wedge onboarding (Phase 1 follow-up, "iOS signup slim"): the form
+        // matches web — email + password. Everything below is optional and
+        // collected later in the claim flow; when typed it is still checked.
         case .username:
-            return AuthValidation.username(username)
-        case .firstName:
-            return firstName.trimmingCharacters(in: .whitespaces).isEmpty ? "First name is required." : nil
-        case .lastName:
-            return lastName.trimmingCharacters(in: .whitespaces).isEmpty ? "Last name is required." : nil
-        case .middleName:
+            return AuthValidation.usernameOptional(username)
+        case .firstName, .lastName, .middleName:
             return nil // optional
         case .dateOfBirth:
-            return AuthValidation.dateOfBirth(dateOfBirth)
+            return AuthValidation.dateOfBirthOptional(dateOfBirth)
         case .phoneNumber:
             return AuthValidation.phoneOptional(phoneNumber)
         case .address:
             let trimmed = address.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { return "Address is required." }
-            if trimmed.count < 5 { return "Address must be at least 5 characters." }
-            return nil
+            if trimmed.isEmpty { return nil }
+            return trimmed.count < 5 ? "Address must be at least 5 characters." : nil
         case .city:
             let trimmed = city.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { return "City is required." }
-            if trimmed.count < 2 { return "City must be at least 2 characters." }
-            return nil
+            if trimmed.isEmpty { return nil }
+            return trimmed.count < 2 ? "City must be at least 2 characters." : nil
         case .state:
             let trimmed = state.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { return "State is required." }
-            if trimmed.count < 2 { return "State must be at least 2 characters." }
-            return nil
+            if trimmed.isEmpty { return nil }
+            return trimmed.count < 2 ? "State must be at least 2 characters." : nil
         case .zipcode:
             let trimmed = zipcode.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { return "ZIP is required." }
-            if trimmed.count < 3 { return "ZIP must be at least 3 characters." }
-            return nil
+            if trimmed.isEmpty { return nil }
+            return trimmed.count < 3 ? "ZIP must be at least 3 characters." : nil
         case .inviteCode:
             return nil // optional
         }
@@ -178,6 +173,9 @@ public final class SignUpViewModel {
 
     /// Runs validation, then submits to `AuthManager.signUp`. On success
     /// sets `didSucceed = true` so the caller pushes `AuthRoute.verifyEmail`.
+    /// Optional profile fields travel as absent keys, never as "".
+    static func nilIfEmpty(_ value: String) -> String? { value.isEmpty ? nil : value }
+
     func submit(using auth: AuthManager) async {
         hasAttemptedSubmit = true
         let errors = Self.validateAll(self)
@@ -195,15 +193,15 @@ public final class SignUpViewModel {
                 email: email.trimmingCharacters(in: .whitespaces).lowercased(),
                 password: password,
                 phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
-                username: username.trimmingCharacters(in: .whitespaces).lowercased(),
-                firstName: firstName.trimmingCharacters(in: .whitespaces),
+                username: Self.nilIfEmpty(username.trimmingCharacters(in: .whitespaces).lowercased()),
+                firstName: Self.nilIfEmpty(firstName.trimmingCharacters(in: .whitespaces)),
                 middleName: middleName.isEmpty ? nil : middleName.trimmingCharacters(in: .whitespaces),
-                lastName: lastName.trimmingCharacters(in: .whitespaces),
+                lastName: Self.nilIfEmpty(lastName.trimmingCharacters(in: .whitespaces)),
                 dateOfBirth: dateOfBirth,
-                address: address.trimmingCharacters(in: .whitespaces),
-                city: city.trimmingCharacters(in: .whitespaces),
-                state: state.trimmingCharacters(in: .whitespaces),
-                zipcode: zipcode.trimmingCharacters(in: .whitespaces),
+                address: Self.nilIfEmpty(address.trimmingCharacters(in: .whitespaces)),
+                city: Self.nilIfEmpty(city.trimmingCharacters(in: .whitespaces)),
+                state: Self.nilIfEmpty(state.trimmingCharacters(in: .whitespaces)),
+                zipcode: Self.nilIfEmpty(zipcode.trimmingCharacters(in: .whitespaces)),
                 accountType: accountType.asAccountType,
                 inviteCode: inviteCode.isEmpty ? nil : inviteCode.trimmingCharacters(in: .whitespaces)
             )
@@ -238,7 +236,7 @@ public final class SignUpViewModel {
     /// (`SignUpViewModel.oauthPrerequisiteMessage`).
     func oauthPrerequisiteMessage() -> String? {
         if accountType == .business { return Self.oauthBusinessMessage }
-        if let dateOfBirthError = AuthValidation.dateOfBirth(dateOfBirth) {
+        if let dateOfBirthError = AuthValidation.dateOfBirthOptional(dateOfBirth) {
             hasAttemptedSubmit = true
             fieldErrors[.dateOfBirth] = dateOfBirthError
             return dateOfBirthError

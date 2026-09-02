@@ -107,6 +107,8 @@ struct PlaceDashboardView: View {
                     .padding(.top, isClaimed ? 12 : 14)
 
                 VStack(spacing: 24) {
+                    // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
+                    privacyMirrorRow
                     if isVerified {
                         messagesEntry(address: intel.place.label)
                     }
@@ -172,6 +174,28 @@ struct PlaceDashboardView: View {
                 }
             }
         }
+    }
+
+    /// Wedge v2 §2 — "Private by default. See what neighbors see of this address."
+    private var privacyMirrorRow: some View {
+        Button(action: viewModel.onOpenPrivacyMirror) {
+            HStack(spacing: 8) {
+                Icon(.shieldCheck, size: 15, strokeWidth: 2.25, color: Theme.Color.home)
+                Text("Private by default. See what neighbors see of this address.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Icon(.chevronRight, size: 15, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.Color.appSurfaceSunken)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("place.privacyMirror")
     }
 
     /// W7 — verified-neighbor messaging entry (verified residents only).

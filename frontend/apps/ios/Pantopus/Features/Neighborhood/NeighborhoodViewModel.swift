@@ -21,6 +21,9 @@ enum NeighborhoodState: Sendable, Equatable {
 @MainActor
 final class NeighborhoodViewModel {
     private(set) var state: NeighborhoodState = .loading
+    /// The window (Wedge v2 §4). Nil until loaded, and nil when the window
+    /// fails — it never takes the meter down with it.
+    private(set) var cells: NeighborhoodCellsDTO?
 
     private let client: APIClient
 
@@ -42,6 +45,10 @@ final class NeighborhoodViewModel {
         do {
             let meter: NeighborhoodMeterDTO = try await client.request(NeighborhoodEndpoints.meter())
             state = .loaded(meter)
+            if meter.state != .noPlace {
+                let window: NeighborhoodCellsDTO? = try? await client.request(NeighborhoodEndpoints.cells())
+                cells = window?.isReady == true ? window : nil
+            }
         } catch {
             state = .error(message: "We couldn't load your neighborhood meter.")
         }

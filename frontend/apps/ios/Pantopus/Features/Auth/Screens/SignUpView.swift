@@ -7,7 +7,6 @@
 //  Uses the FormShell archetype with its new `bottomActionLabel` slot.
 //
 
-// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -72,19 +71,9 @@ struct SignUpView: View {
                 confirmPasswordField
             }
 
-            FormFieldGroup("Profile") {
-                usernameField
-                firstNameField
-                middleNameField
-                lastNameField
-                dateOfBirthField
-            }
-
-            FormFieldGroup("Address") {
-                addressField
-                cityStateZipRow
-            }
-
+            // Wedge onboarding: the form matches web — email + password. The
+            // username is generated server-side; names and the address arrive
+            // in the claim flow, where they mean something.
             FormFieldGroup("Account type") {
                 AccountTypePicker(selection: $viewModel.accountType)
                     .accessibilityIdentifier("signUpAccountTypePicker")
@@ -190,79 +179,6 @@ struct SignUpView: View {
         .onChange(of: viewModel.confirmPassword) { _, _ in viewModel.clearError(for: .confirmPassword) }
     }
 
-    private var usernameField: some View {
-        PantopusTextField(
-            "Username",
-            text: $viewModel.username,
-            placeholder: "your_handle",
-            state: state(for: .username),
-            contentType: .username,
-            identifier: "signUpUsernameField"
-        )
-        .textInputAutocapitalization(.never)
-        .onChange(of: viewModel.username) { _, _ in viewModel.clearError(for: .username) }
-    }
-
-    private var firstNameField: some View {
-        PantopusTextField(
-            "First name",
-            text: $viewModel.firstName,
-            placeholder: "Maria",
-            state: state(for: .firstName),
-            contentType: .givenName,
-            identifier: "signUpFirstNameField"
-        )
-        .onChange(of: viewModel.firstName) { _, _ in viewModel.clearError(for: .firstName) }
-    }
-
-    private var middleNameField: some View {
-        PantopusTextField(
-            "Middle name (optional)",
-            text: $viewModel.middleName,
-            placeholder: "Optional",
-            state: state(for: .middleName),
-            contentType: .middleName,
-            identifier: "signUpMiddleNameField"
-        )
-    }
-
-    private var lastNameField: some View {
-        PantopusTextField(
-            "Last name",
-            text: $viewModel.lastName,
-            placeholder: "Kowalski",
-            state: state(for: .lastName),
-            contentType: .familyName,
-            identifier: "signUpLastNameField"
-        )
-        .onChange(of: viewModel.lastName) { _, _ in viewModel.clearError(for: .lastName) }
-    }
-
-    private var dateOfBirthField: some View {
-        VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("Date of birth")
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            DatePicker(
-                "",
-                selection: Binding(
-                    get: { viewModel.dateOfBirth ?? Self.defaultDate },
-                    set: { viewModel.dateOfBirth = $0 }
-                ),
-                in: ...Self.maxDate,
-                displayedComponents: .date
-            )
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("signUpDateOfBirthField")
-            if let message = visibleError(for: .dateOfBirth) {
-                Text(message)
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.error)
-            }
-        }
-    }
-
     private var phoneField: some View {
         PantopusTextField(
             "Phone (optional)",
@@ -274,53 +190,6 @@ struct SignUpView: View {
             identifier: "signUpPhoneField"
         )
         .onChange(of: viewModel.phoneNumber) { _, _ in viewModel.clearError(for: .phoneNumber) }
-    }
-
-    private var addressField: some View {
-        PantopusTextField(
-            "Street address",
-            text: $viewModel.address,
-            placeholder: "123 Main St",
-            state: state(for: .address),
-            contentType: .fullStreetAddress,
-            identifier: "signUpAddressField"
-        )
-        .onChange(of: viewModel.address) { _, _ in viewModel.clearError(for: .address) }
-    }
-
-    private var cityStateZipRow: some View {
-        HStack(alignment: .top, spacing: Spacing.s2) {
-            PantopusTextField(
-                "City",
-                text: $viewModel.city,
-                placeholder: "Cambridge",
-                state: state(for: .city),
-                contentType: .addressCity,
-                identifier: "signUpCityField"
-            )
-            .onChange(of: viewModel.city) { _, _ in viewModel.clearError(for: .city) }
-            PantopusTextField(
-                "State",
-                text: $viewModel.state,
-                placeholder: "MA",
-                state: state(for: .state),
-                contentType: .addressState,
-                identifier: "signUpStateField"
-            )
-            .frame(maxWidth: 80)
-            .onChange(of: viewModel.state) { _, _ in viewModel.clearError(for: .state) }
-            PantopusTextField(
-                "ZIP",
-                text: $viewModel.zipcode,
-                placeholder: "02139",
-                state: state(for: .zipcode),
-                keyboardType: .numberPad,
-                contentType: .postalCode,
-                identifier: "signUpZipField"
-            )
-            .frame(maxWidth: 100)
-            .onChange(of: viewModel.zipcode) { _, _ in viewModel.clearError(for: .zipcode) }
-        }
     }
 
     private var inviteCodeField: some View {

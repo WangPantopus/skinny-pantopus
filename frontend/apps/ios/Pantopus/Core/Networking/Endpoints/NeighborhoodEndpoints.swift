@@ -14,4 +14,11 @@ public enum NeighborhoodEndpoints {
     public static func meter() -> Endpoint {
         Endpoint(method: .get, path: "/api/neighborhood/meter")
     }
+
+    /// `GET /api/neighborhood/cells` — the Nearby window (Wedge v2 §4):
+    /// the 5×5 grid of block cells around the viewer's place, each with
+    /// ONLY its floored density bucket. Route `backend/routes/neighborhood.js`.
+    public static func cells() -> Endpoint {
+        Endpoint(method: .get, path: "/api/neighborhood/cells")
+    }
 }

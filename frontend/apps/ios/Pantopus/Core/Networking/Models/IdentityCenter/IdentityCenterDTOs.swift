@@ -203,3 +203,65 @@ public struct ViewAsResponse: Decodable, Sendable, Hashable {
         public let isGigParticipant: Bool?
     }
 }
+
+// MARK: - The privacy mirror (Wedge v2 §2)
+
+/// `GET /api/identity-center/view-as?surface=home&home_id=`: the member's
+/// home exactly as a neighbor outside the household sees it — street and
+/// a first name, never the number — produced by the same serializer the
+/// public-profile route uses, so this cannot drift from what they get.
+public struct HomeMirrorDTO: Decodable, Sendable, Hashable {
+    public struct Home: Decodable, Sendable, Hashable {
+        public let id: String
+        public let name: String?
+        public let address: String?
+        public let addressRedacted: Bool
+        public let city: String?
+        public let state: String?
+        public let zipcode: String?
+        public let visibility: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id, name, address, city, state, zipcode, visibility
+            case addressRedacted = "address_redacted"
+        }
+    }
+
+    public struct Owner: Decodable, Sendable, Hashable {
+        public let id: String
+        public let username: String?
+        public let name: String?
+        public let profilePictureUrl: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id, username, name
+            case profilePictureUrl = "profile_picture_url"
+        }
+    }
+
+    public struct Hidden: Decodable, Sendable, Hashable, Identifiable {
+        public let key: String
+        public let label: String
+
+        public var id: String { key }
+    }
+
+    public let surface: String
+    public let viewer: String
+    public let viewerLabel: String
+    public let discoverable: Bool
+    public let home: Home
+    public let owner: Owner?
+    public let hidden: [Hidden]
+
+    enum CodingKeys: String, CodingKey {
+        case surface, viewer, discoverable, home, owner, hidden
+        case viewerLabel = "viewer_label"
+    }
+
+    /// "NW Lacamas Dr · Camas, WA" — the whole address line a neighbor gets.
+    public var addressLine: String {
+        let place = [home.city, home.state].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return [home.address, place].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}

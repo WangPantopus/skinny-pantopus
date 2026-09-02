@@ -127,6 +127,8 @@ struct NeighborhoodView: View {
 
     private func lockedBody(_ meter: NeighborhoodMeterDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
+            // The window (Wedge v2 §4): alive whatever the meter says.
+            if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
             meterCard(meter)
             inviteButton
             Text("What opens at \(meter.threshold)")
@@ -241,6 +243,7 @@ struct NeighborhoodView: View {
 
     private func unlockedBody(_ meter: NeighborhoodMeterDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
+            if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
             HStack(spacing: Spacing.s2) {
                 Icon(.sparkles, size: 16, color: Theme.Color.primary600)
                 Text("Your neighborhood is open — \(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")

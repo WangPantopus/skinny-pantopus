@@ -30,6 +30,15 @@ public enum IdentityCenterEndpoints {
         return Endpoint(method: .get, path: "/api/identity-center/view-as", query: query)
     }
 
+    /// `GET /api/identity-center/view-as?surface=home&home_id=` — the
+    /// privacy mirror (Wedge v2 §2): the signed-in member's home exactly as
+    /// a neighbor outside the household sees it, through the same
+    /// serializer the public-profile route uses. Members only.
+    /// Route `backend/routes/identityCenter.js` (view-as, surface=home).
+    public static func homeMirror(homeId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/identity-center/view-as", query: ["surface": "home", "home_id": homeId])
+    }
+
     /// `PATCH /api/identity-center/bridges/:personaId` — toggle the
     /// "link these profiles" preferences. Route
     /// `backend/routes/identityCenter.js:516`.

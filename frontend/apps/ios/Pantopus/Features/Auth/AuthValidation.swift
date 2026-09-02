@@ -47,6 +47,18 @@ enum AuthValidation {
     }
 
     /// Required; must be ≥ 18 years ago.
+    /// Wedge onboarding: the username is optional (the server generates one);
+    /// when typed it must still be well-formed.
+    static func usernameOptional(_ value: String) -> String? {
+        value.trimmingCharacters(in: .whitespaces).isEmpty ? nil : username(value)
+    }
+
+    /// Wedge onboarding: date of birth is optional at sign-up; when given,
+    /// the 18+ rule still applies.
+    static func dateOfBirthOptional(_ date: Date?, now: Date = Date()) -> String? {
+        date == nil ? nil : dateOfBirth(date, now: now)
+    }
+
     static func dateOfBirth(_ date: Date?, now: Date = Date()) -> String? {
         guard let date else { return "Date of birth is required." }
         let calendar = Calendar(identifier: .gregorian)

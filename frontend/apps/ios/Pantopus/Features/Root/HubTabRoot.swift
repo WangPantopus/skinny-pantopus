@@ -366,6 +366,8 @@ public enum HubRoute: Hashable {
     case placeDetail(homeId: String, group: PlaceDetailGroup)
     /// W4 — the full Today's Pulse signal stream (from the dashboard hero).
     case placePulse(homeId: String)
+    /// Wedge v2 §2 — the privacy mirror: this home as a neighbor sees it.
+    case privacyMirror(homeId: String)
     /// W5 — the verify status screen (B2 pending → B3 success / B4 failed)
     /// after a method is chosen in the verify sheet.
     case placeVerifyStatus(homeId: String, method: PlaceVerifyMethod, address: String)
@@ -3004,6 +3006,7 @@ public struct HubTabRoot: View {
                         push(.neighborCompose(homeId: homeId, address: address, recipient: nil))
                     },
                     onOpenInbox: { push(.neighborInbox) },
+                    onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
                     onOpenHubHome: {}
                 )
             )
@@ -3015,6 +3018,8 @@ public struct HubTabRoot: View {
             PlacePulseView(
                 viewModel: PlacePulseViewModel(homeId: homeId)
             ) { pop() }
+        case let .privacyMirror(homeId):
+            PlacePrivacyMirrorView(viewModel: PlacePrivacyMirrorViewModel(homeId: homeId)) { pop() }
         case let .placeVerifyStatus(homeId, method, address):
             PlaceVerifyStatusView(
                 address: address,

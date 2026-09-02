@@ -38,6 +38,8 @@ final class PlaceDashboardViewModel {
     let onComposeMessage: (String) -> Void
     /// W7 — open the verified-neighbor inbox.
     let onOpenInbox: () -> Void
+    /// Wedge v2 §2 — the privacy mirror ("see what neighbors see").
+    let onOpenPrivacyMirror: () -> Void
     let onOpenHubHome: () -> Void
 
     init(
@@ -50,6 +52,7 @@ final class PlaceDashboardViewModel {
         onStartVerify: @escaping (PlaceVerifyMethod, String) -> Void = { _, _ in },
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
+        onOpenPrivacyMirror: @escaping () -> Void = {},
         onOpenHubHome: @escaping () -> Void = {}
     ) {
         self.homeId = homeId
@@ -61,6 +64,7 @@ final class PlaceDashboardViewModel {
         self.onStartVerify = onStartVerify
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox
+        self.onOpenPrivacyMirror = onOpenPrivacyMirror
         self.onOpenHubHome = onOpenHubHome
     }
 
