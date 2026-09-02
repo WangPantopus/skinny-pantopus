@@ -22,6 +22,9 @@ final class PlaceDashboardViewModel {
 
     private(set) var state: State = .loading
     let homeId: String
+    /// `Home.move_in_date`, read alongside the intelligence; nil until the
+    /// detail fetch lands or when the home has none. Drives `JustMovedCard`.
+    private(set) var moveInDate: String?
 
     private let api: APIClient
     let onOpenDetail: (PlaceDetailGroup) -> Void
@@ -40,6 +43,8 @@ final class PlaceDashboardViewModel {
     let onOpenInbox: () -> Void
     /// Wedge v2 §2 — the privacy mirror ("see what neighbors see").
     let onOpenPrivacyMirror: () -> Void
+    /// Movers first (Wedge v2 D5): "Send back the previous resident's mail" opens Mail Day.
+    let onOpenMailDay: () -> Void
     let onOpenHubHome: () -> Void
 
     init(
@@ -53,6 +58,7 @@ final class PlaceDashboardViewModel {
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
         onOpenPrivacyMirror: @escaping () -> Void = {},
+        onOpenMailDay: @escaping () -> Void = {},
         onOpenHubHome: @escaping () -> Void = {}
     ) {
         self.homeId = homeId
@@ -65,6 +71,7 @@ final class PlaceDashboardViewModel {
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox
         self.onOpenPrivacyMirror = onOpenPrivacyMirror
+        self.onOpenMailDay = onOpenMailDay
         self.onOpenHubHome = onOpenHubHome
     }
 
@@ -78,10 +85,14 @@ final class PlaceDashboardViewModel {
     }
 
     private func fetch() async {
+        // The move-in date rides on the home detail; it is a nicety, so a
+        // failed detail read never blocks the dashboard.
+        async let detail: HomeDetailResponse? = try? api.request(HomesEndpoints.detail(homeId: homeId))
         do {
             let intelligence: PlaceIntelligence = try await api.request(
                 PlaceEndpoints.intelligence(homeId: homeId)
             )
+            moveInDate = await detail?.home.base.moveInDate
             state = .loaded(intelligence)
         } catch let error as APIError {
             state = .error(message: error.errorDescription ?? "Couldn't load your place.")

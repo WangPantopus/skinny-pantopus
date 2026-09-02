@@ -100,6 +100,17 @@ struct PlaceDashboardView: View {
                         .padding(.top, Spacing.s4)
                 }
 
+                // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
+                JustMovedCard(
+                    homeId: viewModel.homeId,
+                    moveInDate: viewModel.moveInDate,
+                    needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
+                    onOpenDetail: viewModel.onOpenDetail,
+                    onOpenMailDay: viewModel.onOpenMailDay
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+
                 PlaceHeroCard(
                     variant: pulse.variant,
                     chip: pulse.chip,

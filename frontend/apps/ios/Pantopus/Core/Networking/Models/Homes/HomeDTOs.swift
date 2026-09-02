@@ -26,6 +26,9 @@ public struct HomeDTO: Decodable, Sendable, Hashable, Identifiable {
     public let description: String?
     public let createdAt: String?
     public let updatedAt: String?
+    /// `Home.move_in_date` (YYYY-MM-DD) from the claim wizard; drives the
+    /// first-week card on the dashboard. Absent for older homes.
+    public let moveInDate: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, address, city, state, zipcode
@@ -33,6 +36,7 @@ public struct HomeDTO: Decodable, Sendable, Hashable, Identifiable {
         case visibility, description
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case moveInDate = "move_in_date"
     }
 }
 

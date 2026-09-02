@@ -3007,6 +3007,7 @@ public struct HubTabRoot: View {
                     },
                     onOpenInbox: { push(.neighborInbox) },
                     onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
+                    onOpenMailDay: { push(.mailDay(variant: .populated)) },
                     onOpenHubHome: {}
                 )
             )

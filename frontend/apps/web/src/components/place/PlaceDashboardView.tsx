@@ -68,6 +68,11 @@ export default function PlaceDashboardView({
   const openVerify = () => setVerifyOpen(true);
 
   const pulse = derivePulse(intelligence);
+  // The first-week card ticks "Set your pickup day" itself once the
+  // calendar runs on the household's own day rather than a city default.
+  const calendar = intelligence.groups.flatMap((g) => g.sections).find((s) => s.id === 'address_calendar');
+  const needsPickupDay =
+    calendar && calendar.status === 'ready' && calendar.data ? (calendar.data as { needs_pickup_day?: boolean }).needs_pickup_day ?? null : null;
   const tier = intelligence.tier;
   const status = tier === 'T4' ? 'verified' : tier === 'T3' ? 'claimed' : 'none';
 
@@ -99,7 +104,7 @@ export default function PlaceDashboardView({
 
       <div className={showVerify ? 'mt-3' : 'mt-4'}>
         {/* Movers first (Wedge v2 D5): the first-week checklist for a recent move-in. */}
-        <JustMovedCard homeId={homeId} moveInDate={moveInDate} className="mb-4" />
+        <JustMovedCard homeId={homeId} moveInDate={moveInDate} needsPickupDay={needsPickupDay} className="mb-4" />
         {/* The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. */}
         <Link
           href={`/app/homes/${homeId}/privacy`}

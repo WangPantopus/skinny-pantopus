@@ -95,6 +95,7 @@ fun PlaceDashboardScreen(
             is PlaceDashboardUiState.Loaded ->
                 PlaceDashboardContent(
                     intel = current.intelligence,
+                    homeId = homeId,
                     moveInDate = current.moveInDate,
                     onOpenMailDay = onOpenMailDay,
                     onOpenPrivacyMirror = onOpenPrivacyMirror,
@@ -149,6 +150,7 @@ internal fun PlaceDashboardContent(
     moveInDate: String? = null,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
+    homeId: String = "",
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     val isClaimed = intel.tier == PlaceTier.T3
@@ -176,10 +178,13 @@ internal fun PlaceDashboardContent(
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
         item {
             JustMovedCard(
+                homeId = homeId,
                 moveInDate = moveInDate,
                 onOpenDetail = onOpenDetail,
                 onOpenMailDay = onOpenMailDay,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+                // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
+                needsPickupDay = intel.groups.flatMap { it.sections }.firstOrNull { it.addressCalendar != null }?.addressCalendar?.needsPickupDay,
             )
         }
         item {

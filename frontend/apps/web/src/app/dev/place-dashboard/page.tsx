@@ -248,6 +248,14 @@ export default function DevPlaceDashboardPage() {
         </header>
 
         <div className="flex flex-wrap gap-8 items-start">
+          <Column label="Verified (T4) · just moved in (first-week card)">
+            <PlaceDashboardView
+              intelligence={build(false)}
+              homeId="dev-home-mover"
+              userInitials="RC"
+              moveInDate={new Date().toISOString().slice(0, 10)}
+            />
+          </Column>
           <Column label="Verified (T4) · all clear">
             <PlaceDashboardView intelligence={build(false)} homeId="dev-home" userInitials="RC" />
           </Column>
