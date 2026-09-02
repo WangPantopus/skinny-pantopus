@@ -34,15 +34,30 @@ Android had never left the five-tab hub IA (Home · Pulse · Tasks · Marketplac
 - **Preview** (D1): `PlacePreview.aha` + `sections`; the launch screen leads with the aha card (tone → chip, icon), then every Band-A section through `PlaceSectionView` grouped in the launch order; a backend that sends only `free` still renders the three tiles.
 - Tests: `PlaceWedgeDecodingTest` (5: aha + sections, unknown tone, address calendar reading, founding line, movers window), `NeighborhoodDecodingTest` (3). `make build` / `make lint` — see the commit.
 
+### 7. National footing (same day, fourth slice)
+YP asked whether the product was "only Camas". The logic never was; the content was. Two hooks fixed:
+- **Calendar registry, 50 states.** Migration **197** seeds the property-tax due dates for every state whose schedule is set statewide by statute (36 states + DC, 69 rows), all `unverified` with the state revenue source named; county- and town-set states (AK GA IL ME NE NH NY OH PA RI VT VA) are deliberately absent because silence beats a wrong date. `tests/unit/addressCalendarSeeds.test.js` parses both seed migrations and checks every RRULE against its `dtstart`, the state coverage, and the confidence rule.
+- **Seasonal engine by climate region.** `services/ai/seasonalEngine.js` resolves one of twelve regions from the home's state (coordinates as a coarse fallback), runs the base calendar everywhere minus the seasons that do not apply, layers regional seasons (hurricane, tornado, monsoon, heat, wildfire, winter storm, blizzard, deep freeze, pollen) with NWS/NOAA-dated copy and no invented local numbers, keeps the PNW copy verbatim for the PNW, keeps `primary_season` a base key so the checklist and health score keep working, and still fails closed without any location. Hub, briefing, Pulse and the health score now carry seasonal content nationally.
+
+### 8. Parity (same slice)
+- **iOS:** the privacy mirror (`PlacePrivacyMirrorView`, `HubRoute.privacyMirror`, a row on the Place dashboard) and the cells window (`NearbyCellsMapCard`, MapKit `MapPolygon`s over the same buckets, above the meter on the Nearby tab, best-effort so it never takes the meter down). `make build` regenerates the project from `project.yml`, so new Swift files are fine.
+- **Android:** the privacy mirror (`ui/screens/place/privacy/`, `ChildRoutes.PLACE_PRIVACY_MIRROR`, dashboard row), the share card on the anonymous preview (system share sheet with `${PANTOPUS_WEB_BASE_URL}/start?address=`; the origin is a `buildConfigField`, default `https://pantopus.com`), and "Just moved here" on the add-home details step (stamps `move_in_date` = today).
+
+### 9. The Phase 1 carry-overs, closed (2026-09-02)
+- **Setup checklist in wedge order.** `routes/hub.js` now emits `home` (claim) → `verify` (any verified occupancy or verified-owner row) → `complete_profile` → `profile_photo`; the gig-worker items (`skills`, `payout_method`) only appear once the person is already on the earning path (skills, a payout method, or a business). `SetupBanner` knows the two new keys ("Claim your address", "Verify your address") and titles itself "Set up your place" until they are done.
+- **Hub absorption into Place (the useful half).** The web Place page reads the hub payload and shows the checklist above the dashboard until every step is done; `/app/hub` stays reachable for the business and discovery blocks.
+- **The unlock event.** `densityReader.unlockThreshold()` is the one source of truth; `jobs/neighborhoodPreviewRefresh.js` always treats the threshold as a milestone and announces the crossing as "Your neighborhood is open" (deep link to Nearby, `metadata.unlocked`) instead of a round number. `tests/unit/neighborhoodPreviewRefresh.test.js` covers both copies.
+- **Signup slim, iOS and Android.** Both native forms now match web: email + password + terms. Username, names, date of birth and address are optional (still validated when typed, 18+ when a birth date is given) and travel as absent keys, never as empty strings; the server generates the username. The Profile and Address groups are gone from both screens; OAuth no longer demands a birth date first. Tests rewritten on both platforms.
+
 ## Verification
 - Backend: new/extended `tests/funnelEvents`, `tests/unit/funnelReport` (3), `tests/unit/evidenceRetentionSweep` (4), `tests/unit/homeMirror` (4), `tests/neighborhoodMeter` (+3 cells); full suite and privacy gates — see the commit.
 - Web: `tests/startFunnel` (+1 beacon case), `tests/homePrivacyMirror` (3), `tests/nearbyCells` (1); lint clean; no type errors in touched files.
 - iOS: `make build` **BUILD SUCCEEDED**; `PlaceMoneyLeadDecodingTests` (+2).
 
 ## Still open (engineering)
-- Android: the privacy mirror page and the share card (web-only today); a Just-moved date in the Add Home wizard.
-- iOS parity for the cells map and the privacy mirror.
-- Calendar feeds (permits, agendas); Hub absorption into Place; iOS signup slim.
+- Calendar feeds (permits, agendas) once a Camas source exists; county-level tax rules for the twelve county-set states.
+- Retiring the standalone Hub surface once its business and discovery blocks have a home (Place carries the checklist now).
+- Store screenshots for the four-tab IA (tooling, not product).
 - 0% marketplace fee for Founding Neighbors (needs a marketplace fee to exist).
 
 ## Founder items and product calls — unchanged, see the Phase 2 record

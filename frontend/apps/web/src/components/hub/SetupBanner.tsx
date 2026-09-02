@@ -2,14 +2,18 @@
 
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, Wrench, CreditCard, UserCheck, Check, Circle } from 'lucide-react';
+import { Camera, Wrench, CreditCard, UserCheck, Check, Circle, Home, ShieldCheck } from 'lucide-react';
 import type { SetupStep } from './types';
 
 interface SetupBannerProps {
   steps: SetupStep[];
 }
 
+// Wedge order: claim → verify → profile. Keys come from the backend
+// (`routes/hub.js` setupSteps); unknown keys fall back to a plain chip.
 const stepConfig: Record<string, { label: string; route: string; icon: ReactNode }> = {
+  home: { label: 'Claim your address', route: '/app/homes/new', icon: <Home className="w-4 h-4" /> },
+  verify: { label: 'Verify your address', route: '/app/place', icon: <ShieldCheck className="w-4 h-4" /> },
   complete_profile: { label: 'Complete profile', route: '/app/profile/edit', icon: <UserCheck className="w-4 h-4" /> },
   profile_photo: { label: 'Add profile photo', route: '/app/profile/edit', icon: <Camera className="w-4 h-4" /> },
   skills: { label: 'Add skills', route: '/app/professional', icon: <Wrench className="w-4 h-4" /> },
@@ -27,7 +31,7 @@ export default function SetupBanner({ steps }: SetupBannerProps) {
     <div className="bg-app-surface border border-app-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-2.5">
         <p className="text-sm font-semibold text-app-text dark:text-white">
-          Complete your profile
+          {steps.some((s) => (s.key === 'home' || s.key === 'verify') && !s.done) ? 'Set up your place' : 'Complete your profile'}
         </p>
         <span className="text-xs text-app-text-muted dark:text-app-text-secondary">{completedCount}/{steps.length}</span>
       </div>

@@ -19,7 +19,35 @@ const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { encodeGeohash6 } = require('../utils/geohash');
 
-const MILESTONES = [500, 200, 100, 50, 25, 10];
+const { unlockThreshold } = require('../services/place/densityReader');
+
+const BASE_MILESTONES = [500, 200, 100, 50, 25, 10];
+
+// The unlock threshold is always a milestone, whatever the env sets it to,
+// so crossing it is announced as the moment the neighborhood opens rather
+// than as a round number (Wedge Phase 1 follow-up: "wire the unlock event").
+function milestones() {
+  const unlock = unlockThreshold();
+  return [...new Set([...BASE_MILESTONES, unlock])].sort((a, b) => b - a);
+}
+
+/** The notification copy: the unlock is a door opening, not a round number. */
+function milestoneCopy(milestone, unlock) {
+  if (milestone === unlock) {
+    return {
+      title: 'Your neighborhood is open',
+      body: `${milestone} households have verified their address nearby. Pulse, the marketplace, and local tasks are unlocked for everyone here.`,
+      icon: '🔓',
+      link: '/app/nearby',
+    };
+  }
+  return {
+    title: '🎉 Neighborhood milestone!',
+    body: `Your neighborhood just hit ${milestone} verified members!`,
+    icon: '🎉',
+    link: '/app/nearby',
+  };
+}
 
 // ── Main job ──────────────────────────────────────────────────────────────
 
@@ -129,7 +157,7 @@ module.exports = async function neighborhoodPreviewRefresh() {
 
     // Find the highest milestone at or below newCount that hasn't been notified yet.
     // This handles both fresh crossings AND catch-up (e.g., row created with count already above milestone).
-    for (const m of MILESTONES) {
+    for (const m of milestones()) {
       if (newCount >= m && m > lastNotified) {
         milestoneCrossings.push({ geohash: gh, milestone: m, newCount });
         break; // only highest un-notified milestone
@@ -180,14 +208,15 @@ module.exports = async function neighborhoodPreviewRefresh() {
     if (eligibleUserIds.length === 0) continue;
 
     // Send notifications (bulk)
+    const copy = milestoneCopy(milestone, unlockThreshold());
     const notifications = eligibleUserIds.map((userId) => ({
       userId,
       type: 'density_milestone',
-      title: '🎉 Neighborhood milestone!',
-      body: `Your neighborhood just hit ${milestone} verified members!`,
-      icon: '🎉',
-      link: '/',
-      metadata: { milestone, geohash },
+      title: copy.title,
+      body: copy.body,
+      icon: copy.icon,
+      link: copy.link,
+      metadata: { milestone, geohash, unlocked: milestone === unlockThreshold() },
     }));
 
     await notificationService.createBulkNotifications(notifications);
@@ -205,3 +234,6 @@ module.exports = async function neighborhoodPreviewRefresh() {
     });
   }
 };
+
+module.exports.milestones = milestones;
+module.exports.milestoneCopy = milestoneCopy;

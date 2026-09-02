@@ -30,15 +30,11 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { encodeGeohash6, decodeGeohashBbox } = require('../utils/geohash');
-const { K_ANON_MIN, FEW_MAX, bucketForCount } = require('../services/place/densityReader');
+const { K_ANON_MIN, FEW_MAX, bucketForCount, unlockThreshold } = require('../services/place/densityReader');
 
 // Unlock threshold: aligned with densityReader.FEW_MAX so "unlocked" and
 // the 'growing' density bucket agree (a cell reads 'growing' above FEW_MAX).
 // Env-tunable for launch experiments without a deploy.
-function unlockThreshold() {
-  const n = parseInt(process.env.NEIGHBORHOOD_UNLOCK_THRESHOLD, 10);
-  return Number.isFinite(n) && n > 0 ? n : FEW_MAX;
-}
 
 /**
  * Resolve the viewer's primary home (same ladder as GET /api/homes/primary:

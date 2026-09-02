@@ -142,7 +142,19 @@ async function readRawCountForVerifiedInsider(geohash) {
   }
 }
 
+/**
+ * The neighborhood unlock threshold (Wedge Phase 1): the verified-home
+ * count at which Pulse / Marketplace / Tasks open for a cell. Defaults to
+ * the top of the 'few' band so the door and the density bucket agree;
+ * env-tunable for launch experiments without a deploy.
+ */
+function unlockThreshold() {
+  const n = parseInt(process.env.NEIGHBORHOOD_UNLOCK_THRESHOLD, 10);
+  return Number.isFinite(n) && n > 0 ? n : FEW_MAX;
+}
+
 module.exports = {
+  unlockThreshold,
   getDensityBucket,
   readRawCountForVerifiedInsider,
   bucketForCount,

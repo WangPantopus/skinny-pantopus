@@ -23,6 +23,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
+import SetupBanner from '@/components/hub/SetupBanner';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -55,6 +56,18 @@ export default function PlaceDashboard() {
   }, [mounted, router]);
 
   const authed = mounted && !!getAuthToken();
+
+  // The setup checklist (Hub absorption): read from the hub payload, shown
+  // above the dashboard until every step is done. Best effort — a hub
+  // failure never blocks the place page.
+  const hubQuery = useQuery({
+    queryKey: ['hub', 'setup'],
+    queryFn: () => api.hub.getHub(),
+    enabled: authed,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const setupSteps = hubQuery.data?.setup?.steps ?? [];
 
   // 1) Resolve the resident's primary home (the default place).
   const homeQuery = useQuery({
@@ -146,6 +159,11 @@ export default function PlaceDashboard() {
 
   return (
     <Shell>
+      {/* Hub absorption (Phase 1 follow-up): the setup checklist lives on the
+          place page now, in wedge order (claim → verify → profile). */}
+      {setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
+        <div className="px-4 pt-4"><SetupBanner steps={setupSteps} /></div>
+      ) : null}
       <PlaceDashboardView
         intelligence={intelQuery.data}
         homeId={homeId as string}

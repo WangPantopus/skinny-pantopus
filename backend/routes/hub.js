@@ -46,7 +46,7 @@ router.get('/', verifyToken, async (req, res) => {
         ).catch(() => null),
         supabaseAdmin
           .from('HomeOccupancy')
-          .select('home_id, role, is_active, home:home_id(id, name, address, city, state, zipcode, latitude, longitude)')
+          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, latitude, longitude)')
           .eq('user_id', userId)
           .eq('is_active', true),
         // Seat-based business memberships (with fallback to BusinessTeam format)
@@ -114,6 +114,7 @@ router.get('/', verifyToken, async (req, res) => {
         longitude: o.home.longitude || null,
         isPrimary: false,
         roleBase: o.role || 'member',
+        verified: o.verification_status === 'verified',
       }));
 
     // Include homes where user is a verified owner (in case occupancy is missing or out of sync after claim approval)
@@ -178,12 +179,22 @@ router.get('/', verifyToken, async (req, res) => {
     const profileComplete = profileDone >= profileTotal;
     const profileCompleteness = Math.round((profileDone / profileTotal) * 100);
 
+    // Wedge order (Phase 1 follow-up): claim → verify → profile. The
+    // gig-worker items (skills, payout) leave the new-user path and only
+    // appear once the person is already on the earning side.
+    const hasVerifiedHome = homes.some((h) => h.verified) || ownerHomeIds.length > 0;
+    const onEarningPath = hasSkills || hasPayoutMethod || businesses.length > 0;
     const setupSteps = [
-      { key: 'complete_profile', done: profileComplete },
       { key: 'home', done: homes.length > 0 },
+      { key: 'verify', done: hasVerifiedHome },
+      { key: 'complete_profile', done: profileComplete },
       { key: 'profile_photo', done: !!user.profile_picture_url },
-      { key: 'skills', done: hasSkills },
-      { key: 'payout_method', done: hasPayoutMethod },
+      ...(onEarningPath
+        ? [
+          { key: 'skills', done: hasSkills },
+          { key: 'payout_method', done: hasPayoutMethod },
+        ]
+        : []),
     ];
 
     // ── Parallel batch 2: Status counts + card data ──────────
