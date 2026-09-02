@@ -150,6 +150,30 @@ function InviteForm({ homeId, remaining, cap }: { homeId: string; remaining: num
   );
 }
 
+// The Founding Neighbor tier: first 5 in the block, within 21 days of the
+// first. A threshold makes a goal; the deadline makes a reason to act today.
+function FoundingLine({ founding }: { founding: NonNullable<BlockStatus['founding']> }) {
+  const ends = founding.window_ends_at ? new Date(founding.window_ends_at) : null;
+  const daysLeft = ends ? Math.max(0, Math.ceil((ends.getTime() - Date.now()) / 86400000)) : null;
+  if (founding.is_founding) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-xl bg-app-home-bg px-3 py-2 text-[13px] text-app-home font-semibold">
+        <Award size={15} strokeWidth={2.25} />
+        Founding Neighbor · slot {founding.slot} of {founding.slots_total}. Permanent.
+      </div>
+    );
+  }
+  if (founding.window_open && founding.slots_open > 0) {
+    return (
+      <div className="mt-3 rounded-xl bg-app-surface-sunken px-3 py-2 text-[13px] text-app-text-strong">
+        <span className="font-semibold">{founding.slots_open} Founding Neighbor {founding.slots_open === 1 ? 'slot' : 'slots'} still open on this block</span>
+        {daysLeft != null ? <span className="text-app-text-secondary"> · closes in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}. Invite a neighbor below.</span> : null}
+      </div>
+    );
+  }
+  return null;
+}
+
 function FoundersCard({ block, homeId }: { block: BlockStatus; homeId: string }) {
   const established = block.established_at
     ? new Date(block.established_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -171,6 +195,7 @@ function FoundersCard({ block, homeId }: { block: BlockStatus; homeId: string })
           </div>
         </div>
       </div>
+      {block.founding ? <FoundingLine founding={block.founding} /> : null}
       {/* The two raw insider counts. `rent_reports` is deliberately its
           own reading rather than only a meter fill: it is what the Real
           Rent benchmark is waiting on, and a founder deciding whether to

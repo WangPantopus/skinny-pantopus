@@ -46,13 +46,26 @@ const PREVIEW_SECTION_ORDER = [
 ];
 
 // Preview-facing density labels. The signed-out card must never read as
-// a zero: below the floor it is an invitation, not an absence.
+// a zero: below the floor it is an invitation, not an absence. The
+// Founding-Neighbor line is only printed while the cell's founding window
+// actually has open slots (services/place/foundingWindow) — a promise the
+// rank system rations, not a slogan.
 const PREVIEW_DENSITY_LABELS = {
   none: 'Founding Neighbor slots are open here',
   forming: 'Your block is starting to form',
   few: 'A few verified homes nearby',
   growing: 'Growing activity near this area',
 };
+const NO_SLOTS_LABELS = {
+  none: 'Be one of the first verified here',
+  forming: 'Your block is starting to form',
+};
+
+function previewDensityLabel(bucket, foundingOpen = true) {
+  const b = PREVIEW_DENSITY_LABELS[bucket] ? bucket : 'none';
+  if (!foundingOpen && NO_SLOTS_LABELS[b]) return NO_SLOTS_LABELS[b];
+  return PREVIEW_DENSITY_LABELS[b];
+}
 
 const SLOW_REASON = 'Still loading from the source. Check back in a moment.';
 
@@ -172,22 +185,22 @@ function censusEnvelope(area) {
   });
 }
 
-function densityEnvelope(bucket) {
+function densityEnvelope(bucket, foundingOpen = true) {
   const b = PREVIEW_DENSITY_LABELS[bucket] ? bucket : 'none';
   return serializePlaceSection('block_density', {
-    data: { bucket: b, label: PREVIEW_DENSITY_LABELS[b] },
+    data: { bucket: b, label: previewDensityLabel(b, foundingOpen), founding_open: Boolean(foundingOpen) },
   });
 }
 
 // Merge the remote envelopes with the route's local layers into the
 // curated order. Unknown ids are dropped; missing ids are omitted (a
 // section that no composer produced is simply not shown).
-function assemblePreviewSections({ remote = [], flood = null, area = null, bucket = 'none' }) {
+function assemblePreviewSections({ remote = [], flood = null, area = null, bucket = 'none', foundingOpen = true }) {
   const byId = new Map();
   for (const env of remote) if (env && env.id) byId.set(env.id, env);
   byId.set('flood', floodEnvelope(flood));
   byId.set('census_context', censusEnvelope(area));
-  byId.set('block_density', densityEnvelope(bucket));
+  byId.set('block_density', densityEnvelope(bucket, foundingOpen));
   return PREVIEW_SECTION_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id));
 }
 
@@ -430,6 +443,7 @@ module.exports = {
   pickAha,
   PREVIEW_SECTION_ORDER,
   PREVIEW_DENSITY_LABELS,
+  previewDensityLabel,
   // Exported for unit testing.
   withBudget,
   sectionBudgetMs,

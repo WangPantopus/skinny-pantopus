@@ -35,6 +35,29 @@ public struct BlockMeter: Decodable, Sendable, Hashable, Identifiable {
 /// Everything past `available` is optional because the unavailable
 /// shape is `{ available: false, reason: "NO_COORDINATES" }` — a home
 /// we cannot place on a block has no rank, no meters, and no budget.
+/// The Founding Neighbor tier (Wedge v2 D5): the first 5 verified homes in
+/// the block, within 21 days of the first. Derived server-side; optional so
+/// older servers still decode.
+public struct BlockFounding: Decodable, Sendable, Hashable {
+    public let isFounding: Bool
+    public let slot: Int?
+    public let slotsTotal: Int
+    public let slotsTaken: Int
+    public let slotsOpen: Int
+    public let windowOpen: Bool
+    public let windowEndsAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case slot
+        case isFounding = "is_founding"
+        case slotsTotal = "slots_total"
+        case slotsTaken = "slots_taken"
+        case slotsOpen = "slots_open"
+        case windowOpen = "window_open"
+        case windowEndsAt = "window_ends_at"
+    }
+}
+
 public struct BlockStatus: Decodable, Sendable, Hashable {
     public let available: Bool
     /// Machine reason when `available` is false, e.g. `NO_COORDINATES`.
@@ -49,9 +72,10 @@ public struct BlockStatus: Decodable, Sendable, Hashable {
     public let meters: [BlockMeter]?
     public let invitesRemaining: Int?
     public let invitesWeeklyCap: Int?
+    public let founding: BlockFounding?
 
     private enum CodingKeys: String, CodingKey {
-        case available, reason, rank, meters
+        case available, reason, rank, meters, founding
         case establishedAt = "established_at"
         case verifiedCount = "verified_count"
         case rentReports = "rent_reports"
@@ -68,7 +92,8 @@ public struct BlockStatus: Decodable, Sendable, Hashable {
         rentReports: Int? = nil,
         meters: [BlockMeter]? = nil,
         invitesRemaining: Int? = nil,
-        invitesWeeklyCap: Int? = nil
+        invitesWeeklyCap: Int? = nil,
+        founding: BlockFounding? = nil
     ) {
         self.available = available
         self.reason = reason
@@ -79,6 +104,7 @@ public struct BlockStatus: Decodable, Sendable, Hashable {
         self.meters = meters
         self.invitesRemaining = invitesRemaining
         self.invitesWeeklyCap = invitesWeeklyCap
+        self.founding = founding
     }
 
     /// The budget after a send is the one the send itself returned — no

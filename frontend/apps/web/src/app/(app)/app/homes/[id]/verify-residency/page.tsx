@@ -177,7 +177,7 @@ export default function VerifyResidencyPage() {
         <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl mb-6">
           <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            Your document is seen by one reviewer and never by neighbors. Cover account numbers if you like; we only
+            Your document is seen by one reviewer, never by neighbors, and deleted once your claim is decided. Cover account numbers if you like; we only
             need your name and this address. Own this home? Use the ownership flow instead.
           </p>
         </div>

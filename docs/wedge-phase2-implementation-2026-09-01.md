@@ -44,11 +44,28 @@ Three things the reconciliation surfaced that are decisions, not bugs:
 - Web: jest 60 suites / 716 tests; lint 0 errors; no type errors in any Phase 2 file (the new pages are null-safe by construction).
 - iOS: `make build` (from `frontend/apps/ios`) **BUILD SUCCEEDED**; SwiftLint clean on touched files (length directives on the two presentation files that grow by design).
 
+## Phase 2b — the channels (same day, second slice)
+
+### D5 — Founding Neighbor tier, the deadline, the share card, movers, route capture
+- **Founding tier** (`services/place/foundingWindow.js`, new): the first **5** verified homes in a geohash-6 cell, taken within **21 days** of the cell's first founder — derived from the permanent Block Founder rows, never stored, so it cannot drift. `getBlockStatus` now returns `founding { is_founding, slot, slots_total, slots_taken, slots_open, window_open, window_ends_at }`; web `FoundersCard` and the iOS rank card show "Founding Neighbor · slot N of 5. Permanent." or "N slots still open · closes in D days". The rank stays unbounded (Block Founder #N) — the tier is the scarce part. The 0% marketplace fee named in v1 is **not** wired: there is no marketplace fee code to exempt yet (only persona 10% and business-entity defaults).
+- **The preview stops over-promising.** `placePreviewService.previewDensityLabel(bucket, foundingOpen)`: the anonymous density card prints "Founding Neighbor slots are open here" only while the cell's window genuinely has open slots (`foundingSlotsOpen`, a boolean, never a count); otherwise "Be one of the first verified here". The routed `public.js` reads it in the fan-out.
+- **Share card.** `/api/og/place?address=…` (Next `ImageResponse`, edge) renders "What's true about {address}": the aha headline and grade plus flood / wildfire / air / radon chips, straight from the anonymous preview — nothing stored. `/start?address=…` now carries `generateMetadata` (og:image, `summary_large_image`, `noindex`) and the funnel resolves an `?address=` deep link into the preview (first autocomplete suggestion). A "Share this address" link (Web Share, clipboard fallback) sits in the wall bar; the browser URL is never rewritten.
+- **Route capture.** `/start?r=<route>` (EDDM cards, invite postcards) is remembered per browser (`rememberFunnelRoute`) and stamped into `meta.route` on every funnel beacon, so route-level CAC reads straight from `FunnelEvent`.
+- **Movers first.** The claim wizard's move-in date gains a one-tap "Just moved here"; the Place dashboard shows `JustMovedCard` for ~60 days after a move-in: pickup day, the previous resident's mail, utilities/rebates, districts/schools, meet the block. No new columns (`Home.move_in_date` already existed and is returned by `HOME_DETAIL = '*'`).
+
+### Evidence deletion after review (Phase 1.5 follow-up, closed)
+- `services/evidencePurge.js` deletes the S3 object of every claim document on **approve / reject** (`routes/admin.js`) and on **withdrawal** (`routes/homeOwnership.js`), stamping `metadata.purged_at` / `purge_reason` and nulling `storage_ref`; rows stay for the audit trail. Non-S3 refs are skipped; a failed delete is left unstamped for a retention sweep. The privacy promise now says "…and deleted once your claim is decided" on the wall, the claim step, and both residency pages.
+
+### Verification (2b)
+- Backend: `tests/unit/foundingWindow.test.js` (5), `tests/unit/evidencePurge.test.js` (3), preview label cases; full suite **262 suites / 4135 tests**, privacy gates OK.
+- Web: jest **60 suites / 716 tests**, lint 0 errors, no type errors in any 2b file.
+- iOS: `make build` **BUILD SUCCEEDED** (the local simulator set had been emptied mid-session; an iPhone 17 on iOS 26.5 was recreated with `xcrun simctl create`); SwiftLint clean on touched files.
+
 ## Open, in priority order
-1. **D5 channels** — first-5 Founding Neighbor tier + 21-day slot deadline on top of the Block Founder rank (and make the Phase 1.5 density label conditional on open slots); the share card; "Just moved?" at claim; EDDM route capture on `/start?r=`; the agents' closing-gift kit and HOA/City onboarding are founder work with a small "claim invite link" build.
-2. **Reconcile the two meters** — one source of truth for "the block": pick the Block Founders thresholds or the door's, and one privacy rule.
-3. **Name the thing once** — "Block Founder #N" for the rank; retire or rename the 10-referral badge.
-4. **D4 leftovers** — local offers need supply (the Camas walk) before a surface; physical junk-mail suppression (DMAchoice/OptOutPrescreen guidance) can join Unlisted.
-5. **Calendar feeds** — Clark County permit hearings and Camas council agendas as adapters; confirm the Camas waste schedule and flip those rows to `official`.
-6. **Evidence deletion after review** and the Place privacy mirror (task chips from Phase 1.5).
-7. **Android** — port the tab IA, the residency door, and the calendar card.
+1. **D5 leftovers needing the founder** — agents' closing-gift kit (a "claim invite link" build is small once the kit exists), HOA / PTA / City onboarding, the EDDM drop itself (the route capture is ready), the Camas business walk (then local offers get a surface).
+2. **Reconcile the two meters** — one source of truth for "the block": the Nearby door (k-anon 10, unlock 24) vs Block Founders (raw count, 10/10/25, T4). A product call.
+3. **Name the thing once** — "Block Founder #N" for the rank and "Founding Neighbor" for the first-5 tier are now consistent; the 10-referral profile badge still says "Founding Neighbor Badge" (`inviteRewardService.js`, iOS/Android ProfileInsightCards) and should be renamed.
+4. **0% marketplace fee for Founding Neighbors** — wire when a marketplace fee exists.
+5. **Calendar feeds** — permit hearings and council agendas as adapters; confirm the Camas waste schedule and flip those rows to `official`.
+6. **Place privacy mirror** (task chip) and a **retention sweep** for any evidence object whose delete failed.
+7. **Android** — tabs, residency door, calendar card, founding tier, Just-moved card.

@@ -30,6 +30,19 @@ export interface BlockStatus {
   rent_reports?: number;
   meters?: BlockMeter[];
   invites_remaining?: number;
+  /**
+   * The Founding Neighbor tier (Wedge v2 D5): the first 5 verified homes
+   * in the block, taken within 21 days of the first. Derived server-side.
+   */
+  founding?: {
+    is_founding: boolean;
+    slot: number | null;
+    slots_total: number;
+    slots_taken: number;
+    slots_open: number;
+    window_open: boolean;
+    window_ends_at: string | null;
+  };
   invites_weekly_cap?: number;
 }
 

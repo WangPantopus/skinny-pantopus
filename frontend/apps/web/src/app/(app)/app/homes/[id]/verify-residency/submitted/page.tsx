@@ -33,7 +33,7 @@ export default function VerifyResidencySubmittedPage() {
             Usually within hours, always within a business day. You&apos;ll get a notification the moment it&apos;s
             decided, and everything you have now stays available while you wait.
           </p>
-          <p className="text-sm text-app-text-muted mb-10">Your document is seen by one reviewer and never by neighbors.</p>
+          <p className="text-sm text-app-text-muted mb-10">Your document is seen by one reviewer, never by neighbors, and deleted once your claim is decided.</p>
 
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button

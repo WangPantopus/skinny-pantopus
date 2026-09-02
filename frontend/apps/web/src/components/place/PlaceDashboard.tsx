@@ -153,6 +153,7 @@ export default function PlaceDashboard() {
         onOpenPulse={() => router.push('/app/place/pulse')}
         switchHomes={switchHomes}
         activeHomeId={homeId}
+        moveInDate={homeQuery.data?.home?.id === homeId ? homeQuery.data?.home?.move_in_date ?? null : null}
         onSwitchHome={setSelectedHomeId}
         onAddPlace={() => router.push('/app/homes/new')}
         onClaim={() => router.push('/app/homes')}

@@ -199,6 +199,8 @@ export const getAuthToken = jest.fn();
 // Wedge Phase 1 funnel beacons (fire-and-forget from /start).
 export const recordFunnelEvent = jest.fn();
 export const getFunnelAnonId = jest.fn(() => 'anon-test');
+export const rememberFunnelRoute = jest.fn();
+export const getFunnelRoute = jest.fn(() => null);
 export const clearAuthToken = jest.fn();
 export const refreshAuthSession = jest.fn();
 

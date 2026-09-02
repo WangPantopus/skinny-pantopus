@@ -15,6 +15,7 @@ const placeSectionAdapters = require('../services/placeSectionAdapters');
 const { encodeGeohash, encodeGeohash6 } = require('../utils/geohash');
 const { GeoCache } = require('../utils/geoCache');
 const placePreviewService = require('../services/placePreviewService');
+const { foundingSlotsOpen } = require('../services/place/foundingWindow');
 const { recordFunnelEvent, CLIENT_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { resolveUsState } = require('../utils/usState');
 
@@ -532,7 +533,7 @@ router.get('/place', async (req, res) => {
       return tractPromise;
     };
 
-    const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled] = await Promise.allSettled([
+    const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
       fetchFloodCached(place.lat, place.lng),
       fetchCensusTeaserCached(place.lat, place.lng, resolveTract),
       readDensityBucket(geohash),
@@ -543,6 +544,9 @@ router.get('/place', async (req, res) => {
       placePreviewService.composePreviewSections({
         lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract,
       }),
+      // Are Founding Neighbor slots genuinely open in this cell? A boolean,
+      // never a count — it only chooses the density card's invitation line.
+      foundingSlotsOpen(geohash),
     ]);
 
     const flood = floodSettled.status === 'fulfilled' ? floodSettled.value : null;
@@ -550,8 +554,9 @@ router.get('/place', async (req, res) => {
     const bucket = bucketSettled.status === 'fulfilled' ? bucketSettled.value : 'none';
     const money = moneySettled.status === 'fulfilled' ? moneySettled.value : null;
     const remote = remoteSettled.status === 'fulfilled' ? remoteSettled.value : [];
+    const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
 
-    const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket });
+    const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
     const aha = placePreviewService.pickAha(sections);
 
     const floodSection = flood && flood.flood_zone
@@ -581,7 +586,7 @@ router.get('/place', async (req, res) => {
     const densitySection = {
       status: 'ready',
       bucket,                       // enum only — NEVER a count
-      label: DENSITY_LABELS[bucket],
+      label: placePreviewService.previewDensityLabel(bucket, foundingOpen),
       source: 'Pantopus verified neighbors',
     };
 

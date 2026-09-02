@@ -19,6 +19,7 @@ const policy = require('../utils/homeSecurityPolicy');
 const propertyDataService = require('../services/propertyDataService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const adminAlerts = require('../services/adminAlerts');
+const { purgeClaimEvidence } = require('../services/evidencePurge');
 const homeClaimComparisonService = require('../services/homeClaimComparisonService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
@@ -691,6 +692,8 @@ router.delete('/:id/ownership-claims/:claimId', verifyToken, async (req, res) =>
       .eq('subject_id', userId)
       .eq('owner_status', 'pending');
 
+    // Withdrawn: the uploaded documents have no further job.
+    try { await purgeClaimEvidence(claimId, 'withdrawn'); } catch (purgeErr) { logger.warn('claim delete: evidence purge failed (non-fatal)', { claimId, error: purgeErr.message }); }
     const { error: delErr } = await supabaseAdmin
       .from('HomeOwnershipClaim')
       .delete()

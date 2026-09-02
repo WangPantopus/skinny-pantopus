@@ -29,6 +29,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Smartphone,
+  Share2,
   Home,
   Bell,
   Wind,
@@ -404,8 +405,39 @@ function AppDownloadLink() {
   );
 }
 
+// ── Share this address (Wedge v2 D5: the share card) ─────────
+// The link is the preview of THIS address; the card image is rendered
+// on the fly by /api/og/place (nothing is stored). Web Share where it
+// exists, copy-to-clipboard elsewhere.
+function ShareAddressLink({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    if (typeof window === 'undefined') return;
+    // The link is the preview of THIS address; the browser URL is left alone.
+    const url = `${window.location.origin}/start?address=${encodeURIComponent(address)}`;
+    const title = "What's true about this address";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* dismissed */
+    }
+  };
+  return (
+    <button type="button" onClick={share} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary-600 hover:text-primary-700">
+      <Share2 size={14} strokeWidth={2} />
+      {copied ? 'Link copied' : 'Share this address'}
+    </button>
+  );
+}
+
 // ── Sticky wall bar ─────────────────────────────────────────
-function WallBar({ onWall }: { onWall: () => void }) {
+function WallBar({ onWall, shareAddress }: { onWall: () => void; shareAddress: string }) {
   return (
     <div className="sticky bottom-0 left-0 right-0 -mx-5 px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-app-surface/95 backdrop-blur border-t border-app-border sm:rounded-t-2xl sm:border-x sm:shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
       <div className="flex items-center gap-3.5">
@@ -423,7 +455,8 @@ function WallBar({ onWall }: { onWall: () => void }) {
           Claim it
         </button>
       </div>
-      <div className="mt-2 flex justify-center">
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <ShareAddressLink address={shareAddress} />
         <AppDownloadLink />
       </div>
     </div>
@@ -509,6 +542,35 @@ export default function StartFunnel() {
   const router = useRouter();
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
+
+  // Deep links (Wedge v2 D5): `?r=<route>` from an EDDM card or invite
+  // postcard is remembered for every funnel beacon; `?address=` (a share
+  // card, a postcard QR) resolves the first suggestion and shows the
+  // preview straight away.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('r') || params.get('route');
+    if (route) api.rememberFunnelRoute(route);
+    const address = (params.get('address') || '').trim();
+    if (!address) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.geo.autocompleteWithAbort(address, new AbortController().signal);
+        const first = res?.suggestions?.[0];
+        if (cancelled || !first) return;
+        const lat = first.center?.lat;
+        const lng = first.center?.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        setSelected({ label: first.label, latitude: lat, longitude: lng });
+        setSubmitted(first.label);
+      } catch {
+        /* a bad deep link simply lands on the hero */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const previewQuery = useQuery({
     queryKey: ['place', 'public-preview', submitted],
@@ -615,7 +677,7 @@ export default function StartFunnel() {
               <PreviewBody preview={preview} onWall={goWall} />
               <div className="h-4" />
             </div>
-            <WallBar onWall={goWall} />
+            <WallBar onWall={goWall} shareAddress={selected?.label ?? submitted ?? ''} />
           </>
         ) : null}
       </div>

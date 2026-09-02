@@ -30,6 +30,7 @@ const { encodeGeohash } = require('../utils/geohash');
 const { computeAddressHash, expandAbbreviations } = require('../utils/normalizeAddress');
 const { readRawCountForVerifiedInsider } = require('./place/densityReader');
 const realRentService = require('./realRentService');
+const foundingWindow = require('./place/foundingWindow');
 const { mailVendorService } = require('./addressValidation');
 const { generateLetterCode } = require('./residencyLetterService');
 
@@ -295,8 +296,10 @@ async function getBlockStatus({ home, userId }) {
   const geohash6 = cellForHome(home);
   if (!geohash6) return { available: false, reason: 'NO_COORDINATES' };
 
-  const [founder, verifiedCount, rentReports, { count: weekCount }] = await Promise.all([
-    ensureFounderRank({ home, userId }),
+  // Rank first (it may insert), then everything else in parallel — including
+  // the founding window, which must see the freshly assigned rank.
+  const founder = await ensureFounderRank({ home, userId });
+  const [verifiedCount, rentReports, { count: weekCount }, window] = await Promise.all([
     readRawCountForVerifiedInsider(geohash6),
     realRentService.countCellReports(geohash6),
     supabaseAdmin
@@ -304,9 +307,13 @@ async function getBlockStatus({ home, userId }) {
       .select('id', { count: 'exact', head: true })
       .eq('sender_user_id', userId)
       .gte('created_at', new Date(Date.now() - WEEK_MS).toISOString()),
+    // The Founding Neighbor tier (Wedge v2 D5): the first 5 in the cell,
+    // within 21 days of the first — derived, never stored.
+    foundingWindow.cellFoundingWindow(geohash6),
   ]);
 
   const readingFor = (source) => (source === 'rent_reports' ? rentReports : verifiedCount);
+  const isFounding = foundingWindow.isFoundingRow(founder, window);
 
   return {
     available: true,
@@ -326,6 +333,15 @@ async function getBlockStatus({ home, userId }) {
     }),
     invites_remaining: Math.max(0, WEEKLY_INVITE_CAP - (weekCount || 0)),
     invites_weekly_cap: WEEKLY_INVITE_CAP,
+    founding: {
+      is_founding: isFounding,
+      slot: isFounding ? founder.rank : null,
+      slots_total: window.slots_total,
+      slots_taken: window.taken,
+      slots_open: window.slots_open,
+      window_open: window.open,
+      window_ends_at: window.ends_at,
+    },
   };
 }
 

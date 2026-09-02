@@ -20,6 +20,33 @@ import { post } from '../client';
 export type ClientFunnelEventType = 't0_preview_viewed' | 't0_wall_viewed' | 'register_started';
 
 const ANON_ID_KEY = 'pantopus_anon_id';
+const ROUTE_KEY = 'pantopus_route';
+
+/**
+ * The acquisition route a visitor arrived on — `/start?r=<route>` printed
+ * on an EDDM card or an invite postcard (Wedge v2 D5). Remembered per
+ * browser so the wall and the register beacons carry it and route-level
+ * CAC can be read straight from FunnelEvent.meta.
+ */
+export function rememberFunnelRoute(route: string | null | undefined): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const clean = String(route ?? '').trim().slice(0, 64);
+    if (!clean) return;
+    window.localStorage.setItem(ROUTE_KEY, clean);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function getFunnelRoute(): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(ROUTE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The stable per-browser anonymous id. Generated once, kept in
@@ -53,7 +80,7 @@ export function recordFunnelEvent(
     void post('/api/public/funnel-events', {
       event_type: eventType,
       anon_id: getFunnelAnonId(),
-      meta: meta ?? {},
+      meta: { ...(getFunnelRoute() ? { route: getFunnelRoute() } : {}), ...(meta ?? {}) },
     }).catch(() => {});
   } catch {
     // Beacons are best-effort by design.

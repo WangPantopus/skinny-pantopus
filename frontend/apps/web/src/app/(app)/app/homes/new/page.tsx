@@ -1126,12 +1126,24 @@ export default function NewHomePage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Move-in date</label>
-                  <input
-                    type="date"
-                    value={moveInDate}
-                    onChange={e => setMoveInDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-app-border rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={moveInDate}
+                      onChange={e => setMoveInDate(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-app-border rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20"
+                    />
+                    {/* Movers first (Wedge v2 D5): one tap says "this is new", and the
+                        place page opens with the first-week checklist. */}
+                    <button
+                      type="button"
+                      onClick={() => setMoveInDate(new Date().toISOString().slice(0, 10))}
+                      className="shrink-0 px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:border-primary-500"
+                    >
+                      Just moved here
+                    </button>
+                  </div>
+                  <p className="text-xs text-app-text-secondary mt-1.5">Just moved? Your place page starts with the first-week checklist: pickup day, the previous resident&apos;s mail, utilities, schools.</p>
                 </div>
               </div>
 

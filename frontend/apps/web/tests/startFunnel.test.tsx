@@ -22,6 +22,8 @@ jest.mock('@pantopus/api', () => ({
   // Wedge Phase 1 funnel beacons — fire-and-forget from the funnel.
   recordFunnelEvent: jest.fn(),
   getFunnelAnonId: jest.fn(() => 'anon-test'),
+  rememberFunnelRoute: jest.fn(),
+  getFunnelRoute: jest.fn(() => null),
 }));
 
 jest.mock('@/lib/publicShare', () => ({

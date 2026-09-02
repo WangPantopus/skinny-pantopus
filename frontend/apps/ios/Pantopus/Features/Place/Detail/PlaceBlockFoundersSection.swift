@@ -210,6 +210,19 @@ private struct BlockFounderRankCard: View {
                     .font(.system(size: 12.5))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                if let founding = status.founding, let line = foundingLine(founding) {
+                    HStack(spacing: 8) {
+                        Icon(.crown, size: 14, strokeWidth: 2.25, color: founding.isFounding ? Theme.Color.home : Theme.Color.appTextSecondary)
+                        Text(line)
+                            .font(.system(size: 12.5, weight: founding.isFounding ? .semibold : .medium))
+                            .foregroundStyle(founding.isFounding ? Theme.Color.home : Theme.Color.appText)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(founding.isFounding ? Theme.Color.homeBg : Theme.Color.appSurfaceSunken)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityIdentifier("place.blockFounders.founding")
+                }
                 HStack(spacing: Spacing.s3) {
                     stat(icon: .users, value: status.verifiedCount.map(PlacePresentation.grouped) ?? "—", label: "Verified homes")
                     stat(icon: .handCoins, value: status.rentReports.map(PlacePresentation.grouped) ?? "—", label: "Rents shared")
@@ -222,6 +235,26 @@ private struct BlockFounderRankCard: View {
     private var rankTitle: String {
         guard let rank = status.rank else { return "Your block" }
         return "Founder #\(rank) of this block"
+    }
+
+    /// The Founding Neighbor tier: first 5, within 21 days of the first.
+    private func foundingLine(_ f: BlockFounding) -> String? {
+        if f.isFounding, let slot = f.slot {
+            return "Founding Neighbor · slot \(slot) of \(f.slotsTotal). Permanent."
+        }
+        guard f.windowOpen, f.slotsOpen > 0 else { return nil }
+        let slots = f.slotsOpen == 1 ? "slot" : "slots"
+        if let ends = f.windowEndsAt, let end = ISO8601DateFormatter().date(from: ends) ?? isoWithFraction(ends) {
+            let days = max(0, Int(ceil(end.timeIntervalSinceNow / 86400)))
+            return "\(f.slotsOpen) Founding Neighbor \(slots) still open · closes in \(days) \(days == 1 ? "day" : "days")"
+        }
+        return "\(f.slotsOpen) Founding Neighbor \(slots) still open on this block"
+    }
+
+    private func isoWithFraction(_ value: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: value)
     }
 
     private var established: String? {

@@ -754,6 +754,8 @@ export interface Home {
   bedrooms?: number;
   bathrooms?: number;
   square_feet?: number;
+  /** Set at claim; drives the first-week "Just moved" card for ~60 days. */
+  move_in_date?: string | null;
   public_info?: {
     wifi_password?: string;
     house_rules?: string;

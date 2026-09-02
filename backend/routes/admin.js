@@ -11,6 +11,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
+const { purgeClaimEvidence } = require('../services/evidencePurge');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const { findHomeOwnerRowForClaimant } = require('../utils/homeOwnerRowLookup');
@@ -409,6 +410,16 @@ router.post('/claims/:claimId/review', async (req, res) => {
     });
 
     const result = { action, newState, claimId, homeId };
+
+    // The document was for this decision; once decided it is deleted
+    // (services/evidencePurge). The row keeps the audit trail.
+    if (action === 'approve' || action === 'reject') {
+      try {
+        result.evidence_purged = (await purgeClaimEvidence(claimId, action === 'approve' ? 'approved' : 'rejected')).purged;
+      } catch (purgeErr) {
+        logger.warn('admin review: evidence purge failed (non-fatal)', { claimId, error: purgeErr.message });
+      }
+    }
 
     if (action === 'approve') {
       // --- Mark all evidence as verified ---

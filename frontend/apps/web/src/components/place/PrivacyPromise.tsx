@@ -14,7 +14,7 @@ export const PRIVACY_PROMISE_LINES: readonly string[] = [
   'Neighbors see a first name and a street at most. Never a house number or unit.',
   'We never sell your address or use it for ads.',
   'Verifying never asks for your GPS. It works by mail, a landlord, or a document you choose.',
-  'Verification documents are seen by one reviewer and never by neighbors.',
+  'Verification documents are seen by one reviewer, never by neighbors, and deleted once your claim is decided.',
 ];
 
 export interface PrivacyPromiseProps {

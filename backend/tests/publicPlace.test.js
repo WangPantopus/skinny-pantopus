@@ -258,6 +258,18 @@ describe('GET /api/public/place', () => {
       expect(res.body.free.density.bucket).toBe('none');
       expect(res.body.free.density.label).toMatch(/Founding Neighbor/);
       expect(byId(res.body).block_density.data.label).toMatch(/Founding Neighbor/);
+      expect(byId(res.body).block_density.data.founding_open).toBe(true);
+    });
+
+    it('stops promising Founding Neighbor slots once the cell\'s five are taken', async () => {
+      resetTables();
+      publicRouter.__clearPreviewCaches();
+      const est = new Date().toISOString();
+      seedTable('BlockFounder', [1, 2, 3, 4, 5].map((rank) => ({ id: `f${rank}`, home_id: `h${rank}`, user_id: `u${rank}`, geohash6: PORTLAND_GEOHASH, rank, established_at: est })));
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+      expect(res.body.free.density.label).not.toMatch(/Founding Neighbor/);
+      expect(res.body.free.density.label).toMatch(/first verified here/i);
+      expect(byId(res.body).block_density.data.founding_open).toBe(false);
     });
 
     it('degrades a single slow provider to unavailable within the budget — the rest stay ready', async () => {

@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { Compass, ChevronRight } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
+import JustMovedCard from './JustMovedCard';
 import { derivePulse, renderSection, renderVerifyLocked } from './presentation';
 import { IdentityGroup } from './PlaceIdentitySection';
 import VerifyPromptSheet from './VerifyPromptSheet';
@@ -40,6 +41,8 @@ export interface PlaceDashboardViewProps {
   switchHomes?: PlaceSwitcherHome[];
   /** The home currently shown (highlighted in the switcher). */
   activeHomeId?: string | null;
+  /** The active home's move-in date; a recent one shows the first-week checklist. */
+  moveInDate?: string | null;
   /** Switch the active place — re-queries the contract for it. */
   onSwitchHome?: (id: string) => void;
   /** Claim or verify another address. */
@@ -56,6 +59,7 @@ export default function PlaceDashboardView({
   onOpenPulse,
   switchHomes,
   activeHomeId,
+  moveInDate = null,
   onSwitchHome,
   onAddPlace,
   onClaim,
@@ -94,6 +98,8 @@ export default function PlaceDashboardView({
       ) : null}
 
       <div className={showVerify ? 'mt-3' : 'mt-4'}>
+        {/* Movers first (Wedge v2 D5): the first-week checklist for a recent move-in. */}
+        <JustMovedCard homeId={homeId} moveInDate={moveInDate} className="mb-4" />
         <HeroCard
           variant={pulse.variant}
           title={pulse.title}
