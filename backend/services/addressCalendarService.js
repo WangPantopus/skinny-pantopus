@@ -131,6 +131,17 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
     }
   }
   upcoming.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : SCOPE_RANK[a.scope] - SCOPE_RANK[b.scope]));
+  // Belt and braces under migration 198's unique index: two rules that say
+  // the same thing on the same day are one line on the card, never two.
+  const seen = new Set();
+  const deduped = upcoming.filter((e) => {
+    const key = `${e.kind}|${e.date}|${e.title}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  upcoming.length = 0;
+  upcoming.push(...deduped);
 
   const needsPickupDay = rules.some((r) => PICKUP_KINDS.has(r.kind) && r.scope_type !== 'home');
 

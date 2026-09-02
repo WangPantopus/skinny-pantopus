@@ -48,6 +48,16 @@ describe('composeForHome', () => {
     expect(cal.upcoming.some((e) => e.title === 'Vancouver garbage')).toBe(false);
   });
 
+  it('a rule seeded twice is one line on the card, never two (migration 198 + service guard)', async () => {
+    seedCamas();
+    const dup = getTable('AddressCalendarRule').find((r) => r.id === 'r-garbage');
+    getTable('AddressCalendarRule').push({ ...dup, id: 'r-garbage-dup' });
+    const out = await svc.composeForHome(home, { now: NOW });
+    const garbageDays = out.upcoming.filter((e) => e.kind === 'garbage');
+    expect(new Set(garbageDays.map((e) => e.date)).size).toBe(garbageDays.length);
+    expect(garbageDays.length).toBeGreaterThan(0);
+  });
+
   it('flags needs_pickup_day while pickup comes from the city default', async () => {
     seedCamas();
     const cal = await svc.composeForHome(home, { now: NOW });

@@ -1357,7 +1357,7 @@ private fun AuthenticatedUser.toSessionUser(): UserDto =
     UserDto(
         id = id,
         email = email,
-        displayName = name.takeIf { it.isNotEmpty() },
+        displayName = name?.takeIf { it.isNotEmpty() },
         avatarUrl = null,
         isAdmin = role == "admin",
         username = username,

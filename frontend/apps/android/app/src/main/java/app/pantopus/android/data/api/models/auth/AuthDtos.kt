@@ -233,10 +233,12 @@ data class AuthenticatedUser(
     val id: String,
     val email: String,
     val username: String = "",
-    val name: String = "",
-    val firstName: String = "",
+    // Wedge onboarding: email + password sign-up leaves the name fields null
+    // on the wire. Nullable here, never a crash at the first login.
+    val name: String? = null,
+    val firstName: String? = null,
     val middleName: String? = null,
-    val lastName: String = "",
+    val lastName: String? = null,
     val phoneNumber: String? = null,
     val address: String? = null,
     val city: String? = null,
