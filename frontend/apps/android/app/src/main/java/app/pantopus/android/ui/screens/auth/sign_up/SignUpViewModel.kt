@@ -134,45 +134,28 @@ class SignUpViewModel
                             confirmPassword != password -> "Passwords don't match."
                             else -> null
                         }
-                    SignUpField.Username -> AuthValidation.username(username)
-                    SignUpField.FirstName ->
-                        if (firstName.trim().isEmpty()) "First name is required." else null
-                    SignUpField.LastName ->
-                        if (lastName.trim().isEmpty()) "Last name is required." else null
-                    SignUpField.MiddleName -> null
-                    SignUpField.DateOfBirth -> AuthValidation.dateOfBirth(dateOfBirth)
+                    // Wedge onboarding (Phase 1 follow-up, "signup slim"): the form
+                    // matches web — email + password. Everything below is optional
+                    // and collected later in the claim flow; when typed it is checked.
+                    SignUpField.Username -> AuthValidation.usernameOptional(username)
+                    SignUpField.FirstName, SignUpField.LastName, SignUpField.MiddleName -> null
+                    SignUpField.DateOfBirth -> AuthValidation.dateOfBirthOptional(dateOfBirth)
                     SignUpField.PhoneNumber -> AuthValidation.phoneOptional(phoneNumber)
                     SignUpField.Address -> {
                         val trimmed = address.trim()
-                        when {
-                            trimmed.isEmpty() -> "Address is required."
-                            trimmed.length < 5 -> "Address must be at least 5 characters."
-                            else -> null
-                        }
+                        if (trimmed.isEmpty() || trimmed.length >= 5) null else "Address must be at least 5 characters."
                     }
                     SignUpField.City -> {
                         val trimmed = city.trim()
-                        when {
-                            trimmed.isEmpty() -> "City is required."
-                            trimmed.length < 2 -> "City must be at least 2 characters."
-                            else -> null
-                        }
+                        if (trimmed.isEmpty() || trimmed.length >= 2) null else "City must be at least 2 characters."
                     }
                     SignUpField.State -> {
                         val trimmed = state.trim()
-                        when {
-                            trimmed.isEmpty() -> "State is required."
-                            trimmed.length < 2 -> "State must be at least 2 characters."
-                            else -> null
-                        }
+                        if (trimmed.isEmpty() || trimmed.length >= 2) null else "State must be at least 2 characters."
                     }
                     SignUpField.Zipcode -> {
                         val trimmed = zipcode.trim()
-                        when {
-                            trimmed.isEmpty() -> "ZIP is required."
-                            trimmed.length < 3 -> "ZIP must be at least 3 characters."
-                            else -> null
-                        }
+                        if (trimmed.isEmpty() || trimmed.length >= 3) null else "ZIP must be at least 3 characters."
                     }
                     SignUpField.InviteCode -> null
                 }
@@ -298,7 +281,7 @@ class SignUpViewModel
         private fun oauthPrerequisiteMessage(): String? {
             val snapshot = _uiState.value
             if (snapshot.accountType == SignUpAccountTypeChoice.Business) return OAUTH_BUSINESS_MESSAGE
-            val dateOfBirthError = AuthValidation.dateOfBirth(snapshot.dateOfBirth)
+            val dateOfBirthError = AuthValidation.dateOfBirthOptional(snapshot.dateOfBirth)
             if (dateOfBirthError != null) {
                 update {
                     it.copy(
@@ -423,15 +406,15 @@ class SignUpViewModel
                         email = snapshot.email.trim().lowercase(),
                         password = snapshot.password,
                         phoneNumber = snapshot.phoneNumber.ifBlank { null },
-                        username = snapshot.username.trim().lowercase(),
-                        firstName = snapshot.firstName.trim(),
+                        username = snapshot.username.trim().lowercase().ifBlank { null },
+                        firstName = snapshot.firstName.trim().ifBlank { null },
                         middleName = snapshot.middleName.ifBlank { null }?.trim(),
-                        lastName = snapshot.lastName.trim(),
+                        lastName = snapshot.lastName.trim().ifBlank { null },
                         dateOfBirth = snapshot.dateOfBirth?.format(DateTimeFormatter.ISO_LOCAL_DATE),
-                        address = snapshot.address.trim(),
-                        city = snapshot.city.trim(),
-                        state = snapshot.state.trim(),
-                        zipcode = snapshot.zipcode.trim(),
+                        address = snapshot.address.trim().ifBlank { null },
+                        city = snapshot.city.trim().ifBlank { null },
+                        state = snapshot.state.trim().ifBlank { null },
+                        zipcode = snapshot.zipcode.trim().ifBlank { null },
                         accountType = snapshot.accountType.asAccountType,
                         inviteCode = snapshot.inviteCode.ifBlank { null }?.trim(),
                     )

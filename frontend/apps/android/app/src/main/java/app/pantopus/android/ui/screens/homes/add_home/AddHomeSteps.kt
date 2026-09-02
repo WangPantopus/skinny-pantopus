@@ -117,6 +117,8 @@ enum class AddHomeHomeType(
 data class AddHomeDetailsFields(
     val nickname: String = "",
     val homeType: AddHomeHomeType = AddHomeHomeType.House,
+    /** Wedge v2 D5 (movers): stamps `move_in_date` = today, which drives the first-week checklist. */
+    val justMoved: Boolean = false,
     val bedrooms: String = "",
     val bathrooms: String = "",
     val sqFt: String = "",

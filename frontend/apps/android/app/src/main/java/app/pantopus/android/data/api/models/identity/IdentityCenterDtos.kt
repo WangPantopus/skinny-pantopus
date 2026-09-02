@@ -145,3 +145,55 @@ data class ViewAsContextDto(
     val isHouseholdMember: Boolean? = null,
     val isGigParticipant: Boolean? = null,
 )
+
+// ─── The privacy mirror (Wedge v2 §2) ────────────────────────
+
+/**
+ * `GET /api/identity-center/view-as?surface=home&home_id=`: the member's
+ * home exactly as a neighbor outside the household sees it — street and a
+ * first name, never the number — produced by the same serializer the
+ * public-profile route uses, so it cannot drift from what they get.
+ */
+@JsonClass(generateAdapter = true)
+data class HomeMirrorDto(
+    val surface: String = "home",
+    val viewer: String = "neighbor",
+    @Json(name = "viewer_label") val viewerLabel: String = "",
+    val discoverable: Boolean = false,
+    val home: HomeMirrorHomeDto,
+    val owner: HomeMirrorOwnerDto? = null,
+    val hidden: List<HomeMirrorHiddenDto> = emptyList(),
+) {
+    /** "NW Lacamas Dr · Camas, WA" — the whole address line a neighbor gets. */
+    val addressLine: String
+        get() {
+            val place = listOfNotNull(home.city, home.state).filter { it.isNotBlank() }.joinToString(", ")
+            return listOfNotNull(home.address, place).filter { it.isNotBlank() }.joinToString(" · ")
+        }
+}
+
+@JsonClass(generateAdapter = true)
+data class HomeMirrorHomeDto(
+    val id: String,
+    val name: String? = null,
+    val address: String? = null,
+    @Json(name = "address_redacted") val addressRedacted: Boolean = true,
+    val city: String? = null,
+    val state: String? = null,
+    val zipcode: String? = null,
+    val visibility: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeMirrorOwnerDto(
+    val id: String,
+    val username: String? = null,
+    val name: String? = null,
+    @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeMirrorHiddenDto(
+    val key: String,
+    val label: String,
+)

@@ -313,6 +313,8 @@ import app.pantopus.android.ui.screens.place.messaging.NEIGHBOR_MESSAGE_ID_KEY
 import app.pantopus.android.ui.screens.place.messaging.NeighborMessageComposeScreen
 import app.pantopus.android.ui.screens.place.messaging.NeighborMessageInboxScreen
 import app.pantopus.android.ui.screens.place.messaging.NeighborMessageReceivedScreen
+import app.pantopus.android.ui.screens.place.privacy.PRIVACY_MIRROR_HOME_ID_KEY
+import app.pantopus.android.ui.screens.place.privacy.PlacePrivacyMirrorScreen
 import app.pantopus.android.ui.screens.place.pulse.PLACE_PULSE_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.pulse.PlacePulseScreen
 import app.pantopus.android.ui.screens.place.today.TodayTabScreen
@@ -484,6 +486,11 @@ private object ChildRoutes {
     const val PLACE_DASHBOARD = "place/{$PLACE_DASHBOARD_HOME_ID_KEY}"
 
     fun placeDashboard(homeId: String): String = "place/$homeId"
+
+    /** Wedge v2 §2 — the privacy mirror: this home as a neighbor sees it. */
+    const val PLACE_PRIVACY_MIRROR = "place/{$PRIVACY_MIRROR_HOME_ID_KEY}/privacy"
+
+    fun placePrivacyMirror(homeId: String): String = "place/$homeId/privacy"
 
     /** W4 — a Place group-detail page (today / your-home / risk / …). */
     const val PLACE_DETAIL = "place/{$PLACE_DETAIL_HOME_ID_KEY}/detail/{$PLACE_DETAIL_SLUG_KEY}"
@@ -2562,7 +2569,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
                         onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
+                        onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
                     )
+                }
+                composable(
+                    route = ChildRoutes.PLACE_PRIVACY_MIRROR,
+                    arguments = listOf(navArgument(PRIVACY_MIRROR_HOME_ID_KEY) { type = NavType.StringType }),
+                ) {
+                    PlacePrivacyMirrorScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.PLACE_DETAIL,

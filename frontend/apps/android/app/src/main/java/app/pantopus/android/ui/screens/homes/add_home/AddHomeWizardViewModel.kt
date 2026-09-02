@@ -362,6 +362,9 @@ open class AddHomeWizardViewModel
 
         fun updateNickname(value: String) = updateDetails { it.copy(nickname = value) }
 
+        /** Wedge v2 D5 — "Just moved here" at claim. */
+        fun setJustMoved(value: Boolean) = updateDetails { it.copy(justMoved = value) }
+
         fun selectHomeType(value: AddHomeHomeType) = updateDetails { it.copy(homeType = value) }
 
         fun updateBedrooms(value: String) = updateDetails { it.copy(bedrooms = digitsOnly(value)) }
@@ -813,6 +816,8 @@ open class AddHomeWizardViewModel
                     latitude = _state.value.geocodedAddress?.latitude,
                     longitude = _state.value.geocodedAddress?.longitude,
                     homeType = details.homeType.wireValue,
+                    // Movers first (Wedge v2 D5): today's date when the resident says they just moved.
+                    moveInDate = if (details.justMoved) java.time.LocalDate.now().toString() else null,
                     // RN falls back to the street when no nickname is
                     // typed (`useHomeForm.ts:302`).
                     name = nickname.ifEmpty { fields.street },

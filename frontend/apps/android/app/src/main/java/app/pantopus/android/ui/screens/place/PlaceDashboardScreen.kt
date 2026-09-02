@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -77,6 +78,7 @@ fun PlaceDashboardScreen(
     onOpenInbox: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenMailDay: () -> Unit = {},
+    onOpenPrivacyMirror: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -95,6 +97,7 @@ fun PlaceDashboardScreen(
                     intel = current.intelligence,
                     moveInDate = current.moveInDate,
                     onOpenMailDay = onOpenMailDay,
+                    onOpenPrivacyMirror = onOpenPrivacyMirror,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
@@ -145,6 +148,7 @@ internal fun PlaceDashboardContent(
     onOpenInbox: () -> Unit = {},
     moveInDate: String? = null,
     onOpenMailDay: () -> Unit = {},
+    onOpenPrivacyMirror: () -> Unit = {},
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     val isClaimed = intel.tier == PlaceTier.T3
@@ -167,6 +171,8 @@ internal fun PlaceDashboardContent(
                 )
             }
         }
+        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
+        item { PrivacyMirrorRow(onOpen = onOpenPrivacyMirror) }
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
         item {
             JustMovedCard(
@@ -219,6 +225,34 @@ internal fun PlaceDashboardContent(
             }
         }
         item { Spacer(modifier = Modifier.height(40.dp)) }
+    }
+}
+
+/** "Private by default. See what neighbors see of this address." (Wedge v2 §2). */
+@Composable
+private fun PrivacyMirrorRow(onOpen: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PantopusColors.appSurfaceSunken)
+                .clickable(onClick = onOpen)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .testTag("place.privacyMirror"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(PantopusIcon.ShieldCheck, null, size = 15.dp, strokeWidth = 2.25f, tint = PantopusColors.home)
+        Text(
+            "Private by default. See what neighbors see of this address.",
+            fontSize = 13.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        PantopusIconImage(PantopusIcon.ChevronRight, null, size = 15.dp, strokeWidth = 2.25f, tint = PantopusColors.appTextMuted)
     }
 }
 

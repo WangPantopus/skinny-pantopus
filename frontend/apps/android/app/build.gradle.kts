@@ -63,6 +63,8 @@ android {
         // These are the defaultConfig values; the release buildType overrides
         // PANTOPUS_ENV to production below.
         buildConfigField("String", "PANTOPUS_API_BASE_URL", "\"$apiBaseUrl\"")
+        // The web origin the share card links to (`/start?address=`). Wedge v2 D5.
+        buildConfigField("String", "PANTOPUS_WEB_BASE_URL", "\"${envOr("PANTOPUS_WEB_BASE_URL", "https://pantopus.com")}\"")
         buildConfigField("String", "PANTOPUS_SOCKET_URL", "\"$socketUrl\"")
         buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", "\"$stripeKey\"")
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")

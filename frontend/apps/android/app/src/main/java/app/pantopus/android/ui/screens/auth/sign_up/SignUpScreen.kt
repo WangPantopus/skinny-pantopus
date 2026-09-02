@@ -18,13 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -67,9 +62,6 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
 
 object SignUpScreenTags {
     const val ROOT = "signUpScreen"
@@ -215,101 +207,9 @@ fun SignUpScreen(
                 )
             }
 
-            FormFieldGroup("Profile") {
-                FieldWithLiveError(state, SignUpField.Username) {
-                    PantopusTextField(
-                        label = "Username",
-                        value = state.username,
-                        onValueChange = viewModel::onUsernameChange,
-                        placeholder = "your_handle",
-                        state = fieldState(state, SignUpField.Username),
-                        fieldTestTag = SignUpScreenTags.USERNAME,
-                    )
-                }
-                FieldWithLiveError(state, SignUpField.FirstName) {
-                    PantopusTextField(
-                        label = "First name",
-                        value = state.firstName,
-                        onValueChange = viewModel::onFirstNameChange,
-                        placeholder = "Maria",
-                        state = fieldState(state, SignUpField.FirstName),
-                        fieldTestTag = SignUpScreenTags.FIRST_NAME,
-                    )
-                }
-                PantopusTextField(
-                    label = "Middle name (optional)",
-                    value = state.middleName,
-                    onValueChange = viewModel::onMiddleNameChange,
-                    placeholder = "Optional",
-                    fieldTestTag = SignUpScreenTags.MIDDLE_NAME,
-                )
-                FieldWithLiveError(state, SignUpField.LastName) {
-                    PantopusTextField(
-                        label = "Last name",
-                        value = state.lastName,
-                        onValueChange = viewModel::onLastNameChange,
-                        placeholder = "Kowalski",
-                        state = fieldState(state, SignUpField.LastName),
-                        fieldTestTag = SignUpScreenTags.LAST_NAME,
-                    )
-                }
-                DateOfBirthField(state = state, onChange = viewModel::onDateOfBirthChange)
-            }
-
-            FormFieldGroup("Address") {
-                FieldWithLiveError(state, SignUpField.Address) {
-                    PantopusTextField(
-                        label = "Street address",
-                        value = state.address,
-                        onValueChange = viewModel::onAddressChange,
-                        placeholder = "123 Main St",
-                        state = fieldState(state, SignUpField.Address),
-                        fieldTestTag = SignUpScreenTags.ADDRESS,
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    Box(modifier = Modifier.weight(2f)) {
-                        FieldWithLiveError(state, SignUpField.City) {
-                            PantopusTextField(
-                                label = "City",
-                                value = state.city,
-                                onValueChange = viewModel::onCityChange,
-                                placeholder = "Cambridge",
-                                state = fieldState(state, SignUpField.City),
-                                fieldTestTag = SignUpScreenTags.CITY,
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.width(80.dp)) {
-                        FieldWithLiveError(state, SignUpField.State) {
-                            PantopusTextField(
-                                label = "State",
-                                value = state.state,
-                                onValueChange = viewModel::onStateChange,
-                                placeholder = "MA",
-                                state = fieldState(state, SignUpField.State),
-                                fieldTestTag = SignUpScreenTags.STATE,
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.width(100.dp)) {
-                        FieldWithLiveError(state, SignUpField.Zipcode) {
-                            PantopusTextField(
-                                label = "ZIP",
-                                value = state.zipcode,
-                                onValueChange = viewModel::onZipcodeChange,
-                                placeholder = "02139",
-                                state = fieldState(state, SignUpField.Zipcode),
-                                keyboardType = KeyboardType.Number,
-                                fieldTestTag = SignUpScreenTags.ZIPCODE,
-                            )
-                        }
-                    }
-                }
-            }
-
+            // Wedge onboarding: the form matches web — email + password. The
+            // username is generated server-side; names and the address arrive
+            // in the claim flow, where they mean something.
             FormFieldGroup("Account type") {
                 AccountTypePicker(
                     selection = state.accountType,
@@ -588,100 +488,6 @@ private fun borderState(state: PantopusFieldState) =
                 PantopusFieldState.Default -> PantopusColors.appBorder
             },
     )
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DateOfBirthField(
-    state: SignUpViewModel.UiState,
-    onChange: (LocalDate?) -> Unit,
-) {
-    var showPicker by remember { mutableStateOf(false) }
-    val displayText =
-        state.dateOfBirth?.toString() ?: "Tap to choose"
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-        Text(
-            text = "Date of birth",
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.appTextSecondary,
-        )
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.appSurface)
-                    .border(
-                        borderState(fieldState(state, SignUpField.DateOfBirth)),
-                        RoundedCornerShape(Radii.md),
-                    ).clickable { showPicker = true }
-                    .padding(horizontal = Spacing.s3)
-                    .testTag(SignUpScreenTags.DATE_OF_BIRTH),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Text(
-                text = displayText,
-                style = PantopusTextStyle.body,
-                color =
-                    if (state.dateOfBirth != null) {
-                        PantopusColors.appText
-                    } else {
-                        PantopusColors.appTextMuted
-                    },
-            )
-        }
-        val live = fieldState(state, SignUpField.DateOfBirth)
-        if (live is PantopusFieldState.Error) {
-            Text(
-                text = live.message,
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.error,
-            )
-        }
-    }
-    if (showPicker) {
-        val today = LocalDate.now()
-        val maxDate = today.minusYears(18)
-        val datePickerState =
-            rememberDatePickerState(
-                initialSelectedDateMillis =
-                    state.dateOfBirth
-                        ?.atStartOfDay(ZoneOffset.UTC)
-                        ?.toInstant()
-                        ?.toEpochMilli()
-                        ?: today.minusYears(25).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-                initialDisplayMode = DisplayMode.Picker,
-                selectableDates = MaxEighteenDates(maxDateMillis = maxDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()),
-            )
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val millis = datePickerState.selectedDateMillis
-                    if (millis != null) {
-                        val chosen = Instant.ofEpochMilli(millis).atOffset(ZoneOffset.UTC).toLocalDate()
-                        onChange(chosen)
-                    }
-                    showPicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
-            },
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-private class MaxEighteenDates(
-    private val maxDateMillis: Long,
-) : androidx.compose.material3.SelectableDates {
-    override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= maxDateMillis
-
-    override fun isSelectableYear(year: Int): Boolean = year <= LocalDate.now().year
-}
 
 /**
  * Terms agreement checkbox with individually tappable Terms / Privacy

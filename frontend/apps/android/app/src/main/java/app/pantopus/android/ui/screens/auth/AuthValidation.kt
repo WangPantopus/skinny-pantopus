@@ -54,6 +54,15 @@ object AuthValidation {
         return null
     }
 
+    /** Wedge onboarding: the username is optional (the server generates one); when typed it must still be well-formed. */
+    fun usernameOptional(value: String): String? = if (value.trim().isEmpty()) null else username(value)
+
+    /** Wedge onboarding: date of birth is optional at sign-up; when given, the 18+ rule still applies. */
+    fun dateOfBirthOptional(
+        date: LocalDate?,
+        today: LocalDate = LocalDate.now(),
+    ): String? = if (date == null) null else dateOfBirth(date, today)
+
     fun phoneOptional(value: String): String? {
         val trimmed = value.trim()
         if (trimmed.isEmpty()) return null

@@ -216,6 +216,8 @@ data class CreateHomeRequest(
     val latitude: Double? = null,
     val longitude: Double? = null,
     @Json(name = "home_type") val homeType: String? = null,
+    /** Wedge v2 D5 (movers): ISO date; the dashboard's first-week checklist rides on it. */
+    @Json(name = "move_in_date") val moveInDate: String? = null,
     val visibility: String? = null,
     val name: String? = null,
     val description: String? = null,

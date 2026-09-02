@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.identity.BridgesEchoResponse
+import app.pantopus.android.data.api.models.identity.HomeMirrorDto
 import app.pantopus.android.data.api.models.identity.IdentityCenterResponse
 import app.pantopus.android.data.api.models.identity.UpdateBridgesBody
 import app.pantopus.android.data.api.models.identity.ViewAsResponse
@@ -33,6 +34,18 @@ interface IdentityCenterApi {
     /** `GET /api/identity-center/view-as` — privacy preview: render the
      *  signed-in user's profile as a chosen `viewer` would see it. Route
      *  `backend/routes/identityCenter.js:489`. */
+
+    /**
+     * `GET /api/identity-center/view-as?surface=home&home_id=` — the privacy
+     * mirror (Wedge v2 §2): this home as a neighbor outside the household
+     * sees it. Members only. Route `backend/routes/identityCenter.js` (view-as).
+     */
+    @GET("api/identity-center/view-as")
+    suspend fun homeMirror(
+        @Query("home_id") homeId: String,
+        @Query("surface") surface: String = "home",
+    ): HomeMirrorDto
+
     @GET("api/identity-center/view-as")
     suspend fun viewAs(
         @Query("surface") surface: String,

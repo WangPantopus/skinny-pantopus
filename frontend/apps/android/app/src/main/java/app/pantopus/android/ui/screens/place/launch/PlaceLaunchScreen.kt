@@ -1,5 +1,7 @@
 package app.pantopus.android.ui.screens.place.launch
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -32,12 +35,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlacePreviewAha
 import app.pantopus.android.data.api.models.place.PlacePreviewAhaTone
 import app.pantopus.android.data.api.models.place.PlacePreviewLockedSection
+import app.pantopus.android.data.api.models.place.PlacePreviewPlaceRef
 import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.ui.components.PrimaryButton
@@ -367,7 +372,41 @@ private fun PreviewBody(
                 color = PantopusColors.appText,
             )
             PrimaryButton(title = "Create account", onClick = onCreateAccount, modifier = Modifier.fillMaxWidth())
+            preview.place?.let { place -> ShareAddressLink(place) }
         }
+    }
+}
+
+/**
+ * The share card (Wedge v2 D5): the link is the preview of THIS address on
+ * the web, whose OG image is rendered on the fly by `/api/og/place` —
+ * nothing is stored. The system share sheet does the rest.
+ */
+@Composable
+private fun ShareAddressLink(place: PlacePreviewPlaceRef) {
+    val context = LocalContext.current
+    val address = listOfNotNull(place.address, place.city, place.state, place.zipcode).filter { it.isNotBlank() }.joinToString(", ")
+    if (address.isBlank()) return
+    Row(
+        modifier =
+            Modifier
+                .clickable {
+                    val url = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/start?address=" + Uri.encode(address)
+                    val send =
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "What's true about this address")
+                            putExtra(Intent.EXTRA_TEXT, url)
+                        }
+                    context.startActivity(Intent.createChooser(send, "Share this address"))
+                }
+                .padding(vertical = 4.dp)
+                .testTag("place.preview.share"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(PantopusIcon.Share, null, size = 14.dp, strokeWidth = 2f, tint = PantopusColors.primary600)
+        Text("Share this address", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
     }
 }
 

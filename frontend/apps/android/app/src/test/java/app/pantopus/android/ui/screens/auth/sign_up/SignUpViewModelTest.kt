@@ -109,7 +109,7 @@ class SignUpViewModelTest {
     @Test
     fun `username lowercase 3 to 20`() {
         val vm = buildVm()
-        assertEquals("Username is required.", vm.uiState.value.validate(SignUpField.Username))
+        assertNull(vm.uiState.value.validate(SignUpField.Username))
         vm.onUsernameChange("ab")
         assertEquals("Username must be at least 3 characters.", vm.uiState.value.validate(SignUpField.Username))
         vm.onUsernameChange("Alice")
@@ -122,18 +122,13 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `firstName required`() {
+    fun `names optional since the wedge slim`() {
         val vm = buildVm()
-        assertEquals("First name is required.", vm.uiState.value.validate(SignUpField.FirstName))
-        vm.onFirstNameChange("Maria")
         assertNull(vm.uiState.value.validate(SignUpField.FirstName))
-    }
-
-    @Test
-    fun `lastName required`() {
-        val vm = buildVm()
-        assertEquals("Last name is required.", vm.uiState.value.validate(SignUpField.LastName))
+        assertNull(vm.uiState.value.validate(SignUpField.LastName))
+        vm.onFirstNameChange("Maria")
         vm.onLastNameChange("Kowalski")
+        assertNull(vm.uiState.value.validate(SignUpField.FirstName))
         assertNull(vm.uiState.value.validate(SignUpField.LastName))
     }
 
@@ -146,9 +141,9 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `dateOfBirth required and 18 plus`() {
+    fun `dateOfBirth optional but 18 plus when given`() {
         val vm = buildVm()
-        assertEquals("Date of birth is required.", vm.uiState.value.validate(SignUpField.DateOfBirth))
+        assertNull(vm.uiState.value.validate(SignUpField.DateOfBirth))
         vm.onDateOfBirthChange(LocalDate.now().minusYears(10))
         assertEquals("You must be at least 18 years old.", vm.uiState.value.validate(SignUpField.DateOfBirth))
         vm.onDateOfBirthChange(LocalDate.now().minusYears(25))
@@ -169,9 +164,9 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `address required and min length`() {
+    fun `address optional but min length when given`() {
         val vm = buildVm()
-        assertEquals("Address is required.", vm.uiState.value.validate(SignUpField.Address))
+        assertNull(vm.uiState.value.validate(SignUpField.Address))
         vm.onAddressChange("12")
         assertEquals("Address must be at least 5 characters.", vm.uiState.value.validate(SignUpField.Address))
         vm.onAddressChange("123 Main")
@@ -179,12 +174,20 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `isValid requires terms and all fields`() {
+    fun `isValid requires terms and the account fields only`() {
         val vm = buildVm()
         assertFalse(vm.uiState.value.isValid)
-        fillValid(vm)
+        // The slim form: email + password + terms is a complete sign-up.
+        vm.onEmailChange("alice@example.com")
+        vm.onPasswordChange("strongpass1")
+        vm.onConfirmPasswordChange("strongpass1")
+        vm.onTermsToggle()
         assertTrue(vm.uiState.value.isValid)
         vm.onTermsToggle()
+        assertFalse(vm.uiState.value.isValid)
+        // A malformed optional field still blocks.
+        vm.onTermsToggle()
+        vm.onUsernameChange("Bad Name!")
         assertFalse(vm.uiState.value.isValid)
     }
 

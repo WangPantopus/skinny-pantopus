@@ -1,6 +1,7 @@
 package app.pantopus.android.data.identity
 
 import app.pantopus.android.data.api.models.identity.BridgesEchoResponse
+import app.pantopus.android.data.api.models.identity.HomeMirrorDto
 import app.pantopus.android.data.api.models.identity.IdentityCenterResponse
 import app.pantopus.android.data.api.models.identity.UpdateBridgesBody
 import app.pantopus.android.data.api.models.identity.ViewAsResponse
@@ -18,6 +19,9 @@ class IdentityCenterRepository
         private val api: IdentityCenterApi,
     ) {
         suspend fun overview(): NetworkResult<IdentityCenterResponse> = safeApiCall { api.overview() }
+
+        /** The privacy mirror: this home as a neighbor sees it (members only). */
+        suspend fun homeMirror(homeId: String): NetworkResult<HomeMirrorDto> = safeApiCall { api.homeMirror(homeId) }
 
         suspend fun updateBridges(
             personaId: String,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -114,6 +115,27 @@ internal fun AddHomeDetailsSection(
                 testTag = "addHome_nickname",
             )
             HomeTypeChips(selected = state.form.details.homeType, onSelect = vm::selectHomeType)
+            // Movers first (Wedge v2 D5): one tap, and the place page opens on the first-week checklist.
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("addHome_justMoved"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Just moved here",
+                        style = PantopusTextStyle.body,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                    )
+                    Text(
+                        "We'll start you on the first week: pickup day, the previous resident's mail, your districts.",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                }
+                Switch(checked = state.form.details.justMoved, onCheckedChange = vm::setJustMoved)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 AddHomeTextField(
                     label = "Bedrooms",
