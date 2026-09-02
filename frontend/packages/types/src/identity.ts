@@ -259,6 +259,34 @@ export interface IdentityCenterPayload {
   };
 }
 
+/**
+ * The privacy mirror (Wedge v2 §2): a resident's own home exactly as an
+ * outsider sees it — street and first name, never the number — produced
+ * by the same serializer the public-profile route uses.
+ */
+export interface ViewAsHomePreview {
+  surface: 'home';
+  viewer: 'neighbor';
+  viewer_label: string;
+  /** false when the home is not discoverable at all (visibility != public_preview). */
+  discoverable: boolean;
+  home: {
+    id: string;
+    name: string | null;
+    address: string | null;
+    address_redacted: boolean;
+    city: string | null;
+    state: string | null;
+    zipcode: string | null;
+    home_type: string | null;
+    visibility: string | null;
+    description: string | null;
+    created_at: string | null;
+  };
+  owner: { id: string; username: string | null; name: string | null; profile_picture_url: string | null } | null;
+  hidden: { key: string; label: string }[];
+}
+
 export interface ViewAsPreviewSection {
   key: string;
   label: string;

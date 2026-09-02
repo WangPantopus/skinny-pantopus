@@ -1,5 +1,5 @@
 import { get, patch } from '../client';
-import type { IdentityCenterPayload, ViewAsPreview } from '@pantopus/types';
+import type { IdentityCenterPayload, ViewAsPreview, ViewAsHomePreview } from '@pantopus/types';
 
 export async function getIdentityCenter(): Promise<IdentityCenterPayload> {
   return get('/api/identity-center');
@@ -11,6 +11,11 @@ export async function getViewAsPreview(params: {
   viewer?: string;
 }): Promise<ViewAsPreview> {
   return get('/api/identity-center/view-as', params);
+}
+
+/** The privacy mirror: this home as a neighbor outside the household sees it. Members only. */
+export async function getHomeMirror(homeId: string): Promise<ViewAsHomePreview> {
+  return get('/api/identity-center/view-as', { surface: 'home', home_id: homeId });
 }
 
 export async function updateBridgeSettings(personaId: string, payload: {

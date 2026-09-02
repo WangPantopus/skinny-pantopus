@@ -17,7 +17,12 @@
 
 import { post } from '../client';
 
-export type ClientFunnelEventType = 't0_preview_viewed' | 't0_wall_viewed' | 'register_started';
+export type ClientFunnelEventType =
+  | 't0_preview_viewed'
+  | 't0_aha_viewed'
+  | 't0_share_clicked'
+  | 't0_wall_viewed'
+  | 'register_started';
 
 const ANON_ID_KEY = 'pantopus_anon_id';
 const ROUTE_KEY = 'pantopus_route';

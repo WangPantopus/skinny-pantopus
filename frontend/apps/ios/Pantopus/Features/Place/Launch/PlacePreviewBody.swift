@@ -2,11 +2,12 @@
 //  PlacePreviewBody.swift
 //  Pantopus
 //
-//  C0 — the anonymous T0 preview (the funnel's hook). Renders the free
-//  Band-A subset live (flood, density bucket, area teaser) with locked
-//  descriptors for everything recurring/exact, and a sticky "Create a
-//  free account" wall. Ported from place-preview.jsx. A6 region body
-//  lives here too. Reuses the Phase-2 archetype cards.
+//  C0 — the anonymous T0 preview (the funnel's hook). Wedge v2 D1: the
+//  aha card leads, then every Band-A section as a one-shot snapshot
+//  through the same section cards the claimed dashboard uses, then the
+//  one locked (Band B) descriptor and a sticky "Create a free account"
+//  wall. Older backends that send only `free` still render the three
+//  legacy tiles. A6 region body lives here too.
 //
 
 import SwiftUI
@@ -29,10 +30,17 @@ struct PlacePreviewBody: View {
                     // this address, and nothing at all when it did not —
                     // the tiles carry the page as before. Never
                     // synthesized client-side.
+                    // The aha card leads (D1): the most surprising ready
+                    // fact, in the server's words.
+                    if let aha = preview.aha, aha.isRenderable {
+                        ahaCard(aha)
+                    }
                     if let lead = preview.moneyLead, lead.isRenderable {
                         moneyLeadCard(lead)
                     }
-                    if let free = preview.free {
+                    if let sections = preview.sections, !sections.isEmpty {
+                        previewSections(sections)
+                    } else if let free = preview.free {
                         freeSections(free)
                     }
                     if let locked = preview.locked, !locked.isEmpty {
@@ -154,6 +162,100 @@ struct PlacePreviewBody: View {
         .placeCard()
         .padding(.top, 14)
         .accessibilityIdentifier("place.preview.moneyLead")
+    }
+
+    // MARK: - The aha card (Wedge v2 D1)
+
+    private func ahaChipTone(_ tone: PlacePreviewAhaTone) -> PlaceChipModel.Tone {
+        switch tone {
+        case .alert: .error
+        case .watch: .warning
+        case .info: .sky
+        case .calm: .success
+        }
+    }
+
+    private func ahaIcon(_ tone: PlacePreviewAhaTone) -> PantopusIcon {
+        switch tone {
+        case .alert, .watch: .flame
+        case .info: .mapPin
+        case .calm: .sparkles
+        }
+    }
+
+    /// Headline, grade, detail and follow-up are the server's own words,
+    /// rendered whole — the card says what the rule picked, nothing more.
+    private func ahaCard(_ aha: PlacePreviewAha) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.Color.homeBg)
+                    Icon(ahaIcon(aha.tone), size: 19, strokeWidth: 2, color: Theme.Color.home)
+                }
+                .frame(width: 34, height: 34)
+                PlaceChip(model: PlaceChipModel(tone: ahaChipTone(aha.tone), text: aha.grade.isEmpty ? "What stands out" : aha.grade))
+                Spacer(minLength: 0)
+            }
+            Text(aha.headline)
+                .font(.system(size: 17, weight: .bold))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            if !aha.detail.isEmpty {
+                Text(aha.detail)
+                    .font(.system(size: 13.5))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !aha.followUp.isEmpty {
+                Button(action: onCreateAccount) {
+                    HStack(spacing: 4) {
+                        Text(aha.followUp)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .multilineTextAlignment(.leading)
+                        Icon(.chevronRight, size: 14, strokeWidth: 2.25, color: Theme.Color.primary600)
+                    }
+                    .foregroundStyle(Theme.Color.primary600)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("place.preview.aha.followUp")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.s4)
+        .placeCard()
+        .padding(.top, 14)
+        .accessibilityIdentifier("place.preview.aha")
+    }
+
+    // MARK: - Band A as section cards (Wedge v2 D1)
+
+    /// The launch-set group order for the preview; a section in a group
+    /// the client does not know is simply not shown here.
+    private static let previewGroupOrder: [(group: PlaceGroup, label: String)] = [
+        (.today, "Today"),
+        (.riskReadiness, "Risk & readiness"),
+        (.healthEnvironment, "Health & environment"),
+        (.yourBlock, "Your block"),
+        (.moneySignals, "Money signals"),
+        (.civic, "Civic"),
+        (.yourHome, "Your home"),
+    ]
+
+    @ViewBuilder
+    private func previewSections(_ sections: [PlaceSectionEnvelope]) -> some View {
+        ForEach(Array(Self.previewGroupOrder.enumerated()), id: \.offset) { _, entry in
+            let items = sections.filter { $0.group == entry.group }
+            if !items.isEmpty {
+                PlaceGroupLabel(text: entry.label).padding(.top, 18)
+                VStack(spacing: 8) {
+                    ForEach(items, id: \.id) { env in
+                        PlaceSectionView(env: env, onOpen: nil, onVerify: onCreateAccount, onClaim: onCreateAccount)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder

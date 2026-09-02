@@ -10,6 +10,10 @@
  * Event vocabulary (CHECK-constrained in the FunnelEvent migration):
  *   t0_preview_viewed  client-side, T0 preview rendered (the preview route
  *                      itself persists nothing — see CLIENT_POSTABLE note)
+ *   t0_aha_viewed      client-side, the aha card rendered (meta: section_id,
+ *                      tone, grade) — the "aha rate" of Wedge v2 D1
+ *   t0_share_clicked   client-side, "Share this address" tapped (meta:
+ *                      method share|copy) — the share rate of D5
  *   t0_wall_viewed     client-side, when the soft wall is shown/tapped
  *   register_started   client-side, register form mounted
  *   t1_account_created server-side, on successful registration
@@ -25,12 +29,14 @@ const logger = require('../utils/logger');
 
 const FUNNEL_EVENT_TYPES = Object.freeze([
   't0_preview_viewed',
+  't0_aha_viewed',
+  't0_share_clicked',
   't0_wall_viewed',
   'register_started',
   't1_account_created',
 ]);
 
-// The subset a browser may post directly. All three T0-stage events are
+// The subset a browser may post directly. All T0-stage events are
 // client beacons: the /api/public/place route deliberately persists
 // NOTHING (the preview's anti-leak/no-storage contract, asserted by
 // tests/publicPlace.test.js), so even its funnel event is client-posted.
@@ -38,6 +44,8 @@ const FUNNEL_EVENT_TYPES = Object.freeze([
 // routes and cannot be spoofed here.
 const CLIENT_POSTABLE_EVENT_TYPES = Object.freeze([
   't0_preview_viewed',
+  't0_aha_viewed',
+  't0_share_clicked',
   't0_wall_viewed',
   'register_started',
 ]);

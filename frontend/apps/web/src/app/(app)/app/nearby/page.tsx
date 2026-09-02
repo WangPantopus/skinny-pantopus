@@ -19,6 +19,7 @@
 // ============================================================
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -38,6 +39,9 @@ import {
 import * as api from '@pantopus/api';
 import type { NeighborhoodMeter } from '@pantopus/api';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+
+// Leaflet touches `window` at import time; the window is client-only.
+const NearbyCellsMap = dynamic(() => import('./NearbyCellsMap'), { ssr: false });
 
 const SURFACES = [
   { icon: Newspaper, title: 'Pulse', subtitle: 'What your neighbors are posting, asking, and sharing', route: '/app/feed' },
@@ -200,6 +204,14 @@ export default function NearbyPage() {
   });
 
   const meter = meterQuery.data;
+  // The window (Wedge v2 §4): alive whatever the meter says, once there is a place.
+  const cellsQuery = useQuery({
+    queryKey: ['nearby', 'cells'],
+    queryFn: () => api.getNeighborhoodCells(),
+    staleTime: 5 * 60_000,
+    enabled: !!meter && meter.state !== 'no_place',
+  });
+  const cellsMap = cellsQuery.data?.state === 'ready' ? <NearbyCellsMap cells={cellsQuery.data} /> : null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -254,10 +266,12 @@ export default function NearbyPage() {
               Your neighborhood is open — {meter.verified_count} verified households {areaLabel(meter)}.
             </span>
           </div>
+          {cellsMap ? <div className="mb-5">{cellsMap}</div> : null}
           <UnlockedSurfaces />
         </>
       ) : meter ? (
         <div className="space-y-5">
+          {cellsMap}
           <MeterCard meter={meter} />
           <InviteButton />
           <div>

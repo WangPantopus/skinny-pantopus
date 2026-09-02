@@ -1717,6 +1717,48 @@ public struct PlaceMoneyLead: Decodable, Sendable, Hashable {
     public var isRenderable: Bool { !headline.isEmpty }
 }
 
+/// The aha card (Wedge v2 D1): the one most surprising READY fact for
+/// this address, chosen server-side (`placePreviewService.pickAha`) and
+/// written in the server's words. `tone` is an open set — an unknown
+/// tone renders as `.info`; the card is never dropped for it.
+public enum PlacePreviewAhaTone: String, Decodable, Sendable, Hashable {
+    case alert, watch, info, calm
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PlacePreviewAhaTone(rawValue: raw) ?? .info
+    }
+}
+
+public struct PlacePreviewAha: Decodable, Sendable, Hashable {
+    /// The section the fact came from (nil for the calm fallback).
+    public let sectionId: String?
+    public let tone: PlacePreviewAhaTone
+    public let grade: String
+    public let headline: String
+    public let detail: String
+    public let followUp: String
+
+    private enum CodingKeys: String, CodingKey {
+        case tone, grade, headline, detail
+        case sectionId = "section_id"
+        case followUp = "follow_up"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sectionId = try container.decodeIfPresent(String.self, forKey: .sectionId)
+        tone = try container.decodeIfPresent(PlacePreviewAhaTone.self, forKey: .tone) ?? .info
+        grade = try container.decodeIfPresent(String.self, forKey: .grade) ?? ""
+        headline = try container.decodeIfPresent(String.self, forKey: .headline) ?? ""
+        detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        followUp = try container.decodeIfPresent(String.self, forKey: .followUp) ?? ""
+    }
+
+    /// An empty headline is nothing to lead with.
+    public var isRenderable: Bool { !headline.isEmpty }
+}
+
 public struct PlacePreview: Decodable, Sendable, Hashable {
     public let status: PlacePreviewStatus
     /// Always "preview".
@@ -1729,12 +1771,18 @@ public struct PlacePreview: Decodable, Sendable, Hashable {
     /// nil ⇒ no figure was available. Fall back to the tiles; never
     /// invent one.
     public let moneyLead: PlaceMoneyLead?
+    /// Wedge v2 D1: the card that leads the page. nil on older backends.
+    public let aha: PlacePreviewAha?
+    /// Wedge v2 D1: every Band-A section as a one-shot snapshot, in the
+    /// same envelope the claimed dashboard renders. nil on older
+    /// backends, in which case `free` carries the page as before.
+    public let sections: [PlaceSectionEnvelope]?
     public let free: PlacePreviewFree?
     public let locked: [PlacePreviewLockedSection]?
     public let disclaimer: String?
 
     private enum CodingKeys: String, CodingKey {
-        case status, tier, region, message, place, free, locked, disclaimer
+        case status, tier, region, message, place, aha, sections, free, locked, disclaimer
         case moneyLead = "money_lead"
     }
 }

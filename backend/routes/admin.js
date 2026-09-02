@@ -12,6 +12,7 @@ const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
 const { purgeClaimEvidence } = require('../services/evidencePurge');
+const funnelReport = require('../services/funnelReport');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const { findHomeOwnerRowForClaimant } = require('../utils/homeOwnerRowLookup');
@@ -119,6 +120,19 @@ async function enrichClaims(claims) {
  * Returns all ownership/residency claims in reviewable states across all homes.
  * Kept as an alias for /claims?bucket=pending so existing clients keep working.
  */
+// ── GET /funnel/summary?days=30 — the wedge ladder read-out ──
+// Previews → aha → share → wall → register → account, per distinct
+// visitor, overall and split by the ?r= route on the beacons. Nothing
+// identifying comes back: anon ids are counted, never listed.
+router.get('/funnel/summary', async (req, res) => {
+  try {
+    res.json(await funnelReport.loadFunnelSummary({ days: req.query.days }));
+  } catch (err) {
+    logger.error('admin.funnel.summary.error', { error: err.message });
+    res.status(500).json({ error: 'Failed to build the funnel summary' });
+  }
+});
+
 router.get('/pending-claims', async (req, res) => {
   try {
     const { data: claims, error } = await supabaseAdmin

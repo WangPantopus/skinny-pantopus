@@ -25,6 +25,7 @@ const {
   sanitizePersonaPostForViewer,
 } = require('../serializers/identitySerializers');
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
+const { loadHomeMirror } = require('../services/homeMirror');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -499,6 +500,17 @@ router.get('/view-as', verifyToken, async (req, res) => {
     // can never silently fall back to public visibility.
     if (!VALID_VIEWERS.has(String(viewer))) {
       return res.status(400).json({ error: 'invalid viewer mode', viewer });
+    }
+    // The privacy mirror (Wedge v2 §2): a resident sees their own home
+    // exactly as an outsider does, through the same serializer the
+    // public-profile route uses. Members only; there is nothing to
+    // mirror for anyone else.
+    if (surface === 'home') {
+      const homeId = typeof req.query.home_id === 'string' ? req.query.home_id : '';
+      if (!homeId) return res.status(400).json({ error: 'home_id is required' });
+      const mirror = await loadHomeMirror({ homeId, userId: req.user.id });
+      if (!mirror) return res.status(403).json({ error: 'Only a member of this home can preview it' });
+      return res.json(mirror);
     }
     // P2.7 — for the persona surface, fall back to the user's own
     // persona when no handle is supplied so the Privacy preview page

@@ -128,3 +128,50 @@ describe('GET /api/neighborhood/meter', () => {
     expect(res.body).toMatchObject({ state: 'unlocked', threshold: 10, unlocked: true });
   });
 });
+
+// ── The window: density by block cell ────────────────────────
+describe('GET /api/neighborhood/cells', () => {
+  const { decodeGeohashBbox } = require('../utils/geohash');
+  const { gridAround } = require('../routes/neighborhood');
+
+  beforeEach(() => resetTables());
+
+  it('returns the 5×5 grid around the place with a bucket per cell — never a count, never a point', async () => {
+    seedHome();
+    const grid = gridAround(CAMAS.lat, CAMAS.lng);
+    const neighbor = grid.hashes.find((h) => h !== grid.home);
+    seedTable('NeighborhoodPreview', [
+      { geohash: CAMAS_GEOHASH, verified_users_count: 30 },
+      { geohash: neighbor, verified_users_count: 12 },
+    ]);
+    const res = await request(makeApp()).get('/api/neighborhood/cells').set('x-test-user-id', USER_ID);
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('ready');
+    expect(res.body.home_cell).toBe(CAMAS_GEOHASH);
+    expect(res.body.cells).toHaveLength(25);
+    const byHash = Object.fromEntries(res.body.cells.map((c) => [c.geohash, c]));
+    expect(byHash[CAMAS_GEOHASH]).toMatchObject({ bucket: 'growing', is_home: true });
+    expect(byHash[neighbor]).toMatchObject({ bucket: 'few', is_home: false });
+    expect(res.body.cells.filter((c) => c.bucket === 'none')).toHaveLength(23);
+    // Cell geometry is the geohash box, and the centre is the CELL's centre.
+    const b = decodeGeohashBbox(CAMAS_GEOHASH);
+    expect(byHash[CAMAS_GEOHASH].bounds).toEqual([[b.minLat, b.minLng], [b.maxLat, b.maxLng]]);
+    expect(res.body.center).toEqual({ lat: (b.minLat + b.maxLat) / 2, lng: (b.minLng + b.maxLng) / 2 });
+    expect(JSON.stringify(res.body)).not.toMatch(/verified_users_count|"count"|45\.5871|122\.4034/);
+    expect(res.body.buckets).toMatchObject({ forming: `Forming (under ${K_ANON_MIN})`, growing: `Growing (${FEW_MAX + 1}+)` });
+  });
+
+  it('a cell below the k-anon floor reads forming, not its count', async () => {
+    seedHome();
+    seedPreview(K_ANON_MIN - 1);
+    const res = await request(makeApp()).get('/api/neighborhood/cells').set('x-test-user-id', USER_ID);
+    expect(res.body.cells.find((c) => c.is_home).bucket).toBe('forming');
+  });
+
+  it('is no_place without a placed home', async () => {
+    seedHome({ withCoords: false });
+    const res = await request(makeApp()).get('/api/neighborhood/cells').set('x-test-user-id', USER_ID);
+    expect(res.body).toMatchObject({ state: 'no_place', cells: [], home_cell: null, center: null });
+  });
+});
+

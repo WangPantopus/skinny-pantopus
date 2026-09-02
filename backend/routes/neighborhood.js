@@ -29,8 +29,8 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
-const { encodeGeohash6 } = require('../utils/geohash');
-const { K_ANON_MIN, FEW_MAX } = require('../services/place/densityReader');
+const { encodeGeohash6, decodeGeohashBbox } = require('../utils/geohash');
+const { K_ANON_MIN, FEW_MAX, bucketForCount } = require('../services/place/densityReader');
 
 // Unlock threshold: aligned with densityReader.FEW_MAX so "unlocked" and
 // the 'growing' density bucket agree (a cell reads 'growing' above FEW_MAX).
@@ -140,4 +140,69 @@ router.get('/meter', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/neighborhood/cells — the window (Wedge v2 §4) ──
+// The Nearby tab is alive from the first minute: the 5×5 grid of
+// geohash-6 cells (~1.2 km × 0.6 km each) around the viewer's place,
+// each carrying ONLY its density bucket from the same floored reader the
+// public preview uses. Never a count, never a point: nobody's home is a
+// dot on this map, including the viewer's — their cell is flagged, its
+// centre is the cell's centre.
+const GRID_RADIUS = 2;
+
+function bucketLabels() {
+  return {
+    none: 'No verified homes yet',
+    forming: `Forming (under ${K_ANON_MIN})`,
+    few: `A few (${K_ANON_MIN}–${FEW_MAX})`,
+    growing: `Growing (${FEW_MAX + 1}+)`,
+  };
+}
+
+function gridAround(lat, lng) {
+  const home = encodeGeohash6(lat, lng);
+  const b = decodeGeohashBbox(home);
+  const dLat = b.maxLat - b.minLat;
+  const dLng = b.maxLng - b.minLng;
+  const cLat = (b.minLat + b.maxLat) / 2;
+  const cLng = (b.minLng + b.maxLng) / 2;
+  const hashes = [];
+  for (let i = -GRID_RADIUS; i <= GRID_RADIUS; i += 1) {
+    for (let j = -GRID_RADIUS; j <= GRID_RADIUS; j += 1) {
+      const h = encodeGeohash6(cLat + i * dLat, cLng + j * dLng);
+      if (!hashes.includes(h)) hashes.push(h);
+    }
+  }
+  return { home, center: { lat: cLat, lng: cLng }, hashes };
+}
+
+router.get('/cells', verifyToken, async (req, res) => {
+  try {
+    const home = await resolvePrimaryHome(req.user.id);
+    if (!home || home.map_center_lat == null || home.map_center_lng == null) {
+      return res.json({ state: 'no_place', home_cell: null, center: null, cells: [], buckets: bucketLabels(), k_anon_min: K_ANON_MIN });
+    }
+    const grid = gridAround(Number(home.map_center_lat), Number(home.map_center_lng));
+    const { data, error } = await supabaseAdmin
+      .from('NeighborhoodPreview')
+      .select('geohash, verified_users_count')
+      .in('geohash', grid.hashes);
+    if (error) logger.warn('neighborhood/cells: NeighborhoodPreview read error', { error: error.message });
+    const counts = new Map((data || []).map((r) => [r.geohash, r.verified_users_count]));
+    const cells = grid.hashes.map((h) => {
+      const b = decodeGeohashBbox(h);
+      return {
+        geohash: h,
+        bounds: [[b.minLat, b.minLng], [b.maxLat, b.maxLng]],
+        bucket: bucketForCount(counts.get(h) ?? 0), // floored enum — never the count
+        is_home: h === grid.home,
+      };
+    });
+    return res.json({ state: 'ready', home_cell: grid.home, center: grid.center, cells, buckets: bucketLabels(), k_anon_min: K_ANON_MIN });
+  } catch (err) {
+    logger.error('neighborhood/cells failed', { error: err.message });
+    return res.status(500).json({ error: 'Failed to load the nearby map' });
+  }
+});
+
 module.exports = router;
+module.exports.gridAround = gridAround;

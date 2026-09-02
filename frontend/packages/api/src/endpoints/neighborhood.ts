@@ -31,3 +31,30 @@ export interface NeighborhoodMeter {
 export async function getNeighborhoodMeter(): Promise<NeighborhoodMeter> {
   return get<NeighborhoodMeter>('/api/neighborhood/meter');
 }
+
+// ── The window: density by block cell (Wedge v2 §4) ──────────
+export type NeighborhoodCellBucket = 'none' | 'forming' | 'few' | 'growing';
+
+export interface NeighborhoodCell {
+  geohash: string;
+  /** [[minLat, minLng], [maxLat, maxLng]] — Leaflet's LatLngBounds tuple. */
+  bounds: [[number, number], [number, number]];
+  /** A floored enum from the same reader as the public preview. Never a count. */
+  bucket: NeighborhoodCellBucket;
+  is_home: boolean;
+}
+
+export interface NeighborhoodCells {
+  state: 'no_place' | 'ready';
+  home_cell: string | null;
+  /** The centre of the viewer's CELL, not of their home. */
+  center: { lat: number; lng: number } | null;
+  cells: NeighborhoodCell[];
+  buckets: Record<NeighborhoodCellBucket, string>;
+  k_anon_min: number;
+}
+
+/** GET /api/neighborhood/cells — Route backend/routes/neighborhood.js */
+export async function getNeighborhoodCells(): Promise<NeighborhoodCells> {
+  return get('/api/neighborhood/cells');
+}

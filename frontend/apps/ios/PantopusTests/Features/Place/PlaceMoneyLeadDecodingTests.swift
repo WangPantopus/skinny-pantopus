@@ -74,4 +74,48 @@ final class PlaceMoneyLeadDecodingTests: XCTestCase {
         XCTAssertTrue(lead.isRenderable)
     }
 
+    // MARK: - Wedge v2 D1: the aha card and the Band-A sections
+
+    /// The preview now leads with an aha card and carries the full
+    /// Band-A section list in the dashboard's envelope. Both are optional
+    /// (older backends), and an unknown tone renders as info rather than
+    /// dropping the card.
+    func testDecodesAhaCardAndSections() throws {
+        let json = """
+        {"status":"ready","tier":"preview","region":"US",
+         "place":{"address":"2518 NW Lacamas Dr","city":"Camas","state":"WA","zipcode":"98607"},
+         "aha":{"section_id":"lead_radon","tone":"alert","grade":"Radon zone 1",
+           "headline":"This county is in the EPA's highest radon band",
+           "detail":"Zone 1 means the predicted average indoor level is above the EPA action level.",
+           "follow_up":"Claim it and we'll remind you when a test kit is due."},
+         "sections":[{"id":"flood","group":"risk_readiness","band":"A","access":"available","status":"ready",
+           "as_of":"2026-09-01T14:00:00.000Z","source":"FEMA","coverage":"full","unavailable_reason":null,
+           "data":{"zone":"X","zone_label":"Zone X","risk_level":"minimal","in_sfha":false,
+                   "insurance_required":false,"plain_meaning":"Minimal flood risk"}}],
+         "money_lead":null,"disclaimer":"A free, one-time look."}
+        """
+        let preview = try decoder.decode(PlacePreview.self, from: Data(json.utf8))
+        let aha = try XCTUnwrap(preview.aha)
+        XCTAssertTrue(aha.isRenderable)
+        XCTAssertEqual(aha.tone, .alert)
+        XCTAssertEqual(aha.sectionId, "lead_radon")
+        XCTAssertEqual(aha.grade, "Radon zone 1")
+        XCTAssertEqual(aha.followUp, "Claim it and we'll remind you when a test kit is due.")
+        XCTAssertEqual(preview.sections?.count, 1)
+        XCTAssertEqual(preview.sections?.first?.group, .riskReadiness)
+        XCTAssertEqual(preview.sections?.first?.status, .ready)
+    }
+
+    func testUnknownAhaToneRendersAsInfoAndOlderBackendsCarryNoAha() throws {
+        let json = """
+        {"status":"ready","tier":"preview","region":"US","aha":{"tone":"purple","headline":"Something new"}}
+        """
+        let preview = try decoder.decode(PlacePreview.self, from: Data(json.utf8))
+        XCTAssertEqual(preview.aha?.tone, .info)
+        XCTAssertEqual(preview.aha?.isRenderable, true)
+        XCTAssertEqual(preview.aha?.grade, "")
+        let older = try decoder.decode(PlacePreview.self, from: Data(#"{"status":"ready","tier":"preview"}"#.utf8))
+        XCTAssertNil(older.aha)
+        XCTAssertNil(older.sections)
+    }
 }

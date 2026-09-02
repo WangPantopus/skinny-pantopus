@@ -17,7 +17,7 @@
 
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
-import { Compass, ChevronRight } from 'lucide-react';
+import { Compass, ChevronRight, ShieldCheck } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import JustMovedCard from './JustMovedCard';
@@ -100,6 +100,15 @@ export default function PlaceDashboardView({
       <div className={showVerify ? 'mt-3' : 'mt-4'}>
         {/* Movers first (Wedge v2 D5): the first-week checklist for a recent move-in. */}
         <JustMovedCard homeId={homeId} moveInDate={moveInDate} className="mb-4" />
+        {/* The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. */}
+        <Link
+          href={`/app/homes/${homeId}/privacy`}
+          className="mb-4 flex items-center gap-2 rounded-xl border border-app-border bg-app-surface-sunken px-3.5 py-2.5 text-[13px] text-app-text-secondary hover:text-app-text"
+        >
+          <ShieldCheck size={15} strokeWidth={2.25} className="shrink-0 text-app-home" />
+          <span className="flex-1">Private by default. See what neighbors see of this address.</span>
+          <ChevronRight size={15} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+        </Link>
         <HeroCard
           variant={pulse.variant}
           title={pulse.title}

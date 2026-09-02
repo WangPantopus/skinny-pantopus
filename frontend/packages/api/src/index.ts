@@ -255,7 +255,7 @@ export type { AudienceIdentity, PersonaCategoryPolicy } from './endpoints/person
 export { listOwnerTiers, listPublicTiers, updateTier, setTierVisibility, deleteTier } from './endpoints/personaTiers';
 export type { OwnerTier, PublicTier, TierStatus, TierReplyPolicy, TierUpdatePayload } from './endpoints/personaTiers';
 export { getBroadcastMessages, publishBroadcastMessage, markBroadcastMessageRead } from './endpoints/broadcast';
-export { getIdentityCenter, getViewAsPreview, updateBridgeSettings } from './endpoints/identityCenter';
+export { getIdentityCenter, getViewAsPreview, getHomeMirror, updateBridgeSettings } from './endpoints/identityCenter';
 export { searchProfiles } from './endpoints/identitySearch';
 
 // Convenience exports from magicTask
@@ -307,7 +307,7 @@ export type { PickupWeekday, AddressCalendarResponse, SetPickupDayResponse } fro
 
 // Neighborhood — the density-gated door (four-tab IA, wedge Phase 1)
 export * as neighborhood from './endpoints/neighborhood';
-export { getNeighborhoodMeter } from './endpoints/neighborhood';
+export { getNeighborhoodMeter, getNeighborhoodCells } from './endpoints/neighborhood';
 export type { NeighborhoodMeter, NeighborhoodMeterState } from './endpoints/neighborhood';
 
 // Funnel — pre-account instrumentation beacons (wedge Phase 1)

@@ -40,6 +40,17 @@ describe('POST /api/public/funnel-events', () => {
     });
   });
 
+  it('accepts the aha and share beacons with their small metas', async () => {
+    const app = makeApp();
+    await request(app).post('/api/public/funnel-events')
+      .send({ event_type: 't0_aha_viewed', anon_id: 'v1', meta: { section_id: 'lead_radon', tone: 'alert', grade: 'Radon zone 1', route: 'eddm-lacamas-1' } });
+    await request(app).post('/api/public/funnel-events')
+      .send({ event_type: 't0_share_clicked', anon_id: 'v1', meta: { method: 'copy' } });
+    const rows = getTable('FunnelEvent');
+    expect(rows.map((r) => r.event_type)).toEqual(['t0_aha_viewed', 't0_share_clicked']);
+    expect(rows[0].meta).toMatchObject({ section_id: 'lead_radon', tone: 'alert', route: 'eddm-lacamas-1' });
+  });
+
   it('drops server-owned event types without erroring', async () => {
     const res = await request(makeApp())
       .post('/api/public/funnel-events')

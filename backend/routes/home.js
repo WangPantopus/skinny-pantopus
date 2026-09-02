@@ -43,6 +43,7 @@ const {
 } = require('../services/addressValidation');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const { redactStreet, queryKnowsNumber, firstNameOnly } = require('../utils/addressRedaction');
+const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 
 function isPendingOwnershipClaimForReadPath(claim) {
   if (!claim) return false;
@@ -2692,32 +2693,12 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
         .maybeSingle(),
     ]);
 
-    const ownerFullName = ownerRes.data
-      ? ownerRes.data.name || [ownerRes.data.first_name, ownerRes.data.last_name].filter(Boolean).join(' ') || ownerRes.data.username
-      : null;
-    const owner = ownerRes.data
-      ? {
-          id: ownerRes.data.id,
-          username: ownerRes.data.username,
-          name: reveal ? ownerFullName : firstNameOnly(ownerFullName),
-          profile_picture_url: ownerRes.data.profile_picture_url || null,
-        }
-      : null;
+    // One projection for outsiders, shared with the privacy mirror
+    // (identity-center view-as?surface=home) so the two can never drift.
+    const owner = serializeOwnerForViewer(ownerRes.data, { reveal });
 
     res.json({
-      home: {
-        id: home.id,
-        name: home.name,
-        address: reveal ? home.address : redactStreet(home.address),
-        address_redacted: !reveal,
-        city: home.city,
-        state: home.state,
-        zipcode: reveal ? home.zipcode : null,
-        home_type: home.home_type,
-        visibility: home.visibility,
-        description: home.description || null,
-        created_at: home.created_at,
-      },
+      home: serializeHomeForViewer(home, { reveal }),
       owner,
       has_verified_owner: hasVerifiedOwner,
       is_member: !!memberRes.data,

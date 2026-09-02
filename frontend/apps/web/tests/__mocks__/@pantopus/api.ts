@@ -105,6 +105,7 @@ export const posts = {
 
 // P2.6 — unified Profiles & Privacy surface.
 export const identityCenter = {
+  getHomeMirror: jest.fn(),
   getIdentityCenter: jest.fn(),
   getViewAsPreview: jest.fn(),
   updateBridgeSettings: jest.fn(),

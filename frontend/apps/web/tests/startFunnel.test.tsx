@@ -137,6 +137,23 @@ describe('StartFunnel — T0 preview', () => {
     expect(sessionStorage.length).toBeGreaterThan(0);
   });
 
+  it('fires the preview, aha, and share beacons — with the card, never the address', async () => {
+    const api = jest.requireMock('@pantopus/api') as { recordFunnelEvent: jest.Mock };
+    Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
+    mockPreview.mockResolvedValue(READY_PREVIEW);
+    renderFunnel();
+    await selectAddressAndSubmit();
+    await screen.findByText(/high wildfire hazard around this address/i);
+
+    expect(api.recordFunnelEvent).toHaveBeenCalledWith('t0_preview_viewed', { status: 'ready' });
+    expect(api.recordFunnelEvent).toHaveBeenCalledWith('t0_aha_viewed', { section_id: 'wildfire', tone: 'alert', grade: 'High' });
+    fireEvent.click(screen.getByRole('button', { name: /share this address/i }));
+    expect(api.recordFunnelEvent).toHaveBeenCalledWith('t0_share_clicked', { method: 'copy' });
+    for (const [, meta] of api.recordFunnelEvent.mock.calls) {
+      expect(JSON.stringify(meta ?? {})).not.toMatch(/tacoma/i);
+    }
+  });
+
   it('renders the coming-to-your-region state for non-US addresses', async () => {
     mockPreview.mockResolvedValue({ status: 'unsupported_region', tier: 'preview', region: null, message: 'US only' });
     renderFunnel();

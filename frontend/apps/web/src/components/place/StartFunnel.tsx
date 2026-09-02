@@ -416,6 +416,8 @@ function ShareAddressLink({ address }: { address: string }) {
     // The link is the preview of THIS address; the browser URL is left alone.
     const url = `${window.location.origin}/start?address=${encodeURIComponent(address)}`;
     const title = "What's true about this address";
+    // Funnel: the share rate (D5). Method only — never the address.
+    api.recordFunnelEvent('t0_share_clicked', { method: navigator.share ? 'share' : 'copy' });
     try {
       if (navigator.share) {
         await navigator.share({ title, url });
@@ -588,6 +590,19 @@ export default function StartFunnel() {
       api.recordFunnelEvent('t0_preview_viewed', { status: previewStatus });
     }
   }, [submitted, previewStatus]);
+
+  // Funnel: the aha rate (D1) — which card led, and whether it was the
+  // calm fallback. Section id, tone and grade only; never the address.
+  const aha = previewQuery.data?.aha ?? null;
+  useEffect(() => {
+    if (submitted && previewStatus === 'ready' && aha) {
+      api.recordFunnelEvent('t0_aha_viewed', {
+        section_id: aha.section_id ?? '',
+        tone: aha.tone,
+        grade: aha.grade,
+      });
+    }
+  }, [submitted, previewStatus, aha]);
 
   const goBrowse = () => router.push(REGISTER_HREF);
 

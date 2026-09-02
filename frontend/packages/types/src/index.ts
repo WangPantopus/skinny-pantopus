@@ -137,6 +137,7 @@ export type {
   ViewAsPreviewPost,
   ViewAsPreviewBroadcast,
   ViewAsPreview,
+  ViewAsHomePreview,
   ProfileDiscoveryResultType,
   ProfileDiscoveryActionKind,
   ProfileDiscoveryLinkedProfile,

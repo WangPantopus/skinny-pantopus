@@ -58,6 +58,7 @@ const processClaimWindows = require('./processClaimWindows');
 const validateHomeCoordinates = require('./validateHomeCoordinates');
 const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
+const evidenceRetentionSweep = require('./evidenceRetentionSweep');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
@@ -413,6 +414,19 @@ function startJobs(options = {}) {
   scheduleCron('11 * * * *', wrapJob(
     'expireInitiatedHomeClaims',
     () => expireInitiatedHomeClaims({ dryRun: householdClaimJobsDryRun }),
+  ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Evidence Retention Sweep (Wedge privacy promise) ───
+  // Runs daily at 04:17 UTC.
+  // Deletes any stored verification document whose claim is decided
+  // but whose purge failed or never ran (services/evidencePurge is the
+  // in-line path; this is the net under it).
+  scheduleCron('17 4 * * *', wrapJob(
+    'evidenceRetentionSweep',
+    () => evidenceRetentionSweep({ dryRun: householdClaimJobsDryRun }),
   ), {
     scheduled: true,
     timezone: 'UTC',
