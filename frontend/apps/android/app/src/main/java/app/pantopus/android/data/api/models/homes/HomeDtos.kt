@@ -105,6 +105,8 @@ data class HomeDetail(
     val visibility: String?,
     val description: String?,
     @Json(name = "created_at") val createdAt: String?,
+    /** Wedge v2 D5 (movers): drives the first-week checklist for ~60 days. */
+    @Json(name = "move_in_date") val moveInDate: String? = null,
     val owner: HomeUserRef?,
     val occupants: List<HomeOccupant> = emptyList(),
     val location: HomeLocation?,

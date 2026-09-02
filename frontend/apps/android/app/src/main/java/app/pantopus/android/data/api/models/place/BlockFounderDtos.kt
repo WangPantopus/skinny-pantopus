@@ -37,6 +37,8 @@ data class BlockStatus(
     /** Rent reports in the cell — what the `real_rent` meter counts. */
     @Json(name = "rent_reports") val rentReports: Int = 0,
     val meters: List<BlockMeter> = emptyList(),
+    /** Wedge v2 D5: the first-5 tier; null on older backends. */
+    val founding: BlockFounding? = null,
     @Json(name = "invites_remaining") val invitesRemaining: Int = 0,
     @Json(name = "invites_weekly_cap") val invitesWeeklyCap: Int = 0,
 )
@@ -65,3 +67,37 @@ data class BlockInviteResult(
     val sent: Boolean = false,
     @Json(name = "invites_remaining") val invitesRemaining: Int = 0,
 )
+
+private const val MILLIS_PER_DAY = 86_400_000.0
+
+/**
+ * The Founding Neighbor tier (Wedge v2 D5): the first `slots_total`
+ * verified homes in a block cell, taken within the cell's window.
+ * Derived server-side from the permanent founder rows; never stored.
+ */
+@JsonClass(generateAdapter = true)
+data class BlockFounding(
+    @Json(name = "is_founding") val isFounding: Boolean = false,
+    val slot: Int? = null,
+    @Json(name = "slots_total") val slotsTotal: Int = 0,
+    @Json(name = "slots_taken") val slotsTaken: Int = 0,
+    @Json(name = "slots_open") val slotsOpen: Int = 0,
+    @Json(name = "window_open") val windowOpen: Boolean = false,
+    @Json(name = "window_ends_at") val windowEndsAt: String? = null,
+) {
+    /**
+     * The one line the rank card shows — or nothing, when the window is
+     * closed and the viewer is not a Founding Neighbor. Same copy as iOS.
+     */
+    fun line(nowMillis: Long = System.currentTimeMillis()): String? {
+        if (isFounding && slot != null) return "Founding Neighbor · slot $slot of $slotsTotal. Permanent."
+        if (!windowOpen || slotsOpen <= 0) return null
+        val slots = if (slotsOpen == 1) "slot" else "slots"
+        val endMillis = windowEndsAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+        if (endMillis != null) {
+            val days = maxOf(0L, kotlin.math.ceil((endMillis - nowMillis) / MILLIS_PER_DAY).toLong())
+            return "$slotsOpen Founding Neighbor $slots still open · closes in $days ${if (days == 1L) "day" else "days"}"
+        }
+        return "$slotsOpen Founding Neighbor $slots still open"
+    }
+}

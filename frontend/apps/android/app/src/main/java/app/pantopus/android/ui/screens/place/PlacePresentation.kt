@@ -185,6 +185,8 @@ object PlacePresentation {
             PlaceSectionId.REAL_RENT -> PlaceSectionDisplayConfig(PantopusIcon.Users, "Real rent on your block")
             PlaceSectionId.EXEMPTION_CHECK -> PlaceSectionDisplayConfig(PantopusIcon.Landmark, "Homestead exemption")
             PlaceSectionId.CIVIC_DISTRICTS -> PlaceSectionDisplayConfig(PantopusIcon.Landmark, "Your districts")
+            PlaceSectionId.ADDRESS_CALENDAR ->
+                PlaceSectionDisplayConfig(PantopusIcon.CalendarDays, "Address calendar", inline = true)
             PlaceSectionId.CIVIC_ELECTION ->
                 PlaceSectionDisplayConfig(PantopusIcon.Vote, "Next election", inline = true)
             PlaceSectionId.UNKNOWN -> PlaceSectionDisplayConfig(PantopusIcon.MapPin, "Place")
@@ -387,6 +389,19 @@ object PlacePresentation {
                     value = if (n > 0) "$n voting districts on record" else "Your federal, state, and city districts",
                 )
             }
+            PlaceSectionId.ADDRESS_CALENDAR -> {
+                val d = env.addressCalendar ?: return PlaceSectionReading()
+                val next = d.next
+                when {
+                    next != null ->
+                        PlaceSectionReading(
+                            value = "${next.title} · ${daysUntilLabel(next.daysUntil)}",
+                            statusDot = if (next.daysUntil <= 1) PantopusColors.error else PantopusColors.home,
+                        )
+                    d.needsPickupDay -> PlaceSectionReading(value = "Set your pickup day")
+                    else -> PlaceSectionReading(value = "Nothing in the next ${d.windowDays} days")
+                }
+            }
             PlaceSectionId.CIVIC_ELECTION -> {
                 val d = env.civicElection ?: return PlaceSectionReading()
                 PlaceSectionReading(chip = PlaceChipModel(PlaceChipTone.SKY, "In ${d.daysUntil} days"))
@@ -451,6 +466,14 @@ object PlacePresentation {
             AirQualityCategory.VERY_UNHEALTHY,
             AirQualityCategory.HAZARDOUS,
         )
+
+    /** "Today" / "Tomorrow" / "In 5 days" — the calendar's relative label. */
+    fun daysUntilLabel(days: Int): String =
+        when {
+            days <= 0 -> "Today"
+            days == 1 -> "Tomorrow"
+            else -> "In $days days"
+        }
 
     fun derivePulse(intel: PlaceIntelligence): PlaceDerivedPulse {
         val aqi = findSection(intel, PlaceSectionId.AIR_QUALITY)

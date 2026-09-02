@@ -293,6 +293,7 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
+import app.pantopus.android.ui.screens.nearby.NearbyScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsZone
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -314,6 +315,7 @@ import app.pantopus.android.ui.screens.place.messaging.NeighborMessageInboxScree
 import app.pantopus.android.ui.screens.place.messaging.NeighborMessageReceivedScreen
 import app.pantopus.android.ui.screens.place.pulse.PLACE_PULSE_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.pulse.PlacePulseScreen
+import app.pantopus.android.ui.screens.place.today.TodayTabScreen
 import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_ADDRESS_KEY
 import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_METHOD_KEY
@@ -1910,10 +1912,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = PantopusRoute.fromPath(backStackEntry?.destination?.route) ?: PantopusRoute.Home
+    val currentRoute = PantopusRoute.fromPath(backStackEntry?.destination?.route) ?: PantopusRoute.Place
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
-        if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Messages to resolvedInboxBadgeCount) else emptyMap()
+        if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Mail to resolvedInboxBadgeCount) else emptyMap()
 
     // Consume pending deep links — when the host activity (or a
     // notification tap) routed a URL or path through DeepLinkRouter,
@@ -1942,7 +1944,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Home -> {
-                navController.navigateToRootTab(PantopusRoute.Home)
+                navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Connections -> {
@@ -2099,7 +2101,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         }
                     } else {
                         // No home at all — the Home tab is the safe landing.
-                        navController.navigate(PantopusRoute.Home.path) {
+                        navController.navigate(PantopusRoute.Place.path) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
@@ -2247,10 +2249,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { padding: PaddingValues ->
             NavHost(
                 navController = navController,
-                startDestination = PantopusRoute.Home.path,
+                startDestination = PantopusRoute.Place.path,
                 modifier = Modifier.padding(padding),
             ) {
-                composable(PantopusRoute.Home.path) {
+                composable(PantopusRoute.Place.path) {
                     // W3 — land the Home tab on the Place dashboard when the
                     // user has a primary home. One-shot push over Hub so Hub
                     // stays reachable (back) and is the no-home fallback;
@@ -2341,6 +2343,40 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             }
                         })
                     }
+                }
+                // ── Wedge v2 D2: Place · Today · Nearby · Mail ──────────
+                composable(PantopusRoute.Today.path) {
+                    TodayTabScreen(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) })
+                }
+                composable(PantopusRoute.Nearby.path) {
+                    NearbyScreen(
+                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                        onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                        onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                    )
+                }
+                composable(PantopusRoute.Mail.path) {
+                    MailboxRootScreen(
+                        onOpenMail = { mailId ->
+                            navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
+                        },
+                        onOpenSearch = { navController.navigate(ChildRoutes.MAILBOX_SEARCH) },
+                        onOpenMap = { navController.navigate(ChildRoutes.MAILBOX_MAP) },
+                        onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
+                        onOpenEarn = { navController.navigate(ChildRoutes.EARN) },
+                        onOpenVacationHold = { navController.navigate(ChildRoutes.MAILBOX_VACATION) },
+                        onOpenStamps = { navController.navigate(ChildRoutes.STAMPS) },
+                        onOpenUnboxing = { navController.navigate(ChildRoutes.unboxing()) },
+                        onOpenCompose = { navController.navigate(ChildRoutes.CEREMONIAL_MAIL) },
+                        onOpenRoutingQueue = { navController.navigate(ChildRoutes.MAIL_ROUTING_QUEUE) },
+                        onOpenMailParty = { navController.navigate(ChildRoutes.MAILBOX_PARTY) },
+                        onOpenCommunity = { navController.navigate(ChildRoutes.MAILBOX_COMMUNITY) },
+                        onOpenRecords = { navController.navigate(ChildRoutes.MAILBOX_HOME_RECORDS) },
+                        onOpenMailTasks = { navController.navigate(ChildRoutes.mailTaskList()) },
+                        onBack = null,
+                        onOpenInbox = { navController.navigate(PantopusRoute.Messages.path) },
+                    )
                 }
                 composable(PantopusRoute.Pulse.path) {
                     FeedScreen(
@@ -2512,14 +2548,20 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenSection = { hid, slug -> navController.navigate(ChildRoutes.placeDetail(hid, slug)) },
                         onSwitchHome = { id -> navController.navigate(ChildRoutes.placeDashboard(id)) },
                         onAddPlace = { navController.navigate(ChildRoutes.ADD_HOME) },
-                        onStartVerify = { method, address ->
-                            navController.navigate(ChildRoutes.placeVerifyStatus(homeId, method.slug, address))
+                        // Wedge v2 D3: each door is a real flow, never a status mock-up.
+                        onStartVerify = { method, _ ->
+                            when (method) {
+                                PlaceVerifyMethod.DOCUMENT -> navController.navigate(ChildRoutes.verifyResidency(homeId))
+                                PlaceVerifyMethod.MAIL -> navController.navigate(ChildRoutes.postcardVerification(homeId))
+                                PlaceVerifyMethod.LANDLORD -> navController.navigate(ChildRoutes.verifyLandlord(homeId))
+                            }
                         },
                         onOpenPulse = { navController.navigate(ChildRoutes.placePulse(homeId)) },
                         onComposeMessage = { address ->
                             navController.navigate(ChildRoutes.neighborCompose(homeId, address))
                         },
                         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
+                        onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
                     )
                 }
                 composable(

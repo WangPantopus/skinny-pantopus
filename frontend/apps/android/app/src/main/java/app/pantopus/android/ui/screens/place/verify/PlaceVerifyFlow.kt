@@ -55,14 +55,25 @@ const val PLACE_VERIFY_HOME_ID_KEY = "homeId"
 const val PLACE_VERIFY_METHOD_KEY = "method"
 const val PLACE_VERIFY_ADDRESS_KEY = "address"
 
+/**
+ * The three doors (Wedge v2 D3), in the order they are offered: the
+ * instant door first. Each pushes a REAL flow — the residency document
+ * wizard, the postcard, the landlord confirmation — never a status
+ * mock-up. Same three as web and iOS.
+ */
 enum class PlaceVerifyMethod(val slug: String, val icon: PantopusIcon, val label: String, val sub: String) {
-    MAIL("mail", PantopusIcon.Send, "Mail a code to my address", "We send a postcard with a code. Most common."),
-    RECORDS("records", PantopusIcon.FileSearch, "Match property records", "Instant if your name is on the deed or lease"),
-    DOCUMENT("document", PantopusIcon.Upload, "Upload a document", "A utility bill, lease, or bank statement"),
+    DOCUMENT(
+        "document",
+        PantopusIcon.Upload,
+        "Upload a document",
+        "A utility bill, lease, or ID with this address. A person reviews it, usually within hours.",
+    ),
+    MAIL("mail", PantopusIcon.Send, "Mail a code to my address", "A postcard with a code, usually within a week."),
+    LANDLORD("landlord", PantopusIcon.Home, "Ask my landlord", "Your landlord or property manager confirms you live here."),
     ;
 
     companion object {
-        fun fromSlug(slug: String?): PlaceVerifyMethod = entries.firstOrNull { it.slug == slug } ?: MAIL
+        fun fromSlug(slug: String?): PlaceVerifyMethod = entries.firstOrNull { it.slug == slug } ?: DOCUMENT
     }
 }
 
@@ -84,7 +95,7 @@ fun PlaceVerifySheet(
     onStart: (PlaceVerifyMethod) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selected by remember { mutableStateOf(PlaceVerifyMethod.MAIL) }
+    var selected by remember { mutableStateOf(PlaceVerifyMethod.DOCUMENT) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
@@ -156,7 +167,8 @@ fun PlaceVerifySheet(
                     modifier = Modifier.padding(top = 1.dp),
                 )
                 Text(
-                    "This can take a few days. Everything you have now stays available while you wait.",
+                    "Documents are reviewed by a person, usually within hours; postcards take about a week. " +
+                        "Everything you have now stays available while you wait.",
                     fontSize = 12.5.sp,
                     lineHeight = 18.sp,
                     color = PantopusColors.appTextSecondary,
@@ -265,7 +277,11 @@ private fun Pending(
 ) {
     StatusMark(if (method == PlaceVerifyMethod.MAIL) PantopusIcon.Clock else PantopusIcon.RefreshCw, home = true)
     Text(
-        if (method == PlaceVerifyMethod.MAIL) "Your code is on the way" else "Checking property records…",
+        when (method) {
+            PlaceVerifyMethod.MAIL -> "Your code is on the way"
+            PlaceVerifyMethod.LANDLORD -> "Waiting on your landlord"
+            PlaceVerifyMethod.DOCUMENT -> "Reviewing your document"
+        },
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
@@ -273,9 +289,9 @@ private fun Pending(
     )
     Text(
         when (method) {
-            PlaceVerifyMethod.MAIL -> "We've mailed a postcard to your address. Enter the code when it arrives — usually within a few days."
-            PlaceVerifyMethod.RECORDS -> "We're matching your name against the deed and lease records on file. This is usually instant."
-            PlaceVerifyMethod.DOCUMENT -> "We're reviewing the document you uploaded. We'll let you know shortly."
+            PlaceVerifyMethod.MAIL -> "We've mailed a postcard to your address. Enter the code when it arrives — usually within a week."
+            PlaceVerifyMethod.LANDLORD -> "We've asked your landlord or property manager to confirm you live here."
+            PlaceVerifyMethod.DOCUMENT -> "A person is reviewing the document you uploaded — usually within hours."
         },
         fontSize = 14.sp,
         lineHeight = 20.sp,

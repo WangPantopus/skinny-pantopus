@@ -53,7 +53,8 @@ class PlaceDetailViewModel
     constructor(
         private val repo: PlaceRepository,
         savedStateHandle: SavedStateHandle,
-    ) : ViewModel() {
+    ) : ViewModel(),
+        AddressCalendarActions {
         private val homeId: String =
             requireNotNull(savedStateHandle[PLACE_DETAIL_HOME_ID_KEY]) {
                 "PlaceDetailViewModel requires a '$PLACE_DETAIL_HOME_ID_KEY' nav arg."
@@ -64,6 +65,37 @@ class PlaceDetailViewModel
 
         private val _state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
         val state: StateFlow<PlaceDetailUiState> = _state.asStateFlow()
+
+        // ─── Address calendar (Wedge v2 D6) ────────────────────
+        private val _calendarBusy = MutableStateFlow(false)
+        override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
+        private val _calendarError = MutableStateFlow<String?>(null)
+        override val calendarError: StateFlow<String?> = _calendarError.asStateFlow()
+
+        /** `weekday` is MO TU WE TH FR SA SU; the section refreshes on success. */
+        override fun setPickupDay(weekday: String) {
+            viewModelScope.launch {
+                _calendarBusy.value = true
+                _calendarError.value = null
+                when (val r = repo.setPickupDay(homeId, weekday)) {
+                    is NetworkResult.Success -> refresh()
+                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't save your pickup day.")
+                }
+                _calendarBusy.value = false
+            }
+        }
+
+        override fun clearPickupDay() {
+            viewModelScope.launch {
+                _calendarBusy.value = true
+                _calendarError.value = null
+                when (val r = repo.clearPickupDay(homeId)) {
+                    is NetworkResult.Success -> refresh()
+                    is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't reset your pickup day.")
+                }
+                _calendarBusy.value = false
+            }
+        }
 
         fun load() {
             if (_state.value is PlaceDetailUiState.Loaded) return

@@ -152,6 +152,7 @@ enum class PlaceSectionId(val raw: String) {
     EXEMPTION_CHECK("exemption_check"),
     CIVIC_DISTRICTS("civic_districts"),
     CIVIC_ELECTION("civic_election"),
+    ADDRESS_CALENDAR("address_calendar"),
     UNKNOWN("unknown"),
     ;
 
@@ -1021,6 +1022,48 @@ data class PlaceHomeSystemsData(
 // ─── Section payload union ───────────────────────────────────
 
 /** Typed payload for a section envelope — one case per launch-set id. */
+// ─── address_calendar (Wedge v2 D6) ──────────────────────────
+
+/**
+ * One dated thing at this address in the next two weeks: a garbage
+ * pickup, a property-tax deadline, a council meeting. The server
+ * writes every string; `confidence` says whether the rule is
+ * `official` or still unverified.
+ */
+@JsonClass(generateAdapter = true)
+data class PlaceCalendarEvent(
+    @Json(name = "rule_id") val ruleId: String = "",
+    val kind: String = "",
+    val title: String = "",
+    val detail: String? = null,
+    /** YYYY-MM-DD. */
+    val date: String = "",
+    @Json(name = "days_until") val daysUntil: Int = 0,
+    @Json(name = "all_day") val allDay: Boolean = true,
+    @Json(name = "lead_days") val leadDays: Int = 0,
+    val scope: String = "",
+    val source: String? = null,
+    @Json(name = "source_url") val sourceUrl: String? = null,
+    val confidence: String = "",
+)
+
+/**
+ * The address calendar section — `needs_pickup_day` is the one thing
+ * the resident must tell us; everything else is derived from the rule
+ * registry (state → county → city → home, narrowest wins).
+ */
+@JsonClass(generateAdapter = true)
+data class PlaceAddressCalendarData(
+    val upcoming: List<PlaceCalendarEvent> = emptyList(),
+    val next: PlaceCalendarEvent? = null,
+    @Json(name = "needs_pickup_day") val needsPickupDay: Boolean = false,
+    @Json(name = "window_days") val windowDays: Int = 14,
+    @Json(name = "rule_count") val ruleCount: Int = 0,
+    /** YYYY-MM-DD the window starts on. */
+    val today: String = "",
+    val source: String? = null,
+)
+
 sealed interface PlaceSectionData {
     data class Weather(val value: PlaceWeatherData) : PlaceSectionData
 
@@ -1067,6 +1110,8 @@ sealed interface PlaceSectionData {
     data class CivicDistricts(val value: PlaceCivicDistrictsData) : PlaceSectionData
 
     data class CivicElection(val value: PlaceCivicElectionData) : PlaceSectionData
+
+    data class AddressCalendar(val value: PlaceAddressCalendarData) : PlaceSectionData
 }
 
 // ─── The envelope ────────────────────────────────────────────
@@ -1126,6 +1171,7 @@ data class PlaceSectionEnvelope(
     val exemptionCheck: PlaceExemptionCheckData? get() = (data as? PlaceSectionData.ExemptionCheck)?.value
     val civicDistricts: PlaceCivicDistrictsData? get() = (data as? PlaceSectionData.CivicDistricts)?.value
     val civicElection: PlaceCivicElectionData? get() = (data as? PlaceSectionData.CivicElection)?.value
+    val addressCalendar: PlaceAddressCalendarData? get() = (data as? PlaceSectionData.AddressCalendar)?.value
 }
 
 // ─── Response root ───────────────────────────────────────────
@@ -1313,6 +1359,42 @@ data class PlaceMoneyLead(
  * preview. Non-persistent (no DB writes): close and reopen still hits
  * the wall.
  */
+
+/** The aha card's tone — an open set; an unknown tone renders as INFO. */
+enum class PlacePreviewAhaTone(val raw: String) {
+    ALERT("alert"),
+    WATCH("watch"),
+    INFO("info"),
+    CALM("calm"),
+    ;
+
+    companion object {
+        fun from(raw: String?): PlacePreviewAhaTone = entries.firstOrNull { it.raw == raw } ?: INFO
+    }
+}
+
+/**
+ * Wedge v2 D1 — the one most surprising READY fact for this address,
+ * chosen server-side (`placePreviewService.pickAha`) and written in the
+ * server's words. Parity twin of the iOS `PlacePreviewAha`.
+ */
+@JsonClass(generateAdapter = true)
+data class PlacePreviewAha(
+    /** The section the fact came from; null for the calm fallback. */
+    @Json(name = "section_id") val sectionId: String? = null,
+    /** Raw wire tone — see [toneEnum]. */
+    val tone: String? = null,
+    val grade: String = "",
+    val headline: String = "",
+    val detail: String = "",
+    @Json(name = "follow_up") val followUp: String = "",
+) {
+    val toneEnum: PlacePreviewAhaTone get() = PlacePreviewAhaTone.from(tone)
+
+    /** An empty headline is nothing to lead with. */
+    val isRenderable: Boolean get() = headline.isNotEmpty()
+}
+
 @JsonClass(generateAdapter = true)
 data class PlacePreview(
     val status: PlacePreviewStatus,
@@ -1326,6 +1408,14 @@ data class PlacePreview(
     /** Null ⇒ no figure was available. Fall back to the tiles; never
      * invent one. */
     @Json(name = "money_lead") val moneyLead: PlaceMoneyLead? = null,
+    /** Wedge v2 D1: the card that leads the page. Null on older backends. */
+    val aha: PlacePreviewAha? = null,
+    /**
+     * Wedge v2 D1: every Band-A section as a one-shot snapshot, in the
+     * same envelope the claimed dashboard renders. Null on older
+     * backends, in which case [free] carries the page as before.
+     */
+    val sections: List<PlaceSectionEnvelope>? = null,
     val free: PlacePreviewFree? = null,
     val locked: List<PlacePreviewLockedSection>? = null,
     val disclaimer: String? = null,

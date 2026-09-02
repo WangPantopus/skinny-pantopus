@@ -125,6 +125,8 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                     parse(PlaceCivicDistrictsData::class.java)?.let(PlaceSectionData::CivicDistricts)
                 PlaceSectionId.CIVIC_ELECTION ->
                     parse(PlaceCivicElectionData::class.java)?.let(PlaceSectionData::CivicElection)
+                PlaceSectionId.ADDRESS_CALENDAR ->
+                    parse(PlaceAddressCalendarData::class.java)?.let(PlaceSectionData::AddressCalendar)
                 PlaceSectionId.UNKNOWN -> null
             }
         }
@@ -176,6 +178,7 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 is PlaceSectionData.ExemptionCheck -> writeValue(writer, payload.value)
                 is PlaceSectionData.CivicDistricts -> writeValue(writer, payload.value)
                 is PlaceSectionData.CivicElection -> writeValue(writer, payload.value)
+                is PlaceSectionData.AddressCalendar -> writeValue(writer, payload.value)
             }
             writer.endObject()
         }

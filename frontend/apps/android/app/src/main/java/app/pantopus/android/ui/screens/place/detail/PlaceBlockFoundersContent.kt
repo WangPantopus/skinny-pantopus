@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -146,6 +149,7 @@ private fun BlockFoundersCard(
     PlaceDetailCard {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             FounderRankRow(block)
+            block.founding?.line()?.let { FoundingLine(it, block.founding.isFounding) }
             HorizontalDivider(color = PantopusColors.appBorderSubtle)
             // The two raw insider counts. `rent_reports` is deliberately
             // its own reading rather than only a meter fill: it is what
@@ -199,6 +203,38 @@ private fun BlockCountStat(
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
+        )
+    }
+}
+
+/** The Founding Neighbor tier line (Wedge v2 D5) — the scarce part of the rank. */
+@Composable
+private fun FoundingLine(
+    text: String,
+    isFounding: Boolean,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isFounding) PantopusColors.homeBg else PantopusColors.appSurfaceSunken)
+                .padding(horizontal = 10.dp, vertical = 7.dp)
+                .testTag("place.blockFounders.founding"),
+    ) {
+        PantopusIconImage(
+            PantopusIcon.Crown,
+            null,
+            size = 14.dp,
+            strokeWidth = 2.25f,
+            tint = if (isFounding) PantopusColors.home else PantopusColors.appTextSecondary,
+        )
+        Text(
+            text,
+            fontSize = 12.5.sp,
+            fontWeight = if (isFounding) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (isFounding) PantopusColors.home else PantopusColors.appText,
         )
     }
 }

@@ -41,6 +41,7 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.place.components.JustMovedCard
 import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
@@ -75,6 +76,7 @@ fun PlaceDashboardScreen(
     onComposeMessage: (address: String) -> Unit,
     onOpenInbox: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenMailDay: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -91,6 +93,8 @@ fun PlaceDashboardScreen(
             is PlaceDashboardUiState.Loaded ->
                 PlaceDashboardContent(
                     intel = current.intelligence,
+                    moveInDate = current.moveInDate,
+                    onOpenMailDay = onOpenMailDay,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
@@ -139,6 +143,8 @@ internal fun PlaceDashboardContent(
     onOpenPulse: () -> Unit = {},
     onComposeMessage: (address: String) -> Unit = {},
     onOpenInbox: () -> Unit = {},
+    moveInDate: String? = null,
+    onOpenMailDay: () -> Unit = {},
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     val isClaimed = intel.tier == PlaceTier.T3
@@ -160,6 +166,15 @@ internal fun PlaceDashboardContent(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
                 )
             }
+        }
+        // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
+        item {
+            JustMovedCard(
+                moveInDate = moveInDate,
+                onOpenDetail = onOpenDetail,
+                onOpenMailDay = onOpenMailDay,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+            )
         }
         item {
             PlaceHeroCard(

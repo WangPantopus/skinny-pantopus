@@ -29,10 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.GoodDayVerdict
+import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.PlaceAirQualityData
 import app.pantopus.android.data.api.models.place.PlaceGoodDayTile
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -43,6 +46,7 @@ import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.ui.screens.place.PlacePresentation
+import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -52,7 +56,10 @@ import kotlin.math.roundToInt
 private const val GOOD_DAY_TILE_CAP = 5
 
 @Composable
-fun PlaceTodayDetailContent(intel: PlaceIntelligence) {
+fun PlaceTodayDetailContent(
+    intel: PlaceIntelligence,
+    viewModel: AddressCalendarActions? = null,
+) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
         PlaceDetailSectionLabel("Weather")
         val data = env.weather
@@ -98,10 +105,10 @@ fun PlaceTodayDetailContent(intel: PlaceIntelligence) {
             PlaceDetailFallbackCard(env)
         }
     }
+    AddressCalendarSection(intel, viewModel)
     PlaceDetailSectionLabel("Coming soon")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         PlaceComingSoonRow(PantopusIcon.Flower2, "Pollen & allergens", "Daily pollen count for your area")
-        PlaceComingSoonRow(PantopusIcon.Trash, "Trash & recycling", "Your pickup schedule")
         PlaceComingSoonRow(PantopusIcon.ZapOff, "Power outages", "Live status for your block")
     }
 }
@@ -387,3 +394,171 @@ private fun weatherTint(code: WeatherConditionCode): Color =
         WeatherConditionCode.RAIN, WeatherConditionCode.SLEET, WeatherConditionCode.SNOW -> PantopusColors.primary600
         else -> PantopusColors.appTextSecondary
     }
+
+// ─── The address calendar (Wedge v2 D6) ──────────────────────
+// Pickup days, tax dates, council meetings — the reason Today earns a
+// tab. The one thing the resident must tell us is the pickup day;
+// everything else comes from the registry. Parity twin of the iOS
+// `AddressCalendarCard`.
+
+private val WEEKDAYS = listOf("MO" to "Mon", "TU" to "Tue", "WE" to "Wed", "TH" to "Thu", "FR" to "Fri", "SA" to "Sat", "SU" to "Sun")
+
+@Composable
+private fun AddressCalendarSection(
+    intel: PlaceIntelligence,
+    viewModel: AddressCalendarActions?,
+) {
+    val env = intel.section(PlaceSectionId.ADDRESS_CALENDAR) ?: return
+    PlaceDetailSectionLabel("Address calendar")
+    val data = env.addressCalendar
+    if (data != null && env.isLive()) {
+        AddressCalendarCard(data, viewModel)
+        PlaceSourceNote(data.source ?: "Pantopus registry", "next ${data.windowDays} days")
+    } else {
+        PlaceDetailFallbackCard(env)
+    }
+}
+
+@Composable
+private fun AddressCalendarCard(
+    data: PlaceAddressCalendarData,
+    viewModel: AddressCalendarActions?,
+) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    val busy = viewModel?.calendarBusy?.collectAsStateWithLifecycle()?.value ?: false
+    val errorText = viewModel?.calendarError?.collectAsStateWithLifecycle()?.value
+    Column(
+        modifier = Modifier.fillMaxWidth().placeCard().padding(16.dp).testTag("place.today.addressCalendar"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CalendarHeader(windowDays = data.windowDays, picking = picking, canPick = viewModel != null) { picking = !picking }
+        when {
+            picking && viewModel != null -> PickupDayPicker(data, viewModel, busy)
+            data.needsPickupDay && viewModel != null -> PickupPrompt { picking = true }
+        }
+        errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
+        UpcomingEvents(data)
+    }
+}
+
+@Composable
+private fun CalendarHeader(
+    windowDays: Int,
+    picking: Boolean,
+    canPick: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "NEXT $windowDays DAYS AT THIS ADDRESS",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        if (canPick) {
+            Text(
+                if (picking) "Done" else "Pickup day",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.primary600,
+                modifier = Modifier.clickable(onClick = onToggle).testTag("addressCalendarPickupToggle"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PickupDayPicker(
+    data: PlaceAddressCalendarData,
+    viewModel: AddressCalendarActions,
+    busy: Boolean,
+) {
+    Text(
+        "Which day is garbage picked up? Recycling is assumed every other week.",
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        color = PantopusColors.appTextSecondary,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        WEEKDAYS.forEach { (code, label) ->
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(PantopusColors.appSurfaceSunken)
+                        .clickable(enabled = !busy) { viewModel.setPickupDay(code) }
+                        .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            }
+        }
+    }
+    if (!data.needsPickupDay) {
+        Text(
+            "Clear my pickup day",
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.clickable(enabled = !busy) { viewModel.clearPickupDay() },
+        )
+    }
+}
+
+@Composable
+private fun PickupPrompt(onClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(PantopusColors.homeBg)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(PantopusIcon.Trash2, null, size = 18.dp, strokeWidth = 2f, tint = PantopusColors.home)
+        Text(
+            "Set your pickup day and we'll remind you the night before.",
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+            modifier = Modifier.weight(1f),
+        )
+        PantopusIconImage(PantopusIcon.ChevronRight, null, size = 16.dp, strokeWidth = 2.25f, tint = PantopusColors.appTextMuted)
+    }
+}
+
+@Composable
+private fun UpcomingEvents(data: PlaceAddressCalendarData) {
+    if (data.upcoming.isEmpty()) {
+        Text(
+            "Nothing on the calendar for the next two weeks.",
+            fontSize = 13.5.sp,
+            lineHeight = 19.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+        return
+    }
+    data.upcoming.forEach { event ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(event.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                event.detail?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary)
+                }
+            }
+            Text(
+                PlacePresentation.daysUntilLabel(event.daysUntil),
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (event.daysUntil <= 1) PantopusColors.error else PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}

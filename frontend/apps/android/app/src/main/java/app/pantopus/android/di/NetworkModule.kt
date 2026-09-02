@@ -74,6 +74,7 @@ import app.pantopus.android.data.api.services.MailboxVaultApi
 import app.pantopus.android.data.api.services.MatchedBusinessesApi
 import app.pantopus.android.data.api.services.MembershipApi
 import app.pantopus.android.data.api.services.NeighborMessagesApi
+import app.pantopus.android.data.api.services.NeighborhoodApi
 import app.pantopus.android.data.api.services.NotificationPreferencesApi
 import app.pantopus.android.data.api.services.NotificationsApi
 import app.pantopus.android.data.api.services.OffersApi
@@ -611,6 +612,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideBlockFoundersApi(retrofit: Retrofit): BlockFoundersApi = retrofit.create(BlockFoundersApi::class.java)
+
+    /** Nearby — the density meter and the cells window (Wedge v2 D2 / §4). */
+    @Provides
+    @Singleton
+    fun provideNeighborhoodApi(retrofit: Retrofit): NeighborhoodApi = retrofit.create(NeighborhoodApi::class.java)
 
     @Provides
     @Singleton

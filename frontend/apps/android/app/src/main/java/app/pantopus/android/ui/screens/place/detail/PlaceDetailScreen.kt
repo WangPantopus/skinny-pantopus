@@ -72,7 +72,7 @@ private fun GroupContent(
     viewModel: PlaceDetailViewModel,
 ) {
     when (group) {
-        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel)
+        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel)
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
         PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)

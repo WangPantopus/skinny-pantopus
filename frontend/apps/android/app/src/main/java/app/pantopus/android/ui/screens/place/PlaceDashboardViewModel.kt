@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +27,7 @@ class PlaceDashboardViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
+        private val homesRepository: HomesRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PlaceDashboardUiState>(PlaceDashboardUiState.Loading)
         val state: StateFlow<PlaceDashboardUiState> = _state.asStateFlow()
@@ -45,10 +48,18 @@ class PlaceDashboardViewModel
         }
 
         private suspend fun fetch(id: String) {
+            // The home row rides alongside the intelligence for the one field
+            // the dashboard needs from it (move_in_date → the movers card);
+            // a failure there never blocks the page.
+            val intelligence = viewModelScope.async { repo.intelligence(id) }
+            val detail = viewModelScope.async { homesRepository.detail(id) }
+            val intelligenceResult = intelligence.await()
+            val moveInDate = (detail.await() as? NetworkResult.Success)?.data?.home?.moveInDate
             _state.value =
-                when (val result = repo.intelligence(id)) {
-                    is NetworkResult.Success -> PlaceDashboardUiState.Loaded(result.data)
-                    is NetworkResult.Failure -> PlaceDashboardUiState.Error(result.error.displayMessage("Couldn't load your dashboard."))
+                when (intelligenceResult) {
+                    is NetworkResult.Success -> PlaceDashboardUiState.Loaded(intelligenceResult.data, moveInDate)
+                    is NetworkResult.Failure ->
+                        PlaceDashboardUiState.Error(intelligenceResult.error.displayMessage("Couldn't load your dashboard."))
                 }
         }
     }
@@ -56,7 +67,11 @@ class PlaceDashboardViewModel
 sealed interface PlaceDashboardUiState {
     data object Loading : PlaceDashboardUiState
 
-    data class Loaded(val intelligence: PlaceIntelligence) : PlaceDashboardUiState
+    data class Loaded(
+        val intelligence: PlaceIntelligence,
+        /** Wedge v2 D5: the movers card shows for ~60 days after this. */
+        val moveInDate: String? = null,
+    ) : PlaceDashboardUiState
 
     data class Error(val message: String) : PlaceDashboardUiState
 }

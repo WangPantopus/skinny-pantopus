@@ -1,8 +1,13 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.place.AddressCalendarResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -36,4 +41,25 @@ interface PlaceApi {
     suspend fun publicPreview(
         @Query("address") address: String,
     ): PlacePreview
+
+    // ─── Address calendar (Wedge v2 D6) ────────────────────────
+
+    /** `GET /api/homes/:id/calendar` — route `backend/routes/addressCalendar.js:41`. */
+    @GET("api/homes/{id}/calendar")
+    suspend fun addressCalendar(
+        @Path("id") homeId: String,
+    ): AddressCalendarResponse
+
+    /** `PUT /api/homes/:id/calendar/pickup-day` — route `backend/routes/addressCalendar.js:53`. */
+    @PUT("api/homes/{id}/calendar/pickup-day")
+    suspend fun setPickupDay(
+        @Path("id") homeId: String,
+        @Body body: SetPickupDayRequest,
+    ): AddressCalendarResponse
+
+    /** `DELETE /api/homes/:id/calendar/pickup-day` — route `backend/routes/addressCalendar.js:70`. */
+    @DELETE("api/homes/{id}/calendar/pickup-day")
+    suspend fun clearPickupDay(
+        @Path("id") homeId: String,
+    ): AddressCalendarResponse
 }

@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
 import app.pantopus.android.data.api.models.geo.GeoNearbyPlacesResponse
 import app.pantopus.android.data.api.models.geo.GeoPlaceSearchResponse
 import app.pantopus.android.data.api.models.homes.GetHomeEmergenciesResponse
+import app.pantopus.android.data.api.models.place.AddressCalendarResponse
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
 import app.pantopus.android.data.api.models.place.BlockInviteRequest
 import app.pantopus.android.data.api.models.place.BlockInviteResult
@@ -37,6 +38,7 @@ import app.pantopus.android.data.api.models.place.ResidencyLetterVerification
 import app.pantopus.android.data.api.models.place.ResidencyLettersResponse
 import app.pantopus.android.data.api.models.place.SendNeighborMessageRequest
 import app.pantopus.android.data.api.models.place.SentNeighborMessage
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.data.api.models.place.SetRecordWatchRequest
 import app.pantopus.android.data.api.models.place.SetRentReportRequest
 import app.pantopus.android.data.api.models.place.SetUnlistedRemovalRequest
@@ -124,6 +126,20 @@ class PlaceRepository
 
         /** The anonymous, address-only T0 preview (no account required). */
         suspend fun publicPreview(address: String): NetworkResult<PlacePreview> = safeApiCall { placeApi.publicPreview(address) }
+
+        // ─── Address calendar (Wedge v2 D6) ────────────────────
+
+        suspend fun addressCalendar(homeId: String): NetworkResult<AddressCalendarResponse> =
+            safeApiCall { placeApi.addressCalendar(homeId) }
+
+        suspend fun setPickupDay(
+            homeId: String,
+            weekday: String,
+            recyclingEveryOtherWeek: Boolean = true,
+        ): NetworkResult<AddressCalendarResponse> =
+            safeApiCall { placeApi.setPickupDay(homeId, SetPickupDayRequest(weekday, recyclingEveryOtherWeek)) }
+
+        suspend fun clearPickupDay(homeId: String): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId) }
 
         /** The Neighborhood Pulse signal stream for a home. */
         suspend fun pulse(homeId: String): NetworkResult<NeighborhoodPulse> = safeApiCall { aiApi.pulse(homeId) }

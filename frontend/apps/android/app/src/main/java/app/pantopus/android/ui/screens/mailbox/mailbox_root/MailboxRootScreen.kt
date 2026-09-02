@@ -2,6 +2,13 @@
 
 package app.pantopus.android.ui.screens.mailbox.mailbox_root
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -12,9 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
@@ -53,6 +63,8 @@ fun MailboxRootScreen(
     onOpenRecords: () -> Unit = {},
     onOpenMailTasks: () -> Unit = {},
     onBack: (() -> Unit)? = null,
+    /** Wedge v2 D2: Messages lives inside Mail — the inbox entry above the drawers. */
+    onOpenInbox: (() -> Unit)? = null,
     viewModel: MailboxRootViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -100,19 +112,22 @@ fun MailboxRootScreen(
             ),
         onBack = onBack,
         customHeader = {
-            MailboxRootHeader(
-                drawers = viewModel.drawers,
-                selectedDrawer = selectedDrawer,
-                tabs = viewModel.mailTabs,
-                selectedTab = selectedTab,
-                drawerBadge = viewModel::drawerBadge,
-                tabBadge = viewModel::tabBadge,
-                onSelectDrawer = viewModel::selectDrawer,
-                onSelectTab = viewModel::selectTab,
-                onOpenMailDay = onOpenMailDay,
-                pendingRoutingCount = pendingRoutingCount,
-                onOpenRoutingQueue = onOpenRoutingQueue,
-            )
+            Column {
+                if (onOpenInbox != null) MailboxInboxEntry(onOpenInbox)
+                MailboxRootHeader(
+                    drawers = viewModel.drawers,
+                    selectedDrawer = selectedDrawer,
+                    tabs = viewModel.mailTabs,
+                    selectedTab = selectedTab,
+                    drawerBadge = viewModel::drawerBadge,
+                    tabBadge = viewModel::tabBadge,
+                    onSelectDrawer = viewModel::selectDrawer,
+                    onSelectTab = viewModel::selectTab,
+                    onOpenMailDay = onOpenMailDay,
+                    pendingRoutingCount = pendingRoutingCount,
+                    onOpenRoutingQueue = onOpenRoutingQueue,
+                )
+            }
         },
         extraTopBarAction = {
             IconButton(onClick = onOpenStamps, modifier = Modifier.testTag("mailboxRootStamps")) {
@@ -234,5 +249,32 @@ private fun MailboxRootSettingsMenu(
             },
             modifier = Modifier.testTag("mailboxRootSettings.vacationHold"),
         )
+    }
+}
+
+/** Messages as Mail's inbox (Wedge v2 D2): one row above the drawers, into the chat list. */
+@Composable
+private fun MailboxInboxEntry(onOpenInbox: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(PantopusColors.appSurface)
+                .clickable(onClick = onOpenInbox)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag("mailboxRootInbox"),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(icon = PantopusIcon.MessageCircle, contentDescription = null, size = 20.dp, tint = PantopusColors.primary600)
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Messages", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text(
+                "Your inbox — neighbors, businesses, and the people you follow",
+                fontSize = 12.5.sp,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
 }

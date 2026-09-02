@@ -35,9 +35,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
+import app.pantopus.android.data.api.models.place.PlacePreviewAha
+import app.pantopus.android.data.api.models.place.PlacePreviewAhaTone
 import app.pantopus.android.data.api.models.place.PlacePreviewLockedSection
 import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
+import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.place.PlaceSectionView
+import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.components.PlaceDensityCard
@@ -302,8 +307,15 @@ private fun PreviewBody(
                 // A real dollar band when one exists for this address,
                 // and nothing at all when it does not — the tiles carry
                 // the page as before. Never synthesized client-side.
+                // The aha card leads (Wedge v2 D1): the most surprising ready
+                // fact, in the server's words.
+                preview.aha?.takeIf { it.isRenderable }?.let { AhaCard(it, onCreateAccount) }
                 preview.moneyLead?.takeIf { it.isRenderable }?.let { MoneyLeadCard(it) }
-                preview.free?.let { free ->
+                // Every Band-A section through the dashboard's own cards;
+                // older backends send only `free` and keep the three tiles.
+                val sections = preview.sections.orEmpty()
+                if (sections.isNotEmpty()) PreviewSections(sections, onCreateAccount)
+                preview.free?.takeIf { sections.isEmpty() }?.let { free ->
                     PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
                     PlaceSectionCard(
                         title = "Flood",
@@ -499,5 +511,85 @@ private fun RegionBody(
             PrimaryButton(title = "Follow people & places", onClick = onBrowse, modifier = Modifier.fillMaxWidth())
         }
         Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+// ─── Wedge v2 D1: the aha card and the Band-A sections ───────
+
+private val PREVIEW_GROUP_ORDER =
+    listOf(
+        PlaceGroup.TODAY to "Today",
+        PlaceGroup.RISK_READINESS to "Risk & readiness",
+        PlaceGroup.HEALTH_ENVIRONMENT to "Health & environment",
+        PlaceGroup.YOUR_BLOCK to "Your block",
+        PlaceGroup.MONEY_SIGNALS to "Money signals",
+        PlaceGroup.CIVIC to "Civic",
+        PlaceGroup.YOUR_HOME to "Your home",
+    )
+
+/** Headline, grade, detail and follow-up are the server's words, rendered whole. */
+@Composable
+private fun AhaCard(
+    aha: PlacePreviewAha,
+    onFollowUp: () -> Unit,
+) {
+    val tone =
+        when (aha.toneEnum) {
+            PlacePreviewAhaTone.ALERT -> PlaceChipTone.ERROR
+            PlacePreviewAhaTone.WATCH -> PlaceChipTone.WARNING
+            PlacePreviewAhaTone.INFO -> PlaceChipTone.SKY
+            PlacePreviewAhaTone.CALM -> PlaceChipTone.SUCCESS
+        }
+    val icon =
+        when (aha.toneEnum) {
+            PlacePreviewAhaTone.ALERT, PlacePreviewAhaTone.WATCH -> PantopusIcon.Flame
+            PlacePreviewAhaTone.INFO -> PantopusIcon.MapPin
+            PlacePreviewAhaTone.CALM -> PantopusIcon.Sparkles
+        }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp).placeCard().padding(16.dp).testTag("place.preview.aha"),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(PantopusColors.homeBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(icon, null, size = 19.dp, strokeWidth = 2f, tint = PantopusColors.home)
+            }
+            PlaceChip(PlaceChipModel(tone, aha.grade.ifEmpty { "What stands out" }))
+        }
+        Text(aha.headline, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 23.sp, color = PantopusColors.appText)
+        if (aha.detail.isNotEmpty()) {
+            Text(aha.detail, fontSize = 13.5.sp, lineHeight = 19.sp, color = PantopusColors.appTextSecondary)
+        }
+        if (aha.followUp.isNotEmpty()) {
+            Row(
+                modifier = Modifier.clickable(onClick = onFollowUp).testTag("place.preview.aha.followUp"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(aha.followUp, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+                PantopusIconImage(PantopusIcon.ChevronRight, null, size = 14.dp, strokeWidth = 2.25f, tint = PantopusColors.primary600)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewSections(
+    sections: List<PlaceSectionEnvelope>,
+    onCreateAccount: () -> Unit,
+) {
+    PREVIEW_GROUP_ORDER.forEach { (group, label) ->
+        val items = sections.filter { it.groupId == group }
+        if (items.isNotEmpty()) {
+            PlaceGroupLabel(text = label, modifier = Modifier.padding(top = 18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { env ->
+                    PlaceSectionView(env = env, onOpen = null, onVerify = onCreateAccount, onClaim = onCreateAccount)
+                }
+            }
+        }
     }
 }
