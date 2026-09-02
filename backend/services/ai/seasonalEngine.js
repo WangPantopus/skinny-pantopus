@@ -1,40 +1,140 @@
 /**
- * Pacific Northwest Seasonal Intelligence Engine
+ * Seasonal Intelligence Engine — national, by climate region.
  *
  * A deterministic service (no AI/LLM calls, no external APIs, no DB queries)
- * that returns seasonal context based on the current date, region, and
- * optional home characteristics. Critical for the cold-start Pulse —
- * provides useful, personalised content with zero community data.
+ * that returns seasonal context based on the current date, the home's
+ * climate region, and optional home characteristics. Critical for the
+ * cold-start Pulse and the Hub briefing — useful, honest content with zero
+ * community data.
  *
- * Target region: Clark County WA + Portland Metro OR.
+ * It shipped Pacific-Northwest-only and failed closed everywhere else. It
+ * now resolves one of twelve climate regions from the home's state (or,
+ * failing that, coarse coordinates), runs the month-based base calendar
+ * everywhere minus the seasons that do not apply to a region, layers the
+ * region's own seasons on top (hurricane, tornado, monsoon, heat,
+ * wildfire, winter storm, pollen), and serves tip copy that never claims
+ * a statistic about somewhere the home is not. The original PNW copy is
+ * kept verbatim for the PNW.
  */
 
-const SUPPORTED_REGIONS = [
-  // Vancouver, WA centroid — Clark County, Washington (not other U.S. Clark Counties).
-  { label: 'Clark County, WA', lat: 45.6387, lng: -122.6615, radius_meters: 30_000 },
-  { label: 'Portland Metro', lat: 45.5152, lng: -122.6784, radius_meters: 30_000 },
-];
+// ── Climate regions ─────────────────────────────────────────────────────
 
-function haversineMeters(lat1, lng1, lat2, lng2) {
-  const R = 6_371_000;
-  const toRad = (d) => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+const REGION_BY_STATE = {
+  WA: 'pacific_northwest', OR: 'pacific_northwest', ID: 'pacific_northwest',
+  CA: 'california',
+  AZ: 'southwest', NM: 'southwest', NV: 'southwest', UT: 'southwest',
+  CO: 'mountain', MT: 'mountain', WY: 'mountain',
+  ND: 'northern_plains', SD: 'northern_plains', NE: 'northern_plains', KS: 'northern_plains',
+  MN: 'upper_midwest', WI: 'upper_midwest', MI: 'upper_midwest', IA: 'upper_midwest',
+  IL: 'ohio_valley', IN: 'ohio_valley', OH: 'ohio_valley', KY: 'ohio_valley', WV: 'ohio_valley', MO: 'ohio_valley', TN: 'ohio_valley',
+  NY: 'northeast', NJ: 'northeast', PA: 'northeast', CT: 'northeast', RI: 'northeast', MA: 'northeast', VT: 'northeast',
+  NH: 'northeast', ME: 'northeast', MD: 'northeast', DE: 'northeast', DC: 'northeast',
+  VA: 'southeast', NC: 'southeast', SC: 'southeast', GA: 'southeast', FL: 'southeast', AL: 'southeast',
+  TX: 'south_central', OK: 'south_central', AR: 'south_central', LA: 'south_central', MS: 'south_central',
+  AK: 'alaska',
+  HI: 'hawaii',
+};
+
+/**
+ * Region config: which BASE seasons do not apply, and which regional
+ * seasons overlay the base calendar (with their months, 0-indexed).
+ */
+const REGIONS = {
+  pacific_northwest: { label: 'Pacific Northwest', exclude: [], overlays: {} },
+  california: {
+    label: 'California',
+    exclude: ['smoke_season', 'winter_ice'],
+    overlays: { wildfire_season: [5, 6, 7, 8, 9], heat_season: [5, 6, 7, 8], winter_storm_season: [10, 11, 0, 1, 2] },
+  },
+  southwest: {
+    label: 'Southwest',
+    exclude: ['smoke_season'],
+    overlays: { heat_season: [4, 5, 6, 7, 8], monsoon_season: [5, 6, 7, 8], wildfire_season: [4, 5] },
+  },
+  mountain: {
+    label: 'Mountain West',
+    exclude: ['smoke_season'],
+    overlays: { wildfire_season: [5, 6, 7, 8], blizzard_season: [10, 11, 0, 1, 2] },
+  },
+  northern_plains: {
+    label: 'Northern Plains',
+    exclude: ['smoke_season'],
+    overlays: { tornado_season: [3, 4, 5, 6], blizzard_season: [10, 11, 0, 1, 2] },
+  },
+  upper_midwest: {
+    label: 'Upper Midwest',
+    exclude: ['smoke_season'],
+    overlays: { tornado_season: [3, 4, 5, 6], blizzard_season: [10, 11, 0, 1, 2] },
+  },
+  ohio_valley: {
+    label: 'Ohio Valley',
+    exclude: ['smoke_season'],
+    overlays: { tornado_season: [2, 3, 4, 5], heat_season: [5, 6, 7] },
+  },
+  northeast: {
+    label: 'Northeast',
+    exclude: ['smoke_season'],
+    overlays: { hurricane_season: [7, 8, 9], winter_storm_season: [10, 11, 0, 1, 2] },
+  },
+  southeast: {
+    label: 'Southeast',
+    exclude: ['smoke_season'],
+    overlays: { hurricane_season: [5, 6, 7, 8, 9, 10], heat_season: [5, 6, 7, 8], pollen_season: [2, 3, 4], tornado_season: [2, 3, 4] },
+  },
+  south_central: {
+    label: 'South Central',
+    exclude: ['smoke_season'],
+    overlays: { tornado_season: [2, 3, 4, 5], hurricane_season: [5, 6, 7, 8, 9, 10], heat_season: [5, 6, 7, 8], pollen_season: [2, 3] },
+  },
+  alaska: {
+    label: 'Alaska',
+    exclude: ['smoke_season', 'summer_dry'],
+    overlays: { freeze_season: [9, 10, 11, 0, 1, 2, 3], wildfire_season: [5, 6, 7] },
+  },
+  hawaii: {
+    label: 'Hawaii',
+    exclude: ['winter_ice', 'smoke_season'],
+    overlays: { hurricane_season: [5, 6, 7, 8, 9, 10] },
+  },
+};
+
+/**
+ * Coarse coordinate fallback for callers that have no state code. Bands
+ * are deliberately rough — a home row always carries `state`, which wins.
+ */
+function regionFromCoords(lat, lng) {
+  if (lat >= 18 && lat <= 23 && lng >= -161 && lng <= -154) return 'hawaii';
+  if (lat > 51 && (lng < -129 || lng > 170)) return 'alaska';
+  if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return null; // not the contiguous US
+  if (lng < -114) return lat >= 42 ? 'pacific_northwest' : 'california';
+  if (lng < -102) return lat >= 37 ? 'mountain' : 'southwest';
+  if (lng < -94) return lat >= 37 ? 'northern_plains' : 'south_central';
+  if (lng < -84) {
+    if (lat >= 41.5) return 'upper_midwest';
+    if (lat >= 36.5) return 'ohio_valley';
+    return lng < -88 ? 'south_central' : 'southeast';
+  }
+  return lat >= 39.5 ? 'northeast' : 'southeast';
 }
 
-function isSupportedSeasonalRegion(options = {}) {
+/**
+ * Resolve the climate region for a home. The state code is authoritative;
+ * coordinates are the fallback; with neither we do not know and say so.
+ * @param {{ state?: string, latitude?: number, longitude?: number }} options
+ * @returns {string|null}
+ */
+function resolveClimateRegion(options = {}) {
+  const state = typeof options.state === 'string' ? options.state.trim().toUpperCase() : '';
+  if (state && REGION_BY_STATE[state]) return REGION_BY_STATE[state];
   const latitude = Number(options.latitude);
   const longitude = Number(options.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return false;
-  }
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return regionFromCoords(latitude, longitude);
+}
 
-  return SUPPORTED_REGIONS.some((region) =>
-    haversineMeters(latitude, longitude, region.lat, region.lng) <= region.radius_meters
-  );
+/** Kept for callers that only ask "do we know where this is?" */
+function isSupportedSeasonalRegion(options = {}) {
+  return resolveClimateRegion(options) != null;
 }
 
 // ── Seasonal Calendar ──────────────────────────────────────────────────────
@@ -173,6 +273,179 @@ const SEASONAL_TIPS = {
   ],
 };
 
+// ── Default copy for the base seasons outside the PNW ──────────────────────
+// Same shape as SEASONAL_TIPS, no local statistics: nothing here claims a
+// number about a place. The PNW keeps its own copy above.
+
+const DEFAULT_TIPS = {
+  winter_ice: [
+    {
+      condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      tip: 'Freeze season. Protect outdoor faucets and exposed pipes, and keep de-icing supplies handy.',
+      homeTip: 'Your {{year}} home may have original plumbing. Pipe insulation and heat tape prevent costly freeze damage.',
+    },
+    { tip: 'Freeze season. Protect outdoor faucets and exposed pipes, and keep de-icing supplies handy.', homeTip: null },
+  ],
+  spring_cleanup: [
+    {
+      condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      tip: 'Spring cleanup season: gutters, pressure washing, and yard cleanup are the top residential jobs right now.',
+      homeTip: "Your {{year}} home's gutters and siding take the most wear over winter; a spring check catches small problems early.",
+    },
+    { tip: 'Spring cleanup season: gutters, pressure washing, and yard cleanup are the top residential jobs right now.', homeTip: null },
+  ],
+  early_summer: [
+    { tip: 'Early summer is the window for outdoor projects: decks, paint, and landscaping before the heat peaks.', homeTip: null },
+  ],
+  summer_dry: [
+    { tip: 'Peak summer: water early in the morning, watch for local watering restrictions, and keep AC filters fresh.', homeTip: null },
+  ],
+  smoke_season: [
+    { tip: 'Wildfire smoke can reach far from any fire. Check the AQI on hazy days and run HVAC on recirculate with a good filter.', homeTip: null },
+  ],
+  fall_prep: [
+    {
+      condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      tip: 'Fall is gutter season: clear gutters and downspouts before the first hard rains, and have the furnace checked.',
+      homeTip: 'Your {{year}} home likely has original gutters. A professional cleaning before the rains prevents water damage.',
+    },
+    {
+      condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt >= 2010,
+      tip: 'Fall prep season is here. Even newer homes need gutter cleaning and downspout checks before winter.',
+      homeTip: 'Your newer home may have gutter guards, but they still need clearing. Leaves and debris accumulate fast in fall.',
+    },
+    { tip: 'Fall is gutter season: clear gutters and downspouts before the first hard rains, and have the furnace checked.', homeTip: null },
+  ],
+  holiday_season: [
+    { tip: 'Package theft peaks in December. Consider coordinating with neighbors for delivery watching.', homeTip: null },
+  ],
+};
+
+// ── Regional seasons (overlays) ────────────────────────────────────────────
+// Facts only: season dates are the NWS / NOAA definitions; the advice is
+// the standard preparedness guidance, with no invented local numbers.
+
+const OVERLAYS = {
+  hurricane_season: {
+    label: 'Hurricane Season',
+    urgency: 'high',
+    priority: 1,
+    tips: [
+      {
+        condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 2000,
+        tip: 'Atlantic hurricane season runs June 1 to November 30 and peaks in September. Know your evacuation zone and keep a week of water and medication.',
+        homeTip: 'Older roofs and windows fail first in high wind. Hurricane straps, shutters, and a garage-door brace are the highest-value upgrades for your {{year}} home.',
+      },
+      {
+        tip: 'Atlantic hurricane season runs June 1 to November 30 and peaks in September. Know your evacuation zone, keep a week of water and medication, and photograph your home for insurance before a storm is named.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task to clear gutters and secure loose outdoor items before the September peak.' },
+  },
+  tornado_season: {
+    label: 'Tornado Season',
+    urgency: 'high',
+    priority: 2,
+    tips: [
+      {
+        tip: 'Tornado season peaks in spring. Know your safe room — the lowest interior room with no windows — and keep weather alerts on overnight.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman'], nudge: 'Post a task to trim dead limbs and secure anything in the yard that could become a projectile.' },
+  },
+  monsoon_season: {
+    label: 'Monsoon Season',
+    urgency: 'moderate',
+    priority: 4,
+    tips: [
+      {
+        tip: 'The Southwest monsoon runs June 15 to September 30: flash floods and dust storms arrive fast. Never drive through a flooded wash, and clear roof drains before the first storms.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task to clear roof drains and scuppers before the monsoon storms.' },
+  },
+  heat_season: {
+    label: 'Extreme Heat Season',
+    urgency: 'high',
+    priority: 3,
+    tips: [
+      {
+        condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+        tip: 'Extreme heat is the deadliest weather in the United States. Check on older neighbors, keep AC filters fresh, and know the nearest cooling center.',
+        homeTip: 'Older homes lose cool air through attic and duct leaks; an attic insulation and duct-seal check pays back fastest for your {{year}} home.',
+      },
+      {
+        tip: 'Extreme heat is the deadliest weather in the United States. Check on older neighbors, keep AC filters fresh, and know the nearest cooling center.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task for an AC filter change and a window-shade install before the next heat wave.' },
+  },
+  wildfire_season: {
+    label: 'Wildfire Season',
+    urgency: 'high',
+    priority: 2,
+    tips: [
+      {
+        tip: 'Wildfire season: keep the first five feet around the house free of dry vegetation, clear needles from the roof and gutters, and check the AQI on smoke days.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Gardening', 'Cleaning'], nudge: 'Post a task to clear brush and roof debris from the home ignition zone.' },
+  },
+  winter_storm_season: {
+    label: 'Winter Storm Season',
+    urgency: 'moderate',
+    priority: 5,
+    tips: [
+      {
+        tip: 'Winter storm season: clear gutters before the rains, know where your water shutoff is, and keep a flashlight and a charged battery pack by the door.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task to clear gutters and check the sump pump before the first big storm.' },
+  },
+  blizzard_season: {
+    label: 'Blizzard Season',
+    urgency: 'high',
+    priority: 3,
+    tips: [
+      {
+        tip: 'Blizzard season: insulate exposed pipes, keep the furnace filter fresh, and have sand or salt ready before the first storm.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman'], nudge: 'Post a task for snow removal or a furnace check before the first storm.' },
+  },
+  freeze_season: {
+    label: 'Deep-Freeze Season',
+    urgency: 'high',
+    priority: 3,
+    tips: [
+      {
+        tip: 'Deep-freeze season: heat tape on exposed lines, engine block heaters plugged in, and a carbon monoxide alarm tested.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Handyman'], nudge: 'Post a task to winterize exposed plumbing before the first hard freeze.' },
+  },
+  pollen_season: {
+    label: 'Pollen Season',
+    urgency: 'low',
+    priority: 6,
+    tips: [
+      {
+        tip: 'Pollen season: change HVAC filters monthly, keep windows closed on high-count mornings, and check the daily pollen forecast.',
+        homeTip: null,
+      },
+    ],
+    gigs: { categories: ['Cleaning'], nudge: 'Post a task for a filter change and a pressure wash once the pollen settles.' },
+  },
+};
+
 // ── Gig Suggestions ────────────────────────────────────────────────────────
 
 const SEASONAL_GIG_SUGGESTIONS = {
@@ -271,8 +544,8 @@ function resolveTip(template, ctx) {
  * @param {object} ctx  { homeYearBuilt, homePropertyType }
  * @returns {{ tip: string, homeTip: string|null }}
  */
-function findBestTip(seasonKey, ctx) {
-  const tips = SEASONAL_TIPS[seasonKey];
+function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
+  const tips = table[seasonKey];
   if (!tips || tips.length === 0) {
     return { tip: '', homeTip: null };
   }
@@ -307,76 +580,89 @@ function findBestTip(seasonKey, ctx) {
 function getSeasonalContext(options = {}) {
   const date = options.date || new Date();
   const month = date.getMonth(); // 0-indexed
-  const hasCoords = options.latitude != null && options.longitude != null;
 
-  // Region-specific COPY requires knowing the region. This used to read
-  // `!hasCoords || isSupportedSeasonalRegion(options)`, which had two
-  // symmetrical failures:
-  //
-  //   with coords, outside the PNW → EVERYTHING returned null, so Hub,
-  //     the briefing, the pulse and the home-health score silently lost
-  //     the whole seasonal signal class for every user in the country;
-  //   without coords → the gate passed, so `home.js` (seasonal-checklist)
-  //     and `homeHealthService` served Portland-specific copy to every
-  //     home in the country: "Portland/Vancouver averages 3–5 ice events
-  //     per winter" to a homeowner in Phoenix.
-  //
-  // The fix separates the two things that were conflated. The month-based
-  // season calendar is generic and now runs everywhere, so the checklist
-  // and health score work nationally. Only the PNW-specific TIP TEXT is
-  // gated — and it now fails closed, because without coordinates we do
-  // not know the region and must not claim it.
-  //
-  // National, data-driven seasonal risk lives in `heat_cold` (NWS
-  // HeatRisk + the freeze line), which is what actually replaces this.
-  const inRegion = hasCoords && isSupportedSeasonalRegion(options);
+  // Region-specific COPY requires knowing the region. Without a state or
+  // coordinates we do not know it and must not claim it, so the tips fail
+  // closed; the month-based season calendar still runs everywhere.
+  const region = resolveClimateRegion(options);
+  const regionCfg = region ? REGIONS[region] : null;
+  const inRegion = regionCfg != null;
 
   const ctx = {
     homeYearBuilt: options.homeYearBuilt || null,
     homePropertyType: options.homePropertyType || null,
   };
 
-  // 1. Find all active seasons for this month
+  // 1. Base seasons active this month, minus the ones that do not apply here
+  const excluded = new Set(regionCfg ? regionCfg.exclude : []);
   const activeSeasons = [];
   for (const [key, season] of Object.entries(SEASONS)) {
-    if (season.months.includes(month)) {
+    if (season.months.includes(month) && !excluded.has(key)) {
       activeSeasons.push(key);
     }
   }
 
-  // 2. Pick primary season by priority
-  const primarySeason = SEASON_PRIORITY.find(s => activeSeasons.includes(s)) || activeSeasons[0] || 'early_summer';
+  // 2. The region's own seasons on top
+  const overlayActive = regionCfg
+    ? Object.entries(regionCfg.overlays).filter(([, months]) => months.includes(month)).map(([key]) => key)
+    : [];
+  const regionalSeason = overlayActive.slice().sort((a, b) => OVERLAYS[a].priority - OVERLAYS[b].priority)[0] || null;
 
-  // 3. Get the best tip for the primary season
-  const { tip, homeTip } = findBestTip(primarySeason, ctx);
+  // 3. Primary base season by priority — always a base key, so every
+  //    consumer of `primary_season` (checklist, health score) keeps working
+  const primarySeason = SEASON_PRIORITY.find((k) => activeSeasons.includes(k)) || activeSeasons[0] || 'early_summer';
 
-  // 4. Get gig suggestions for the primary season
-  const gigSuggestion = SEASONAL_GIG_SUGGESTIONS[primarySeason] || SEASONAL_GIG_SUGGESTIONS.early_summer;
+  // 4. Copy: the PNW keeps its own; everywhere else gets the number-free
+  //    default; an active regional season outranks the base tip
+  const baseTips = region === 'pacific_northwest' ? SEASONAL_TIPS : DEFAULT_TIPS;
+  const base = findBestTip(primarySeason, ctx, baseTips);
+  const overlay = regionalSeason ? findBestTip(regionalSeason, ctx, { [regionalSeason]: OVERLAYS[regionalSeason].tips }) : null;
+  // No base season genuinely active this month (Hawaii in January) and no
+  // regional season either → no copy, rather than a fallback's copy.
+  const baseIsActive = activeSeasons.includes(primarySeason);
+  const tip = overlay && overlay.tip ? overlay.tip : (baseIsActive ? base.tip : null);
+  const homeTip = overlay && overlay.tip ? overlay.homeTip : (baseIsActive ? base.homeTip : null);
 
-  // 5. Determine overall urgency (take highest from active seasons)
+  // 5. Gig suggestions follow the same choice
+  const gigSuggestion = regionalSeason
+    ? OVERLAYS[regionalSeason].gigs
+    : (SEASONAL_GIG_SUGGESTIONS[primarySeason] || SEASONAL_GIG_SUGGESTIONS.early_summer);
+
+  // 6. Urgency: the highest across everything active
   const urgencyRank = { high: 3, moderate: 2, low: 1 };
   let maxUrgency = 'low';
   for (const key of activeSeasons) {
     const u = SEASONS[key].urgency;
-    if ((urgencyRank[u] || 0) > (urgencyRank[maxUrgency] || 0)) {
-      maxUrgency = u;
-    }
+    if ((urgencyRank[u] || 0) > (urgencyRank[maxUrgency] || 0)) maxUrgency = u;
+  }
+  for (const key of overlayActive) {
+    const u = OVERLAYS[key].urgency;
+    if ((urgencyRank[u] || 0) > (urgencyRank[maxUrgency] || 0)) maxUrgency = u;
   }
 
   return {
-    active_seasons: activeSeasons,
+    active_seasons: [...activeSeasons, ...overlayActive],
     primary_season: primarySeason,
-    // The tips carry PNW-specific statistics ("Portland/Vancouver averages
-    // 3–5 ice events per winter"), so they are withheld outside the region
-    // rather than served as if they were national facts. The season itself
-    // is month-based and applies anywhere.
+    regional_season: regionalSeason,
+    region,
+    region_label: regionCfg ? regionCfg.label : null,
     seasonal_tip: inRegion ? tip : null,
-    suggested_gig_categories: inRegion ? gigSuggestion.categories : [],
+    suggested_gig_categories: inRegion && tip ? gigSuggestion.categories : [],
     home_specific_tip: inRegion ? homeTip : null,
     urgency: maxUrgency,
-    first_action_nudge: inRegion ? gigSuggestion.nudge : null,
+    first_action_nudge: inRegion && tip ? gigSuggestion.nudge : null,
     is_relevant_region: inRegion,
   };
 }
 
-module.exports = { getSeasonalContext, isSupportedSeasonalRegion, SEASONS, SEASONAL_TIPS };
+module.exports = {
+  getSeasonalContext,
+  isSupportedSeasonalRegion,
+  resolveClimateRegion,
+  SEASONS,
+  SEASONAL_TIPS,
+  DEFAULT_TIPS,
+  OVERLAYS,
+  REGIONS,
+  REGION_BY_STATE,
+};

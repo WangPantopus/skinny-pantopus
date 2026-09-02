@@ -262,20 +262,30 @@ describe('SeasonalEngine', () => {
   });
 });
 
-// ── Regression: the region gate ───────────────────────────────────────────
+// ── The region gate, nationally ───────────────────────────────────────────
 //
-// The gate read `!hasCoords || isSupportedSeasonalRegion(options)`, which
-// failed in two symmetrical directions:
-//   with coords outside the PNW → everything returned null, so Hub, the
-//     briefing, the pulse and the home-health score silently lost the whole
-//     seasonal signal class for every user in the country;
-//   without coords → the gate PASSED, so home.js (seasonal-checklist) and
-//     homeHealthService served Portland statistics to every home in the US.
+// The engine used to know only the PNW: with coordinates outside it every
+// tip was null (Hub, briefing, pulse and health score lost the whole
+// seasonal signal for the rest of the country), and Portland statistics
+// were once served to Phoenix. Now a home resolves to one of twelve
+// climate regions and gets copy that never claims a number about
+// somewhere it is not; without any location the copy still fails closed.
 describe('region gating', () => {
   const PHOENIX = { latitude: 33.4484, longitude: -112.0740 };
 
-  it('never serves Portland-specific copy to a home outside the region', () => {
+  it('never serves Portland-specific copy to a home outside the PNW', () => {
     const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PHOENIX });
+    expect(ctx.region).toBe('southwest');
+    expect(ctx.is_relevant_region).toBe(true);
+    expect(ctx.seasonal_tip).toBeTruthy();
+    expect(ctx.seasonal_tip).not.toMatch(/Portland|Vancouver|Clark County|Pacific Northwest/);
+  });
+
+  it('fails closed when the caller supplies no location at all', () => {
+    // This is how home.js and homeHealthService call it. Without a state or
+    // coordinates we cannot know the region, so we must not claim it.
+    const ctx = getSeasonalContext({ date: dateOf(1, 15) });
+    expect(ctx.region).toBeNull();
     expect(ctx.is_relevant_region).toBe(false);
     expect(ctx.seasonal_tip).toBeNull();
     expect(ctx.home_specific_tip).toBeNull();
@@ -283,19 +293,8 @@ describe('region gating', () => {
     expect(ctx.suggested_gig_categories).toEqual([]);
   });
 
-  it('fails closed when the caller supplies no location at all', () => {
-    // This is how home.js and homeHealthService call it. Without
-    // coordinates we cannot know the region, so we must not claim it.
-    const ctx = getSeasonalContext({ date: dateOf(1, 15) });
-    expect(ctx.is_relevant_region).toBe(false);
-    expect(ctx.seasonal_tip).toBeNull();
-    expect(ctx.home_specific_tip).toBeNull();
-  });
-
   it('still resolves the season nationally, so the checklist keeps working', () => {
     // The month-based calendar is generic; only the tip copy is regional.
-    // Previously an out-of-region home got primary_season: null, which took
-    // the seasonal checklist and home-health score down with it.
     for (const loc of [PHOENIX, {}, { latitude: 40.7128, longitude: -74.0060 }]) {
       const ctx = getSeasonalContext({ date: dateOf(1, 15), ...loc });
       expect(ctx.primary_season).toBe('winter_ice');
@@ -304,9 +303,68 @@ describe('region gating', () => {
     }
   });
 
-  it('still serves the regional tip inside the region', () => {
+  it('still serves the PNW copy inside the PNW', () => {
     const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PNW });
+    expect(ctx.region).toBe('pacific_northwest');
     expect(ctx.is_relevant_region).toBe(true);
-    expect(ctx.seasonal_tip).toBeTruthy();
+    expect(ctx.seasonal_tip).toMatch(/Portland\/Vancouver/);
+  });
+});
+
+describe('climate regions', () => {
+  const { resolveClimateRegion, REGION_BY_STATE, OVERLAYS, REGIONS } = require('../services/ai/seasonalEngine');
+
+  it('covers every state and DC, and the state code wins over coordinates', () => {
+    expect(Object.keys(REGION_BY_STATE)).toHaveLength(51);
+    for (const region of Object.values(REGION_BY_STATE)) expect(REGIONS[region]).toBeDefined();
+    expect(resolveClimateRegion({ state: 'fl', ...PNW })).toBe('southeast');
+    expect(resolveClimateRegion({ latitude: 51.5074, longitude: -0.1278 })).toBeNull(); // London
+    expect(resolveClimateRegion({ latitude: 21.3069, longitude: -157.8583 })).toBe('hawaii');
+    expect(resolveClimateRegion({ latitude: 61.2181, longitude: -149.9003 })).toBe('alaska');
+  });
+
+  it('Miami in September leads with hurricane season', () => {
+    const ctx = getSeasonalContext({ date: dateOf(9, 10), state: 'FL', homeYearBuilt: 1985 });
+    expect(ctx.regional_season).toBe('hurricane_season');
+    expect(ctx.active_seasons).toContain('hurricane_season');
+    expect(ctx.active_seasons).not.toContain('smoke_season');
+    expect(ctx.seasonal_tip).toMatch(/hurricane season/i);
+    expect(ctx.home_specific_tip).toMatch(/1985/);
+    expect(ctx.urgency).toBe('high');
+    expect(ctx.suggested_gig_categories).toEqual(OVERLAYS.hurricane_season.gigs.categories);
+    // The base key stays a base key for the checklist and health score.
+    expect(['smoke_season', 'fall_prep', 'summer_dry']).toContain(ctx.primary_season);
+    expect(ctx.primary_season).not.toBe('smoke_season');
+  });
+
+  it('Phoenix in July leads with heat, Minneapolis in January with blizzards, Anchorage with the deep freeze', () => {
+    expect(getSeasonalContext({ date: dateOf(7, 15), state: 'AZ' }).regional_season).toBe('heat_season');
+    expect(getSeasonalContext({ date: dateOf(1, 10), latitude: 44.98, longitude: -93.27 }).regional_season).toBe('blizzard_season');
+    expect(getSeasonalContext({ date: dateOf(1, 10), state: 'AK' }).regional_season).toBe('freeze_season');
+    expect(getSeasonalContext({ date: dateOf(4, 10), state: 'OK' }).regional_season).toBe('tornado_season');
+    // In the desert Southwest heat outranks the monsoon as the lead; the monsoon still rides along.
+    const nm = getSeasonalContext({ date: dateOf(8, 10), state: 'NM' });
+    expect(nm.regional_season).toBe('heat_season');
+    expect(nm.active_seasons).toContain('monsoon_season');
+  });
+
+  it('Hawaii never hears about freezes, and says nothing when no season applies', () => {
+    const jan = getSeasonalContext({ date: dateOf(1, 10), state: 'HI' });
+    expect(jan.active_seasons).not.toContain('winter_ice');
+    expect(jan.seasonal_tip).toBeNull();
+    expect(jan.first_action_nudge).toBeNull();
+    const aug = getSeasonalContext({ date: dateOf(8, 10), state: 'HI' });
+    expect(aug.regional_season).toBe('hurricane_season');
+  });
+
+  it('the default copy outside the PNW carries no local statistics', () => {
+    for (const state of ['TX', 'NY', 'OH', 'CO', 'GA']) {
+      for (const month of [1, 4, 7, 10, 12]) {
+        const ctx = getSeasonalContext({ date: dateOf(month, 15), state, homeYearBuilt: 1975 });
+        for (const text of [ctx.seasonal_tip, ctx.home_specific_tip]) {
+          if (text) expect(text).not.toMatch(/Portland|Vancouver|Clark County|3–5 ice events/);
+        }
+      }
+    }
   });
 });
