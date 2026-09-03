@@ -268,7 +268,7 @@ export default function SuggestedSlots({
             ))}
           </div>
           {/* Sticky footer: design shows a single full-width SecondaryBtn "Send proposal to members" */}
-          <div className="sticky bottom-0 -mx-1 bg-gradient-to-t from-app-bg via-app-bg/95 to-transparent pb-1 pt-3">
+          <div className="sticky bottom-[var(--fab-lift,0px)] -mx-1 bg-gradient-to-t from-app-bg via-app-bg/95 to-transparent pb-1 pt-3">
             <button
               type="button"
               onClick={onSendProposal}

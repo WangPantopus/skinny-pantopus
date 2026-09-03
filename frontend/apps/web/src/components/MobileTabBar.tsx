@@ -5,6 +5,7 @@
 // mobile web they used to hide behind the hamburger, which made the app
 // read as a single long page. Desktop keeps the sidebar (AppShell).
 
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { NavIcons } from '@/lib/icons';
 
@@ -34,6 +35,13 @@ export default function MobileTabBar({ unread = 0 }: { unread?: number }) {
   const router = useRouter();
   const active = activeMobileTab(pathname);
 
+  // The sidebar prefetches each tab on hover; phones have no hover, so
+  // warm all four once instead of giving the slowest connections the
+  // coldest navigation.
+  useEffect(() => {
+    MOBILE_TABS.forEach((tab) => router.prefetch(tab.href));
+  }, [router]);
+
   return (
     <nav
       aria-label="Primary"
@@ -52,7 +60,7 @@ export default function MobileTabBar({ unread = 0 }: { unread?: number }) {
                 aria-current={isActive ? 'page' : undefined}
                 data-testid={`mobile-tab-${tab.key}`}
                 className={`relative flex w-full flex-col items-center gap-0.5 py-2 text-[11px] font-medium leading-none transition-colors ${
-                  isActive ? 'text-primary-600' : 'text-app-muted'
+                  isActive ? 'text-primary-700 dark:text-primary-400' : 'text-app-text-secondary'
                 }`}
               >
                 <Icon className="h-6 w-6" strokeWidth={isActive ? 2.25 : 1.75} aria-hidden />

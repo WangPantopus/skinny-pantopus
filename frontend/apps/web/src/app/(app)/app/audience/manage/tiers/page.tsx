@@ -189,7 +189,7 @@ export default function ManageTiersPage() {
             ))}
         </div>
 
-        <footer className="sticky bottom-0 -mx-6 border-t border-app-strong bg-app/95 px-6 py-3 backdrop-blur">
+        <footer className="sticky bottom-[var(--fab-lift,0px)] -mx-6 border-t border-app-strong bg-app/95 px-6 py-3 backdrop-blur">
           <div className="flex items-center justify-between">
             <p className="text-sm text-app-secondary">
               {dirtyTierIds.length === 0

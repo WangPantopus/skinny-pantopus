@@ -530,7 +530,7 @@ export default function MemberHoursEditor({ memberId }: { memberId: string }) {
       </div>
 
       {/* Sticky save bar */}
-      <div className="sticky bottom-0 left-0 right-0 mt-2 border-t border-app-border bg-app-surface/95 px-1 py-3 backdrop-blur">
+      <div className="sticky bottom-[var(--fab-lift,0px)] left-0 right-0 mt-2 border-t border-app-border bg-app-surface/95 px-1 py-3 backdrop-blur">
         <div className="mx-auto max-w-2xl">
           <PrimaryButton
             onClick={save}

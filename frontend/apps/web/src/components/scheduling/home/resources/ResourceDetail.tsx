@@ -420,7 +420,7 @@ export default function ResourceDetail({
       )}
 
       {/* Sticky footer */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-app-border bg-app-surface/95 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-20 border-t border-app-border bg-app-surface/95 backdrop-blur">
         <div className="mx-auto max-w-2xl px-4 py-3">
           {fullyBookedToday && nextOpening ? (
             <PrimaryButton

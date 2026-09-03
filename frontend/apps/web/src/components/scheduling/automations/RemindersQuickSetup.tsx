@@ -337,7 +337,7 @@ export default function RemindersQuickSetup() {
       </p>
 
       {/* Sticky save bar */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-app-border bg-app-surface/95 backdrop-blur lg:left-60">
+      <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-10 border-t border-app-border bg-app-surface/95 backdrop-blur lg:left-60">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           {saved && !dirty ? (
             <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-app-success">

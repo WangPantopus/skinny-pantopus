@@ -347,7 +347,7 @@ export default function RescheduleFlow({ token }: { token: string }) {
 
       {/* Frame 8: sticky "Message host" footer when cutoff */}
       {isCutoff && (
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-app-border bg-app-surface/97 px-4 py-3 pb-5 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-10 border-t border-app-border bg-app-surface/97 px-4 py-3 pb-5 backdrop-blur">
           <div className="mx-auto max-w-md">
             <OpenInAppButton
               appUrl={buildBookingManageAppUrl(token)}

@@ -141,6 +141,9 @@ export default function PlaceDashboardView({
                   // a single one keeps its card so the group never looks bare.
                   const unavailable = group.sections.filter(isUnavailableSection);
                   const fold = unavailable.length >= 2;
+                  // One section's reason must not be printed under another's name.
+                  const reasons = Array.from(new Set(unavailable.map((s) => s.unavailable_reason).filter(Boolean)));
+                  const sharedReason = reasons.length === 1 ? reasons[0] ?? null : null;
                   return (
                     <>
                       {group.sections
@@ -148,7 +151,7 @@ export default function PlaceDashboardView({
                         .map((section) => (
                           <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim })}</Fragment>
                         ))}
-                      {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={unavailable[0]?.unavailable_reason ?? null} onOpen={onOpen} /> : null}
+                      {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={sharedReason} onOpen={onOpen} /> : null}
                     </>
                   );
                 })()}

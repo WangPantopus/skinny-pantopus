@@ -254,7 +254,7 @@ export default function NeighborMessageComposeView({
       </div>
 
       {/* Pinned send bar */}
-      <div className="sticky bottom-0 px-4 sm:px-5 pt-3 pb-6 bg-app-bg/90 supports-[backdrop-filter]:bg-app-bg/75 backdrop-blur-md border-t border-app-border">
+      <div className="sticky bottom-[var(--fab-lift,0px)] px-4 sm:px-5 pt-3 pb-6 bg-app-bg/90 supports-[backdrop-filter]:bg-app-bg/75 backdrop-blur-md border-t border-app-border">
         <button
           type="button"
           onClick={onSend}

@@ -351,7 +351,7 @@ export default function RefundPolicyEditor({
       </p>
 
       {/* Sticky save bar. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-app-border-subtle bg-gradient-to-t from-app-bg via-app-bg to-transparent px-4 pb-6 pt-3 lg:left-60">
+      <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-30 border-t border-app-border-subtle bg-gradient-to-t from-app-bg via-app-bg to-transparent px-4 pb-6 pt-3 lg:left-60">
         <div className="mx-auto max-w-6xl lg:pl-8">
           <button
             type="button"

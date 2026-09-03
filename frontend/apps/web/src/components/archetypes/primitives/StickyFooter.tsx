@@ -45,7 +45,7 @@ export default function StickyFooter({
 }: StickyFooterProps) {
   return (
     <div
-      className={`sticky bottom-0 left-0 right-0 z-10 bg-app-surface/95 backdrop-blur-md border-t border-app-border px-4 py-3 ${className}`}
+      className={`sticky bottom-[var(--fab-lift,0px)] left-0 right-0 z-10 bg-app-surface/95 backdrop-blur-md border-t border-app-border px-4 py-3 ${className}`}
     >
       {helperText ? (
         <p className="text-xs text-app-text-secondary text-center mb-2">{helperText}</p>

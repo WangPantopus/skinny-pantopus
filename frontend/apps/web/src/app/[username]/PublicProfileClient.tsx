@@ -533,7 +533,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       </main>
 
       {!showOwnerOnly && (
-        <div className="fixed bottom-0 left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
+        <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
           <div className="max-w-lg mx-auto grid grid-cols-2 gap-2">
             <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>
             <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>

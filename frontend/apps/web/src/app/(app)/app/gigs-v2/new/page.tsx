@@ -101,7 +101,7 @@ function UndoToast({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
+    <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 z-50">
       <div className="mx-auto max-w-xl bg-gray-900 rounded-t-xl px-6 pt-4 pb-6 shadow-2xl">
         {phase === 'notifying' ? (
           <p className="text-white font-semibold text-center">✓ Top matches being notified</p>

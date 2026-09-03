@@ -310,7 +310,7 @@ function HubFooterCTA({
 }) {
   const tk = pillarTokens(pillar);
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-app-border bg-white/90 px-4 pb-6 pt-3 backdrop-blur-md">
+    <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 z-20 border-t border-app-border bg-white/90 px-4 pb-6 pt-3 backdrop-blur-md">
       <button
         type="button"
         onClick={paused ? onResume : onShare}

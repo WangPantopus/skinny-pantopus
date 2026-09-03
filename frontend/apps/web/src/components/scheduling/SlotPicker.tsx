@@ -837,7 +837,7 @@ export default function SlotPicker({
       {/* Slot-just-taken floating WARN toast (Frame 6) */}
       {hasTakenSlots && (
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-6"
+          className="pointer-events-none fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-30 flex justify-center px-4 pb-6"
           aria-live="assertive"
           aria-atomic="true"
         >

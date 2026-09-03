@@ -205,7 +205,7 @@ const EXAMPLE_READINGS: { icon: LucideIcon; label: string; value: string; tone: 
 
 const TONE_DOT: Record<'good' | 'watch' | 'neutral', string> = {
   good: 'bg-app-home',
-  watch: 'bg-amber-500',
+  watch: 'bg-app-warning',
   neutral: 'bg-app-text-muted',
 };
 
@@ -524,7 +524,7 @@ function ShareAddressLink({ address }: { address: string }) {
 // ── Sticky wall bar ─────────────────────────────────────────
 function WallBar({ onWall, shareAddress }: { onWall: () => void; shareAddress: string }) {
   return (
-    <div className="sticky bottom-0 left-0 right-0 -mx-5 px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-app-surface/95 backdrop-blur border-t border-app-border sm:rounded-t-2xl sm:border-x sm:shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
+    <div className="sticky bottom-[var(--fab-lift,0px)] left-0 right-0 -mx-5 px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-app-surface/95 backdrop-blur border-t border-app-border sm:rounded-t-2xl sm:border-x sm:shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
       <div className="flex items-center gap-3.5">
         <div className="flex-1 min-w-0">
           <p className="text-[14.5px] font-semibold text-app-text leading-[19px] -tracking-[0.01em]">

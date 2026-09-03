@@ -373,7 +373,7 @@ export default function EventDetailRsvp({
 
       {/* footer actions */}
       {canEdit && (
-        <div className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-2xl items-center gap-2.5 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-10 mx-auto flex max-w-2xl items-center gap-2.5 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
           <button
             onClick={() => setEditOpen(true)}
             className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border-strong bg-app-surface text-sm font-bold text-app-text-secondary"

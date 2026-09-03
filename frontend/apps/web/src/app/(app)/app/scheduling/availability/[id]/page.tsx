@@ -522,7 +522,7 @@ export default function AvailabilityEditorPage() {
 
       {/* Sticky save bar — hours tab (not in isUnset state) */}
       {tab === "hours" && !isUnset && (
-        <div className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
+        <div className="sticky bottom-[var(--fab-lift,0px)] z-10 -mx-4 mt-6 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
           <button
             type="button"
             onClick={saveHours}

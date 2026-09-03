@@ -129,6 +129,12 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --app-bg: 2 6 23;
+    /* Identity tints: deep versions of the pillar colours so text tokens
+       that flip (text-app-text etc.) stay readable on top. Matches the
+       iOS asset catalogue's dark appearance for Identity/HomeBg. */
+    --color-identity-personal-bg: #122540;
+    --color-identity-home-bg: #102A1C;
+    --color-identity-business-bg: #241A3D;
     --app-surface: 15 23 42;
     --app-surface-raised: 30 41 59;
     --app-surface-sunken: 15 23 42;

@@ -471,7 +471,7 @@ export default function ConfirmFlow({
 
       {/* Sticky CTA — hidden on the payment step (CheckoutPanel owns its button) */}
       {step !== "payment" && (
-        <div className="sticky bottom-0 border-t border-app-border bg-app-surface/95 px-4 py-3 pb-5 backdrop-blur">
+        <div className="sticky bottom-[var(--fab-lift,0px)] border-t border-app-border bg-app-surface/95 px-4 py-3 pb-5 backdrop-blur">
           {submitting ? (
             <div className="flex h-12 w-full items-center justify-center rounded-xl bg-app-surface-sunken text-[13px] font-semibold text-app-text-muted">
               Submitting your booking…

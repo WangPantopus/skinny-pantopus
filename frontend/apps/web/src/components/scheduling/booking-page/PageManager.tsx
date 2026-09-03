@@ -643,7 +643,7 @@ export default function PageManager() {
 
       {/* Sticky save bar */}
       {showForm && (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
+        <div className="sticky bottom-[var(--fab-lift,0px)] -mx-4 mt-4 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
           <button
             type="button"
             onClick={handleSave}

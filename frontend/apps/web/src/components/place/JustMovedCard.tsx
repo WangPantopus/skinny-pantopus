@@ -25,9 +25,13 @@ const DONE_KEY = 'pantopus_just_moved_done';
 /** True when the move-in date is within the last 60 days (or up to 14 days ahead). */
 export function isRecentMove(moveInDate: string | null | undefined, now = new Date()): boolean {
   if (!moveInDate) return false;
-  const t = new Date(`${String(moveInDate).slice(0, 10)}T12:00:00`).getTime();
-  if (!Number.isFinite(t)) return false;
-  const days = (now.getTime() - t) / 86400000;
+  // Whole calendar days, so the answer never flips mid-day and day 60 is
+  // inclusive on every platform (Android and iOS count the same way).
+  const [y, m, d] = String(moveInDate).slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const start = Date.UTC(y, m - 1, d);
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today - start) / 86400000);
   return days >= -14 && days <= JUST_MOVED_WINDOW_DAYS;
 }
 
@@ -121,14 +125,14 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[18px] font-bold leading-[24px] -tracking-[0.015em] text-app-text text-balance">Your first week at this address</p>
-            <p className="mt-1 text-[13.5px] leading-[19px] text-app-text-secondary">Five things it can do for you now, before there are neighbors to meet.</p>
+            <p className="mt-1 text-[13.5px] leading-[19px] text-app-text-strong">Five things it can do for you now, before there are neighbors to meet.</p>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-app-surface" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={doneCount} aria-label="First week progress">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-app-text/15" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={doneCount} aria-label="First week progress">
             <div className="h-full rounded-full bg-app-home transition-[width] duration-300" style={{ width: `${(doneCount / total) * 100}%` }} />
           </div>
-          <span className="text-[12.5px] font-semibold tabular-nums text-app-text-secondary" data-testid="just-moved-progress">{doneCount} of {total} done</span>
+          <span className="text-[12.5px] font-semibold tabular-nums text-app-text-strong" data-testid="just-moved-progress">{doneCount} of {total} done</span>
         </div>
       </div>
 

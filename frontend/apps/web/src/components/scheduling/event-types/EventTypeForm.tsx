@@ -588,7 +588,7 @@ export default function EventTypeForm({ id }: { id: string }) {
       </div>
 
       {/* Sticky save bar */}
-      <div className="sticky bottom-0 z-10 -mx-4 mt-4 border-t border-app-border bg-app-bg/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-[var(--fab-lift,0px)] z-10 -mx-4 mt-4 border-t border-app-border bg-app-bg/95 px-4 py-3 backdrop-blur">
         <button
           type="button"
           onClick={handleSave}

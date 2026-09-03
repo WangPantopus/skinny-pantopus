@@ -388,7 +388,7 @@ export default function VisitDetail({
       )}
 
       {/* Sticky footer */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-app-border bg-app-surface/95 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-20 border-t border-app-border bg-app-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3">
           {isPast ? (
             <SecondaryButton icon={Repeat} onClick={onBookAgain}>

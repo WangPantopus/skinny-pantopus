@@ -83,7 +83,7 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   };
 
   return (
-    <footer className="bg-surface border-t border-app sticky bottom-0">
+    <footer className="bg-surface border-t border-app sticky bottom-[var(--fab-lift,0px)]">
       <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
         {error && (
           <div className="mb-2 text-xs text-red-600">{error}</div>

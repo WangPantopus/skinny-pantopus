@@ -538,7 +538,7 @@ export default function RecurringSetup() {
         )}
 
         {/* Sticky confirm footer */}
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-10 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
           <div className="mx-auto max-w-md space-y-2">
             <button
               type="button"
@@ -709,7 +709,7 @@ export default function RecurringSetup() {
       </div>
 
       {/* Sticky footer */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-[var(--fab-lift,0px)] z-10 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto max-w-md space-y-2">
           {isPartial ? (
             // Frame 3: dual CTA

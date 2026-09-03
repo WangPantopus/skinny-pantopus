@@ -452,7 +452,7 @@ export default function BookingDetailPage() {
 
 function Dock({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky bottom-0 z-20 mt-6 flex gap-2.5 border-t border-app-border bg-app-surface/95 py-3 backdrop-blur-md">
+    <div className="sticky bottom-[var(--fab-lift,0px)] z-20 mt-6 flex gap-2.5 border-t border-app-border bg-app-surface/95 py-3 backdrop-blur-md">
       {children}
     </div>
   );
