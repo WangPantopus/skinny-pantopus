@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -28,6 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -256,14 +260,15 @@ fun JustMovedCard(
                             Modifier.padding(4.dp).size(28.dp).clip(CircleShape)
                                 .background(if (checked) PantopusColors.home else PantopusColors.appSurface)
                                 .border(2.dp, if (checked) PantopusColors.home else PantopusColors.appBorder, CircleShape)
-                                .clickable(enabled = !auto) {
+                                .toggleable(value = checked, enabled = !auto, role = Role.Checkbox) {
                                     done = if (step.id in done) done - step.id else done + step.id
                                     store.setDone(done)
                                 }
+                                .semantics { contentDescription = step.label }
                                 .testTag("place.justMoved.check.${step.id.name.lowercase()}"),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (checked) PantopusIconImage(PantopusIcon.Check, "Done", size = 14.dp, strokeWidth = 3f, tint = Color.White)
+                        if (checked) PantopusIconImage(PantopusIcon.Check, null, size = 14.dp, strokeWidth = 3f, tint = Color.White)
                     }
                     Row(
                         modifier =

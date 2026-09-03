@@ -344,7 +344,7 @@ private fun PreviewBody(
     onCreateAccount: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
                 Box(
@@ -608,7 +608,7 @@ private fun RegionBody(
     onBrowse: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp)) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 28.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Box(
                 modifier = Modifier.size(34.dp).clip(CircleShape).background(PantopusColors.appSurface).clickable(onClick = onBack),

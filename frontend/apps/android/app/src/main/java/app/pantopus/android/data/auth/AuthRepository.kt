@@ -1368,7 +1368,7 @@ private fun UserProfile.toSessionUser(): UserDto =
     UserDto(
         id = id,
         email = email,
-        displayName = name.takeIf { it.isNotEmpty() },
+        displayName = name?.takeIf { it.isNotEmpty() },
         avatarUrl = avatarUrl ?: profilePictureUrl,
         isAdmin = role == "admin",
         username = username,

@@ -53,10 +53,13 @@ data class UserProfile(
     val id: String,
     val email: String,
     val username: String,
-    val firstName: String,
+    // Slim sign-up writes null for all three (backend/routes/users.js
+    // stores `normalizedFirst || null`); the profile route returns the
+    // columns raw. Non-null here crashed the You tab for those accounts.
+    val firstName: String?,
     val middleName: String?,
-    val lastName: String,
-    val name: String,
+    val lastName: String?,
+    val name: String?,
     val phoneNumber: String?,
     val dateOfBirth: String?,
     val address: String?,

@@ -127,7 +127,8 @@ data class MailDetail(
     data class Sender(
         val id: String,
         val username: String,
-        val name: String,
+        /** Raw `users.name`; null for slim sign-up accounts (v2 already allows this). */
+        val name: String?,
     )
 }
 

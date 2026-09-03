@@ -570,10 +570,10 @@ class EditProfileViewModel
             if (_avatarUrl.value == null) {
                 _avatarUrl.value = profile.profilePictureUrl ?: profile.avatarUrl
             }
-            _avatarInitial.value = displayInitial(profile.firstName, profile.name, profile.username)
-            seed(EditProfileField.FirstName, profile.firstName)
+            _avatarInitial.value = displayInitial(profile.firstName.orEmpty(), profile.name.orEmpty(), profile.username)
+            seed(EditProfileField.FirstName, profile.firstName.orEmpty())
             seed(EditProfileField.MiddleName, profile.middleName.orEmpty())
-            seed(EditProfileField.LastName, profile.lastName)
+            seed(EditProfileField.LastName, profile.lastName.orEmpty())
             seed(EditProfileField.Bio, profile.bio.orEmpty())
             seed(EditProfileField.Tagline, profile.tagline.orEmpty())
             seed(EditProfileField.PhoneNumber, profile.phoneNumber.orEmpty())

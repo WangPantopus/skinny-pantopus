@@ -132,7 +132,8 @@ data class HomeDetail(
 data class HomeUserRef(
     val id: String,
     val username: String,
-    val name: String,
+    /** Raw `users.name`; null for accounts created by slim sign-up. */
+    val name: String?,
 )
 
 @JsonClass(generateAdapter = true)
@@ -187,9 +188,10 @@ data class HomePublicProfile(
     data class VerifiedOwner(
         val id: String,
         val username: String,
-        val name: String,
-        @Json(name = "first_name") val firstName: String,
-        @Json(name = "last_name") val lastName: String,
+        // All three are null for slim sign-up accounts; never assume a name.
+        val name: String?,
+        @Json(name = "first_name") val firstName: String?,
+        @Json(name = "last_name") val lastName: String?,
         @Json(name = "profile_picture_url") val profilePictureUrl: String?,
     )
 

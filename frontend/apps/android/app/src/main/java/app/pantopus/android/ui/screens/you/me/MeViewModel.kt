@@ -162,7 +162,7 @@ class MeViewModel
             stats: UserStatsDto?,
         ): MeIdentityContent {
             val name =
-                profile.name.ifEmpty {
+                profile.name.orEmpty().ifEmpty {
                     listOfNotNull(profile.firstName, profile.lastName)
                         .filter { it.isNotEmpty() }
                         .joinToString(" ")

@@ -177,7 +177,9 @@ internal fun PlaceDashboardContent(
         item { PrivacyMirrorRow(onOpen = onOpenPrivacyMirror) }
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
         item {
-            JustMovedCard(
+            // Per-home ticks and dismissal are keyed by id; never let the
+            // empty default (previews, snapshots) collapse households together.
+            if (homeId.isNotBlank()) JustMovedCard(
                 homeId = homeId,
                 moveInDate = moveInDate,
                 onOpenDetail = onOpenDetail,
