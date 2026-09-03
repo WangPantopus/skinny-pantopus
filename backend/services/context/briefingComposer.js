@@ -187,7 +187,11 @@ function composeTemplate(rankedOutput, options = {}) {
 
   let body = parts.join(' ');
 
-  const remainingCount = signals.length - 3;
+  // Only signals the summary could have shown and did not: the weather
+  // intro already covers current conditions and the seasonal tip has its
+  // own card, so neither counts as "one more item".
+  const shownSignals = Math.min(weatherSignals.length, 1) + Math.min(nonWeatherSignals.length, maxOtherSignals);
+  const remainingCount = weatherSignals.length + nonWeatherSignals.length - shownSignals;
   if (remainingCount > 0) {
     body += ` Plus ${remainingCount} more item${remainingCount > 1 ? 's' : ''} to check.`;
   }

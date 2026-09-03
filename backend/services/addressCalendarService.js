@@ -198,9 +198,16 @@ async function setPickupDay(home, { weekday, recyclingEveryOtherWeek = true, use
   } else {
     rows.push({ ...base, kind: 'recycling', title: 'Recycling day', detail: 'Weekly, with the garbage.', rrule: `FREQ=WEEKLY;BYDAY=${wd}` });
   }
-  const { error } = await supabaseAdmin
-    .from('AddressCalendarRule')
-    .upsert(rows, { onConflict: 'scope_key,kind' });
+  // The uniqueness index on (scope_key, kind) is partial (WHERE scope_type =
+  // 'home'), and PostgREST cannot express the predicate in ON CONFLICT, so an
+  // upsert against it fails to resolve its conflict target. A delete then an
+  // insert would leave the household with no reminders if the insert failed.
+  // `set_home_pickup_rules` (migration 199) swaps the rules in one
+  // transaction: either the new pair lands or nothing changes.
+  const { error } = await supabaseAdmin.rpc('set_home_pickup_rules', {
+    p_home_id: String(home.id),
+    p_rows: rows.map(({ scope_type: _scopeType, scope_key: _scopeKey, ...rest }) => rest),
+  });
   if (error) throw new Error(error.message);
   return { weekday: wd, dtstart, rules: rows.length };
 }
