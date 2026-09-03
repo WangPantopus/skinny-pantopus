@@ -178,7 +178,8 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
 public struct HomeUserRef: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let username: String
-    public let name: String
+    /// Raw `users.name`; nil for accounts created by slim sign-up.
+    public let name: String?
 }
 
 /// Single occupant row.
@@ -254,9 +255,10 @@ public struct HomePublicProfileResponse: Decodable, Sendable, Hashable {
         public struct VerifiedOwner: Decodable, Sendable, Hashable, Identifiable {
             public let id: String
             public let username: String
-            public let name: String
-            public let firstName: String
-            public let lastName: String
+            // All three are nil for slim sign-up accounts; never assume a name.
+            public let name: String?
+            public let firstName: String?
+            public let lastName: String?
             public let profilePictureURL: String?
 
             private enum CodingKeys: String, CodingKey {
@@ -311,6 +313,9 @@ public struct CreateHomeRequest: Encodable, Sendable {
     /// `role` — one of `owner | renter | household | property_manager |
     /// guest` (`backend/routes/home.js:102`).
     public let role: String?
+    /// `move_in_date` (YYYY-MM-DD). Set from the wizard's "Just moved in"
+    /// switch; drives the first-week card. Web and Android write it too.
+    public let moveInDate: String?
     public let attomPropertyDetail: JSONEncodable?
 
     public init(
@@ -332,6 +337,7 @@ public struct CreateHomeRequest: Encodable, Sendable {
         yearBuilt: Int? = nil,
         isOwner: Bool? = nil,
         role: String? = nil,
+        moveInDate: String? = nil,
         attomPropertyDetail: JSONEncodable? = nil
     ) {
         self.address = address
@@ -352,6 +358,7 @@ public struct CreateHomeRequest: Encodable, Sendable {
         self.yearBuilt = yearBuilt
         self.isOwner = isOwner
         self.role = role
+        self.moveInDate = moveInDate
         self.attomPropertyDetail = attomPropertyDetail
     }
 
@@ -369,6 +376,7 @@ public struct CreateHomeRequest: Encodable, Sendable {
         case yearBuilt = "year_built"
         case isOwner = "is_owner"
         case role
+        case moveInDate = "move_in_date"
         case attomPropertyDetail = "attom_property_detail"
     }
 }

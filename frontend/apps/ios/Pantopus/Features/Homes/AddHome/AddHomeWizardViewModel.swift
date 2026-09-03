@@ -390,6 +390,20 @@ final class AddHomeWizardViewModel: WizardModel {
         form.details.description = value
     }
 
+    func updateJustMoved(_ value: Bool) {
+        form.details.justMoved = value
+    }
+
+    /// Today as the server's YYYY-MM-DD, in the device's own day.
+    private static func isoToday(_ now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: now)
+    }
+
     private func digitsOnly(_ value: String) -> String {
         value.filter(\.isNumber)
     }
@@ -799,6 +813,7 @@ final class AddHomeWizardViewModel: WizardModel {
             yearBuilt: Int(details.yearBuilt),
             isOwner: role == .owner,
             role: role.claimedRole,
+            moveInDate: details.justMoved ? Self.isoToday() : nil,
             attomPropertyDetail: propertySuggestions?.attomPropertyDetail.map { JSONEncodable($0) }
         )
         do {

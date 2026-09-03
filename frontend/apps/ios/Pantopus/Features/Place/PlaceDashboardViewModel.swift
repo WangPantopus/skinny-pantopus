@@ -92,7 +92,9 @@ final class PlaceDashboardViewModel {
             let intelligence: PlaceIntelligence = try await api.request(
                 PlaceEndpoints.intelligence(homeId: homeId)
             )
-            moveInDate = await detail?.home.base.moveInDate
+            // Only a successful detail read may change the date; a failed one
+            // keeps the last known value so the card does not blink out.
+            if let detail = await detail { moveInDate = detail.home.base.moveInDate }
             state = .loaded(intelligence)
         } catch let error as APIError {
             state = .error(message: error.errorDescription ?? "Couldn't load your place.")

@@ -163,6 +163,23 @@ struct AddHomeDetailsSection: View {
                 isMultiline: true,
                 identifier: "addHome_description"
             )
+
+            // Wedge v2 D5 (movers): the only place iOS writes `move_in_date`.
+            Toggle(isOn: Binding(
+                get: { viewModel.form.details.justMoved },
+                set: { viewModel.updateJustMoved($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Just moved in")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                    Text("Shows a first-week checklist on your Place page: pickup day, mail, utilities, voting, the block.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+            }
+            .tint(Theme.Color.home)
+            .accessibilityIdentifier("addHome_justMoved")
         }
     }
 

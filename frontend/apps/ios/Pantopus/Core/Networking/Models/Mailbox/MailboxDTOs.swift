@@ -175,7 +175,8 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         public struct Sender: Decodable, Sendable, Hashable, Identifiable {
             public let id: String
             public let username: String
-            public let name: String
+            /// Raw `users.name`; nil for slim sign-up accounts.
+            public let name: String?
         }
 
         private enum Keys: String, CodingKey {

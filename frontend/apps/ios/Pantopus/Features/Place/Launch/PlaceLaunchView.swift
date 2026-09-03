@@ -203,6 +203,8 @@ struct PlaceLaunchView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(reading.label): \(reading.value)")
             }
 
             Text("Yours takes about three seconds and stays on this screen until you save it.")
@@ -216,7 +218,7 @@ struct PlaceLaunchView: View {
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Example of what an address shows")
         .accessibilityIdentifier("startExampleCard")
     }

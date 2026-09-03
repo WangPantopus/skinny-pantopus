@@ -155,6 +155,9 @@ public struct AddHomeDetailsFields: Codable, Sendable, Equatable {
     public var lotSqFt: String
     public var yearBuilt: String
     public var description: String
+    /// Wedge v2 D5 (movers): stamps `move_in_date` = today, which drives
+    /// the first-week checklist. Parity with Android's `justMoved` switch.
+    public var justMoved: Bool
 
     public init(
         nickname: String = "",
@@ -164,7 +167,8 @@ public struct AddHomeDetailsFields: Codable, Sendable, Equatable {
         sqFt: String = "",
         lotSqFt: String = "",
         yearBuilt: String = "",
-        description: String = ""
+        description: String = "",
+        justMoved: Bool = false
     ) {
         self.nickname = nickname
         self.homeType = homeType
@@ -174,6 +178,7 @@ public struct AddHomeDetailsFields: Codable, Sendable, Equatable {
         self.lotSqFt = lotSqFt
         self.yearBuilt = yearBuilt
         self.description = description
+        self.justMoved = justMoved
     }
 }
 

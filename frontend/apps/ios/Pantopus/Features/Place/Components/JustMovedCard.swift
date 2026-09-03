@@ -21,11 +21,17 @@ enum JustMovedStepId: String, CaseIterable {
 /// True when the move-in date is within the last 60 days (or up to 14 days ahead).
 func isRecentMove(_ moveInDate: String?, now: Date = Date()) -> Bool {
     guard let moveInDate, moveInDate.count >= 10 else { return false }
+    // Server dates are ISO and Gregorian whatever the device region says.
     let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = Calendar(identifier: .gregorian)
     formatter.dateFormat = "yyyy-MM-dd"
     formatter.timeZone = .current
     guard let day = formatter.date(from: String(moveInDate.prefix(10))) else { return false }
-    let days = now.timeIntervalSince(day) / 86_400
+    // Whole calendar days, day 60 inclusive: the same window as web and Android.
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .current
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: day), to: calendar.startOfDay(for: now)).day ?? 0
     return days >= -14 && days <= 60
 }
 
@@ -182,14 +188,14 @@ struct JustMovedCard: View {
                     Text("Five things it can do for you now, before there are neighbors to meet.")
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .foregroundStyle(Theme.Color.appTextStrong)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 12) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.Color.appSurface)
+                        Capsule().fill(Theme.Color.appText.opacity(0.15))
                         Capsule().fill(Theme.Color.home)
                             .frame(width: geo.size.width * CGFloat(doneCount) / CGFloat(Self.steps.count))
                     }
@@ -198,7 +204,7 @@ struct JustMovedCard: View {
                 Text("\(doneCount) of \(Self.steps.count) done")
                     .font(.system(size: 12.5, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .foregroundStyle(Theme.Color.appTextStrong)
                     .accessibilityIdentifier("place.justMoved.progress")
             }
         }

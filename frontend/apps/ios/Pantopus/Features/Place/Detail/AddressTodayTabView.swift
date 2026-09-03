@@ -15,6 +15,7 @@ struct AddressTodayTabView: View {
     @Environment(RootTabModel.self) private var rootTabs
     @State private var homeId: String?
     @State private var resolved = false
+    @State private var loadFailed = false
     @State private var detail: PlaceDetailViewModel?
 
     var body: some View {
@@ -56,6 +57,8 @@ struct AddressTodayTabView: View {
             PlaceDetailSkeleton()
         } else if let detail {
             AddressTodayLoaded(viewModel: detail)
+        } else if loadFailed {
+            couldNotLoad
         } else {
             noPlace
         }
@@ -89,12 +92,46 @@ struct AddressTodayTabView: View {
         .accessibilityIdentifier("addressTodayNoPlace")
     }
 
-    private func resolveHome() async {
-        guard !resolved else { return }
-        if let response: MyHomesResponse = try? await APIClient.shared.request(HomesEndpoints.myHomes()) {
+    /// Could not ask which home is primary (offline, a dead spot, a 5xx).
+    /// This is not "no home": say so and offer a retry rather than sending
+    /// a verified resident off to claim an address they already own.
+    private var couldNotLoad: some View {
+        VStack(spacing: 10) {
+            Text("Couldn't load your place")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(Theme.Color.appText)
+            Text("Check your connection and try again.")
+                .font(.system(size: 14))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            PrimaryButton(title: "Try again") { Task { await resolveHome(force: true) } }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+        .padding(.horizontal, 16)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("addressTodayLoadFailed")
+    }
+
+    private func resolveHome(force: Bool = false) async {
+        // A failed lookup never latches: it retries on the next appearance
+        // or on the button. A successful one is final for this view's life.
+        guard force || !resolved || loadFailed else { return }
+        resolved = false
+        loadFailed = false
+        do {
+            let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
             let id = response.homes.first { $0.isPrimaryOwner == true }?.id ?? response.homes.first?.id
             homeId = id
             if let id { detail = PlaceDetailViewModel(homeId: id, group: .today) }
+        } catch is CancellationError {
+            // The view went away mid-request; the next appearance asks again.
+            return
+        } catch {
+            loadFailed = true
         }
         resolved = true
     }
