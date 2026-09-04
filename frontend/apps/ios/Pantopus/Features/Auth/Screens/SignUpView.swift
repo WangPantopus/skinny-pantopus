@@ -92,6 +92,7 @@ struct SignUpView: View {
             .accessibilityIdentifier("signUpTermsCheckbox")
             .padding(.horizontal, Spacing.s4)
         }
+        .navigationBarHidden(true)
         .onAppear { seedInviteCode() }
         .onChange(of: viewModel.didSucceed) { _, succeeded in
             guard succeeded else { return }

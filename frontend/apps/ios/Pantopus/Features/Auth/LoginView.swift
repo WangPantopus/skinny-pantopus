@@ -35,8 +35,7 @@ struct LoginView: View {
                         .padding(.bottom, Spacing.s10)
 
                     VStack(spacing: Spacing.s2) {
-                        Text("WELCOME BACK")
-                            .pantopusTextStyle(.overline)
+                        Text("Welcome back", style: .overline)
                             .foregroundStyle(Theme.Color.primary600)
                             .tracking(1.2)
                         Text("Log in to Pantopus")
@@ -90,23 +89,6 @@ struct LoginView: View {
                         .padding(.bottom, Spacing.s3)
                         .accessibilityIdentifier("loginInfoBanner")
                     }
-
-                    OAuthButtonGroup(
-                        isLoading: viewModel.isLoading,
-                        onGoogle: { signIn(with: .google) },
-                        onApple: { signIn(with: .apple) },
-                        googleIdentifier: "loginGoogleButton",
-                        appleIdentifier: "loginAppleButton",
-                        lastUsed: viewModel.lastUsedOAuthProvider
-                    )
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.bottom, Spacing.s3)
-
-                    AuthOAuthTermsLine(identifier: "loginLegalTermsLine") { document in
-                        path.append(.legal(document))
-                    }
-                    .padding(.horizontal, Spacing.s5)
-                    .padding(.bottom, Spacing.s5)
 
                     VStack(spacing: Spacing.s3) {
                         // `.username` (not `.emailAddress`) so Password AutoFill
@@ -189,6 +171,32 @@ struct LoginView: View {
                         .accessibilityIdentifier("loginResendVerificationButton")
                         .accessibilityLabel("Resend verification email")
                     }
+
+                    // Web's login (`(auth)/login/page.tsx`) separates the two
+                    // sign-in methods with a hairline carrying "Or continue
+                    // with"; the same intent in the iOS idiom.
+                    AuthMethodDivider()
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.top, Spacing.s5)
+                        .padding(.bottom, Spacing.s4)
+
+                    OAuthButtonGroup(
+                        isLoading: viewModel.isLoading,
+                        onGoogle: { signIn(with: .google) },
+                        onApple: { signIn(with: .apple) },
+                        googleIdentifier: "loginGoogleButton",
+                        appleIdentifier: "loginAppleButton",
+                        lastUsed: viewModel.lastUsedOAuthProvider
+                    )
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.bottom, Spacing.s3)
+
+                    // Sits directly under the two OAuth buttons because it
+                    // describes only those two — it travels with them.
+                    AuthOAuthTermsLine(identifier: "loginLegalTermsLine") { document in
+                        path.append(.legal(document))
+                    }
+                    .padding(.horizontal, Spacing.s5)
 
                     HStack(spacing: Spacing.s1) {
                         Text("New to Pantopus?")
@@ -330,22 +338,43 @@ struct LoginView: View {
 
 // MARK: - Login subcomponents
 
-/// Centered brand lockup — 48pt mark + wordmark + tagline. Mirrors
-/// `auth-frames.jsx:75-91`.
+/// Centered brand lockup — the horizontal `PantopusLockup` at 36pt with the
+/// tagline beneath. The canonical lockup owns the mark/wordmark gap and the
+/// x-height optical centring, so no auth screen hand-rolls a stack of its
+/// own; Android's login draws the identical `PantopusLockup(size = 36.dp)`.
 private struct BrandLockup: View {
     var body: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.home, size: 48, color: Theme.Color.primary600)
-                .accessibilityHidden(true)
-            Text("Pantopus")
-                .pantopusTextStyle(.h1)
-                .foregroundStyle(Theme.Color.appText)
+            PantopusLockup(size: 36)
             Text("Your neighborhood, verified.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Pantopus — Your neighborhood, verified.")
+    }
+}
+
+/// Hairline + centred label separating the password form from the OAuth
+/// block, mirroring web's "Or continue with" rule.
+private struct AuthMethodDivider: View {
+    var body: some View {
+        HStack(spacing: Spacing.s3) {
+            line
+            Text("Or continue with")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            line
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Or continue with")
+        .accessibilityIdentifier("loginOAuthDivider")
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(Theme.Color.appBorder)
+            .frame(height: 1)
     }
 }
 
