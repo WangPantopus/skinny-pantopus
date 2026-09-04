@@ -66,8 +66,7 @@ public struct KeyValueBody: View {
             ForEach(sections) { section in
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     if let title = section.title {
-                        Text(title.uppercased())
-                            .pantopusTextStyle(.overline)
+                        Text(title, style: .overline)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     sectionCard(section.rows)

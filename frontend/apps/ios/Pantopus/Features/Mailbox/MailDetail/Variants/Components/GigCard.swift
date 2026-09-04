@@ -34,8 +34,7 @@ struct GigCard<Content: View>: View {
 struct GigSectionLabel: View {
     let text: String
     var body: some View {
-        Text(text)
-            .pantopusTextStyle(.overline)
+        Text(text, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
     }
 }

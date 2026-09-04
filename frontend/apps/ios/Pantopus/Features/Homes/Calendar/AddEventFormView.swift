@@ -115,8 +115,7 @@ private struct EventSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             if let overline {
-                Text(overline)
-                    .pantopusTextStyle(.overline)
+                Text(overline, style: .overline)
                     .foregroundStyle(Theme.Color.homeDark)
                     .accessibilityAddTraits(.isHeader)
             }

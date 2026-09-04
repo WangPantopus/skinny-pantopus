@@ -207,8 +207,7 @@ private struct TodayHero: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s1) {
                 Icon(content.isAlert ? .alertTriangle : .mapPin, size: 12, color: kickerColor)
-                Text(content.kicker)
-                    .pantopusTextStyle(.overline)
+                Text(content.kicker, style: .overline)
                     .foregroundStyle(kickerColor)
             }
 
@@ -295,8 +294,7 @@ private struct HeroChip: View {
                 Circle().fill(dot.foreground).frame(width: 7, height: 7)
             }
             Icon(chip.icon, size: 12, color: Theme.Color.appTextStrong)
-            Text(chip.label)
-                .pantopusTextStyle(.overline)
+            Text(chip.label, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Text(chip.value)
                 .pantopusTextStyle(.caption)
@@ -350,8 +348,7 @@ private struct TodaySectionCard<Content: View>: View {
                 if let accent {
                     Circle().fill(accent.foreground).frame(width: 6, height: 6)
                 }
-                Text(title)
-                    .pantopusTextStyle(.overline)
+                Text(title, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: Spacing.s2)
@@ -418,10 +415,10 @@ private struct SunArcView: View {
                     }
                     .stroke(Theme.Color.warning, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
 
-                    Circle().fill(Theme.Color.warning.opacity(0.18))
+                    Circle().fill(Theme.Color.warningSolid.opacity(0.18))
                         .frame(width: 28, height: 28)
                         .position(x: sunX, y: sunY)
-                    Circle().fill(Theme.Color.warning)
+                    Circle().fill(Theme.Color.warningSolid)
                         .frame(width: 20, height: 20)
                         .position(x: sunX, y: sunY)
                 }
@@ -433,8 +430,7 @@ private struct SunArcView: View {
                 sunLabel(sunSky.sunrise, caption: "Sunrise", alignment: .leading)
                 Spacer(minLength: Spacing.s2)
                 VStack(spacing: 1) {
-                    Text(sunSky.phaseLabel)
-                        .pantopusTextStyle(.overline)
+                    Text(sunSky.phaseLabel, style: .overline)
                         .foregroundStyle(Theme.Color.warning)
                     Text(sunSky.daylight)
                         .pantopusTextStyle(.caption)
@@ -458,8 +454,7 @@ private struct SunArcView: View {
                 .pantopusTextStyle(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.appText)
-            Text(caption)
-                .pantopusTextStyle(.overline)
+            Text(caption, style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
     }
@@ -541,8 +536,7 @@ private struct SeverityPill: View {
     let severity: TodaySignal.Severity
 
     var body: some View {
-        Text(severity.label)
-            .pantopusTextStyle(.overline)
+        Text(severity.label, style: .overline)
             .foregroundStyle(severity.tone.foreground)
             .padding(.vertical, 1)
             .padding(.horizontal, Spacing.s1)

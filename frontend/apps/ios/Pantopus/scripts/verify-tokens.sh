@@ -145,10 +145,10 @@ fi
 # documented in docs/token-drift-typography.md and stay in code untouched
 # until design decides to extend the scale or snap them to canonical.
 #
-# (11, .semibold) is INTENTIONALLY NOT FLAGGED — Pass 2 skipped it
-# because .pantopusTextStyle(.overline) ALSO applies UPPERCASE + 0.06em
-# tracking. Auto-replacing would mutate rendering. Manual review per
-# call site.
+# (11, .semibold) is INTENTIONALLY NOT FLAGGED — the overline role also
+# applies UPPERCASE + 0.06em tracking, so swapping a bare 11/.semibold
+# font for it mutates rendering. Migrate those to `Text(copy, style:
+# .overline)` deliberately, per call site. Rule 5 guards the casing.
 typography_pairs=(
   "size: 30, weight: \.bold"
   "size: 24, weight: \.semibold"
@@ -171,6 +171,26 @@ if [[ -n "$typography_violations" ]]; then
   echo "" >&2
   echo "  Mapping: 30/.bold→.h1  24/.semibold→.h2  20/.semibold→.h3  16/.regular→.body  14/.regular→.small  12/.regular→.caption" >&2
   echo "  (no-weight forms default to .regular: size: 16→.body  size: 14→.small  size: 12→.caption)" >&2
+  status=1
+fi
+
+# --- 5. Overline casing: reject the chain form ------------------------
+#
+# `.overline` is UPPERCASE per the shared typography token. A built `Text`
+# cannot be re-cased (SwiftUI exposes no accessor for its own string), so
+# `Text(...).pantopusTextStyle(.overline)` silently renders whatever casing
+# the call site typed. `Text(copy, style: .overline)` takes the source
+# string and upper-cases it — write the copy in natural case.
+overline_violations=$(grep -rn "\.pantopusTextStyle(\.overline)" \
+  "$FEATURES" "$COMPONENTS" "$APP" \
+  --include='*.swift' "${EXCLUDE_DESIGN[@]}" 2>/dev/null || true)
+
+if [[ -n "$overline_violations" ]]; then
+  echo "✗ verify-tokens: .overline must be built with Text(_:style:) so the role can upper-case it:" >&2
+  echo "$overline_violations" >&2
+  echo "" >&2
+  echo "  Replace: Text(\"Assign to\").pantopusTextStyle(.overline)" >&2
+  echo "  With:    Text(\"Assign to\", style: .overline)" >&2
   status=1
 fi
 

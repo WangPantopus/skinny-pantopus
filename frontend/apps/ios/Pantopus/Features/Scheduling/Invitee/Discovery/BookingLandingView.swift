@@ -190,8 +190,7 @@ struct BookingLandingView: View {
     }
 
     private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .pantopusTextStyle(.overline)
+        Text(text, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .padding(.horizontal, Spacing.s1)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -391,7 +390,7 @@ private struct HostAvatar: View {
     private var verifiedCheck: some View {
         Icon(.check, size: 10, strokeWidth: 4, color: Theme.Color.appTextInverse)
             .frame(width: 18, height: 18)
-            .background(Theme.Color.success)
+            .background(Theme.Color.successSolid)
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2.5))
     }
@@ -462,8 +461,7 @@ struct EventTypeCardRow: View {
     private func modeChip(_ text: String, icon: PantopusIcon) -> some View {
         HStack(spacing: Spacing.s1) {
             Icon(icon, size: 10, strokeWidth: 2.4, color: Theme.Color.primary700)
-            Text(text)
-                .pantopusTextStyle(.overline)
+            Text(text, style: .overline)
                 .foregroundStyle(Theme.Color.primary700)
         }
         .padding(.horizontal, Spacing.s2)

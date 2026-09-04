@@ -223,8 +223,7 @@ struct DisambiguateMailFormView: View {
         @ViewBuilder content: () -> some View
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(overline.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(overline, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             content()

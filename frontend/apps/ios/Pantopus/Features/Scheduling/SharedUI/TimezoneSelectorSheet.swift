@@ -207,8 +207,7 @@ public struct TimezoneSelectorSheet: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .pantopusTextStyle(.overline)
+        Text(title, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .padding(.top, Spacing.s2)
             .padding(.horizontal, Spacing.s1)
@@ -262,8 +261,7 @@ public struct TimezoneSelectorSheet: View {
                         .foregroundStyle(Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                     if detectedChip {
-                        Text("Detected")
-                            .pantopusTextStyle(.overline)
+                        Text("Detected", style: .overline)
                             .foregroundStyle(Theme.Color.primary700)
                             .padding(.horizontal, Spacing.s2)
                             .padding(.vertical, 2)

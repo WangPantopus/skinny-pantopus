@@ -329,7 +329,7 @@ private struct AngleSlot: View {
                             .stroke(Theme.Color.success, lineWidth: 1.5)
                     )
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 16, height: 16)
                     .overlay(Icon(.check, size: 9, color: .white))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -406,8 +406,7 @@ private struct PhotoTile: View {
 
 private struct HeroChip: View {
     var body: some View {
-        Text("HERO")
-            .pantopusTextStyle(.overline)
+        Text("Hero", style: .overline)
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s1)

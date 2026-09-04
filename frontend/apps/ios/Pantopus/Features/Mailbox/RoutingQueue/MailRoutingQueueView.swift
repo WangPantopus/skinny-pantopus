@@ -138,8 +138,7 @@ struct MailRoutingQueueView: View {
             if !entry.previewText.isEmpty || !entry.senderDisplay.isEmpty {
                 previewCard(entry)
             }
-            Text("IS THIS FOR:")
-                .pantopusTextStyle(.overline)
+            Text("Is this for:", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: Spacing.s2) {
@@ -313,7 +312,7 @@ private struct RadioDot: View {
                 .frame(width: 20, height: 20)
             if isSelected {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 10, height: 10)
             }
         }

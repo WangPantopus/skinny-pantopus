@@ -45,8 +45,7 @@ struct DrawerSuggestionCard: View {
 
     private var header: some View {
         HStack {
-            Text("File into")
-                .pantopusTextStyle(.overline)
+            Text("File into", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer()
             HStack(spacing: 3) {

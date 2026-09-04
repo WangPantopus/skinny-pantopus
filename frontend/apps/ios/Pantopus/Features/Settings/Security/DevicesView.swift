@@ -242,8 +242,7 @@ public struct DevicesView: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .pantopusTextStyle(.overline)
+        Text(title, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .textCase(.uppercase)
             .accessibilityAddTraits(.isHeader)

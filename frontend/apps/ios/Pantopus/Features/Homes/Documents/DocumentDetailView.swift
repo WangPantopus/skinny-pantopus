@@ -582,8 +582,7 @@ private struct TagsRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("TAGS")
-                .pantopusTextStyle(.overline)
+            Text("Tags", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s1) {
@@ -612,8 +611,7 @@ private struct LinkedToCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("LINKED TO")
-                .pantopusTextStyle(.overline)
+            Text("Linked to", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: Spacing.s2) {
                 Icon(link.kind.icon, size: 16, color: Theme.Color.home)

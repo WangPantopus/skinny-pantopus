@@ -37,8 +37,7 @@ public struct SourcePill: View {
             if let icon {
                 Icon(icon, size: 11, color: foreground)
             }
-            Text(label)
-                .pantopusTextStyle(.overline)
+            Text(label, style: .overline)
                 .foregroundStyle(foreground)
         }
         .padding(.horizontal, Spacing.s2)

@@ -4,12 +4,15 @@
 //
 //  Type-ramp tokens. Call sites MUST use `.pantopusTextStyle(.h1)` rather
 //  than `.font(.system(...))` so tracking, line-height, and casing stay
-//  consistent with the design system.
+//  consistent with the design system — except for roles that specify casing
+//  (`.overline`), which are built with `Text(copy, style: .overline)` so the
+//  role can upper-case the source string.
 //
 
 import SwiftUI
 
-/// A semantic type-ramp role. Use with `Text.pantopusTextStyle(_:)`.
+/// A semantic type-ramp role. Use with `Text.pantopusTextStyle(_:)`, or with
+/// `Text(_:style:)` when the role carries casing.
 public enum PantopusTextStyle: Sendable {
     case h1
     case h2
@@ -67,9 +70,21 @@ public enum PantopusTextStyle: Sendable {
         }
     }
 
-    /// Whether the role enforces upper-casing.
-    public var uppercased: Bool {
+    /// Whether the role renders in upper case — `.overline`, per the shared
+    /// `typography.overline.textTransform` token that web and Android build on.
+    ///
+    /// `Text` cannot read back its own string, so the casing has to be applied
+    /// to the source string *before* the `Text` exists. That is what
+    /// `Text.init(_:style:)` is for; chaining `.pantopusTextStyle(.overline)`
+    /// onto an existing `Text` cannot upper-case it, and `verify-tokens.sh`
+    /// rejects that form.
+    public var isUppercased: Bool {
         self == .overline
+    }
+
+    /// `string` with this role's casing applied.
+    public func cased(_ string: String) -> String {
+        isUppercased ? string.uppercased() : string
     }
 }
 
@@ -104,29 +119,29 @@ public extension Theme.Font {
 }
 
 public extension Text {
-    /// Apply a design-system text style.
+    /// Design-system text: applies the role's casing, font, and tracking.
     ///
-    /// Sets the font, tracking, and upper-casing (for `.overline`). Pair with
+    /// Write the copy in natural case — the role does the shouting, the same
+    /// way web writes `overline="Assign to"` and lets `text-transform` cap it.
+    /// Roles that specify casing (`.overline`) MUST be built this way rather
+    /// than with `Text(...).pantopusTextStyle(...)`, which can only reach the
+    /// font and tracking.
+    ///
+    /// Casing runs on the string as given, so this takes a `String` rather
+    /// than a `LocalizedStringKey`; localized copy would need resolving first.
+    init(_ content: String, style: PantopusTextStyle) {
+        self = Text(verbatim: style.cased(content)).pantopusTextStyle(style)
+    }
+
+    /// Apply a design-system role's font and tracking to existing `Text`.
+    ///
+    /// This deliberately does not touch casing — a built `Text` cannot be
+    /// re-cased. Use `Text(_:style:)` for `.overline`. Pair with
     /// `.pantopusLineHeight(_:)` on the surrounding `View` if you need the
     /// line-height spec — `Text` alone cannot set line spacing.
     func pantopusTextStyle(_ style: PantopusTextStyle) -> Text {
-        var text = self
-        if style.uppercased {
-            text = Text(verbatim: stringValue.uppercased())
-        }
-        return text
-            .font(Theme.Font.role(style))
+        font(Theme.Font.role(style))
             .tracking(style.tracking)
-    }
-
-    /// Best-effort extraction of a `Text`'s string value. Falls back to empty
-    /// when the `Text` is built from a formatter or attributed source.
-    private var stringValue: String {
-        // Mirror is the only reliable way; `Text` has no public accessor.
-        for child in Mirror(reflecting: self).children {
-            if let s = child.value as? String { return s }
-        }
-        return ""
     }
 }
 

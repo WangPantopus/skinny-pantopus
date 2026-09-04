@@ -291,8 +291,7 @@ struct RescheduleReassignSheet: View {
 
     private var authorityToggle: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("How to apply")
-                .pantopusTextStyle(.overline)
+            Text("How to apply", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: 3) {
                 ForEach(RescheduleMode.allCases, id: \.self) { option in
@@ -330,8 +329,7 @@ struct RescheduleReassignSheet: View {
     private var assignToSection: some View {
         if viewModel.eligibleHostCount > 0 {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                Text("Assign to")
-                    .pantopusTextStyle(.overline)
+                Text("Assign to", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 memberRail
             }

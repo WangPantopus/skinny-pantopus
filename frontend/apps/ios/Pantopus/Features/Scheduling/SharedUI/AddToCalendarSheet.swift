@@ -150,8 +150,7 @@ struct AddToCalendarSheet: View {
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s3)
 
-                Text("More options")
-                    .pantopusTextStyle(.overline)
+                Text("More options", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s4)

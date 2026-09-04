@@ -76,8 +76,7 @@ struct AddHomeDetailsSection: View {
 
     private var editableFields: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Editable details")
-                .pantopusTextStyle(.overline)
+            Text("Editable details", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
 
             AddHomeTextField(

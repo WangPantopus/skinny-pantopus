@@ -35,8 +35,7 @@ public struct SectionHeader: View {
 
     public var body: some View {
         HStack(spacing: Spacing.s2) {
-            Text(title)
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             Spacer()

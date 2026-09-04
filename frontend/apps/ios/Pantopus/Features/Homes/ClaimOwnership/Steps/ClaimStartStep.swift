@@ -119,8 +119,7 @@ private struct ClaimMethodPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Verification method")
-                .pantopusTextStyle(.overline)
+            Text("Verification method", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -214,7 +213,7 @@ private struct ContestedClaimNotice: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 Circle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 30, height: 30)
                     .overlay {
                         Icon(.users, size: 15, strokeWidth: 2.2, color: Theme.Color.appTextInverse)

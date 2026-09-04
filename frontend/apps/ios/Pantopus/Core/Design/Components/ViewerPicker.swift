@@ -175,8 +175,7 @@ public struct ViewerPicker: View {
             if let title {
                 HStack(spacing: Spacing.s1) {
                     Icon(.eye, size: 13, color: Theme.Color.appTextSecondary)
-                    Text(title)
-                        .pantopusTextStyle(.overline)
+                    Text(title, style: .overline)
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -186,8 +185,7 @@ public struct ViewerPicker: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s2) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                        Text(group.kind.title)
-                            .pantopusTextStyle(.overline)
+                        Text(group.kind.title, style: .overline)
                             .foregroundStyle(Theme.Color.appTextMuted)
                             .padding(.leading, index == 0 ? Spacing.s0 : Spacing.s2)
                             .accessibilityHidden(true)
@@ -279,8 +277,7 @@ public struct LiveBadge: View {
             Circle()
                 .fill(tone)
                 .frame(width: 6, height: 6)
-            Text(label)
-                .pantopusTextStyle(.overline)
+            Text(label, style: .overline)
                 .foregroundStyle(Theme.Color.appTextStrong)
         }
         .padding(.horizontal, Spacing.s2)

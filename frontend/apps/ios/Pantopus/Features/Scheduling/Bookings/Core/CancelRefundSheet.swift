@@ -240,8 +240,7 @@ struct CancelRefundSheet: View {
 
     private func reasonSection(_ selection: Binding<CancelReason?>, otherDetail: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Reason")
-                .pantopusTextStyle(.overline)
+            Text("Reason", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ReasonChipRow(reasons: CancelReason.allCases, label: { $0.label }, selected: selection)
             if selection.wrappedValue == .other {

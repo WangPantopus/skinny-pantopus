@@ -58,8 +58,23 @@ final class TypographyTests: XCTestCase {
     }
 
     func testOverlineIsUppercased() {
-        XCTAssertTrue(PantopusTextStyle.overline.uppercased)
-        XCTAssertFalse(PantopusTextStyle.body.uppercased)
+        XCTAssertTrue(PantopusTextStyle.overline.isUppercased)
+        XCTAssertFalse(PantopusTextStyle.body.isUppercased)
+    }
+
+    /// The casing is the part that used to be dead: the ramp declared
+    /// `.overline` UPPERCASE but could not apply it, so call sites shouted
+    /// their own copy. `cased(_:)` is what `Text(_:style:)` runs the source
+    /// string through, so assert it actually transforms.
+    func testCasedAppliesOverlineUppercasing() {
+        XCTAssertEqual(PantopusTextStyle.overline.cased("Welcome back"), "WELCOME BACK")
+        XCTAssertEqual(PantopusTextStyle.overline.cased("USPS tracking"), "USPS TRACKING")
+    }
+
+    func testCasedLeavesNonUppercasedRolesAlone() {
+        for role: PantopusTextStyle in [.h1, .h2, .h3, .body, .small, .caption] {
+            XCTAssertEqual(role.cased("Welcome back"), "Welcome back")
+        }
     }
 
     // MARK: - Helpers
