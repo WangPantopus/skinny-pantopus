@@ -174,23 +174,11 @@ if [[ -n "$typography_violations" ]]; then
   status=1
 fi
 
-# --- 5. Overline casing: reject the chain form ------------------------
+# --- 5. Overline casing -----------------------------------------------
 #
-# `.overline` is UPPERCASE per the shared typography token. A built `Text`
-# cannot be re-cased (SwiftUI exposes no accessor for its own string), so
-# `Text(...).pantopusTextStyle(.overline)` silently renders whatever casing
-# the call site typed. `Text(copy, style: .overline)` takes the source
-# string and upper-cases it — write the copy in natural case.
-overline_violations=$(grep -rn "\.pantopusTextStyle(\.overline)" \
-  "$FEATURES" "$COMPONENTS" "$APP" \
-  --include='*.swift' "${EXCLUDE_DESIGN[@]}" 2>/dev/null || true)
-
-if [[ -n "$overline_violations" ]]; then
-  echo "✗ verify-tokens: .overline must be built with Text(_:style:) so the role can upper-case it:" >&2
-  echo "$overline_violations" >&2
-  echo "" >&2
-  echo "  Replace: Text(\"Assign to\").pantopusTextStyle(.overline)" >&2
-  echo "  With:    Text(\"Assign to\", style: .overline)" >&2
+# Lives in its own script so it can gate a merge on its own: this file exits
+# non-zero on a large pre-existing literal backlog, which would bury it.
+if ! bash "$(dirname "${BASH_SOURCE[0]}")/verify-overline.sh"; then
   status=1
 fi
 

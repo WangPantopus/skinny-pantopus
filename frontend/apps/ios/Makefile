@@ -83,7 +83,7 @@ test: bootstrap
 		-configuration Debug \
 		test
 
-lint: verify-icons verify-tokens
+lint: verify-icons verify-tokens verify-overline
 	@command -v swiftlint >/dev/null 2>&1 || { echo >&2 "Install SwiftLint: brew install swiftlint"; exit 1; }
 	swiftlint lint
 
@@ -98,6 +98,14 @@ verify-icons:
 # in docs/token-drift-{color,spacing,radii}.md. Wired into `make lint`.
 verify-tokens:
 	@bash Pantopus/scripts/verify-tokens.sh
+
+# Fails the build if an `.overline` reaches the type ramp as a built `Text`
+# rather than as a string — the role carries UPPERCASE and a built `Text`
+# cannot be re-cased. Deliberately standalone (and green today), so it can
+# gate a merge; verify-tokens.sh is red on a pre-existing literal backlog
+# and would bury this. Wired into `make lint` too.
+verify-overline:
+	@bash Pantopus/scripts/verify-overline.sh
 
 format:
 	@command -v swiftformat >/dev/null 2>&1 || { echo >&2 "Install SwiftFormat: brew install swiftformat"; exit 1; }

@@ -175,7 +175,6 @@ final class CancelRefundViewModel {
     }
 }
 
-// swiftlint:disable:next type_body_length
 struct CancelRefundSheet: View {
     @State private var viewModel: CancelRefundViewModel
     let onCompleted: () async -> Void

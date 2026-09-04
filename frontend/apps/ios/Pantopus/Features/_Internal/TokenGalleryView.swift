@@ -276,8 +276,7 @@ public struct TokenGalleryView: View {
 
     private func typeRow(_ style: PantopusTextStyle, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("The quick brown fox")
-                .pantopusTextStyle(style)
+            Text("The quick brown fox", style: style)
                 .foregroundStyle(Theme.Color.appText)
             Text(label)
                 .pantopusTextStyle(.caption)

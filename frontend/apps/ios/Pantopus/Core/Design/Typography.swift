@@ -70,14 +70,20 @@ public enum PantopusTextStyle: Sendable {
         }
     }
 
-    /// Whether the role renders in upper case — `.overline`, per the shared
-    /// `typography.overline.textTransform` token that web and Android build on.
+    /// Whether the role renders in upper case — `.overline`.
+    ///
+    /// Each platform holds its own copy of this decision; nothing generates one
+    /// from another. `frontend/packages/theme/src/typography.ts` states it as
+    /// the design reference but is imported by no app, web hand-mirrors it into
+    /// `globals.css` as `uppercase` utility classes, and Android leaves it to
+    /// call sites because Compose's `TextStyle` has no text-transform. Changing
+    /// the casing means changing all three.
     ///
     /// `Text` cannot read back its own string, so the casing has to be applied
     /// to the source string *before* the `Text` exists. That is what
     /// `Text.init(_:style:)` is for; chaining `.pantopusTextStyle(.overline)`
-    /// onto an existing `Text` cannot upper-case it, and `verify-tokens.sh`
-    /// rejects that form.
+    /// onto an existing `Text` cannot upper-case it — `make verify-overline`
+    /// rejects that form, including when the role arrives as a variable.
     public var isUppercased: Bool {
         self == .overline
     }
@@ -122,7 +128,8 @@ public extension Text {
     /// Design-system text: applies the role's casing, font, and tracking.
     ///
     /// Write the copy in natural case — the role does the shouting, the same
-    /// way web writes `overline="Assign to"` and lets `text-transform` cap it.
+    /// way web's shared overline primitives take `overline="Assign to"` and let
+    /// `text-transform` cap it.
     /// Roles that specify casing (`.overline`) MUST be built this way rather
     /// than with `Text(...).pantopusTextStyle(...)`, which can only reach the
     /// font and tracking.
