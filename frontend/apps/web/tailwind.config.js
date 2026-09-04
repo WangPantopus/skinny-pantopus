@@ -39,15 +39,19 @@ module.exports = {
 
         // ── Semantic status colors ──────────────────────────────
         'app-success':         'var(--color-success)',
+        'app-success-solid':   'var(--color-success-solid)',
         'app-success-light':   'var(--color-success-light)',
         'app-success-bg':      'var(--color-success-bg)',
         'app-warning':         'var(--color-warning)',
+        'app-warning-solid':   'var(--color-warning-solid)',
         'app-warning-light':   'var(--color-warning-light)',
         'app-warning-bg':      'var(--color-warning-bg)',
         'app-error':           'var(--color-error)',
+        'app-error-solid':     'var(--color-error-solid)',
         'app-error-light':     'var(--color-error-light)',
         'app-error-bg':        'var(--color-error-bg)',
         'app-info':            'var(--color-info)',
+        'app-info-solid':      'var(--color-info-solid)',
         'app-info-light':      'var(--color-info-light)',
         'app-info-bg':         'var(--color-info-bg)',
 
@@ -57,11 +61,16 @@ module.exports = {
         'app-live-badge':      'var(--color-live-badge)',
 
         // ── Identity / pillar colors ────────────────────────────
+        'brand-check':               'var(--color-brand-check)',
+        'app-link':                   'var(--color-link)',
         'app-personal':        'var(--color-identity-personal)',
+        'app-personal-solid':  'var(--color-identity-personal-solid)',
         'app-personal-bg':     'var(--color-identity-personal-bg)',
         'app-home':            'var(--color-identity-home)',
+        'app-home-solid':      'var(--color-identity-home-solid)',
         'app-home-bg':         'var(--color-identity-home-bg)',
         'app-business':        'var(--color-identity-business)',
+        'app-business-solid':  'var(--color-identity-business-solid)',
         'app-business-bg':     'var(--color-identity-business-bg)',
       },
       borderRadius: theme.radii,
