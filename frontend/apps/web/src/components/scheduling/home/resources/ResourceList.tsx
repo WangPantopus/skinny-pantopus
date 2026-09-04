@@ -233,7 +233,7 @@ export default function ResourceList({
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <span
-                  className={`h-[7px] w-[7px] rounded-full ${free ? "bg-app-success" : "bg-app-text-muted"}`}
+                  className={`h-[7px] w-[7px] rounded-full ${free ? "bg-app-success-solid" : "bg-app-text-muted"}`}
                 />
                 <span
                   className={`whitespace-nowrap text-[11px] font-semibold ${free ? "text-app-success" : "text-app-text-secondary"}`}

@@ -146,7 +146,7 @@ function WeekdayChips({
               className={clsx(
                 "flex h-8 flex-1 cursor-pointer items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 on
-                  ? "border-app-personal bg-app-personal text-white"
+                  ? "border-app-personal bg-app-personal-solid text-white"
                   : "border-app-border bg-app-surface text-app-text-muted hover:bg-app-hover",
               )}
             >
@@ -464,7 +464,7 @@ export default function RecurringSetup() {
         </p>
         <Link
           href="/app/scheduling/my-bookings"
-          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-app-personal px-4 py-2.5 text-sm font-bold text-white"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-app-personal-solid px-4 py-2.5 text-sm font-bold text-white"
         >
           View my bookings
           <ArrowRight className="h-4 w-4" aria-hidden />
@@ -544,7 +544,7 @@ export default function RecurringSetup() {
               type="button"
               onClick={confirm}
               disabled={submitting || recapOccurrences.length === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal-solid px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
             >
               {submitting ? "Booking…" : `Confirm ${recapOccurrences.length} bookings`}
               {!submitting && <ArrowRight className="h-4 w-4" aria-hidden />}
@@ -620,7 +620,7 @@ export default function RecurringSetup() {
                   className={clsx(
                     "flex-1 rounded-lg border py-2 text-sm font-bold tabular-nums",
                     count === n
-                      ? "border-app-personal bg-app-personal text-white"
+                      ? "border-app-personal bg-app-personal-solid text-white"
                       : "border-app-border bg-app-surface text-app-text-secondary",
                   )}
                 >
@@ -717,7 +717,7 @@ export default function RecurringSetup() {
               <button
                 type="button"
                 onClick={() => setReviewing(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal px-4 py-3 text-sm font-bold text-white"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal-solid px-4 py-3 text-sm font-bold text-white"
               >
                 Book the {openCount} that work
                 <ArrowRight className="h-4 w-4" aria-hidden />
@@ -736,7 +736,7 @@ export default function RecurringSetup() {
               type="button"
               onClick={() => setReviewing(true)}
               disabled={count === 0}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal-solid px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
             >
               Review {count} bookings
               <ArrowRight className="h-4 w-4" aria-hidden />

@@ -224,7 +224,7 @@ export default function VisitSetup({
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                       on
-                        ? "border-app-home bg-app-home text-white"
+                        ? "border-app-home bg-app-home-solid text-white"
                         : "border-app-border-strong"
                     }`}
                   >

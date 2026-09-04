@@ -76,7 +76,7 @@ function MasterToggleCard({
           aria-checked={on}
           className={
             "relative h-7 w-12 shrink-0 rounded-full transition-colors " +
-            (on ? "bg-app-business" : "bg-app-border-strong")
+            (on ? "bg-app-business-solid" : "bg-app-border-strong")
           }
         >
           <span

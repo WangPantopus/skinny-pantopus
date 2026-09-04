@@ -83,10 +83,10 @@ const TONE_TEXT: Record<Tone, string> = {
 
 const TONE_BG: Record<Tone, string> = {
   neutral: "bg-app-text-muted",
-  success: "bg-app-success",
-  warning: "bg-app-warning",
-  error: "bg-app-error",
-  info: "bg-app-info",
+  success: "bg-app-success-solid",
+  warning: "bg-app-warning-solid",
+  error: "bg-app-error-solid",
+  info: "bg-app-info-solid",
 };
 
 const TONE_SOFT: Record<Tone, string> = {

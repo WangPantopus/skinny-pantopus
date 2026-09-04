@@ -243,7 +243,7 @@ export function Toggle({
       onClick={() => onChange?.(!on)}
       className={clsx(
         "relative h-7 w-12 shrink-0 rounded-full transition-colors",
-        on ? "bg-app-business" : "bg-app-border-strong",
+        on ? "bg-app-business-solid" : "bg-app-border-strong",
         disabled && "opacity-50",
       )}
     >
@@ -517,7 +517,7 @@ export function RuleTile({
         className={clsx(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
           selected
-            ? "border-transparent bg-app-business"
+            ? "border-transparent bg-app-business-solid"
             : "border-app-border-strong",
         )}
       >
@@ -536,7 +536,7 @@ export function Checkbox({ on }: { on: boolean }) {
     <span
       className={clsx(
         "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border",
-        on ? "border-transparent bg-app-business" : "border-app-border-strong",
+        on ? "border-transparent bg-app-business-solid" : "border-app-border-strong",
       )}
     >
       {on && (

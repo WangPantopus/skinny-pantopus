@@ -352,7 +352,7 @@ export default function ResourceDetail({
                     type="button"
                     disabled={acting === b.id}
                     onClick={() => act(b.id, "approve")}
-                    className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home text-[12px] font-bold text-white transition hover:brightness-105 disabled:opacity-50"
+                    className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home-solid text-[12px] font-bold text-white transition hover:brightness-105 disabled:opacity-50"
                   >
                     <Check className="h-3.5 w-3.5" />
                     Approve
@@ -399,7 +399,7 @@ export default function ResourceDetail({
               return (
                 <Card key={b.id} className="!p-3">
                   <div className="flex items-center gap-3">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-app-success" />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-app-success-solid" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-bold tracking-tight text-app-text">
                         {formatRange(b.start_at, b.end_at)}

@@ -52,7 +52,7 @@ export default function ProfileHeader({
           </div>
         )}
         {verified ? (
-          <span className="absolute -right-0.5 -bottom-0.5 w-6 h-6 rounded-full bg-app-home border-2 border-app-surface flex items-center justify-center">
+          <span className="absolute -right-0.5 -bottom-0.5 w-6 h-6 rounded-full bg-app-home-solid border-2 border-app-surface flex items-center justify-center">
             <Check size={14} className="text-white" strokeWidth={3} />
           </span>
         ) : null}

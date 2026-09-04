@@ -204,7 +204,7 @@ export function Switch({
       aria-checked={on}
       onClick={() => onChange(!on)}
       className={`relative h-5 w-9 shrink-0 rounded-full transition ${
-        on ? "bg-app-home" : "bg-app-border-strong"
+        on ? "bg-app-home-solid" : "bg-app-border-strong"
       }`}
     >
       <span
@@ -265,7 +265,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={`h-8 flex-1 rounded-md px-2 text-[12px] font-semibold transition ${
               on
-                ? "bg-app-home text-white shadow-sm"
+                ? "bg-app-home-solid text-white shadow-sm"
                 : "text-app-text-secondary"
             }`}
           >
@@ -420,7 +420,7 @@ export function WeekdayPicker({
             onClick={() => toggle(i)}
             className={`flex h-[30px] flex-1 items-center justify-center rounded-lg text-[11px] font-bold transition ${
               on
-                ? "bg-app-home text-white"
+                ? "bg-app-home-solid text-white"
                 : "bg-app-surface-sunken text-app-text-muted"
             }`}
           >
@@ -452,7 +452,7 @@ export function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-app-home text-[13.5px] font-bold text-white shadow-[0_4px_14px_rgba(22,163,74,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-app-home-solid text-[13.5px] font-bold text-white shadow-[0_4px_14px_rgba(22,163,74,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
     >
       {loading ? (
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />

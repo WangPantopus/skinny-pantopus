@@ -332,7 +332,7 @@ export default function PayoutsEarnings({
                 "h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-bold transition-colors",
                 on
                   ? biz
-                    ? "bg-app-business text-white"
+                    ? "bg-app-business-solid text-white"
                     : "bg-primary-600 text-white"
                   : "border border-app-border bg-app-surface text-app-text-strong hover:bg-app-hover",
               )}

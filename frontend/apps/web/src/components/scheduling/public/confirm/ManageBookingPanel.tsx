@@ -275,7 +275,7 @@ function ExpiredState({ hostEmail }: { hostEmail?: string | null }) {
       <div className="flex w-full max-w-xs flex-col gap-2">
         <a
           href={APP_WEB_URL || "/"}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-info text-[14px] font-bold text-white shadow-sm"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-info-solid text-[14px] font-bold text-white shadow-sm"
         >
           <Mail className="h-4 w-4" aria-hidden />
           Request a new link

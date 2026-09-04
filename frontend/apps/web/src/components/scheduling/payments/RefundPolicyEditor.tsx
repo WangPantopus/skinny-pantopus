@@ -71,7 +71,7 @@ function PresetCard({
         className={clsx(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
           selected
-            ? "bg-app-business text-white"
+            ? "bg-app-business-solid text-white"
             : "border-[1.5px] border-app-border-strong",
         )}
       >
@@ -188,7 +188,7 @@ function CustomRows({
           className={clsx(
             "relative h-7 w-12 shrink-0 rounded-full transition-colors",
             value.depositNonRefundable
-              ? "bg-app-business"
+              ? "bg-app-business-solid"
               : "bg-app-border-strong",
           )}
         >
@@ -357,7 +357,7 @@ export default function RefundPolicyEditor({
             type="button"
             onClick={save}
             disabled={saving || !dirty}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-business text-sm font-bold text-white shadow-sm transition hover:opacity-95 disabled:opacity-45 sm:w-auto sm:px-8"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-business-solid text-sm font-bold text-white shadow-sm transition hover:opacity-95 disabled:opacity-45 sm:w-auto sm:px-8"
           >
             {saving ? "Saving…" : dirty ? "Save policy" : "Saved"}
           </button>

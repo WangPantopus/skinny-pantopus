@@ -69,7 +69,7 @@ export default function TaskCard({
             </span>
           )}
           {task.mail_id && (
-            <span className="text-xs text-primary-500">from mail</span>
+            <span className="text-xs text-app-link">from mail</span>
           )}
         </div>
       </button>
