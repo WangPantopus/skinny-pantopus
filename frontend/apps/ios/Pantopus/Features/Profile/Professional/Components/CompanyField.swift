@@ -53,7 +53,7 @@ struct CompanyField: View {
     private var logoDisc: some View {
         ZStack {
             RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
-                .fill(Theme.Color.business)
+                .fill(Theme.Color.businessSolid)
                 .frame(width: 32, height: 32)
             Text(String(company.name.prefix(1)).uppercased())
                 .pantopusTextStyle(.small)

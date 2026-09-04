@@ -428,7 +428,7 @@ public struct HomeRecordsView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 7)
-                    .background(Theme.Color.home)
+                    .background(Theme.Color.homeSolid)
                     .clipShape(Capsule())
             })
             .buttonStyle(.plain)

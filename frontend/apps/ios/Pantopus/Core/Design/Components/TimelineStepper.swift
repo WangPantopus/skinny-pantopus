@@ -95,7 +95,7 @@ private struct TimelineMarker: View {
             ZStack {
                 switch state {
                 case .done:
-                    Circle().fill(Theme.Color.success).frame(width: 20, height: 20)
+                    Circle().fill(Theme.Color.successSolid).frame(width: 20, height: 20)
                     Icon(.check, size: 12, color: Theme.Color.appTextInverse)
                 case .current:
                     if !reduceMotion {

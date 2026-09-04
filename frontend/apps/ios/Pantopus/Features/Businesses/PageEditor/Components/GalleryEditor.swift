@@ -82,7 +82,7 @@ private struct GalleryTileView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
                     .padding(6)
             }
@@ -287,7 +287,7 @@ private struct CoverHero: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
                 .padding(6)
         }

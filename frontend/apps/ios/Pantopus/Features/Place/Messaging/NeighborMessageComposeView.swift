@@ -232,7 +232,7 @@ private struct TemplateRow: View {
     private var radio: some View {
         ZStack {
             if selected {
-                Circle().fill(Theme.Color.home)
+                Circle().fill(Theme.Color.homeSolid)
                 Icon(.check, size: 13, strokeWidth: 3.25, color: Theme.Color.appTextInverse)
             } else {
                 Circle()

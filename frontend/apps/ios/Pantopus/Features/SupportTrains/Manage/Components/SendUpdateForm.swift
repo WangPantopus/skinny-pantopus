@@ -122,11 +122,11 @@ public struct SlotPreview: View {
         switch state {
         case .filled:
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Theme.Color.success)
+                .fill(Theme.Color.successSolid)
                 .frame(width: size, height: size)
         case .dropout:
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Theme.Color.error)
+                .fill(Theme.Color.errorSolid)
                 .frame(width: size, height: size)
         case .open:
             RoundedRectangle(cornerRadius: radius, style: .continuous)

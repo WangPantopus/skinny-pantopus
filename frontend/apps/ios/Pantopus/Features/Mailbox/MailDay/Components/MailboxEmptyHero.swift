@@ -182,7 +182,7 @@ struct MailboxIllustration: View {
                 .offset(x: 0, y: 26)
             // flag
             Rectangle()
-                .fill(Theme.Color.error)
+                .fill(Theme.Color.errorSolid)
                 .frame(width: 14, height: 12)
                 .clipShape(
                     UnevenRoundedRectangle(

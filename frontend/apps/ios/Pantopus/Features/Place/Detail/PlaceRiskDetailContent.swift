@@ -272,7 +272,7 @@ private struct EmergencyChecklist: View {
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.Color.appSurfaceSunken).frame(height: 6)
-                        Capsule().fill(Theme.Color.home)
+                        Capsule().fill(Theme.Color.homeSolid)
                             .frame(width: proxy.size.width * (total == 0 ? 0 : Double(checked.count) / Double(total)), height: 6)
                     }
                 }

@@ -120,7 +120,7 @@ private struct EditHoursRowView: View {
                     )
                 if row.isDirty {
                     Circle()
-                        .fill(Theme.Color.warning)
+                        .fill(Theme.Color.warningSolid)
                         .frame(width: 6, height: 6)
                         .overlay(
                             Circle()

@@ -352,7 +352,7 @@ private struct StampsIssuerCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             Icon(.check, size: 9, color: Color.white)
                 .frame(width: 16, height: 16)
-                .background(Circle().fill(Theme.Color.success))
+                .background(Circle().fill(Theme.Color.successSolid))
                 .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                 .offset(x: 3, y: 3)
         }

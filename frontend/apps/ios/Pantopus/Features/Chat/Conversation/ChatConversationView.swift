@@ -1480,7 +1480,7 @@ private struct ChatConversationHeader: View {
                 if let presence {
                     HStack(spacing: 5) {
                         if presenceOnline {
-                            Circle().fill(Theme.Color.success).frame(width: 6, height: 6)
+                            Circle().fill(Theme.Color.successSolid).frame(width: 6, height: 6)
                         }
                         // A15 `.chat-id .sub` — 11pt regular.
                         Text(presence)
@@ -1686,7 +1686,7 @@ private struct ChatCreatorAudienceStrip: View {
             HStack(spacing: 10) {
                 Icon(.users, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
                     .frame(width: 28, height: 28)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(context.personaName.map { "Creator inbox · \($0)" } ?? "Creator inbox")
@@ -2007,7 +2007,7 @@ private struct ChatFanPersonaAvatar: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Circle()
-                .fill(Theme.Color.business)
+                .fill(Theme.Color.businessSolid)
                 .frame(width: size, height: size)
             Circle()
                 .strokeBorder(Theme.Color.appSurface, lineWidth: 2)
@@ -2022,7 +2022,7 @@ private struct ChatFanPersonaAvatar: View {
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(width: size, height: size)
             Circle()
-                .fill(Theme.Color.success)
+                .fill(Theme.Color.successSolid)
                 .frame(width: 10, height: 10)
                 .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
         }
@@ -2064,14 +2064,14 @@ private struct ChatPersonAvatar: View {
                 // 88 empty-state avatar.
                 Icon(.check, size: min(12, max(6, size * 0.22)), strokeWidth: 3.5, color: Theme.Color.appTextInverse)
                     .frame(width: min(24, max(12, size * 0.4)), height: min(24, max(12, size * 0.4)))
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 1, y: 1)
             }
             if online {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 9, height: 9)
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: -2, y: -size + 3)
@@ -3426,7 +3426,7 @@ private struct ChatComposer: View {
                     .stroke(Theme.Color.error, lineWidth: 1.5)
                     .frame(width: 36, height: 36)
                 RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(Theme.Color.error)
+                    .fill(Theme.Color.errorSolid)
                     .frame(width: 11, height: 11)
             }
             .frame(width: 44, height: 44)

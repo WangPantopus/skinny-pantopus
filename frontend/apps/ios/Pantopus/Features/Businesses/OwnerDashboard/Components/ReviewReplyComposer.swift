@@ -114,7 +114,7 @@ struct ReviewReplyComposer: View {
         )
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Theme.Color.business)
+                .fill(Theme.Color.businessSolid)
                 .frame(width: 2)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }

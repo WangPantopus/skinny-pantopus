@@ -54,7 +54,7 @@ struct ProfessionalEnableFormView: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                    .fill(Theme.Color.business)
+                    .fill(Theme.Color.businessSolid)
                     .frame(width: 48, height: 48)
                 Icon(.wrench, size: 22, color: Theme.Color.appTextInverse)
             }

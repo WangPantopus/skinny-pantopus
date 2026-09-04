@@ -346,7 +346,7 @@ struct PlaceVerifyStatusView: View {
     private var seal: some View {
         ZStack {
             Circle().fill(Theme.Color.homeBg).frame(width: 96, height: 96)
-            Circle().fill(Theme.Color.home).frame(width: 64, height: 64)
+            Circle().fill(Theme.Color.homeSolid).frame(width: 64, height: 64)
             Icon(.check, size: 34, strokeWidth: 3, color: Theme.Color.appTextInverse)
         }
         .padding(.top, 12)

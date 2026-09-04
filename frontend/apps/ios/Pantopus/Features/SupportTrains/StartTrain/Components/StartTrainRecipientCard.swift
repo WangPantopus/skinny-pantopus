@@ -67,7 +67,7 @@ struct StartTrainRecipientCard: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                 )
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(.shieldCheck, size: 9, strokeWidth: 2.6, color: Theme.Color.appTextInverse)
             }
             .frame(width: 18, height: 18)

@@ -177,7 +177,7 @@ private struct WithdrawBidSheet: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: Radii.md)
-                                .fill(Theme.Color.error)
+                                .fill(Theme.Color.errorSolid)
                         )
                 }
                 .buttonStyle(.plain)

@@ -231,7 +231,7 @@ public struct HomeCalendarView: View {
         } label: {
             Icon(.plus, size: 24, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
                 .frame(width: 52, height: 52)
-                .background(Theme.Color.home)
+                .background(Theme.Color.homeSolid)
                 .clipShape(Circle())
                 .pantopusShadow(.primary)
         }

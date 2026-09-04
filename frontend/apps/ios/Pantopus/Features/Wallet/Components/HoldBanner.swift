@@ -17,7 +17,7 @@ struct HoldBanner: View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.lg - 2, style: .continuous)
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                 Icon(.shieldAlert, size: 17, strokeWidth: 2.3, color: .white)
             }
             .frame(width: 32, height: 32)

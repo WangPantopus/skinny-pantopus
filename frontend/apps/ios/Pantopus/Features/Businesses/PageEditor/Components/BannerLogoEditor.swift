@@ -110,7 +110,7 @@ public struct EditBusinessBannerLogoEditor: View {
                 }
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, 3)
-                .background(Theme.Color.warning)
+                .background(Theme.Color.warningSolid)
                 .clipShape(Capsule())
                 .padding(.horizontal, Spacing.s2)
                 .padding(.top, Spacing.s2)
@@ -254,7 +254,7 @@ private struct CafeGoldenHourBanner: View {
                         .position(x: w * 0.5, y: h * 0.66)
                     // Awning (red trapezoid)
                     awning(width: w * 0.8)
-                        .fill(Theme.Color.error)
+                        .fill(Theme.Color.errorSolid)
                         .frame(width: w * 0.8, height: h * 0.12)
                         .position(x: w * 0.5, y: h * 0.39)
                     // Door

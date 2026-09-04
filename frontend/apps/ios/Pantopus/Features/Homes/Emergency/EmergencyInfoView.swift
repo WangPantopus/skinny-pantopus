@@ -85,7 +85,7 @@ struct EmergencyCall911Banner: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.s3)
-            .background(Theme.Color.error)
+            .background(Theme.Color.errorSolid)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

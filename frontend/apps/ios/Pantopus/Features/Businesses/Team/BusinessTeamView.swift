@@ -445,7 +445,7 @@ private struct InviteFAB: View {
         Button(action: action) {
             Icon(.userPlus, size: 22, color: Theme.Color.appTextInverse)
                 .frame(width: 52, height: 52)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(Circle())
                 .pantopusShadow(.primary)
         }
