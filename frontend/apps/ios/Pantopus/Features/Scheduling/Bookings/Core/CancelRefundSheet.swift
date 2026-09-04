@@ -175,7 +175,6 @@ final class CancelRefundViewModel {
     }
 }
 
-// swiftlint:disable:next type_body_length
 struct CancelRefundSheet: View {
     @State private var viewModel: CancelRefundViewModel
     let onCompleted: () async -> Void
@@ -240,8 +239,7 @@ struct CancelRefundSheet: View {
 
     private func reasonSection(_ selection: Binding<CancelReason?>, otherDetail: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Reason")
-                .pantopusTextStyle(.overline)
+            Text("Reason", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ReasonChipRow(reasons: CancelReason.allCases, label: { $0.label }, selected: selection)
             if selection.wrappedValue == .other {

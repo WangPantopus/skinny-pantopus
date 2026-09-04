@@ -61,9 +61,11 @@ import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCard
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCardState
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.theme.MarkVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusLockup
 import app.pantopus.android.ui.theme.Spacing
 
 @Composable
@@ -98,15 +100,7 @@ private fun Hero(
     // Signed-out root: nothing above us pads the status bar, so do it here.
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(PantopusColors.homeBg),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(PantopusIcon.MapPin, null, size = 16.dp, strokeWidth = 2.25f, tint = PantopusColors.home)
-                }
-                Text("Pantopus", fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = PantopusColors.appText)
-            }
+            PantopusLockup(size = 22.dp, variant = MarkVariant.Light)
             // Demoted to the top bar so the address field is the first control.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),

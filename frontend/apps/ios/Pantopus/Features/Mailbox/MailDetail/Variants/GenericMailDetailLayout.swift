@@ -250,7 +250,7 @@ private struct GenericHeroCard: View {
         HStack(spacing: Spacing.s2) {
             Icon(.check, size: 13, color: Theme.Color.appTextInverse)
                 .frame(width: 20, height: 20)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
             (
                 Text("Acknowledged").bold()
@@ -387,7 +387,7 @@ private struct SenderCard: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
             .overlay(alignment: .bottomTrailing) {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 16, height: 16)
                     .overlay {
                         Icon(.check, size: 9, color: Theme.Color.appTextInverse)

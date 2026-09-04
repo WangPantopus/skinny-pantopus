@@ -243,7 +243,8 @@ private struct SplashView: View {
         ZStack {
             Theme.Color.appBg.ignoresSafeArea()
             VStack(spacing: Spacing.s4) {
-                Icon(.home, size: 64, color: Theme.Color.primary600)
+                PantopusMark(size: 64)
+                    .accessibilityHidden(true)
                 ProgressView()
             }
         }

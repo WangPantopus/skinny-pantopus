@@ -197,7 +197,7 @@ export default function InvoiceList({ owner }: { owner: SchedulingOwnerRef }) {
                         className={clsx(
                           "h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-[11.5px] font-bold transition",
                           on
-                            ? "bg-app-business text-white"
+                            ? "bg-app-business-solid text-white"
                             : "border border-app-border bg-app-surface text-app-text-secondary hover:border-app-border-strong",
                         )}
                       >

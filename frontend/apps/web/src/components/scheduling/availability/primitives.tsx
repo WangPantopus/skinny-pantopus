@@ -81,7 +81,7 @@ export function Toggle({
       onClick={() => onChange?.(!on)}
       className={clsx(
         "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-        on ? "bg-app-personal" : "bg-app-border-strong",
+        on ? "bg-app-personal-solid" : "bg-app-border-strong",
         disabled && "opacity-60",
         !disabled && "cursor-pointer",
       )}

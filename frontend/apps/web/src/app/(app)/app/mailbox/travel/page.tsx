@@ -226,7 +226,7 @@ function ActiveHoldView({
           </div>
           {hold.items_held_count > 0 && (
             <div className="flex items-center gap-2 text-sm text-app-text-secondary">
-              <span className="text-primary-500">📬</span>
+              <span className="text-app-link">📬</span>
               {hold.items_held_count} item{hold.items_held_count !== 1 ? 's' : ''} held so far
             </div>
           )}

@@ -315,8 +315,7 @@ struct BookingOverline: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(icon, size: 13, color: accent)
-            Text(text)
-                .pantopusTextStyle(.overline)
+            Text(text, style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
     }

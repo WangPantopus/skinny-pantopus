@@ -687,7 +687,7 @@ struct NeighborVerificationLedger: View {
         case .check:
             Icon(.check, size: 12, color: Theme.Color.appTextInverse)
                 .frame(width: 16, height: 16)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
                 .accessibilityLabel("Verified")
         case let .status(text):

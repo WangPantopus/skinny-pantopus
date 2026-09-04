@@ -238,8 +238,7 @@ private struct PostcardHero: View {
         case .delivered:
             HStack(spacing: 5) {
                 Icon(.checkCircle, size: 11, color: Theme.Color.success)
-                Text("DELIVERED \(deliveredOn?.uppercased() ?? "")")
-                    .pantopusTextStyle(.overline)
+                Text("Delivered \(deliveredOn ?? "")", style: .overline)
                     .foregroundStyle(Theme.Color.success)
             }
             .padding(.horizontal, 9)
@@ -249,7 +248,7 @@ private struct PostcardHero: View {
         case .mailed, .inTransit:
             HStack(spacing: 5) {
                 Circle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 6, height: 6)
                     .scaleEffect(pulse && !reduceMotion ? 1.6 : 1)
                     .opacity(pulse && !reduceMotion ? 0.6 : 1)
@@ -257,8 +256,7 @@ private struct PostcardHero: View {
                         .easeInOut(duration: 1.6).repeatForever(autoreverses: true),
                         value: pulse
                     )
-                Text("IN TRANSIT")
-                    .pantopusTextStyle(.overline)
+                Text("In transit", style: .overline)
                     .foregroundStyle(Theme.Color.warning)
             }
             .padding(.horizontal, 9)
@@ -318,8 +316,7 @@ private struct PostcardStatusTimeline: View {
 
     private var trackingHeader: some View {
         HStack {
-            Text("USPS TRACKING")
-                .pantopusTextStyle(.overline)
+            Text("USPS tracking", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer()
             Text(content.trackingNumber)
@@ -465,7 +462,7 @@ private struct PostcardTimelineConnector: View {
                 .frame(height: 2)
             if isDone {
                 Rectangle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(height: 2)
             }
             if isCurrent {

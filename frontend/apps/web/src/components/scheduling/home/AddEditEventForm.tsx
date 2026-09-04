@@ -411,7 +411,7 @@ export default function AddEditEventForm({
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                       on
-                        ? "border-app-home bg-app-home text-white"
+                        ? "border-app-home bg-app-home-solid text-white"
                         : "border-app-border-strong"
                     }`}
                   >
@@ -551,7 +551,7 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
       aria-checked={on}
       onClick={onClick}
       className={`relative h-5 w-9 shrink-0 rounded-full transition ${
-        on ? "bg-app-home" : "bg-app-border-strong"
+        on ? "bg-app-home-solid" : "bg-app-border-strong"
       }`}
     >
       <span
@@ -582,7 +582,7 @@ function Segmented({
             onClick={() => onChange(o)}
             className={`h-8 flex-1 rounded-md text-[12px] font-semibold transition ${
               on
-                ? "bg-app-home text-white shadow-sm"
+                ? "bg-app-home-solid text-white shadow-sm"
                 : "text-app-text-secondary"
             }`}
           >

@@ -130,8 +130,7 @@ public struct RedactionScrim<Content: View>: View {
 #Preview("RedactionScrim") {
     func sampleField(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text(title)
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
             Text(value)
                 .font(.system(size: 13.5, weight: .semibold))

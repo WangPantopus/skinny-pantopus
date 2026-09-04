@@ -134,7 +134,7 @@ struct PartyHero: View {
     private var goingBanner: some View {
         HStack(spacing: Spacing.s2) {
             ZStack {
-                Circle().fill(Theme.Color.success).frame(width: 20, height: 20)
+                Circle().fill(Theme.Color.successSolid).frame(width: 20, height: 20)
                 Icon(.check, size: 12, color: Theme.Color.appTextInverse)
             }
             (

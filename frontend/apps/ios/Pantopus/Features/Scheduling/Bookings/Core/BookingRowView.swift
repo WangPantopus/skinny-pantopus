@@ -106,7 +106,7 @@ struct BookingRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Spacing.s1) {
                     if showQuickActions {
-                        Circle().fill(Theme.Color.warning).frame(width: 7, height: 7)
+                        Circle().fill(Theme.Color.warningSolid).frame(width: 7, height: 7)
                     }
                     Text(booking.inviteeName ?? "Guest")
                         .font(.system(size: 14, weight: .bold))

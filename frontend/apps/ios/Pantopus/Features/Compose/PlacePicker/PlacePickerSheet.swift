@@ -274,8 +274,7 @@ public struct PlacePickerSheet: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .pantopusTextStyle(.overline)
+        Text(title, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .padding(.top, Spacing.s2)
             .padding(.horizontal, Spacing.s1)

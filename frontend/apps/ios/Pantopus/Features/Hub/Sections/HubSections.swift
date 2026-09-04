@@ -64,7 +64,7 @@ struct HubTopBar: View {
                 .accessibilityIdentifier("hubBellButton")
                 if content.unreadCount > 0 {
                     Circle()
-                        .fill(Theme.Color.error)
+                        .fill(Theme.Color.errorSolid)
                         .frame(width: 8, height: 8)
                         .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                         .offset(x: -8, y: 8)
@@ -87,7 +87,7 @@ struct HubTopBar: View {
                     .accessibilityIdentifier("hubAudienceBellButton")
                     if content.audienceUnreadCount > 0 {
                         Circle()
-                            .fill(Theme.Color.success)
+                            .fill(Theme.Color.successSolid)
                             .frame(width: 8, height: 8)
                             .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                             .offset(x: -8, y: 8)
@@ -173,7 +173,7 @@ struct HubSetupBanner: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s1)
-                    .background(Theme.Color.warning)
+                    .background(Theme.Color.warningSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             }
             .buttonStyle(.plain)

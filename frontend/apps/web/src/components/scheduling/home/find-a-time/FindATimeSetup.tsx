@@ -258,7 +258,7 @@ export default function FindATimeSetup({
           Category
         </p>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-app-home-bg px-3 py-1.5 text-xs font-bold text-app-home">
-          <span className="h-2 w-2 rounded-full bg-app-home" />
+          <span className="h-2 w-2 rounded-full bg-app-home-solid" />
           Family
         </span>
       </Card>
@@ -298,7 +298,7 @@ export default function FindATimeSetup({
                     <div className="relative">
                       <MemberAvatar member={m} size="md" />
                       {role === "required" && (
-                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-app-surface bg-app-home">
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-app-surface bg-app-home-solid">
                           <Check
                             className="h-2 w-2 text-white"
                             strokeWidth={4}
@@ -330,7 +330,7 @@ export default function FindATimeSetup({
                               "rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors",
                               on &&
                                 opt === "required" &&
-                                "bg-app-home text-white",
+                                "bg-app-home-solid text-white",
                               on &&
                                 opt === "optional" &&
                                 "bg-app-surface text-app-text-secondary shadow-sm",

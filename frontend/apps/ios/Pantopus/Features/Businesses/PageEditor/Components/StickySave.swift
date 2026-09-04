@@ -75,7 +75,7 @@ public struct EditBusinessStickySave: View {
                         }
                         .padding(.horizontal, 22)
                         .frame(minHeight: 42)
-                        .background(Theme.Color.business)
+                        .background(Theme.Color.businessSolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                         .pantopusShadow(WizardIdentity.business.ctaShadow)
                     }
@@ -121,7 +121,7 @@ public struct EditBusinessStickySave: View {
     private func dirtyBadge(count: Int) -> some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(Theme.Color.warning)
+                .fill(Theme.Color.warningSolid)
                 .frame(width: 6, height: 6)
             Text("\(count) UNSAVED")
                 .font(.system(size: 11, weight: .bold))

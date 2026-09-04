@@ -271,7 +271,7 @@ export default function BookingLimitsForm({
           type="button"
           disabled={doneDisabled}
           onClick={() => void onDone(limits)}
-          className="w-full rounded-xl bg-app-personal py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-xl bg-app-personal-solid py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Done"}
         </button>

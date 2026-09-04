@@ -34,7 +34,7 @@ public struct OfflineBanner: View {
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.warningBg)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Color.warning.opacity(0.3)).frame(height: 1)
+            Rectangle().fill(Theme.Color.warningSolid.opacity(0.3)).frame(height: 1)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("You're offline. Showing last known data.")

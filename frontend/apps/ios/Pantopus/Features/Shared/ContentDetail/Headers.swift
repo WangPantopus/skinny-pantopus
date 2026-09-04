@@ -40,8 +40,7 @@ public struct HomeHeroHeader: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s2) {
                 Icon(.shieldCheck, size: 14, color: Theme.Color.home)
-                Text(verified ? "VERIFIED HOME" : "UNVERIFIED HOME")
-                    .pantopusTextStyle(.overline)
+                Text(verified ? "Verified home" : "Unverified home", style: .overline)
                     .foregroundStyle(Theme.Color.home)
             }
             Text(address)
@@ -66,7 +65,7 @@ public struct HomeHeroHeader: View {
                     .overlay(alignment: .trailing) {
                         if stat.id != stats.last?.id {
                             Rectangle()
-                                .fill(Theme.Color.home.opacity(0.2))
+                                .fill(Theme.Color.homeSolid.opacity(0.2))
                                 .frame(width: 1)
                                 .padding(.trailing, Spacing.s2)
                         }

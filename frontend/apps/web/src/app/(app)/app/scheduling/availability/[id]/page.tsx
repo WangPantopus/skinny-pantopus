@@ -215,7 +215,7 @@ export default function AvailabilityEditorPage() {
           <button
             type="button"
             onClick={() => router.push("/app/scheduling/availability")}
-            className="mt-5 rounded-xl bg-app-personal px-5 py-2.5 text-sm font-bold text-white"
+            className="mt-5 rounded-xl bg-app-personal-solid px-5 py-2.5 text-sm font-bold text-white"
           >
             Back to availability
           </button>
@@ -310,7 +310,7 @@ export default function AvailabilityEditorPage() {
                     <button
                       type="button"
                       onClick={useQuickDefault}
-                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-app-personal/30 bg-app-personal-bg py-2.5 text-[13px] font-bold text-primary-700"
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-app-personal/30 bg-app-personal-bg py-2.5 text-[13px] font-bold text-app-personal"
                     >
                       <WandSparkles className="h-4 w-4" aria-hidden /> Use 9–5,
                       Mon–Fri
@@ -433,7 +433,7 @@ export default function AvailabilityEditorPage() {
                     <button
                       type="button"
                       onClick={useQuickDefault}
-                      className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-app-personal/30 bg-app-personal-bg py-2.5 text-[13px] font-bold text-primary-700"
+                      className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-app-personal/30 bg-app-personal-bg py-2.5 text-[13px] font-bold text-app-personal"
                     >
                       <WandSparkles className="h-4 w-4" aria-hidden /> Use 9–5,
                       Mon–Fri
@@ -527,7 +527,7 @@ export default function AvailabilityEditorPage() {
             type="button"
             onClick={saveHours}
             disabled={saving || !dirty}
-            className="w-full rounded-xl bg-app-personal py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-xl bg-app-personal-solid py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Saving…" : dirty ? "Save schedule" : "Saved"}
           </button>

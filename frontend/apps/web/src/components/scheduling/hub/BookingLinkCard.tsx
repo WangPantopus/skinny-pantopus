@@ -45,7 +45,7 @@ function LivePreview({
         <span
           className={clsx(
             "h-1.5 w-1.5 rounded-full",
-            paused ? "bg-app-text-muted" : "bg-app-success",
+            paused ? "bg-app-text-muted" : "bg-app-success-solid",
           )}
         />
         Live preview

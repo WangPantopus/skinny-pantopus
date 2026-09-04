@@ -33,7 +33,7 @@ struct FiledSummary: View {
     private var banner: some View {
         HStack(spacing: Spacing.s3) {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                .fill(Theme.Color.success)
+                .fill(Theme.Color.successSolid)
                 .frame(width: 38, height: 38)
                 .overlay(Icon(.check, size: 20, strokeWidth: 2.4, color: .white))
                 .shadow(color: Theme.Color.success.opacity(0.3), radius: 6, x: 0, y: 2)

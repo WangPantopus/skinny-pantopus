@@ -165,7 +165,7 @@ struct CommunityFeedCard: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)

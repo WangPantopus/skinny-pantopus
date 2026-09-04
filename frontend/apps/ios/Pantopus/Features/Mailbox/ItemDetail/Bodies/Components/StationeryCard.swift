@@ -56,10 +56,9 @@ public struct StationeryCard: View {
     private var eyebrowRow: some View {
         HStack(spacing: Spacing.s2) {
             RoundedRectangle(cornerRadius: Radii.pill)
-                .fill(Theme.Color.warning)
+                .fill(Theme.Color.warningSolid)
                 .frame(width: 24, height: 1)
-            Text(eyebrow)
-                .pantopusTextStyle(.overline)
+            Text(eyebrow, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Rectangle()
                 .fill(Theme.Color.appBorder)

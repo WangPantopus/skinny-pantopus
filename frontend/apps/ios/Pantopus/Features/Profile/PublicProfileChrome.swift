@@ -172,7 +172,7 @@ struct PublicProfileBroadcastCard: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .frame(minHeight: 32)
-                    .background(Theme.Color.warning)
+                    .background(Theme.Color.warningSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

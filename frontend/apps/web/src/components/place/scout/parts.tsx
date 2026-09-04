@@ -42,7 +42,7 @@ export function AskRow({
         aria-label={checked ? `Mark "${ask.question}" as not asked` : `Mark "${ask.question}" as asked`}
         className={`mt-0.5 w-[22px] h-[22px] rounded-[7px] border-[1.5px] flex items-center justify-center shrink-0 transition ${
           checked
-            ? 'bg-app-home border-app-home text-white'
+            ? 'bg-app-home-solid border-app-home text-white'
             : 'bg-app-surface border-app-border text-transparent hover:border-app-home'
         }`}
       >
@@ -103,7 +103,7 @@ export function BandTrack({
         {pct != null ? (
           <span
             className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[13px] h-[13px] rounded-full border-2 border-app-surface shadow-sm ${
-              outside ? 'bg-app-warning' : 'bg-app-home'
+              outside ? 'bg-app-warning-solid' : 'bg-app-home-solid'
             }`}
             style={{ left: `${pct}%` }}
             aria-hidden="true"

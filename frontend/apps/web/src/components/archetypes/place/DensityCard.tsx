@@ -23,7 +23,7 @@ function DensityDots({ level }: { level: number }) {
   return (
     <div className="flex gap-1 shrink-0">
       {[0, 1, 2, 3].map((i) => (
-        <span key={i} className={`w-2 h-2 rounded-full ${i < level ? 'bg-app-home' : 'bg-app-border'}`} />
+        <span key={i} className={`w-2 h-2 rounded-full ${i < level ? 'bg-app-home-solid' : 'bg-app-border'}`} />
       ))}
     </div>
   );

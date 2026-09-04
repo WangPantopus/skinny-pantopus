@@ -71,7 +71,7 @@ function Content() {
           type="button"
           onClick={() => goNew()}
           aria-label="Add resource"
-          className="fixed bottom-6 right-6 z-20 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-app-home text-white shadow-[0_8px_24px_rgba(22,163,74,0.4)] transition hover:brightness-105"
+          className="fixed bottom-6 right-6 z-20 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-app-home-solid text-white shadow-[0_8px_24px_rgba(22,163,74,0.4)] transition hover:brightness-105"
         >
           <Plus className="h-6 w-6" strokeWidth={2.4} />
         </button>

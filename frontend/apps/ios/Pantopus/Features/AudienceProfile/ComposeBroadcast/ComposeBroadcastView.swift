@@ -126,7 +126,7 @@ public struct ComposeBroadcastView: View {
 
     private var unsavedDraftChip: some View {
         HStack(spacing: 5) {
-            Circle().fill(Theme.Color.warning).frame(width: 5, height: 5)
+            Circle().fill(Theme.Color.warningSolid).frame(width: 5, height: 5)
             Text("Unsaved draft")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.Color.appTextMuted)

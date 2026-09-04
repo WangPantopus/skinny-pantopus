@@ -20,8 +20,7 @@ public struct FormFieldGroup<Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(title.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s4)
                 .accessibilityAddTraits(.isHeader)

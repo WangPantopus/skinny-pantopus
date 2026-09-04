@@ -526,7 +526,7 @@ private struct JustOpenedNote: View {
         HStack(alignment: .top, spacing: 11) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.business)
+                    .fill(Theme.Color.businessSolid)
                     .frame(width: 32, height: 32)
                 Icon(.badgeCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
             }

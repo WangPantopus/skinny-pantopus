@@ -96,6 +96,7 @@ struct PlaceLaunchView: View {
                 Button("Sign in", action: onSignIn)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary600)
+                    .accessibilityIdentifier("placeLaunchSignIn")
             }
             .padding(.horizontal, 20)
             .padding(.top, Spacing.s2)
@@ -238,17 +239,7 @@ struct PlaceLaunchView: View {
     ]
 
     private var brandLockup: some View {
-        HStack(spacing: 7) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.Color.homeBg)
-                Icon(.mapPin, size: 16, strokeWidth: 2.25, color: Theme.Color.home)
-            }
-            .frame(width: 28, height: 28)
-            Text("Pantopus")
-                .font(.system(size: 17, weight: .bold))
-                .kerning(-0.3)
-                .foregroundStyle(Theme.Color.appText)
-        }
+        PantopusLockup(size: 22)
     }
 
     /// Demoted to the top bar so the address field is the first control.

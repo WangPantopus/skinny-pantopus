@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -62,9 +63,11 @@ import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
+import app.pantopus.android.ui.theme.MarkVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusLockup
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
@@ -84,6 +87,9 @@ object LoginScreenTags {
     const val GOOGLE_BUTTON = "loginGoogleButton"
     const val APPLE_BUTTON = "loginAppleButton"
     const val LEGAL_TERMS_LINE = "loginLegalTermsLine"
+
+    /** The "Or continue with" rule between the email form and the OAuth buttons. */
+    const val METHOD_SEPARATOR = "loginMethodSeparator"
 
     /** Persistent login — the security / expiry sign-out banner. */
     const val SESSION_END_BANNER = "loginSessionEndBanner"
@@ -239,22 +245,6 @@ fun LoginScreen(
             Box(modifier = Modifier.height(Spacing.s3))
         }
 
-        OAuthButtonGroup(
-            isLoading = state.isLoading,
-            onGoogle = { viewModel.signInWithOAuth(OAuthProvider.Google) },
-            onApple = { viewModel.signInWithOAuth(OAuthProvider.Apple) },
-            googleTag = LoginScreenTags.GOOGLE_BUTTON,
-            appleTag = LoginScreenTags.APPLE_BUTTON,
-            lastUsed = state.lastUsedOAuthProvider,
-        )
-        Box(modifier = Modifier.height(Spacing.s3))
-
-        AuthOAuthTermsLine(
-            testTag = LoginScreenTags.LEGAL_TERMS_LINE,
-            onOpenLegal = onOpenLegal,
-        )
-        Box(modifier = Modifier.height(Spacing.s5))
-
         EmailField(
             value = state.email,
             onChange = viewModel::onEmailChange,
@@ -342,6 +332,32 @@ fun LoginScreen(
             }
         }
 
+        Box(modifier = Modifier.height(Spacing.s5))
+
+        // Password first, OAuth second — the separator marks the hand-off
+        // between the two sign-in methods. Web draws a rule with a centred
+        // "Or continue with"; this is the same treatment in Compose.
+        AuthMethodSeparator()
+
+        Box(modifier = Modifier.height(Spacing.s5))
+
+        OAuthButtonGroup(
+            isLoading = state.isLoading,
+            onGoogle = { viewModel.signInWithOAuth(OAuthProvider.Google) },
+            onApple = { viewModel.signInWithOAuth(OAuthProvider.Apple) },
+            googleTag = LoginScreenTags.GOOGLE_BUTTON,
+            appleTag = LoginScreenTags.APPLE_BUTTON,
+            lastUsed = state.lastUsedOAuthProvider,
+        )
+        Box(modifier = Modifier.height(Spacing.s3))
+
+        // Travels with the two buttons above it: the sentence describes
+        // Google and Apple only, not the email form.
+        AuthOAuthTermsLine(
+            testTag = LoginScreenTags.LEGAL_TERMS_LINE,
+            onOpenLegal = onOpenLegal,
+        )
+
         Box(modifier = Modifier.height(Spacing.s4))
 
         Row(
@@ -381,6 +397,29 @@ fun LoginScreen(
                 fontSize = 1.sp,
             )
         }
+    }
+}
+
+/**
+ * The rule between the two sign-in methods: email above, Google / Apple
+ * below. Mirrors web's centred "Or continue with" divider
+ * (`(auth)/login/page.tsx`) — a hairline through the middle with the label
+ * sitting in the gap, not a heavy block.
+ */
+@Composable
+private fun AuthMethodSeparator() {
+    Row(
+        modifier = Modifier.fillMaxWidth().testTag(LoginScreenTags.METHOD_SEPARATOR),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = PantopusColors.appBorder)
+        Text(
+            text = "Or continue with",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = PantopusColors.appBorder)
     }
 }
 
@@ -561,17 +600,8 @@ private fun BrandLockup() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        PantopusIconImage(
-            icon = PantopusIcon.Home,
-            contentDescription = null,
-            size = 48.dp,
-            tint = PantopusColors.primary600,
-        )
-        Text(
-            text = "Pantopus",
-            style = PantopusTextStyle.h1,
-            color = PantopusColors.appText,
-        )
+        // Mark + wordmark at 36.dp holds the h1-sized wordmark the hero had.
+        PantopusLockup(size = 36.dp, variant = MarkVariant.Light)
         Text(
             text = "Your neighborhood, verified.",
             style = PantopusTextStyle.caption,

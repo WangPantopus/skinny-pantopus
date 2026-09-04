@@ -88,7 +88,7 @@ export default function BookerProfileHeader({
                 </span>
               )}
               <span
-                className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-app-surface bg-app-success"
+                className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-app-surface bg-app-success-solid"
                 aria-label="Verified host"
               >
                 <Check
@@ -137,7 +137,7 @@ export default function BookerProfileHeader({
             appUrl={appUrl}
             linkHref={pageUrl}
             fallbackUrl={fallbackUrl}
-            className="shrink-0 rounded-lg bg-app-info px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+            className="shrink-0 rounded-lg bg-app-info-solid px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
           >
             Open
           </OpenInAppButton>

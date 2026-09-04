@@ -69,7 +69,7 @@ private struct DistrictsCard: View {
                             .foregroundStyle(Theme.Color.appTextMuted)
                         ForEach(Array(items.enumerated()), id: \.offset) { _, d in
                             HStack(alignment: .top, spacing: 8) {
-                                Circle().fill(Theme.Color.home).frame(width: 6, height: 6).padding(.top, 6)
+                                Circle().fill(Theme.Color.homeSolid).frame(width: 6, height: 6).padding(.top, 6)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(d.officeLabel)
                                         .font(.system(size: 12.5, weight: .medium))

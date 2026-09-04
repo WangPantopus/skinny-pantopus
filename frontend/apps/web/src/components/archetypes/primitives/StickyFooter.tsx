@@ -26,9 +26,9 @@ export interface StickyFooterProps {
 
 const TONE_BG: Record<NonNullable<StickyFooterProps['primaryTone']>, string> = {
   primary: 'bg-primary-600 hover:bg-primary-700',
-  success: 'bg-app-success hover:brightness-110',
-  warning: 'bg-app-warning hover:brightness-110',
-  danger: 'bg-app-error hover:brightness-110',
+  success: 'bg-app-success-solid hover:brightness-110',
+  warning: 'bg-app-warning-solid hover:brightness-110',
+  danger: 'bg-app-error-solid hover:brightness-110',
 };
 
 export default function StickyFooter({

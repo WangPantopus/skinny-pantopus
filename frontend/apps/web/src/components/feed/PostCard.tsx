@@ -277,7 +277,7 @@ function PostCard({
           {post.content.length > 400 ? (
             <>
               {post.content.slice(0, 400)}
-              <span className="text-primary-500 font-medium">… Read more</span>
+              <span className="text-app-link font-medium">… Read more</span>
             </>
           ) : (
             post.content

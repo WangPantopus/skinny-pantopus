@@ -20,7 +20,7 @@ struct PostGigV1ErrorBanner: View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             Icon(.alertTriangle, size: 12, color: Theme.Color.appTextInverse)
                 .frame(width: 22, height: 22)
-                .background(Theme.Color.error)
+                .background(Theme.Color.errorSolid)
                 .clipShape(Circle())
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: Spacing.s1) {
@@ -171,8 +171,7 @@ struct PostGigV1PhotoTile: View {
                 )
 
             if isCover {
-                Text("Cover")
-                    .pantopusTextStyle(.overline)
+                Text("Cover", style: .overline)
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s1)

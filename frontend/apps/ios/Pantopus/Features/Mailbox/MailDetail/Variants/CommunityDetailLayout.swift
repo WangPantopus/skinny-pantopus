@@ -267,7 +267,7 @@ private struct CommunityHeroCard: View {
         HStack(spacing: Spacing.s2) {
             Icon(.check, size: 13, color: Theme.Color.appTextInverse)
                 .frame(width: 20, height: 20)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
             Text("You're going")
                 .font(.system(size: 12, weight: .bold))
@@ -381,7 +381,7 @@ private struct CommunityBadgeCard: View {
             if community.group.isVerified {
                 Icon(.check, size: 9, color: Theme.Color.appTextInverse)
                     .frame(width: 18, height: 18)
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 2, y: 2)
@@ -608,9 +608,9 @@ private struct MiniMap: View {
                 .frame(width: 3, height: 56)
                 .position(x: 21.5, y: 28)
             Group {
-                Circle().fill(Theme.Color.success).frame(width: 4, height: 4).position(x: 10, y: 18)
-                Circle().fill(Theme.Color.success).frame(width: 4, height: 4).position(x: 38, y: 36)
-                Circle().fill(Theme.Color.success).frame(width: 3, height: 3).position(x: 40, y: 18)
+                Circle().fill(Theme.Color.successSolid).frame(width: 4, height: 4).position(x: 10, y: 18)
+                Circle().fill(Theme.Color.successSolid).frame(width: 4, height: 4).position(x: 38, y: 36)
+                Circle().fill(Theme.Color.successSolid).frame(width: 3, height: 3).position(x: 40, y: 18)
             }
             .opacity(0.7)
             MapPinDrop(accent: accent, size: 18)
@@ -732,7 +732,7 @@ private struct AvatarBubble: View {
                 if attendee.isVerified {
                     Icon(.check, size: 7, color: Theme.Color.appTextInverse)
                         .frame(width: 12, height: 12)
-                        .background(Theme.Color.success)
+                        .background(Theme.Color.successSolid)
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                 }
@@ -824,7 +824,7 @@ private struct CommunityBodyCard: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(width: 28, height: 28)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 1) {
                     Text(authorName)
@@ -885,7 +885,7 @@ private struct CommunityPulseThreadCard: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(width: 22, height: 22)
-                        .background(Theme.Color.success)
+                        .background(Theme.Color.successSolid)
                         .clipShape(Circle())
                     (
                         Text(author).bold() + Text(" \(preview)")

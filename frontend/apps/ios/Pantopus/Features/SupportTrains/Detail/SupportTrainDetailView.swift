@@ -482,7 +482,7 @@ private struct CelebrationBanner: View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                 Icon(.partyPopper, size: 18, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
             }
             .frame(width: 36, height: 36)

@@ -218,7 +218,7 @@ struct PlacePrivacyMirrorView: View {
             }
             ForEach(privacyPromiseLines, id: \.self) { line in
                 HStack(alignment: .top, spacing: 8) {
-                    Circle().fill(Theme.Color.home).frame(width: 4, height: 4).padding(.top, 7)
+                    Circle().fill(Theme.Color.homeSolid).frame(width: 4, height: 4).padding(.top, 7)
                     Text(line)
                         .font(.system(size: 13))
                         .lineSpacing(2)

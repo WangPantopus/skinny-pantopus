@@ -21,7 +21,7 @@ struct OwnerComposeFab: View {
         Button(action: action) {
             Icon(.edit2, size: 20, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
                 .frame(width: 52, height: 52)
-                .background(Theme.Color.business, in: Circle())
+                .background(Theme.Color.businessSolid, in: Circle())
         }
         .buttonStyle(.plain)
         .pantopusShadow(.lg)

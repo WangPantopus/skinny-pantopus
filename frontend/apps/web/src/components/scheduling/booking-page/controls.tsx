@@ -311,7 +311,7 @@ export function StatusChip({ tone }: { tone: StatusTone }) {
     live: {
       label: "Live",
       cls: "bg-app-success-bg text-app-success",
-      dot: "bg-app-success",
+      dot: "bg-app-success-solid",
     },
     paused: {
       label: "Paused",
@@ -321,7 +321,7 @@ export function StatusChip({ tone }: { tone: StatusTone }) {
     draft: {
       label: "Draft",
       cls: "bg-app-warning-bg text-app-warning",
-      dot: "bg-app-warning",
+      dot: "bg-app-warning-solid",
     },
   };
   const m = map[tone];

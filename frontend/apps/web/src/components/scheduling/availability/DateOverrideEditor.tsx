@@ -133,7 +133,7 @@ function MonthCalendar({
                 className={clsx(
                   "relative flex h-8 w-8 items-center justify-center rounded-full text-[12px] tabular-nums",
                   sel
-                    ? "bg-app-personal font-bold text-white"
+                    ? "bg-app-personal-solid font-bold text-white"
                     : "font-medium text-app-text hover:bg-app-hover",
                 )}
               >
@@ -143,7 +143,7 @@ function MonthCalendar({
                     className={clsx(
                       "absolute bottom-1 h-1 w-1 rounded-full",
                       ov && !ov.is_unavailable
-                        ? "bg-app-personal"
+                        ? "bg-app-personal-solid"
                         : "bg-app-text-muted",
                     )}
                   />
@@ -385,7 +385,7 @@ export default function DateOverrideEditor({
           <button
             type="button"
             onClick={applyForSelected}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal py-2.5 text-[13px] font-bold text-white shadow-sm"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal-solid py-2.5 text-[13px] font-bold text-white shadow-sm"
           >
             {choice === "custom" ? (
               <Clock className="h-[15px] w-[15px]" aria-hidden />
@@ -440,7 +440,7 @@ export default function DateOverrideEditor({
               type="button"
               onClick={blockRange}
               disabled={!rangeStart || !rangeEnd}
-              className="flex-1 rounded-xl bg-app-personal py-2 text-[13px] font-bold text-white disabled:opacity-50"
+              className="flex-1 rounded-xl bg-app-personal-solid py-2 text-[13px] font-bold text-white disabled:opacity-50"
             >
               Block range
             </button>

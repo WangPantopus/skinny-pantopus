@@ -13,6 +13,7 @@ import { SocketProvider } from '@/contexts/SocketContext';
 import { useDesktopNotifications } from '@/hooks/useDesktopNotifications';
 import { NavIcons, HomeIcons, BusinessIcons } from '@/lib/icons';
 import MobileTabBar from '@/components/MobileTabBar';
+import { PantopusMark } from '@/components/brand/PantopusMark';
 import UnifiedFAB from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
@@ -367,7 +368,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               {mobileOpen ? <X className="w-5 h-5 text-app-muted" /> : <Menu className="w-5 h-5 text-app-muted" />}
             </button>
             <button onClick={() => router.push('/app/hub')} className="flex items-center gap-2 mr-auto">
-              <NavIcons.hub className="w-6 h-6 text-primary-600" />
+              <PantopusMark size={24} />
               <span className="text-lg font-semibold text-app">Pantopus</span>
             </button>
           </>
@@ -434,12 +435,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <div className="h-14 flex items-center gap-3 flex-shrink-0 border-b border-app overflow-hidden" style={sidebarHeaderPadStyle}>
             {showLabels ? (
               <button onClick={() => router.push('/app/hub')} className="flex items-center gap-3 hover-bg-app rounded-lg px-1 py-1 transition">
-                <NavIcons.hub className="w-7 h-7 text-primary-600 flex-shrink-0" />
+                <PantopusMark size={28} className="flex-shrink-0" />
                 <span className="text-lg font-bold text-app whitespace-nowrap">Pantopus</span>
               </button>
             ) : (
-              <button onClick={() => router.push('/app/hub')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus Hub">
-                <NavIcons.hub className="w-7 h-7 text-primary-600" />
+              <button onClick={() => router.push('/app/hub')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus Hub" aria-label="Pantopus Hub">
+                <PantopusMark size={28} />
               </button>
             )}
           </div>

@@ -261,6 +261,50 @@ function seedTable(name, rows) {
   tables[name] = [...rows];
 }
 
+// ── Built-in RPC handlers ───────────────────────────────────
+// Postgres functions the app calls in normal flows, mirrored against the
+// in-memory tables so the tests exercise real behaviour instead of a stub.
+// An explicit setRpcMock() still wins — these are only the fallback.
+const PICKUP_KINDS_SQL = ['garbage', 'recycling', 'yard_waste'];
+
+const DEFAULT_RPCS = {
+  // migration 199 — set_home_pickup_rules(p_home_id text, p_rows jsonb).
+  // Deletes the household's pickup rules and inserts the new set in one
+  // step, returning the inserted row count.
+  set_home_pickup_rules: ({ p_home_id: homeId, p_rows: rows }) => {
+    const table = (tables.AddressCalendarRule = tables.AddressCalendarRule || []);
+    const key = String(homeId);
+    for (let i = table.length - 1; i >= 0; i -= 1) {
+      const r = table[i];
+      if (r.scope_type === 'home' && String(r.scope_key) === key && PICKUP_KINDS_SQL.includes(r.kind)) {
+        table.splice(i, 1);
+      }
+    }
+    const incoming = Array.isArray(rows) ? rows : [];
+    for (const r of incoming) {
+      table.push({
+        id: `mock-addresscalendarrule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        scope_type: 'home',
+        scope_key: key,
+        kind: r.kind,
+        title: r.title,
+        detail: r.detail ?? null,
+        rrule: r.rrule,
+        dtstart: r.dtstart,
+        until: r.until ?? null,
+        all_day: r.all_day ?? true,
+        lead_days: r.lead_days ?? 1,
+        source: r.source ?? null,
+        source_url: r.source_url ?? null,
+        confidence: r.confidence ?? 'official',
+        created_by: r.created_by ?? null,
+        updated_at: r.updated_at ?? new Date().toISOString(),
+      });
+    }
+    return incoming.length;
+  },
+};
+
 function setRpcMock(fn) {
   _rpcMock = fn;
 }
@@ -730,7 +774,16 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
-    return { data: null, error: { message: 'No RPC mock configured' } };
+    const [fnName, params] = args;
+    const builtin = DEFAULT_RPCS[fnName];
+    if (builtin) {
+      try {
+        return { data: builtin(params || {}), error: null };
+      } catch (err) {
+        return { data: null, error: { message: err.message } };
+      }
+    }
+    return { data: null, error: { message: `No RPC mock configured for "${fnName}"` } };
   },
   auth: {
     signUp: (...args) => _authMocks.signUp(...args),

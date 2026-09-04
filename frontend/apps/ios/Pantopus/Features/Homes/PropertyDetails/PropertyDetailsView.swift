@@ -201,8 +201,7 @@ private struct HouseholdPill: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.home, size: 11, color: Theme.Color.home)
-            Text("Household")
-                .pantopusTextStyle(.overline)
+            Text("Household", style: .overline)
                 .foregroundStyle(Theme.Color.home)
         }
         .padding(.horizontal, Spacing.s2)
@@ -325,7 +324,7 @@ private struct MismatchBanner: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
-                        .fill(Theme.Color.warning.opacity(0.18))
+                        .fill(Theme.Color.warningSolid.opacity(0.18))
                     Icon(.alertTriangle, size: 14, color: Theme.Color.warning)
                 }
                 .frame(width: 26, height: 26)

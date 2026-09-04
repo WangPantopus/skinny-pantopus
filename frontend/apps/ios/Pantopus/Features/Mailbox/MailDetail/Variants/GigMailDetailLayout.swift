@@ -184,8 +184,7 @@ private struct GigHeroCard: View {
 
     private var payoutBlock: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
-            Text("ESTIMATED PAYOUT")
-                .pantopusTextStyle(.overline)
+            Text("Estimated payout", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s0)
             Text("$\(gig.bid.amount)")
@@ -203,7 +202,7 @@ private struct GigHeroCard: View {
         HStack(spacing: Spacing.s2) {
             Icon(.check, size: 13, color: Theme.Color.appTextInverse)
                 .frame(width: 20, height: 20)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
             Text("Bid accepted · $\(gig.bid.amount)")
                 .font(.system(size: 12, weight: .bold))
@@ -435,7 +434,7 @@ private struct GigSplitDock: View {
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, Spacing.s2)
-            .background(Theme.Color.success)
+            .background(Theme.Color.successSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
             .opacity(inFlight ? 0.6 : 1)
         }

@@ -118,8 +118,7 @@ private struct PackageStatusCard: View {
             HStack(spacing: Spacing.s3) {
                 CarrierBadge(carrier: content.carrier)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(content.carrier) - Tracking #")
-                        .pantopusTextStyle(.overline)
+                    Text("\(content.carrier) - Tracking #", style: .overline)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     Text(content.trackingNumber ?? "Tracking pending")
                         .pantopusTextStyle(.small)
@@ -202,8 +201,7 @@ private struct PackageStatusCard: View {
 private struct EtaProgressBar: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
-            Text("Branch")
-                .pantopusTextStyle(.overline)
+            Text("Branch", style: .overline)
                 .foregroundStyle(Theme.Color.primary700)
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
@@ -219,8 +217,7 @@ private struct EtaProgressBar: View {
                 }
             }
             .frame(height: 12)
-            Text("Porch")
-                .pantopusTextStyle(.overline)
+            Text("Porch", style: .overline)
                 .foregroundStyle(Theme.Color.primary700)
         }
         .accessibilityLabel("Delivery progress from branch to porch, about 68 percent")
@@ -363,8 +360,7 @@ private struct PackageDeliveryPhotoCard: View {
         PackageCard(noPadding: true) {
             HStack(spacing: Spacing.s2) {
                 Icon(.camera, size: 13, color: Theme.Color.appTextSecondary)
-                Text("Courier proof photo")
-                    .pantopusTextStyle(.overline)
+                Text("Courier proof photo", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 Text(photo.capturedAt)
@@ -419,7 +415,7 @@ private struct PorchPhotoIllustration: View {
                         .frame(width: width * 0.30, height: height * 0.64)
                         .position(x: width * 0.78, y: height * 0.39)
                     RoundedRectangle(cornerRadius: Radii.sm)
-                        .fill(Theme.Color.warning)
+                        .fill(Theme.Color.warningSolid)
                         .frame(width: width * 0.20, height: height * 0.20)
                         .overlay(
                             Rectangle()
@@ -432,7 +428,7 @@ private struct PorchPhotoIllustration: View {
                         .frame(width: width * 0.34, height: height * 0.08)
                         .position(x: width * 0.76, y: height * 0.86)
                     Circle()
-                        .fill(Theme.Color.home)
+                        .fill(Theme.Color.homeSolid)
                         .frame(width: 44, height: 44)
                         .position(x: width * 0.15, y: height * 0.68)
                     Theme.Color.appText.opacity(0.20)
@@ -462,7 +458,7 @@ private struct PorchPhotoIllustration: View {
                 }
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, Spacing.s1)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(Spacing.s3)
@@ -492,8 +488,7 @@ private struct PackageContentsCard: View {
     var body: some View {
         PackageCard(noPadding: true) {
             HStack {
-                Text("What's inside")
-                    .pantopusTextStyle(.overline)
+                Text("What's inside", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 Text("Order details")

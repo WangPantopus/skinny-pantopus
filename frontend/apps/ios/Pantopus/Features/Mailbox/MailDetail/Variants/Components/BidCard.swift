@@ -46,8 +46,7 @@ public struct BidCard: View {
     private var amountRow: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: Spacing.s1) {
-                Text("BID AMOUNT")
-                    .pantopusTextStyle(.overline)
+                Text("Bid amount", style: .overline)
                     .foregroundStyle(Theme.Color.handyman)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
                     Text("$\(bid.amount)")
@@ -93,8 +92,7 @@ public struct BidCard: View {
 
     private var messageBlock: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("THEIR MESSAGE")
-                .pantopusTextStyle(.overline)
+            Text("Their message", style: .overline)
                 .foregroundStyle(Theme.Color.handyman)
             VStack(alignment: .leading, spacing: Spacing.s1) {
                 ForEach(Array(bid.message.enumerated()), id: \.offset) { _, paragraph in

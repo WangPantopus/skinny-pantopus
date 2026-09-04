@@ -227,7 +227,7 @@ export default function BlockOffForm({
         type="button"
         onClick={submit}
         disabled={disabled}
-        className="w-full rounded-xl bg-app-personal py-2.5 text-[13.5px] font-bold text-white shadow-sm disabled:opacity-60"
+        className="w-full rounded-xl bg-app-personal-solid py-2.5 text-[13.5px] font-bold text-white shadow-sm disabled:opacity-60"
       >
         {creating ? "Saving…" : "Save block"}
       </button>

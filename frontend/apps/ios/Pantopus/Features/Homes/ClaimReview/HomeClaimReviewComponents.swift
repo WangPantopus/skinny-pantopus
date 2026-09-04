@@ -474,8 +474,7 @@ struct HomeClaimComparePanel: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s1) {
                 Icon(icon, size: 14, color: tint)
-                Text(title)
-                    .pantopusTextStyle(.overline)
+                Text(title, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             if cards.isEmpty {

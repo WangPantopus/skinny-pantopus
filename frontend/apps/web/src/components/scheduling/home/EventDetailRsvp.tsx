@@ -125,7 +125,7 @@ export default function EventDetailRsvp({
             setLoading(true);
             void load();
           }}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-app-home px-5 py-2.5 text-sm font-bold text-white"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-app-home-solid px-5 py-2.5 text-sm font-bold text-white"
         >
           <RotateCw className="h-4 w-4" /> Retry
         </button>
@@ -541,7 +541,7 @@ function RsvpSegmented({
             onClick={() => onPick(o.status)}
             className={`h-9 flex-1 rounded-md text-[12.5px] font-bold transition disabled:opacity-60 ${
               on
-                ? "bg-app-home text-white shadow-sm"
+                ? "bg-app-home-solid text-white shadow-sm"
                 : "text-app-text-secondary"
             }`}
           >

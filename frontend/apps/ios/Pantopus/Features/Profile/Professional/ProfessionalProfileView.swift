@@ -137,7 +137,7 @@ public struct ProfessionalProfileView: View {
             HStack(spacing: Spacing.s3) {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(Theme.Color.business)
+                        .fill(Theme.Color.businessSolid)
                         .frame(width: 40, height: 40)
                     Icon(.briefcase, size: 18, color: Theme.Color.appTextInverse)
                 }
@@ -152,12 +152,11 @@ public struct ProfessionalProfileView: View {
                         .foregroundStyle(Theme.Color.business)
                 }
                 Spacer(minLength: Spacing.s0)
-                Text("Business")
-                    .pantopusTextStyle(.overline)
+                Text("Business", style: .overline)
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s2)
                     .padding(.vertical, 3)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
             }
             PillarStrip(
@@ -361,7 +360,7 @@ public struct ProfessionalProfileView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Theme.Color.business)
+                        .background(Theme.Color.businessSolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
                     .buttonStyle(.plain)

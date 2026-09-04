@@ -50,6 +50,7 @@ import * as api from '@pantopus/api';
 import type { PlacePreview, PlacePreviewLockedSection, PlacePreviewMoneyLead } from '@pantopus/api';
 import type { PlaceBlockDensityData, PlaceSection } from '@pantopus/types';
 import { Group, SectionCard, LockedCard, DensityCard, PlaceHeader, TextButton, AhaCard } from '@/components/archetypes/place';
+import { PantopusLockup } from '@/components/brand/PantopusMark';
 import { renderSection } from '@/components/place/presentation';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { getStoreDownloadCta } from '@/lib/publicShare';
@@ -63,12 +64,7 @@ const REGISTER_HREF = '/register?redirectTo=%2Fapp%2Fplace';
 function TopBar() {
   return (
     <div className="flex items-center justify-between pt-2">
-      <div className="flex items-center gap-2.5">
-        <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-app-home shadow-sm">
-          <MapPinned size={17} strokeWidth={2.25} className="text-white" />
-        </span>
-        <span className="text-lg font-bold -tracking-[0.02em] text-app-text">Pantopus</span>
-      </div>
+      <PantopusLockup size={30} />
       <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-app-text-muted">
         <Globe size={13} strokeWidth={2} />
         <span className="text-[12px] font-medium -tracking-[0.01em]">United States</span>
@@ -204,8 +200,8 @@ const EXAMPLE_READINGS: { icon: LucideIcon; label: string; value: string; tone: 
 ];
 
 const TONE_DOT: Record<'good' | 'watch' | 'neutral', string> = {
-  good: 'bg-app-home',
-  watch: 'bg-app-warning',
+  good: 'bg-app-home-solid',
+  watch: 'bg-app-warning-solid',
   neutral: 'bg-app-text-muted',
 };
 

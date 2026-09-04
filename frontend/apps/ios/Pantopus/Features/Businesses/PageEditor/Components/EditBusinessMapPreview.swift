@@ -81,7 +81,7 @@ public struct EditBusinessMapPreview: View {
             let positions: [CGFloat] = [0.38, 0.48, 0.58]
             if positions.indices.contains(idx) {
                 Circle()
-                    .fill(Theme.Color.success.opacity(0.65))
+                    .fill(Theme.Color.successSolid.opacity(0.65))
                     .frame(width: w * 0.035)
                     .position(x: w * positions[idx], y: h * 0.53)
             }
@@ -113,7 +113,7 @@ public struct EditBusinessMapPreview: View {
                 .frame(width: 14, height: 5)
                 .offset(y: 0)
             PinShape()
-                .fill(Theme.Color.business)
+                .fill(Theme.Color.businessSolid)
                 .frame(width: 32, height: 38)
                 .overlay(
                     PinShape()

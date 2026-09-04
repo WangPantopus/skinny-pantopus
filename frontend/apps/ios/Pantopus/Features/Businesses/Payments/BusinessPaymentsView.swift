@@ -239,7 +239,7 @@ public struct BusinessPaymentsView: View {
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, Spacing.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.Color.error)
+                .background(Theme.Color.errorSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .padding(Spacing.s4)
                 .accessibilityIdentifier("businessPayments.actionToast")

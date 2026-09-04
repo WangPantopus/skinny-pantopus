@@ -607,8 +607,7 @@ private struct LinkedEntityPickerSheet: View {
 
     private func section(title: String, options: [UploadDocumentLinkOption]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(title.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             VStack(spacing: Spacing.s1) {
                 ForEach(options) { option in

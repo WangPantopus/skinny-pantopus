@@ -363,8 +363,7 @@ struct DashboardCard<Content: View>: View {
                             .fill(accent)
                             .frame(width: 6, height: 6)
                     }
-                    Text(title.uppercased())
-                        .pantopusTextStyle(.overline)
+                    Text(title, style: .overline)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer()

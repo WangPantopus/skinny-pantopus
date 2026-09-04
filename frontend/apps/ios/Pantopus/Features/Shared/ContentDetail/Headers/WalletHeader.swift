@@ -106,8 +106,7 @@ public struct WalletHeader: View {
 
     private var topRow: some View {
         HStack {
-            Text(availableLabel.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(availableLabel, style: .overline)
                 .foregroundStyle(Theme.Color.primary200)
             Spacer()
             HStack(spacing: Spacing.s1) {

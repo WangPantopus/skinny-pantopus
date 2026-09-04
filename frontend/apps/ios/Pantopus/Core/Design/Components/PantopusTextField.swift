@@ -73,7 +73,7 @@ public struct PantopusTextField: View {
                 }
                 if isDirty {
                     Circle()
-                        .fill(Theme.Color.warning)
+                        .fill(Theme.Color.warningSolid)
                         .frame(width: 6, height: 6)
                         .padding(.leading, Spacing.s1)
                         .accessibilityHidden(true)

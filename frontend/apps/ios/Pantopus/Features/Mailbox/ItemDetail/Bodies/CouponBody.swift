@@ -201,8 +201,7 @@ private struct StoreBarcodeCard: View {
 
                 HStack(spacing: Spacing.s2) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Checkout code")
-                            .pantopusTextStyle(.overline)
+                        Text("Checkout code", style: .overline)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                         Text(code)
                             .font(.system(size: isExpanded ? 20 : 15, weight: .heavy, design: .monospaced))
@@ -254,8 +253,7 @@ private struct RedeemedRibbon: View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             HStack(spacing: Spacing.s2) {
                 Icon(.checkCircle, size: 18, color: Theme.Color.appTextInverse)
-                Text("Redeemed")
-                    .pantopusTextStyle(.overline)
+                Text("Redeemed", style: .overline)
                     .foregroundStyle(Theme.Color.appTextInverse)
                 Spacer()
                 Text("Success")
@@ -264,7 +262,7 @@ private struct RedeemedRibbon: View {
             }
             .padding(.horizontal, Spacing.s4)
             .frame(height: 44)
-            .background(Theme.Color.success)
+            .background(Theme.Color.successSolid)
 
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text(headline)
@@ -302,8 +300,7 @@ private struct RibbonFact: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .pantopusTextStyle(.overline)
+            Text(label, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Text(value)
                 .pantopusTextStyle(.caption)
@@ -360,7 +357,7 @@ private struct WalletPreviewCard: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             HStack(spacing: 3) {
-                Circle().fill(Theme.Color.success).frame(width: 6, height: 6)
+                Circle().fill(Theme.Color.successSolid).frame(width: 6, height: 6)
                 Text("Active")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(Theme.Color.success)
@@ -625,8 +622,7 @@ private struct FinePrintCard: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s2) {
                 Icon(.fileText, size: 15, color: Theme.Color.appTextSecondary)
-                Text("Fine print")
-                    .pantopusTextStyle(.overline)
+                Text("Fine print", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 Text("From sender")

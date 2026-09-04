@@ -83,8 +83,7 @@ private struct SearchResultsHeader: View {
 
     var body: some View {
         HStack {
-            Text("\(matchCount) \(matchCount == 1 ? "match" : "matches") for \"\(query)\"")
-                .pantopusTextStyle(.overline)
+            Text("\(matchCount) \(matchCount == 1 ? "match" : "matches") for \"\(query)\"", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s2)
             Button {

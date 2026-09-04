@@ -176,8 +176,7 @@ public struct ShareLinkSheet: View {
     private var overline: some View {
         HStack(spacing: Spacing.s2) {
             Circle().fill(theme.accent).frame(width: 8, height: 8)
-            Text("\(theme.title) booking link")
-                .pantopusTextStyle(.overline)
+            Text("\(theme.title) booking link", style: .overline)
                 .foregroundStyle(theme.accent)
         }
     }

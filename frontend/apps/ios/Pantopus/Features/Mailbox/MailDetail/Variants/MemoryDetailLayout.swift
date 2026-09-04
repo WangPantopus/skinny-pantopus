@@ -185,7 +185,7 @@ private struct MemoryHeroCard: View {
         HStack(spacing: Spacing.s2) {
             Icon(.heart, size: 13, color: Theme.Color.appTextInverse)
                 .frame(width: 20, height: 20)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
             Text("Kept in your Vault")
                 .font(.system(size: 12, weight: .bold))

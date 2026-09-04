@@ -329,7 +329,7 @@ export default function CancelRefundSheet({
                 </div>
               </div>
               <div
-                className={`relative h-[25px] w-[42px] shrink-0 rounded-full transition ${restoreCredit ? "bg-app-info" : "bg-app-border-strong"}`}
+                className={`relative h-[25px] w-[42px] shrink-0 rounded-full transition ${restoreCredit ? "bg-app-info-solid" : "bg-app-border-strong"}`}
               >
                 <div
                   className={`absolute top-[2.5px] h-5 w-5 rounded-full bg-white shadow transition-all ${restoreCredit ? "right-[2.5px]" : "left-[2.5px]"}`}
@@ -354,7 +354,7 @@ export default function CancelRefundSheet({
               </div>
             </div>
             <div
-              className={`relative h-[25px] w-[42px] shrink-0 rounded-full transition ${notifyInvitee ? "bg-app-info" : "bg-app-border-strong"}`}
+              className={`relative h-[25px] w-[42px] shrink-0 rounded-full transition ${notifyInvitee ? "bg-app-info-solid" : "bg-app-border-strong"}`}
             >
               <div
                 className={`absolute top-[2.5px] h-5 w-5 rounded-full bg-white shadow transition-all ${notifyInvitee ? "right-[2.5px]" : "left-[2.5px]"}`}
@@ -372,7 +372,7 @@ export default function CancelRefundSheet({
             type="button"
             disabled={submitting}
             onClick={submit}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-error text-sm font-bold text-white transition disabled:opacity-70"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-error-solid text-sm font-bold text-white transition disabled:opacity-70"
           >
             {submitting ? (
               <span

@@ -218,7 +218,7 @@ private struct RecordsHeroCard: View {
     private var filedStamp: some View {
         HStack(spacing: Spacing.s2) {
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(.check, size: 13, color: Theme.Color.appTextInverse)
             }
             .frame(width: 20, height: 20)

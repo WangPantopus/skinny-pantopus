@@ -514,7 +514,7 @@ function RealRentCard({
                 <div className="absolute inset-y-0 bg-app-success-light" style={{ left: `${pos(lo)}%`, width: `${pos(hi) - pos(lo)}%` }} />
               ) : null}
               {mid != null ? (
-                <div className="absolute inset-y-0 w-[2px] bg-app-home" style={{ left: `${pos(mid)}%` }} />
+                <div className="absolute inset-y-0 w-[2px] bg-app-home-solid" style={{ left: `${pos(mid)}%` }} />
               ) : null}
             </div>
             {ownRent != null ? (

@@ -438,7 +438,7 @@ private struct PorchFrame: View {
                     .foregroundColor(.white)
                 Icon(.check, size: 7, color: .white)
                     .frame(width: 14, height: 14)
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color(red: 246 / 255, green: 236 / 255, blue: 216 / 255), lineWidth: 2))
                     .offset(x: -1, y: -1)
@@ -668,7 +668,7 @@ private struct ReadingFrame: View {
                     .foregroundColor(.white)
                 Icon(.check, size: 8, color: .white)
                     .frame(width: 16, height: 16)
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(letter.stationery.paperColor, lineWidth: 2))
             }

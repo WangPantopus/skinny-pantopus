@@ -158,7 +158,7 @@ struct PaymentFailedView: View {
                             .fill(Theme.Color.appSurfaceSunken)
                             .frame(width: geo.size.width * 0.70, height: 5)
                         Capsule()
-                            .fill(Theme.Color.success)
+                            .fill(Theme.Color.successSolid)
                             .frame(width: geo.size.width * 0.70 * 0.62, height: 5)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -166,7 +166,7 @@ struct PaymentFailedView: View {
                 .frame(height: 5)
                 HStack(spacing: Spacing.s1) {
                     Circle()
-                        .fill(Theme.Color.success)
+                        .fill(Theme.Color.successSolid)
                         .frame(width: 6, height: 6)
                     Text("Confirming your booking")
                         .font(.system(size: 11))

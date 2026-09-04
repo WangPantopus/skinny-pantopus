@@ -114,7 +114,7 @@ struct ProSticky: View {
 
     private var editsPill: some View {
         HStack(spacing: Spacing.s1) {
-            Circle().fill(Theme.Color.business).frame(width: 6, height: 6)
+            Circle().fill(Theme.Color.businessSolid).frame(width: 6, height: 6)
             Text("\(dirtyCount) \(dirtyCount == 1 ? "edit" : "edits")")
                 .pantopusTextStyle(.caption)
                 .fontWeight(.bold)
@@ -153,7 +153,7 @@ struct ProSticky: View {
             }
             .padding(.horizontal, Spacing.s4)
             .frame(minHeight: 44)
-            .background(Theme.Color.business)
+            .background(Theme.Color.businessSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

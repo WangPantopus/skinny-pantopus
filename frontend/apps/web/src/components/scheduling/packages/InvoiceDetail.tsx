@@ -341,7 +341,7 @@ function Body({
                 {i !== events.length - 1 && (
                   <span className="absolute left-[6px] top-3.5 bottom-0 w-px bg-app-border" />
                 )}
-                <span className="z-[1] mt-1 h-3 w-3 shrink-0 rounded-full bg-app-success" />
+                <span className="z-[1] mt-1 h-3 w-3 shrink-0 rounded-full bg-app-success-solid" />
                 <div className="flex flex-1 items-baseline justify-between">
                   <span className="text-[12px] font-semibold text-app-text">
                     {e.label}
