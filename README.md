@@ -304,13 +304,14 @@ cd frontend/apps/android && ./gradlew test
 ### Backend (EC2 + Docker)
 
 - **Workflow:** `.github/workflows/deploy-backend.yml`
-- **Triggers:** Push to `dev` → staging EC2; push to `main` → production EC2.
+- **Triggers:** Push to `dev` → staging EC2; push to `master` → production EC2. Skips with a warning until the secrets below exist.
 - **Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_SSH_KEY`, `EC2_USERNAME`, `STAGING_EC2_HOST`, `PROD_EC2_HOST`
+- **All workflows, caching and branch protection:** see [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ### Web (Vercel)
 
 - **Method:** Vercel Git integration.
-- **Settings:** Root Directory = `frontend/apps/web`, Framework = Next.js, Production branch = `main`, Preview = `dev`.
+- **Settings:** Root Directory = `frontend/apps/web`, Framework = Next.js, Production branch = `master`, Preview = `dev`.
 - **Env:** `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
 
 ### iOS (App Store Connect via Fastlane)
