@@ -1,0 +1,105 @@
+name: Release Notifications
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy Backend
+      - Rollback Backend
+    types:
+      - completed
+
+jobs:
+  notify:
+    name: Notify Release Channels
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+    steps:
+      - name: Decide if notification is needed
+        id: gate
+        run: |
+          WORKFLOW='${{ github.event.workflow_run.name }}'
+          BRANCH='${{ github.event.workflow_run.head_branch }}'
+          SHOULD_NOTIFY='false'
+
+          if [ "$WORKFLOW" = "Deploy Backend" ] && [ "$BRANCH" = "master" ]; then
+            SHOULD_NOTIFY='true'
+          elif [ "$WORKFLOW" = "Rollback Backend" ] && [ "$BRANCH" = "master" ]; then
+            SHOULD_NOTIFY='true'
+          fi
+
+          echo "should_notify=$SHOULD_NOTIFY" >> "$GITHUB_OUTPUT"
+
+      - name: Build release message
+        id: message
+        if: steps.gate.outputs.should_notify == 'true'
+        run: |
+          CONCLUSION='${{ github.event.workflow_run.conclusion }}'
+          WORKFLOW='${{ github.event.workflow_run.name }}'
+          BRANCH='${{ github.event.workflow_run.head_branch }}'
+          SHA='${{ github.event.workflow_run.head_sha }}'
+          ACTOR='${{ github.event.workflow_run.actor.login }}'
+          REPO='${{ github.repository }}'
+          RUN_URL='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}'
+
+          if [ "$CONCLUSION" = "success" ]; then
+            ICON='✅'
+          elif [ "$CONCLUSION" = "failure" ]; then
+            ICON='❌'
+          else
+            ICON='⚠️'
+          fi
+
+          SHORT_SHA=$(printf '%s' "$SHA" | cut -c1-7)
+          MESSAGE="$ICON $WORKFLOW: $CONCLUSION\nRepo: $REPO\nBranch: $BRANCH\nCommit: $SHORT_SHA\nBy: $ACTOR\nRun: $RUN_URL"
+
+          {
+            echo "text<<EOF"
+            echo "$MESSAGE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification (optional)
+        if: steps.gate.outputs.should_notify == 'true' && env.SLACK_WEBHOOK_URL != ''
+        env:
+          MESSAGE: ${{ steps.message.outputs.text }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          payload = {"text": os.environ["MESSAGE"]}
+          req = urllib.request.Request(
+              os.environ["SLACK_WEBHOOK_URL"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req).read()
+          PY
+
+      - name: Send Discord notification (optional)
+        if: steps.gate.outputs.should_notify == 'true' && env.DISCORD_WEBHOOK_URL != ''
+        env:
+          MESSAGE: ${{ steps.message.outputs.text }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          payload = {"content": os.environ["MESSAGE"]}
+          req = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req).read()
+          PY
+
+      - name: Skip non-production notification
+        if: steps.gate.outputs.should_notify != 'true'
+        run: echo "Skipping notification for non-production run"

@@ -1,0 +1,269 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "frontend/apps/ios/**"
+      - ".github/workflows/ios-ci.yml"
+  pull_request:
+    paths:
+      - "frontend/apps/ios/**"
+      - ".github/workflows/ios-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend/apps/ios
+
+env:
+  IOS_DERIVED_DATA_PATH: DerivedData
+  IOS_SPM_PATH: SourcePackages
+  IOS_SIMULATOR_OS: "18.5"
+
+jobs:
+  lint:
+    name: Lint (SwiftLint + SwiftFormat)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned SwiftLint & SwiftFormat
+        # `brew install` is unpinned: the hosted runners flip between bottles
+        # (e.g. 0.63.2 flags `URL(string:)!` force-unwraps while 0.63.3 does
+        # not), which broke this job in BOTH directions on successive runs.
+        # Pin exact versions from the GitHub release binaries for determinism.
+        # Keep these in sync with the versions used locally.
+        env:
+          SWIFTLINT_VERSION: "0.63.3"
+          SWIFTFORMAT_VERSION: "0.61.1"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pinned-tools"
+          curl -fsSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" -o "$RUNNER_TEMP/swiftlint.zip"
+          unzip -o -q "$RUNNER_TEMP/swiftlint.zip" -d "$RUNNER_TEMP/swiftlint-bin"
+          install "$RUNNER_TEMP/swiftlint-bin/swiftlint" "$RUNNER_TEMP/pinned-tools/swiftlint"
+          curl -fsSL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o "$RUNNER_TEMP/swiftformat.zip"
+          unzip -o -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat-bin"
+          install "$RUNNER_TEMP/swiftformat-bin/swiftformat" "$RUNNER_TEMP/pinned-tools/swiftformat"
+          # Put the pinned tools FIRST on PATH for the SwiftLint/SwiftFormat
+          # steps so any swiftlint preinstalled on the runner can't shadow them.
+          echo "$RUNNER_TEMP/pinned-tools" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pinned-tools/swiftlint" version
+          "$RUNNER_TEMP/pinned-tools/swiftformat" --version
+
+      - name: SwiftLint
+        run: swiftlint lint --strict
+
+      - name: SwiftFormat (lint only)
+        run: swiftformat --lint .
+
+      # The two guards `make lint` runs locally: feature code goes through
+      # the PantopusIcon enum, and uses design-system tokens rather than
+      # hex colours or on-scale spacing / radius literals.
+      - name: Icons go through PantopusIcon
+        run: bash Pantopus/scripts/verify-icons.sh
+
+      - name: Tokens, not literals
+        run: bash Pantopus/scripts/verify-tokens.sh
+
+      - name: No raw hex in feature code
+        # Acceptance criterion #5 from Prompt P1 — feature code must use
+        # `Theme.Color.*` tokens, never raw `#RRGGBB(AA)` literals (in code
+        # or comments). Token files under `Pantopus/Core/Design/` are
+        # exempt by design.
+        run: |
+          if grep -rnE '#[0-9a-fA-F]{6,8}' Pantopus/Features ; then
+            echo "::error::Raw hex literals found in feature code. Use Theme.Color.* tokens instead."
+            exit 1
+          fi
+          echo "✓ No raw hex literals in Pantopus/Features."
+
+  test:
+    name: Tests on ${{ matrix.simulator }}
+    runs-on: macos-15
+    # The full unit + UI-skip suite runs ~28-32 min on the slowest simulator
+    # (iPhone SE 3rd gen) — 30 was too tight and cancelled it mid-run, while
+    # iPhone 16 / 16 Pro finish in ~24-25 min. 45 gives reliable headroom.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        simulator:
+          - "iPhone 16"
+          - "iPhone 16 Pro"
+          - "iPhone SE (3rd generation)"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        # Xcode 16.4 ships with the iOS 18.5 simulator runtime
+        # preinstalled on the macos-15 runner image; older 16.x bundles
+        # may be missing their runtime, leading to "iOS X is not
+        # installed" errors when xcodebuild looks for a destination.
+        run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: frontend/apps/ios/SourcePackages
+          # v3 — workspace-local package clones avoid the wildcard
+          # DerivedData restore path that previously failed on sentry-cocoa.
+          key: spm-v3-${{ runner.os }}-${{ hashFiles('frontend/apps/ios/project.yml') }}
+          restore-keys: |
+            spm-v3-${{ runner.os }}-
+
+      # Sanitised matrix entry → safe artifact + bundle name (no spaces /
+      # parentheses). Used by the result-bundle path and the upload step.
+      - name: Compute simulator slug
+        id: sim
+        run: |
+          slug=$(echo "${{ matrix.simulator }}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/-+$//')
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Create simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+
+          runtime_id=$(xcrun simctl list runtimes | awk -v os="${IOS_SIMULATOR_OS}" '
+            $0 ~ "iOS " os && $0 !~ /unavailable/ {
+              match($0, /com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+/)
+              if (RSTART) {
+                print substr($0, RSTART, RLENGTH)
+                exit
+              }
+            }
+          ')
+
+          if [[ -z "${runtime_id}" ]]; then
+            echo "::error::iOS ${IOS_SIMULATOR_OS} simulator runtime is not installed."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+
+          device_type_id=$(xcrun simctl list devicetypes | awk -v name="${{ matrix.simulator }}" '
+            index($0, name " (") == 1 {
+              match($0, /com\.apple\.CoreSimulator\.SimDeviceType\.[^)]+/)
+              if (RSTART) {
+                print substr($0, RSTART, RLENGTH)
+                exit
+              }
+            }
+          ')
+
+          if [[ -z "${device_type_id}" ]]; then
+            echo "::error::Simulator device type '${{ matrix.simulator }}' is not installed."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+
+          device_id=$(xcrun simctl create "Pantopus CI ${{ steps.sim.outputs.slug }}" "${device_type_id}" "${runtime_id}")
+          echo "udid=${device_id}" >> "$GITHUB_OUTPUT"
+          echo "SIMULATOR_UDID=${device_id}" >> "$GITHUB_ENV"
+          xcrun simctl boot "${device_id}" || true
+          xcrun simctl bootstatus "${device_id}" -b
+          echo "Using simulator '${{ matrix.simulator }}' (${device_id}) on ${runtime_id}."
+
+      - name: Run tests
+        # CI runners have no Apple Developer signing identity. Disable
+        # signing so the simulator-only test/build works without a
+        # provisioning profile.
+        #
+        # OS is pinned to 18.5 (the SDK Xcode 16.4 builds against) rather
+        # than `OS=latest`. The runner image now also carries iOS 26.x
+        # runtimes, so `latest` resolved to 26.2 — running an 18.5-SDK app
+        # there made the XCUITest runner injection flaky ("Application …
+        # xctrunner is unknown to FrontBoard"). Matching the runtime to the
+        # SDK keeps the runner install deterministic across simulators.
+        #
+        # The whole PantopusUITests target is skipped from the RUN action
+        # (`-skip-testing:PantopusUITests`): even pinned to 18.5 the XCUITest
+        # runner injection hangs indefinitely on the hosted simulators (the
+        # phase never reaches a single UI test case, then the job times out).
+        # The target is still BUILT, so UI-test code is compile-checked; the
+        # unit + snapshot suites provide the gating coverage. Run UI tests
+        # locally with `make test`.
+        #
+        # Tee raw xcodebuild output so compiler diagnostics survive xcbeautify
+        # formatting — SwiftEmitModule failures otherwise surface with no file
+        # or line context in GitHub Actions logs.
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Pantopus.xcodeproj \
+            -scheme Pantopus \
+            -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}" \
+            -configuration Debug \
+            -derivedDataPath "${IOS_DERIVED_DATA_PATH}" \
+            -clonedSourcePackagesDirPath "${IOS_SPM_PATH}" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            -enableCodeCoverage YES \
+            -skip-testing:PantopusUITests \
+            -resultBundlePath "TestResults-${{ steps.sim.outputs.slug }}.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            test 2>&1 | tee "xcodebuild-${{ steps.sim.outputs.slug }}.log" | xcbeautify
+
+      - name: Upload xcodebuild log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log-${{ steps.sim.outputs.slug }}
+          path: frontend/apps/ios/xcodebuild-${{ steps.sim.outputs.slug }}.log
+          if-no-files-found: ignore
+
+      - name: List available iOS simulators on failure
+        if: failure()
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices available iPhone
+
+      - name: Extract coverage summary
+        if: always()
+        run: |
+          set -e
+          bundle="TestResults-${{ steps.sim.outputs.slug }}.xcresult"
+          if [[ -d "$bundle" ]]; then
+            echo "## iOS coverage — ${{ matrix.simulator }}" >> "$GITHUB_STEP_SUMMARY"
+            xcrun xccov view --report --only-targets "$bundle" \
+              | tee coverage-${{ steps.sim.outputs.slug }}.txt \
+              | head -40 >> "$GITHUB_STEP_SUMMARY" || true
+            xcrun xccov view --report --json "$bundle" \
+              > coverage-${{ steps.sim.outputs.slug }}.json || true
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results-${{ steps.sim.outputs.slug }}
+          path: |
+            frontend/apps/ios/TestResults-${{ steps.sim.outputs.slug }}.xcresult
+            frontend/apps/ios/coverage-${{ steps.sim.outputs.slug }}.txt
+            frontend/apps/ios/coverage-${{ steps.sim.outputs.slug }}.json
+          retention-days: 7
+
+      - name: Delete simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
+          xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true

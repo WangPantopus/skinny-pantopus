@@ -76,7 +76,7 @@ struct NearbyCellsMapCard: View {
             CLLocationCoordinate2D(latitude: minLat, longitude: minLng),
             CLLocationCoordinate2D(latitude: minLat, longitude: maxLng),
             CLLocationCoordinate2D(latitude: maxLat, longitude: maxLng),
-            CLLocationCoordinate2D(latitude: maxLat, longitude: minLng),
+            CLLocationCoordinate2D(latitude: maxLat, longitude: minLng)
         ]
     }
 }

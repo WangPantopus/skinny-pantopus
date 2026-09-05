@@ -1,0 +1,212 @@
+name: Deploy Backend
+
+# Builds the backend Docker image, pushes it to Docker Hub, then deploys it
+# to the EC2 host for the branch: dev → staging, master → production.
+#
+# The whole pipeline is a no-op (with a warning) until the Docker Hub
+# secrets exist on this repository, so landing backend changes never fails
+# on a missing secret. See docs/ci-cd.md for the full secret list.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, dev]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy-backend.yml'
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend
+
+jobs:
+  # ─── Are the deploy secrets configured? ────────────────────────────────────
+  preflight:
+    name: Check deploy configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          if [ "$HAS_DOCKERHUB" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Backend deploy skipped: DOCKERHUB_USERNAME / DOCKERHUB_TOKEN are not set on this repository. See docs/ci-cd.md to enable deploys."
+          fi
+
+  # ─── Build + push Docker image to Docker Hub ──────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            # dev branch → :staging tag
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/dev' }}
+            # master branch → :latest and :prod tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/master' }}
+            # Always tag with short commit SHA for traceability
+            type=sha,prefix={{branch}}-,format=short
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Deploy to Staging EC2 (dev branch) ───────────────────────────────────
+  # Requires GitHub Secrets:
+  #   EC2_SSH_KEY        - contents of your .pem private key
+  #   STAGING_EC2_HOST   - staging server IP or hostname
+  #   EC2_USERNAME       - ec2-user (Amazon Linux) or ubuntu (Ubuntu)
+  #   DOCKERHUB_USERNAME - Docker Hub username
+  #   DOCKERHUB_TOKEN    - Docker Hub access token
+  #
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/dev'
+    environment: staging
+
+    steps:
+      - name: SSH and deploy to staging EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
+            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
+            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:staging"
+
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+
+            docker pull "$IMAGE"
+
+            docker stop pantopus-backend-staging || true
+            docker rm pantopus-backend-staging || true
+            docker run -d \
+              --name pantopus-backend-staging \
+              --env-file ~/pantopus/.env.staging \
+              -p 8000:8000 \
+              --restart unless-stopped \
+              "$IMAGE"
+
+            for i in $(seq 1 20); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend-staging 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "Staging container is healthy"
+                break
+              fi
+              if [ "$i" -eq 20 ]; then
+                echo "Staging container failed health check"
+                docker logs --tail 100 pantopus-backend-staging || true
+                exit 1
+              fi
+              sleep 3
+            done
+
+            docker image prune -f
+
+  # ─── Deploy to Production EC2 (master branch) ─────────────────────────────
+  # Requires GitHub Secrets:
+  #   EC2_SSH_KEY        - contents of your .pem private key
+  #   PROD_EC2_HOST      - production server IP or hostname
+  #   EC2_USERNAME       - ec2-user (Amazon Linux) or ubuntu (Ubuntu)
+  #   DOCKERHUB_USERNAME - Docker Hub username
+  #   DOCKERHUB_TOKEN    - Docker Hub access token
+  #
+  deploy-prod:
+    name: Deploy to Production
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/master'
+    environment: production
+
+    steps:
+      - name: SSH and deploy to production EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
+            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
+            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:prod"
+
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+
+            docker pull "$IMAGE"
+
+            docker stop pantopus-backend || true
+            docker rm pantopus-backend || true
+            docker run -d \
+              --name pantopus-backend \
+              --env-file ~/pantopus/.env.prod \
+              -p 8000:8000 \
+              --restart unless-stopped \
+              "$IMAGE"
+
+            for i in $(seq 1 20); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "Production container is healthy"
+                break
+              fi
+              if [ "$i" -eq 20 ]; then
+                echo "Production container failed health check"
+                docker logs --tail 100 pantopus-backend || true
+                exit 1
+              fi
+              sleep 3
+            done
+
+            docker image prune -f

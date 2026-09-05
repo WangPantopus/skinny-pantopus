@@ -96,6 +96,7 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertNil(vm.validate(.firstName))
         XCTAssertNil(vm.validate(.lastName))
     }
+
     func test_middleName_optional() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.middleName))
@@ -113,6 +114,7 @@ final class SignUpViewModelTests: XCTestCase {
         vm.dateOfBirth = Calendar.current.date(byAdding: .year, value: -25, to: Date())
         XCTAssertNil(vm.validate(.dateOfBirth))
     }
+
     func test_phone_optional_but_must_be_e164_when_present() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.phoneNumber)) // optional
@@ -142,6 +144,7 @@ final class SignUpViewModelTests: XCTestCase {
         vm.zipcode = "02"
         XCTAssertEqual(vm.validate(.zipcode), "ZIP must be at least 3 characters.")
     }
+
     func test_inviteCode_optional() {
         let vm = SignUpViewModel()
         XCTAssertNil(vm.validate(.inviteCode))

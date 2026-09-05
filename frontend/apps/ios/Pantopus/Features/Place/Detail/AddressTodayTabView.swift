@@ -75,11 +75,13 @@ struct AddressTodayTabView: View {
             Text("Today starts at your address")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("Weather, air, alerts, and the dates that matter at your address — pickup day, tax deadlines, council meetings. Claim your address to start.")
-                .font(.system(size: 14))
-                .lineSpacing(3)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.Color.appTextSecondary)
+            Text(
+                "Weather, air, alerts, and the dates that matter at your address — pickup day, tax deadlines, council meetings. Claim your address to start."
+            )
+            .font(.system(size: 14))
+            .lineSpacing(3)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(Theme.Color.appTextSecondary)
             PrimaryButton(title: "Claim your address") { rootTabs.selected = .place }
         }
         .padding(24)

@@ -1,0 +1,53 @@
+name: iOS Beta (TestFlight)
+
+on:
+  push:
+    tags:
+      - "ios-v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: frontend/apps/ios
+
+jobs:
+  testflight:
+    name: Upload to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: ios-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: frontend/apps/ios
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Write .env from secrets
+        run: |
+          cat > .env <<'ENV'
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          MATCH_GIT_URL=${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD=${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_KEY_ID=${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID=${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_CONTENT=${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+          APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
+          ENV
+
+      - name: Fastlane beta
+        env:
+          FASTLANE_HIDE_CHANGELOG: "true"
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+        run: bundle exec fastlane beta

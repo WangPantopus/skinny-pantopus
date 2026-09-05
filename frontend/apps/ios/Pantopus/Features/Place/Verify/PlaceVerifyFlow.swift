@@ -55,8 +55,8 @@ struct PlaceVerifyBenefit: Identifiable {
     }
 }
 
-// The T4 unlocks that actually exist (Wedge v2 D4): proof you live here,
-// your rank on the block, and the rooms only verified neighbors see.
+/// The T4 unlocks that actually exist (Wedge v2 D4): proof you live here,
+/// your rank on the block, and the rooms only verified neighbors see.
 let placeVerifyBenefits: [PlaceVerifyBenefit] = [
     .init(
         icon: .badgeCheck,

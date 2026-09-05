@@ -48,7 +48,7 @@ final class PlaceUnlistedViewModel {
     }
 
     /// What we can honestly show for one broker's row.
-    enum RowProgress: Sendable, Hashable {
+    enum RowProgress: Hashable {
         case status(UnlistedRemovalStatus)
         /// The progress read failed — we do not know, and must not guess.
         case unknown
@@ -300,8 +300,8 @@ private struct UnlistedStateProgramCard: View {
         .accessibilityIdentifier("place.unlisted.stateProgram.\(identifierSuffix)")
     }
 
-    // The three answers are three different claims. Only one of them is
-    // "this state has none", and it is only ever made when we checked.
+    /// The three answers are three different claims. Only one of them is
+    /// "this state has none", and it is only ever made when we checked.
     private var headline: String {
         switch answer {
         case let .program(program):

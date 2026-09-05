@@ -226,5 +226,4 @@ final class PlaceSectionsDecodingTests: XCTestCase {
         XCTAssertEqual(d.zone, "X")
         XCTAssertNil(d.nfip)
     }
-
 }

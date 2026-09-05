@@ -21,6 +21,7 @@ const META: Record<PlaceSectionId, { group: PlaceSection['group']; band: PlaceSe
   alerts: { group: 'today', band: 'A', source: 'National Weather Service' },
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo' },
   good_day_to: { group: 'today', band: 'A', source: "Pantopus \u00b7 derived from today's conditions" },
+  address_calendar: { group: 'today', band: 'A', source: 'Pantopus registry · city and state sources' },
   your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM' },
   home_systems: { group: 'your_home', band: 'C', source: 'Your household record' },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer' },

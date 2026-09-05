@@ -500,7 +500,7 @@ function ShareAddressLink({ address }: { address: string }) {
     const url = `${window.location.origin}/start?address=${encodeURIComponent(address)}`;
     const title = "What's true about this address";
     // Funnel: the share rate (D5). Method only — never the address.
-    api.recordFunnelEvent('t0_share_clicked', { method: navigator.share ? 'share' : 'copy' });
+    api.recordFunnelEvent('t0_share_clicked', { method: typeof navigator.share === 'function' ? 'share' : 'copy' });
     try {
       if (navigator.share) {
         await navigator.share({ title, url });
@@ -686,7 +686,7 @@ export default function StartFunnel() {
       api.recordFunnelEvent('t0_aha_viewed', {
         section_id: aha.section_id ?? '',
         tone: aha.tone,
-        grade: aha.grade,
+        grade: aha.grade ?? '',
       });
     }
   }, [submitted, previewStatus, aha]);

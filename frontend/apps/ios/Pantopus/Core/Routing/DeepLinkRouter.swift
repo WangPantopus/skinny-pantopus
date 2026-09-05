@@ -587,7 +587,7 @@ final class DeepLinkRouter {
     /// `pantopus://place/<homeId>/<slug>`       → a group-detail page
     /// `pantopus://place?id=<homeId>&section=<slug>`
     private func placeDestination(
-        url: URL,
+        url _: URL,
         segments: [String],
         idQuery: String?,
         comps: URLComponents?

@@ -452,7 +452,7 @@ final class PlacePickerViewModelTests: XCTestCase {
         XCTAssertEqual(tag.placeId, "poi.1")
         XCTAssertEqual(tag.kind, "poi")
         // Locality has no short address line — falls back to the full one.
-        let localityTag = PostPlaceTag(place: try XCTUnwrap(locality))
+        let localityTag = try PostPlaceTag(place: XCTUnwrap(locality))
         XCTAssertEqual(localityTag.name, "Portland")
         XCTAssertEqual(localityTag.address, "Portland, Oregon, United States")
         XCTAssertEqual(localityTag.kind, "place")

@@ -1,0 +1,110 @@
+name: Rollback Backend
+run-name: Rollback Backend (${{ inputs.target }}) - ${{ inputs.image_tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Rollback target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: "Docker image tag to deploy (example: dev-abc1234, master-abc1234, prod, staging)"
+        required: true
+        type: string
+
+jobs:
+  rollback-staging:
+    name: Rollback Staging Backend
+    if: inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: SSH and rollback staging EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
+            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
+            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:${{ inputs.image_tag }}"
+
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+
+            docker pull "$IMAGE"
+
+            docker stop pantopus-backend-staging || true
+            docker rm pantopus-backend-staging || true
+            docker run -d \
+              --name pantopus-backend-staging \
+              --env-file ~/pantopus/.env.staging \
+              -p 8000:8000 \
+              --restart unless-stopped \
+              "$IMAGE"
+
+            for i in $(seq 1 20); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend-staging 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "Staging rollback succeeded"
+                break
+              fi
+              if [ "$i" -eq 20 ]; then
+                echo "Staging rollback failed health check"
+                docker logs --tail 100 pantopus-backend-staging || true
+                exit 1
+              fi
+              sleep 3
+            done
+
+  rollback-production:
+    name: Rollback Production Backend
+    if: inputs.target == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: SSH and rollback production EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
+            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
+            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:${{ inputs.image_tag }}"
+
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+
+            docker pull "$IMAGE"
+
+            docker stop pantopus-backend || true
+            docker rm pantopus-backend || true
+            docker run -d \
+              --name pantopus-backend \
+              --env-file ~/pantopus/.env.prod \
+              -p 8000:8000 \
+              --restart unless-stopped \
+              "$IMAGE"
+
+            for i in $(seq 1 20); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "Production rollback succeeded"
+                break
+              fi
+              if [ "$i" -eq 20 ]; then
+                echo "Production rollback failed health check"
+                docker logs --tail 100 pantopus-backend || true
+                exit 1
+              fi
+              sleep 3
+            done

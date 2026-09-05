@@ -298,8 +298,8 @@ final class UnlistedDecodingTests: XCTestCase {
         "source_url":"https://www.acxiom.com/optout/","verified_at":"2026-08-27"}]}]
     """
 
-    // Mirrors backend/services/unlistedService.js. The second clause used
-    // to claim the registry was exhaustive; it is not.
+    /// Mirrors backend/services/unlistedService.js. The second clause used
+    /// to claim the registry was exhaustive; it is not.
     private static let methodNote = """
     We do not look your address up on these sites — searching them would hand them your address. \
     These are the 19 sites we have verified a working removal path for — there are more we have not got to yet.

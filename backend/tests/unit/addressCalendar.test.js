@@ -9,7 +9,7 @@ jest.mock('../../config/supabaseAdmin', () => jest.requireActual('../__mocks__/s
 jest.mock('../../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../../utils/homePermissions', () => ({ checkHomePermission: jest.fn(async () => ({ hasAccess: true })) }));
 
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 const { checkHomePermission } = require('../../utils/homePermissions');
 const svc = require('../../services/addressCalendarService');
 const router = require('../../routes/addressCalendar');
@@ -31,7 +31,24 @@ function seedCamas() {
   ]);
 }
 
-beforeEach(() => { resetTables(); jest.clearAllMocks(); checkHomePermission.mockResolvedValue({ hasAccess: true }); });
+// Emulates migration 199's `set_home_pickup_rules` against the in-memory
+// table: drop the household's pickup rules, then insert the new pair, so
+// the service's atomic swap behaves the way it does in Postgres.
+const PICKUP_KINDS = ['garbage', 'recycling', 'yard_waste'];
+function mockPickupSwapRpc() {
+  setRpcMock(async (fn, args) => {
+    if (fn !== 'set_home_pickup_rules') return { data: null, error: { message: `Unexpected RPC ${fn}` } };
+    const table = getTable('AddressCalendarRule');
+    const kept = table.filter((r) => !(r.scope_type === 'home' && r.scope_key === args.p_home_id && PICKUP_KINDS.includes(r.kind)));
+    const inserted = args.p_rows.map((r, i) => ({
+      id: `home-rule-${i}`, scope_type: 'home', scope_key: args.p_home_id, all_day: true, lead_days: 1, confidence: 'official', ...r,
+    }));
+    table.splice(0, table.length, ...kept, ...inserted);
+    return { data: inserted.length, error: null };
+  });
+}
+
+beforeEach(() => { resetTables(); mockPickupSwapRpc(); jest.clearAllMocks(); checkHomePermission.mockResolvedValue({ hasAccess: true }); });
 
 describe('composeForHome', () => {
   it('expands weekly, biweekly and monthly-by-weekday rules into dated events within 14 days', async () => {
