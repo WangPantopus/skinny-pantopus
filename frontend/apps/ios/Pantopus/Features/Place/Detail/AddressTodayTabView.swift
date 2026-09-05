@@ -76,6 +76,7 @@ struct AddressTodayTabView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(
+                // swiftlint:disable:next line_length
                 "Weather, air, alerts, and the dates that matter at your address — pickup day, tax deadlines, council meetings. Claim your address to start."
             )
             .font(.system(size: 14))

@@ -1,3 +1,4 @@
+// swiftlint:disable type_body_length
 //
 //  PlacePickerViewModelTests.swift
 //  PantopusTests
@@ -350,7 +351,8 @@ final class PlacePickerViewModelTests: XCTestCase {
         }
         XCTAssertEqual(restored.count, 2)
         XCTAssertEqual(
-            SequencedURLProtocol.capturedRequests.count, 2,
+            SequencedURLProtocol.capturedRequests.count,
+            2,
             "both nearby fetches are media-anchored; the fix-less current anchor fetches nothing"
         )
     }

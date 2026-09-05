@@ -12,7 +12,7 @@ final class JustMovedCardTests: XCTestCase {
     private func iso(_ daysAgo: Int) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!)
+        return f.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date())
     }
 
     func test_window_is_sixty_days_back_and_two_weeks_ahead() {
