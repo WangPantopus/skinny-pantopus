@@ -76,10 +76,20 @@ function check(root, base) {
       errors.push('Baseline activation requires real SQL contracts under supabase/tests');
     }
   }
-  if (base && policy.mode === 'baselined') {
-    const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  if (base && !/^0+$/.test(base)) {
+    const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     let previous;
     try { previous = JSON.parse(git(['show', `${base}:supabase/migration-policy.json`])); } catch { /* first adoption PR */ }
+    const canonical = value => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)));
+    if (previous && canonical(previous.legacyFiles) !== canonical(policy.legacyFiles)) {
+      errors.push('The historical inventory is immutable; do not regenerate hashes to accept edits');
+    }
+    if (previous?.mode === 'baselined' && policy.mode !== 'baselined') {
+      errors.push('Database adoption cannot be reverted to legacy mode');
+    }
+    if (previous?.mode === 'baselined' && canonical(previous.baselineFiles) !== canonical(policy.baselineFiles)) {
+      errors.push('The adopted baseline inventory is immutable');
+    }
     if (previous?.mode === 'baselined') {
       const names = git(['ls-tree', '-r', '--name-only', base, 'supabase/migrations']).trim().split('\n').filter(n => n.endsWith('.sql'));
       const newest = names.map(n => path.basename(n).slice(0, 14)).sort().at(-1);

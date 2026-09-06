@@ -119,8 +119,13 @@ jobs:
           file: backend/Dockerfile
           target: production
           push: false
+          load: true
+          tags: pantopus-ci/backend:check
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Exercise production image readiness
+        run: docker run --rm --entrypoint node -v "$PWD/scripts/deploy/check-image.cjs:/checks.cjs:ro" pantopus-ci/backend:check /checks.cjs
 
   # ─── Web: lint, typecheck gate, Jest ───────────────────────────────────────
   web:

@@ -34,7 +34,9 @@ else if(a[0]==='inspect'){
 }else if(a[0]==='start'){
  const c=lookup(a[1]);if(!c)code=1;else c.status='running';
 }else{console.error('Unsupported Docker operation',a);code=2;}
-fs.writeFileSync(file,JSON.stringify(s));if(out)console.log(out);process.exit(code);
+fs.writeFileSync(file,JSON.stringify(s));if(out)console.log(out);
+if(a[0]==='run'&&a[a.indexOf('--name')+1]==='pantopus-backend'&&['SIGHUP','SIGTERM'].includes(fail))process.kill(process.ppid,fail);
+process.exit(code);
 `;
 function rollout(failure, first = false) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantopus-rollout-test-'));
@@ -55,7 +57,7 @@ function rollout(failure, first = false) {
     return { ...result, state: JSON.parse(fs.readFileSync(state)) };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
-for (const failure of ['pull', 'candidate', 'bind', 'worker', 'stop']) {
+for (const failure of ['pull', 'candidate', 'bind', 'worker', 'stop', 'SIGHUP', 'SIGTERM']) {
   test(`${failure} failure retains or restores both previous services`, () => {
     const r = rollout(failure); assert.notEqual(r.status, 0, r.stdout+r.stderr);
     for (const [name, original] of [['pantopus-backend', 'previous-api'], ['pantopus-worker', 'previous-worker']]) {
