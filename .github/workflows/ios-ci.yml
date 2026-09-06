@@ -117,6 +117,7 @@ jobs:
             -clonedSourcePackagesDirPath "$IOS_SPM_PATH" \
             -skipPackagePluginValidation -skipMacroValidation \
             -enableCodeCoverage YES \
+            ARCHS="$(uname -m)" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
             build-for-testing 2>&1 | tee xcodebuild-build.log | xcbeautify
       - name: Package test products (preserve symlinks)

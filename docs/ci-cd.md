@@ -15,7 +15,7 @@ tests. The navigation smoke tests cover Place, Today, Nearby and Mail. Place's
 route retains `root/home` for compatibility. Snapshot updates require inspecting
 the diff; do not increase tolerance to hide a failure.
 
-iOS builds the test bundle once, preserves symlinks in a tar artifact, then runs
+iOS builds the test bundle once for the runner's architecture, preserves symlinks in a tar artifact, then runs
 that same bundle on three iOS 18.5 simulators. Build and test timeouts are
 separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
 existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
