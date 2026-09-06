@@ -1,16 +1,11 @@
 name: Android CI
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "frontend/apps/android/**"
-      - ".github/workflows/android-ci.yml"
-  pull_request:
-    paths:
-      - "frontend/apps/android/**"
-      - ".github/workflows/android-ci.yml"
+  workflow_call:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -124,7 +119,6 @@ jobs:
     name: Instrumented tests (emulator)
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4

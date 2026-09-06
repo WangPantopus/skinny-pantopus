@@ -6,6 +6,13 @@ on:
       - "android-v*"
   workflow_dispatch:
 
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: frontend/apps/android

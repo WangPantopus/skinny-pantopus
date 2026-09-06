@@ -1,5 +1,5 @@
-FROM node:20-alpine AS base
-RUN corepack enable pnpm
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # --- Prune monorepo for @pantopus/web only ---
 FROM base AS pruner
@@ -34,7 +34,7 @@ ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 RUN pnpm turbo build --filter=@pantopus/web
 
 # --- Production runner (minimal image) ---
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 
 ENV NODE_ENV=production

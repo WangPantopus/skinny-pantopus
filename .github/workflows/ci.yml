@@ -1,13 +1,7 @@
 name: CI
 
-# Backend, web and seeder checks. Pull requests only run the jobs whose
-# surface changed (paths are detected in the `changes` job); pushes to
-# master and dev run everything. iOS and Android have their own workflows
-# (ios-ci.yml, android-ci.yml) because they need different runners.
-#
-# `CI OK` is the single job to mark as a required status check on master:
-# it fails if any job it depends on failed, and passes when they succeed
-# or were skipped for an unrelated change.
+# CI OK is the required check for every surface, including reusable mobile jobs.
+# Only job-level conditions skip unrelated work; the aggregate always reports.
 
 on:
   pull_request:
@@ -38,17 +32,22 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       web: ${{ steps.filter.outputs.web }}
       seeder: ${{ steps.filter.outputs.seeder }}
+      ios: ${{ steps.filter.outputs.ios }}
+      android: ${{ steps.filter.outputs.android }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             backend:
+              - 'scripts/deploy/**'
+              - '.dockerignore'
+              - 'docker-compose*.yml'
               - 'backend/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/**'
             web:
               - 'frontend/apps/web/**'
               - 'frontend/packages/**'
@@ -57,10 +56,16 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'turbo.json'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/**'
+            ios:
+              - 'frontend/apps/ios/**'
+              - '.github/workflows/**'
+            android:
+              - 'frontend/apps/android/**'
+              - '.github/workflows/**'
             seeder:
               - 'pantopus-seeder/**'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/**'
 
   # ─── Backend: privacy gates + Jest ─────────────────────────────────────────
   backend:
@@ -68,7 +73,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -95,14 +100,13 @@ jobs:
         run: pnpm test
 
   # ─── Backend: the production Docker image still builds ─────────────────────
-  # Pull requests only. On master the image is built and pushed for real by
-  # deploy-backend.yml, so building it here would be duplicate work.
+  # Validate the production image before any commit is eligible for deployment.
   backend-image:
     name: Backend Docker image
     needs: changes
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true' }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -111,7 +115,8 @@ jobs:
       - name: Build production target (no push)
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: backend/Dockerfile
           target: production
           push: false
           cache-from: type=gha
@@ -123,7 +128,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -150,6 +155,11 @@ jobs:
 
       - name: Jest
         run: pnpm --filter=@pantopus/web test
+
+      - name: Production build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter=@pantopus/web build
 
   # ─── Web: Identity Firewall end-to-end (Playwright, API fully mocked) ──────
   web-e2e:
@@ -223,21 +233,63 @@ jobs:
         working-directory: pantopus-seeder
         run: pytest tests/ -q
 
-  # ─── Aggregate: the one required status check ──────────────────────────────
+  ios:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.ios == 'true') }}
+    uses: ./.github/workflows/ios-ci.yml
+
+  android:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.android == 'true') }}
+    uses: ./.github/workflows/android-ci.yml
+
+  infrastructure:
+    name: Deployment and migration safeguards
+    outputs:
+      database-mode: ${{ steps.database.outputs.mode }}
+      database-cli: ${{ steps.database.outputs.cli }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs
+      - name: Protect migration history
+        id: database
+        env:
+          MIGRATION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          node scripts/db/check-migrations.cjs
+          node -e 'const p=require("./supabase/migration-policy.json"); console.log("mode="+p.mode); console.log("cli="+p.cliVersion)' >> "$GITHUB_OUTPUT"
+      - run: bash -n scripts/deploy/backend.sh scripts/deploy/remote.sh
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Validate every workflow
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=
+
+  database:
+    needs: infrastructure
+    if: needs.infrastructure.outputs.database-mode == 'baselined'
+    uses: ./.github/workflows/db-migrations-check.yml
+    with:
+      cli-version: ${{ needs.infrastructure.outputs.database-cli }}
+
   ci-ok:
     name: CI OK
-    if: ${{ !cancelled() }}
-    needs: [changes, backend, backend-image, web, web-e2e, seeder]
+    if: always()
+    needs: [changes, backend, backend-image, web, web-e2e, seeder, ios, android, infrastructure, database]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Report
+      - name: Require every applicable check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
         run: |
-          echo "backend:       ${{ needs.backend.result }}"
-          echo "backend-image: ${{ needs.backend-image.result }}"
-          echo "web:           ${{ needs.web.result }}"
-          echo "web-e2e:       ${{ needs.web-e2e.result }}"
-          echo "seeder:        ${{ needs.seeder.result }}"
-      - name: Fail if any job failed
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
-        run: exit 1
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'

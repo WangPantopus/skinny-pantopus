@@ -8,6 +8,10 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   notify:
     name: Notify Release Channels
@@ -20,18 +24,17 @@ jobs:
     steps:
       - name: Decide if notification is needed
         id: gate
-        run: |
-          WORKFLOW='${{ github.event.workflow_run.name }}'
-          BRANCH='${{ github.event.workflow_run.head_branch }}'
-          SHOULD_NOTIFY='false'
-
-          if [ "$WORKFLOW" = "Deploy Backend" ] && [ "$BRANCH" = "master" ]; then
-            SHOULD_NOTIFY='true'
-          elif [ "$WORKFLOW" = "Rollback Backend" ] && [ "$BRANCH" = "master" ]; then
-            SHOULD_NOTIFY='true'
-          fi
-
-          echo "should_notify=$SHOULD_NOTIFY" >> "$GITHUB_OUTPUT"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              ...context.repo, run_id: run.id, filter: 'latest', per_page: 100,
+            });
+            const released = jobs.some(job => job.steps?.some(step =>
+              step.name === 'Deploy API and worker' && step.conclusion === 'success'));
+            const actionable = released || run.conclusion === 'failure';
+            core.setOutput('should_notify', run.head_branch === 'master' && actionable ? 'true' : 'false');
 
       - name: Build release message
         id: message

@@ -1,110 +1,52 @@
 name: Rollback Backend
-run-name: Rollback Backend (${{ inputs.target }}) - ${{ inputs.image_tag }}
+run-name: Rollback Backend (${{ inputs.target }})
 
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: Rollback target environment
+        description: Environment (run production from master; staging from dev)
         required: true
         type: choice
-        options:
-          - staging
-          - production
-      image_tag:
-        description: "Docker image tag to deploy (example: dev-abc1234, master-abc1234, prod, staging)"
+        options: [production, staging]
+      digest:
+        description: Previous release digest from its summary (sha256 plus 64 hex digits)
         required: true
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ inputs.target }}
+  cancel-in-progress: false
+
 jobs:
-  rollback-staging:
-    name: Rollback Staging Backend
-    if: inputs.target == 'staging'
+  rollback:
+    if: >-
+      (inputs.target == 'production' && github.ref == 'refs/heads/master') ||
+      (inputs.target == 'staging' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
-    environment: staging
-
+    timeout-minutes: 20
+    environment: ${{ inputs.target }}
     steps:
-      - name: SSH and rollback staging EC2
-        uses: appleboy/ssh-action@v1
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.STAGING_EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
-            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
-            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:${{ inputs.image_tag }}"
-
-            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-
-            docker pull "$IMAGE"
-
-            docker stop pantopus-backend-staging || true
-            docker rm pantopus-backend-staging || true
-            docker run -d \
-              --name pantopus-backend-staging \
-              --env-file ~/pantopus/.env.staging \
-              -p 8000:8000 \
-              --restart unless-stopped \
-              "$IMAGE"
-
-            for i in $(seq 1 20); do
-              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend-staging 2>/dev/null || echo "starting")
-              if [ "$status" = "healthy" ]; then
-                echo "Staging rollback succeeded"
-                break
-              fi
-              if [ "$i" -eq 20 ]; then
-                echo "Staging rollback failed health check"
-                docker logs --tail 100 pantopus-backend-staging || true
-                exit 1
-              fi
-              sleep 3
-            done
-
-  rollback-production:
-    name: Rollback Production Backend
-    if: inputs.target == 'production'
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - name: SSH and rollback production EC2
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.PROD_EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
-            DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
-            IMAGE="$DOCKERHUB_USERNAME/pantopus-backend:${{ inputs.image_tag }}"
-
-            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-
-            docker pull "$IMAGE"
-
-            docker stop pantopus-backend || true
-            docker rm pantopus-backend || true
-            docker run -d \
-              --name pantopus-backend \
-              --env-file ~/pantopus/.env.prod \
-              -p 8000:8000 \
-              --restart unless-stopped \
-              "$IMAGE"
-
-            for i in $(seq 1 20); do
-              status=$(docker inspect --format='{{.State.Health.Status}}' pantopus-backend 2>/dev/null || echo "starting")
-              if [ "$status" = "healthy" ]; then
-                echo "Production rollback succeeded"
-                break
-              fi
-              if [ "$i" -eq 20 ]; then
-                echo "Production rollback failed health check"
-                docker logs --tail 100 pantopus-backend || true
-                exit 1
-              fi
-              sleep 3
-            done
+          persist-credentials: false
+      - name: Validate immutable rollback digest
+        env:
+          DIGEST: ${{ inputs.digest }}
+        run: '[[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]'
+      # Application rollback is forward-compatible with the current schema.
+      # Never revert migration ledger rows or run down migrations here.
+      - name: Deploy API and worker
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DEPLOY_TARGET: ${{ inputs.target }}
+          DEPLOY_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ inputs.digest }}
+        run: bash scripts/deploy/remote.sh

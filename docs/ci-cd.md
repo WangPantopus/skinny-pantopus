@@ -1,119 +1,141 @@
 # CI/CD
 
-Everything runs on GitHub Actions from `.github/workflows/`. The repository
-is public, so runner minutes are free; the design goal is short wall-clock
-and no work for surfaces a change did not touch.
+`CI OK` is the required merge check. It includes backend tests, the production
+backend image, web lint/type checks/Jest/**production build**, the Identity
+Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
+Mobile workflows are reusable children of CI, so a mobile failure or cancellation
+fails the aggregate. PR path filtering happens at the job level. Pushes to
+`master` and `dev` validate every surface. Database replay joins the aggregate
+only after the verified baseline is adopted.
 
-## Workflows
+## Mobile checks
 
-| Workflow | File | Runs when | What it gates |
-|---|---|---|---|
-| CI | `ci.yml` | every PR; pushes to `master` / `dev` | backend privacy gates + Jest, backend Docker image build (PRs only), web lint + typecheck gate + Jest, web Identity Firewall Playwright spec, seeder pytest |
-| iOS CI | `ios-ci.yml` | PRs and `master` pushes touching `frontend/apps/ios/**` | SwiftLint (strict, pinned 0.63.3), SwiftFormat (pinned 0.61.1), icon and token guards, hex-literal guard, unit + snapshot tests on three simulators (Xcode 16.4, iOS 18.5) |
-| Android CI | `android-ci.yml` | PRs and `master` pushes touching `frontend/apps/android/**` | ktlint, detekt, Android Lint, JVM unit tests, Paparazzi snapshot verify, debug APK; Compose instrumented tests on an emulator (PRs only) |
-| Deploy Backend | `deploy-backend.yml` | pushes to `master` / `dev` touching `backend/**`, `docker-compose.yml` or the workflow; manual | build + push `pantopus-backend` image, SSH deploy to staging (`dev`) or production (`master`) |
-| Rollback Backend | `rollback-backend.yml` | manual | redeploy a previous image tag to staging or production |
-| Release Notifications | `release-notify.yml` | after Deploy / Rollback on `master` | Slack / Discord webhook message (skips when no webhook secret) |
-| iOS Beta | `ios-beta.yml` | tag `ios-v*`; manual | Fastlane `beta` → TestFlight |
-| Android Beta | `android-beta.yml` | tag `android-v*`; manual | Fastlane `beta` → Play internal track |
+Android runs lint, JVM tests, Paparazzi verification, a debug build and emulator
+tests. The navigation smoke tests cover Place, Today, Nearby and Mail. Place's
+route retains `root/home` for compatibility. Snapshot updates require inspecting
+the diff; do not increase tolerance to hide a failure.
 
-### How `ci.yml` stays fast
+iOS builds the test bundle once, preserves symlinks in a tar artifact, then runs
+that same bundle on three iOS 18.5 simulators. Build and test timeouts are
+separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
+existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
+current SDK upload requirement. UI tests are compiled but not executed on hosted
+simulators because the existing XCUITest injection issue is still unresolved;
+run them locally with `make test`. The pre-existing token-literal backlog is also
+not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
 
-- **Path detection.** On a pull request the `changes` job classifies the
-  diff (backend / web / seeder) and only the matching jobs run. Pushes to
-  `master` and `dev` run everything.
-- **One required check.** `CI OK` depends on every job and fails if any of
-  them failed. Mark only `CI OK` as required on `master`; skipped jobs for
-  an unrelated change count as passing.
-- **Caching.** The pnpm store (via `actions/setup-node`), pip, Playwright
-  browsers and Docker layers (GitHub Actions cache) are all cached.
-- **Concurrency.** A new push to the same PR cancels the in-flight run.
+## Deployment sequence
 
-### Typecheck gate
+1. CI succeeds on the current `master` (production) or `dev` (staging) commit.
+2. Deploy Backend verifies the exact commit against the latest CI run and branch
+   head. A manual dispatch has the same requirement; PR/fork runs cannot deploy.
+3. The environment must explicitly enable deployment and provide all secrets.
+4. Build a frozen-lockfile image, push a commit tag, and use its immutable digest
+   for the API and worker. No `prod`, `staging`, or `latest` tag is used at runtime.
+5. After database adoption, apply validated migrations **before** the application
+   rollout. A migration failure stops deployment. Before adoption, migration
+   files are frozen and no hosted SQL executes.
+6. On EC2, start an unexposed API candidate with background jobs disabled. Its
+   `/health` probe must reach Supabase successfully before cutover.
+7. Preserve the old containers; replace API and worker together. If startup,
+   binding or readiness fails, stop partial replacements and restore the old
+   containers. This is a short stop/start deployment, so existing sockets may
+   disconnect; it is not a zero-downtime load-balancer rollout.
+8. Keep stopped previous containers/images and record the release digest in the
+   Actions summary. Never automatically prune the only rollback image.
 
-`pnpm --filter=@pantopus/web type-check:gate` compares `tsc` output against
-`frontend/apps/web/tsc-baseline.json`. The baseline is empty, so any type
-error fails the web job. If you ever need to grandfather errors, run
-`type-check:baseline` and commit the file with an explanation.
+Deploy and rollback share `backend-production` / `backend-staging` concurrency
+groups. A host `flock` also prevents overlapping script invocations. Database
+writes occur inside the same workflow lock. Disable deployment in the old
+repository before enabling this one: GitHub concurrency is repository-scoped.
 
-### iOS lint pins
+## Configure each environment
 
-The lint job downloads SwiftLint 0.63.3 and SwiftFormat 0.61.1 from their
-GitHub releases so results do not drift with the runner image. Install the
-same versions locally (`brew install swiftlint swiftformat` then pin, or use
-the release binaries) and run `make lint` / `make format` in
-`frontend/apps/ios` before pushing.
+Create `production` and `staging`. Restrict production to `master`. Staging must
+allow `master` (the default-branch context of `workflow_run`) and `dev` (manual
+runs). The workflow independently verifies the source branch. Optional required
+reviewers can be added if your release policy calls for approval.
 
-## Enabling deploys
+Set these **environment** secrets in each environment, using distinct hosts and
+database projects where applicable:
 
-`deploy-backend.yml` is safe to leave enabled before any secret exists: its
-`preflight` job checks for the Docker Hub secrets and skips the pipeline
-with a warning when they are missing. To turn deploys on, add these
-repository secrets (Settings → Secrets and variables → Actions):
-
-| Secret | Used by |
+| Secret | Value |
 |---|---|
-| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | image push and pull on the hosts |
-| `EC2_SSH_KEY`, `EC2_USERNAME` | SSH into the EC2 hosts |
-| `STAGING_EC2_HOST` | deploy / rollback from `dev` |
-| `PROD_EC2_HOST` | deploy / rollback from `master` |
-| `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` | optional release notifications |
+| `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Image repository credentials |
+| `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY` | SSH host, account and private key |
+| `EC2_KNOWN_HOSTS` | Verified OpenSSH known_hosts entry for that host |
 
-The `staging` and `production` environments are created automatically on
-first use. Add required reviewers to `production` in Settings →
-Environments if you want a manual approval step before a production deploy.
+Verify host keys through a trusted channel (for example the EC2 console). Do
+not blindly accept a key obtained over the same untrusted network connection.
+The SSH user needs Docker access, `flock`, and `~/pantopus/.env.prod` or
+`~/pantopus/.env.staging`. Configure the API to listen on port 8000. Those env
+files carry runtime secrets; they are never copied into an image or Actions
+artifact. The deployment overrides `PGBOSS_ENABLED` and `CRON_ENABLED` to false
+on the API and true on the worker. `DATABASE_URL` is needed for pg-boss; the
+worker retains the application's existing cron fallback if it is unavailable.
 
-If another repository still deploys the same backend image and host, turn
-its deploy workflow off when you enable this one so two pipelines never race
-for the same container.
+Set environment variable `BACKEND_DEPLOY_ENABLED=true` only after configuring
+all secrets and the host. Missing secrets then fail clearly; a disabled
+environment produces a notice and no release notification.
 
-### Mobile release secrets
+For the future database activation, see
+[supabase-migration-automation-runbook.md](supabase-migration-automation-runbook.md).
+Do not point staging migration credentials at the production project.
 
-`ios-beta.yml` uses the `ios-release` environment with
-`STRIPE_PUBLISHABLE_KEY`, `MATCH_GIT_URL`, `MATCH_PASSWORD`,
-`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
-`APP_STORE_CONNECT_KEY_CONTENT` (base64 `.p8`) and `APPLE_TEAM_ID`.
+## Rollback
 
-`android-beta.yml` uses the `android-release` environment with
-`ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
-`PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
-`PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY` and
-`MAPS_API_KEY`.
+Run **Rollback Backend** from `master` for production or `dev` for staging.
+Supply a previous successful release's `sha256:...` digest from its Actions
+summary. The repository name comes from the environment, not from input.
+Rollback uses the same candidate/readiness/recovery script and restores both API
+and worker. It does not undo database migrations; use backward-compatible
+expand/contract schema changes so the previous application remains usable.
 
-## Branch protection
+If automatic recovery itself fails, the workflow reports a critical error.
+Inspect retained `*-previous` containers on the host and recover service before
+retrying. A failed first deployment has no prior service to restore.
 
-Recommended once the first green run lands on `master`:
+## Required check and permissions
+
+Protect `master` with required check `CI OK`, strict up-to-date branches, and
+admin enforcement. Use the GitHub Actions app as the expected source. Do not
+require path-filtered standalone mobile workflows. The workflows themselves use
+read-only repository permissions and keep deployment secrets out of PR jobs.
+
+## Mobile releases and notifications
+
+- iOS: `ios-v*` tags or manual dispatch use `ios-release`. Configure
+  `STRIPE_PUBLISHABLE_KEY`, `MATCH_GIT_URL`, `MATCH_PASSWORD`,
+  `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+  `APP_STORE_CONNECT_KEY_CONTENT` (base64 `.p8`) and `APPLE_TEAM_ID`.
+  The signing repository also needs `MATCH_GIT_BASIC_AUTHORIZATION` (base64
+  `username:token`) or your supported private-repository authentication.
+- Android: `android-v*` tags or manual dispatch use `android-release`. Configure
+  `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
+  `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
+  `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY` and
+  `MAPS_API_KEY`. Commit a new increasing `versionCode` before each new upload;
+  tags do not change the app version. Store acceptance/signing must be verified
+  with the actual accounts before the first release.
+- Optional repository secrets `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` send
+  production deployment outcomes. A disabled deployment is not a success alert.
+
+## Local checks
 
 ```bash
-gh api -X PUT repos/WangPantopus/skinny-pantopus/branches/master/protection \
-  --input - <<'JSON'
-{
-  "required_status_checks": { "strict": false, "contexts": ["CI OK"] },
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
-  "restrictions": null
-}
-JSON
-```
-
-`iOS CI` and `Android CI` only run when their app changed, so leave them out
-of the required list; a red run still blocks the merge button visually.
-
-## Running the same checks locally
-
-```bash
-# backend
-cd backend && pnpm run test:privacy && pnpm test
-
-# web
+pnpm install --frozen-lockfile
+pnpm --dir backend run test:privacy
+pnpm --dir backend test
 pnpm --filter=@pantopus/web lint
 pnpm --filter=@pantopus/web type-check:gate
 pnpm --filter=@pantopus/web test
-
-# seeder
-cd pantopus-seeder && pytest tests/ -q
-
-# iOS / Android
-cd frontend/apps/ios && make lint && make test
-cd frontend/apps/android && make lint && make test
+pnpm --filter=@pantopus/web build
+node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs
+pnpm db:check
+docker build -f backend/Dockerfile --target production .
 ```
+
+Android: `./gradlew ktlintCheck detekt :app:lintDebug test paparazziVerify
+:app:assembleDebug` from `frontend/apps/android`, plus
+`connectedDebugAndroidTest` with an emulator. iOS: `make lint` and `make test`
+from `frontend/apps/ios`. Seeder: `pytest tests/ -q` from `pantopus-seeder`.

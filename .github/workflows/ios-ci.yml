@@ -1,16 +1,11 @@
 name: iOS CI
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "frontend/apps/ios/**"
-      - ".github/workflows/ios-ci.yml"
-  pull_request:
-    paths:
-      - "frontend/apps/ios/**"
-      - ".github/workflows/ios-ci.yml"
+  workflow_call:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ios-ci-${{ github.ref }}
@@ -80,20 +75,10 @@ jobs:
           fi
           echo "✓ No raw hex literals in Pantopus/Features."
 
-  test:
-    name: Tests on ${{ matrix.simulator }}
+  build:
+    name: Build iOS test bundles
     runs-on: macos-15
-    # The full unit + UI-skip suite runs ~28-32 min on the slowest simulator
-    # (iPhone SE 3rd gen) — 30 was too tight and cancelled it mid-run, while
-    # iPhone 16 / 16 Pro finish in ~24-25 min. 45 gives reliable headroom.
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        simulator:
-          - "iPhone 16"
-          - "iPhone 16 Pro"
-          - "iPhone SE (3rd generation)"
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +108,57 @@ jobs:
           restore-keys: |
             spm-v3-${{ runner.os }}-
 
+      - name: Build tests once for the simulator matrix
+        run: |
+          set -o pipefail
+          xcodebuild -project Pantopus.xcodeproj -scheme Pantopus \
+            -destination 'generic/platform=iOS Simulator' -configuration Debug \
+            -derivedDataPath "$IOS_DERIVED_DATA_PATH" \
+            -clonedSourcePackagesDirPath "$IOS_SPM_PATH" \
+            -skipPackagePluginValidation -skipMacroValidation \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+            build-for-testing 2>&1 | tee xcodebuild-build.log | xcbeautify
+      - name: Package test products (preserve symlinks)
+        run: tar -czf ios-test-products.tar.gz -C "$IOS_DERIVED_DATA_PATH" Build/Products
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-products
+          path: frontend/apps/ios/ios-test-products.tar.gz
+          retention-days: 1
+          compression-level: 0
+      - name: Upload build diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: frontend/apps/ios/xcodebuild-build.log
+          retention-days: 7
+
+  test:
+    name: Tests on ${{ matrix.simulator }}
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        simulator:
+          - "iPhone 16"
+          - "iPhone 16 Pro"
+          - "iPhone SE (3rd generation)"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the same Xcode as the build job
+        run: sudo xcode-select -switch /Applications/Xcode_16.4.app
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-test-products
+          path: frontend/apps/ios
+      - name: Restore test products
+        run: |
+          mkdir -p "$IOS_DERIVED_DATA_PATH"
+          tar -xzf ios-test-products.tar.gz -C "$IOS_DERIVED_DATA_PATH"
       # Sanitised matrix entry → safe artifact + bundle name (no spaces /
       # parentheses). Used by the result-bundle path and the upload step.
       - name: Compute simulator slug
@@ -177,51 +213,22 @@ jobs:
           xcrun simctl bootstatus "${device_id}" -b
           echo "Using simulator '${{ matrix.simulator }}' (${device_id}) on ${runtime_id}."
 
-      - name: Run tests
-        # CI runners have no Apple Developer signing identity. Disable
-        # signing so the simulator-only test/build works without a
-        # provisioning profile.
-        #
-        # OS is pinned to 18.5 (the SDK Xcode 16.4 builds against) rather
-        # than `OS=latest`. The runner image now also carries iOS 26.x
-        # runtimes, so `latest` resolved to 26.2 — running an 18.5-SDK app
-        # there made the XCUITest runner injection flaky ("Application …
-        # xctrunner is unknown to FrontBoard"). Matching the runtime to the
-        # SDK keeps the runner install deterministic across simulators.
-        #
-        # The whole PantopusUITests target is skipped from the RUN action
-        # (`-skip-testing:PantopusUITests`): even pinned to 18.5 the XCUITest
-        # runner injection hangs indefinitely on the hosted simulators (the
-        # phase never reaches a single UI test case, then the job times out).
-        # The target is still BUILT, so UI-test code is compile-checked; the
-        # unit + snapshot suites provide the gating coverage. Run UI tests
-        # locally with `make test`.
-        #
-        # Tee raw xcodebuild output so compiler diagnostics survive xcbeautify
-        # formatting — SwiftEmitModule failures otherwise surface with no file
-        # or line context in GitHub Actions logs.
+      - name: Run prebuilt unit and snapshot tests
+        # UI test injection is still a separately documented local check.
+        # Simulator OS stays at 18.5 to preserve the reviewed snapshot baseline.
         run: |
           set -o pipefail
-          xcodebuild \
-            -project Pantopus.xcodeproj \
-            -scheme Pantopus \
+          test_run=$(find "$IOS_DERIVED_DATA_PATH/Build/Products" -name '*.xctestrun' -print -quit)
+          test -n "$test_run"
+          xcodebuild -xctestrun "$test_run" \
             -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}" \
-            -configuration Debug \
-            -derivedDataPath "${IOS_DERIVED_DATA_PATH}" \
-            -clonedSourcePackagesDirPath "${IOS_SPM_PATH}" \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            -enableCodeCoverage YES \
+            -parallel-testing-enabled NO \
             -skip-testing:PantopusUITests \
             -resultBundlePath "TestResults-${{ steps.sim.outputs.slug }}.xcresult" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            test 2>&1 | tee "xcodebuild-${{ steps.sim.outputs.slug }}.log" | xcbeautify
+            test-without-building 2>&1 | tee "xcodebuild-${{ steps.sim.outputs.slug }}.log"
 
       - name: Upload xcodebuild log on failure
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-log-${{ steps.sim.outputs.slug }}
@@ -229,7 +236,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: List available iOS simulators on failure
-        if: failure()
+        if: failure() || cancelled()
         run: |
           xcrun simctl list runtimes
           xcrun simctl list devices available iPhone

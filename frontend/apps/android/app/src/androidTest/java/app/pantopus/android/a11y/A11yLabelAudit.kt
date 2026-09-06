@@ -18,7 +18,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
-import app.pantopus.android.ui.screens.hub.HUB_SCREEN_TAG
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.screens.root.PantopusBottomBar
 import app.pantopus.android.ui.screens.root.PantopusRoute
@@ -59,7 +58,7 @@ class A11yLabelAudit {
     @Test
     fun root_tab_bar_buttons_all_labelled() {
         compose.setContent {
-            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Home) }
+            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Place) }
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 bottomBar = {
@@ -70,17 +69,7 @@ class A11yLabelAudit {
                 },
             ) { padding ->
                 Box(Modifier.padding(padding)) {
-                    when (selected) {
-                        PantopusRoute.Home -> Box(Modifier.fillMaxSize().testTag(HUB_SCREEN_TAG))
-                        PantopusRoute.Pulse -> Box(Modifier.fillMaxSize().testTag("pulseFeed"))
-                        PantopusRoute.Tasks -> Box(Modifier.fillMaxSize().testTag("gigsFeed"))
-                        PantopusRoute.Marketplace -> Box(Modifier.fillMaxSize().testTag("marketplace"))
-                        PantopusRoute.Messages ->
-                            NotYetAvailableView(
-                                tabName = "Messages",
-                                icon = PantopusIcon.MessageCircle,
-                            )
-                    }
+                    Box(Modifier.fillMaxSize().testTag("landing.${selected.path}"))
                 }
             }
         }

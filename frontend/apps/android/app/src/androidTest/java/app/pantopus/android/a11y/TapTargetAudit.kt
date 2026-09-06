@@ -15,10 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import app.pantopus.android.ui.screens.hub.HUB_SCREEN_TAG
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.screens.root.PantopusBottomBar
 import app.pantopus.android.ui.screens.root.PantopusRoute
@@ -61,7 +58,7 @@ class TapTargetAudit {
     @Test
     fun root_tab_bar_meets_min_tap_size() {
         compose.setContent {
-            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Home) }
+            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Place) }
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 bottomBar = {
@@ -72,21 +69,10 @@ class TapTargetAudit {
                 },
             ) { padding ->
                 Box(Modifier.padding(padding)) {
-                    when (selected) {
-                        PantopusRoute.Home -> Box(Modifier.fillMaxSize().testTag(HUB_SCREEN_TAG))
-                        PantopusRoute.Pulse -> Box(Modifier.fillMaxSize().testTag("pulseFeed"))
-                        PantopusRoute.Tasks -> Box(Modifier.fillMaxSize().testTag("gigsFeed"))
-                        PantopusRoute.Marketplace -> Box(Modifier.fillMaxSize().testTag("marketplace"))
-                        PantopusRoute.Messages ->
-                            NotYetAvailableView(
-                                tabName = "Messages",
-                                icon = PantopusIcon.MessageCircle,
-                            )
-                    }
+                    Box(Modifier.fillMaxSize().testTag("landing.${selected.path}"))
                 }
             }
         }
-        compose.onNodeWithTag(HUB_SCREEN_TAG).performClick()
         assertAllClickableTouchTargetsClear("RootTab")
     }
 

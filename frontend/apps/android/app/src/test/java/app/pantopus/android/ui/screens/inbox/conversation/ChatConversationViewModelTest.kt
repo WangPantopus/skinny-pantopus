@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.inbox.conversation
 
+import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
@@ -42,9 +43,12 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -85,6 +89,8 @@ class ChatConversationViewModelTest {
     // for chat-push suppression.
     private val activeChatThread = ActiveChatThread()
 
+    private val viewModels = mutableListOf<ChatConversationViewModel>()
+
     private fun makeViewModel(): ChatConversationViewModel =
         ChatConversationViewModel(
             repo,
@@ -100,7 +106,7 @@ class ChatConversationViewModelTest {
             linkPreviewRepo,
             aiSession,
             activeChatThread,
-        )
+        ).also { viewModels.add(it) }
 
     private val counterpartyPerson =
         ChatCounterparty.Person(
@@ -139,6 +145,13 @@ class ChatConversationViewModelTest {
     }
 
     @After fun tearDown() {
+        // The disconnected-socket poller uses Dispatchers.Default. Stop and
+        // join it before resetting Main, so it cannot refresh in another test.
+        viewModels.forEach { it.teardown() }
+        runBlocking {
+            viewModels.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        }
+        viewModels.clear()
         Dispatchers.resetMain()
     }
 
