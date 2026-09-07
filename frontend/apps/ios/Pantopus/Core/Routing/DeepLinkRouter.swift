@@ -160,7 +160,7 @@ final class DeepLinkRouter {
     }
 
     /// How a resolved destination should be handled relative to auth.
-    private enum RoutingKind {
+    private enum RoutingKind: String {
         /// OAuth callback / `.unknown` — never stash, never park as content.
         case discard
         /// `reset-password` / `verify-email` / `join/:code` — the auth stack
@@ -180,9 +180,16 @@ final class DeepLinkRouter {
     /// and opens the existing Login cover without disrupting the Place funnel.
     private(set) var prefersLoginPresentation = false
 
-    private let logger = Logger(label: "app.pantopus.ios.DeepLinkRouter")
+    private let onDiagnostic: @MainActor (String) -> Void
 
-    private init() {}
+    init(onDiagnostic: @escaping @MainActor (String) -> Void = { category in
+        Logger(label: "app.pantopus.ios.DeepLinkRouter").info("deeplink", metadata: [
+            "category": .string(category)
+        ])
+        Observability.shared.track("deeplink.received", properties: ["category": category])
+    }) {
+        self.onDiagnostic = onDiagnostic
+    }
 
     func handle(url: URL) {
         // Browser OAuth callbacks are owned by ASWebAuthenticationSession /
@@ -190,13 +197,10 @@ final class DeepLinkRouter {
         if AuthManager.isOAuthCallback(url) { return }
 
         let destination = resolve(url: url)
-        logger.info("deeplink", metadata: [
-            "url": .string(url.absoluteString),
-            "destination": .string("\(destination)")
-        ])
-        Observability.shared.track("deeplink.received", properties: [
-            "url": url.absoluteString
-        ])
+        // URLs and enum-associated values can contain reset tokens, invite
+        // secrets, addresses or account identifiers. Diagnostics receive only
+        // a fixed category; the original destination stays in the routing flow.
+        onDiagnostic(Self.routingKind(of: destination).rawValue)
         apply(destination: destination, persistencePath: Self.normalizedPath(for: url))
     }
 
