@@ -2,10 +2,15 @@
 
 ## Status — September 7, 2026
 
-The code baseline is master `e30e76036a89c49fd3a27c1bdaff1fa5cd147424`
-(merged PRs #4 and #1). This preparation adds explicit native staging inputs
-and local configuration checks. **Staging is not deployed and physical push
-delivery is not verified.**
+The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
+(including merged PR #5). Explicit native staging inputs and local configuration
+checks are available. The runtime preparation below adds sandbox vendor checks
+without disabling production security settings. **Staging is not deployed and
+physical push delivery is not verified.**
+
+The operator requested preparation **without new paid resources**. Do not create
+a paid host/database, restart the existing stopped server, or enable deployment
+as part of this preparation.
 
 Read-only discovery found:
 
@@ -14,7 +19,9 @@ Read-only discovery found:
 | GitHub staging | Exists; no environment secrets; backend deployment and DB migration flags are false. |
 | Staging source branch | No remote `dev` branch exists yet. |
 | Supabase | The authenticated account lists only `Pantopus-backend`; no project has been designated for staging. |
-| Backend host | AWS's configured credentials fail authentication. No staging host is confirmed. |
+| Backend host | AWS CLI access works. The Pantopus EC2 instance in Oregon is stopped, with reason `Client.UserInitiatedShutdown`; no staging host is confirmed. |
+| DNS | The operator can access Cloudflare for both domains. The public `api.pantopus.com/health` returned HTTP 522; its configured origin has not yet been verified. |
+| Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
 | Push server credentials | No APNs/FCM credentials in the active local backend env; no staging runtime env exists. |
 | iOS | Paired iPhone 16 Pro is available; a local Apple Development signing identity exists. |
@@ -32,10 +39,50 @@ both explicit staging paths rejected a missing env file. Test inputs and
 generated secret overlays were removed afterward. No signed app was installed,
 and no staging release or live notification was sent.
 
+Read-only hosted database inspection found PostgreSQL 17.6 and 288 public
+tables. A schema-only export was saved outside the repository with private
+permissions; it contains no row INSERT/COPY statements. This is an inspection
+artifact, not an adopted or restore-validated baseline. Both `AuthDevice` and
+`AuthSession`, used by the current device/session implementation, are absent.
+Prepare and validate the missing schema in isolation before testing native login.
+No production application schema or migration ledger was changed.
+
+Runtime preparation validation passed: 4,279 backend tests (16 skipped), all
+privacy gates, and 28 deployment/native-configuration/database-safeguard tests.
+The backend total includes 16 new staging startup checks. These tests use
+synthetic credentials and do not deploy or call live providers.
+
+## Hosted staging runtime
+
+The deployment script explicitly sets `NODE_ENV=production` and `APP_ENV` to
+the selected target on the candidate, API and worker. Thus staging retains the
+existing production requirements for CSRF, step-up secrets and vendor config.
+The staging runtime requires:
+
+```dotenv
+NODE_ENV=production
+APP_ENV=staging
+LOB_ENV=test
+LOB_API_KEY=test_REPLACE_ME
+STRIPE_SECRET_KEY=sk_test_REPLACE_ME
+```
+
+These lines describe required modes, not a complete or usable runtime env.
+Provide real sandbox keys privately. A restricted Stripe `rk_test_` key is also
+accepted if it has the permissions the app needs. Lob chooses test/live delivery
+from the key itself, so `LOB_ENV=test` with a live key is rejected. Both process
+entry points validate before loading services or registering jobs. Hosted
+staging still requires Google/Smarty configuration and the Lob webhook signing
+secret; ordinary production still requires `LOB_ENV=live`.
+
+The checks do not establish database isolation, credential validity, email/SMS
+recipient restrictions, storage isolation or push delivery. Configure those
+separately before deploying. No live provider call is made by validation.
+
 ## Configure the backend
 
 1. Designate the staging Supabase project and an HTTPS backend host. Restore
-   AWS/Google CLI access if those accounts will be used. Keep resource IDs and
+   Google CLI access if that account will be used. Keep resource IDs and
    secret-file locations in the operator's private configuration.
 2. Follow [CI/CD host setup](ci-cd.md#configure-each-environment). Install
    `~/pantopus/.env.staging` with the staging database credentials and runtime

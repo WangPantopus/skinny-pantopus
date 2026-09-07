@@ -12,6 +12,7 @@
 const fs = require('fs');
 const dotenvPath = fs.existsSync('.env') ? '.env' : '.env.dev';
 require('dotenv').config({ path: dotenvPath });
+require('./config/stagingRuntime').validateStagingRuntime();
 
 const logger = require('./utils/logger');
 const { initPgBoss, stopPgBoss } = require('./jobs/pgBossManager');

@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const dotenvPath = fs.existsSync('.env') ? '.env' : '.env.dev';
 require('dotenv').config({ path: dotenvPath });
+require('./config/stagingRuntime').validateStagingRuntime();
 
 // Import routes
 const userRoutes = require('./routes/users');
