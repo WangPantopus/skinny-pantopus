@@ -1132,7 +1132,9 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
     public let sourceUrl: String?
     public let confidence: String
 
-    public var id: String { "\(ruleId):\(date)" }
+    public var id: String {
+        "\(ruleId):\(date)"
+    }
 
     private enum CodingKeys: String, CodingKey {
         case kind, title, detail, date, scope, source, confidence
@@ -1728,7 +1730,9 @@ public struct PlaceMoneyLead: Decodable, Sendable, Hashable {
 
     /// The server writes the sentence; we only decide whether there is
     /// one to show. An empty headline is nothing to lead with.
-    public var isRenderable: Bool { !headline.isEmpty }
+    public var isRenderable: Bool {
+        !headline.isEmpty
+    }
 }
 
 /// The aha card (Wedge v2 D1): the one most surprising READY fact for
@@ -1770,7 +1774,9 @@ public struct PlacePreviewAha: Decodable, Sendable, Hashable {
     }
 
     /// An empty headline is nothing to lead with.
-    public var isRenderable: Bool { !headline.isEmpty }
+    public var isRenderable: Bool {
+        !headline.isEmpty
+    }
 }
 
 public struct PlacePreview: Decodable, Sendable, Hashable {

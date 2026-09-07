@@ -18,7 +18,7 @@ public let privacyPromiseLines: [String] = [
     "Neighbors see a first name and a street at most. Never a house number or unit.",
     "We never sell your address or use it for ads.",
     "Verifying never asks for your GPS. It works by mail, a landlord, or a document you choose.",
-    "Verification documents are seen by one reviewer, never by neighbors, and deleted once your claim is decided.",
+    "Verification documents are seen by one reviewer, never by neighbors, and deleted once your claim is decided."
 ]
 
 @Observable
@@ -122,7 +122,7 @@ struct PlacePrivacyMirrorView: View {
 
     private var placeholders: some View {
         VStack(spacing: 12) {
-            ForEach(0 ..< 2, id: \.self) { i in
+            ForEach(0..<2, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Theme.Color.appSurfaceSunken)
                     .frame(height: i == 0 ? 88 : 160)
@@ -177,7 +177,7 @@ struct PlacePrivacyMirrorView: View {
             Text(mirror.discoverable
                 ? "Street only, no house number. That is the whole card."
                 : "Your home is not discoverable right now, so neighbors see nothing unless you share it. "
-                    + "This is what they would see if you did.")
+                + "This is what they would see if you did.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextMuted)
         }

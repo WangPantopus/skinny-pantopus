@@ -25,6 +25,9 @@ import app.pantopus.android.ui.theme.PantopusColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+private const val WEEKLY_PICKUP_WINDOW_DAYS = 7L
+private const val BIWEEKLY_PICKUP_WINDOW_DAYS = 14L
+
 private val WEEKDAYS =
     listOf(
         "MO" to "Monday",
@@ -53,7 +56,7 @@ internal fun PickupScheduleEditor(
             if (today == null) {
                 emptyList()
             } else {
-                (0L until if (frequency == "weekly") 7L else 14L).map { offset ->
+                (0L until if (frequency == "weekly") WEEKLY_PICKUP_WINDOW_DAYS else BIWEEKLY_PICKUP_WINDOW_DAYS).map { offset ->
                     val date = today.plusDays(offset)
                     date.toString() to date.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
                 }

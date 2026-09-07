@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -25,7 +26,7 @@ class RootTabTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun home_is_default_and_tabs_switch() {
+    fun place_is_default_and_tabs_switch() {
         composeRule.setContent {
             var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Place) }
             Scaffold(
@@ -44,11 +45,9 @@ class RootTabTest {
         }
 
         composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
-        for (route in PantopusRoute.entries) {
-            composeRule.onNodeWithTag("tab.${route.path.substringAfterLast('/')}").performClick()
-            composeRule.onNodeWithTag("landing.${route.path}").assertIsDisplayed()
+        for (tab in listOf("today", "nearby", "mail", "home")) {
+            composeRule.onNodeWithTag("tab.$tab").performClick().assertIsSelected()
+            composeRule.onNodeWithTag("landing.root/$tab").assertIsDisplayed()
         }
-        composeRule.onNodeWithTag("tab.home").performClick()
-        composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
     }
 }

@@ -85,12 +85,8 @@ enum class FeedSurface(
      *
      * @param scopeLabel Active neighborhood (Pulse footer). `null` hides the
      *   Pulse footer chip.
-     * @param followCount Beacons followed (Beacons footer).
      */
-    fun emptyContent(
-        scopeLabel: String?,
-        followCount: Int,
-    ): FeedEmptyContent =
+    fun emptyContent(scopeLabel: String?): FeedEmptyContent =
         when (this) {
             Pulse ->
                 FeedEmptyContent(

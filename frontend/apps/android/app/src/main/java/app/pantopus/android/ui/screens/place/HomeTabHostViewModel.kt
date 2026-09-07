@@ -75,7 +75,9 @@ class HomeTabHostViewModel
             val draft = state.draft ?: return
             if (state.isSaving || state.saved != null) return
             val stored = PlacePendingStore.read()
-            if (userId == null || userId != draft.userId || stored?.id != draft.id || stored.userId != userId) {
+            val belongsToCurrentUser = userId != null && userId == draft.userId
+            val matchesStoredDraft = stored?.id == draft.id && stored.userId == userId
+            if (!belongsToCurrentUser || !matchesStoredDraft) {
                 _arrival.value = state.copy(error = "This preview expired or belongs to another session. Look up the address again.")
                 return
             }
@@ -91,11 +93,11 @@ class HomeTabHostViewModel
                             expectedUserId = draft.userId,
                         ),
                     )
-                if (result is NetworkResult.Success && result.data.savedPlace.userId == draft.userId &&
-                    userId == draft.userId && result.data.savedPlace.id.isNotBlank()
-                ) {
+                val saved = (result as? NetworkResult.Success)?.data?.savedPlace
+                val belongsToDraft = saved?.userId == draft.userId && userId == draft.userId
+                if (belongsToDraft && !saved?.id.isNullOrBlank()) {
                     PlacePendingStore.clear(id = draft.id)
-                    _arrival.value = _arrival.value.copy(isSaving = false, saved = result.data.savedPlace)
+                    _arrival.value = _arrival.value.copy(isSaving = false, saved = saved)
                 } else {
                     _arrival.value =
                         _arrival.value.copy(

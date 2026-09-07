@@ -23,15 +23,15 @@ Packages/
 SourcePackages/
 # Carve out feature folders — `Packages/` above matches SwiftPM source
 # trees; these per-feature `Packages/` directories are real source code.
+# (The Scheduling ones were silently dropped from the initial import of
+# this repository because they were missing here — keep every feature
+# `Packages/` folder listed.)
 !Pantopus/Features/Homes/Packages/
-!Pantopus/Features/Scheduling/Routing/Stubs/Packages/
 !Pantopus/Features/Scheduling/Business/Packages/
+!Pantopus/Features/Scheduling/Routing/Stubs/Packages/
+!PantopusTests/Scheduling/Packages/
 Package.pins
 Package.resolved
-# Resolved dependency clones/checkouts/artifacts. `xcodebuild
-# -clonedSourcePackagesDirPath` and Xcode both land these here; it reaches
-# multiple GB, so an unguarded `git add -A` would stage the whole cache.
-SourcePackages/
 
 # CocoaPods — not used, but just in case
 Pods/

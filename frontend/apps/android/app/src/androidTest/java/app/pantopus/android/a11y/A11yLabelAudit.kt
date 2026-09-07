@@ -18,7 +18,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
-import app.pantopus.android.ui.screens.hub.HUB_SCREEN_TAG
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.screens.root.PantopusBottomBar
 import app.pantopus.android.ui.screens.root.PantopusRoute
@@ -70,7 +69,7 @@ class A11yLabelAudit {
                 },
             ) { padding ->
                 Box(Modifier.padding(padding)) {
-                    Box(Modifier.fillMaxSize().testTag(HUB_SCREEN_TAG))
+                    Box(Modifier.fillMaxSize().testTag("landing.${selected.path}"))
                 }
             }
         }

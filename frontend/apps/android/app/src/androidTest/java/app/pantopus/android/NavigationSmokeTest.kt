@@ -21,16 +21,11 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import org.junit.Rule
 import org.junit.Test
 
-/**
- * Drives the real four-tab bottom bar with stub destinations. This checks tab
- * selection and reachability; full authenticated journeys need a device and
- * a test backend. Screen tests exercise their own composables separately.
- */
+/** Exercises the real four-tab bottom bar with Hilt-free stub destinations. */
 class NavigationSmokeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /** Exercise the current four-tab bar; social routes remain behind Nearby. */
     @Test
     fun bottomBarTabs_swapDestinationsCorrectly() {
         composeRule.setContent {
@@ -51,12 +46,10 @@ class NavigationSmokeTest {
         }
 
         composeRule.onNodeWithTag("smoke.root/home").assertIsDisplayed()
-        for (route in PantopusRoute.entries) {
-            composeRule.onNodeWithTag("tab.${route.path.substringAfterLast('/')}").assertIsDisplayed().performClick()
-            composeRule.onNodeWithTag("smoke.${route.path}").assertIsDisplayed()
+        for (tab in listOf("today", "nearby", "mail", "home")) {
+            composeRule.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
+            composeRule.onNodeWithTag("smoke.root/$tab").assertIsDisplayed()
         }
-        composeRule.onNodeWithTag("tab.home").performClick()
-        composeRule.onNodeWithTag("smoke.root/home").assertIsDisplayed()
     }
 
     /**
@@ -89,7 +82,7 @@ class NavigationSmokeTest {
             PantopusRoute.entries.map { route ->
                 "tab.${route.path.substringAfterLast('/')}"
             }
-        // Place / Today / Nearby / Mail.
+        // Place keeps its legacy home path for deep-link compatibility.
         check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.mail")) {
             "PantopusRoute.entries derived testTags drifted: $expectedTags"
         }

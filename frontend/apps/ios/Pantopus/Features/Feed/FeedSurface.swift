@@ -100,7 +100,7 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
     ///   - scopeLabel: Active neighborhood (Pulse footer). `nil` hides the
     ///     Pulse footer chip.
     ///   - followCount: Beacons followed (Beacons footer).
-    public func emptyContent(scopeLabel: String?, followCount: Int) -> FeedEmptyContent {
+    public func emptyContent(scopeLabel: String?, followCount _: Int) -> FeedEmptyContent {
         switch self {
         case .pulse:
             FeedEmptyContent(

@@ -392,11 +392,13 @@ final class PulseComposeViewModelTests: XCTestCase {
         let vm = PulseComposeViewModel(intent: .ask, api: makeAPI())
         vm.update(.title, to: "Need a plumber")
         vm.update(.body, to: "Pipe is leaking.")
-        vm.setPhotos([PulseComposePhoto(
-            data: Data([0x2]),
-            capturedLatitude: 41.8781,
-            capturedLongitude: -87.6298
-        )])
+        vm.setPhotos([
+            PulseComposePhoto(
+                data: Data([0x2]),
+                capturedLatitude: 41.8781,
+                capturedLongitude: -87.6298
+            )
+        ])
         let request = vm.buildRequest()
         XCTAssertNil(request.latitude)
         XCTAssertNil(request.longitude)

@@ -304,13 +304,14 @@ cd frontend/apps/android && ./gradlew test
 ### Backend (EC2 + Docker)
 
 - **Workflow:** `.github/workflows/deploy-backend.yml`
-- **Triggers:** Push to `dev` → staging EC2; push to `main` → production EC2.
-- **Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_SSH_KEY`, `EC2_USERNAME`, `STAGING_EC2_HOST`, `PROD_EC2_HOST`
+- **Triggers:** Successful CI on the current `dev` → staging or `master` → production commit; manual dispatch enforces the same check. Deployments remain disabled until the environment is configured.
+- **Environment secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `EC2_SSH_KEY`, `EC2_USERNAME`, `EC2_HOST`, `EC2_KNOWN_HOSTS`. Set `BACKEND_DEPLOY_ENABLED=true` after host setup.
+- **All workflows, caching and branch protection:** see [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ### Web (Vercel)
 
 - **Method:** Vercel Git integration.
-- **Settings:** Root Directory = `frontend/apps/web`, Framework = Next.js, Production branch = `main`, Preview = `dev`.
+- **Settings:** Root Directory = `frontend/apps/web`, Framework = Next.js, Production branch = `master`, Preview = `dev`.
 - **Env:** `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
 
 ### iOS (App Store Connect via Fastlane)

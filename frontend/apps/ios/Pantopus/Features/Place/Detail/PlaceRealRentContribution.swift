@@ -51,10 +51,12 @@ struct RealRentContribution: View {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("Your figure is pooled with your neighbors' and only ever leaves as quartiles — nobody, including us, shows a single home's rent. Only verified residents can add one, which is the whole reason this benchmark is worth reading.")
-                    .font(.system(size: 12.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                Text(
+                    "Your figure is pooled with your neighbors' and only ever leaves as quartiles — nobody, including us, shows a single home's rent. Only verified residents can add one, which is the whole reason this benchmark is worth reading."
+                )
+                .font(.system(size: 12.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextSecondary)
                 field(label: "Monthly rent", placeholder: "2,400", text: $vm.rentInput)
                 field(label: "Bedrooms (optional)", placeholder: "2", text: $vm.bedroomsInput)
                 if let saveError = vm.saveError {

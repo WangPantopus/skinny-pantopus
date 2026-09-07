@@ -2785,10 +2785,10 @@ public struct HubTabRoot: View {
             )
         case .placeArrival:
             PendingPlaceView(
-                viewModel: PendingPlaceViewModel(userId: currentUserId, currentUser: {
+                viewModel: PendingPlaceViewModel(userId: currentUserId) {
                     if case let .signedIn(user) = auth.state { return user.id }
                     return nil
-                }),
+                },
                 onDone: { pop() },
                 onSavedPlaces: { push(.savedPlaces) },
                 onSetUpHome: { push(.addHome) }

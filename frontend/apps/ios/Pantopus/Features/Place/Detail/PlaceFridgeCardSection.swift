@@ -160,7 +160,7 @@ private let sectionMeta: [FridgeCardSectionKey: (title: String, placeholder: Fri
     .pets: ("Pets", FridgeCardItem(label: "Biscuit", note: "Golden retriever, friendly")),
     .utilities: ("Shutoffs & utilities", FridgeCardItem(label: "Gas shutoff", note: "Left side of the house")),
     .contacts: ("Emergency contacts", FridgeCardItem(label: "Grandma Ana", note: "503-555-0101")),
-    .notes: ("Notes", FridgeCardItem(label: "Spare key", note: "Lockbox by the side gate")),
+    .notes: ("Notes", FridgeCardItem(label: "Spare key", note: "Lockbox by the side gate"))
 ]
 
 // MARK: - Section

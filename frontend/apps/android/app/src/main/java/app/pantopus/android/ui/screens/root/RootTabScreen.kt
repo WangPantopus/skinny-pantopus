@@ -2270,11 +2270,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
                     LaunchedEffect(placeLanding) {
                         val landing = placeLanding
-                        if (!didLandPlace && landing is HomeLanding.PlaceDashboard &&
-                            navController.currentDestination?.route == PantopusRoute.Place.path &&
-                            DeepLinkRouter.pending.value == null &&
-                            app.pantopus.android.core.routing.PendingDeepLinkStore.peek() == null
-                        ) {
+                        val canRestoreLanding =
+                            !didLandPlace &&
+                                navController.currentDestination?.route == PantopusRoute.Place.path
+                        val hasPendingLink =
+                            DeepLinkRouter.pending.value != null ||
+                                app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
+                        if (canRestoreLanding && landing is HomeLanding.PlaceDashboard && !hasPendingLink) {
                             didLandPlace = true
                             navController.navigate(ChildRoutes.placeDashboard(landing.homeId))
                         }

@@ -52,7 +52,7 @@ struct LoginView: View {
                     .padding(.bottom, Spacing.s5)
 
                     if let security = viewModel.securityMessage {
-                        SecuritySignOutBanner(message: security, onDismiss: { viewModel.dismissSecurityMessage(using: auth) })
+                        SecuritySignOutBanner(message: security) { viewModel.dismissSecurityMessage(using: auth) }
                             .padding(.horizontal, Spacing.s5)
                             .padding(.bottom, Spacing.s3)
                             .accessibilityIdentifier("loginSessionEndBanner")

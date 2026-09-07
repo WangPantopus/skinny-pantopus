@@ -108,6 +108,7 @@ final class FollowingProjectionTests: XCTestCase {
         XCTAssertEqual(projected.latestPostId, "post-t")
         XCTAssertEqual(projected.trailing, .unread("1"))
     }
+
     func testExpiredMuteRestoresNormalPresentation() {
         let (_, projected) = FollowingProjection.project(
             row(id: "expired", unread: 0, hoursAgo: 1, muted: true, muteExpiresIn: -1), now: now
@@ -115,5 +116,4 @@ final class FollowingProjectionTests: XCTestCase {
         XCTAssertFalse(projected.isMuted)
         XCTAssertEqual(projected.trailing, .chevron)
     }
-
 }

@@ -8,6 +8,8 @@ import java.util.UUID
 /** Device-local, expiring draft. Saving never creates a Home or a membership. */
 object PlacePendingStore {
     internal const val TTL_MS = 24L * 60L * 60L * 1000L
+    private const val MAX_LATITUDE = 90.0
+    private const val MAX_LONGITUDE = 180.0
     private var prefs: SharedPreferences? = null
 
     data class Pending(
@@ -46,9 +48,11 @@ object PlacePendingStore {
         val lat = store.getString("lat", null)?.toDoubleOrNull()
         val lng = store.getString("lng", null)?.toDoubleOrNull()
         val expires = store.getLong("expires_at", 0L)
-        if (id.isNullOrBlank() || lat == null || lng == null || !valid(label, lat, lng) ||
-            expires <= now || expires - now > TTL_MS
-        ) {
+        if (id.isNullOrBlank() || lat == null || lng == null) {
+            clear()
+            return null
+        }
+        if (!valid(label, lat, lng) || expires <= now || expires - now > TTL_MS) {
             clear()
             return null
         }
@@ -78,7 +82,8 @@ object PlacePendingStore {
         label: String,
         lat: Double,
         lng: Double,
-    ): Boolean = label.isNotBlank() && lat.isFinite() && lng.isFinite() && lat in -90.0..90.0 && lng in -180.0..180.0
+    ): Boolean =
+        label.isNotBlank() && lat.isFinite() && lng.isFinite() && lat in -MAX_LATITUDE..MAX_LATITUDE && lng in -MAX_LONGITUDE..MAX_LONGITUDE
 
     private fun write(draft: Pending): Boolean {
         val store = prefs ?: return false

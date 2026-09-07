@@ -27,7 +27,7 @@ Native projection tests cover muted unread updates, mute expiry, and the post ID
 - Android: **92 unit tests and one emulator interaction test pass** on API 34. The interaction test distinguishes opening a post from opening the Beacon profile and verifies selection-mode behavior.
 - Targeted Kotlin lint and web ESLint pass. Both native app builds succeed.
 
-The web type-check gate still reports the same six pre-existing signatures recorded in the social discovery note: nearbyCells TS2305, NearbyCellsMap TS2724/TS7006, and TS2741 in the two place development pages and placeGroupDetail test. No type-check baseline was changed. Targeted SwiftLint retains one existing HubTabRoot trailing-closure warning.
+At the original checkpoint, the web type-check gate reported the same six pre-existing signatures recorded in the social discovery note: nearbyCells TS2305, NearbyCellsMap TS2724/TS7006, and TS2741 in the two place development pages and placeGroupDetail test. No type-check baseline was changed. The original targeted SwiftLint check retained one HubTabRoot trailing-closure warning. Both findings are resolved in the subsequent [master integration](master-integration-2026-09-07.md), which passes the zero-error type baseline and strict iOS lint.
 
 ## Release limits and next work
 

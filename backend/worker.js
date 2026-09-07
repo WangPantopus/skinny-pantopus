@@ -55,6 +55,10 @@ async function main() {
     logger.info('[Worker] Skipping node-cron because CRON_ENABLED=false');
   }
 
+  // Written only after queue/cron registration; stale heartbeats fail Docker health.
+  const heartbeat = () => fs.writeFileSync('/tmp/pantopus-worker-ready', String(Date.now()));
+  heartbeat();
+  setInterval(heartbeat, 10000).unref();
   logger.info('[Worker] Ready');
 }
 

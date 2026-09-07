@@ -254,7 +254,9 @@ public struct UnlistedBrokerGroup: Decodable, Sendable, Hashable, Identifiable {
     /// It also matches Android's `place.unlisted.group.${group.category}`,
     /// so the two clients' test identifiers finally agree, and it no
     /// longer re-keys every identifier when a label's copy is edited.
-    public var id: String { rawCategory.isEmpty ? (label.isEmpty ? "unknown" : label) : rawCategory }
+    public var id: String {
+        rawCategory.isEmpty ? (label.isEmpty ? "unknown" : label) : rawCategory
+    }
 
     private enum CodingKeys: String, CodingKey {
         case category, label, brokers
@@ -280,7 +282,9 @@ public struct UnlistedRemoval: Decodable, Sendable, Hashable, Identifiable {
     public let requestedAt: String?
     public let confirmedAt: String?
 
-    public var id: String { brokerId }
+    public var id: String {
+        brokerId
+    }
 
     private enum CodingKeys: String, CodingKey {
         case status

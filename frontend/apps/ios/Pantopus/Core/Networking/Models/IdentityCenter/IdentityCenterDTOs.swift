@@ -243,7 +243,9 @@ public struct HomeMirrorDTO: Decodable, Sendable, Hashable {
         public let key: String
         public let label: String
 
-        public var id: String { key }
+        public var id: String {
+            key
+        }
     }
 
     public let surface: String

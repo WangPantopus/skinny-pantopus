@@ -31,7 +31,9 @@ struct UnlistedProgressLine: View {
     let profile: UnlistedExposureProfile
     let vm: PlaceUnlistedViewModel
 
-    private var rows: [UnlistedRemoval] { profile.removals.rows ?? [] }
+    private var rows: [UnlistedRemoval] {
+        profile.removals.rows ?? []
+    }
 
     private var summary: String {
         guard !rows.isEmpty else {

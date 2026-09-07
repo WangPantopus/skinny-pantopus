@@ -81,6 +81,8 @@ fun NearbyScreen(
     NearbyContent(state, onClaim, onOpenPulse, onOpenBeacons, onOpenConnections, onOpenMarketplace, onOpenTasks, viewModel::refresh)
 }
 
+// Keep each destination callback explicit at this screen boundary.
+@Suppress("LongParameterList")
 @Composable
 internal fun NearbyContent(
     state: NearbyUiState,

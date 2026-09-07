@@ -19,9 +19,9 @@ struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
 
-    // Order (matches Android): what it is like now, what to do with it,
-    // what recurs at this address, then air, alerts and sun. The calendar
-    // is the reason the Today tab exists and sits above the fold.
+    /// Order (matches Android): what it is like now, what to do with it,
+    /// what recurs at this address, then air, alerts and sun. The calendar
+    /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let weather = vm.section(.weather, in: intel) {
@@ -284,8 +284,13 @@ private struct GoodDayRow: View {
     let tiles: [PlaceGoodDayTile]
     @State private var openID: String?
 
-    private var shown: [PlaceGoodDayTile] { Array(tiles.prefix(5)) }
-    private var open: PlaceGoodDayTile? { shown.first { $0.id == openID } }
+    private var shown: [PlaceGoodDayTile] {
+        Array(tiles.prefix(5))
+    }
+
+    private var open: PlaceGoodDayTile? {
+        shown.first { $0.id == openID }
+    }
 
     private func tint(_ verdict: GoodDayVerdict) -> Color {
         switch verdict {
@@ -521,7 +526,9 @@ struct AddressCalendarCard: View {
             Text("Recycling")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            Picker("Recycling", selection: Binding(get: { frequency }, set: { frequency = $0; nextDate = "" })) {
+            Picker("Recycling", selection: Binding(get: { frequency }, set: { frequency = $0
+                nextDate = ""
+            })) {
                 Text("Not sure yet").tag("not_set")
                 Text("Every week").tag("weekly")
                 Text("Every other week").tag("biweekly")

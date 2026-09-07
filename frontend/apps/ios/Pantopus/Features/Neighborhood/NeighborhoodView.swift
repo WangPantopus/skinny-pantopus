@@ -8,8 +8,8 @@
 
 import SwiftUI
 
-// Internal like PlaceDashboardView — the view model's APIClient dependency
-// is internal, and the app is a single target.
+/// Internal like PlaceDashboardView — the view model's APIClient dependency
+/// is internal, and the app is a single target.
 struct NeighborhoodView: View {
     @State private var viewModel: NeighborhoodViewModel
 
@@ -87,9 +87,9 @@ struct NeighborhoodView: View {
                 "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
                     + "Following Beacons needs no home address."
             )
-                .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .pantopusTextStyle(.small)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, Spacing.s3)
     }
@@ -181,9 +181,9 @@ struct NeighborhoodView: View {
             : max(0.08, min(1, Double(meter.verifiedCount ?? 0) / Double(max(meter.threshold, 1))))
         let copy = isForming
             ? "Your area is just forming — be one of the first \(meter.kAnonMin) verified households "
-                + "here. Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
+            + "here. Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
             : "\(meter.verifiedCount ?? 0) households have verified their address nearby. "
-                + "Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
+            + "Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
 
         return VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack {
@@ -338,7 +338,7 @@ struct NeighborhoodView: View {
             title: "Tasks",
             subtitle: "Post and pick up local work, backed by verified addresses",
             destination: .tasks
-        ),
+        )
     ]
 
     private func areaSuffix(_ meter: NeighborhoodMeterDTO) -> String {

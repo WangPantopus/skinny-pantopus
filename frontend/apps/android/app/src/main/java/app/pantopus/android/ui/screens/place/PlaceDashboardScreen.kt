@@ -137,7 +137,7 @@ fun PlaceDashboardScreen(
 }
 
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 internal fun PlaceDashboardContent(
     intel: PlaceIntelligence,
     onOpenAvatar: () -> Unit,
@@ -179,16 +179,18 @@ internal fun PlaceDashboardContent(
         item {
             // Per-home ticks and dismissal are keyed by id; never let the
             // empty default (previews, snapshots) collapse households together.
-            if (homeId.isNotBlank()) JustMovedCard(
-                homeId = homeId,
-                moveInDate = moveInDate,
-                onOpenDetail = onOpenDetail,
-                onOpenMailDay = onOpenMailDay,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
-                // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
-                needsPickupDay =
-                    intel.groups.flatMap { it.sections }.firstNotNullOfOrNull { it.addressCalendar }?.needsPickupDay,
-            )
+            if (homeId.isNotBlank()) {
+                JustMovedCard(
+                    homeId = homeId,
+                    moveInDate = moveInDate,
+                    onOpenDetail = onOpenDetail,
+                    onOpenMailDay = onOpenMailDay,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+                    // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
+                    needsPickupDay =
+                        intel.groups.flatMap { it.sections }.firstNotNullOfOrNull { it.addressCalendar }?.needsPickupDay,
+                )
+            }
         }
         item {
             PlaceHeroCard(

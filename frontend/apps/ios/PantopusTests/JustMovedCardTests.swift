@@ -12,7 +12,7 @@ final class JustMovedCardTests: XCTestCase {
     private func iso(_ daysAgo: Int) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!)
+        return f.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date())
     }
 
     func test_window_is_sixty_days_back_and_two_weeks_ahead() {
@@ -26,8 +26,8 @@ final class JustMovedCardTests: XCTestCase {
         XCTAssertTrue(isRecentMove(iso(3) + "T00:00:00Z"), "timestamps are read by their date prefix")
     }
 
-    func test_store_keeps_ticks_and_dismissal_per_home() {
-        let defaults = UserDefaults(suiteName: "JustMovedCardTests")!
+    func test_store_keeps_ticks_and_dismissal_per_home() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "JustMovedCardTests"))
         defaults.removePersistentDomain(forName: "JustMovedCardTests")
         let a = JustMovedStore(homeId: "h1", defaults: defaults)
         let b = JustMovedStore(homeId: "h2", defaults: defaults)

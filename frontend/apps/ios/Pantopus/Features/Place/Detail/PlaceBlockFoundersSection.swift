@@ -212,7 +212,12 @@ private struct BlockFounderRankCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 if let founding = status.founding, let line = foundingLine(founding) {
                     HStack(spacing: 8) {
-                        Icon(.crown, size: 14, strokeWidth: 2.25, color: founding.isFounding ? Theme.Color.home : Theme.Color.appTextSecondary)
+                        Icon(
+                            .crown,
+                            size: 14,
+                            strokeWidth: 2.25,
+                            color: founding.isFounding ? Theme.Color.home : Theme.Color.appTextSecondary
+                        )
                         Text(line)
                             .font(.system(size: 12.5, weight: founding.isFounding ? .semibold : .medium))
                             .foregroundStyle(founding.isFounding ? Theme.Color.home : Theme.Color.appText)
@@ -298,10 +303,12 @@ private struct BlockFounderMetersCard: View {
                         row(meter)
                     }
                 }
-                Text("“Real rents” counts rents your neighbors have shared; the others count verified homes. That difference is deliberate — a block of twenty-five verified owner-occupiers has no rents to pool.")
-                    .font(.system(size: 11.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextMuted)
+                Text(
+                    "“Real rents” counts rents your neighbors have shared; the others count verified homes. That difference is deliberate — a block of twenty-five verified owner-occupiers has no rents to pool."
+                )
+                .font(.system(size: 11.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
             }
         }
         .accessibilityIdentifier("place.blockFounders.meters")

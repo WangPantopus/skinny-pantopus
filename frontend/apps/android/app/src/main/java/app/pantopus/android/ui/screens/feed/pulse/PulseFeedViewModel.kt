@@ -765,7 +765,7 @@ class PulseFeedViewModel
                 if (loadedPosts.isEmpty()) return
                 _state.value =
                     PulseFeedUiState.Empty(
-                        content = _surface.value.emptyContent(scopeLabel = scopeLabel, followCount = 0),
+                        content = _surface.value.emptyContent(scopeLabel = scopeLabel),
                     )
                 return
             }
@@ -817,7 +817,6 @@ class PulseFeedViewModel
                                         content =
                                             _surface.value.emptyContent(
                                                 scopeLabel = scopeLabel,
-                                                followCount = 0,
                                             ),
                                     )
                                 } else {

@@ -1,7 +1,8 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: ${DOCKER_TARGET:-production}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -15,7 +16,8 @@ services:
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: worker
     env_file:
       - ./backend/.env.${APP_ENV:-dev}
