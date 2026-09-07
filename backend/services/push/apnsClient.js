@@ -176,11 +176,12 @@ function sendOne(session, token, payloadString, providerToken, bundleId) {
 
 /**
  * Send one payload to many APNs device tokens over a shared HTTP/2 session.
- * Returns the tokens APNs reported as permanently invalid.
+ * Returns explicit provider acceptance and permanently invalid tokens.
+ * Acceptance does not confirm display or delivery on the device.
  */
 async function sendMany(tokens, message) {
   if (!isConfigured() || !tokens || tokens.length === 0) {
-    return { invalidTokens: [] };
+    return { invalidTokens: [], acceptedTokens: [] };
   }
   const { bundleId } = getConfig();
   const providerToken = getProviderToken();
@@ -192,7 +193,8 @@ async function sendMany(tokens, message) {
   );
 
   const invalidTokens = results.filter((r) => r.action === 'invalid').map((r) => r.token);
-  return { invalidTokens };
+  const acceptedTokens = results.filter((r) => r.action === 'ok').map((r) => r.token);
+  return { invalidTokens, acceptedTokens };
 }
 
 /** Close the shared HTTP/2 session (used on graceful shutdown / tests). */

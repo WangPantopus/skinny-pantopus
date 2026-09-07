@@ -1,9 +1,46 @@
 const expoClient = require('../../../services/push/expoClient');
+const mockExpo = {
+  chunkPushNotifications: jest.fn((messages) => [messages]),
+  sendPushNotificationsAsync: jest.fn(),
+};
+jest.mock('expo-server-sdk', () => ({ Expo: jest.fn(() => mockExpo) }));
 
 const savedFlag = process.env.PUSH_EXPO_ENABLED;
 afterEach(() => {
   if (savedFlag === undefined) delete process.env.PUSH_EXPO_ENABLED;
   else process.env.PUSH_EXPO_ENABLED = savedFlag;
+});
+
+describe('push/expoClient.sendMany (mocked SDK)', () => {
+  beforeEach(() => { process.env.PUSH_EXPO_ENABLED = 'true'; });
+
+  it('only confirms tokens with an ok ticket and receipt ID', async () => {
+    mockExpo.sendPushNotificationsAsync.mockResolvedValue([
+      { status: 'ok', id: 'receipt-1' },
+      { status: 'error', details: { error: 'DeviceNotRegistered' } },
+      { status: 'error', details: { error: 'MessageRateExceeded' } },
+      { status: 'ok' },
+    ]);
+    const tokens = ['ok', 'dead', 'throttled', 'missing-receipt'].map((id) => `ExpoPushToken[${id}]`);
+    expect(await expoClient.sendMany(tokens, {})).toEqual({
+      acceptedTokens: [tokens[0]], invalidTokens: [tokens[1]],
+    });
+  });
+
+  it('does not report acceptance when a chunk send throws', async () => {
+    mockExpo.sendPushNotificationsAsync.mockRejectedValue(new Error('connection reset'));
+    expect(await expoClient.sendMany(['ExpoPushToken[x]'], {})).toEqual({
+      acceptedTokens: [], invalidTokens: [],
+    });
+  });
+
+  it('does not send when disabled', async () => {
+    process.env.PUSH_EXPO_ENABLED = 'false';
+    expect(await expoClient.sendMany(['ExpoPushToken[x]'], {})).toEqual({
+      acceptedTokens: [], invalidTokens: [],
+    });
+    expect(mockExpo.sendPushNotificationsAsync).not.toHaveBeenCalled();
+  });
 });
 
 describe('push/expoClient.isConfigured (dual-write flag)', () => {

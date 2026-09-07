@@ -44,17 +44,19 @@ function buildMessages(tokens, { title, body, data } = {}) {
 /**
  * Send to many Expo tokens. Returns tokens Expo rejected outright
  * (DeviceNotRegistered / InvalidCredentials); ok tickets are queued for
- * optional later receipt inspection via {@link checkReceipts}.
+ * optional later receipt inspection via {@link checkReceipts}. acceptedTokens
+ * means Expo issued an ok ticket, not that APNs/FCM or the device received it.
  */
 async function sendMany(tokens, message) {
-  if (!isConfigured()) return { invalidTokens: [] };
+  if (!isConfigured()) return { invalidTokens: [], acceptedTokens: [] };
 
   const messages = buildMessages(tokens, message);
-  if (messages.length === 0) return { invalidTokens: [] };
+  if (messages.length === 0) return { invalidTokens: [], acceptedTokens: [] };
 
   const expo = getExpo();
   const chunks = expo.chunkPushNotifications(messages);
   const invalidTokens = [];
+  const acceptedTokens = [];
 
   for (const chunk of chunks) {
     try {
@@ -62,6 +64,7 @@ async function sendMany(tokens, message) {
       tickets.forEach((ticket, i) => {
         if (ticket.status === 'ok' && ticket.id) {
           _pendingReceiptIds.push(ticket.id);
+          acceptedTokens.push(chunk[i].to);
         } else if (ticket.status === 'error') {
           const detail = ticket.details && ticket.details.error;
           logger.warn('Expo ticket error', { error: ticket.message, detail, token: chunk[i].to });
@@ -75,7 +78,7 @@ async function sendMany(tokens, message) {
     }
   }
 
-  return { invalidTokens };
+  return { invalidTokens, acceptedTokens };
 }
 
 /** Drain queued Expo receipt ids and log any delivery errors. Best-effort. */

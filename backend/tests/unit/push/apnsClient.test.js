@@ -1,5 +1,7 @@
 const { generateKeyPairSync } = require('crypto');
 const jwt = require('jsonwebtoken');
+const http2 = require('http2');
+const { EventEmitter } = require('events');
 const apnsClient = require('../../../services/push/apnsClient');
 
 const ENV_KEYS = [
@@ -13,9 +15,72 @@ beforeEach(() => {
   apnsClient.close(); // reset cached provider token / session
 });
 afterEach(() => {
+  apnsClient.close();
+  jest.restoreAllMocks();
   ENV_KEYS.forEach((k) => {
     if (savedEnv[k] === undefined) delete process.env[k];
     else process.env[k] = savedEnv[k];
+  });
+});
+
+describe('push/apnsClient.sendMany (mocked HTTP/2)', () => {
+  beforeEach(() => {
+    process.env.APNS_KEY_ID = 'KEY12345AB';
+    process.env.APNS_TEAM_ID = 'TEAM98765C';
+    process.env.APNS_BUNDLE_ID = 'app.pantopus.ios';
+    process.env.APNS_PRIVATE_KEY = generateKeyPairSync('ec', {
+      namedCurve: 'P-256',
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    }).privateKey;
+  });
+
+  function mockResponses(responses) {
+    const session = new EventEmitter();
+    session.close = jest.fn();
+    session.request = jest.fn(() => {
+      const response = responses.shift();
+      const req = new EventEmitter();
+      req.setEncoding = jest.fn();
+      req.close = jest.fn();
+      let timeout;
+      req.setTimeout = jest.fn((_, callback) => { timeout = callback; });
+      req.end = jest.fn(() => queueMicrotask(() => {
+        if (response === 'timeout') return timeout();
+        if (response === 'error') return req.emit('error', new Error('connection reset'));
+        req.emit('response', { ':status': response.status });
+        if (response.reason) req.emit('data', JSON.stringify({ reason: response.reason }));
+        req.emit('end');
+      }));
+      return req;
+    });
+    jest.spyOn(http2, 'connect').mockReturnValue(session);
+  }
+
+  it('distinguishes acceptance, invalid tokens, auth failure, and throttling', async () => {
+    mockResponses([
+      { status: 200 }, { status: 410, reason: 'Unregistered' },
+      { status: 403, reason: 'ExpiredProviderToken' }, { status: 429, reason: 'TooManyRequests' },
+    ]);
+    expect(await apnsClient.sendMany(['ok', 'dead', 'auth', 'throttle'], { title: 'Test' })).toEqual({
+      acceptedTokens: ['ok'], invalidTokens: ['dead'],
+    });
+  });
+
+  it.each(['timeout', 'error'])('does not report acceptance after a transport %s', async (failure) => {
+    mockResponses([failure]);
+    expect(await apnsClient.sendMany(['test-device'], {})).toEqual({
+      acceptedTokens: [], invalidTokens: [],
+    });
+  });
+
+  it('does not connect when configuration is missing', async () => {
+    delete process.env.APNS_KEY_ID;
+    const connect = jest.spyOn(http2, 'connect');
+    expect(await apnsClient.sendMany(['test-device'], {})).toEqual({
+      acceptedTokens: [], invalidTokens: [],
+    });
+    expect(connect).not.toHaveBeenCalled();
   });
 });
 
