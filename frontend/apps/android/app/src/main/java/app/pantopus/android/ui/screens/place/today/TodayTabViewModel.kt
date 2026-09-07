@@ -71,12 +71,13 @@ class TodayTabViewModel
                 is NetworkResult.Failure -> null
             }
 
-        override fun setPickupDay(weekday: String) {
+        override fun setPickupDay(request: app.pantopus.android.data.api.models.place.SetPickupDayRequest) {
             val id = homeId ?: return
+            if (_calendarBusy.value) return
+            _calendarBusy.value = true
             viewModelScope.launch {
-                _calendarBusy.value = true
                 _calendarError.value = null
-                when (val r = repo.setPickupDay(id, weekday)) {
+                when (val r = repo.setPickupDay(id, request)) {
                     is NetworkResult.Success -> refresh()
                     is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't save your pickup day.")
                 }
@@ -86,8 +87,9 @@ class TodayTabViewModel
 
         override fun clearPickupDay() {
             val id = homeId ?: return
+            if (_calendarBusy.value) return
+            _calendarBusy.value = true
             viewModelScope.launch {
-                _calendarBusy.value = true
                 _calendarError.value = null
                 when (val r = repo.clearPickupDay(id)) {
                     is NetworkResult.Success -> refresh()

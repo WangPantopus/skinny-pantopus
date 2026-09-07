@@ -109,7 +109,12 @@ function daysBetween(fromDay, toDay) {
 async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS } = {}) {
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
-  const rules = applyPrecedence(await loadRules(home));
+  const loaded = await loadRules(home);
+  const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && r.kind === 'garbage');
+  // Once the household sets its schedule, unknown pickup kinds must not
+  // silently fall back to a guessed city week (including briefing signals).
+  const rules = applyPrecedence(loaded.filter((r) =>
+    !hasHouseholdPickup || !PICKUP_KINDS.has(r.kind) || r.scope_type === 'home'));
 
   const upcoming = [];
   for (const rule of rules) {
@@ -143,12 +148,19 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   upcoming.length = 0;
   upcoming.push(...deduped);
 
-  const needsPickupDay = rules.some((r) => PICKUP_KINDS.has(r.kind) && r.scope_type !== 'home');
+  const garbage = rules.find((r) => r.scope_type === 'home' && r.kind === 'garbage');
+  const recycling = rules.find((r) => r.scope_type === 'home' && r.kind === 'recycling');
+  const pickupSchedule = garbage ? {
+    weekday: /BYDAY=([A-Z]{2})/.exec(garbage.rrule)?.[1] || null,
+    recycling_frequency: recycling ? (/INTERVAL=2(?:;|$)/.test(recycling.rrule) ? 'biweekly' : 'weekly') : 'not_set',
+    recycling_next_date: recycling ? expandRule(recycling, today, end)[0] || null : null,
+  } : null;
 
   return {
     upcoming,
     next: upcoming[0] || null,
-    needs_pickup_day: needsPickupDay,
+    needs_pickup_day: !garbage,
+    pickup_schedule: pickupSchedule,
     window_days: windowDays,
     rule_count: rules.length,
     today,
@@ -169,12 +181,29 @@ async function composeForHomeId(homeId, options = {}) {
 }
 
 // ── Resident override: "my pickup day is Thursday" ──────────
-// Writes a home-scoped weekly garbage rule and a biweekly recycling rule
-// anchored to the next pickup, replacing the city defaults for that home.
-async function setPickupDay(home, { weekday, recyclingEveryOtherWeek = true, userId = null, now = new Date() }) {
-  const wd = String(weekday || '').toUpperCase().slice(0, 2);
-  if (!WEEKDAYS[wd]) throw new Error('weekday must be one of MO TU WE TH FR SA SU');
+// Garbage is weekly. Recycling needs a known frequency AND next date;
+// a weekday alone cannot establish the alternating week or even its day.
+function invalidPickup(message) {
+  return Object.assign(new Error(message), { code: 'INVALID_PICKUP' });
+}
+
+async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', recyclingNextDate = null, userId = null, now = new Date() }) {
+  const wd = String(weekday || '').toUpperCase();
+  if (!WEEKDAYS[wd]) throw invalidPickup('weekday must be one of MO TU WE TH FR SA SU');
+  if (!['not_set', 'weekly', 'biweekly'].includes(recyclingFrequency)) throw invalidPickup('Choose a recycling frequency.');
   const today = localToday(home, now);
+  if (recyclingFrequency !== 'not_set') {
+    const date = typeof recyclingNextDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(recyclingNextDate) ? noonUtc(recyclingNextDate) : null;
+    if (!date || !Number.isFinite(date.getTime()) || isoDate(date) !== recyclingNextDate) {
+      throw invalidPickup('Choose a valid next recycling pickup date.');
+    }
+    const days = daysBetween(today, recyclingNextDate);
+    if (days < 0 || days >= (recyclingFrequency === 'weekly' ? 7 : 14)) {
+      throw invalidPickup(`Choose the next recycling pickup within ${recyclingFrequency === 'weekly' ? 7 : 14} days, including today.`);
+    }
+  } else if (recyclingNextDate != null) {
+    throw invalidPickup('Choose a recycling frequency for this date.');
+  }
   // Anchor: the next occurrence of that weekday on or after today.
   const anchor = new RRule({ freq: RRule.WEEKLY, byweekday: [WEEKDAYS[wd]], dtstart: noonUtc(today) }).after(noonUtc(today), true);
   const dtstart = isoDate(anchor);
@@ -193,10 +222,13 @@ async function setPickupDay(home, { weekday, recyclingEveryOtherWeek = true, use
   const rows = [
     { ...base, kind: 'garbage', title: 'Garbage day', detail: 'Bins out the night before.', rrule: `FREQ=WEEKLY;BYDAY=${wd}` },
   ];
-  if (recyclingEveryOtherWeek) {
-    rows.push({ ...base, kind: 'recycling', title: 'Recycling day', detail: 'Every other week, with the garbage.', rrule: `FREQ=WEEKLY;INTERVAL=2;BYDAY=${wd}` });
-  } else {
-    rows.push({ ...base, kind: 'recycling', title: 'Recycling day', detail: 'Weekly, with the garbage.', rrule: `FREQ=WEEKLY;BYDAY=${wd}` });
+  if (recyclingFrequency !== 'not_set') {
+    const recyclingDay = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][noonUtc(recyclingNextDate).getUTCDay()];
+    rows.push({
+      ...base, dtstart: recyclingNextDate, kind: 'recycling', title: 'Recycling day',
+      detail: recyclingFrequency === 'biweekly' ? 'Every other week, on the schedule your household set.' : 'Weekly, on the schedule your household set.',
+      rrule: `FREQ=WEEKLY;INTERVAL=${recyclingFrequency === 'biweekly' ? 2 : 1};BYDAY=${recyclingDay}`,
+    });
   }
   // The uniqueness index on (scope_key, kind) is partial (WHERE scope_type =
   // 'home'), and PostgREST cannot express the predicate in ON CONFLICT, so an

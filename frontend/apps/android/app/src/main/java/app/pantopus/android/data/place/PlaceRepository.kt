@@ -134,10 +134,8 @@ class PlaceRepository
 
         suspend fun setPickupDay(
             homeId: String,
-            weekday: String,
-            recyclingEveryOtherWeek: Boolean = true,
-        ): NetworkResult<AddressCalendarResponse> =
-            safeApiCall { placeApi.setPickupDay(homeId, SetPickupDayRequest(weekday, recyclingEveryOtherWeek)) }
+            request: SetPickupDayRequest,
+        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.setPickupDay(homeId, request) }
 
         suspend fun clearPickupDay(homeId: String): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId) }
 

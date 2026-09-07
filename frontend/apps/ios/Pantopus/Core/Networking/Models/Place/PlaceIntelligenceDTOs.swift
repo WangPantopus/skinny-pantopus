@@ -1154,12 +1154,26 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     public let windowDays: Int
     public let ruleCount: Int
     public let today: String
+    public var pickupSchedule: HouseholdPickupSchedule?
 
     private enum CodingKeys: String, CodingKey {
         case upcoming, next, today
         case needsPickupDay = "needs_pickup_day"
         case windowDays = "window_days"
         case ruleCount = "rule_count"
+        case pickupSchedule = "pickup_schedule"
+    }
+}
+
+public struct HouseholdPickupSchedule: Decodable, Sendable, Hashable {
+    public let weekday: String?
+    public let recyclingFrequency: String
+    public let recyclingNextDate: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case weekday
+        case recyclingFrequency = "recycling_frequency"
+        case recyclingNextDate = "recycling_next_date"
     }
 }
 

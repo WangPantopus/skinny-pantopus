@@ -35,7 +35,7 @@ The verified-Home dashboard, permissions, property/ATTOM information, weather, a
 
 The follow-up fixes the normal workspace iOS build: `MyPackagesView.swift` now uses the existing `Theme.Color.personal` token. The iOS ignore file also explicitly includes `Pantopus/Features/Scheduling/Business/Packages/`, whose ten existing source files had been hidden by the generic `Packages/` rule. The simulator build and focused tests now pass in the original workspace, without a scratch-copy substitution.
 
-Android's instrumentation build also passes (`:app:assembleDebugAndroidTest`). Four old navigation/accessibility test harnesses referenced the removed five-tab route enum; they now use the current Place, Today, Nearby, and Mail routes. These bottom-bar tests use stub destinations and do not claim full-screen journey coverage. No Android device or usable emulator image is installed locally, so instrumentation execution remains outstanding.
+Android's instrumentation build also passes (`:app:assembleDebugAndroidTest`). Four old navigation/accessibility test harnesses referenced the removed five-tab route enum; they now use the current Place, Today, Nearby, and Mail routes. These bottom-bar tests use stub destinations and do not claim full-screen journey coverage. A subsequent SDK-manager inventory found an installed API 34 image that the earlier file scan missed. A dedicated `Pantopus_Entry_API_34` emulator was created, and **all eight selected navigation and accessibility checks passed**. Full authenticated Android arrival journeys remain outstanding.
 
 Reproducible test targets:
 

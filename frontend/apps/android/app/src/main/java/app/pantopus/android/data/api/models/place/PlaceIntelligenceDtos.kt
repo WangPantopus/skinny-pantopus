@@ -1061,7 +1061,15 @@ data class PlaceAddressCalendarData(
     @Json(name = "rule_count") val ruleCount: Int = 0,
     /** YYYY-MM-DD the window starts on. */
     val today: String = "",
+    @Json(name = "pickup_schedule") val pickupSchedule: HouseholdPickupSchedule? = null,
     val source: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class HouseholdPickupSchedule(
+    val weekday: String? = null,
+    @Json(name = "recycling_frequency") val recyclingFrequency: String = "not_set",
+    @Json(name = "recycling_next_date") val recyclingNextDate: String? = null,
 )
 
 sealed interface PlaceSectionData {
