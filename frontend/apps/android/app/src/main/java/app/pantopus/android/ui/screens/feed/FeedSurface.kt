@@ -7,10 +7,10 @@ import app.pantopus.android.ui.theme.PantopusIcon
 /**
  * The A03 feed archetype renders two surfaces from one screen: Pulse (the
  * public neighborhood feed, `surface=place`) and Beacon Updates (broadcasts
- * from verified beacons the user follows, `surface=personas`).
+ * from public profiles the user follows, `surface=personas`).
  * Design ref: docs/designs/A03 — feed-frames.jsx (A03.1) + beacons-frames.jsx
- * (A03.2). They share chrome, chip row, card recipe, FAB, and tab bar; only
- * the title, backend surface, verified-floor, and empty state differ.
+ * (A03.2). They share chrome, chip row, card recipe, discovery controls, and tab bar; only
+ * the title, backend surface, credential presentation, and empty state differ.
  */
 enum class FeedSurface(
     /**
@@ -31,11 +31,6 @@ enum class FeedSurface(
     val toggleLabel: String,
     /** Glyph on the Nearby / Connections toggle row. */
     val toggleIcon: PantopusIcon,
-    /**
-     * Beacons are verified people / businesses / civic accounts, so every
-     * author on that surface carries the verified check disc (A03.2).
-     */
-    val authorsAlwaysVerified: Boolean,
 ) {
     /** A03.1 — public neighborhood feed (`surface=place`). */
     Pulse(
@@ -44,7 +39,6 @@ enum class FeedSurface(
         moderationSurface = "nearby",
         toggleLabel = "Nearby",
         toggleIcon = PantopusIcon.MapPin,
-        authorsAlwaysVerified = false,
     ),
 
     /**
@@ -58,7 +52,6 @@ enum class FeedSurface(
         moderationSurface = "connections",
         toggleLabel = "Connections",
         toggleIcon = PantopusIcon.Link,
-        authorsAlwaysVerified = false,
     ),
 
     /** A03.2 — beacon broadcasts (`surface=personas`). */
@@ -68,7 +61,6 @@ enum class FeedSurface(
         moderationSurface = "nearby",
         toggleLabel = "Beacons",
         toggleIcon = PantopusIcon.Rss,
-        authorsAlwaysVerified = true,
     ),
     ;
 
@@ -130,16 +122,16 @@ enum class FeedSurface(
             Beacons ->
                 FeedEmptyContent(
                     icon = PantopusIcon.Rss,
-                    headline = "Follow a beacon to see updates here",
+                    headline = "No Beacon updates yet",
                     body =
-                        "Beacons are verified people, businesses, and civic accounts you can follow. " +
+                        "Beacons are public profiles you choose to follow. " +
                             "Their posts land in this feed only.",
                     ctaLabel = "Discover beacons",
                     ctaIcon = PantopusIcon.Compass,
                     footerIcon = PantopusIcon.Users,
                     footerLead = "You follow ",
-                    footerEmphasis = "$followCount beacons",
-                    footerTrail = " · suggestions nearby",
+                    footerEmphasis = null,
+                    footerTrail = " · find more by name or handle",
                 )
         }
 

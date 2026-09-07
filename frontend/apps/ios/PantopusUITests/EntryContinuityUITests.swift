@@ -102,6 +102,39 @@ final class EntryContinuityUITests: XCTestCase {
         capture("Beacon following after app relaunch")
     }
 
+    func testNearbyFindsBeaconsWithoutAHome() {
+        launch(reset: true, link: "/beacons")
+        signIn()
+        tap("tab.nearby")
+        tap("nearbySocial.beacons")
+        tap("beacons.find")
+        XCTAssertTrue(element("universalSearch").waitForExistence(timeout: 10))
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Maya")
+        XCTAssertTrue(app.staticTexts["Maya Builds"].waitForExistence(timeout: 10))
+        capture("Beacon search without a home")
+        app.staticTexts["Maya Builds"].tap()
+        XCTAssertTrue(element("beaconProfile").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Follow"].waitForExistence(timeout: 10))
+    }
+
+    func testMeterFailureKeepsSocialAndFollowingAccessible() {
+        app.launchEnvironment["UI_TESTS_SOCIAL_METER"] = "error"
+        launch(reset: true, link: "/beacons")
+        signIn()
+        tap("tab.nearby")
+        for id in ["pulse", "beacons", "connections"] {
+            XCTAssertTrue(element("nearbySocial.\(id)").waitForExistence(timeout: 10))
+        }
+        capture("Social discovery during a meter outage")
+        tap("nearbySocial.beacons")
+        tap("beacons.following")
+        XCTAssertTrue(app.staticTexts["Following"].waitForExistence(timeout: 10))
+        capture("Following without a home")
+    }
+
     private func launch(reset: Bool = false, link: String? = nil) {
         if app.state != .notRunning { app.terminate() }
         app.launchEnvironment["UI_TESTS_ENTRY_RESET"] = reset ? "1" : "0"

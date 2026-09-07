@@ -1204,6 +1204,7 @@ private object ChildRoutes {
      * row; gig-only search stays reachable from its Tasks tab and from
      * the Gigs feed search bar.
      */
+    const val BEACON_SEARCH = "search/beacons"
     const val UNIVERSAL_SEARCH = "search"
 
     /** Gig detail target — placeholder until T2.6 Transactional Detail. */
@@ -2375,6 +2376,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NearbyScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
+                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                         onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                         onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
                     )
@@ -4402,14 +4405,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     BeaconsFeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                        onDiscover = { navController.navigate(ChildRoutes.DISCOVER_HUB) },
+                        onFollowing = { navController.navigate(ChildRoutes.FOLLOWING) },
+                        onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
                         onBack = { navController.popBackStack() },
                     )
                 }
                 composable(ChildRoutes.FOLLOWING) {
                     FollowingScreen(
                         onBack = { navController.popBackStack() },
-                        onDiscover = { navController.navigate(ChildRoutes.DISCOVER_HUB) },
+                        onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
                         onOpenPersona = { handle -> navController.navigate(ChildRoutes.beaconProfile(handle)) },
                     )
                 }
@@ -4538,6 +4542,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.GIG_SEARCH) {
                     GigSearchScreen(
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(ChildRoutes.BEACON_SEARCH) {
+                    UniversalSearchScreen(
+                        initialTab = app.pantopus.android.ui.screens.universal_search.UniversalSearchTab.Beacons,
+                        onOpen = { destination -> navController.navigate(routeForUniversalSearch(destination)) },
+                        onBrowseNearbyBusinesses = { navController.navigate(ChildRoutes.DISCOVER_BUSINESSES) },
                         onBack = { navController.popBackStack() },
                     )
                 }

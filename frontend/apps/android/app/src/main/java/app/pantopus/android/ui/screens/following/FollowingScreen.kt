@@ -761,7 +761,7 @@ private fun FollowingEmpty(onDiscover: () -> Unit) {
         )
         Spacer(Modifier.height(Spacing.s2))
         Text(
-            text = "Follow Beacons — verified people, businesses, and civic accounts — to get their updates here.",
+            text = "Follow public profiles that interest you to get their updates here.",
             fontSize = 13.5.sp,
             color = PantopusColors.appTextSecondary,
             modifier = Modifier.padding(horizontal = Spacing.s2),

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -260,6 +261,11 @@ export default function FeedPage() {
                 ))}
               </div>
 
+              {feed.surface === 'personas' && (
+                <nav aria-label="Beacon discovery" className="flex flex-wrap gap-4 text-sm font-semibold text-primary-600">
+                  <Link href="/app/beacons">Find Beacons and manage following</Link>
+                </nav>
+              )}
               {/* Area picker (Place surface only) */}
               {feed.surface === 'place' && (
                 <div className="border-b border-app px-4 py-2.5">

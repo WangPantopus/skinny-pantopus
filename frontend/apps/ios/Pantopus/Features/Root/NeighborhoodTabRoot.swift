@@ -2,12 +2,12 @@
 //  NeighborhoodTabRoot.swift
 //  Pantopus
 //
-//  Nearby tab — the density-gated door (wedge Phase 1 four-tab IA, renamed
+//  Nearby tab — social discovery and local activity (four-tab IA, renamed
 //  "Nearby" in Phase 1.5; the Swift types keep their Neighborhood names).
 //
 //  Pulse / Tasks / Marketplace no longer sit on the root tab bar; they
-//  present as sheets from this door once the viewer's area crosses the
-//  unlock threshold. Each sheet hosts the surface's original tab root
+//  present as sheets from this door. Pulse is always available; the local
+//  task/marketplace preview still uses the meter. Each sheet hosts its tab root
 //  (own NavigationStack + deep-link consumption), so drill-down behavior
 //  is unchanged — only the entry point moved.
 //
@@ -36,7 +36,9 @@ public struct NeighborhoodTabRoot: View {
                     // The claim flow lives in the Place tab's stack — its
                     // hub root carries the add-home / verification CTAs.
                     rootTabs.selected = .place
-                }
+                },
+                onOpenBeacons: { DeepLinkRouter.shared.handle(path: "/beacons") },
+                onOpenConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
             )
             .toolbar(.hidden, for: .navigationBar)
         }

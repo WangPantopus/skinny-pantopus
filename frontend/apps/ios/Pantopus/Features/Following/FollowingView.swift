@@ -312,7 +312,7 @@ public struct FollowingView: View {
                 .font(.system(size: 20, weight: .bold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appText)
-            Text("Follow Beacons \u{2014} verified people, businesses, and civic accounts \u{2014} to get their updates here.")
+            Text("Follow public profiles that interest you to get their updates here.")
                 .font(.system(size: 13.5))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appTextSecondary)

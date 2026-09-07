@@ -122,6 +122,26 @@ enum UITestArrivalFixture {
 
     private static func socialResponse(method: String, path: String) -> (status: Int, data: Data)? {
         switch (method, path) {
+        case ("GET", "/api/neighborhood/meter"):
+            let state = ProcessInfo.processInfo.environment["UI_TESTS_SOCIAL_METER"] ?? "no_place"
+            if state == "error" { return json(["error": "Meter unavailable"], status: 503) }
+            return json(["state": state, "verified_count": NSNull(), "k_anon_min": 10, "threshold": 24, "unlocked": false])
+        case ("GET", "/api/posts/feed"):
+            return json(["posts": [], "pagination": ["hasMore": false]])
+        case ("GET", "/api/personas/me/following"):
+            return json([
+                "items": [], "counts": ["totalFollowing": 0, "unreadBeacons": 0],
+                "pagination": ["hasMore": false, "nextOffset": NSNull()]
+            ])
+        case ("GET", "/api/identity/search"):
+            return json([
+                "results": [
+                    [
+                        "id": "p_demo", "type": "public_profile", "title": "Maya Builds",
+                        "subtitle": "@mayabuilds", "href": "/@mayabuilds"
+                    ]
+                ]
+            ])
         case ("GET", "/api/posts/entry-post"):
             return json([
                 "post": [

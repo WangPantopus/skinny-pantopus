@@ -61,6 +61,21 @@ final class PulseFeedViewModelTests: XCTestCase {
         return "{\"posts\":[\(body)],\"pagination\":{\"hasMore\":false}}"
     }
 
+    func testBeaconBadgeUsesPublicCredentialInsteadOfAssumingVerification() async {
+        for credential in ["none", "verified"] {
+            SequencedURLProtocol.reset()
+            let post = Self.askPostJSON.replacingOccurrences(
+                of: "\"account_type\": \"personal\"",
+                with: "\"credential\": {\"status\": \"\(credential)\"}"
+            )
+            SequencedURLProtocol.sequence = [.status(200, body: Self.feedJSON(post))]
+            let vm = PulseFeedViewModel(api: makeAPI(), surface: .beacons, locationProvider: Self.fixedLocation)
+            await vm.load()
+            guard case let .loaded(rows) = vm.state else { return XCTFail("Expected Beacon rows") }
+            XCTAssertEqual(rows.first?.authorVerified, credential == "verified")
+        }
+    }
+
     func testLoadTransitionsLoadedWhenPostsReturned() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.feedJSON(Self.askPostJSON))]
         let vm = makeVM()

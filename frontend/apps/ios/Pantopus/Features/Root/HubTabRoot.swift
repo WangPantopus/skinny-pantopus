@@ -178,6 +178,8 @@ public enum HubRoute: Hashable {
     /// A03.2 — Beacon Updates feed (`surface=personas`). Reached from the
     /// AudienceProfile entry and the `pantopus://beacons` deep link.
     case beaconsFeed
+    case following
+    case beaconSearch
     /// A21.1 — "My Beacon": the signed-in user's own public Beacon profile
     /// (owner role). Reached from the navigation drawer.
     case myBeacon
@@ -2067,9 +2069,18 @@ public struct HubTabRoot: View {
                 onCompose: { intent in
                     Task { @MainActor in push(.composePost(intent: intent.rawValue)) }
                 },
-                onDiscover: { Task { @MainActor in push(.discoverHub) } },
+                onDiscover: { Task { @MainActor in push(.beaconSearch) } },
+                onFollowing: { Task { @MainActor in push(.following) } },
                 onBack: { Task { @MainActor in pop() } }
             )
+        case .following:
+            FollowingView(viewModel: FollowingViewModel(
+                onBack: { Task { @MainActor in pop() } },
+                onDiscover: { Task { @MainActor in push(.beaconSearch) } },
+                onOpenPersona: { handle in
+                    Task { @MainActor in push(.beaconProfile(handle: handle)) }
+                }
+            ))
         case .myBeacon:
             BeaconProfileView(
                 mode: .owner,
@@ -2158,8 +2169,9 @@ public struct HubTabRoot: View {
                 },
                 onBack: pop
             )
-        case .universalSearch:
+        case .universalSearch, .beaconSearch:
             UniversalSearchView(
+                viewModel: UniversalSearchViewModel(initialTab: route == .beaconSearch ? .beacons : .all),
                 onOpen: { destination in
                     Task { @MainActor in push(Self.route(forUniversalSearch: destination)) }
                 },

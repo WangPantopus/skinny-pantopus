@@ -77,8 +77,9 @@ public final class UniversalSearchViewModel {
     private let api: APIClient
     private var searchTask: Task<Void, Never>?
 
-    init(api: APIClient = .shared) {
+    init(api: APIClient = .shared, initialTab: UniversalSearchTab = .all) {
         self.api = api
+        activeTab = initialTab
     }
 
     // MARK: - Derived view state
