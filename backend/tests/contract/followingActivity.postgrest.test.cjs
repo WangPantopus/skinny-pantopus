@@ -19,7 +19,7 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
   const api = `${name}-api`;
   let db;
   const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', timeout: 90_000 }).trim();
-  const runSql = (sql) => execFileSync('docker', ['exec', '-i', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
+  const runSql = (sql) => execFileSync('docker', ['exec', '-i', database, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
     input: sql, encoding: 'utf8', timeout: 15_000,
   });
 
@@ -28,8 +28,11 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
     docker('run', '--rm', '-d', '--name', database, '--network', name,
       '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17-alpine');
     let ready = false;
+    // The image's temporary initialization server accepts Unix sockets but
+    // disables TCP. Wait for the final TCP server used by PostgREST, and use
+    // that same transport for fixture setup to avoid the initialization race.
     for (let attempt = 0; attempt < 60; attempt++) {
-      try { docker('exec', database, 'pg_isready', '-U', 'postgres'); ready = true; break; } catch { await delay(500); }
+      try { docker('exec', database, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'); ready = true; break; } catch { await delay(500); }
     }
     assert.ok(ready, 'disposable PostgreSQL must become ready');
     runSql(`
