@@ -13,12 +13,13 @@ endif
 ENV_FILE        := .env
 SECRETS_XCCONFIG := Config/Secrets.xcconfig
 
-.PHONY: help bootstrap open build test lint format clean beta release validate-env env-to-xcconfig verify-icons verify-tokens verify-overline
+.PHONY: help bootstrap bootstrap-staging open build test lint format clean beta release validate-env env-to-xcconfig verify-icons verify-tokens verify-overline
 
 help:
 	@echo "Pantopus iOS — available targets:"
 	@echo ""
 	@echo "  bootstrap      Install XcodeGen deps and generate $(PROJECT)"
+	@echo "  bootstrap-staging  Generate the staging overlay from .env.staging"
 	@echo "  validate-env   Check that .env has the keys the build needs"
 	@echo "  open           Open $(PROJECT) in Xcode"
 	@echo "  build          Build for simulator"
@@ -63,6 +64,12 @@ bootstrap: env-to-xcconfig
 	@command -v xcodegen >/dev/null 2>&1 || { echo >&2 "Install XcodeGen: brew install xcodegen"; exit 1; }
 	xcodegen generate
 	@echo "✓ $(PROJECT) generated. Open with: make open"
+
+# Validate first so a missing file never creates an apparently usable overlay.
+# Recursive make keeps the selected input/output paired, including under -j.
+bootstrap-staging:
+	node ../../../scripts/staging/check-native-config.cjs --platform ios --env-file .env.staging
+	@$(MAKE) bootstrap ENV_FILE=.env.staging SECRETS_XCCONFIG=Config/Secrets.Staging.xcconfig
 
 open: bootstrap
 	open $(PROJECT)
@@ -112,7 +119,7 @@ format:
 	swiftformat .
 
 clean:
-	rm -rf build DerivedData $(PROJECT) .swiftpm Package.resolved Config/Secrets.xcconfig
+	rm -rf build DerivedData $(PROJECT) .swiftpm Package.resolved Config/Secrets.xcconfig Config/Secrets.Staging.xcconfig
 
 beta:
 	bundle exec fastlane beta

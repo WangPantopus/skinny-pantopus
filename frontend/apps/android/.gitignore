@@ -20,6 +20,11 @@ local.properties
 .env
 .env.*
 !.env.example
+!.env.staging.example
+
+# Device-test Firebase configuration; the root JSON remains the CI placeholder.
+app/src/debug/google-services.json
+app/src/release/google-services.json
 
 # Keystores — never commit
 *.jks

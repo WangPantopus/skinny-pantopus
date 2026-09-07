@@ -271,7 +271,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs
+      - run: node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs scripts/staging/*.test.cjs
       - name: Protect migration history
         id: database
         env:
