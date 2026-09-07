@@ -1,0 +1,28 @@
+name: DB migrations check
+on:
+  workflow_call:
+    inputs:
+      cli-version:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  replay:
+    name: Replay and lint the complete schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ inputs.cli-version }}
+      - name: Replay from an empty database
+        run: supabase db start
+      - name: Reject invalid database functions
+        run: supabase db lint --local --fail-on error
+      - name: Run SQL contracts
+        run: supabase test db
+      - name: Stop this job's local database
+        if: always()
+        run: supabase stop --no-backup

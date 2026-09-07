@@ -99,5 +99,4 @@ final class DeepLinkRouterPlaceTests: XCTestCase {
             XCTAssertNotNil(PlaceDetailGroup(rawValue: slug), "no PlaceDetailGroup for \(slug)")
         }
     }
-
 }

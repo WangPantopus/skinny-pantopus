@@ -180,7 +180,9 @@ public final class SignUpViewModel {
     /// Runs validation, then submits to `AuthManager.signUp`. On success
     /// sets `didSucceed = true` so the caller pushes `AuthRoute.verifyEmail`.
     /// Optional profile fields travel as absent keys, never as "".
-    static func nilIfEmpty(_ value: String) -> String? { value.isEmpty ? nil : value }
+    static func nilIfEmpty(_ value: String) -> String? {
+        value.isEmpty ? nil : value
+    }
 
     func submit(using auth: AuthManager) async {
         hasAttemptedSubmit = true

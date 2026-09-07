@@ -7,7 +7,6 @@
 //  Uses the FormShell archetype with its new `bottomActionLabel` slot.
 //
 
-
 import SwiftUI
 
 struct SignUpView: View {

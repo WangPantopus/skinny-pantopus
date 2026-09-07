@@ -134,7 +134,7 @@ final class PlaceRealRentViewModel {
     static func writeFailureMessage(_ error: APIError, fallback: String) -> String {
         switch error {
         case .forbidden:
-            return Self.verificationRequiredMessage
+            return verificationRequiredMessage
         case let .clientError(_, message):
             if APIError.code(in: message) == "VERIFICATION_REQUIRED" {
                 return Self.verificationRequiredMessage
@@ -277,10 +277,12 @@ private struct RealRentBuildingCard: View {
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 PlaceProgressBar(current: data.reports, needed: data.needed)
-                Text("\(data.needed) shared rents open the block's real range — the quartiles verified neighbors here actually pay, which a county-wide estimate can never tell you. Add yours, and ask a neighbor: the invite cards live on your Block page.")
-                    .font(.system(size: 12.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextMuted)
+                Text(
+                    "\(data.needed) shared rents open the block's real range — the quartiles verified neighbors here actually pay, which a county-wide estimate can never tell you. Add yours, and ask a neighbor: the invite cards live on your Block page."
+                )
+                .font(.system(size: 12.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
             }
         }
         .accessibilityIdentifier("place.realRent.building")

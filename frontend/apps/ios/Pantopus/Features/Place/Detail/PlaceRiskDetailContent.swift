@@ -110,10 +110,9 @@ struct PlaceRiskDetailContent: View {
         }
     }
 
-    // Wave 2 — what flood policies in this tract actually cost. Absent
-    // while the benchmark warms or sits below the 10-policy floor, so
-    // the card degrades to zone-only. A benchmark, never a quote.
-    @ViewBuilder
+    /// Wave 2 — what flood policies in this tract actually cost. Absent
+    /// while the benchmark warms or sits below the 10-policy floor, so
+    /// the card degrades to zone-only. A benchmark, never a quote.
     private func nfipBlock(_ nfip: PlaceFloodNfipData) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Divider()
@@ -329,7 +328,7 @@ private struct HeatColdCard: View {
         Color(red: 1.0, green: 0.918, blue: 0.380),
         Color(red: 1.0, green: 0.639, blue: 0.247),
         Color(red: 0.910, green: 0.267, blue: 0.180),
-        Color(red: 0.541, green: 0.169, blue: 0.886),
+        Color(red: 0.541, green: 0.169, blue: 0.886)
     ]
 
     private var tone: Color {
@@ -343,7 +342,9 @@ private struct HeatColdCard: View {
         let parts = date.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return "" }
         var comps = DateComponents()
-        comps.year = parts[0]; comps.month = parts[1]; comps.day = parts[2]
+        comps.year = parts[0]
+        comps.month = parts[1]
+        comps.day = parts[2]
         guard let d = Calendar(identifier: .gregorian).date(from: comps) else { return "" }
         let fmt = DateFormatter()
         fmt.dateFormat = "EEE"

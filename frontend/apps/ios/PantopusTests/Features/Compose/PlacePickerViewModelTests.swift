@@ -1,3 +1,4 @@
+// swiftlint:disable type_body_length
 //
 //  PlacePickerViewModelTests.swift
 //  PantopusTests
@@ -350,7 +351,8 @@ final class PlacePickerViewModelTests: XCTestCase {
         }
         XCTAssertEqual(restored.count, 2)
         XCTAssertEqual(
-            SequencedURLProtocol.capturedRequests.count, 2,
+            SequencedURLProtocol.capturedRequests.count,
+            2,
             "both nearby fetches are media-anchored; the fix-less current anchor fetches nothing"
         )
     }
@@ -452,7 +454,7 @@ final class PlacePickerViewModelTests: XCTestCase {
         XCTAssertEqual(tag.placeId, "poi.1")
         XCTAssertEqual(tag.kind, "poi")
         // Locality has no short address line — falls back to the full one.
-        let localityTag = PostPlaceTag(place: try XCTUnwrap(locality))
+        let localityTag = try PostPlaceTag(place: XCTUnwrap(locality))
         XCTAssertEqual(localityTag.name, "Portland")
         XCTAssertEqual(localityTag.address, "Portland, Oregon, United States")
         XCTAssertEqual(localityTag.kind, "place")

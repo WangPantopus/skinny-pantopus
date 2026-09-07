@@ -13,6 +13,7 @@ import SwiftUI
 // swiftlint:disable line_length
 
 // MARK: - Rate watch VM (Wave 2b)
+
 // One user-entered fact (the month the loan was recorded) held against
 // Freddie Mac's weekly PMMS average. Averages and deltas only — the
 // copy never says "refinance". Watches are personal per home+user.
@@ -160,10 +161,12 @@ struct RateWatchForm: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(vm.isSaving || vm.monthInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                Text("We compare Freddie Mac's weekly 30-year survey average with the average for your month — facts about the market, not refinancing advice. Only you can see this.")
-                    .font(.system(size: 11.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextMuted)
+                Text(
+                    "We compare Freddie Mac's weekly 30-year survey average with the average for your month — facts about the market, not refinancing advice. Only you can see this."
+                )
+                .font(.system(size: 11.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
             }
         }
     }

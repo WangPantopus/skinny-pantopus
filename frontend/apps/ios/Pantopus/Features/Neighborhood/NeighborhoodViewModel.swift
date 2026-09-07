@@ -9,14 +9,14 @@ import Foundation
 import Observation
 
 /// Render state for the Neighborhood door.
-enum NeighborhoodState: Sendable, Equatable {
+enum NeighborhoodState: Equatable {
     case loading
     case loaded(NeighborhoodMeterDTO)
     case error(message: String)
 }
 
-// Internal (not public) because APIClient is internal — same pattern as
-// PlaceDashboardView; the app is a single target so nothing is lost.
+/// Internal (not public) because APIClient is internal — same pattern as
+/// PlaceDashboardView; the app is a single target so nothing is lost.
 @Observable
 @MainActor
 final class NeighborhoodViewModel {

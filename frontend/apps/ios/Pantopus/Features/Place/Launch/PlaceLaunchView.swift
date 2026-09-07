@@ -83,10 +83,10 @@ struct PlaceLaunchView: View {
 
     // MARK: - A1 hero
 
-    // One job: get a stranger from a postcard or a share card to type their
-    // address. The field is the hero, the proof line answers the privacy
-    // objection, and the example card shows what comes back. Scrolls only
-    // when the keyboard or a small screen makes it.
+    /// One job: get a stranger from a postcard or a share card to type their
+    /// address. The field is the hero, the proof line answers the privacy
+    /// objection, and the example card shows what comes back. Scrolls only
+    /// when the keyboard or a small screen makes it.
     private var hero: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -111,35 +111,35 @@ struct PlaceLaunchView: View {
     }
 
     private var heroBody: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("See what's true about your address.")
-                    .font(.system(size: 31, weight: .bold))
-                    .kerning(-0.87)
-                    .lineSpacing(4)
-                    .foregroundStyle(Theme.Color.appText)
-                Text("Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("See what's true about your address.")
+                .font(.system(size: 31, weight: .bold))
+                .kerning(-0.87)
+                .lineSpacing(4)
+                .foregroundStyle(Theme.Color.appText)
+            Text("Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
+                .font(.system(size: 15))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.Color.appTextSecondary)
 
-                addressField
+            addressField
 
-                if viewModel.isTyping && !viewModel.suggestions.isEmpty {
-                    suggestionList
-                } else {
-                    seePlaceButton
-                    privacyProof
-                    exampleCard
-                        .padding(.top, Spacing.s2)
-                    Button { onCreateAccount() } label: {
-                        Text("Just here to follow someone or browse?")
-                            .font(.system(size: 13.5, weight: .medium))
-                            .foregroundStyle(Theme.Color.appTextMuted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+            if viewModel.isTyping && !viewModel.suggestions.isEmpty {
+                suggestionList
+            } else {
+                seePlaceButton
+                privacyProof
+                exampleCard
+                    .padding(.top, Spacing.s2)
+                Button { onCreateAccount() } label: {
+                    Text("Just here to follow someone or browse?")
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(Theme.Color.appTextMuted)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
             }
+        }
     }
 
     /// The privacy answer where the decision is made: what a neighbor sees,
@@ -234,7 +234,7 @@ struct PlaceLaunchView: View {
         ExampleReading(icon: .wind, label: "Air today", value: "Good · AQI 24", tone: Theme.Color.home),
         ExampleReading(icon: .waves, label: "Flood zone", value: "X · minimal", tone: Theme.Color.home),
         ExampleReading(icon: .testTube, label: "Radon", value: "Zone 1 · test it", tone: Theme.Color.warning),
-        ExampleReading(icon: .trash2, label: "Next pickup", value: "Tue · garbage + recycling", tone: Theme.Color.appTextMuted),
+        ExampleReading(icon: .trash2, label: "Next pickup", value: "Tue · garbage + recycling", tone: Theme.Color.appTextMuted)
     ]
 
     private var brandLockup: some View {

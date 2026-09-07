@@ -17,8 +17,8 @@
 
 import SwiftUI
 
-// Internal like PlaceDashboardView — the view model's APIClient dependency
-// is internal, and the app is a single target.
+/// Internal like PlaceDashboardView — the view model's APIClient dependency
+/// is internal, and the app is a single target.
 struct NeighborhoodView: View {
     @State private var viewModel: NeighborhoodViewModel
 
@@ -89,9 +89,9 @@ struct NeighborhoodView: View {
                 "Feed, marketplace, and local tasks open when enough households nearby have "
                     + "verified their address — so day one here is real neighbors, not empty rooms."
             )
-                .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .pantopusTextStyle(.small)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, Spacing.s3)
     }
@@ -151,9 +151,9 @@ struct NeighborhoodView: View {
             : max(0.08, min(1, Double(meter.verifiedCount ?? 0) / Double(max(meter.threshold, 1))))
         let copy = isForming
             ? "Your area is just forming — be one of the first \(meter.kAnonMin) verified households "
-                + "here. The neighborhood opens at \(meter.threshold)."
+            + "here. The neighborhood opens at \(meter.threshold)."
             : "\(meter.verifiedCount ?? 0) households have verified their address nearby. "
-                + "At \(meter.threshold), the neighborhood opens for everyone."
+            + "At \(meter.threshold), the neighborhood opens for everyone."
 
         return VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack {
@@ -313,7 +313,7 @@ struct NeighborhoodView: View {
             title: "Tasks",
             subtitle: "Post and pick up local work, backed by verified addresses",
             destination: .tasks
-        ),
+        )
     ]
 
     private func areaSuffix(_ meter: NeighborhoodMeterDTO) -> String {

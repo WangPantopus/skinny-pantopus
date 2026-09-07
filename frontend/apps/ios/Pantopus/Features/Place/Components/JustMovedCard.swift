@@ -40,11 +40,21 @@ struct JustMovedStore {
     let homeId: String
     var defaults: UserDefaults = .standard
 
-    private var dismissKey: String { "just_moved.dismissed.\(homeId)" }
-    private var doneKey: String { "just_moved.done.\(homeId)" }
+    private var dismissKey: String {
+        "just_moved.dismissed.\(homeId)"
+    }
 
-    var isDismissed: Bool { defaults.bool(forKey: dismissKey) }
-    func dismiss() { defaults.set(true, forKey: dismissKey) }
+    private var doneKey: String {
+        "just_moved.done.\(homeId)"
+    }
+
+    var isDismissed: Bool {
+        defaults.bool(forKey: dismissKey)
+    }
+
+    func dismiss() {
+        defaults.set(true, forKey: dismissKey)
+    }
 
     var done: Set<JustMovedStepId> {
         Set((defaults.stringArray(forKey: doneKey) ?? []).compactMap(JustMovedStepId.init(rawValue:)))
@@ -77,19 +87,47 @@ struct JustMovedCard: View {
 
     private static let steps: [Step] = [
         Step(id: .pickup, icon: .trash2, label: "Set your pickup day", payoff: "Reminders the night before, every week", target: .today),
-        Step(id: .mail, icon: .mailbox, label: "Send back the previous resident's mail", payoff: "One tap returns it; yours gets filed", target: nil),
-        Step(id: .money, icon: .zap, label: "Utilities, rebates, and rates", payoff: "What this address qualifies for, and when taxes are due", target: .money),
-        Step(id: .civic, icon: .landmark, label: "Who represents you, and the schools", payoff: "Your districts, the next election, the council calendar", target: .civic),
-        Step(id: .block, icon: .users, label: "Meet the block", payoff: "Who is verified nearby, and the Founding Neighbor slots", target: .block),
+        Step(
+            id: .mail,
+            icon: .mailbox,
+            label: "Send back the previous resident's mail",
+            payoff: "One tap returns it; yours gets filed",
+            target: nil
+        ),
+        Step(
+            id: .money,
+            icon: .zap,
+            label: "Utilities, rebates, and rates",
+            payoff: "What this address qualifies for, and when taxes are due",
+            target: .money
+        ),
+        Step(
+            id: .civic,
+            icon: .landmark,
+            label: "Who represents you, and the schools",
+            payoff: "Your districts, the next election, the council calendar",
+            target: .civic
+        ),
+        Step(
+            id: .block,
+            icon: .users,
+            label: "Meet the block",
+            payoff: "Who is verified nearby, and the Founding Neighbor slots",
+            target: .block
+        )
     ]
 
-    private var store: JustMovedStore { JustMovedStore(homeId: homeId) }
+    private var store: JustMovedStore {
+        JustMovedStore(homeId: homeId)
+    }
 
     private func isDone(_ id: JustMovedStepId) -> Bool {
         (id == .pickup && needsPickupDay == false) || done.contains(id)
     }
 
-    private var doneCount: Int { Self.steps.filter { isDone($0.id) }.count }
+    private var doneCount: Int {
+        Self.steps.filter { isDone($0.id) }.count
+    }
 
     var body: some View {
         Group {
@@ -114,7 +152,7 @@ struct JustMovedCard: View {
         dismissed = true
     }
 
-    // Five of five: the card retires into one line rather than vanishing.
+    /// Five of five: the card retires into one line rather than vanishing.
     private var retired: some View {
         HStack(spacing: 12) {
             ZStack {
@@ -171,7 +209,7 @@ struct JustMovedCard: View {
         .accessibilityIdentifier("place.justMoved")
     }
 
-    // Header band in the home tint: this is the card the eye lands on.
+    /// Header band in the home tint: this is the card the eye lands on.
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {

@@ -240,10 +240,9 @@ struct PlacePreviewBody: View {
         (.yourBlock, "Your block"),
         (.moneySignals, "Money signals"),
         (.civic, "Civic"),
-        (.yourHome, "Your home"),
+        (.yourHome, "Your home")
     ]
 
-    @ViewBuilder
     private func previewSections(_ sections: [PlaceSectionEnvelope]) -> some View {
         ForEach(Array(Self.previewGroupOrder.enumerated()), id: \.offset) { _, entry in
             let items = sections.filter { $0.group == entry.group }

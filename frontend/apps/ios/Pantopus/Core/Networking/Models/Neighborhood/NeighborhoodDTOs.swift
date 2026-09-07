@@ -77,7 +77,9 @@ public struct NeighborhoodCellsDTO: Decodable, Sendable, Hashable {
         public let bucket: String
         public let isHome: Bool
 
-        public var id: String { geohash }
+        public var id: String {
+            geohash
+        }
 
         enum CodingKeys: String, CodingKey {
             case geohash, bounds, bucket
@@ -105,7 +107,9 @@ public struct NeighborhoodCellsDTO: Decodable, Sendable, Hashable {
         case kAnonMin = "k_anon_min"
     }
 
-    public var isReady: Bool { state == "ready" && center != nil }
+    public var isReady: Bool {
+        state == "ready" && center != nil
+    }
 }
 
 /// Fill alpha by bucket — none is transparent, growing the strongest.

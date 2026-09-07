@@ -23,7 +23,9 @@ public final class NeighborhoodDoorStore {
     /// A neighborhood surface presented from the door.
     public enum Surface: String, Identifiable, Sendable {
         case pulse, tasks, marketplace
-        public var id: String { rawValue }
+        public var id: String {
+            rawValue
+        }
     }
 
     /// Set by the cross-tab dispatcher; consumed (nil-ed) by

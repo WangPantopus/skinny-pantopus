@@ -1,0 +1,52 @@
+name: Rollback Backend
+run-name: Rollback Backend (${{ inputs.target }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment (run production from master; staging from dev)
+        required: true
+        type: choice
+        options: [production, staging]
+      digest:
+        description: Previous release digest from its summary (sha256 plus 64 hex digits)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    if: >-
+      (inputs.target == 'production' && github.ref == 'refs/heads/master') ||
+      (inputs.target == 'staging' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate immutable rollback digest
+        env:
+          DIGEST: ${{ inputs.digest }}
+        run: '[[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]'
+      # Application rollback is forward-compatible with the current schema.
+      # Never revert migration ledger rows or run down migrations here.
+      - name: Deploy API and worker
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DEPLOY_TARGET: ${{ inputs.target }}
+          DEPLOY_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ inputs.digest }}
+        run: bash scripts/deploy/remote.sh

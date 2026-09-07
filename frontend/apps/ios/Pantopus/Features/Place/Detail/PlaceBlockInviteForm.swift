@@ -69,10 +69,12 @@ struct BlockInviteForm: View {
 
     private var promises: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("You choose the address. Pantopus writes and mails the card — there's no message to write, and the wording is the same on every one.")
-                .font(.system(size: 12.5))
-                .lineSpacing(2)
-                .foregroundStyle(Theme.Color.appTextSecondary)
+            Text(
+                "You choose the address. Pantopus writes and mails the card — there's no message to write, and the wording is the same on every one."
+            )
+            .font(.system(size: 12.5))
+            .lineSpacing(2)
+            .foregroundStyle(Theme.Color.appTextSecondary)
             promise("You're named only as a neighbor on your street — never your name, never your house number.")
             promise("Every card carries a working opt-out. One use silences that address for good, from every sender.")
             promise("One card per address per season, from anyone — an address already on Pantopus is never mailed.")
