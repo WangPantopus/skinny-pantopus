@@ -134,7 +134,7 @@ pnpm --filter=@pantopus/web lint
 pnpm --filter=@pantopus/web type-check:gate
 pnpm --filter=@pantopus/web test
 pnpm --filter=@pantopus/web build
-node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs
+node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs scripts/staging/*.test.cjs
 pnpm db:check
 docker build -f backend/Dockerfile --target production .
 ```

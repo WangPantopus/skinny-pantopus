@@ -48,9 +48,11 @@ fastlane/.env*
 .env
 .env.*
 !.env.example
+!.env.staging.example
 
 # Secrets materialized from .env at build time
 Config/Secrets.xcconfig
+Config/Secrets.Staging.xcconfig
 
 # Bundler
 vendor/bundle
