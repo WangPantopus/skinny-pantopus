@@ -74,7 +74,7 @@ function MeterRow({ label, current, needed, unlocked }: { label: string; current
       </div>
       <div className="h-1.5 rounded-full bg-app-surface-sunken mt-1.5 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all ${unlocked ? 'bg-app-success' : 'bg-primary-600'}`}
+          className={`h-full rounded-full transition-all ${unlocked ? 'bg-app-success-solid' : 'bg-primary-600'}`}
           style={{ width: `${Math.min(100, Math.round((current / needed) * 100))}%` }}
         />
       </div>

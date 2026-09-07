@@ -179,7 +179,7 @@ struct BookingsInboxView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, 4)
                         .frame(minWidth: 15, minHeight: 15)
-                        .background(Theme.Color.warning)
+                        .background(Theme.Color.warningSolid)
                         .clipShape(Capsule())
                 }
             }
@@ -292,8 +292,7 @@ extension BookingsInboxView {
 
     private func sectionHeader(_ section: BookingSection) -> some View {
         HStack(spacing: Spacing.s2) {
-            Text(section.title)
-                .pantopusTextStyle(.overline)
+            Text(section.title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
             if section.showsApprovalDot {
                 Circle().fill(viewModel.accent).frame(width: 6, height: 6)

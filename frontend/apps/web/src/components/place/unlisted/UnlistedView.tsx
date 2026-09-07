@@ -70,7 +70,7 @@ export default function UnlistedView() {
             else, so it is reachable the moment the page paints. */}
         <div className="flex items-start justify-between gap-3 pt-3">
           <div className="flex items-center gap-2.5 pt-1">
-            <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-app-home shadow-sm">
+            <span className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-[9px] bg-app-home-solid shadow-sm">
               <MapPinned size={17} strokeWidth={2.25} className="text-white" />
             </span>
             <span className="text-lg font-bold -tracking-[0.02em] text-app-text">Pantopus</span>

@@ -158,7 +158,7 @@ public struct MarketplaceView: View {
         Button(action: onCompose) {
             Icon(.camera, size: 22, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
                 .frame(width: 52, height: 52)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(Circle())
                 .shadow(color: Theme.Color.business.opacity(0.36), radius: 12, x: 0, y: 8)
         }

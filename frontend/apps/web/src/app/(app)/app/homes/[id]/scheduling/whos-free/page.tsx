@@ -230,7 +230,7 @@ export default function WhosFreePage() {
                   className={clsx(
                     "flex-shrink-0 rounded-lg px-3 py-1.5 text-center text-[11px] font-bold transition-colors",
                     on
-                      ? "bg-app-home text-white"
+                      ? "bg-app-home-solid text-white"
                       : "bg-app-surface text-app-text-secondary hover:bg-app-hover",
                   )}
                 >

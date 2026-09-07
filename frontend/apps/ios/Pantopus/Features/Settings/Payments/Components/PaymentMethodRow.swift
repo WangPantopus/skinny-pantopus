@@ -136,10 +136,10 @@ struct PaymentBrandBadge: View {
         case .mastercard:
             HStack(spacing: -4) {
                 Circle()
-                    .fill(Theme.Color.error.opacity(0.85))
+                    .fill(Theme.Color.errorSolid.opacity(0.85))
                     .frame(width: 10, height: 10)
                 Circle()
-                    .fill(Theme.Color.warning.opacity(0.85))
+                    .fill(Theme.Color.warningSolid.opacity(0.85))
                     .frame(width: 10, height: 10)
             }
         case .amex:

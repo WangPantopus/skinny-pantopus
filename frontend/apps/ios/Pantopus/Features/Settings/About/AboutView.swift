@@ -33,9 +33,7 @@ public struct AboutView: View {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Theme.Color.primary600)
                     .frame(width: 96, height: 96)
-                Text("P")
-                    .font(.system(size: 44, weight: .heavy))
-                    .foregroundStyle(.white)
+                PantopusMark(size: 56, variant: .reverse)
             }
             .accessibilityHidden(true)
             Text("Pantopus")

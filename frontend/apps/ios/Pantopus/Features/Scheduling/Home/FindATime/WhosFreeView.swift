@@ -225,7 +225,7 @@ struct WhosFreeView: View {
             }
             .overlay(alignment: .topLeading) {
                 if state == .free {
-                    Circle().fill(Theme.Color.home).frame(width: 5, height: 5).padding(3)
+                    Circle().fill(Theme.Color.homeSolid).frame(width: 5, height: 5).padding(3)
                 }
             }
             .overlay {
@@ -301,7 +301,7 @@ struct WhosFreeView: View {
                 }
                 .overlay(alignment: .topLeading) {
                     if state == .free {
-                        Circle().fill(Theme.Color.home).frame(width: 4, height: 4).padding(2)
+                        Circle().fill(Theme.Color.homeSolid).frame(width: 4, height: 4).padding(2)
                     }
                 }
             Text(label)

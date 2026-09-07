@@ -121,8 +121,7 @@ public struct OcrFactsList: View {
 
     private var header: some View {
         HStack(spacing: Spacing.s2) {
-            Text(title)
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s2)
             if let status {

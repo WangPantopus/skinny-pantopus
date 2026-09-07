@@ -45,7 +45,7 @@ interface SignalCardProps {
 
 // ── One ranked signal: icon · title · one-line detail · one action ──
 function SignalCard({ icon: Icon, tone, emphasis = false, title, detail, action }: SignalCardProps) {
-  const tile = emphasis ? 'bg-app-warning text-white' : TILE_TONE[tone];
+  const tile = emphasis ? 'bg-app-warning-solid text-white' : TILE_TONE[tone];
   const frame = emphasis ? 'bg-app-warning-bg border-app-warning-light' : 'bg-app-surface border-app-border';
   return (
     <div className={`rounded-2xl border shadow-sm p-[15px] ${frame}`}>

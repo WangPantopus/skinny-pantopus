@@ -269,7 +269,7 @@ export default function SmartSearch({ value, onChange, onSearch }: SmartSearchPr
                   }`}
                 >
                   <svg
-                    className="w-4 h-4 shrink-0 text-primary-500"
+                    className="w-4 h-4 shrink-0 text-app-link"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"

@@ -322,7 +322,7 @@ export default function HomeAgenda({
                 <span
                   className={`flex h-[30px] w-[30px] items-center justify-center rounded-full text-[13px] font-semibold ${
                     sel
-                      ? "bg-app-home text-white"
+                      ? "bg-app-home-solid text-white"
                       : isToday
                         ? "text-app-text ring-[1.5px] ring-app-home"
                         : "text-app-text"
@@ -332,7 +332,7 @@ export default function HomeAgenda({
                 </span>
                 <span
                   className={`h-1 w-1 rounded-full ${
-                    has && !sel ? "bg-app-home" : "bg-transparent"
+                    has && !sel ? "bg-app-home-solid" : "bg-transparent"
                   }`}
                 />
               </button>
@@ -382,7 +382,7 @@ export default function HomeAgenda({
                 setLoading(true);
                 load().finally(() => setLoading(false));
               }}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-app-home px-5 py-2.5 text-sm font-bold text-white"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-app-home-solid px-5 py-2.5 text-sm font-bold text-white"
             >
               <RotateCw className="h-4 w-4" /> Retry
             </button>
@@ -445,7 +445,7 @@ export default function HomeAgenda({
         <button
           aria-label="Create"
           onClick={() => setCreateMenuOpen(true)}
-          className="fixed bottom-24 right-6 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-app-home text-white shadow-[0_8px_20px_rgba(22,163,74,0.4)] md:bottom-8"
+          className="fixed bottom-24 right-6 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-app-home-solid text-white shadow-[0_8px_20px_rgba(22,163,74,0.4)] md:bottom-8"
         >
           <Plus className="h-6 w-6" strokeWidth={2.4} />
         </button>
@@ -600,7 +600,7 @@ function AssignmentRow({
       <div className="mt-2.5 flex gap-2">
         <button
           onClick={onAccept}
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home text-[12px] font-bold text-white"
+          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home-solid text-[12px] font-bold text-white"
         >
           <Check className="h-3.5 w-3.5" /> Accept
         </button>
@@ -636,7 +636,7 @@ function EmptyAgenda({
       {canEdit && (
         <button
           onClick={onAdd}
-          className="mt-3.5 inline-flex items-center gap-2 rounded-xl bg-app-home px-5 py-2.5 text-sm font-bold text-white"
+          className="mt-3.5 inline-flex items-center gap-2 rounded-xl bg-app-home-solid px-5 py-2.5 text-sm font-bold text-white"
         >
           <Plus className="h-4 w-4" /> Add an event
         </button>

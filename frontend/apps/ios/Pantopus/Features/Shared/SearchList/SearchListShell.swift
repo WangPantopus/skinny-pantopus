@@ -178,8 +178,7 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 if !recentQueries.isEmpty {
-                    Text("Recent")
-                        .pantopusTextStyle(.overline)
+                    Text("Recent", style: .overline)
                         .foregroundStyle(Theme.Color.appTextMuted)
                         .padding(.horizontal, Spacing.s4)
                         .padding(.top, Spacing.s4)

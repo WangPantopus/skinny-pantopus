@@ -60,7 +60,7 @@ export default function AcceptingBookingsCard({
           type="button"
           disabled={busy}
           onClick={() => onTogglePause(false)}
-          className="shrink-0 rounded-full bg-app-warning px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60"
+          className="shrink-0 rounded-full bg-app-warning-solid px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60"
         >
           Resume
         </button>

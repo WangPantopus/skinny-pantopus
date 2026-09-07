@@ -125,7 +125,7 @@ export default function NoShowSheet({
             type="button"
             onClick={submit}
             disabled={submitting || !allowed}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-app-error px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-app-error-solid px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? (
               <svg
@@ -200,7 +200,7 @@ export default function NoShowSheet({
                         className={clsx(
                           "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-[1.5px] transition",
                           checked
-                            ? "border-app-error bg-app-error"
+                            ? "border-app-error bg-app-error-solid"
                             : "border-app-border-strong bg-app-surface",
                         )}
                         aria-hidden

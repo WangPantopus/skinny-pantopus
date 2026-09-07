@@ -106,7 +106,7 @@ private struct HomeContextStrip: View {
         HStack(spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.home)
+                    .fill(Theme.Color.homeSolid)
                     .frame(width: 30, height: 30)
                 Icon(.home, size: 15, color: Theme.Color.appTextInverse)
             }
@@ -120,8 +120,7 @@ private struct HomeContextStrip: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s0)
-            Text("GUEST PASS")
-                .pantopusTextStyle(.overline)
+            Text("Guest pass", style: .overline)
                 .foregroundStyle(Theme.Color.home)
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, 3)

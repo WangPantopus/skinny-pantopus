@@ -171,8 +171,7 @@ struct FilterSectionRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(section.title)
-                .pantopusTextStyle(.overline)
+            Text(section.title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("filterSection_\(section.id)_title")

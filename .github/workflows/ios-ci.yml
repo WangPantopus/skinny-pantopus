@@ -63,6 +63,9 @@ jobs:
       - name: Icons go through PantopusIcon
         run: bash Pantopus/scripts/verify-icons.sh
 
+      - name: Overline labels retain their text
+        run: bash Pantopus/scripts/verify-overline.sh
+
       - name: No raw hex in feature code
         # Acceptance criterion #5 from Prompt P1 — feature code must use
         # `Theme.Color.*` tokens, never raw `#RRGGBB(AA)` literals (in code

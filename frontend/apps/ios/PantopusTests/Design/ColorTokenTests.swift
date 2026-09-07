@@ -31,24 +31,24 @@ final class ColorTokenTests: XCTestCase {
     }
 
     func testSemantic() {
-        assertColor(Theme.Color.success, hex: "#059669")
+        assertColor(Theme.Color.success, hex: "#047857")
         assertColor(Theme.Color.successLight, hex: "#D1FAE5")
         assertColor(Theme.Color.successBg, hex: "#F0FDF4")
-        assertColor(Theme.Color.warning, hex: "#D97706")
+        assertColor(Theme.Color.warning, hex: "#9A4A08")
         assertColor(Theme.Color.warningLight, hex: "#FDE68A")
         assertColor(Theme.Color.warningBg, hex: "#FFFBEB")
-        assertColor(Theme.Color.error, hex: "#DC2626")
+        assertColor(Theme.Color.error, hex: "#A81A1A")
         assertColor(Theme.Color.errorLight, hex: "#FECACA")
         assertColor(Theme.Color.errorBg, hex: "#FEF2F2")
-        assertColor(Theme.Color.info, hex: "#0284c7")
+        assertColor(Theme.Color.info, hex: "#075985")
         assertColor(Theme.Color.infoLight, hex: "#BAE6FD")
         assertColor(Theme.Color.infoBg, hex: "#F0F9FF")
     }
 
     func testIdentity() {
-        assertColor(Theme.Color.personal, hex: "#0284C7")
+        assertColor(Theme.Color.personal, hex: "#0369A1")
         assertColor(Theme.Color.personalBg, hex: "#DBEAFE")
-        assertColor(Theme.Color.home, hex: "#16A34A")
+        assertColor(Theme.Color.home, hex: "#15803D")
         assertColor(Theme.Color.homeBg, hex: "#DCFCE7")
         assertColor(Theme.Color.business, hex: "#7C3AED")
         assertColor(Theme.Color.businessBg, hex: "#F3E8FF")
@@ -72,8 +72,8 @@ final class ColorTokenTests: XCTestCase {
         assertColor(Theme.Color.appBorderSubtle, hex: "#f3f4f6")
         assertColor(Theme.Color.appText, hex: "#111827")
         assertColor(Theme.Color.appTextStrong, hex: "#374151")
-        assertColor(Theme.Color.appTextSecondary, hex: "#6b7280")
-        assertColor(Theme.Color.appTextMuted, hex: "#9ca3af")
+        assertColor(Theme.Color.appTextSecondary, hex: "#4E5563")
+        assertColor(Theme.Color.appTextMuted, hex: "#5F6775")
         assertColor(Theme.Color.appTextInverse, hex: "#ffffff")
         assertColor(Theme.Color.appHover, hex: "#f3f4f6")
     }
@@ -97,6 +97,49 @@ final class ColorTokenTests: XCTestCase {
 
     func testRating() {
         assertColor(Theme.Color.star, hex: "#f59e0b")
+    }
+
+    /// Exercise the production checkbox, including its theme-dependent fill.
+    /// A palette-only test cannot catch accidentally using the lightened label
+    /// token behind the white checkmark in dark mode.
+    @MainActor
+    func testSelectedCheckHasVisibleContrastInBothThemes() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let renderer = ImageRenderer(content: SelectionCheck(isOn: true)
+                .padding(4)
+                .environment(\.colorScheme, scheme))
+            renderer.scale = 3
+            let image = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let context = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            var fills: [Int: Int] = [:]
+            var whitePixels = 0
+            for offset in stride(from: 0, to: pixels.count, by: 4) where pixels[offset + 3] == 255 {
+                let red = Int(pixels[offset]), green = Int(pixels[offset + 1]), blue = Int(pixels[offset + 2])
+                if min(red, green, blue) > 240 {
+                    whitePixels += 1
+                } else {
+                    fills[(red << 16) | (green << 8) | blue, default: 0] += 1
+                }
+            }
+            XCTAssertGreaterThan(whitePixels, 0, "The selected checkmark must be visible")
+            let fill = try XCTUnwrap(fills.max { $0.value < $1.value }?.key)
+            let linear = [16, 8, 0].map { shift -> Double in
+                let channel = Double((fill >> shift) & 255) / 255
+                return channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+            }
+            let luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+            XCTAssertGreaterThanOrEqual(1.05 / (luminance + 0.05), 3, "Checkmark contrast in \(scheme)")
+        }
     }
 
     // MARK: - Helpers

@@ -167,6 +167,9 @@ jobs:
       - name: Jest
         run: pnpm --filter=@pantopus/web test
 
+      - name: Brand assets match their source tokens
+        run: pnpm --filter=@pantopus/web exec node scripts/build-icons.mjs --list
+
       - name: Production build
         env:
           NEXT_TELEMETRY_DISABLED: "1"

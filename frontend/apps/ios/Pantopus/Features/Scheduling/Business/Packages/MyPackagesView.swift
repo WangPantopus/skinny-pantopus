@@ -204,7 +204,7 @@ private struct CreditCard: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
-                .background(Theme.Color.personal)
+                .background(Theme.Color.personalSolid)
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 // Design `Book with a credit` CTA carries a sky-tinted shadow
                 // (`0 6px 16px rgba(2,132,199,0.22)`); buyer chrome is always

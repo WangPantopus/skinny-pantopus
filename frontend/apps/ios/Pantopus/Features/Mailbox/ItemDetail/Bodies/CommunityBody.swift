@@ -141,7 +141,7 @@ private struct CommunityBodyBadgeCard: View {
                     if community.group.isVerified {
                         Icon(.check, size: 9, color: Theme.Color.appTextInverse)
                             .frame(width: 18, height: 18)
-                            .background(Theme.Color.success)
+                            .background(Theme.Color.successSolid)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                             .offset(x: 2, y: 2)
@@ -154,8 +154,7 @@ private struct CommunityBodyBadgeCard: View {
                             .fontWeight(.bold)
                             .foregroundStyle(Theme.Color.appText)
                         if community.group.isVerified {
-                            Text("VERIFIED HOA")
-                                .pantopusTextStyle(.overline)
+                            Text("Verified HOA", style: .overline)
                                 .foregroundStyle(Theme.Color.success)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -300,8 +299,7 @@ private struct CommunityBodyEventCard: View {
                 }
                 if !event.bringItems.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Text("Bring if you can")
-                            .pantopusTextStyle(.overline)
+                        Text("Bring if you can", style: .overline)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                         ForEach(Array(event.bringItems.enumerated()), id: \.offset) { _, item in
                             HStack(alignment: .top, spacing: Spacing.s2) {
@@ -355,8 +353,7 @@ private struct CommunityBodyEventCard: View {
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
                 )
             VStack(alignment: .leading, spacing: 2) {
-                Text(overline)
-                    .pantopusTextStyle(.overline)
+                Text(overline, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Text(title)
                     .pantopusTextStyle(.small)
@@ -522,8 +519,7 @@ private struct CommunityBodyAttendeesCard: View {
         CommunityBodyCard(noPadding: true) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(community.attendeeCount) going")
-                        .pantopusTextStyle(.overline)
+                    Text("\(community.attendeeCount) going", style: .overline)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     Text(isGoing
                         ? "Including you"
@@ -610,7 +606,7 @@ private struct CommunityBodyAvatar: View {
                 if verified {
                     Icon(.check, size: 7, color: Theme.Color.appTextInverse)
                         .frame(width: 12, height: 12)
-                        .background(Theme.Color.success)
+                        .background(Theme.Color.successSolid)
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                 }
@@ -638,7 +634,7 @@ private struct CommunityBodyMessageCard: View {
                     .fontWeight(.bold)
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(width: 28, height: 28)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 1) {
                     Text(authorName)
@@ -672,8 +668,7 @@ private struct CommunityBodyPulseThreadCard: View {
                     .frame(width: 24, height: 24)
                     .background(Theme.Color.primary100)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
-                Text("Pulse thread")
-                    .pantopusTextStyle(.overline)
+                Text("Pulse thread", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Text(thread.title)
@@ -690,7 +685,7 @@ private struct CommunityBodyPulseThreadCard: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(width: 22, height: 22)
-                        .background(Theme.Color.success)
+                        .background(Theme.Color.successSolid)
                         .clipShape(Circle())
                     Text("\(author) \(preview)")
                         .pantopusTextStyle(.caption)
@@ -831,8 +826,7 @@ private struct CommunityBodyCardHeader: View {
     let title: String
 
     var body: some View {
-        Text(title)
-            .pantopusTextStyle(.overline)
+        Text(title, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.s3)

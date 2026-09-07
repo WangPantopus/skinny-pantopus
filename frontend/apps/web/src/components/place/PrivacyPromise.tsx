@@ -38,7 +38,7 @@ export default function PrivacyPromise({ compact = false, className = '' }: Priv
       <ul className="flex flex-col gap-1.5">
         {PRIVACY_PROMISE_LINES.map((line) => (
           <li key={line} className="flex items-start gap-2 text-[13px] leading-[18px] text-app-text-strong">
-            <span aria-hidden="true" className="mt-[7px] w-1 h-1 rounded-full bg-app-home shrink-0" />
+            <span aria-hidden="true" className="mt-[7px] w-1 h-1 rounded-full bg-app-home-solid shrink-0" />
             <span>{line}</span>
           </li>
         ))}

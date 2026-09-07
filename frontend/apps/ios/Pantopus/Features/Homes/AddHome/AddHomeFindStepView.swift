@@ -126,8 +126,7 @@ private struct NearbyHomesSection: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s1) {
                 Icon(.mapPin, size: 12, color: Theme.Color.appTextSecondary)
-                Text("Nearby · Brooklyn, NY")
-                    .pantopusTextStyle(.overline)
+                Text("Nearby · Brooklyn, NY", style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             VStack(spacing: Spacing.s2) {
@@ -232,8 +231,7 @@ private struct AddHomeAutocompleteDropdown: View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             HStack(spacing: Spacing.s1) {
                 Icon(.search, size: 10, color: Theme.Color.appTextMuted)
-                Text("\(results.count) matches")
-                    .pantopusTextStyle(.overline)
+                Text("\(results.count) matches", style: .overline)
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
             .padding(.horizontal, Spacing.s3)

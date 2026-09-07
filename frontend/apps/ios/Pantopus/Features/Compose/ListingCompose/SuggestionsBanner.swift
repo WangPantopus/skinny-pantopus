@@ -98,8 +98,7 @@ private struct ListingComposePhotoStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Photos · \(photos.count) of \(ListingComposeFormState.maxPhotos)")
-                .pantopusTextStyle(.overline)
+            Text("Photos · \(photos.count) of \(ListingComposeFormState.maxPhotos)", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             PhotoStripGrid(photos: photos, canAddMore: canAddMore, onAddPhoto: onAddPhoto)
         }
@@ -219,7 +218,7 @@ struct SuggestionsBanner: View {
         HStack(spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.business)
+                    .fill(Theme.Color.businessSolid)
                     .frame(width: 28, height: 28)
                 Icon(.sparkles, size: 14, strokeWidth: 2.4, color: .white)
             }
@@ -431,8 +430,7 @@ private struct SuggestedConditionControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Condition")
-                .pantopusTextStyle(.overline)
+            Text("Condition", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: Spacing.s1) {
                 ForEach(ListingComposeCondition.allCases, id: \.self) { condition in
@@ -480,8 +478,7 @@ private struct PickupDeliveryPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Pickup & delivery")
-                .pantopusTextStyle(.overline)
+            Text("Pickup & delivery", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             VStack(spacing: Spacing.s0) {
                 Button {

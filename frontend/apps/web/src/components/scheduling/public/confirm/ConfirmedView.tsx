@@ -124,7 +124,7 @@ function PendingTimeline() {
     <div className="rounded-2xl border border-app-border bg-app-surface px-2.5 py-4 shadow-sm">
       <div className="relative flex items-start justify-between">
         <div className="absolute left-[16.66%] right-[16.66%] top-3.5 h-0.5 bg-app-border" />
-        <div className="absolute left-[16.66%] top-3.5 h-0.5 w-1/3 bg-app-info" />
+        <div className="absolute left-[16.66%] top-3.5 h-0.5 w-1/3 bg-app-info-solid" />
         {steps.map((s) => (
           <div
             key={s.label}
@@ -134,9 +134,9 @@ function PendingTimeline() {
               className={clsx(
                 "flex h-7 w-7 items-center justify-center rounded-full ring-4",
                 s.state === "done"
-                  ? "bg-app-success text-white ring-app-success-bg"
+                  ? "bg-app-success-solid text-white ring-app-success-bg"
                   : s.state === "current"
-                    ? "bg-app-info text-white ring-app-info-bg"
+                    ? "bg-app-info-solid text-white ring-app-info-bg"
                     : "border-[1.5px] border-app-border-strong bg-app-surface ring-transparent",
               )}
             >

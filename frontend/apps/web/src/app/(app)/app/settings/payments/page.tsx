@@ -396,7 +396,7 @@ function PaymentSettingsPageContent() {
             <SchedulingConnectPanel />
             <button
               onClick={() => router.push("/app/scheduling/payments")}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-business px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-app-business-solid px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
             >
               Open payouts &amp; earnings
             </button>

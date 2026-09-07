@@ -41,7 +41,7 @@ struct DueSnoozeCard: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s0)
             HStack(spacing: Spacing.s1) {
-                Circle().fill(Theme.Color.error).frame(width: 6, height: 6)
+                Circle().fill(Theme.Color.errorSolid).frame(width: 6, height: 6)
                 Text(due.left)
                     .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Theme.Color.error)

@@ -102,7 +102,7 @@ struct MyBusinessesEmptyView: View {
                 .background(Circle().fill(Theme.Color.businessBg))
             Icon(.check, size: 16, strokeWidth: 3, color: Theme.Color.appTextInverse)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Theme.Color.business))
+                .background(Circle().fill(Theme.Color.businessSolid))
                 .overlay(Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2))
         }
     }

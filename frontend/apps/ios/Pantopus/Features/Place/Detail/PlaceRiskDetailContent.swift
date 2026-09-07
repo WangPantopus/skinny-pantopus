@@ -271,7 +271,7 @@ private struct EmergencyChecklist: View {
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.Color.appSurfaceSunken).frame(height: 6)
-                        Capsule().fill(Theme.Color.home)
+                        Capsule().fill(Theme.Color.homeSolid)
                             .frame(width: proxy.size.width * (total == 0 ? 0 : Double(checked.count) / Double(total)), height: 6)
                     }
                 }
@@ -298,7 +298,7 @@ private struct EmergencyChecklist: View {
             HStack(spacing: 10) {
                 ZStack {
                     Circle().strokeBorder(checked.contains(item) ? Theme.Color.home : Theme.Color.appBorder, lineWidth: 2)
-                        .background(Circle().fill(checked.contains(item) ? Theme.Color.home : Color.clear))
+                        .background(Circle().fill(checked.contains(item) ? Theme.Color.homeSolid : Color.clear))
                         .frame(width: 22, height: 22)
                     if checked.contains(item) {
                         Icon(.check, size: 13, strokeWidth: 3, color: Theme.Color.appTextInverse)

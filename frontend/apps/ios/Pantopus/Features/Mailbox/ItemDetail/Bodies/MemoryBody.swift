@@ -91,7 +91,7 @@ private struct MemorySavedBanner: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(.heart, size: 11, color: Theme.Color.appTextInverse)
             }
             .frame(width: 20, height: 20)
@@ -194,8 +194,7 @@ private struct MemoryFactsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
-            Text("The story behind it")
-                .pantopusTextStyle(.overline)
+            Text("The story behind it", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
@@ -278,8 +277,7 @@ private struct MemoryVaultCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Filed in your Vault")
-                .pantopusTextStyle(.overline)
+            Text("Filed in your Vault", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
 
             breadcrumb

@@ -519,7 +519,7 @@ struct BizLabel: View {
                 }
                 if dirty {
                     Circle()
-                        .fill(Theme.Color.warning)
+                        .fill(Theme.Color.warningSolid)
                         .frame(width: 6, height: 6)
                         .overlay(
                             Circle().stroke(Theme.Color.warningBg, lineWidth: 2)
@@ -730,7 +730,7 @@ private struct PromptBlock: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             }
             .padding(14)

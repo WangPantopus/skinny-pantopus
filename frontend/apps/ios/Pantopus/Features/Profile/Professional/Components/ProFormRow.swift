@@ -23,8 +23,7 @@ struct ProSectionBlock<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(overline)
-                .pantopusTextStyle(.overline)
+            Text(overline, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s4)
                 .accessibilityAddTraits(.isHeader)

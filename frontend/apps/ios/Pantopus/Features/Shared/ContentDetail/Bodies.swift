@@ -161,7 +161,7 @@ public struct GridTabsBody<Overview: View>: View {
                                     .foregroundStyle(Theme.Color.appTextInverse)
                                     .padding(.horizontal, Spacing.s1)
                                     .frame(minWidth: 18, minHeight: 18)
-                                    .background(Theme.Color.error)
+                                    .background(Theme.Color.errorSolid)
                                     .clipShape(Capsule())
                                     .padding(.top, Spacing.s1)
                                     .padding(.trailing, Spacing.s1)

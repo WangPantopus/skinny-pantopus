@@ -152,7 +152,7 @@ function SlotRow({
           <button
             type="button"
             onClick={() => onBook(slot)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-app-home px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-app-home-solid px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
           >
             <Check className="h-4 w-4" aria-hidden /> Book it
           </button>
@@ -229,7 +229,7 @@ export default function SuggestedSlots({
             <button
               type="button"
               onClick={onEdit}
-              className="flex items-center justify-center gap-2 rounded-xl bg-app-home px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="flex items-center justify-center gap-2 rounded-xl bg-app-home-solid px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
             >
               <UserMinus className="h-4 w-4" aria-hidden /> Make someone
               optional

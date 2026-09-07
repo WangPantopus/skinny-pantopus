@@ -169,8 +169,7 @@ struct ApproveDeclineSheet: View {
 
     private func reasonSection(_ selection: Binding<DeclineReason?>) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Reason")
-                .pantopusTextStyle(.overline)
+            Text("Reason", style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
             ReasonChipRow(reasons: DeclineReason.allCases, label: { $0.label }, selected: selection)
             if let onProposeTime {

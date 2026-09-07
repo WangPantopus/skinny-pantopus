@@ -101,8 +101,7 @@ private struct VerifyLandlordHomeChipView: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.home, size: 11, color: Theme.Color.home)
-            Text(label.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(label, style: .overline)
                 .foregroundStyle(Theme.Color.home)
         }
         .padding(.horizontal, Spacing.s3)
@@ -125,7 +124,7 @@ private struct VerifyFastTrackNotice: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 30, height: 30)
                     .overlay {
                         Icon(.badgeCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
@@ -201,8 +200,7 @@ private struct VerifiedPill: View {
     var body: some View {
         HStack(spacing: 3) {
             Icon(.check, size: 9, strokeWidth: 3, color: Theme.Color.success)
-            Text("VERIFIED")
-                .pantopusTextStyle(.overline)
+            Text("Verified", style: .overline)
                 .foregroundStyle(Theme.Color.success)
         }
         .padding(.horizontal, Spacing.s2)

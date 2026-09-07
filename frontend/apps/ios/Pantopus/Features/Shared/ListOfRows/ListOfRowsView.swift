@@ -1708,7 +1708,7 @@ private struct LeadingBadge: View {
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 2)
-        .background(Theme.Color.warning)
+        .background(Theme.Color.warningSolid)
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         .frame(maxWidth: .infinity, alignment: .leading)
     }

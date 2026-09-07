@@ -44,7 +44,7 @@ struct AutoDetectBanner: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 7)
-                    .background(Theme.Color.warning)
+                    .background(Theme.Color.warningSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

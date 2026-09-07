@@ -41,6 +41,12 @@ public extension Theme.Color {
 
     /// Success base — `#059669`.
     static let success = SwiftUI.Color("Semantic/Success", bundle: Theme.bundle)
+    /// Fill counterpart of `success`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `success` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let successSolid = SwiftUI.Color("Semantic/SuccessSolid", bundle: Theme.bundle)
+
     /// Success dark — `#047857`. Emerald-700; the darker confirmed-stat value
     /// shade specified in roster-frames.jsx (SUCCESS_DK). Use for high-emphasis
     /// success numerals (e.g. Confirmed seat count) where the lighter #059669
@@ -53,6 +59,12 @@ public extension Theme.Color {
 
     /// Warning base — `#D97706`.
     static let warning = SwiftUI.Color("Semantic/Warning", bundle: Theme.bundle)
+    /// Fill counterpart of `warning`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `warning` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let warningSolid = SwiftUI.Color("Semantic/WarningSolid", bundle: Theme.bundle)
+
     /// Warning light tint — `#FDE68A`.
     static let warningLight = SwiftUI.Color("Semantic/WarningLight", bundle: Theme.bundle)
     /// Warning background — `#FFFBEB`.
@@ -67,6 +79,12 @@ public extension Theme.Color {
 
     /// Error base — `#DC2626`.
     static let error = SwiftUI.Color("Semantic/Error", bundle: Theme.bundle)
+    /// Fill counterpart of `error`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `error` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let errorSolid = SwiftUI.Color("Semantic/ErrorSolid", bundle: Theme.bundle)
+
     /// Error light tint — `#FECACA`.
     static let errorLight = SwiftUI.Color("Semantic/ErrorLight", bundle: Theme.bundle)
     /// Error background — `#FEF2F2`.
@@ -74,6 +92,12 @@ public extension Theme.Color {
 
     /// Info base — `#0284c7`.
     static let info = SwiftUI.Color("Semantic/Info", bundle: Theme.bundle)
+    /// Fill counterpart of `info`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `info` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let infoSolid = SwiftUI.Color("Semantic/InfoSolid", bundle: Theme.bundle)
+
     /// Info light tint — `#BAE6FD`.
     static let infoLight = SwiftUI.Color("Semantic/InfoLight", bundle: Theme.bundle)
     /// Info background — `#F0F9FF`.
@@ -83,10 +107,27 @@ public extension Theme.Color {
 
     /// Personal identity pillar — `#0284C7`.
     static let personal = SwiftUI.Color("Identity/Personal", bundle: Theme.bundle)
+    /// Fill counterpart of `personal`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `personal` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let personalSolid = SwiftUI.Color("Identity/PersonalSolid", bundle: Theme.bundle)
+
     /// Personal identity background — `#DBEAFE`.
     static let personalBg = SwiftUI.Color("Identity/PersonalBg", bundle: Theme.bundle)
     /// Home identity pillar — `#16A34A`.
     static let home = SwiftUI.Color("Identity/Home", bundle: Theme.bundle)
+    /// The verification check inside the brand mark's window — `#16A34A` in
+    /// both appearances. Deliberately NOT `home`: that token moves per scheme
+    /// for text contrast, and the mark must stay on-brand.
+    static let brandCheck = SwiftUI.Color("Identity/BrandCheck", bundle: Theme.bundle)
+
+    /// Fill counterpart of `home`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `home` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let homeSolid = SwiftUI.Color("Identity/HomeSolid", bundle: Theme.bundle)
+
     /// Home identity background — `#DCFCE7`.
     static let homeBg = SwiftUI.Color("Identity/HomeBg", bundle: Theme.bundle)
     /// Home identity dark — `#15803D`. Tailwind green-700; the dark stop for
@@ -95,6 +136,12 @@ public extension Theme.Color {
     static let homeDark = SwiftUI.Color("Identity/HomeDark", bundle: Theme.bundle)
     /// Business identity pillar — `#7C3AED`.
     static let business = SwiftUI.Color("Identity/Business", bundle: Theme.bundle)
+    /// Fill counterpart of `business`. The saturated hue, identical in both
+    /// appearances, because white text is drawn on it. `business` itself is the
+    /// LABEL ink: it darkens in light and lightens in dark so it reads on its
+    /// own tint, and no single value can do both jobs.
+    static let businessSolid = SwiftUI.Color("Identity/BusinessSolid", bundle: Theme.bundle)
+
     /// Business identity background — `#F3E8FF`.
     static let businessBg = SwiftUI.Color("Identity/BusinessBg", bundle: Theme.bundle)
     /// Business identity dark — `#5B21B6`. Tailwind violet-700; the dark stop

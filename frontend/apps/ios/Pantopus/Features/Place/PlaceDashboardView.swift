@@ -283,7 +283,7 @@ struct PlaceClaimedAvatar: View {
                             .foregroundStyle(Theme.Color.appTextInverse)
                     )
                 Circle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: size * 0.42, height: size * 0.42)
                     .overlay(
                         Icon(.home, size: size * 0.22, strokeWidth: 2.75, color: Theme.Color.appTextInverse)

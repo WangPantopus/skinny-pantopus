@@ -25,8 +25,8 @@ export interface HomeHeroHeaderProps {
 
 const BG: Record<NonNullable<HomeHeroHeaderProps['accent']>, string> = {
   primary: 'bg-primary-600',
-  success: 'bg-app-success',
-  business: 'bg-app-business',
+  success: 'bg-app-success-solid',
+  business: 'bg-app-business-solid',
 };
 
 export default function HomeHeroHeader({

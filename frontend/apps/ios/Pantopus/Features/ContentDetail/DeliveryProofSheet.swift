@@ -190,7 +190,7 @@ public struct DeliveryProofSheetView: View {
             // Added-confirmation check badge (top-right).
             Icon(.check, size: 10, strokeWidth: 4, color: Theme.Color.appTextInverse)
                 .frame(width: 20, height: 20)
-                .background(Circle().fill(Theme.Color.success))
+                .background(Circle().fill(Theme.Color.successSolid))
                 .overlay(Circle().stroke(Theme.Color.appTextInverse, lineWidth: 2))
                 .padding(Spacing.s1)
             // Remove (bottom-right).

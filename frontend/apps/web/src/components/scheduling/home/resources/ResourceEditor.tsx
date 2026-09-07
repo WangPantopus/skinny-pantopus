@@ -225,7 +225,7 @@ export default function ResourceEditor({
               <button
                 type="button"
                 onClick={confirmDelete}
-                className="h-11 w-full rounded-xl bg-app-error text-[13.5px] font-bold text-white transition hover:brightness-105"
+                className="h-11 w-full rounded-xl bg-app-error-solid text-[13.5px] font-bold text-white transition hover:brightness-105"
               >
                 Delete
               </button>
@@ -380,7 +380,7 @@ export default function ResourceEditor({
                     <span
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                         on
-                          ? "border-app-home bg-app-home text-white"
+                          ? "border-app-home bg-app-home-solid text-white"
                           : "border-app-border-strong"
                       }`}
                     >

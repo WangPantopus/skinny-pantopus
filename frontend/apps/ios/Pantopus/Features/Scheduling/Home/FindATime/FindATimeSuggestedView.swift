@@ -349,7 +349,7 @@ struct FindATimeSuggestedView: View {
         VStack(spacing: Spacing.s4) {
             ZStack {
                 Circle().fill(Theme.Color.homeBg).frame(width: 84, height: 84)
-                Circle().fill(Theme.Color.home).frame(width: 52, height: 52)
+                Circle().fill(Theme.Color.homeSolid).frame(width: 52, height: 52)
                 Icon(.check, size: 28, strokeWidth: 3, color: Theme.Color.appTextInverse)
             }
             VStack(spacing: Spacing.s2) {
@@ -383,7 +383,7 @@ struct FindATimeSuggestedView: View {
         VStack(spacing: Spacing.s4) {
             ZStack {
                 Circle().fill(Theme.Color.homeBg).frame(width: 84, height: 84)
-                Circle().fill(Theme.Color.home).frame(width: 52, height: 52)
+                Circle().fill(Theme.Color.homeSolid).frame(width: 52, height: 52)
                 Icon(.calendarCheck, size: 26, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
             }
             VStack(spacing: Spacing.s2) {

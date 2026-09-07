@@ -83,7 +83,7 @@ public struct DataRow: View {
         .overlay(alignment: .leading) {
             if mismatch {
                 Rectangle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 3)
             }
         }

@@ -107,7 +107,7 @@ public struct CombinedSenderCarrierCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
                 Icon(.check, size: 9, color: Theme.Color.appTextInverse)
                     .frame(width: 15, height: 15)
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .clipShape(Circle())
                     .offset(x: 3, y: 3)

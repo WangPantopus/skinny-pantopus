@@ -36,7 +36,7 @@ function actionClasses(variant: ArchetypePageHeaderAction['variant']) {
     return 'border border-app-border bg-app-surface text-app-text-strong hover:bg-app-hover';
   }
   if (variant === 'danger') {
-    return 'bg-app-error text-white hover:brightness-110';
+    return 'bg-app-error-solid text-white hover:brightness-110';
   }
   return 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm';
 }

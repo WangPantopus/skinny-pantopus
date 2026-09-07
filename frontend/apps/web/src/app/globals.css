@@ -23,8 +23,18 @@
   --app-border-strong: 209 213 219;
   --app-border-subtle: 243 244 246;
   --app-text: 17 24 39;
-  --app-text-secondary: 107 114 128;
-  --app-text-muted: 156 163 175;
+  /* The four-tier ink ramp, every tier AA on every light surface in use
+     (#FFFFFF, #F6F7F9, #F3F4F6, #F9FAFB, #F8FAFC). Was 107 114 128 /
+     156 163 175, which measured 4.39:1 and 2.31:1 against the worst of
+     those — 287 pieces of meaningful text ("May 2026", "Screening, not a
+     diagnosis", every section label) sat below the floor, 70% of every
+     light-mode contrast failure in the app. There is not room for four
+     WIDELY separated tiers between #111827 and the 4.5:1 floor, so the
+     steps tighten from 1.72/2.13/1.90 to 1.72/1.38/1.31 — still four
+     distinguishable levels, now all readable.
+     Worst-case ratios: strong 9.37, secondary 6.81, muted 5.18. */
+  --app-text-secondary: 78 85 99;
+  --app-text-muted: 95 103 117;
   --app-text-strong: 55 65 81;
   --app-text-inverse: 255 255 255;
   --app-hover: 243 244 246;
@@ -42,17 +52,38 @@
   --color-primary-900: #0c4a6e;
   --color-primary: #0284c7;
 
+  /* ── Link / action ink ───────────────────────────────────── */
+  /* A SEMANTIC role, not a palette step, because the two themes need
+     different steps: primary-700 on light grounds, primary-400 on dark.
+     A numbered step cannot do both — #0284C7 reads 4.10:1 on white and
+     4.36:1 on the dark surface, failing AA in both directions at once.
+     Use this for interactive text and for icons that carry meaning.
+     Light: 5.93 / 5.54 / 5.57 on #FFFFFF / #F6F7F9 / #F0F9FF.
+     Dark:  8.33 / 9.42 / 6.83 on #0F172A / #020617 / #1E293B. */
+  --color-link: #0369A1;
+
   /* ── Semantic ────────────────────────────────────────────── */
-  --color-success: #059669;
+  /* Same two roles as the identity tokens below. The base token is the
+     *label* colour drawn on the `-bg` tint, so it lightens in dark mode;
+     the `-solid` token is the *fill* that white text sits on. It is frozen
+     across both schemes — a fill that lightened in dark would leave white
+     text on it at about 1.7:1 — and set to the light-mode label value,
+     because at the raw 600-weight hues white text on these fills measured
+     3.19:1 to 4.83:1 across 87 sites. It now measures 5.02 to 7.56. `-light` is the card border. */
+  --color-success: #047857;
+  --color-success-solid: #047857;
   --color-success-light: #D1FAE5;
   --color-success-bg: #F0FDF4;
-  --color-warning: #D97706;
+  --color-warning: #9A4A08;
+  --color-warning-solid: #9A4A08;
   --color-warning-light: #FDE68A;
   --color-warning-bg: #FFFBEB;
-  --color-error: #DC2626;
+  --color-error: #A81A1A;
+  --color-error-solid: #A81A1A;
   --color-error-light: #FECACA;
   --color-error-bg: #FEF2F2;
-  --color-info: #0284c7;
+  --color-info: #075985;
+  --color-info-solid: #075985;
   --color-info-light: #BAE6FD;
   --color-info-bg: #F0F9FF;
 
@@ -62,12 +93,30 @@
      themed surface, so both schemes use the same yellow. */
   --color-live-badge: #FFD60A;
 
+  /* ── Brand mark ──────────────────────────────────────────── */
+  /* The verification check inside the mark's window. Pinned to the brand
+     green and deliberately NOT the identity-home label token: that token
+     darkens for text contrast, and the mark must stay on-brand in both
+     schemes. As a meaningful graphic the bar is 3:1, and #16A34A on the
+     white window reads 3.35:1. */
+  --color-brand-check: #16A34A;
+
   /* ── Identity / pillars ──────────────────────────────────── */
-  --color-identity-personal: #0284C7;
+  /* Two roles, two tokens. The base token is the *label* colour: it sits
+     on `-bg` tinted surfaces, so it has to lighten in dark mode to stay
+     readable. The `-solid` token is the *fill* colour that white text is
+     drawn on, so it must stay saturated in both schemes. One value cannot
+     do both — a colour light enough to read on #102A1C is far too light to
+     carry white text. Use `text-/border-/ring-app-<pillar>` for labels and
+     `bg-app-<pillar>-solid` for filled buttons, FABs and dots. */
+  --color-identity-personal: #0369A1;
+  --color-identity-personal-solid: #0369A1;
   --color-identity-personal-bg: #DBEAFE;
-  --color-identity-home: #16A34A;
+  --color-identity-home: #15803D;
+  --color-identity-home-solid: #15803D;
   --color-identity-home-bg: #DCFCE7;
   --color-identity-business: #7C3AED;
+  --color-identity-business-solid: #7C3AED;
   --color-identity-business-bg: #F3E8FF;
 
   /* ── Spacing (px) ────────────────────────────────────────── */
@@ -132,9 +181,36 @@
     /* Identity tints: deep versions of the pillar colours so text tokens
        that flip (text-app-text etc.) stay readable on top. Matches the
        iOS asset catalogue's dark appearance for Identity/HomeBg. */
+    /* Semantic surfaces. Without these the tints stayed at their light
+       values (green-50, amber-50, red-50, sky-50) while the text on them
+       flipped to the dark-mode ink, which rendered whole banners at about
+       1.1:1 — invisible. Tint, border and label move together; the
+       `-solid` fills deliberately do NOT flip, because white text is
+       drawn on them. Labels clear AA on their own tint and on the app
+       surface (6.2:1 to 10.7:1). `-light` is both the card border AND a
+       badge fill, so it is pitched dark enough for the label to clear AA
+       on it (4.6:1 to 5.7:1) while staying a step above `-bg`. */
+    --color-success: #34D399;
+    --color-success-light: #154E36;
+    --color-success-bg: #0B2B21;
+    --color-warning: #FBBF24;
+    --color-warning-light: #603F0A;
+    --color-warning-bg: #2B1E06;
+    --color-error: #F87171;
+    --color-error-light: #532022;
+    --color-error-bg: #2C1416;
+    --color-info: #38BDF8;
+    --color-info-light: #16456F;
+    --color-info-bg: #122540;
     --color-identity-personal-bg: #122540;
     --color-identity-home-bg: #102A1C;
     --color-identity-business-bg: #241A3D;
+    /* Label colours lighten to clear AA on the tints above (7.18 / 8.80 /
+       5.98 : 1). The `-solid` fills deliberately do NOT flip — white text
+       is drawn on them. */
+    --color-identity-personal: #38BDF8;
+    --color-identity-home: #4ADE80;
+    --color-identity-business: #A78BFA;
     --app-surface: 15 23 42;
     --app-surface-raised: 30 41 59;
     --app-surface-sunken: 15 23 42;
@@ -144,7 +220,12 @@
     --app-border-subtle: 30 41 59;
     --app-text: 229 231 235;
     --app-text-secondary: 148 163 184;
-    --app-text-muted: 100 116 139;
+    /* Was 100 116 139 (slate-500), which read at 3.75:1 on the dark
+       surface and failed AA on every dark ground in the app. This clears
+       4.5:1 on all four (5.0:1 at worst, on --app-surface-raised) and
+       still sits a step below --app-text-secondary. */
+    --app-text-muted: 139 152 172;
+    --color-link: #38BDF8;
     --app-text-strong: 241 245 249;
     --app-text-inverse: 17 24 39;
     --app-hover: 31 41 55;

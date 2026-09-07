@@ -56,7 +56,7 @@ export default function BookingRow({
             <div className="flex items-center gap-1.5">
               {unread && (
                 <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-app-warning"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-app-warning-solid"
                   aria-hidden
                 />
               )}

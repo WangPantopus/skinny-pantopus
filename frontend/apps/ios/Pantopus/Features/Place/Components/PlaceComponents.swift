@@ -173,7 +173,7 @@ struct PlaceVerifiedAvatar: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                 )
             Circle()
-                .fill(Theme.Color.home)
+                .fill(Theme.Color.homeSolid)
                 .frame(width: size * 0.42, height: size * 0.42)
                 .overlay(
                     Icon(.check, size: size * 0.24, strokeWidth: 3.25, color: Theme.Color.appTextInverse)

@@ -165,8 +165,7 @@ struct ResourceEditorView: View {
             } label: {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: Spacing.s1) {
-                        Text("Booking rules".uppercased())
-                            .pantopusTextStyle(.overline)
+                        Text("Booking rules", style: .overline)
                             .foregroundStyle(Theme.Color.homeDark)
                         if !viewModel.isRulesExpanded {
                             Text(viewModel.ruleHelper)
@@ -476,7 +475,7 @@ struct ResourceDeleteDialog: View {
                             .font(.system(size: 13.5, weight: .bold))
                             .foregroundStyle(Theme.Color.appTextInverse)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Theme.Color.error)
+                            .background(Theme.Color.errorSolid)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -586,7 +585,7 @@ struct WeekdayPicker: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isOn ? Theme.Color.appTextInverse : Theme.Color.appTextMuted)
                         .frame(maxWidth: .infinity, minHeight: 30)
-                        .background(isOn ? Theme.Color.home : Theme.Color.appSurfaceSunken)
+                        .background(isOn ? Theme.Color.homeSolid : Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                 }
                 .buttonStyle(.plain)

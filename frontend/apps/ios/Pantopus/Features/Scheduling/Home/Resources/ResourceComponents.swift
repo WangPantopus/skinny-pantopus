@@ -95,7 +95,7 @@ struct HomePrimaryButton: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 46)
-            .background(isEnabled ? Theme.Color.home : Theme.Color.appSurfaceSunken)
+            .background(isEnabled ? Theme.Color.homeSolid : Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .shadow(color: isEnabled ? Theme.Color.home.opacity(0.28) : .clear, radius: 8, y: 4)
         }
@@ -129,7 +129,7 @@ struct InlineHomeButton: View {
                     .foregroundStyle(foreground)
             }
             .frame(maxWidth: .infinity, minHeight: 34)
-            .background(filled ? (tone ?? Theme.Color.home) : Theme.Color.appSurface)
+            .background(filled ? (tone ?? Theme.Color.homeSolid) : Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
                     .stroke(filled ? .clear : Theme.Color.appBorderStrong, lineWidth: 1)
@@ -299,7 +299,7 @@ struct SelectionCheck: View {
         ZStack {
             Circle()
                 .strokeBorder(isOn ? Theme.Color.home : Theme.Color.appBorderStrong, lineWidth: 1.5)
-                .background(Circle().fill(isOn ? Theme.Color.home : .clear))
+                .background(Circle().fill(isOn ? Theme.Color.homeSolid : .clear))
             if isOn {
                 Icon(.check, size: 12, strokeWidth: 3, color: Theme.Color.appTextInverse)
             }

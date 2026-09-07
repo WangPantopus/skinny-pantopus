@@ -280,7 +280,7 @@ function WorkflowsErrorCard({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="h-[38px] rounded-[10px] bg-app-info px-[18px] text-[12.5px] font-bold text-white transition hover:opacity-90"
+        className="h-[38px] rounded-[10px] bg-app-info-solid px-[18px] text-[12.5px] font-bold text-white transition hover:opacity-90"
       >
         Try again
       </button>

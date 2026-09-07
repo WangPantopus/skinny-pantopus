@@ -247,7 +247,7 @@ struct BusinessInboxRoomCard: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .padding(.horizontal, Spacing.s2)
                         .frame(minWidth: 20, minHeight: 20)
-                        .background(Theme.Color.business)
+                        .background(Theme.Color.businessSolid)
                         .clipShape(Capsule())
                 }
             }

@@ -325,7 +325,7 @@ export default function SetupWizard() {
                             className={clsx(
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
                               active
-                                ? "bg-app-personal text-white"
+                                ? "bg-app-personal-solid text-white"
                                 : "bg-app-surface-sunken text-app-text-strong",
                             )}
                           >
@@ -359,7 +359,7 @@ export default function SetupWizard() {
                           className={clsx(
                             "rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors",
                             active
-                              ? "border-app-personal bg-app-personal text-white"
+                              ? "border-app-personal bg-app-personal-solid text-white"
                               : "border-app-border bg-app-surface text-app-text-strong hover:bg-app-hover",
                           )}
                         >
@@ -503,7 +503,7 @@ function Primary({
         grow ? "flex-[1.5]" : "flex-1",
         disabled
           ? "cursor-not-allowed bg-app-surface-sunken text-app-text-muted shadow-none"
-          : "bg-app-personal text-white hover:opacity-90",
+          : "bg-app-personal-solid text-white hover:opacity-90",
       )}
     >
       {children}
@@ -543,7 +543,7 @@ function SuccessStep({
     <div className="flex flex-col items-center pt-2 text-center">
       <div className="relative mb-5 flex h-24 w-24 items-center justify-center">
         <div className="absolute inset-0 rounded-full bg-app-personal-bg" />
-        <div className="absolute inset-[18px] flex items-center justify-center rounded-full bg-app-personal shadow-md">
+        <div className="absolute inset-[18px] flex items-center justify-center rounded-full bg-app-personal-solid shadow-md">
           <Check className="h-8 w-8 text-white" strokeWidth={3} aria-hidden />
         </div>
       </div>
@@ -573,7 +573,7 @@ function SuccessStep({
         <button
           type="button"
           onClick={onDone}
-          className="flex h-12 flex-[1.5] items-center justify-center gap-2 rounded-xl bg-app-personal text-sm font-semibold text-white hover:opacity-90"
+          className="flex h-12 flex-[1.5] items-center justify-center gap-2 rounded-xl bg-app-personal-solid text-sm font-semibold text-white hover:opacity-90"
         >
           <Share2 className="h-4 w-4" aria-hidden />
           Share link

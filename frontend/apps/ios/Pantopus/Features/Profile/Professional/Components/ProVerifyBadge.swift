@@ -36,7 +36,7 @@ struct ProVerifyBadge: View {
 struct FreshDot: View {
     var body: some View {
         Circle()
-            .fill(Theme.Color.warning)
+            .fill(Theme.Color.warningSolid)
             .frame(width: 6, height: 6)
             .overlay(Circle().stroke(Theme.Color.warningBg, lineWidth: 2))
             .accessibilityLabel("Added this session")

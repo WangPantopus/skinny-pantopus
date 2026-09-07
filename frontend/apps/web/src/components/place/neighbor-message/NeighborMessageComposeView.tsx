@@ -105,7 +105,7 @@ function TemplateRow({
     >
       <span
         className={`w-[22px] h-[22px] rounded-full shrink-0 mt-px flex items-center justify-center ${
-          selected ? 'bg-app-home text-white' : 'border-2 border-app-border-strong bg-app-surface'
+          selected ? 'bg-app-home-solid text-white' : 'border-2 border-app-border-strong bg-app-surface'
         }`}
       >
         {selected ? <Check size={13} strokeWidth={3.25} /> : null}

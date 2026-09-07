@@ -62,7 +62,7 @@ export default function VerifiedSuccess({ onContinue }: VerifiedSuccessProps) {
         <div className="relative w-[108px] h-[108px] flex items-center justify-center">
           <span className="absolute w-[108px] h-[108px] rounded-full bg-app-home-bg opacity-50" />
           <span className="absolute w-[92px] h-[92px] rounded-full bg-app-home-bg opacity-80" />
-          <span className="relative w-[78px] h-[78px] rounded-full bg-app-home text-white shadow-lg flex items-center justify-center">
+          <span className="relative w-[78px] h-[78px] rounded-full bg-app-home-solid text-white shadow-lg flex items-center justify-center">
             <Check size={42} strokeWidth={3} />
           </span>
         </div>

@@ -384,7 +384,7 @@ export default function FindATimePage() {
             <button
               type="button"
               onClick={() => setStep("setup")}
-              className="flex items-center justify-center gap-2 rounded-xl bg-app-home px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="flex items-center justify-center gap-2 rounded-xl bg-app-home-solid px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
             >
               Make someone optional
             </button>
@@ -413,7 +413,7 @@ export default function FindATimePage() {
               }}
             />
             {/* Inner solid circle + check */}
-            <div className="absolute inset-4 flex items-center justify-center rounded-full bg-app-home shadow-lg">
+            <div className="absolute inset-4 flex items-center justify-center rounded-full bg-app-home-solid shadow-lg">
               <Check
                 className="h-7 w-7 text-white"
                 strokeWidth={3}
@@ -436,7 +436,7 @@ export default function FindATimePage() {
             <button
               type="button"
               onClick={() => router.push(`/app/homes/${homeId}/calendar`)}
-              className="flex items-center justify-center gap-2 rounded-xl bg-app-home px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="flex items-center justify-center gap-2 rounded-xl bg-app-home-solid px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
             >
               <Home className="h-4 w-4" aria-hidden /> Back to calendar
             </button>

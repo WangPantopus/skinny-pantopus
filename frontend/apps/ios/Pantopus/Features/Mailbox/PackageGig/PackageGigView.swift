@@ -75,7 +75,7 @@ public struct PackageGigView: View {
             .accessibilityLabel("Back to Mailbox")
             Spacer(minLength: Spacing.s0)
             HStack(spacing: Spacing.s1 + 2) {
-                Circle().fill(Theme.Color.business).frame(width: 8, height: 8)
+                Circle().fill(Theme.Color.businessSolid).frame(width: 8, height: 8)
                 Text(viewModel.eyebrow)
                     .font(.system(size: 12, weight: .bold))
                     .tracking(0.5)
@@ -278,7 +278,7 @@ public struct PackageGigView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Theme.Color.business)
+            .background(Theme.Color.businessSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .opacity(viewModel.canSubmit ? 1 : 0.5)
         })
@@ -333,7 +333,7 @@ public struct PackageGigView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
-                        .background(Theme.Color.business)
+                        .background(Theme.Color.businessSolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 })
                 .buttonStyle(.plain)

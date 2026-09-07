@@ -111,7 +111,7 @@ struct TaskCard: View {
     private var checkbox: some View {
         ZStack {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                .fill(done ? Theme.Color.success : Theme.Color.appSurface)
+                .fill(done ? Theme.Color.successSolid : Theme.Color.appSurface)
             if done {
                 Icon(.check, size: 15, color: Theme.Color.appTextInverse)
             } else {

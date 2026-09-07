@@ -222,7 +222,7 @@ export default function OneOffGenerator() {
       <div className="space-y-4">
         <Card>
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-success text-white ring-4 ring-app-success/15">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-success-solid text-white ring-4 ring-app-success/15">
               <Check className="h-5 w-5" strokeWidth={3} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -247,7 +247,7 @@ export default function OneOffGenerator() {
             onClick={copy}
             className={clsx(
               "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold text-white",
-              copied ? "bg-app-success" : "bg-primary-600 hover:bg-primary-700",
+              copied ? "bg-app-success-solid" : "bg-primary-600 hover:bg-primary-700",
             )}
           >
             {copied ? (

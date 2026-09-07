@@ -175,7 +175,7 @@ export default function OneOffLanding({
           />
           <Link
             href={buildBookingManagePath(created.manageToken)}
-            className="block w-full rounded-xl bg-app-personal px-4 py-3 text-center text-sm font-bold text-white"
+            className="block w-full rounded-xl bg-app-personal-solid px-4 py-3 text-center text-sm font-bold text-white"
           >
             Manage your booking
           </Link>
@@ -377,7 +377,7 @@ export default function OneOffLanding({
               type="button"
               onClick={submitIntake}
               disabled={submitting || (priced && !paidEnabled)}
-              className="w-full rounded-xl bg-app-personal px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="w-full rounded-xl bg-app-personal-solid px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               {submitting
                 ? "Booking…"

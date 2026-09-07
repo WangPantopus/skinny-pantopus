@@ -75,7 +75,7 @@ struct ProfileStrengthCard: View {
                 Capsule(style: .continuous)
                     .fill(Theme.Color.appSurfaceSunken)
                 Capsule(style: .continuous)
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: max(0, proxy.size.width * fraction))
             }
         }

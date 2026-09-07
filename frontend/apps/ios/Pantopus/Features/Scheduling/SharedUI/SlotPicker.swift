@@ -268,8 +268,7 @@ public struct SlotPicker: View {
                 let groupSlots = slots.filter { slotGroup(for: $0) == group }
                 if !groupSlots.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Text(group.title)
-                            .pantopusTextStyle(.overline)
+                        Text(group.title, style: .overline)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                         ForEach(groupSlots, id: \.self) { slot in
                             SchedulingSlotRow(

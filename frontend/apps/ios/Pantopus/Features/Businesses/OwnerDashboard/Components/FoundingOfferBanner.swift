@@ -53,7 +53,7 @@ struct FoundingOfferBanner: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.s3)
-                .background(Theme.Color.warning)
+                .background(Theme.Color.warningSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

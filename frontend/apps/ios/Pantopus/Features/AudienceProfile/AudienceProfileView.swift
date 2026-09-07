@@ -1308,7 +1308,7 @@ public struct AudienceProfileView: View {
                             .foregroundStyle(Theme.Color.appTextInverse)
                             .padding(.horizontal, Spacing.s1)
                             .frame(minWidth: 16, minHeight: 16)
-                            .background(Theme.Color.error)
+                            .background(Theme.Color.errorSolid)
                             .clipShape(Capsule())
                             .offset(x: 14, y: -14)
                     }

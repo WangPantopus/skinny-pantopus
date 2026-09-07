@@ -106,7 +106,7 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
   if (complete) {
     return (
       <section aria-label="First week done" data-testid="just-moved-done" className={`flex items-center gap-3 rounded-2xl border border-app-border bg-app-home-bg px-4 py-3 ${className}`}>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-app-home text-white">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-app-home-solid text-white">
           <Check size={16} strokeWidth={2.75} />
         </span>
         <p className="flex-1 text-[14px] font-semibold text-app-text">First week done. The block is yours.</p>
@@ -120,7 +120,7 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
       {/* Header band in the home tint: this is the card the eye lands on. */}
       <div className="bg-app-home-bg px-4 pt-4 pb-3.5">
         <div className="flex items-start gap-3">
-          <span className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-app-home text-white shadow-sm">
+          <span className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-app-home-solid text-white shadow-sm">
             <Truck size={22} strokeWidth={2} />
           </span>
           <div className="min-w-0 flex-1">
@@ -130,7 +130,7 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
         </div>
         <div className="mt-3 flex items-center gap-3">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-app-text/15" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={doneCount} aria-label="First week progress">
-            <div className="h-full rounded-full bg-app-home transition-[width] duration-300" style={{ width: `${(doneCount / total) * 100}%` }} />
+            <div className="h-full rounded-full bg-app-home-solid transition-[width] duration-300" style={{ width: `${(doneCount / total) * 100}%` }} />
           </div>
           <span className="text-[12.5px] font-semibold tabular-nums text-app-text-strong" data-testid="just-moved-progress">{doneCount} of {total} done</span>
         </div>
@@ -152,7 +152,7 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
                 onClick={() => toggle(s.id)}
                 data-testid={`just-moved-check-${s.id}`}
                 className={`m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                  checked ? 'border-app-home bg-app-home text-white' : 'border-app-border text-transparent hover:border-app-home'
+                  checked ? 'border-app-home bg-app-home-solid text-white' : 'border-app-border text-transparent hover:border-app-home'
                 }`}
               >
                 <Check size={14} strokeWidth={3} />

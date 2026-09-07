@@ -205,7 +205,7 @@ export default function AvailabilityListPage() {
             type="button"
             onClick={createBlank}
             disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-app-personal px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-app-personal-solid px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
           >
             <Plus className="h-4 w-4" aria-hidden /> New schedule
           </button>
@@ -232,7 +232,7 @@ export default function AvailabilityListPage() {
             type="button"
             onClick={seedDefault}
             disabled={busy}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-app-personal px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-app-personal-solid px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
           >
             <Plus className="h-4 w-4" strokeWidth={2.4} aria-hidden /> Add
             working hours
@@ -279,7 +279,7 @@ export default function AvailabilityListPage() {
               type="button"
               onClick={submitRename}
               disabled={busy || !renameValue.trim()}
-              className="rounded-lg bg-app-personal px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              className="rounded-lg bg-app-personal-solid px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
             >
               Save
             </button>

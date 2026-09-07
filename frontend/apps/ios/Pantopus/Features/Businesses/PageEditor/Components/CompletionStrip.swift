@@ -34,7 +34,7 @@ public struct EditBusinessCompletionStrip: View {
             HStack(spacing: Spacing.s2) {
                 ZStack {
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
-                        .fill(Theme.Color.business)
+                        .fill(Theme.Color.businessSolid)
                         .frame(width: 18, height: 18)
                     Icon(.building2, size: 10, color: Theme.Color.appTextInverse)
                 }
@@ -79,7 +79,7 @@ public struct EditBusinessCompletionStrip: View {
         .background(Theme.Color.businessBg)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Theme.Color.business.opacity(0.18))
+                .fill(Theme.Color.businessSolid.opacity(0.18))
                 .frame(height: 1)
         }
         .accessibilityElement(children: .contain)

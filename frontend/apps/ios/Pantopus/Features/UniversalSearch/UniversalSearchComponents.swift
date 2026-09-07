@@ -23,8 +23,7 @@ struct UniversalSearchSectionHeader: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(section.kind.icon, size: 14, color: section.kind.accent)
-            Text(section.kind.sectionTitle)
-                .pantopusTextStyle(.overline)
+            Text(section.kind.sectionTitle, style: .overline)
                 .foregroundStyle(Theme.Color.appTextStrong)
             Spacer(minLength: Spacing.s0)
             Text("\(section.results.count)")

@@ -159,7 +159,7 @@ struct ZipMismatchBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             ZStack {
-                Circle().fill(Theme.Color.warning)
+                Circle().fill(Theme.Color.warningSolid)
                 Icon(.alertTriangle, size: 14, strokeWidth: 2.5, color: Theme.Color.appTextInverse)
             }
             .frame(width: 26, height: 26)
@@ -183,8 +183,7 @@ struct ZipMismatchBanner: View {
                             .foregroundStyle(Theme.Color.appText)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Apply")
-                            .pantopusTextStyle(.overline)
+                        Text("Apply", style: .overline)
                             .foregroundStyle(Theme.Color.warning)
                     }
                     .padding(.horizontal, Spacing.s3)
@@ -319,7 +318,7 @@ private struct AddressRecognizedRow: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(.check, size: 12, strokeWidth: 3, color: Theme.Color.appTextInverse)
             }
             .frame(width: 20, height: 20)

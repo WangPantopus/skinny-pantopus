@@ -57,9 +57,9 @@ const WX: Record<WeatherConditionCode, { icon: LucideIcon; tint: string }> = {
   partly_cloudy: { icon: CloudSun, tint: 'text-app-text-muted' },
   cloudy: { icon: Cloud, tint: 'text-app-text-muted' },
   fog: { icon: CloudFog, tint: 'text-app-text-muted' },
-  rain: { icon: CloudRain, tint: 'text-primary-500' },
+  rain: { icon: CloudRain, tint: 'text-app-link' },
   snow: { icon: CloudSnow, tint: 'text-primary-400' },
-  sleet: { icon: CloudHail, tint: 'text-primary-500' },
+  sleet: { icon: CloudHail, tint: 'text-app-link' },
   thunderstorm: { icon: CloudLightning, tint: 'text-app-warning' },
   wind: { icon: Wind, tint: 'text-app-text-muted' },
 };
@@ -145,11 +145,11 @@ function ForecastRow({ day, isToday, isLast, lo, hi }: { day: PlaceWeatherDay; i
     <div className={`flex items-center gap-3 px-4 py-2.5 ${isLast ? '' : 'border-b border-app-border-subtle'}`}>
       <span className="w-11 text-[14.5px] font-semibold text-app-text shrink-0">{fmtDay(day.date, isToday)}</span>
       <span className="w-[30px] flex justify-center shrink-0"><WxGlyph code={day.condition_code} size={19} /></span>
-      <span className={`w-7 text-[12.5px] font-semibold shrink-0 ${day.precip_chance > 0 ? 'text-primary-500' : 'text-transparent'}`}>{day.precip_chance > 0 ? `${day.precip_chance}%` : '–'}</span>
+      <span className={`w-7 text-[12.5px] font-semibold shrink-0 ${day.precip_chance > 0 ? 'text-app-link' : 'text-transparent'}`}>{day.precip_chance > 0 ? `${day.precip_chance}%` : '–'}</span>
       <span className="w-6 text-[14.5px] text-app-text-muted text-right shrink-0">{Math.round(day.low_f)}°</span>
       <div className="flex-1 h-[5px] rounded-full bg-app-surface-sunken relative min-w-[40px]">
         {/* warm-to-cool range fill — sky→amber, mapped to tokens */}
-        <div className="absolute inset-y-0 rounded-full bg-gradient-to-r from-primary-400 to-app-warning" style={{ left: `${left}%`, width: `${Math.max(width, 4)}%` }} />
+        <div className="absolute inset-y-0 rounded-full bg-gradient-to-r from-primary-400 to-app-warning-solid" style={{ left: `${left}%`, width: `${Math.max(width, 4)}%` }} />
       </div>
       <span className="w-6 text-[14.5px] font-semibold text-app-text text-right shrink-0">{Math.round(day.high_f)}°</span>
     </div>

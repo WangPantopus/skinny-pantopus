@@ -48,7 +48,9 @@ struct DeepLinkHandoffView: View {
     private var resolving: some View {
         VStack(spacing: Spacing.s4) {
             Spacer(minLength: 0)
+            // Decorative here — the interstitial's own copy announces the wait.
             PantopusMark(size: 52)
+                .accessibilityHidden(true)
             HStack(spacing: Spacing.s3) {
                 Shimmer(width: 38, height: 38, cornerRadius: Radii.md)
                 VStack(alignment: .leading, spacing: 7) {
@@ -203,42 +205,6 @@ struct DeepLinkHandoffView: View {
 
     private func openWeb() {
         if let url = viewModel.webURL { openURL(url) }
-    }
-}
-
-/// The Pantopus brand mark — a rounded-square sky gradient tile carrying the
-/// concentric-ring glyph. Leads the resolving interstitial (design `PantopusMark`).
-private struct PantopusMark: View {
-    var size: CGFloat = 52
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Theme.Color.primary600, Theme.Color.primary700],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: size, height: size)
-            .overlay(glyph)
-            .shadow(color: Theme.Color.primary600.opacity(0.28), radius: 4, x: 0, y: 3)
-            .accessibilityHidden(true)
-    }
-
-    private var glyph: some View {
-        let g = size * 0.62
-        return ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.35), lineWidth: g * 0.05)
-                .frame(width: g * 0.85, height: g * 0.85)
-            Circle()
-                .stroke(Color.white, lineWidth: g * 0.07)
-                .frame(width: g * 0.5, height: g * 0.5)
-            Circle()
-                .fill(Color.white)
-                .frame(width: g * 0.16, height: g * 0.16)
-        }
     }
 }
 

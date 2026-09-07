@@ -290,9 +290,9 @@ public struct BusinessInvoicesView: View {
     @ViewBuilder private var actionToast: some View {
         switch viewModel.action {
         case let .succeeded(message):
-            toast(message, background: Theme.Color.success)
+            toast(message, background: Theme.Color.successSolid)
         case let .failed(message):
-            toast(message, background: Theme.Color.error)
+            toast(message, background: Theme.Color.errorSolid)
         case .idle, .working:
             EmptyView()
         }

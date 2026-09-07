@@ -63,8 +63,7 @@ struct SetNewPasswordView: View {
                 .padding(.bottom, Spacing.s10)
 
             VStack(spacing: Spacing.s2) {
-                Text("ALMOST DONE")
-                    .pantopusTextStyle(.overline)
+                Text("Almost done", style: .overline)
                     .foregroundStyle(Theme.Color.primary600)
                     .tracking(1.2)
                 Text("Set a new password")
@@ -243,20 +242,13 @@ struct SetNewPasswordView: View {
 
 // MARK: - Subcomponents
 
-/// Centered brand lockup — 48pt mark + wordmark. Mirrors the doorway
-/// screens' lockup (`LoginView.BrandLockup`) minus the tagline, per the
-/// set-password design's tighter header.
+/// Centered brand lockup — the canonical horizontal `PantopusLockup` at
+/// 36pt, identical to the doorway screens (`LoginView.BrandLockup`,
+/// `ContinueAsView.brand`) minus the tagline, per the set-password design's
+/// tighter header.
 private struct SetPasswordBrandLockup: View {
     var body: some View {
-        VStack(spacing: Spacing.s2) {
-            Icon(.home, size: 48, color: Theme.Color.primary600)
-                .accessibilityHidden(true)
-            Text("Pantopus")
-                .pantopusTextStyle(.h1)
-                .foregroundStyle(Theme.Color.appText)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Pantopus")
+        PantopusLockup(size: 36)
     }
 }
 

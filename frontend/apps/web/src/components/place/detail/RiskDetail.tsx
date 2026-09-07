@@ -284,7 +284,7 @@ function CheckRow({ item, checked, onToggle, isLast }: { item: PlanItem; checked
       aria-pressed={checked}
       className={`flex items-center gap-3 w-full text-left px-3.5 py-2.5 ${isLast ? '' : 'border-b border-app-border-subtle'} hover:bg-app-hover transition`}
     >
-      <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center transition ${checked ? 'bg-app-home border border-app-home' : 'bg-app-surface border-[1.75px] border-app-border-strong'}`}>
+      <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center transition ${checked ? 'bg-app-home-solid border border-app-home' : 'bg-app-surface border-[1.75px] border-app-border-strong'}`}>
         {checked ? <Check size={14} strokeWidth={3} className="text-white" /> : null}
       </span>
       <div className="flex-1 min-w-0">
@@ -313,7 +313,7 @@ function EmergencyPlan({ homeId }: { homeId: string | null }) {
           <span className={`text-[13px] font-semibold ${hydrated && doneCount === total ? 'text-app-success' : 'text-app-text-secondary'}`}>{hydrated ? `${doneCount} of ${total} ready` : `${total} steps`}</span>
         </div>
         <div className="h-[7px] rounded-full bg-app-surface-sunken overflow-hidden">
-          <div className="h-full rounded-full bg-app-home transition-[width] duration-200" style={{ width: `${hydrated ? pct : 0}%` }} />
+          <div className="h-full rounded-full bg-app-home-solid transition-[width] duration-200" style={{ width: `${hydrated ? pct : 0}%` }} />
         </div>
       </div>
       {PLAN_GROUPS.map((g, gi) => {

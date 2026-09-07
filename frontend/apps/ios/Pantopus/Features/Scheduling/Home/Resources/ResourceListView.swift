@@ -44,7 +44,7 @@ struct ResourceListView: View {
                 Button { viewModel.openEditor() } label: {
                     Icon(.plus, size: 22, color: Theme.Color.appTextInverse)
                         .frame(width: 52, height: 52)
-                        .background(Theme.Color.home)
+                        .background(Theme.Color.homeSolid)
                         .clipShape(Circle())
                         .shadow(color: Theme.Color.home.opacity(0.3), radius: 8, y: 4)
                 }

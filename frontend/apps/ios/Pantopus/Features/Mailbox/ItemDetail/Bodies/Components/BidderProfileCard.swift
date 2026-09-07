@@ -77,7 +77,7 @@ public struct BidderProfileCard: View {
                 )
             if bidder.isVerified {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 16, height: 16)
                     .overlay(Icon(.check, size: 9, color: Theme.Color.appTextInverse))
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
@@ -88,8 +88,7 @@ public struct BidderProfileCard: View {
     }
 
     private var identityChip: some View {
-        Text(bidder.identityLabel)
-            .pantopusTextStyle(.overline)
+        Text(bidder.identityLabel, style: .overline)
             .foregroundStyle(Theme.Color.personal)
             .padding(.horizontal, Spacing.s1)
             .padding(.vertical, 2)
@@ -134,8 +133,7 @@ public struct BidderProfileCard: View {
     private func statCell(label: String, @ViewBuilder value: () -> some View) -> some View {
         VStack(spacing: 2) {
             value()
-            Text(label)
-                .pantopusTextStyle(.overline)
+            Text(label, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .frame(maxWidth: .infinity)

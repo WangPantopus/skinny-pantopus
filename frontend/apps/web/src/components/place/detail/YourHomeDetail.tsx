@@ -106,7 +106,7 @@ function ValueCard({ data }: { data: PlaceYourHomeData }) {
       <ValueSparkline />
       <div className="flex gap-[18px] mt-3 pt-3 border-t border-app-border-subtle">
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-[3px] rounded-full bg-app-home" />
+          <span className="w-4 h-[3px] rounded-full bg-app-home-solid" />
           <span className="text-[12.5px] font-medium text-app-text-strong">Your home</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -264,12 +264,12 @@ function MortgageEquity({ homeId, homeValue }: { homeId: string | null; homeValu
       </div>
       <div className="text-[13px] text-app-text-muted mt-1 mb-3.5">{usd(equity)} of {usd(homeValue)} estimated value</div>
       <div className="flex h-3 rounded-full overflow-hidden bg-app-surface-sunken">
-        <div className="bg-app-home" style={{ width: `${equityPct}%` }} />
+        <div className="bg-app-home-solid" style={{ width: `${equityPct}%` }} />
         <div className="flex-1 bg-app-border-strong" />
       </div>
       <div className="flex justify-between mt-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded bg-app-home" />
+          <span className="w-2.5 h-2.5 rounded bg-app-home-solid" />
           <span className="text-[12.5px] font-medium text-app-text-strong">Equity</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -288,9 +288,9 @@ function MortgageEquity({ homeId, homeValue }: { homeId: string | null; homeValu
 // resolves without a transaction, because a household must be able to fix
 // its own record without being routed through the marketplace first.
 const SYSTEM_STATUS_TONE: Record<PlaceHomeSystem['status'], { bar: string; text: string }> = {
-  ok: { bar: 'bg-app-success', text: 'text-app-text-secondary' },
-  aging: { bar: 'bg-app-warning', text: 'text-app-warning' },
-  past_expected: { bar: 'bg-app-error', text: 'text-app-error' },
+  ok: { bar: 'bg-app-success-solid', text: 'text-app-text-secondary' },
+  aging: { bar: 'bg-app-warning-solid', text: 'text-app-warning' },
+  past_expected: { bar: 'bg-app-error-solid', text: 'text-app-error' },
   unknown: { bar: 'bg-app-border-strong', text: 'text-app-text-muted' },
 };
 
@@ -325,7 +325,7 @@ function SystemRow({ system, onReplaced, isLast }: {
         <button
           type="button"
           onClick={() => onReplaced(system.key)}
-          className="text-[12px] font-semibold text-primary-500 hover:underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 rounded"
+          className="text-[12px] font-semibold text-app-link hover:underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 rounded"
         >
           It was replaced
         </button>

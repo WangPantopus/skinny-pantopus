@@ -140,7 +140,7 @@ function PayFooter({
       <button
         type="button"
         onClick={onPay}
-        className="inline-flex h-7 items-center gap-1.5 rounded-full bg-app-info px-3.5 text-[11.5px] font-bold text-white"
+        className="inline-flex h-7 items-center gap-1.5 rounded-full bg-app-info-solid px-3.5 text-[11.5px] font-bold text-white"
       >
         Pay {label}
       </button>

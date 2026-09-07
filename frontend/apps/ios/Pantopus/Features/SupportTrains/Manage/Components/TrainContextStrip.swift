@@ -72,7 +72,7 @@ public struct TrainContextStrip: View {
         HStack(spacing: Spacing.s1) {
             if isActive {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 5, height: 5)
             }
             Text(isActive ? "ACTIVE" : "CLOSED")

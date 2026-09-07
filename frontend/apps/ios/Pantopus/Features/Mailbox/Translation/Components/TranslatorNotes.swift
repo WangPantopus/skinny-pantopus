@@ -126,7 +126,7 @@ struct TranslationConfirmBanner: View {
         HStack(spacing: Spacing.s3) {
             Icon(.check, size: 19, color: Theme.Color.appTextInverse)
                 .frame(width: badgeSize, height: badgeSize)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .pantopusShadow(.sm)
             VStack(alignment: .leading, spacing: 1) {
@@ -199,7 +199,7 @@ struct TranslationSenderCard: View {
             .overlay(alignment: .bottomTrailing) {
                 Icon(.check, size: 9, color: Theme.Color.appTextInverse)
                     .frame(width: checkSize, height: checkSize)
-                    .background(Theme.Color.success)
+                    .background(Theme.Color.successSolid)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
                     .offset(x: 3, y: 3)

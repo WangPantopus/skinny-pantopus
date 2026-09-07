@@ -94,7 +94,7 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
       )}
       <div className="space-y-1 px-4 py-3">
         {hostname && (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-500">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-app-link">
             {hostname}
           </p>
         )}
@@ -108,7 +108,7 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
             {preview.description}
           </p>
         )}
-        <div className="flex items-center gap-1 pt-1 text-xs font-semibold text-primary-500">
+        <div className="flex items-center gap-1 pt-1 text-xs font-semibold text-app-link">
           <span>Read article</span>
           <ExternalLink className="h-3 w-3" />
         </div>

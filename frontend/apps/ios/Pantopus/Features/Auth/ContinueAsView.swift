@@ -96,12 +96,13 @@ struct ContinueAsView: View {
 
     // MARK: - Pieces
 
+    /// Same horizontal lockup as the other two signed-out screens
+    /// (`LoginView.BrandLockup`, `SetNewPasswordView`), with this screen's
+    /// overline beneath it.
     private var brand: some View {
         VStack(spacing: Spacing.s2) {
-            Icon(.home, size: 40, color: Theme.Color.primary600)
-                .accessibilityHidden(true)
-            Text("WELCOME BACK")
-                .pantopusTextStyle(.overline)
+            PantopusLockup(size: 36)
+            Text("Welcome back", style: .overline)
                 .foregroundStyle(Theme.Color.primary600)
                 .tracking(1.2)
         }

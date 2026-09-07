@@ -9,6 +9,34 @@
 //  PNG. Catches accidental deletion of the visual contract until full
 //  SwiftUI `assertSnapshot` lands in a T6 follow-up.
 //
+//  HOW BASELINES ARE RECORDED — there is no `record = true` mode here, and
+//  nothing in this file renders a view: the assertions below are a file
+//  tripwire (exists / >8KB / PNG magic), never a pixel diff. A baseline is
+//  therefore recorded BY HAND and checked in:
+//
+//      xcrun simctl ui <udid> appearance light
+//      xcrun simctl launch <udid> app.pantopus.ios
+//      # …navigate to the screen…
+//      xcrun simctl io <udid> screenshot \
+//        PantopusTests/__Snapshots__/auth/<screen>-ios.png
+//
+//  Launch the signed-out stack with `SIMCTL_CHILD_UI_TESTS_SIGNED_OUT=1` so
+//  the app boots to the Place launch screen; "Sign in" opens the auth stack.
+//
+//  `login-ios.png`, `setpassword-ios.png`, `signup-ios.png` and
+//  `error-ios.png` are simulator captures of the shipped screens (iPhone 17,
+//  light, 1206×2622). The two still on the original designer frames —
+//  forgot / verify — carry a device bezel and a 9:41 status bar, and need
+//  re-recording once those screens are next touched.
+//
+//  `error-ios.png` is the one baseline with no tap path to it: nothing in
+//  the app pushes `AuthRoute.error`, so it was recorded by temporarily
+//  seeding `LoginView`'s `path` with `[.error(.networkError)]` and passing a
+//  non-nil `onRetry` — i.e. the composition `AuthErrorView`'s own
+//  `#Preview("Network error")` documents, with both CTAs visible. Reverted
+//  after the capture. Re-record it the same way, or capture it for real once
+//  a caller starts pushing the route.
+//
 
 import XCTest
 

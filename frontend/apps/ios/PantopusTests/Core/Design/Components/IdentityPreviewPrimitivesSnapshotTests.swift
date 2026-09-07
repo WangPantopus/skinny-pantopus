@@ -92,8 +92,7 @@ final class IdentityPreviewPrimitivesSnapshotTests: XCTestCase {
 
     private var sampleField: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("Contact")
-                .pantopusTextStyle(.overline)
+            Text("Contact", style: .overline)
                 .foregroundStyle(Theme.Color.appTextMuted)
             Text("(555) 010-2837")
                 .font(.system(size: 13.5, weight: .semibold))

@@ -85,7 +85,7 @@ struct GigQuestionsSection: View {
                     .foregroundStyle(Theme.Color.success)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Theme.Color.success.opacity(0.12))
+                    .background(Theme.Color.successSolid.opacity(0.12))
                     .clipShape(Capsule())
             }
             if open > 0 {
@@ -94,7 +94,7 @@ struct GigQuestionsSection: View {
                     .foregroundStyle(Theme.Color.warning)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Theme.Color.warning.opacity(0.12))
+                    .background(Theme.Color.warningSolid.opacity(0.12))
                     .clipShape(Capsule())
             }
         }
@@ -373,10 +373,10 @@ struct GigQuestionsSection: View {
         }
         .padding(Spacing.s2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Color.success.opacity(0.08))
+        .background(Theme.Color.successSolid.opacity(0.08))
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Theme.Color.success)
+                .fill(Theme.Color.successSolid)
                 .frame(width: 2)
         }
         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))

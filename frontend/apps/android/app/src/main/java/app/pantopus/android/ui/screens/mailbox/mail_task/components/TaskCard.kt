@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -21,6 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -296,17 +297,13 @@ fun MailTaskAccentCard(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
+                .drawBehind {
+                    // Keep the accent confined to the leading stripe so it
+                    // cannot paint over the readable card surface.
+                    if (accent != null) drawRect(accent, size = Size(4.dp.toPx(), size.height))
+                }
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl)),
     ) {
-        if (accent != null) {
-            Box(
-                modifier =
-                    Modifier
-                        .width(4.dp)
-                        .matchParentSize()
-                        .background(accent),
-            )
-        }
         Box(modifier = Modifier.padding(14.dp)) { content() }
     }
 }

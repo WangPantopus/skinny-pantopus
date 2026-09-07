@@ -175,7 +175,7 @@ private struct HostCard: View {
                 .shadow(color: Theme.Color.categoryParty.opacity(0.25), radius: 4, x: 0, y: 2)
             if party.host.isVerified {
                 ZStack {
-                    Circle().fill(Theme.Color.success).frame(width: 16, height: 16)
+                    Circle().fill(Theme.Color.successSolid).frame(width: 16, height: 16)
                     Icon(.check, size: 9, color: Theme.Color.appTextInverse)
                 }
                 .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))

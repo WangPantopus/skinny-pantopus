@@ -115,8 +115,7 @@ private struct EventSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             if let overline {
-                Text(overline)
-                    .pantopusTextStyle(.overline)
+                Text(overline, style: .overline)
                     .foregroundStyle(Theme.Color.homeDark)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -425,7 +424,7 @@ private struct SegmentButton: View {
                 .foregroundStyle(isSelected ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 30)
-                .background(isSelected ? Theme.Color.home : Color.clear)
+                .background(isSelected ? Theme.Color.homeSolid : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                 .contentShape(Rectangle())
         }

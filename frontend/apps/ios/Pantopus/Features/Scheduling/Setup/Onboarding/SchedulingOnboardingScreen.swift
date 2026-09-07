@@ -273,7 +273,7 @@ struct ComposedAvailabilityNote: View {
                 }
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, 3)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Capsule())
             }
             .padding(.horizontal, 10)
@@ -355,7 +355,7 @@ private struct OnboardingMemberList: View {
     /// Green verified/selected check badge on a selected member's avatar.
     private var memberVerifiedBadge: some View {
         ZStack {
-            Circle().fill(Theme.Color.success)
+            Circle().fill(Theme.Color.successSolid)
             Icon(.check, size: 9, strokeWidth: 3.5, color: Theme.Color.appTextInverse)
         }
         .frame(width: 16, height: 16)

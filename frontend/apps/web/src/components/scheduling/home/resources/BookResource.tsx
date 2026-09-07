@@ -273,7 +273,7 @@ export default function BookResource({
             className={`absolute inset-0 rounded-full ${isPending ? "bg-app-warning-bg" : "bg-app-home-bg"}`}
           />
           <div
-            className={`absolute inset-4 flex items-center justify-center rounded-full ${isPending ? "bg-app-warning" : "bg-app-home"} shadow-lg`}
+            className={`absolute inset-4 flex items-center justify-center rounded-full ${isPending ? "bg-app-warning-solid" : "bg-app-home-solid"} shadow-lg`}
           >
             {isPending ? (
               <Clock className="h-7 w-7 text-white" strokeWidth={2.6} />
@@ -438,7 +438,7 @@ export default function BookResource({
               const st = cellState(h);
               const cls =
                 st === "sel"
-                  ? "bg-app-home text-white border-transparent"
+                  ? "bg-app-home-solid text-white border-transparent"
                   : st === "selErr"
                     ? "bg-app-error-bg text-app-error border-app-error"
                     : st === "taken"

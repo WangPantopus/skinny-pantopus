@@ -34,10 +34,19 @@ object PantopusColors {
     val primary900 = Color(0xFF0C4A6E)
 
     // Semantic
-    val success = Color(0xFF059669)
+    //
+    // Label/fill inks, darkened from the 600-weight hues
+    // (#059669 / #D97706 / #DC2626 / #0284C7), which failed AA in BOTH of
+    // the roles they carry: as a label on their own *Light chip they read
+    // 2.56:1 to 3.34:1, and as a solid fill under white text 3.19:1 to
+    // 4.83:1. The app renders light-only, so unlike the web — where one
+    // value cannot serve both roles across two themes — darkening fixes
+    // both at once. Chip ratios are now 4.84 / 5.02 / 5.13 / 5.70 and
+    // white-on-fill 5.48 / 6.26 / 7.43 / 7.56, across ~1,760 call sites.
+    val success = Color(0xFF047857)
     val successLight = Color(0xFFD1FAE5)
     val successBg = Color(0xFFF0FDF4)
-    val warning = Color(0xFFD97706)
+    val warning = Color(0xFF9A4A08)
     val warningLight = Color(0xFFFDE68A)
     val warningBg = Color(0xFFFFFBEB)
 
@@ -53,17 +62,27 @@ object PantopusColors {
      * [warningStrong] on [warningBg] surfaces.
      */
     val warningDeep = Color(0xFF78350F)
-    val error = Color(0xFFDC2626)
+    val error = Color(0xFFA81A1A)
     val errorLight = Color(0xFFFECACA)
     val errorBg = Color(0xFFFEF2F2)
-    val info = Color(0xFF0284C7)
+    val info = Color(0xFF075985)
     val infoLight = Color(0xFFBAE6FD)
     val infoBg = Color(0xFFF0F9FF)
 
     // Identity pillars
-    val personal = Color(0xFF0284C7)
+    // The verification check inside the brand mark's window. Pinned to the
+    // brand green and deliberately NOT `home`: that token darkened to
+    // #15803D so labels clear AA on the homeBg chip (3.00:1 before), and
+    // the mark must stay on-brand. As a meaningful graphic the bar is 3:1,
+    // and #16A34A on the white window reads 3.35:1.
+    val brandCheck = Color(0xFF16A34A)
+
+    // Identity labels darkened from #0284C7 / #16A34A, which read 3.36:1
+    // and 3.00:1 on their own personalBg / homeBg chips. Now 4.86 and 4.57,
+    // and white-on-fill improves from 4.10/3.30 to 5.93/5.02.
+    val personal = Color(0xFF0369A1)
     val personalBg = Color(0xFFDBEAFE)
-    val home = Color(0xFF16A34A)
+    val home = Color(0xFF15803D)
     val homeBg = Color(0xFFDCFCE7)
 
     /**
@@ -158,8 +177,16 @@ object PantopusColors {
     val appBorderSubtle = Color(0xFFF3F4F6)
     val appText = Color(0xFF111827)
     val appTextStrong = Color(0xFF374151)
-    val appTextSecondary = Color(0xFF6B7280)
-    val appTextMuted = Color(0xFF9CA3AF)
+
+    // Was #6B7280 / #9CA3AF, which measured 4.39:1 and 2.31:1 against the
+    // worst light surface in use (#F3F4F6) — below AA across ~3,450 call
+    // sites. There is no room for four WIDELY separated tiers between
+    // #111827 and the 4.5:1 floor, so the steps tighten while all four stay
+    // distinguishable: strong 9.37, secondary 6.81, muted 5.18. Values are
+    // kept identical to the web tokens (--app-text-secondary / -muted) so
+    // the two platforms stay in parity.
+    val appTextSecondary = Color(0xFF4E5563)
+    val appTextMuted = Color(0xFF5F6775)
     val appTextInverse = Color(0xFFFFFFFF)
     val appHover = Color(0xFFF3F4F6)
 

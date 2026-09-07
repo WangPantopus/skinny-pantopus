@@ -445,7 +445,7 @@ public struct TransactionalDetailShell: View {
             }
             if hero.priceCheckDisc {
                 ZStack {
-                    Circle().fill(Theme.Color.success).frame(width: 28, height: 28)
+                    Circle().fill(Theme.Color.successSolid).frame(width: 28, height: 28)
                     Icon(.check, size: 15, strokeWidth: 3, color: .white)
                 }
                 .accessibilityHidden(true)
@@ -1012,7 +1012,7 @@ public struct TransactionalDetailShell: View {
         switch tone {
         case .success:
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(icon, size: size * 0.5, strokeWidth: 2.6, color: .white)
             }
             .frame(width: size, height: size)

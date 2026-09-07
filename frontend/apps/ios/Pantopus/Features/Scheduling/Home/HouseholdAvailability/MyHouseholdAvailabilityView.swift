@@ -107,7 +107,7 @@ struct MyHouseholdAvailabilityView: View {
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .background(Theme.Color.home)
+                .background(Theme.Color.homeSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)

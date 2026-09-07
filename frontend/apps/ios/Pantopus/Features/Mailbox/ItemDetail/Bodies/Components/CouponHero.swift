@@ -220,8 +220,7 @@ private struct CodeCapsule: View {
     var body: some View {
         HStack(spacing: Spacing.s0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Code")
-                    .pantopusTextStyle(.overline)
+                Text("Code", style: .overline)
                     .foregroundStyle(isExpired ? Theme.Color.appTextMuted : Theme.Color.warning)
                 Text(code)
                     .font(.system(size: 16, weight: .heavy, design: .monospaced))
@@ -273,8 +272,7 @@ private struct TicketStub: View {
     var body: some View {
         VStack(spacing: Spacing.s2) {
             Icon(.tag, size: 22, color: isExpired ? Theme.Color.appTextMuted : Theme.Color.warning)
-            Text("Single\nuse")
-                .pantopusTextStyle(.overline)
+            Text("Single\nuse", style: .overline)
                 .foregroundStyle(isExpired ? Theme.Color.appTextMuted : Theme.Color.warning)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -356,8 +354,7 @@ private struct BannerFact: View {
         HStack(spacing: Spacing.s2) {
             Icon(icon, size: 15, color: isExpired ? Theme.Color.error : Theme.Color.appTextSecondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .pantopusTextStyle(.overline)
+                Text(label, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Text(value)
                     .pantopusTextStyle(.caption)

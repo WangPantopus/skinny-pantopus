@@ -52,7 +52,7 @@ export default function PostAuthorHeader({
           </div>
         )}
         {verified ? (
-          <span className="absolute -right-0.5 -bottom-0.5 w-4 h-4 rounded-full bg-app-home border-2 border-app-surface flex items-center justify-center">
+          <span className="absolute -right-0.5 -bottom-0.5 w-4 h-4 rounded-full bg-app-home-solid border-2 border-app-surface flex items-center justify-center">
             <Check size={9} className="text-white" strokeWidth={4} />
           </span>
         ) : null}

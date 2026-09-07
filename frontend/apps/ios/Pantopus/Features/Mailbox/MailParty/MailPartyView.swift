@@ -417,8 +417,7 @@ struct MailPartyView: View {
     // MARK: - Shared chrome
 
     private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .pantopusTextStyle(.overline)
+        Text(text, style: .overline)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .accessibilityAddTraits(.isHeader)
     }

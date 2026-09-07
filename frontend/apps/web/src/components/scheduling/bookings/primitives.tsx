@@ -238,8 +238,8 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
                   "flex h-[18px] w-[18px] items-center justify-center rounded-full border-2",
                   s.done
                     ? s.tone === "error"
-                      ? "border-transparent bg-app-error"
-                      : "border-transparent bg-app-success"
+                      ? "border-transparent bg-app-error-solid"
+                      : "border-transparent bg-app-success-solid"
                     : "border-dashed border-app-border-strong bg-app-surface",
                 )}
               >
@@ -399,7 +399,7 @@ export function SegmentedTabs({
           >
             {o.label}
             {o.badge != null && o.badge > 0 && (
-              <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-app-warning px-1 text-[10px] font-bold text-white">
+              <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-app-warning-solid px-1 text-[10px] font-bold text-white">
                 {o.badge}
               </span>
             )}

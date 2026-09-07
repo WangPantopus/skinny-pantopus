@@ -156,7 +156,7 @@ struct JustMovedCard: View {
     private var retired: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Theme.Color.home)
+                Circle().fill(Theme.Color.homeSolid)
                 Icon(.check, size: 16, strokeWidth: 2.75, color: .white)
             }
             .frame(width: 32, height: 32)
@@ -214,7 +214,7 @@ struct JustMovedCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.Color.home)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.Color.homeSolid)
                     Icon(.truck, size: 22, strokeWidth: 2, color: .white)
                 }
                 .frame(width: 42, height: 42)
@@ -234,7 +234,7 @@ struct JustMovedCard: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.Color.appText.opacity(0.15))
-                        Capsule().fill(Theme.Color.home)
+                        Capsule().fill(Theme.Color.homeSolid)
                             .frame(width: geo.size.width * CGFloat(doneCount) / CGFloat(Self.steps.count))
                     }
                 }
@@ -261,7 +261,7 @@ struct JustMovedCard: View {
                 store.setDone(done)
             } label: {
                 ZStack {
-                    Circle().fill(checked ? Theme.Color.home : Theme.Color.appSurface)
+                    Circle().fill(checked ? Theme.Color.homeSolid : Theme.Color.appSurface)
                     Circle().strokeBorder(checked ? Theme.Color.home : Theme.Color.appBorder, lineWidth: 2)
                     if checked {
                         Icon(.check, size: 14, strokeWidth: 3, color: .white)

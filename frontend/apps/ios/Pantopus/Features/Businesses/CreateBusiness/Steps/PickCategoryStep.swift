@@ -49,8 +49,7 @@ struct BusinessIdentityChip: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.building2, size: 11, color: Theme.Color.business)
-            Text("Business · new")
-                .pantopusTextStyle(.overline)
+            Text("Business · new", style: .overline)
                 .foregroundStyle(Theme.Color.business)
         }
         .padding(.horizontal, Spacing.s3)
@@ -173,8 +172,7 @@ private struct WhatYouGetStrip: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s1) {
                 Icon(.sparkles, size: 11, color: Theme.Color.businessDark)
-                Text("What you'll get with \(category.label.lowercased())")
-                    .pantopusTextStyle(.overline)
+                Text("What you'll get with \(category.label.lowercased())", style: .overline)
                     .foregroundStyle(Theme.Color.businessDark)
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {

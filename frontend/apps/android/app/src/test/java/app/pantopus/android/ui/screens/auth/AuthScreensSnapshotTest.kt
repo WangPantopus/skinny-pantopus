@@ -16,7 +16,9 @@ import java.io.File
  * until real Paparazzi tests for the auth surfaces land.
  *
  * To regenerate the baselines:
- *   `cd /tmp/auth-screenshots && node render.mjs`
+ *   login / signup / error   `node tools/auth-screenshots/render.mjs`
+ *   forgot / setpassword / verify
+ *                            `node tools/t5-screenshots/auth-p5.mjs`
  */
 class AuthScreensSnapshotTest {
     private val baselineDir = File("src/test/snapshots/auth")

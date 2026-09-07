@@ -241,8 +241,7 @@ private struct DetailsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Details")
-                .pantopusTextStyle(.overline)
+            Text("Details", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             Text(text)

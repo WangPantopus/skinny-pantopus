@@ -225,7 +225,7 @@ public struct MembershipDetailView: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 32, height: 32)
                     .overlay {
                         Icon(.alertTriangle, size: 17, strokeWidth: 2.3, color: Theme.Color.appTextInverse)
@@ -252,7 +252,7 @@ public struct MembershipDetailView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background(Theme.Color.error)
+                    .background(Theme.Color.errorSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
                 .buttonStyle(.plain)

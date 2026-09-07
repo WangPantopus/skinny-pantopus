@@ -223,7 +223,7 @@ public struct BusinessPageBlocksView: View {
             }
             if viewModel.hasChanges {
                 Circle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 6, height: 6)
                 Text("Unsaved")
                     .pantopusTextStyle(.caption)

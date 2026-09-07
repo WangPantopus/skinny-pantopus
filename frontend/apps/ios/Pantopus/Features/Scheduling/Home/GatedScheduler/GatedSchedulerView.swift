@@ -295,7 +295,7 @@ private struct AssignmentRow: View {
                 .foregroundStyle(filled ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
         }
         .frame(maxWidth: .infinity, minHeight: 34)
-        .background(filled ? Theme.Color.home : Theme.Color.appSurface)
+        .background(filled ? Theme.Color.homeSolid : Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

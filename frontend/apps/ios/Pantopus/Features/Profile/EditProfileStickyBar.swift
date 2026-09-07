@@ -23,7 +23,7 @@ struct EditProfileFieldLabel: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             if dirty {
                 Circle()
-                    .fill(Theme.Color.warning)
+                    .fill(Theme.Color.warningSolid)
                     .frame(width: 6, height: 6)
                     .padding(.leading, Spacing.s1)
                     .accessibilityHidden(true)
@@ -88,7 +88,7 @@ struct EditProfileStickyBar: View {
     private var dirtyPill: some View {
         HStack(spacing: Spacing.s1) {
             Circle()
-                .fill(Theme.Color.warning)
+                .fill(Theme.Color.warningSolid)
                 .frame(width: 6, height: 6)
             Text("\(dirtyCount) unsaved")
                 .font(Theme.Font.role(.caption))

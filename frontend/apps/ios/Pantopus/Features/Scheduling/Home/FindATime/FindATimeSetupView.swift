@@ -189,7 +189,7 @@ struct FindATimeSetupView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextStrong)
                 HStack(spacing: Spacing.s1) {
-                    Circle().fill(Theme.Color.business).frame(width: 8, height: 8)
+                    Circle().fill(Theme.Color.businessSolid).frame(width: 8, height: 8)
                     Text("Family")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.Color.homeDark)
@@ -240,7 +240,7 @@ struct FindATimeSetupView: View {
                 MemberAvatarBadge(member: row.member, size: 32)
                 if row.requirement == .required {
                     Circle()
-                        .fill(Theme.Color.home)
+                        .fill(Theme.Color.homeSolid)
                         .frame(width: 15, height: 15)
                         .overlay { Icon(.check, size: 8, strokeWidth: 4, color: Theme.Color.appTextInverse) }
                         .overlay { Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2) }

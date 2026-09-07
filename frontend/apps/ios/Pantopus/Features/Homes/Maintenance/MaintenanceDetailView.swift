@@ -395,8 +395,7 @@ private struct NotesBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("NOTES")
-                .pantopusTextStyle(.overline)
+            Text("Notes", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             Text(notes)
@@ -420,8 +419,7 @@ private struct PhotoGrid: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("PHOTOS")
-                .pantopusTextStyle(.overline)
+            Text("Photos", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             LazyVGrid(columns: [
@@ -466,8 +464,7 @@ private struct ReceiptBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("RECEIPT")
-                .pantopusTextStyle(.overline)
+            Text("Receipt", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             HStack(spacing: Spacing.s3) {

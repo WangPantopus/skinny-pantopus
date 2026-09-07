@@ -205,7 +205,7 @@ export default function ShareLink({
           onClick={handleCopy}
           className={clsx(
             "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold text-white transition-colors",
-            copied ? "bg-app-success" : "bg-primary-600 hover:bg-primary-700",
+            copied ? "bg-app-success-solid" : "bg-primary-600 hover:bg-primary-700",
           )}
         >
           {copied ? (

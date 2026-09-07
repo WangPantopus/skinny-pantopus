@@ -232,7 +232,7 @@ public struct UnboxingView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             })
             .buttonStyle(.plain)

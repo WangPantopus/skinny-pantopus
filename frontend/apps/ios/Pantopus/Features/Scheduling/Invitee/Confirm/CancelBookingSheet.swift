@@ -98,7 +98,7 @@ struct CancelBookingSheet: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Theme.Color.error)
+                    .background(Theme.Color.errorSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)

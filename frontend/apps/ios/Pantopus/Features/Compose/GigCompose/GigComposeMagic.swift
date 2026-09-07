@@ -441,7 +441,7 @@ private struct MagicDescribeCard: View {
         } else if viewModel.form.detectedArchetype != nil {
             HStack(spacing: Spacing.s1) {
                 Circle()
-                    .fill(Theme.Color.success)
+                    .fill(Theme.Color.successSolid)
                     .frame(width: 6, height: 6)
                     .overlay(
                         Circle()
@@ -575,7 +575,7 @@ private struct RecordingIndicator: View {
         Button(action: onStop) {
             HStack(spacing: Spacing.s1) {
                 Circle()
-                    .fill(Theme.Color.error)
+                    .fill(Theme.Color.errorSolid)
                     .frame(width: 8, height: 8)
                     .opacity(pulsing ? 0.35 : 1)
                     .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulsing)

@@ -122,7 +122,7 @@ struct MarkNoShowDialog: View {
 
     private func checkbox(_ checked: Bool) -> some View {
         RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
-            .fill(checked ? Theme.Color.error : Theme.Color.appSurface)
+            .fill(checked ? Theme.Color.errorSolid : Theme.Color.appSurface)
             .frame(width: 21, height: 21)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)

@@ -80,7 +80,7 @@ public struct BusinessPageBlockPreview: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.s5)
-        .background(Theme.Color.business)
+        .background(Theme.Color.businessSolid)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
     }
 

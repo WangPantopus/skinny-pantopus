@@ -99,7 +99,7 @@ extension PaymentsSetupView {
     private var returnedBanner: some View {
         HStack(spacing: Spacing.s3) {
             ZStack {
-                Circle().fill(Theme.Color.success)
+                Circle().fill(Theme.Color.successSolid)
                 Icon(.check, size: 18, strokeWidth: 3, color: Theme.Color.appTextInverse)
             }
             .frame(width: 34, height: 34)

@@ -61,6 +61,7 @@ struct AuthErrorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Color.appSurface)
+        .navigationBarHidden(true)
         .accessibilityIdentifier("authErrorScreen")
     }
 }

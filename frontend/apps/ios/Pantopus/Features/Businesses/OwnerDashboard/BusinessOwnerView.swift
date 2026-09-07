@@ -871,7 +871,7 @@ struct OwnerDock: View {
 
             Button { onEditPage() } label: {
                 dockLabel(icon: .edit2, title: "Edit page", tint: Theme.Color.appTextInverse, bold: true)
-                    .background(Theme.Color.business)
+                    .background(Theme.Color.businessSolid)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)

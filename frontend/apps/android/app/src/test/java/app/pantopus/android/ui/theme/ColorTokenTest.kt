@@ -8,6 +8,12 @@ import org.junit.Test
 /**
  * Verify every PantopusColors entry resolves to the exact ARGB value from
  * the design-system token inventory.
+ *
+ * The semantic, identity and neutral inks were darkened deliberately: at
+ * their previous 600-weight values they failed WCAG AA both as labels on
+ * their own Light and Bg chips (2.56:1 to 3.36:1) and as fills under white
+ * text (3.19:1 to 4.83:1). The app renders light-only, so darkening fixes
+ * both roles at once. Values are kept identical to the web tokens.
  */
 class ColorTokenTest {
     @Test fun primary_scale() {
@@ -24,24 +30,27 @@ class ColorTokenTest {
     }
 
     @Test fun semantic() {
-        assertHex(0xFF059669, PantopusColors.success)
+        assertHex(0xFF047857, PantopusColors.success)
         assertHex(0xFFD1FAE5, PantopusColors.successLight)
         assertHex(0xFFF0FDF4, PantopusColors.successBg)
-        assertHex(0xFFD97706, PantopusColors.warning)
+        assertHex(0xFF9A4A08, PantopusColors.warning)
         assertHex(0xFFFDE68A, PantopusColors.warningLight)
         assertHex(0xFFFFFBEB, PantopusColors.warningBg)
-        assertHex(0xFFDC2626, PantopusColors.error)
+        assertHex(0xFFA81A1A, PantopusColors.error)
         assertHex(0xFFFECACA, PantopusColors.errorLight)
         assertHex(0xFFFEF2F2, PantopusColors.errorBg)
-        assertHex(0xFF0284C7, PantopusColors.info)
+        assertHex(0xFF075985, PantopusColors.info)
         assertHex(0xFFBAE6FD, PantopusColors.infoLight)
         assertHex(0xFFF0F9FF, PantopusColors.infoBg)
     }
 
     @Test fun identity() {
-        assertHex(0xFF0284C7, PantopusColors.personal)
+        // brandCheck keeps the original #16A34A: the mark must not follow
+        // `home` when that token darkens for text contrast.
+        assertHex(0xFF16A34A, PantopusColors.brandCheck)
+        assertHex(0xFF0369A1, PantopusColors.personal)
         assertHex(0xFFDBEAFE, PantopusColors.personalBg)
-        assertHex(0xFF16A34A, PantopusColors.home)
+        assertHex(0xFF15803D, PantopusColors.home)
         assertHex(0xFFDCFCE7, PantopusColors.homeBg)
         assertHex(0xFF7C3AED, PantopusColors.business)
         assertHex(0xFFF3E8FF, PantopusColors.businessBg)
@@ -65,8 +74,8 @@ class ColorTokenTest {
         assertHex(0xFFF3F4F6, PantopusColors.appBorderSubtle)
         assertHex(0xFF111827, PantopusColors.appText)
         assertHex(0xFF374151, PantopusColors.appTextStrong)
-        assertHex(0xFF6B7280, PantopusColors.appTextSecondary)
-        assertHex(0xFF9CA3AF, PantopusColors.appTextMuted)
+        assertHex(0xFF4E5563, PantopusColors.appTextSecondary)
+        assertHex(0xFF5F6775, PantopusColors.appTextMuted)
         assertHex(0xFFFFFFFF, PantopusColors.appTextInverse)
         assertHex(0xFFF3F4F6, PantopusColors.appHover)
     }

@@ -380,7 +380,7 @@ struct GigActiveTaskPanel: View {
                 VStack(spacing: Spacing.s1) {
                     ZStack {
                         Circle()
-                            .fill(reached ? Theme.Color.success : Theme.Color.appSurfaceSunken)
+                            .fill(reached ? Theme.Color.successSolid : Theme.Color.appSurfaceSunken)
                             .frame(width: 18, height: 18)
                         if reached {
                             Icon(.check, size: 9, strokeWidth: 3, color: Theme.Color.appTextInverse)
@@ -1580,7 +1580,7 @@ struct GigRunningLateSheet: View {
                             .foregroundStyle(selected ? Theme.Color.appTextInverse : Theme.Color.appText)
                             .frame(maxWidth: .infinity)
                             .frame(height: 40)
-                            .background(selected ? Theme.Color.warning : Theme.Color.appSurfaceSunken)
+                            .background(selected ? Theme.Color.warningSolid : Theme.Color.appSurfaceSunken)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
                     .buttonStyle(.plain)

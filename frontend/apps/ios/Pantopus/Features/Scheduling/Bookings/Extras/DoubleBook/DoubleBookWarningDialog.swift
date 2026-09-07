@@ -130,7 +130,7 @@ struct DoubleBookWarningDialog: View {
 
     private func memberConflictPill(_ member: String) -> some View {
         HStack(spacing: Spacing.s2) {
-            Circle().fill(Theme.Color.home).frame(width: 8, height: 8)
+            Circle().fill(Theme.Color.homeSolid).frame(width: 8, height: 8)
             Text("Conflicts with \(member)'s availability")
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.homeDark)

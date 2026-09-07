@@ -259,8 +259,7 @@ struct PillarFieldGroup<Content: View>: View {
         if let isExpanded, let onToggle {
             Button(action: onToggle) {
                 HStack {
-                    Text(text.uppercased())
-                        .pantopusTextStyle(.overline)
+                    Text(text, style: .overline)
                         .foregroundStyle(accent)
                     Spacer()
                     Icon(isExpanded ? .chevronUp : .chevronDown, size: 16, color: Theme.Color.appTextMuted)
@@ -270,8 +269,7 @@ struct PillarFieldGroup<Content: View>: View {
             .buttonStyle(.plain)
             .accessibilityAddTraits(.isHeader)
         } else {
-            Text(text.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(text, style: .overline)
                 .foregroundStyle(accent)
                 .accessibilityAddTraits(.isHeader)
         }

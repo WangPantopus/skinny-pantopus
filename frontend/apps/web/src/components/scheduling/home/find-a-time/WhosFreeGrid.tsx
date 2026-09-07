@@ -44,7 +44,7 @@ function Cell({
           "bg-app-home-bg transition hover:ring-2 hover:ring-app-home",
         )}
       >
-        <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full bg-app-home" />
+        <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full bg-app-home-solid" />
       </button>
     );
   }

@@ -635,8 +635,7 @@ private struct DiscoverMarketplaceRailCard: View {
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                         .fill(DiscoverHubMapKind.item.softColor)
                     Icon(item.icon, size: 32, strokeWidth: 1.7, color: DiscoverHubMapKind.item.color)
-                    Text("Item")
-                        .pantopusTextStyle(.overline)
+                    Text("Item", style: .overline)
                         .foregroundStyle(DiscoverHubMapKind.item.color)
                         .padding(.horizontal, Spacing.s2)
                         .padding(.vertical, 2)
@@ -691,8 +690,7 @@ private struct DiscoverPostRailCard: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 HStack(spacing: Spacing.s2) {
-                    Text(item.intent)
-                        .pantopusTextStyle(.overline)
+                    Text(item.intent, style: .overline)
                         .foregroundStyle(intentColor)
                         .padding(.horizontal, Spacing.s2)
                         .padding(.vertical, 2)
@@ -807,8 +805,7 @@ private struct DiscoverHubEmptyBody: View {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     ForEach(DiscoverHubSampleData.emptySkeletonRailTitles, id: \.self) { title in
                         VStack(alignment: .leading, spacing: Spacing.s1) {
-                            Text(title)
-                                .pantopusTextStyle(.overline)
+                            Text(title, style: .overline)
                                 .foregroundStyle(Theme.Color.appTextMuted)
                             HStack(spacing: Spacing.s2) {
                                 ForEach(0..<3, id: \.self) { _ in

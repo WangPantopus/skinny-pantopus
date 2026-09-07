@@ -70,7 +70,7 @@ function DistrictsCard({ districts }: { districts: PlaceCivicDistrict[] }) {
               return (
                 <div key={r.office_label + i} className={`flex items-center justify-between gap-3 py-2.5 ${last ? '' : 'border-b border-app-border-subtle'}`}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-app-home shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-app-home-solid shrink-0" />
                     <span className="text-[13.5px] text-app-text-secondary truncate">{r.office_label}</span>
                   </div>
                   <span className="text-[14px] font-semibold text-app-text text-right">{r.name}</span>
@@ -158,8 +158,8 @@ function ElectionBanner({ data }: { data: PlaceCivicElectionData }) {
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4">
       <div className="flex items-center gap-3">
         <span className="w-[46px] h-[46px] rounded-xl bg-app-info-bg border border-app-info-light flex flex-col items-center justify-center shrink-0 leading-none">
-          <span className="text-[9px] font-bold uppercase tracking-[0.04em] text-primary-700">{mon}</span>
-          <span className="text-[19px] font-extrabold text-primary-700 mt-0.5">{day}</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.04em] text-app-info">{mon}</span>
+          <span className="text-[19px] font-extrabold text-app-info mt-0.5">{day}</span>
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-bold text-app-text -tracking-[0.01em]">{data.name}</div>

@@ -46,8 +46,7 @@ public struct RequirementsCardBlock: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(title.uppercased())
-                .pantopusTextStyle(.overline)
+            Text(title, style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(rows) { row in

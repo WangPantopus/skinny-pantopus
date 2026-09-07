@@ -163,7 +163,7 @@ function CopyMenu({
                 className={clsx(
                   "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border",
                   on
-                    ? "border-app-personal bg-app-personal text-white"
+                    ? "border-app-personal bg-app-personal-solid text-white"
                     : "border-app-border-strong bg-app-surface",
                 )}
               >
@@ -186,7 +186,7 @@ function CopyMenu({
             onCopy([...checked]);
             onClose();
           }}
-          className="w-full rounded-lg bg-app-personal py-2 text-[12px] font-bold text-white disabled:opacity-50"
+          className="w-full rounded-lg bg-app-personal-solid py-2 text-[12px] font-bold text-white disabled:opacity-50"
         >
           Copy to {checked.size} {checked.size === 1 ? "day" : "days"}
         </button>

@@ -93,7 +93,7 @@ public struct GigBody: View {
     private var acceptedBanner: some View {
         HStack(spacing: Spacing.s2) {
             Circle()
-                .fill(Theme.Color.success)
+                .fill(Theme.Color.successSolid)
                 .frame(width: 20, height: 20)
                 .overlay(Icon(.check, size: 12, color: Theme.Color.appTextInverse))
             Text("Bid accepted · funds held in escrow")

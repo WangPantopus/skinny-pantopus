@@ -160,7 +160,7 @@ struct ChatListingOfferCardView: View {
                             .foregroundStyle(Theme.Color.appTextInverse)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(card.priceLabel == "FREE" ? Theme.Color.success : Theme.Color.appSurface)
+                            .background(card.priceLabel == "FREE" ? Theme.Color.successSolid : Theme.Color.appSurface)
                             .clipShape(Capsule())
                             .padding(8)
                     }

@@ -187,7 +187,7 @@ struct FindATimePrimaryButton: View {
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity, minHeight: 46)
-            .background(isEnabled ? Theme.Color.home : Theme.Color.appSurfaceSunken)
+            .background(isEnabled ? Theme.Color.homeSolid : Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

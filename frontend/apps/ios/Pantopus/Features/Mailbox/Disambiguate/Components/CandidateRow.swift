@@ -119,7 +119,7 @@ struct CandidateRow: View {
     private var verifiedBadge: some View {
         Icon(.check, size: 9, strokeWidth: 4, color: Theme.Color.appTextInverse)
             .frame(width: 15, height: 15)
-            .background(Theme.Color.home)
+            .background(Theme.Color.homeSolid)
             .clipShape(Circle())
             .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
     }

@@ -17,7 +17,7 @@ export type Pillar = "personal" | "home" | "business";
 export const PRIMARY_BLUE = "#0284c7";
 export const PRIMARY_BLUE_CLS = {
   text: "text-app-info",
-  bg: "bg-app-info",
+  bg: "bg-app-info-solid",
   bgSoft: "bg-app-info-bg",
   border: "border-app-info",
   ring: "ring-app-info",
@@ -52,7 +52,7 @@ const MAP: Record<Pillar, PillarTokens> = {
   personal: {
     pillar: "personal",
     text: "text-app-personal",
-    bg: "bg-app-personal",
+    bg: "bg-app-personal-solid",
     bgSoft: "bg-app-personal-bg",
     border: "border-app-personal",
     ring: "ring-app-personal",
@@ -62,7 +62,7 @@ const MAP: Record<Pillar, PillarTokens> = {
   home: {
     pillar: "home",
     text: "text-app-home",
-    bg: "bg-app-home",
+    bg: "bg-app-home-solid",
     bgSoft: "bg-app-home-bg",
     border: "border-app-home",
     ring: "ring-app-home",
@@ -72,7 +72,7 @@ const MAP: Record<Pillar, PillarTokens> = {
   business: {
     pillar: "business",
     text: "text-app-business",
-    bg: "bg-app-business",
+    bg: "bg-app-business-solid",
     bgSoft: "bg-app-business-bg",
     border: "border-app-business",
     ring: "ring-app-business",

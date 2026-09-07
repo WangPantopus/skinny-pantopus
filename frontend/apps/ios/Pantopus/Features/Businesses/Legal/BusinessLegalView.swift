@@ -338,7 +338,7 @@ public struct BusinessLegalView: View {
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextInverse)
                 .frame(maxWidth: .infinity, minHeight: 40)
-                .background(Theme.Color.business)
+                .background(Theme.Color.businessSolid)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -498,9 +498,9 @@ public struct BusinessLegalView: View {
     @ViewBuilder private var actionToast: some View {
         switch viewModel.action {
         case let .succeeded(message):
-            toast(message, background: Theme.Color.success)
+            toast(message, background: Theme.Color.successSolid)
         case let .failed(message):
-            toast(message, background: Theme.Color.error)
+            toast(message, background: Theme.Color.errorSolid)
         default:
             EmptyView()
         }

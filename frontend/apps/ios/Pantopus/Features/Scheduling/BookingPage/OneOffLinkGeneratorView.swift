@@ -527,7 +527,7 @@ private struct OneOffResultHero: View {
         HStack(spacing: Spacing.s3) {
             Icon(.check, size: 20, strokeWidth: 3, color: Theme.Color.appTextInverse)
                 .frame(width: 40, height: 40)
-                .background(Theme.Color.success)
+                .background(Theme.Color.successSolid)
                 .clipShape(Circle())
                 .overlay(
                     Circle().stroke(Theme.Color.success.opacity(0.12), lineWidth: 5)
@@ -572,7 +572,7 @@ private struct OneOffResultURL: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
-                .background(copied ? Theme.Color.success : Theme.Color.primary600)
+                .background(copied ? Theme.Color.successSolid : Theme.Color.primary600)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

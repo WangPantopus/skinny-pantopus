@@ -648,7 +648,7 @@ private struct ReviewSummaryCard: View {
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Theme.Color.appBorder)
                                 Capsule()
-                                    .fill(Theme.Color.warning)
+                                    .fill(Theme.Color.warningSolid)
                                     .frame(width: geo.size.width * fraction(star))
                             }
                         }

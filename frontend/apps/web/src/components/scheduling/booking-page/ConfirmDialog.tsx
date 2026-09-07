@@ -74,7 +74,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-app-error px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-app-error-solid px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
           >
             {busy && (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />

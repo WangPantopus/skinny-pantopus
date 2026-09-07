@@ -116,7 +116,7 @@ public struct CommunityMailView: View {
                         }
                         .padding(.horizontal, Spacing.s3)
                         .padding(.vertical, 6)
-                        .background(active ? Theme.Color.business : Theme.Color.appSurfaceSunken)
+                        .background(active ? Theme.Color.businessSolid : Theme.Color.appSurfaceSunken)
                         .clipShape(Capsule())
                     })
                     .buttonStyle(.plain)

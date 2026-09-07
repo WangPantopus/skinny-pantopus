@@ -66,7 +66,7 @@ struct MailboxItemDetailView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .padding(.horizontal, Spacing.s4)
                     .padding(.vertical, Spacing.s2)
-                    .background(Theme.Color.error.opacity(0.95))
+                    .background(Theme.Color.errorSolid.opacity(0.95))
                     .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
                     .padding(.bottom, 100)
                     .task {
@@ -316,7 +316,7 @@ private struct ErrorLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            Rectangle().fill(Theme.Color.error).frame(height: 4)
+            Rectangle().fill(Theme.Color.errorSolid).frame(height: 4)
             ContentDetailTopBar(title: nil, onBack: onBack, action: nil)
             EmptyState(
                 icon: .alertCircle,

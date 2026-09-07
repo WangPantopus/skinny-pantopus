@@ -307,7 +307,7 @@ export default function ApproveDeclineSheet({
               type="button"
               disabled={submitting}
               onClick={decline}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-error text-sm font-bold text-white transition disabled:opacity-70"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-app-error-solid text-sm font-bold text-white transition disabled:opacity-70"
             >
               {submitting ? (
                 <Spinner />

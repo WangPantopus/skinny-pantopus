@@ -75,9 +75,9 @@ export function TextButton({ children, onClick, arrow = true, type = 'button', c
 export type StatusDotTone = 'success' | 'warning' | 'error' | 'neutral';
 
 const DOT_TONE: Record<StatusDotTone, string> = {
-  success: 'bg-app-success',
-  warning: 'bg-app-warning',
-  error: 'bg-app-error',
+  success: 'bg-app-success-solid',
+  warning: 'bg-app-warning-solid',
+  error: 'bg-app-error-solid',
   neutral: 'bg-app-text-muted',
 };
 
@@ -149,7 +149,7 @@ export function PlaceAvatar({ initials = 'RC', status = 'verified', size = 40, l
       </span>
       {status === 'verified' ? (
         <span
-          className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-full bg-app-home border-2 border-app-surface"
+          className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-full bg-app-home-solid border-2 border-app-surface"
           style={{ width: badge, height: badge }}
         >
           <Check size={Math.round(size * 0.24)} strokeWidth={3.25} className="text-white" />
@@ -157,7 +157,7 @@ export function PlaceAvatar({ initials = 'RC', status = 'verified', size = 40, l
       ) : null}
       {status === 'claimed' ? (
         <span
-          className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-full bg-app-warning border-2 border-app-surface"
+          className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-full bg-app-warning-solid border-2 border-app-surface"
           style={{ width: badge, height: badge }}
         >
           <Home size={Math.round(size * 0.22)} strokeWidth={2.75} className="text-white" />

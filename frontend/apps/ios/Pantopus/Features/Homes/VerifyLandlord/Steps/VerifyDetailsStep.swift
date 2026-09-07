@@ -275,8 +275,7 @@ private struct VerifyLandlordSectionHeader: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(overline.uppercased())
-                    .pantopusTextStyle(.overline)
+                Text(overline, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Text(title)
                     .pantopusTextStyle(.body)
@@ -300,8 +299,7 @@ private struct BusinessBadge: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.building2, size: 9, color: Theme.Color.business)
-            Text("BUSINESS")
-                .pantopusTextStyle(.overline)
+            Text("Business", style: .overline)
                 .foregroundStyle(Theme.Color.business)
         }
         .padding(.horizontal, 7)
@@ -547,8 +545,7 @@ private struct PDFThumb: View {
             .fill(Theme.Color.errorBg)
             .frame(width: 36, height: 44)
             .overlay {
-                Text("PDF")
-                    .pantopusTextStyle(.overline)
+                Text("PDF", style: .overline)
                     .foregroundStyle(Theme.Color.error)
                     .tracking(0.4)
             }
@@ -609,7 +606,7 @@ private struct VerifyErrorSummaryBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             Circle()
-                .fill(Theme.Color.error)
+                .fill(Theme.Color.errorSolid)
                 .frame(width: 22, height: 22)
                 .overlay {
                     Icon(.alertCircle, size: 13, strokeWidth: 2.4, color: Theme.Color.appTextInverse)

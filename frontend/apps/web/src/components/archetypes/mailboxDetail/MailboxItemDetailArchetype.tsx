@@ -266,7 +266,7 @@ export default function MailboxItemDetailArchetype({
               const last = i === timeline.length - 1;
               const dotCls =
                 s.state === 'done'
-                  ? 'bg-app-success'
+                  ? 'bg-app-success-solid'
                   : s.state === 'current'
                   ? 'bg-primary-600'
                   : 'bg-app-border-strong';

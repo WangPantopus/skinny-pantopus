@@ -62,7 +62,7 @@ function CheckoutInner({
         type="button"
         onClick={pay}
         disabled={!stripe || submitting}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-personal-solid px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
       >
         <CreditCard className="h-4 w-4" aria-hidden />
         {submitting ? "Confirming…" : payLabel}

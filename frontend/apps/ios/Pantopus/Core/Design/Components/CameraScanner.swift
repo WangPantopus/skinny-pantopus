@@ -463,8 +463,7 @@ public struct CapturedFilmstrip: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack {
-                Text(title)
-                    .pantopusTextStyle(.overline)
+                Text(title, style: .overline)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 Text("\(shots.count) shots")

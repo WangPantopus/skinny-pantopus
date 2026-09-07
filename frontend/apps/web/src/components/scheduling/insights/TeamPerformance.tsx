@@ -207,7 +207,7 @@ export default function TeamPerformance() {
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-app-surface-sunken">
                   <div
-                    className="h-full rounded-full bg-app-business"
+                    className="h-full rounded-full bg-app-business-solid"
                     style={{
                       width: `${Math.max(pct, h.total > 0 ? 4 : 0)}%`,
                     }}

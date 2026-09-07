@@ -109,7 +109,7 @@ function QuickReplyBar({
             type="button"
             disabled={replying}
             onClick={() => onReply(r.id)}
-            className="text-sm font-semibold text-primary-600 bg-app-info-bg border border-app-info-light rounded-full px-3.5 py-2 whitespace-nowrap hover:bg-app-info-light/40 disabled:opacity-60 transition-colors"
+            className="text-sm font-semibold text-app-info bg-app-info-bg border border-app-info-light rounded-full px-3.5 py-2 whitespace-nowrap hover:bg-app-info-light/40 disabled:opacity-60 transition-colors"
           >
             {r.body}
           </button>

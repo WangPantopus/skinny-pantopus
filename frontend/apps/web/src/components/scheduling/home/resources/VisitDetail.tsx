@@ -73,7 +73,7 @@ function StatusTimeline({ current }: { current: number }) {
                 <div
                   className={`flex h-[22px] w-[22px] items-center justify-center rounded-full ${
                     done || active
-                      ? "bg-app-home text-white"
+                      ? "bg-app-home-solid text-white"
                       : "bg-app-surface-sunken text-app-text-muted"
                   } ${active ? "ring-2 ring-app-home ring-offset-2 ring-offset-app-surface" : ""}`}
                 >
@@ -97,7 +97,7 @@ function StatusTimeline({ current }: { current: number }) {
               </div>
               {i < STEPS.length - 1 && (
                 <div
-                  className={`mt-2.5 h-0.5 flex-1 rounded ${i < current ? "bg-app-home" : "bg-app-border"}`}
+                  className={`mt-2.5 h-0.5 flex-1 rounded ${i < current ? "bg-app-home-solid" : "bg-app-border"}`}
                 />
               )}
             </div>
@@ -371,7 +371,7 @@ export default function VisitDetail({
               type="button"
               onClick={saveReschedule}
               disabled={savingResched || !startLocal}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home text-[12.5px] font-bold text-white disabled:opacity-50"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-app-home-solid text-[12.5px] font-bold text-white disabled:opacity-50"
             >
               {savingResched ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

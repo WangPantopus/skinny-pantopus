@@ -52,9 +52,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.screens.auth.AuthTrustFooter
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
+import app.pantopus.android.ui.theme.MarkVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusLockup
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
@@ -223,22 +225,8 @@ private fun FormBody(
 
 @Composable
 private fun BrandLockup() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        PantopusIconImage(
-            icon = PantopusIcon.Home,
-            contentDescription = null,
-            size = 48.dp,
-            tint = PantopusColors.primary600,
-        )
-        Text(
-            text = "Pantopus",
-            style = PantopusTextStyle.h1,
-            color = PantopusColors.appText,
-        )
-    }
+    // Same lockup the login hero wears, so the reset flow reads as one brand.
+    PantopusLockup(size = 36.dp, variant = MarkVariant.Light)
 }
 
 @Composable

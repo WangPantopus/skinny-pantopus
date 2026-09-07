@@ -172,7 +172,7 @@ export default function HouseholdAvailabilityForm({
           </div>
           <button
             onClick={() => router.push("/app/scheduling/availability")}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-app-home text-sm font-bold text-white"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-app-home-solid text-sm font-bold text-white"
           >
             <ExternalLink className="h-4 w-4" /> Set it up in Personal
           </button>
@@ -320,7 +320,7 @@ function ToggleRow({
           disabled={disabled}
           onClick={onToggle}
           className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:cursor-not-allowed ${
-            on && !disabled ? "bg-app-home" : "bg-app-border-strong"
+            on && !disabled ? "bg-app-home-solid" : "bg-app-border-strong"
           } ${last ? "" : ""}`}
         >
           <span

@@ -21,7 +21,7 @@ import { tzShort } from "./format";
 
 function DefaultPill() {
   return (
-    <span className="inline-flex items-center rounded-full bg-app-personal px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+    <span className="inline-flex items-center rounded-full bg-app-personal-solid px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
       Default
     </span>
   );

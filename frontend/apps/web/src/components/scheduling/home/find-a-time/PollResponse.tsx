@@ -16,9 +16,9 @@ import { instantLabel } from "./format";
 type VoteState = Record<string, PollVoteValue>;
 
 const VOTE_OPTS: Array<{ k: PollVoteValue; label: string; on: string }> = [
-  { k: "yes", label: "Works", on: "bg-app-home text-white" },
-  { k: "maybe", label: "If needed", on: "bg-app-warning text-white" },
-  { k: "no", label: "Can't", on: "bg-app-error text-white" },
+  { k: "yes", label: "Works", on: "bg-app-home-solid text-white" },
+  { k: "maybe", label: "If needed", on: "bg-app-warning-solid text-white" },
+  { k: "no", label: "Can't", on: "bg-app-error-solid text-white" },
 ];
 
 function VoteControl({
@@ -244,7 +244,7 @@ export default function PollResponse({
         type="button"
         onClick={submit}
         disabled={!canSubmit}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-home px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-app-home-solid px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
       >
         <Send className="h-4 w-4" aria-hidden />
         {submitting ? "Submitting…" : "Submit response"}

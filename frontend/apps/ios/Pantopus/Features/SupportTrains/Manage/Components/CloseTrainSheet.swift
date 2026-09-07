@@ -198,7 +198,7 @@ public struct CloseTrainSheet: View {
                     .frame(width: confirmWidth, height: 46)
                     .background(
                         RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                            .fill(Theme.Color.error)
+                            .fill(Theme.Color.errorSolid)
                     )
                 }
                 .buttonStyle(.plain)

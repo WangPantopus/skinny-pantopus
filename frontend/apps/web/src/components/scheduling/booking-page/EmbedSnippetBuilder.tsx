@@ -341,7 +341,7 @@ export default function EmbedSnippetBuilder() {
               className={clsx(
                 "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white",
                 copied
-                  ? "bg-app-success"
+                  ? "bg-app-success-solid"
                   : "bg-primary-600 hover:bg-primary-700",
               )}
             >

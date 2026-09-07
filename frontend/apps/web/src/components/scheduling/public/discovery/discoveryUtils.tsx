@@ -16,16 +16,16 @@ import type { Pillar } from "@/components/scheduling";
 
 /** Pillar → banner gradient (light tint → saturated accent), token-based. */
 export const PILLAR_BANNER: Record<Pillar, string> = {
-  personal: "bg-gradient-to-br from-app-personal-bg to-app-personal",
-  home: "bg-gradient-to-br from-app-home-bg to-app-home",
-  business: "bg-gradient-to-br from-app-business-bg to-app-business",
+  personal: "bg-gradient-to-br from-app-personal-bg to-app-personal-solid",
+  home: "bg-gradient-to-br from-app-home-bg to-app-home-solid",
+  business: "bg-gradient-to-br from-app-business-bg to-app-business-solid",
 };
 
 /** Pillar → solid avatar background, token-based. */
 export const PILLAR_AVATAR: Record<Pillar, string> = {
-  personal: "bg-app-personal",
-  home: "bg-app-home",
-  business: "bg-app-business",
+  personal: "bg-app-personal-solid",
+  home: "bg-app-home-solid",
+  business: "bg-app-business-solid",
 };
 
 export function locationIcon(mode: EventTypeLocationMode): LucideIcon {

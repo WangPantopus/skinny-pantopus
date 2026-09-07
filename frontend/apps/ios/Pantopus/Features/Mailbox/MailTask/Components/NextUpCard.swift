@@ -66,7 +66,7 @@ struct NextUpCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .leading) {
-            Rectangle().fill(Theme.Color.home).frame(width: 4)
+            Rectangle().fill(Theme.Color.homeSolid).frame(width: 4)
         }
         .overlay(
             RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)

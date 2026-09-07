@@ -117,7 +117,7 @@ struct RoundRobinAssignmentSheet: View {
                 ZStack {
                     Circle().stroke(selected ? Color.clear : Theme.Color.appBorderStrong, lineWidth: 1.5)
                     if selected {
-                        Circle().fill(Theme.Color.business)
+                        Circle().fill(Theme.Color.businessSolid)
                         Icon(.check, size: 12, strokeWidth: 3.2, color: Theme.Color.appTextInverse)
                     }
                 }

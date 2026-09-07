@@ -183,7 +183,7 @@ function LeftRailStepper({
         const current = idx === currentStep;
         const upcoming = idx > currentStep;
         const stateCls = done
-          ? 'bg-app-success text-white'
+          ? 'bg-app-success-solid text-white'
           : current
           ? 'bg-primary-600 text-white'
           : 'bg-app-surface-sunken text-app-text-muted';
@@ -321,7 +321,7 @@ function WizardBlock({ block }: { block: WizardContentBlock }) {
       const Icon = block.icon ?? Check;
       return (
         <div className="flex flex-col items-center text-center py-8">
-          <div className="w-[88px] h-[88px] rounded-full bg-app-success text-white flex items-center justify-center shadow-lg mb-5">
+          <div className="w-[88px] h-[88px] rounded-full bg-app-success-solid text-white flex items-center justify-center shadow-lg mb-5">
             <Icon size={44} />
           </div>
           <h2 className="text-2xl font-bold text-app-text -tracking-[0.015em] mb-3">{block.headline}</h2>
@@ -339,7 +339,7 @@ function WizardBlock({ block }: { block: WizardContentBlock }) {
               const last = i === block.steps.length - 1;
               const dotCls =
                 s.state === 'done'
-                  ? 'bg-app-success'
+                  ? 'bg-app-success-solid'
                   : s.state === 'current'
                   ? 'bg-primary-600'
                   : 'bg-app-border-strong';

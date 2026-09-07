@@ -199,7 +199,7 @@ public struct BusinessCatalogView: View {
                     .foregroundStyle(Theme.Color.appTextInverse)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Theme.Color.business)
+            .background(Theme.Color.businessSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)
