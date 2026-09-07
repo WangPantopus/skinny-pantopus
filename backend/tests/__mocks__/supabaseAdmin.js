@@ -297,6 +297,7 @@ function createQueryBuilder(tableName) {
   // though in production it turns "no such home" into a 500.
   let isStrictSingle = false;
   let isUpsert = false;
+  let ignoreUpsertDuplicates = false;
   let upsertOnConflict = null;
   let isCountMode = false;
   let isHeadMode = false;
@@ -509,6 +510,7 @@ function createQueryBuilder(tableName) {
     upsert(payload, options) {
       insertPayload = Array.isArray(payload) ? payload : [payload];
       isUpsert = true;
+      ignoreUpsertDuplicates = options?.ignoreDuplicates === true;
       // Capture the onConflict key so the executor can do conflict
       // resolution by composite columns (e.g. 'persona_id,user_id'),
       // matching real Postgres ON CONFLICT semantics.
@@ -609,6 +611,9 @@ function createQueryBuilder(tableName) {
               idx = table.findIndex((r) => r.id === row.id);
             }
             if (idx >= 0) {
+              // PostgREST resolution=ignore-duplicates maps to DO NOTHING;
+              // no existing columns or timestamps change, and no row returns.
+              if (ignoreUpsertDuplicates) continue;
               table[idx] = { ...table[idx], ...row };
               inserted.push(table[idx]);
               continue;
