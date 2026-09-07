@@ -2,6 +2,9 @@
 
 ## Current readiness
 
+For the latest infrastructure inventory and explicit native staging build
+commands, see [staging notification setup](staging-notification-setup.md).
+
 The master integration commit `4172e37fcacead6cb3cea1e6c1398604b7f356fe`
 passed the complete [PR #4 CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34142598999),
 including the web type-check gate, backend/privacy tests, Android build and

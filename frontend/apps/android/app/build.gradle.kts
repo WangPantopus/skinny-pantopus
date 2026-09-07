@@ -18,8 +18,13 @@ plugins {
     id("org.gradle.test-retry") version "1.6.2"
 }
 
-// Load local env from .env (not committed). Falls back to sensible defaults.
-val envFile = rootProject.file(".env")
+// Select staging without overwriting the developer's .env. An explicitly
+// selected missing file must fail instead of silently building for localhost.
+val selectedEnvFile = providers.gradleProperty("pantopus.envFile").orNull ?: System.getenv("PANTOPUS_ENV_FILE")
+val envFile = rootProject.file(selectedEnvFile ?: ".env")
+if (selectedEnvFile != null && !envFile.isFile) {
+    throw GradleException("Selected Pantopus env file does not exist; supply -Ppantopus.envFile with a readable file.")
+}
 val localEnv =
     Properties().apply {
         if (envFile.exists()) {

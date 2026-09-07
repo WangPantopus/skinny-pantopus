@@ -9,5 +9,6 @@ PANTOPUS_SOCKET_URL = https:/$()/staging.api.pantopus.app
 STRIPE_PUBLISHABLE_KEY = pk_test_REPLACE_ME
 APS_ENVIRONMENT = production
 
-// CI/local overlay — staging test key + staging Sentry DSN.
-#include? "Secrets.xcconfig"
+// Generated only by `make bootstrap-staging` from .env.staging. Never load
+// the local Debug/Release overlay: it may point at a developer's LAN API.
+#include? "Secrets.Staging.xcconfig"

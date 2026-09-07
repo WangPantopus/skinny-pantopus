@@ -3,7 +3,7 @@
 // Per-configuration files (Pantopus.Debug/Staging/Release.xcconfig) #include
 // this first, then set the environment-specific API base URL, Stripe
 // publishable key, and APNs environment, and finally overlay
-// Config/Secrets.xcconfig.
+// Config/Secrets.xcconfig (Debug/Release) or Secrets.Staging.xcconfig (Staging).
 //
 // Config/Secrets.xcconfig is gitignored and materialized from the local .env
 // (`make env-to-xcconfig`) or from CI secrets in the release pipeline (see
