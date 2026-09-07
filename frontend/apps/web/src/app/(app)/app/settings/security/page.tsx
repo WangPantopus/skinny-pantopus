@@ -1,5 +1,7 @@
 'use client';
 
+import { clearPendingPlaces } from '@/components/place/pendingPlace';
+
 /**
  * /app/settings/security — "Where you're logged in".
  *
@@ -222,6 +224,7 @@ export default function SecuritySettingsPage() {
     } catch {
       /* cookies are already invalid server-side */
     }
+    clearPendingPlaces();
     clearAuthToken();
     toast.success('Signed out everywhere');
     router.push('/login');

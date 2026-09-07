@@ -27,6 +27,9 @@ final class PlaceLaunchViewModel {
         didSet { scheduleAutocomplete() }
     }
 
+    private var selected: GeoSuggestion?
+    var errorMessage: String?
+
     private let api: APIClient
     private var autocompleteTask: Task<Void, Never>?
     private var lookupTask: Task<Void, Never>?
@@ -66,17 +69,19 @@ final class PlaceLaunchViewModel {
 
     func select(_ suggestion: GeoSuggestion) {
         query = suggestion.label
+        autocompleteTask?.cancel()
         suggestions = []
-        PlacePendingStore.stash(suggestion)
+        selected = suggestion
         loadPreview(address: suggestion.label)
     }
 
     func loadPreview(address: String) {
         lookupTask?.cancel()
+        errorMessage = nil
         isLoadingPreview = true
         lookupTask = Task { [weak self] in
             guard let self else { return }
-            defer { self.isLoadingPreview = false }
+            defer { if !Task.isCancelled { self.isLoadingPreview = false } }
             do {
                 let preview: PlacePreview = try await api.request(PlaceEndpoints.publicPreview(address: address))
                 guard !Task.isCancelled else { return }
@@ -86,59 +91,26 @@ final class PlaceLaunchViewModel {
                     step = .preview(preview)
                 }
             } catch {
-                // Stay on the hero; the field keeps the typed address.
+                guard !Task.isCancelled else { return }
+                errorMessage = "We couldn’t load this address. Please try again."
             }
         }
     }
 
-    func backToHero() {
-        step = .hero
-    }
-}
-
-// MARK: - Pending place stash (the funnel → post-signup bridge)
-
-/// The signed-out preview is non-persistent (the §4 anti-leak rule), so
-/// when a stranger hits the wall we stash the resolved address locally
-/// and save it once they land back in the authed app. UserDefaults keyed,
-/// consumed once. Mirrors the web sessionStorage `pendingPlace`.
-enum PlacePendingStore {
-    private static let key = "pantopus_pending_place"
-
-    struct Pending: Codable {
-        let street: String
-        let city: String
-        let state: String
-        let zip: String
-        let latitude: Double?
-        let longitude: Double?
-    }
-
-    /// Build the structured pending place from a geo suggestion. The
-    /// `secondary_text` is "City, ST, ZIP" (Mapbox); `primary_text` is
-    /// the street line.
-    static func stash(_ suggestion: GeoSuggestion) {
-        let parts = (suggestion.secondaryText ?? "")
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        let pending = Pending(
-            street: suggestion.primaryText,
-            city: parts.first ?? "",
-            state: parts.count > 1 ? parts[1] : "",
-            zip: parts.count > 2 ? parts[2] : "",
-            latitude: suggestion.latitude,
-            longitude: suggestion.longitude
-        )
-        if let data = try? JSONEncoder().encode(pending) {
-            UserDefaults.standard.set(data, forKey: key)
+    func prepareForAuth() -> Bool {
+        guard let selected, selected.label == query,
+              PlacePendingStore.stash(selected) else {
+            step = .hero
+            errorMessage = "Choose an address suggestion to keep this preview through sign-in."
+            return false
         }
+        return true
     }
 
-    /// Read and CONSUME the pending place (one-shot).
-    static func take() -> Pending? {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let pending = try? JSONDecoder().decode(Pending.self, from: data) else { return nil }
-        UserDefaults.standard.removeObject(forKey: key)
-        return pending
+    func backToHero() {
+        lookupTask?.cancel()
+        isLoadingPreview = false
+        PlacePendingStore.clear()
+        step = .hero
     }
 }

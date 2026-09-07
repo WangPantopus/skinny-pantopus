@@ -271,7 +271,7 @@ describe('POST /resend-verification', () => {
     });
     expect(emailService.sendVerificationEmail).toHaveBeenCalledWith({
       toEmail: 'pending@example.com',
-      verifyLink: 'https://pantopus.com/verify-email?token_hash=pending-hashed-token&type=magiclink&email=pending%40example.com',
+      verifyLink: 'https://pantopus.com/verify-email?token_hash=pending-hashed-token&type=magiclink&email=pending%40example.com&redirectTo=%2Fapp%2Fplace',
       isResend: true,
       linkExpiresIn: '1 hour',
     });
@@ -299,7 +299,7 @@ describe('POST /forgot-password', () => {
     setAuthMocks({ adminGenerateLink });
 
     const req = mockReq({
-      body: { email: 'reset@example.com' },
+      body: { email: 'reset@example.com', redirectTo: '/app/feed/post/post-1' },
       path: '/forgot-password',
       originalUrl: '/api/users/forgot-password',
       headers: { origin: 'https://pantopus.com' },
@@ -318,7 +318,32 @@ describe('POST /forgot-password', () => {
     });
     expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith({
       toEmail: 'reset@example.com',
-      resetLink: 'https://pantopus.com/reset-password?token_hash=reset-hashed-token&type=recovery&email=reset%40example.com',
+      resetLink: 'https://pantopus.com/reset-password?token_hash=reset-hashed-token&type=recovery&email=reset%40example.com&redirectTo=%2Fapp%2Ffeed%2Fpost%2Fpost-1',
     });
+  });
+});
+
+describe('verification email arrival context', () => {
+  beforeEach(() => {
+    resetTables(); jest.clearAllMocks();
+    process.env.AUTH_REDIRECT_URL = 'https://pantopus.com';
+    setAuthMocks({ adminGenerateLink: jest.fn().mockResolvedValue({ data: { user: { id: 'arrival-user', email: 'arrival@example.com', email_confirmed_at: null }, properties: { hashed_token: 'arrival-token' } }, error: null }) });
+  });
+  test.each(['/app/place?preview=0123456789abcdef', '/app/feed/post/post-1?comment=reply', '/persona/garden'])('registration email carries %s', async (target) => {
+    const res = mockRes();
+    await registerHandler(mockReq({ body: { email: 'arrival@example.com', password: 'long-password-123', username: 'arrivaluser', redirectTo: target } }), res);
+    expect(res._status).toBe(201);
+    const url = new URL(emailService.sendVerificationEmail.mock.calls[0][0].verifyLink);
+    expect(url.pathname).toBe('/verify-email');
+    expect(url.searchParams.get('token_hash')).toBe('arrival-token');
+    expect(url.searchParams.get('redirectTo')).toBe(target);
+  });
+  test.each(['/persona/garden', 'https://evil.test'])('resend validates destination %s', async (target) => {
+    seedTable('User', [{ id: 'arrival-user', email: 'arrival@example.com', verified: false }]);
+    const res = mockRes();
+    await resendVerificationHandler(mockReq({ body: { email: 'arrival@example.com', redirectTo: target } }), res);
+    const url = new URL(emailService.sendVerificationEmail.mock.calls[0][0].verifyLink);
+    expect(url.origin).toBe('https://pantopus.com');
+    expect(url.searchParams.get('redirectTo')).toBe(target.startsWith('/persona/') ? target : '/app/place');
   });
 });

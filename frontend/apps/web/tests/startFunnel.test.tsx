@@ -100,6 +100,7 @@ async function selectAddressAndSubmit() {
 beforeEach(() => {
   jest.clearAllMocks();
   sessionStorage.clear();
+  localStorage.clear();
 });
 
 describe('StartFunnel — hero', () => {
@@ -150,14 +151,14 @@ describe('StartFunnel — T0 preview', () => {
     // …the privacy promise sits above the wall…
     expect(screen.getByText(/never a house number or unit/i)).toBeInTheDocument();
     // …and the wall is pinned underneath.
-    expect(screen.getByText(/this address has one page\. claim it, free\./i)).toBeInTheDocument();
+    expect(screen.getByText(/keep this address handy/i)).toBeInTheDocument();
 
     // The wall routes to register and stashes the pending place. (The
     // wall bar's button is last in the document.)
-    const ctas = screen.getAllByRole('button', { name: /^claim it$/i });
+    const ctas = screen.getAllByRole('button', { name: /^continue$/i });
     fireEvent.click(ctas[ctas.length - 1]);
     expect(push).toHaveBeenCalledWith(expect.stringContaining('/register'));
-    expect(sessionStorage.length).toBeGreaterThan(0);
+    expect(localStorage.length).toBeGreaterThan(0);
   });
 
   it('fires the preview, aha, and share beacons — with the card, never the address', async () => {
@@ -229,4 +230,12 @@ describe('AddressAutocomplete', () => {
     });
     expect(onClear).toHaveBeenCalled();
   });
+});
+
+it('routes address-free visitors to Beacon browsing', () => {
+  renderFunnel();
+  fireEvent.click(screen.getByRole('button', { name: /just here to follow someone or browse/i }));
+  const target = new URL(push.mock.calls.at(-1)![0], 'https://web.test');
+  expect(target.pathname).toBe('/register');
+  expect(target.searchParams.get('redirectTo')).toBe('/app/feed?surface=personas');
 });

@@ -50,6 +50,26 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun web_social_arrivals_survive_sign_in() {
+        val cases =
+            listOf(
+                "https://pantopus.app/app/feed?surface=personas" to DeepLinkRouter.Destination.Beacons,
+                "https://pantopus.app/app/feed?post=p1&surface=place" to DeepLinkRouter.Destination.Post("p1"),
+                "https://pantopus.app/persona/maria" to DeepLinkRouter.Destination.BeaconProfile("maria"),
+            )
+        cases.forEach { (url, expected) ->
+            signedIn = false
+            DeepLinkRouter.clearPending()
+            DeepLinkRouter.handle(url)
+            assertNull(DeepLinkRouter.pending.value)
+            val replay = requireNotNull(PendingDeepLinkStore.take())
+            signedIn = true
+            DeepLinkRouter.handle(replay)
+            assertEquals(expected, DeepLinkRouter.consume())
+        }
+    }
+
+    @Test
     fun feed_custom_scheme() {
         assertEquals(DeepLinkRouter.Destination.Feed, DeepLinkRouter.resolveString("pantopus://feed"))
     }

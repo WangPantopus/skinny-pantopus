@@ -357,6 +357,7 @@ public enum HubRoute: Hashable {
     /// BLOCK 2E — "Saved places". Reached from the Explore map header's
     /// "Saved" affordance.
     case savedPlaces
+    case placeArrival
     /// W3 — the Place Intelligence dashboard (address-led home
     /// intelligence). The Home tab auto-lands here when the user has a
     /// primary home; the switcher re-pushes it for another home.
@@ -476,6 +477,7 @@ public struct HubTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @Environment(RootTabModel.self) private var rootTabs
     @State private var path = RouteStack<HubRoute>()
+    @State private var navigationReady = false
     @State private var router = DeepLinkRouter.shared
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
@@ -641,13 +643,14 @@ public struct HubTabRoot: View {
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
-        .onAppear {
+        .task(id: rootTabs.selected) {
+            // Let the NavigationStack install its initial binding before
+            // pushing a cold-start destination; otherwise its empty-path
+            // write can erase an already-consumed link.
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            navigationReady = true
             consumeDeepLinkIfNeeded(pending: router.pending)
-        }
-        .task {
-            consumeDeepLinkIfNeeded(pending: router.pending)
-        }
-        .task {
             // W3 — land the Place tab on the Place dashboard when the user
             // has a primary home. One-shot at an empty stack so we never
             // fight the user's navigation or an inbound deep link; Hub
@@ -655,14 +658,18 @@ public struct HubTabRoot: View {
             // no-home fallback. Hub-mode only — the Mail tab's instance
             // roots at the mailbox and must not auto-land.
             guard mode == .hub else { return }
-            guard path.isEmpty, router.pending == nil, !didAutoLandPlace else { return }
-            // W6 — save the place a stranger looked up before signing up
-            // (one-shot), then land on it.
-            await Self.savePendingPlaceIfNeeded()
-            if let homeId = await Self.primaryHomeId() {
+            guard path.isEmpty, router.pending == nil, PendingDeepLinkStore.peek() == nil,
+                  rootTabs.selected == owningTab, !didAutoLandPlace else { return }
+            if PlacePendingStore.bind(to: currentUserId) != nil {
                 didAutoLandPlace = true
-                path.append(.placeDashboard(homeId: homeId))
+                path.append(.placeArrival)
+                return
             }
+            let homeId = await Self.primaryHomeId()
+            // A link or a tab change can arrive during the network request.
+            guard path.isEmpty, router.pending == nil, rootTabs.selected == owningTab else { return }
+            didAutoLandPlace = true
+            if let homeId { path.append(.placeDashboard(homeId: homeId)) }
         }
         .fullScreenCover(item: $modalRoute) { item in
             destination(for: item.route) { path.append($0) }
@@ -838,21 +845,16 @@ public struct HubTabRoot: View {
     /// Place- and Mail-tab instances consume only while their own tab is
     /// selected, so two mounted instances never race for one destination.
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        guard rootTabs.selected == owningTab else { return }
-        guard let pending else { return }
+        guard navigationReady, rootTabs.selected == owningTab else { return }
+        // An onChange callback can still carry a value consumed by the
+        // mount task in the same frame. Never push that stale value twice.
+        guard let pending, pending == router.pending,
+              Self.ownsDeepLink(pending, tab: owningTab) else { return }
         switch pending {
-        case .feed:
-            path.append(.pulseFeed)
-            _ = router.consume()
-        case let .post(id):
-            path.append(.pulsePost(postId: id))
-            _ = router.consume()
-        case let .gig(id):
-            path.append(.gigDetail(gigId: id))
-            _ = router.consume()
-        case let .listing(id):
-            path.append(.listingDetail(listingId: id))
-            _ = router.consume()
+        case .feed, .post, .gig, .listing:
+            // Nearby owns these links. The Place stack can observe a link
+            // before RootTabView switches tabs, and must leave it pending.
+            return
         case let .homeDetail(id), let .homeDashboard(id):
             path.append(.homeDashboard(homeId: id))
             _ = router.consume()
@@ -1014,6 +1016,22 @@ public struct HubTabRoot: View {
             _ = router.consume()
         default:
             break
+        }
+    }
+
+    /// Root tab selection and child observers can run in either order. Only
+    /// the destination's owning stack may consume it, even while another tab
+    /// is still selected during the hand-off.
+    static func ownsDeepLink(_ destination: DeepLinkRouter.Destination, tab: RootTab) -> Bool {
+        switch destination {
+        case .feed, .post, .gig, .listing, .hubToday, .conversation,
+             .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
+            false
+        case .vacationHold, .mailDay, .stamps, .mailTask,
+             .mailTranslation, .unboxing, .packageGig, .earn:
+            tab == .mail
+        default:
+            tab == .place
         }
     }
 
@@ -2749,6 +2767,16 @@ public struct HubTabRoot: View {
                 onBack: { pop() },
                 onOpenSaved: { Task { @MainActor in push(.savedPlaces) } }
             )
+        case .placeArrival:
+            PendingPlaceView(
+                viewModel: PendingPlaceViewModel(userId: currentUserId, currentUser: {
+                    if case let .signedIn(user) = auth.state { return user.id }
+                    return nil
+                }),
+                onDone: { pop() },
+                onSavedPlaces: { push(.savedPlaces) },
+                onSetUpHome: { push(.addHome) }
+            )
         case .savedPlaces:
             SavedPlacesView(
                 viewModel: SavedPlacesViewModel(
@@ -3063,23 +3091,6 @@ public struct HubTabRoot: View {
         case .componentGallery: ComponentGalleryView()
         #endif
         }
-    }
-
-    /// W6 — create the home a stranger looked up in the signed-out funnel
-    /// (stashed in `PlacePendingStore`) once they have an account. Best
-    /// effort: DPV validation may reject it; the resident can re-add it.
-    private static func savePendingPlaceIfNeeded() async {
-        guard let pending = PlacePendingStore.take(), !pending.street.isEmpty else { return }
-        let request = CreateHomeRequest(
-            address: pending.street,
-            city: pending.city,
-            state: pending.state,
-            zipCode: pending.zip,
-            latitude: pending.latitude,
-            longitude: pending.longitude,
-            homeType: "house"
-        )
-        _ = try? await APIClient.shared.request(HomesEndpoints.create(request)) as CreateHomeResponse
     }
 
     /// W3 — the primary home id used to auto-land the Home tab on Place.

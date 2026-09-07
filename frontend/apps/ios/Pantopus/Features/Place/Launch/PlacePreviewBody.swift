@@ -314,11 +314,14 @@ struct PlacePreviewBody: View {
 
     private var wall: some View {
         VStack(spacing: 10) {
-            Text("Create a free account to save this place and get daily updates")
+            Text("Keep this address handy. Choose whether to save it privately after sign-in.")
                 .font(.system(size: 14.5, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appText)
-            PrimaryButton(title: "Create account") { onCreateAccount() }
+            PrimaryButton(title: "Continue") { onCreateAccount() }
+                .accessibilityIdentifier("place.preview.continue")
+            Text("Your preview stays on this device for up to 24 hours while you sign in.")
+                .font(Theme.Font.caption).foregroundStyle(Theme.Color.appTextMuted)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)

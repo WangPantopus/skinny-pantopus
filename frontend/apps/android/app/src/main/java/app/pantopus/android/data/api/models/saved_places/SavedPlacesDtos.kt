@@ -29,6 +29,7 @@ data class SavedPlaceResponse(
 @JsonClass(generateAdapter = true)
 data class SavedPlaceDto(
     val id: String,
+    @Json(name = "user_id") val userId: String? = null,
     val label: String,
     /** `home | work | searched | saved`. */
     @Json(name = "place_type") val placeType: String = "saved",
@@ -58,6 +59,7 @@ data class SavePlaceBody(
     val state: String? = null,
     val geocodePlaceId: String? = null,
     val sourceId: String? = null,
+    val expectedUserId: String? = null,
 ) {
     companion object {
         /** Rebuild a save body from an existing row — used by the Undo path. */

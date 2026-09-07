@@ -14,11 +14,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import app.pantopus.android.ui.theme.PantopusIcon
 import org.junit.Rule
 import org.junit.Test
-
-private const val HUB_SCREEN_TAG = "hubScreen"
 
 /**
  * Bottom-bar tab switching with stub destinations.
@@ -30,7 +27,7 @@ class RootTabTest {
     @Test
     fun home_is_default_and_tabs_switch() {
         composeRule.setContent {
-            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Home) }
+            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Place) }
             Scaffold(
                 modifier = Modifier.testTag("rootScaffold"),
                 bottomBar = {
@@ -41,42 +38,17 @@ class RootTabTest {
                 },
             ) { padding ->
                 Box(Modifier.padding(padding)) {
-                    when (selected) {
-                        PantopusRoute.Home -> Box(Modifier.fillMaxSize().testTag(HUB_SCREEN_TAG))
-                        PantopusRoute.Pulse -> Box(Modifier.fillMaxSize().testTag("pulseFeed"))
-                        PantopusRoute.Tasks -> Box(Modifier.fillMaxSize().testTag("gigsFeed"))
-                        PantopusRoute.Marketplace -> Box(Modifier.fillMaxSize().testTag("marketplace"))
-                        PantopusRoute.Messages ->
-                            NotYetAvailableView(
-                                tabName = "Messages",
-                                icon = PantopusIcon.MessageCircle,
-                            )
-                    }
+                    Box(Modifier.fillMaxSize().testTag("landing.${selected.path}"))
                 }
             }
         }
 
-        // Default is Home.
-        composeRule.onNodeWithTag(HUB_SCREEN_TAG).assertIsDisplayed()
-
-        // Pulse tab renders the feed container.
-        composeRule.onNodeWithTag("tab.pulse").performClick()
-        composeRule.onNodeWithTag("pulseFeed").assertIsDisplayed()
-
-        // Tasks tab renders the gigs feed container.
-        composeRule.onNodeWithTag("tab.tasks").performClick()
-        composeRule.onNodeWithTag("gigsFeed").assertIsDisplayed()
-
-        // Marketplace tab renders its grid container.
-        composeRule.onNodeWithTag("tab.marketplace").performClick()
-        composeRule.onNodeWithTag("marketplace").assertIsDisplayed()
-
-        // Messages tab renders its empty-state heading.
-        composeRule.onNodeWithTag("tab.messages").performClick()
-        composeRule.onNodeWithTag("notYetAvailable").assertIsDisplayed()
-
-        // Back to Home.
+        composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
+        for (route in PantopusRoute.entries) {
+            composeRule.onNodeWithTag("tab.${route.path.substringAfterLast('/')}").performClick()
+            composeRule.onNodeWithTag("landing.${route.path}").assertIsDisplayed()
+        }
         composeRule.onNodeWithTag("tab.home").performClick()
-        composeRule.onNodeWithTag(HUB_SCREEN_TAG).assertIsDisplayed()
+        composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
     }
 }

@@ -42,7 +42,7 @@ const {
   smartyProvider,
 } = require('../services/addressValidation');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
-const { redactStreet, queryKnowsNumber, firstNameOnly } = require('../utils/addressRedaction');
+const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 
 function isPendingOwnershipClaimForReadPath(claim) {
@@ -2531,16 +2531,16 @@ router.get('/discover', verifyToken, async (req, res) => {
         const ownerName = owner
           ? owner.name || [owner.first_name, owner.last_name].filter(Boolean).join(' ') || owner.username
           : null;
-        const ownerUsername = owner?.username || null;
+        const member = memberSet.has(h.id) || h.owner_id === userId;
 
         const searchable = [
-          h.name,
+          member ? h.name : null,
           h.address,
           h.city,
           h.state,
           h.zipcode,
-          ownerName,
-          ownerUsername,
+          member ? ownerName : null,
+          member ? owner?.username : null,
         ]
           .filter(Boolean)
           .join(' ')
@@ -2562,12 +2562,12 @@ router.get('/discover', verifyToken, async (req, res) => {
 
         // Privacy promise: outsiders see the street, never the house number
         // or unit — unless they typed that number themselves (the join /
-        // claim flow), or already belong to / have claimed the home.
-        const reveal = memberSet.has(h.id) || claimMap.has(h.id) || queryKnowsNumber(tokens, h.address);
+        // claim flow), or already belong to the home. A claim alone is not access.
+        const reveal = member || queryKnowsNumber(tokens, h.address);
 
         return {
           id: h.id,
-          name: h.name || null,
+          name: member ? h.name || null : null,
           address: reveal ? h.address : redactStreet(h.address),
           address_redacted: !reveal,
           city: h.city,
@@ -2575,14 +2575,8 @@ router.get('/discover', verifyToken, async (req, res) => {
           zipcode: reveal ? h.zipcode : null,
           home_type: h.home_type || null,
           visibility: h.visibility,
-          owner: owner
-            ? {
-                id: owner.id,
-                username: owner.username,
-                name: reveal ? ownerName : firstNameOnly(ownerName),
-                profile_picture_url: owner.profile_picture_url || null,
-              }
-            : null,
+          // Knowing an address is not permission to link its resident's account.
+          owner: serializeOwnerForViewer(owner, { reveal: member }),
           is_member: memberSet.has(h.id),
           claim_status: claimMap.get(h.id) || null,
           _score: score,
@@ -2624,36 +2618,26 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Home not found' });
     }
 
-    // Public profile can be viewed by: members/owners, public_preview, creator
-    // (onboarding/claim UI), or a user who has actually filed a claim on this home.
-    //
-    // SEC-01: there used to be a fourth leg — a `verifiedOwnerProbe` that granted
-    // access whenever *the home* had a verified owner, regardless of who was
-    // asking. Since this response carries the full street address and the
-    // owner's real name and photo, that turned any home id into an
-    // address-to-identity lookup for any authenticated account, which is the
-    // exact disclosure the identity firewall exists to prevent. A user who wants
-    // to join a household files a claim first (POST /:id/claim); the pre-claim
-    // conflict signal is served by POST /api/homes/check-address, which returns
-    // no identity.
+    // Only current household access reveals private identity/address fields.
+    // A creator or active claimant may inspect a redacted preview while
+    // onboarding, but a claim itself is never a membership credential.
     const access = await checkHomePermission(homeId, userId);
-    const isCreator = Boolean(home.created_by_user_id && home.created_by_user_id === userId);
-    // `insider` = may see the exact address (member / creator / claimant).
-    // `canView` = may see the page at all (insiders + public_preview +
-    // the user-B join flow). Outsiders get the street, never the number.
-    let insider = access.hasAccess || isCreator;
-    let canView = insider || home.visibility === 'public_preview';
-    if (!insider) {
-      const [residencyClaim, ownershipClaim] = await Promise.all([
-        supabaseAdmin.from('HomeResidencyClaim').select('id').eq('home_id', homeId).eq('user_id', userId).limit(1).maybeSingle(),
-        supabaseAdmin.from('HomeOwnershipClaim').select('id').eq('home_id', homeId).eq('claimant_user_id', userId).limit(1).maybeSingle(),
+    if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
+    const isCreator = home.created_by_user_id === userId;
+    const reveal = access.hasAccess;
+    let canView = reveal || home.visibility === 'public_preview' || isCreator;
+    if (!canView) {
+      const [residencyClaims, ownershipClaims] = await Promise.all([
+        supabaseAdmin.from('HomeResidencyClaim').select('id, status').eq('home_id', homeId).eq('user_id', userId).eq('status', 'pending'),
+        supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id, expires_at').eq('home_id', homeId).eq('claimant_user_id', userId),
       ]);
-      if (residencyClaim.data || ownershipClaim.data) { insider = true; canView = true; }
+      if (residencyClaims.error || ownershipClaims.error) throw new Error('Could not check claim status');
+      canView = (residencyClaims.data || []).length > 0 || (ownershipClaims.data || []).some((claim) =>
+        isPendingOwnershipClaimForReadPath(claim) && (!claim.expires_at || new Date(claim.expires_at).getTime() > Date.now()));
     }
     if (!canView) {
       return res.status(403).json({ error: 'This home is not publicly discoverable' });
     }
-    const reveal = insider;
 
     const { data: verifiedOwnerRows } = await supabaseAdmin
       .from('HomeOwner')

@@ -3,6 +3,7 @@
  */
 export {
   readAuthRedirectQuery,
+  authPageHref,
   safeRedirectPath,
   extractApiError,
   extractFieldErrors,

@@ -5,11 +5,11 @@
 /**
  * Read post-login redirect from common query param names used across the app.
  */
-export function readAuthRedirectQuery(params: URLSearchParams): string | undefined {
+export function readAuthRedirectQuery(params: Pick<URLSearchParams, 'get'> | null | undefined): string | undefined {
   const raw =
-    params.get('redirectTo') ||
-    params.get('redirect') ||
-    params.get('returnUrl');
+    params?.get('redirectTo') ||
+    params?.get('redirect') ||
+    params?.get('returnUrl');
   return raw?.trim() || undefined;
 }
 
@@ -18,32 +18,31 @@ export function readAuthRedirectQuery(params: URLSearchParams): string | undefin
  */
 export function safeRedirectPath(redirectTo: string | null | undefined, fallback = '/app/hub'): string {
   if (!redirectTo) return fallback;
-
-  let decoded = redirectTo.trim();
+  let target = redirectTo.trim();
+  // URLSearchParams already decodes the outer query. Only decode a legacy
+  // encoded *whole* path here; decoding its query again corrupts nested URLs.
   try {
-    decoded = decodeURIComponent(decoded);
+    if (/^%2f/i.test(target)) target = decodeURIComponent(target);
+    if (/[\s\u0000-\u001f\u007f]/.test(target)) return fallback;
+    const boundary = target.search(/[?#]/);
+    const rawPath = boundary < 0 ? target : target.slice(0, boundary);
+    const suffix = boundary < 0 ? '' : target.slice(boundary);
+    const path = decodeURIComponent(rawPath);
+    if (/[\s\u0000-\u001f\u007f%\\]/.test(path) || path.includes('//') || path.includes('..')) return fallback;
+    const allowed = path.startsWith('/app/') ||
+      /^\/(?:invite|persona|posts)\/[a-zA-Z0-9_-]+$/.test(path) ||
+      /^\/@[a-zA-Z0-9_-]+$/.test(path);
+    return allowed ? path + suffix : fallback;
   } catch {
-    // use trimmed raw
-  }
-
-  const q = decoded.indexOf('?');
-  const path = q === -1 ? decoded : decoded.slice(0, q);
-  const search = q === -1 ? '' : decoded.slice(q);
-
-  if (path.includes('//') || path.includes('..') || path.includes('@') || path.includes('\\')) {
     return fallback;
   }
+}
 
-  if (path.startsWith('/app/')) {
-    return path + search;
-  }
-
-  // Invite flows: /invite/:token or /invite/seat?token=…
-  if (/^\/invite\/[a-zA-Z0-9_-]+$/.test(path)) {
-    return path + search;
-  }
-
-  return fallback;
+/** Carry only a validated destination across auth screens. */
+export function authPageHref(page: string, redirectTo?: string | null, extras: Record<string, string> = {}): string {
+  const params = new URLSearchParams(extras);
+  params.set('redirectTo', safeRedirectPath(redirectTo, '/app/place'));
+  return `${page}?${params.toString()}`;
 }
 
 export function extractApiError(err: unknown, fallback = 'Something went wrong. Please try again.'): string {
@@ -96,12 +95,11 @@ export function oauthRedirectParamForWeb(
   raw: string | undefined,
   origin: string | undefined
 ): string | undefined {
-  if (!raw || !origin) return undefined;
+  if (!origin) return undefined;
   try {
-    const abs = new URL(raw, origin).href;
-    const o = new URL(origin).origin;
-    if (new URL(abs).origin !== o) return undefined;
-    return abs;
+    const callback = new URL('/auth/callback', origin);
+    callback.searchParams.set('redirectTo', safeRedirectPath(raw, '/app/place'));
+    return callback.href;
   } catch {
     return undefined;
   }
