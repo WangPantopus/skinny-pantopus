@@ -21,52 +21,15 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import org.junit.Rule
 import org.junit.Test
 
-/**
- * P8.3 — End-to-end navigation smoke test (Android instrumented).
- *
- * Coverage strategy
- * ─────────────────
- * The Android side exposes 4 [PantopusRoute] bottom-bar destinations plus
- * 117 typed `ChildRoutes` constants inside `RootTabScreen.kt`. Hosting
- * the real `RootTabScreen` from a Compose UI test would require Hilt
- * test infrastructure (a `HiltAndroidRule`, `@HiltAndroidTest` activity)
- * that the codebase does not yet ship — driving every Hilt-injected
- * view-model through `connectedAndroidTest` is out of scope for a smoke
- * pass. The existing screen-level tests
- * (`AddHomeWizardScreenTest`, `LoginScreenTest`, `RootTabTest`,
- * `ComponentsInteractionTest`) follow the same pattern: bypass Hilt by
- * hosting a target composable directly via `composeRule.setContent`.
- *
- * This file extends that pattern across every bottom-bar route:
- *  - drives the real [PantopusBottomBar] with the same `tab.<path>`
- *    testTags the app ships;
- *  - swaps in stub destinations that render the testTag the real
- *    landing screen carries (`hubScreen`, `nearbyMap`, `chatList`,
- *    `meScreen`);
- *  - verifies tab selection swaps the visible destination's testTag.
- *
- * For in-tab navigation correctness the canonical reference is the
- * static analysis in `docs/nav-graph-closure.md` (every `ChildRoutes`
- * constant audited against its `navigate(...)` call sites + the
- * `composable(route)` block in `RootTabScreen.kt`). The route-by-route
- * pass/fail summary is in `docs/nav-smoke-results.md`.
- */
+/** Exercises the real four-tab bottom bar with Hilt-free stub destinations. */
 class NavigationSmokeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /**
-     * Render the five bottom-bar tabs with stub destinations whose
-     * testTags match the real landing screens. Verifies:
-     *  - all five tab affordances render with `tab.home` / `tab.pulse` /
-     *    `tab.tasks` / `tab.marketplace` / `tab.messages`;
-     *  - selecting a tab swaps the visible destination's testTag;
-     *  - selecting Home returns to the Home destination.
-     */
     @Test
     fun bottomBarTabs_swapDestinationsCorrectly() {
         composeRule.setContent {
-            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Home) }
+            var selected by remember { mutableStateOf<PantopusRoute>(PantopusRoute.Place) }
             Scaffold(
                 modifier = Modifier.testTag("rootScaffold"),
                 bottomBar = {
@@ -77,51 +40,16 @@ class NavigationSmokeTest {
                 },
             ) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding)) {
-                    when (selected) {
-                        PantopusRoute.Home ->
-                            Box(Modifier.fillMaxSize().testTag(LANDING_TAG_HOME))
-                        PantopusRoute.Pulse ->
-                            Box(Modifier.fillMaxSize().testTag(LANDING_TAG_PULSE))
-                        PantopusRoute.Tasks ->
-                            Box(Modifier.fillMaxSize().testTag(LANDING_TAG_TASKS))
-                        PantopusRoute.Marketplace ->
-                            Box(Modifier.fillMaxSize().testTag(LANDING_TAG_MARKETPLACE))
-                        PantopusRoute.Messages ->
-                            Box(Modifier.fillMaxSize().testTag(LANDING_TAG_MESSAGES))
-                    }
+                    Box(Modifier.fillMaxSize().testTag("smoke.${selected.path}"))
                 }
             }
         }
 
-        // 1. All five tabs render with the expected testTags.
-        composeRule.onNodeWithTag("tab.home").assertIsDisplayed()
-        composeRule.onNodeWithTag("tab.pulse").assertIsDisplayed()
-        composeRule.onNodeWithTag("tab.tasks").assertIsDisplayed()
-        composeRule.onNodeWithTag("tab.marketplace").assertIsDisplayed()
-        composeRule.onNodeWithTag("tab.messages").assertIsDisplayed()
-
-        // 2. Default landing is Home.
-        composeRule.onNodeWithTag(LANDING_TAG_HOME).assertIsDisplayed()
-
-        // 3. Tapping Pulse swaps in the feed landing tag.
-        composeRule.onNodeWithTag("tab.pulse").performClick()
-        composeRule.onNodeWithTag(LANDING_TAG_PULSE).assertIsDisplayed()
-
-        // 4. Tapping Tasks swaps in the gigs feed landing tag.
-        composeRule.onNodeWithTag("tab.tasks").performClick()
-        composeRule.onNodeWithTag(LANDING_TAG_TASKS).assertIsDisplayed()
-
-        // 5. Tapping Marketplace swaps in the marketplace landing tag.
-        composeRule.onNodeWithTag("tab.marketplace").performClick()
-        composeRule.onNodeWithTag(LANDING_TAG_MARKETPLACE).assertIsDisplayed()
-
-        // 6. Tapping Messages swaps in the chat list landing tag.
-        composeRule.onNodeWithTag("tab.messages").performClick()
-        composeRule.onNodeWithTag(LANDING_TAG_MESSAGES).assertIsDisplayed()
-
-        // 7. Re-selecting Home returns to the Home landing.
-        composeRule.onNodeWithTag("tab.home").performClick()
-        composeRule.onNodeWithTag(LANDING_TAG_HOME).assertIsDisplayed()
+        composeRule.onNodeWithTag("smoke.root/home").assertIsDisplayed()
+        for (tab in listOf("today", "nearby", "mail", "home")) {
+            composeRule.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
+            composeRule.onNodeWithTag("smoke.root/$tab").assertIsDisplayed()
+        }
     }
 
     /**
@@ -154,19 +82,13 @@ class NavigationSmokeTest {
             PantopusRoute.entries.map { route ->
                 "tab.${route.path.substringAfterLast('/')}"
             }
-        // Home / Pulse / Tasks / Marketplace / Messages.
-        check(expectedTags == listOf("tab.home", "tab.pulse", "tab.tasks", "tab.marketplace", "tab.messages")) {
+        // Place keeps its legacy home path for deep-link compatibility.
+        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.mail")) {
             "PantopusRoute.entries derived testTags drifted: $expectedTags"
         }
     }
 
     private companion object {
-        const val LANDING_TAG_HOME = "smokeStub.hubScreen"
-        const val LANDING_TAG_PULSE = "smokeStub.pulseFeed"
-        const val LANDING_TAG_TASKS = "smokeStub.gigsFeed"
-        const val LANDING_TAG_MARKETPLACE = "smokeStub.marketplace"
-        const val LANDING_TAG_MESSAGES = "smokeStub.chatList"
-
         // Note: matches the tag emitted by NotYetAvailableView via its
         // outermost `.testTag(NOT_YET_AVAILABLE_TAG)` constant, which is
         // visible only to package siblings. Re-declared here so the smoke

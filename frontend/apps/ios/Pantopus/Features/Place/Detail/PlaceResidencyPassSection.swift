@@ -109,7 +109,7 @@ private let scopeLabels: [ResidencyClaimScope: (label: String, hint: String)] = 
     .county: ("County", "For county services and programs"),
     .state: ("State", "For state-residency checks"),
     .congressionalDistrict: ("Congressional district", "For civic and campaign checks"),
-    .address: ("Full address", "Discloses your street address — like the letter"),
+    .address: ("Full address", "Discloses your street address — like the letter")
 ]
 
 private let durationChoices = [1, 7, 30, 90]
@@ -145,9 +145,9 @@ struct PlaceResidencyPassSection: View {
                     "The link shares only the statement you pick — checked live against your verification, "
                         + "logged for you, revocable any time."
                 )
-                    .font(.system(size: 12.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                .font(.system(size: 12.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextSecondary)
                 scopePicker
                 durationPicker
                 Button {

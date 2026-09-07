@@ -146,8 +146,8 @@ export async function logout(options: LogoutOptions = {}): Promise<ApiResponse &
 /**
  * Request password reset
  */
-export async function requestPasswordReset(email: string): Promise<ApiResponse> {
-  return post<ApiResponse>('/api/users/forgot-password', { email });
+export async function requestPasswordReset(email: string, redirectTo?: string): Promise<ApiResponse> {
+  return post<ApiResponse>('/api/users/forgot-password', { email, ...(redirectTo ? { redirectTo } : {}) });
 }
 
 export async function reauthenticate(password: string): Promise<ReauthenticateResponse> {
@@ -195,8 +195,8 @@ export async function verifyEmail(params: {
 /**
  * Resend verification email
  */
-export async function resendVerification(email: string): Promise<ApiResponse> {
-  return post<ApiResponse>('/api/users/resend-verification', { email });
+export async function resendVerification(email: string, redirectTo?: string): Promise<ApiResponse> {
+  return post<ApiResponse>('/api/users/resend-verification', { email, ...(redirectTo ? { redirectTo } : {}) });
 }
 
 /**

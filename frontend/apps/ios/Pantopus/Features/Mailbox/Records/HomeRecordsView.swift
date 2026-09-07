@@ -201,7 +201,7 @@ public struct HomeRecordsView: View {
                 .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(active ? Theme.Color.home : Theme.Color.appSurfaceSunken)
+                .background(active ? Theme.Color.homeSolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Capsule())
         })
         .buttonStyle(.plain)

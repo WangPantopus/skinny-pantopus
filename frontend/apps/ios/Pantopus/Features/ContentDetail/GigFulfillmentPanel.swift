@@ -98,7 +98,7 @@ struct GigFulfillmentPanel: View {
                 VStack(spacing: Spacing.s1) {
                     ZStack {
                         Circle()
-                            .fill(reached ? Theme.Color.success : Theme.Color.appSurfaceSunken)
+                            .fill(reached ? Theme.Color.successSolid : Theme.Color.appSurfaceSunken)
                             .frame(width: 20, height: 20)
                         Icon(
                             reached ? .check : Self.icon(for: step),

@@ -33,6 +33,12 @@ struct PantopusApp: App {
                     if !ProcessInfo.processInfo.isUITestSeededAuthSession {
                         await authManager.restoreSession()
                     }
+                    #if DEBUG
+                    if UITestArrivalFixture.enabled,
+                       let link = ProcessInfo.processInfo.environment["UI_TESTS_ENTRY_LINK"] {
+                        DeepLinkRouter.shared.handle(path: link)
+                    }
+                    #endif
                 }
                 // Universal links (`https://pantopus.com/…`) and custom-scheme
                 // URLs (`pantopus://…`). Both funnel into the same router the
@@ -82,6 +88,9 @@ struct PantopusApp: App {
     /// we boot into an in-memory signed-in session so UI tests can exercise
     /// the root tab view without a real backend.
     private static func bootAuthManager() -> AuthManager {
+        #if DEBUG
+        if UITestArrivalFixture.enabled { return UITestArrivalFixture.makeAuthManager() }
+        #endif
         if ProcessInfo.processInfo.isUITestSignedInSession {
             return AuthManager.previewSignedIn
         }

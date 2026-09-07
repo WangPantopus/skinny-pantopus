@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -38,7 +39,7 @@ const SURFACE_TABS: { key: FeedSurface; label: string; icon: ReactNode }[] = [
 
 export default function FeedPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '/app/feed';
   const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [showCompose, setShowCompose] = useState(false);
@@ -56,7 +57,9 @@ export default function FeedPage() {
 
   const area = useAreaPicker(showToast);
 
+  const surfaceParam = searchParams?.get('surface');
   const feed = useFeedData({
+    initialSurface: surfaceParam === 'personas' || surfaceParam === 'connections' ? surfaceParam : 'place',
     viewingLat: area.viewingLat,
     viewingLng: area.viewingLng,
     userLat: area.userLat,
@@ -146,7 +149,7 @@ export default function FeedPage() {
   }, [showComposer, showCompose]);
 
   useEffect(() => {
-    if (searchParams.get('compose') !== '1') return;
+    if (searchParams?.get('compose') !== '1') return;
 
     if (showComposer) {
       setShowCompose(true);
@@ -240,7 +243,12 @@ export default function FeedPage() {
                 {SURFACE_TABS.map((tab) => (
                   <button
                     key={tab.key}
-                    onClick={() => feed.handleSurfaceChange(tab.key)}
+                    onClick={() => {
+                      feed.handleSurfaceChange(tab.key);
+                      const params = new URLSearchParams(searchParams?.toString() ?? '');
+                      params.set('surface', tab.key);
+                      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+                    }}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
                       feed.surface === tab.key
                         ? 'border-primary-600 text-primary-600'
@@ -253,6 +261,11 @@ export default function FeedPage() {
                 ))}
               </div>
 
+              {feed.surface === 'personas' && (
+                <nav aria-label="Beacon discovery" className="flex flex-wrap gap-4 text-sm font-semibold text-primary-600">
+                  <Link href="/app/beacons">Find Beacons and manage following</Link>
+                </nav>
+              )}
               {/* Area picker (Place surface only) */}
               {feed.surface === 'place' && (
                 <div className="border-b border-app px-4 py-2.5">

@@ -66,7 +66,7 @@ const GEOMETRY = {
 const PLUG_MAX_SIZE = 20;
 
 const BODY = [0x02, 0x84, 0xc7]; // --color-primary-600
-const CHECK = [0x16, 0xa3, 0x4a]; // --color-identity-home
+const CHECK = [0x16, 0xa3, 0x4a]; // --color-brand-check
 const WHITE = [0xff, 0xff, 0xff];
 
 // ── Targets ─────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ const MIRRORS = [
     // The colours are tokens, not literals, in the component; they
     // resolve here.
     file: join(webRoot, 'src/app/globals.css'),
-    needles: ['--color-primary-600: #0284c7', '--color-identity-home: #16A34A'],
+    needles: ['--color-primary-600: #0284c7', '--color-brand-check: #16A34A'],
   },
 ];
 

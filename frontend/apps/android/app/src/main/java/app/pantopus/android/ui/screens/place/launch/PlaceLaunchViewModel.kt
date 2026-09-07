@@ -1,15 +1,14 @@
 package app.pantopus.android.ui.screens.place.launch
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlacePreviewStatus
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +29,6 @@ class PlaceLaunchViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
-        @ApplicationContext private val context: Context,
     ) : ViewModel() {
         private val _step = MutableStateFlow<LaunchStep>(LaunchStep.Hero)
         val step: StateFlow<LaunchStep> = _step.asStateFlow()
@@ -44,6 +42,10 @@ class PlaceLaunchViewModel
         private val _loadingPreview = MutableStateFlow(false)
         val loadingPreview: StateFlow<Boolean> = _loadingPreview.asStateFlow()
 
+        private var selected: GeoSuggestion? = null
+        private val _error = MutableStateFlow<String?>(null)
+        val error: StateFlow<String?> = _error.asStateFlow()
+        private var lookupJob: Job? = null
         private var autocompleteJob: Job? = null
 
         fun onQueryChange(value: String) {
@@ -67,30 +69,47 @@ class PlaceLaunchViewModel
         fun select(suggestion: GeoSuggestion) {
             _query.value = suggestion.label
             _suggestions.value = emptyList()
-            PlacePendingStore.stash(context, suggestion)
+            autocompleteJob?.cancel()
+            selected = suggestion
             loadPreview(suggestion.label)
         }
 
         fun loadPreview(address: String) {
+            lookupJob?.cancel()
+            _error.value = null
             _loadingPreview.value = true
-            viewModelScope.launch {
-                when (val r = repo.publicPreview(address)) {
-                    is NetworkResult.Success -> {
-                        val preview = r.data
-                        _step.value =
-                            if (preview.status == PlacePreviewStatus.UNSUPPORTED_REGION) {
-                                LaunchStep.Region(preview.message ?: "Home features are coming to your region.")
-                            } else {
-                                LaunchStep.Preview(preview)
-                            }
+            lookupJob =
+                viewModelScope.launch {
+                    when (val r = repo.publicPreview(address)) {
+                        is NetworkResult.Success -> {
+                            val preview = r.data
+                            _step.value =
+                                if (preview.status == PlacePreviewStatus.UNSUPPORTED_REGION) {
+                                    LaunchStep.Region(preview.message ?: "Home features are coming to your region.")
+                                } else {
+                                    LaunchStep.Preview(preview)
+                                }
+                        }
+                        is NetworkResult.Failure -> _error.value = "We couldn’t load this address. Please try again."
                     }
-                    is NetworkResult.Failure -> Unit // stay on hero
+                    _loadingPreview.value = false
                 }
-                _loadingPreview.value = false
+        }
+
+        fun prepareForAuth(): Boolean {
+            val suggestion = selected
+            if (suggestion == null || suggestion.label != _query.value || !PlacePendingStore.stash(suggestion)) {
+                _step.value = LaunchStep.Hero
+                _error.value = "Choose an address suggestion to keep this preview through sign-in."
+                return false
             }
+            return true
         }
 
         fun backToHero() {
+            lookupJob?.cancel()
+            _loadingPreview.value = false
+            PlacePendingStore.clear()
             _step.value = LaunchStep.Hero
         }
 

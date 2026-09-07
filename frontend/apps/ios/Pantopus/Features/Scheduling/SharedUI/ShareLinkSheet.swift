@@ -210,7 +210,7 @@ public struct ShareLinkSheet: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(copied ? Theme.Color.success : Theme.Color.primary600)
+                .background(copied ? Theme.Color.successSolid : Theme.Color.primary600)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .pantopusShadow(PantopusShadow.md)
             }

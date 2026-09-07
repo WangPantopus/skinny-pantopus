@@ -128,14 +128,16 @@ struct PantopusMarkStencil: Shape {
         CGPoint(x: 23.5, y: 4), CGPoint(x: 40.5, y: 4),
         CGPoint(x: 23.5, y: 60), CGPoint(x: 40.5, y: 60),
         CGPoint(x: 4, y: 23.5), CGPoint(x: 4, y: 40.5),
-        CGPoint(x: 60, y: 23.5), CGPoint(x: 60, y: 40.5),
+        CGPoint(x: 60, y: 23.5), CGPoint(x: 60, y: 40.5)
     ]
 
     static let perforationRadius: CGFloat = 4.5
 
     func path(in rect: CGRect) -> Path {
         let scale = min(rect.width, rect.height) / 64
-        func scaled(_ value: CGFloat) -> CGFloat { value * scale }
+        func scaled(_ value: CGFloat) -> CGFloat {
+            value * scale
+        }
         func box(x: CGFloat, y: CGFloat, size: CGFloat) -> CGRect {
             CGRect(
                 x: rect.minX + scaled(x),

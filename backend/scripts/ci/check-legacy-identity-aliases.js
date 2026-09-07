@@ -82,10 +82,9 @@ const ALLOWLIST_LINE_KEYS = new Set([
   // routes/users.js:serializeCompatibilitySearchUser projects
   // profile.handle into a legacy `username` key for the v1 search response
   // shape. The whole response is a legacy compat surface; retiring it is
-  // a separate audit item. (Line moved 298 → 305: the wedge Phase-1
-  // funnel-events import plus the persistent-login requires at the top of
-  // routes/users.js; the site itself is unchanged.)
-  'backend/routes/users.js:305',
+  // a separate audit item. Line moved 305 → 306 with the authRedirect
+  // import; the compatibility mapping itself is unchanged.
+  'backend/routes/users.js:306',
 ]);
 
 const ALLOWLIST_LINE_PATTERNS = [

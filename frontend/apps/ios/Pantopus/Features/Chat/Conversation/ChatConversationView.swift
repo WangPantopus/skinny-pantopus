@@ -1917,7 +1917,7 @@ private struct CreatorUpgradeFanCard: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(offer.canSendOffer ? Theme.Color.warning : Theme.Color.appTextMuted)
+                .background(offer.canSendOffer ? Theme.Color.warningSolid : Theme.Color.appTextMuted)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .opacity(offer.canSendOffer ? 1 : 0.6)
             }
@@ -2180,7 +2180,7 @@ private struct ChatSelectionDeleteBar: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(selectedCount == 0 ? Theme.Color.appSurfaceSunken : Theme.Color.error)
+            .background(selectedCount == 0 ? Theme.Color.appSurfaceSunken : Theme.Color.errorSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)

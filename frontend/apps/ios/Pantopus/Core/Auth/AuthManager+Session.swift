@@ -495,6 +495,7 @@ extension AuthManager {
         pendingInstallId = nil
         setState(.signedOut)
         // Workstream 1.4 — never resume a prior user's deferred destination.
+        PlacePendingStore.clear()
         PendingDeepLinkStore.clear()
         DeepLinkRouter.shared.clearPending()
         // One account's client-side mutes / hides must never filter the

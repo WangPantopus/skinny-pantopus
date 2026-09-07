@@ -180,7 +180,7 @@ public struct MonthStripHeader: View {
                     )
                     .frame(width: 30, height: 30)
                     .background(
-                        Circle().fill(selected ? Theme.Color.home : Color.clear)
+                        Circle().fill(selected ? Theme.Color.homeSolid : Color.clear)
                     )
                     .overlay(
                         Circle()

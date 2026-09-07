@@ -585,7 +585,7 @@ struct WeekdayPicker: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isOn ? Theme.Color.appTextInverse : Theme.Color.appTextMuted)
                         .frame(maxWidth: .infinity, minHeight: 30)
-                        .background(isOn ? Theme.Color.home : Theme.Color.appSurfaceSunken)
+                        .background(isOn ? Theme.Color.homeSolid : Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                 }
                 .buttonStyle(.plain)

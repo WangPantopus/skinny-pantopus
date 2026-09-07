@@ -254,7 +254,7 @@ private struct EventRow: View {
                 )
             }
             return EventColors(
-                background: Theme.Color.success,
+                background: Theme.Color.successSolid,
                 border: Theme.Color.success,
                 glyph: Theme.Color.appTextInverse
             )

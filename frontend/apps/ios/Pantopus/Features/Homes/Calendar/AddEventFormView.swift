@@ -424,7 +424,7 @@ private struct SegmentButton: View {
                 .foregroundStyle(isSelected ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 30)
-                .background(isSelected ? Theme.Color.home : Color.clear)
+                .background(isSelected ? Theme.Color.homeSolid : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                 .contentShape(Rectangle())
         }

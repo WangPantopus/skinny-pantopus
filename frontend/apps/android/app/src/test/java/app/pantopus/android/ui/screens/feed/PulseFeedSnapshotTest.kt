@@ -82,7 +82,7 @@ class PulseFeedSnapshotTest {
         paparazzi.snapshot {
             Frame {
                 FeedEmptyState(
-                    content = FeedSurface.Pulse.emptyContent(scopeLabel = "Elm Park", followCount = 0),
+                    content = FeedSurface.Pulse.emptyContent(scopeLabel = "Elm Park"),
                     onCta = {},
                 )
             }
@@ -103,7 +103,7 @@ class PulseFeedSnapshotTest {
         paparazzi.snapshot {
             Frame {
                 FeedEmptyState(
-                    content = FeedSurface.Beacons.emptyContent(scopeLabel = null, followCount = 0),
+                    content = FeedSurface.Beacons.emptyContent(scopeLabel = null),
                     onCta = {},
                 )
             }

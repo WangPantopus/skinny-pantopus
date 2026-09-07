@@ -80,8 +80,10 @@ fun UniversalSearchScreen(
     onOpen: (UniversalSearchDestination) -> Unit = {},
     onBrowseNearbyBusinesses: () -> Unit = {},
     onBack: () -> Unit = {},
+    initialTab: UniversalSearchTab = UniversalSearchTab.All,
     viewModel: UniversalSearchViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(Unit) { viewModel.selectTab(initialTab) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()

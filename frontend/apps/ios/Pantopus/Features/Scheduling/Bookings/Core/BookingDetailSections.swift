@@ -193,7 +193,7 @@ extension BookingDetailView {
                         VStack(spacing: 0) {
                             ZStack {
                                 Circle()
-                                    .fill(step.done ? Theme.Color.success : Theme.Color.appSurface)
+                                    .fill(step.done ? Theme.Color.successSolid : Theme.Color.appSurface)
                                     .frame(width: 18, height: 18)
                                 if step.done {
                                     Icon(.check, size: 11, strokeWidth: 3, color: Theme.Color.appTextInverse)

@@ -10,12 +10,12 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseFeedViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 
 /**
- * A03.2 — Beacon Updates. Broadcasts from verified beacons (businesses,
+ * A03.2 — Beacon Updates. Broadcasts from public profiles (businesses,
  * civic accounts, neighbors-as-creators) the user follows. The design
  * (docs/designs/A03/beacons-frames.jsx) renders the Pulse archetype
  * parametrized to `surface=personas` — same chrome, chip row, card recipe,
- * FAB, and tab bar — so this screen reuses [FeedScreen] with
- * [FeedSurface.Beacons]. Only the title, verified floor, and empty state
+ * discovery controls, and tab bar — so this screen reuses [FeedScreen] with
+ * [FeedSurface.Beacons]. Only the title, credential presentation, and empty state
  * diverge, all driven by the surface.
  *
  * Reached from the AudienceProfile "Beacon Updates" entry and the
@@ -26,6 +26,7 @@ fun BeaconsFeedScreen(
     onOpenPost: (String) -> Unit = {},
     onCompose: (PulseIntent) -> Unit = {},
     onDiscover: () -> Unit = {},
+    onFollowing: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
 ) {
@@ -34,6 +35,7 @@ fun BeaconsFeedScreen(
         onOpenPost = onOpenPost,
         onCompose = onCompose,
         onEmptyCta = onDiscover,
+        onFollowing = onFollowing,
         onBack = onBack,
         viewModel = viewModel,
     )

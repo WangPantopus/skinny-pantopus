@@ -13,7 +13,7 @@ endif
 ENV_FILE        := .env
 SECRETS_XCCONFIG := Config/Secrets.xcconfig
 
-.PHONY: help bootstrap open build test lint format clean beta release validate-env env-to-xcconfig verify-icons verify-tokens
+.PHONY: help bootstrap open build test lint format clean beta release validate-env env-to-xcconfig verify-icons verify-tokens verify-overline
 
 help:
 	@echo "Pantopus iOS — available targets:"

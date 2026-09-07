@@ -73,11 +73,12 @@ class PlaceDetailViewModel
         override val calendarError: StateFlow<String?> = _calendarError.asStateFlow()
 
         /** `weekday` is MO TU WE TH FR SA SU; the section refreshes on success. */
-        override fun setPickupDay(weekday: String) {
+        override fun setPickupDay(request: app.pantopus.android.data.api.models.place.SetPickupDayRequest) {
+            if (_calendarBusy.value) return
+            _calendarBusy.value = true
             viewModelScope.launch {
-                _calendarBusy.value = true
                 _calendarError.value = null
-                when (val r = repo.setPickupDay(homeId, weekday)) {
+                when (val r = repo.setPickupDay(homeId, request)) {
                     is NetworkResult.Success -> refresh()
                     is NetworkResult.Failure -> _calendarError.value = r.error.displayMessage("Couldn't save your pickup day.")
                 }
@@ -86,8 +87,9 @@ class PlaceDetailViewModel
         }
 
         override fun clearPickupDay() {
+            if (_calendarBusy.value) return
+            _calendarBusy.value = true
             viewModelScope.launch {
-                _calendarBusy.value = true
                 _calendarError.value = null
                 when (val r = repo.clearPickupDay(homeId)) {
                     is NetworkResult.Success -> refresh()

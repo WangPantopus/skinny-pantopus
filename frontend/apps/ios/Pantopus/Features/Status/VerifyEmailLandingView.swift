@@ -326,7 +326,7 @@ private struct ResendToastView: View {
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(toast.isError ? Theme.Color.error : Theme.Color.appText)
+        .background(toast.isError ? Theme.Color.errorSolid : Theme.Color.appText)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .accessibilityIdentifier("verifyEmail.resendToast")
     }

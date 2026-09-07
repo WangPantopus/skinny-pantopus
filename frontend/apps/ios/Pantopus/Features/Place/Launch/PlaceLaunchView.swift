@@ -13,7 +13,7 @@ import SwiftUI
 /// The signed-out front door: the Place launch funnel, with the existing
 /// auth screen presented over it for sign-in / account creation. Once the
 /// session flips to signed-in, `RootView` swaps in `RootTabView` and the
-/// stashed place is saved by `HubTabRoot`.
+/// stashed place is offered for a private save by `HubTabRoot`.
 struct PlaceLaunchHost: View {
     @State private var showAuth = false
     @State private var deepLink = DeepLinkRouter.shared
@@ -40,6 +40,7 @@ struct PlaceLaunchHost: View {
         // in `RootView`. Identical on Android (`PantopusNavHost`'s
         // `PlaceLaunchHost`).
         .onAppear {
+            _ = PlacePendingStore.read()
             presentLoginIfRequested()
         }
         .onChange(of: deepLink.prefersLoginPresentation) { _, _ in
@@ -57,7 +58,7 @@ struct PlaceLaunchHost: View {
 struct PlaceLaunchView: View {
     /// Present the existing sign-in screen.
     var onSignIn: () -> Void
-    /// Begin account creation (the pending place is already stashed).
+    /// Begin account creation after keeping the chosen preview.
     var onCreateAccount: () -> Void
 
     @State private var viewModel = PlaceLaunchViewModel()
@@ -72,21 +73,28 @@ struct PlaceLaunchView: View {
             case let .preview(preview):
                 PlacePreviewBody(
                     preview: preview,
-                    onSignIn: onSignIn,
-                    onCreateAccount: onCreateAccount
-                ) { viewModel.backToHero() }
+                    onSignIn: { if viewModel.prepareForAuth() { onSignIn() } },
+                    onCreateAccount: { if viewModel.prepareForAuth() { onCreateAccount() } },
+                    onBack: viewModel.backToHero
+                )
             case let .region(message):
-                PlaceComingRegionBody(message: message, onBrowse: onCreateAccount) { viewModel.backToHero() }
+                PlaceComingRegionBody(message: message, onBrowse: browseBeacons) { viewModel.backToHero() }
             }
         }
     }
 
+    private func browseBeacons() {
+        PlacePendingStore.clear()
+        if let url = URL(string: "pantopus://beacons") { DeepLinkRouter.shared.handle(url: url) }
+        onCreateAccount()
+    }
+
     // MARK: - A1 hero
 
-    // One job: get a stranger from a postcard or a share card to type their
-    // address. The field is the hero, the proof line answers the privacy
-    // objection, and the example card shows what comes back. Scrolls only
-    // when the keyboard or a small screen makes it.
+    /// One job: get a stranger from a postcard or a share card to type their
+    /// address. The field is the hero, the proof line answers the privacy
+    /// objection, and the example card shows what comes back. Scrolls only
+    /// when the keyboard or a small screen makes it.
     private var hero: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -112,35 +120,39 @@ struct PlaceLaunchView: View {
     }
 
     private var heroBody: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("See what's true about your address.")
-                    .font(.system(size: 31, weight: .bold))
-                    .kerning(-0.87)
-                    .lineSpacing(4)
-                    .foregroundStyle(Theme.Color.appText)
-                Text("Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-
-                addressField
-
-                if viewModel.isTyping && !viewModel.suggestions.isEmpty {
-                    suggestionList
-                } else {
-                    seePlaceButton
-                    privacyProof
-                    exampleCard
-                        .padding(.top, Spacing.s2)
-                    Button { onCreateAccount() } label: {
-                        Text("Just here to follow someone or browse?")
-                            .font(.system(size: 13.5, weight: .medium))
-                            .foregroundStyle(Theme.Color.appTextMuted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            if let message = viewModel.errorMessage {
+                Text(message).foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("place.launch.error")
             }
+            Text("See what's true about your address.")
+                .font(.system(size: 31, weight: .bold))
+                .kerning(-0.87)
+                .lineSpacing(4)
+                .foregroundStyle(Theme.Color.appText)
+            Text("Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
+                .font(.system(size: 15))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+
+            addressField
+
+            if viewModel.isTyping && !viewModel.suggestions.isEmpty {
+                suggestionList
+            } else {
+                seePlaceButton
+                privacyProof
+                exampleCard
+                    .padding(.top, Spacing.s2)
+                Button(action: browseBeacons) {
+                    Text("Explore Beacon without an address")
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+            }
+        }
     }
 
     /// The privacy answer where the decision is made: what a neighbor sees,
@@ -235,7 +247,7 @@ struct PlaceLaunchView: View {
         ExampleReading(icon: .wind, label: "Air today", value: "Good · AQI 24", tone: Theme.Color.home),
         ExampleReading(icon: .waves, label: "Flood zone", value: "X · minimal", tone: Theme.Color.home),
         ExampleReading(icon: .testTube, label: "Radon", value: "Zone 1 · test it", tone: Theme.Color.warning),
-        ExampleReading(icon: .trash2, label: "Next pickup", value: "Tue · garbage + recycling", tone: Theme.Color.appTextMuted),
+        ExampleReading(icon: .trash2, label: "Next pickup", value: "Tue · garbage + recycling", tone: Theme.Color.appTextMuted)
     ]
 
     private var brandLockup: some View {
@@ -256,6 +268,7 @@ struct PlaceLaunchView: View {
         HStack(spacing: 10) {
             Icon(.mapPin, size: 18, strokeWidth: 2, color: addressFocused ? Theme.Color.primary600 : Theme.Color.appTextMuted)
             TextField("Type your home address", text: $viewModel.query)
+                .accessibilityIdentifier("place.launch.address")
                 .focused($addressFocused)
                 .font(Theme.Font.body)
                 .autocorrectionDisabled()
@@ -296,6 +309,7 @@ struct PlaceLaunchView: View {
                     .padding(.horizontal, 14)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("place.launch.suggestion.\(s.id)")
                 if s.id != viewModel.suggestions.last?.id {
                     Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1).padding(.leading, 41)
                 }

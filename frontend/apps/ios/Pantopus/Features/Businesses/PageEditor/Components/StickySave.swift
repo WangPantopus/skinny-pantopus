@@ -156,7 +156,7 @@ public struct EditBusinessStickySave: View {
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 42)
-            .background(isLocked ? Theme.Color.appSurfaceSunken : Theme.Color.business)
+            .background(isLocked ? Theme.Color.appSurfaceSunken : Theme.Color.businessSolid)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .modifier(PublishShadowModifier(isLocked: isLocked))

@@ -1,85 +1,102 @@
 #!/usr/bin/env node
 /**
- * Manual push smoke test — send one real notification to a single device
- * token through the native transport, to verify APNs/FCM credentials and
- * round-trip delivery end-to-end. NOT run in CI (the unit suite mocks the
- * transport); this is a hands-on tool for whoever wires the secrets.
+ * Check push configuration without sending, or send one real test push to
+ * a designated device. Never run a live send in CI.
  *
- * Usage:
- *   node scripts/push-smoke.js --token <deviceToken> --platform ios|android \
- *     [--title "Hi"] [--body "Test"] [--link /chat/42]
+ *   node scripts/push-smoke.js --check --platform ios
+ *   node scripts/push-smoke.js --platform ios --link /post/TEST_POST_ID
  *
- *   # provider is inferred from platform (ios→apns, android→fcm) but can
- *   # be forced for an Expo token:
- *   node scripts/push-smoke.js --token ExponentPushToken[..] --provider expo
- *
- * Credentials are read from the same .env slots the backend uses
- * (see docs/push-native-migration.md §6). With none set, the matching
- * provider reports "not configured" and the script explains what's missing.
+ * Load PUSH_SMOKE_TOKEN before a live send. --token is also supported.
+ * Prefer the environment variable to keep tokens
+ * out of process arguments. DOTENV_CONFIG_PATH selects an explicit env file;
+ * otherwise the backend's usual .env is loaded. See the staging runbook.
  */
 
-require('dotenv').config();
-
-const { classifyProvider } = require('../services/push/tokenRouting');
+const { parseArgs } = require('node:util');
+const { classifyProvider, isExpoToken, PROVIDERS, PLATFORMS } = require('../services/push/tokenRouting');
 const apnsClient = require('../services/push/apnsClient');
 const fcmClient = require('../services/push/fcmClient');
 const expoClient = require('../services/push/expoClient');
 
-const senders = { apns: apnsClient, fcm: fcmClient, expo: expoClient };
+const defaultSenders = { apns: apnsClient, fcm: fcmClient, expo: expoClient };
+const USAGE = 'Usage: push-smoke.js --platform ios|android (or --provider apns|fcm|expo) ' +
+  '[--check | --token <deviceToken>] [--title <title>] [--body <body>] [--link <path>]';
 
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const key = argv[i];
-    if (key.startsWith('--')) {
-      const name = key.slice(2);
-      const value = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[(i += 1)] : 'true';
-      args[name] = value;
-    }
+async function runSmoke(argv, { senders = defaultSenders, env = process.env, output = console } = {}) {
+  let args;
+  try {
+    ({ values: args } = parseArgs({
+      args: argv,
+      options: {
+        token: { type: 'string' }, platform: { type: 'string' }, provider: { type: 'string' },
+        title: { type: 'string' }, body: { type: 'string' }, link: { type: 'string' },
+        check: { type: 'boolean' }, help: { type: 'boolean' },
+      },
+    }));
+  } catch {
+    output.error(USAGE);
+    return 2;
   }
-  return args;
-}
-
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const { token, platform, provider, link } = args;
-
-  if (!token) {
-    console.error('Missing --token. See the header of this file for usage.');
-    process.exit(2);
+  if (args.help) {
+    output.log(USAGE);
+    return 0;
+  }
+  const token = (args.token || env.PUSH_SMOKE_TOKEN || '').trim();
+  const { platform, provider, link } = args;
+  if ((platform && !PLATFORMS.includes(platform)) || (provider && !PROVIDERS.includes(provider)) ||
+      (!platform && !provider && !isExpoToken(token))) {
+    output.error(USAGE);
+    return 2;
+  }
+  if (!args.check && !token) {
+    output.error('Missing device token. Set PUSH_SMOKE_TOKEN or pass --token.');
+    return 2;
   }
 
   const resolved = classifyProvider({ token, platform, provider });
   const sender = senders[resolved];
+  output.log(`Provider: ${resolved}`);
+  try {
+    if (!sender.isConfigured()) {
+      output.error(`${resolved.toUpperCase()} is not configured. See docs/push-native-migration.md §6.`);
+      return 1;
+    }
+    if (args.check) {
+      output.log('Configuration present. No network request or notification sent; credentials are not yet verified.');
+      return 0;
+    }
 
-  console.log(`Provider: ${resolved}  (platform=${platform || '—'}, provider=${provider || 'derived'})`);
-
-  if (!sender.isConfigured()) {
-    console.error(
-      `\n✗ The ${resolved.toUpperCase()} sender is not configured.\n` +
-      '  Set the credentials in .env (see docs/push-native-migration.md §6) and retry.',
-    );
-    process.exit(1);
+    const message = {
+      title: args.title || 'Pantopus push smoke test',
+      body: args.body || 'Test notification for the designated device.',
+      data: { type: 'system', link: link || '/notifications' },
+    };
+    output.log('Sending one test notification…');
+    const result = await sender.sendMany([token], message);
+    if (result?.invalidTokens?.includes(token)) {
+      output.error('The provider rejected this token as invalid/unregistered.');
+      return 1;
+    }
+    if (!result?.acceptedTokens?.includes(token)) {
+      output.error('Provider acceptance was not confirmed. Check transport logs for authentication, timeout, or service errors.');
+      return 1;
+    }
+    output.log('Accepted by the provider. Device delivery is still unverified; check display and tap destination on the device.');
+    return 0;
+  } catch {
+    output.error('Push test failed before acceptance could be confirmed. Check transport logs.');
+    return 1;
+  } finally {
+    if (sender.close) sender.close();
   }
-
-  const message = {
-    title: args.title || 'Pantopus push smoke test',
-    body: args.body || 'If you can read this, native push works. 🎉',
-    data: { type: 'system', link: link || '/notifications' },
-  };
-
-  console.log('Sending…', message);
-  const { invalidTokens } = await sender.sendMany([token], message);
-
-  if (invalidTokens.includes(token)) {
-    console.error('\n✗ The provider rejected this token as invalid/unregistered.');
-    process.exit(1);
-  }
-  console.log('\n✓ Accepted by the provider. Check the device.');
-  if (sender.close) sender.close();
 }
 
-main().catch((err) => {
-  console.error('Smoke test failed:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env', quiet: true });
+  runSmoke(process.argv.slice(2)).then((code) => { process.exitCode = code; }).catch(() => {
+    console.error('Push test failed.');
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { runSmoke };

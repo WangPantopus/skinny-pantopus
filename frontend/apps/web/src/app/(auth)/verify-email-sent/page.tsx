@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PantopusBadge from '@/components/PantopusBadge';
-import { extractApiError } from '@/lib/auth-utils';
+import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
 function VerifyEmailSentPageContent() {
   const searchParams = useSearchParams();
-  const emailParam = searchParams.get('email') || '';
+  const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
+  const loginHref = authPageHref('/login', redirectTo);
+  const emailParam = searchParams?.get('email') || '';
   const email = useMemo(() => emailParam.trim().toLowerCase(), [emailParam]);
 
   const [status, setStatus] = useState('');
@@ -31,7 +33,7 @@ function VerifyEmailSentPageContent() {
     setResending(true);
     setStatus('');
     try {
-      const res = await api.auth.resendVerification(email);
+      const res = await api.auth.resendVerification(email, redirectTo);
       setStatus(res?.message || 'If that email exists, a verification email has been sent.');
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
@@ -80,13 +82,13 @@ function VerifyEmailSentPageContent() {
               {resending ? 'Sending verification...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend verification email'}
             </button>
             <Link
-              href={`/register${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+              href={authPageHref('/register', redirectTo, email ? { email } : {})}
               className="w-full inline-flex justify-center py-2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90"
             >
               Use a different email
             </Link>
             <Link
-              href="/login"
+              href={loginHref}
               className="w-full inline-flex justify-center py-2.5 px-4 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover dark:hover:bg-gray-800"
             >
               Back to Sign in

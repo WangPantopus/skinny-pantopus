@@ -1289,6 +1289,8 @@ export interface LoginForm {
 export interface RegisterForm {
   email: string;
   password: string;
+  /** Validated internal destination carried by the verification email. */
+  redirectTo?: string;
   /** Optional since the wedge slim signup — the backend auto-generates a
    *  handle when omitted. Native clients may still send one. */
   username?: string;

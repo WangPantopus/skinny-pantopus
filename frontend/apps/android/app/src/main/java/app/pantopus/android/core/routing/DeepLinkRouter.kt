@@ -419,12 +419,13 @@ object DeepLinkRouter {
             rest.substringAfter('?', missingDelimiterValue = "")
                 .substringBefore('#')
         val parts = pathPart.split('/').filter { it.isNotBlank() }
-        val segments: List<String> =
+        val rawSegments: List<String> =
             if (scheme == "http" || scheme == "https") {
                 if (parts.size <= 1) emptyList() else parts.drop(1)
             } else {
                 parts
             }
+        val segments = if (rawSegments.firstOrNull() == "app") rawSegments.drop(1) else rawSegments
         if (segments.isEmpty()) return Destination.Unknown(raw)
         val first = segments.first()
         if (first.startsWith("@") && first.length > 1) {
@@ -448,7 +449,14 @@ object DeepLinkRouter {
         val idQuery = Paths.queryParam(queryPart, "id")
 
         return when (segments.first()) {
-            "feed" -> Destination.Feed
+            "feed" -> {
+                val post = Paths.queryParam(queryPart, "post")
+                when {
+                    !post.isNullOrBlank() -> Destination.Post(post)
+                    Paths.queryParam(queryPart, "surface") == "personas" -> Destination.Beacons
+                    else -> Destination.Feed
+                }
+            }
             "home" -> Destination.Home
             "notifications" -> Destination.Notifications
             "hub-today", "hub_today", "today" ->

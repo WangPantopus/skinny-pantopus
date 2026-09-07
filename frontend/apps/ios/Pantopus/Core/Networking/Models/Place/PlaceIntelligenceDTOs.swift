@@ -1132,7 +1132,9 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
     public let sourceUrl: String?
     public let confidence: String
 
-    public var id: String { "\(ruleId):\(date)" }
+    public var id: String {
+        "\(ruleId):\(date)"
+    }
 
     private enum CodingKeys: String, CodingKey {
         case kind, title, detail, date, scope, source, confidence
@@ -1154,12 +1156,26 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     public let windowDays: Int
     public let ruleCount: Int
     public let today: String
+    public var pickupSchedule: HouseholdPickupSchedule?
 
     private enum CodingKeys: String, CodingKey {
         case upcoming, next, today
         case needsPickupDay = "needs_pickup_day"
         case windowDays = "window_days"
         case ruleCount = "rule_count"
+        case pickupSchedule = "pickup_schedule"
+    }
+}
+
+public struct HouseholdPickupSchedule: Decodable, Sendable, Hashable {
+    public let weekday: String?
+    public let recyclingFrequency: String
+    public let recyclingNextDate: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case weekday
+        case recyclingFrequency = "recycling_frequency"
+        case recyclingNextDate = "recycling_next_date"
     }
 }
 
@@ -1714,7 +1730,9 @@ public struct PlaceMoneyLead: Decodable, Sendable, Hashable {
 
     /// The server writes the sentence; we only decide whether there is
     /// one to show. An empty headline is nothing to lead with.
-    public var isRenderable: Bool { !headline.isEmpty }
+    public var isRenderable: Bool {
+        !headline.isEmpty
+    }
 }
 
 /// The aha card (Wedge v2 D1): the one most surprising READY fact for
@@ -1756,7 +1774,9 @@ public struct PlacePreviewAha: Decodable, Sendable, Hashable {
     }
 
     /// An empty headline is nothing to lead with.
-    public var isRenderable: Bool { !headline.isEmpty }
+    public var isRenderable: Bool {
+        !headline.isEmpty
+    }
 }
 
 public struct PlacePreview: Decodable, Sendable, Hashable {

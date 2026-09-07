@@ -80,8 +80,8 @@ final class TypographyTests: XCTestCase {
         }
     }
 
-
     // MARK: - Render-level contract
+
     //
     // The blank-overline bug shipped because nothing in the suite compares
     // rendered output: the snapshot tests assert a view builds with non-zero
@@ -93,7 +93,8 @@ final class TypographyTests: XCTestCase {
     func testOverlineRendersVisibleInk() {
         XCTAssertEqual(ink(Text("", style: .overline)), 0, "empty copy should draw nothing")
         XCTAssertGreaterThan(
-            ink(Text("Reason", style: .overline)), 0,
+            ink(Text("Reason", style: .overline)),
+            0,
             "an overline with copy rendered blank — the role is dropping its string"
         )
     }

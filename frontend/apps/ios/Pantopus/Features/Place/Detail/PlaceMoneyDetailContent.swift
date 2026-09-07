@@ -213,6 +213,7 @@ private struct BillBenchmarkCard: View {
 }
 
 // MARK: - Exemption check (Wave 2)
+
 // The honesty ladder as a card: on_file (green, nothing to chase) ·
 // none_on_file (amber — the "exemptions aren't automatic" hook) ·
 // unknown (neutral — the county feed doesn't report it; never dressed

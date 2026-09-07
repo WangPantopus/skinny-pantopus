@@ -281,6 +281,7 @@ final class AuthManager {
     /// Apply the side effects of a confirmed signed-in session: publish
     /// state, identify analytics, and (re)connect the realtime socket.
     func finishSignedIn(_ user: UserDTO, token: String) {
+        PlacePendingStore.bind(to: user.id)
         state = .signedIn(user)
         Observability.shared.identify(userId: user.id, email: user.email)
         Analytics.identify(userId: user.id)
@@ -408,6 +409,7 @@ final class AuthManager {
             let response: RegisterResponse = try await apiClient.request(
                 AuthEndpoints.register(body)
             )
+            PlacePendingStore.bind(to: response.user.id)
             Observability.shared.track("auth.signed_up")
             logger.info("Registered", metadata: ["userId": .string(response.user.id)])
             return SignUpResult(

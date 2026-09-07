@@ -15,6 +15,8 @@ import '@testing-library/jest-dom';
 
 const apiMock = require('@pantopus/api');
 
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) =>

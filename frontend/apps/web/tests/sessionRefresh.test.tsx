@@ -64,7 +64,7 @@ function buildRequest(input: string, cookies: Record<string, string> = {}) {
   const url = new URL(input);
   return {
     url: input,
-    nextUrl: { pathname: url.pathname, search: url.search },
+    nextUrl: { pathname: url.pathname, search: url.search, searchParams: url.searchParams },
     cookies: {
       get: (name: string) => (name in cookies ? { name, value: cookies[name] } : undefined),
     },
@@ -273,5 +273,19 @@ describe('session-refresh helpers', () => {
     expect(parseRefreshGuard('{not json')).toBeNull();
     expect(parseRefreshGuard(JSON.stringify({ target: 1, at: 'x' }))).toBeNull();
     expect(parseRefreshGuard(JSON.stringify({ target: '/a', at: 5 }))).toEqual({ target: '/a', at: 5 });
+  });
+});
+
+
+describe('authenticated arrival handoff', () => {
+  test.each(['/app/feed/post/post-1?comment=reply-2', '/persona/garden', '/app/place?preview=draft-123456789012'])('honors %s on auth screens', (target) => {
+    for (const page of ['/login', '/register']) {
+      const res = middleware(buildRequest(`https://web.test${page}?redirectTo=${encodeURIComponent(target)}`, AUTHED));
+      expect(res.headers.get('location')).toBe(`https://web.test${target}`);
+    }
+  });
+  test('rejects an external destination with a current session', () => {
+    const res = middleware(buildRequest('https://web.test/login?redirectTo=https://evil.test', AUTHED));
+    expect(res.headers.get('location')).toBe('https://web.test/app/place');
   });
 });

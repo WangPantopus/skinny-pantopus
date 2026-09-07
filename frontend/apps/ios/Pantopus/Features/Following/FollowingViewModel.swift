@@ -43,6 +43,7 @@ public final class FollowingViewModel {
     private let onBack: @MainActor () -> Void
     private let onDiscover: @MainActor () -> Void
     private let onOpenPersona: @MainActor (String) -> Void
+    let onOpenPost: (@MainActor (String) -> Void)?
     private let now: @Sendable () -> Date
 
     // MARK: - Cache
@@ -56,12 +57,14 @@ public final class FollowingViewModel {
         onBack: @escaping @MainActor () -> Void = {},
         onDiscover: @escaping @MainActor () -> Void = {},
         onOpenPersona: @escaping @MainActor (String) -> Void = { _ in },
+        onOpenPost: (@MainActor (String) -> Void)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
         self.onBack = onBack
         self.onDiscover = onDiscover
         self.onOpenPersona = onOpenPersona
+        self.onOpenPost = onOpenPost
         self.now = now
     }
 
@@ -111,7 +114,7 @@ public final class FollowingViewModel {
         }
         let sections = FollowingProjection.sections(from: items, now: now())
         let total = items.count
-        let unread = items.filter { ($0.mutedUntil == nil) && ($0.unreadCount ?? 0) > 0 }.count
+        let unread = items.filter { ($0.unreadCount ?? 0) > 0 }.count
         state = .loaded(sections: sections, totalFollowing: total, unreadBeacons: unread)
     }
 
@@ -221,6 +224,10 @@ public final class FollowingViewModel {
     /// `handleBellCycle` (`pantopus/frontend/apps/mobile/src/app/beacons/following.tsx:121`).
     public func cycleNotificationLevel(_ row: FollowingRow) async {
         guard !row.isPaused else { return }
+        if row.isMuted {
+            openActions(for: row)
+            return
+        }
         guard let index = items.firstIndex(where: { $0.membershipId == row.id }) else { return }
         let previous = items[index].notificationLevel
         let next = row.notificationLevel.next

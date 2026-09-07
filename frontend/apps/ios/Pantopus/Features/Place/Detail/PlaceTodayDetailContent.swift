@@ -19,9 +19,9 @@ struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
 
-    // Order (matches Android): what it is like now, what to do with it,
-    // what recurs at this address, then air, alerts and sun. The calendar
-    // is the reason the Today tab exists and sits above the fold.
+    /// Order (matches Android): what it is like now, what to do with it,
+    /// what recurs at this address, then air, alerts and sun. The calendar
+    /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let weather = vm.section(.weather, in: intel) {
@@ -284,8 +284,13 @@ private struct GoodDayRow: View {
     let tiles: [PlaceGoodDayTile]
     @State private var openID: String?
 
-    private var shown: [PlaceGoodDayTile] { Array(tiles.prefix(5)) }
-    private var open: PlaceGoodDayTile? { shown.first { $0.id == openID } }
+    private var shown: [PlaceGoodDayTile] {
+        Array(tiles.prefix(5))
+    }
+
+    private var open: PlaceGoodDayTile? {
+        shown.first { $0.id == openID }
+    }
 
     private func tint(_ verdict: GoodDayVerdict) -> Color {
         switch verdict {
@@ -418,10 +423,29 @@ struct AddressCalendarCard: View {
     @State private var picking = false
     @State private var saving: String?
     @State private var errorText: String?
+    @State private var weekday = ""
+    @State private var frequency = "not_set"
+    @State private var nextDate = ""
+    @State private var confirmed: PlaceAddressCalendarData?
     private let api = APIClient.shared
+    private var calendar: PlaceAddressCalendarData {
+        confirmed ?? data
+    }
+
+    private var pickupDates: [String] {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let today = formatter.date(from: calendar.today) else { return [] }
+        return (0..<(frequency == "weekly" ? 7 : 14)).map {
+            formatter.string(from: today.addingTimeInterval(Double($0) * 86400))
+        }
+    }
 
     private static let weekdays: [(id: String, label: String)] = [
-        ("MO", "Mon"), ("TU", "Tue"), ("WE", "Wed"), ("TH", "Thu"), ("FR", "Fri"), ("SA", "Sat"), ("SU", "Sun")
+        ("MO", "Monday"), ("TU", "Tuesday"), ("WE", "Wednesday"), ("TH", "Thursday"),
+        ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
     init(homeId: String, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
@@ -429,6 +453,9 @@ struct AddressCalendarCard: View {
         self.data = data
         self.onChanged = onChanged
         _picking = State(initialValue: data.needsPickupDay)
+        _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
+        _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
+        _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
     }
 
     var body: some View {
@@ -439,25 +466,32 @@ struct AddressCalendarCard: View {
                     .kerning(0.7)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
-                Button(picking ? "Done" : "Pickup day") { picking.toggle() }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primary600)
-                    .accessibilityIdentifier("addressCalendarPickupToggle")
+                Button(picking ? "Cancel" : "Pickup schedule") {
+                    weekday = calendar.pickupSchedule?.weekday ?? ""
+                    frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
+                    nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                    errorText = nil
+                    picking.toggle()
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.Color.primary600)
+                .accessibilityIdentifier("addressCalendarPickupToggle")
+                .disabled(saving != nil)
             }
 
             if picking {
                 picker
             }
 
-            if data.upcoming.isEmpty {
+            if calendar.upcoming.isEmpty {
                 Text("Nothing on the calendar for the next two weeks.")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(data.upcoming) { event in
+                    ForEach(calendar.upcoming) { event in
                         eventRow(event)
-                        if event.id != data.upcoming.last?.id {
+                        if event.id != calendar.upcoming.last?.id {
                             Divider().overlay(Theme.Color.appBorder)
                         }
                     }
@@ -475,35 +509,75 @@ struct AddressCalendarCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .accessibilityIdentifier("addressCalendarCard")
+        .onChange(of: data) { _, _ in confirmed = nil }
     }
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(data.needsPickupDay
-                 ? "Which day do your bins go out? This replaces the city default for your home."
-                 : "Change your pickup day.")
+            Text("Which day is garbage collected each week?")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appText)
-            HStack(spacing: 6) {
-                ForEach(Self.weekdays, id: \.id) { day in
-                    Button(saving == day.id ? "…" : day.label) { Task { await choose(day.id) } }
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Theme.Color.appSurface)
-                        .foregroundStyle(Theme.Color.appText)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-                        .disabled(saving != nil)
-                }
+            Picker("Garbage collection", selection: $weekday) {
+                Text("Choose a day").tag("")
+                ForEach(Self.weekdays, id: \.id) { day in Text(day.label).tag(day.id) }
             }
-            Text("Recycling is assumed every other week on the same day. You can change this any time.")
-                .font(.system(size: 11.5))
+            .font(.system(size: 14))
+            .frame(minHeight: 44)
+            Text("Recycling")
+                .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
+            Picker("Recycling", selection: Binding(get: { frequency }, set: { frequency = $0
+                nextDate = ""
+            })) {
+                Text("Not sure yet").tag("not_set")
+                Text("Every week").tag("weekly")
+                Text("Every other week").tag("biweekly")
+            }
+            .font(.system(size: 14))
+            .frame(minHeight: 44)
+            if frequency != "not_set" {
+                Text("Next recycling pickup")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                Picker("Next recycling pickup", selection: $nextDate) {
+                    Text("Choose a date").tag("")
+                    ForEach(pickupDates, id: \.self) { day in Text(pickupDateLabel(day)).tag(day) }
+                }
+                .font(.system(size: 14))
+                .frame(minHeight: 44)
+            }
+            Text(
+                "Use your collection day, not the night you put bins out. Dates follow your home’s calendar. "
+                    + "If recycling is unknown, only garbage is saved. Check your provider for holiday changes."
+            )
+            .font(.system(size: 11.5))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            Button("Save schedule") { Task { await choose() } }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(weekday.isEmpty || (frequency != "not_set" && !pickupDates.contains(nextDate)))
+                .accessibilityIdentifier("addressCalendarSave")
+            if calendar.pickupSchedule != nil {
+                Button("Clear household schedule") { Task { await choose(reset: true) } }
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("addressCalendarClear")
+            }
         }
+        .disabled(saving != nil)
         .padding(12)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func pickupDateLabel(_ day: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: day) else { return day }
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
+        return formatter.string(from: date)
     }
 
     private func eventRow(_ event: PlaceCalendarEvent) -> some View {
@@ -533,8 +607,8 @@ struct AddressCalendarCard: View {
                     (event.source ?? "Pantopus registry")
                         + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : "")
                 )
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
         .padding(.vertical, 10)
@@ -565,17 +639,22 @@ struct AddressCalendarCard: View {
     }
 
     @MainActor
-    private func choose(_ weekday: String) async {
-        saving = weekday
+    private func choose(reset: Bool = false) async {
+        guard saving == nil else { return }
+        saving = "saving"
         errorText = nil
         do {
-            _ = try await api.request(
-                AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(weekday: weekday))
-            ) as AddressCalendarResponse
+            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId)
+                : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
+                    weekday: weekday, recyclingFrequency: frequency,
+                    recyclingNextDate: frequency == "not_set" ? nil : nextDate
+                ))
+            let response: AddressCalendarResponse = try await api.request(endpoint)
+            confirmed = response.calendar
             picking = false
             await onChanged()
         } catch {
-            errorText = "Could not save your pickup day. Try again."
+            errorText = "Could not save your pickup schedule. Check the next collection date and try again."
         }
         saving = nil
     }

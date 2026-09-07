@@ -136,7 +136,7 @@ private struct EarnToggle: View {
 
     var body: some View {
         Capsule()
-            .fill(isOn ? Theme.Color.success : Theme.Color.appBorder)
+            .fill(isOn ? Theme.Color.successSolid : Theme.Color.appBorder)
             .frame(width: 38, height: 23)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()

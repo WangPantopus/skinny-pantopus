@@ -19,6 +19,7 @@ import {
   summarizeText,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
+import { authPageHref } from '@/lib/auth-utils';
 
 export async function generateMetadata({
   params,
@@ -201,6 +202,12 @@ export default async function PublicPostPage({
             Open this post in Pantopus to reply, react, and keep up with the conversation.
           </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href={authPageHref('/login', `/app/feed/post/${encodeURIComponent(id)}`)}
+              className="rounded-full border border-app px-5 py-2.5 text-center text-sm font-semibold text-app hover:bg-surface-muted"
+            >
+              Join the conversation
+            </Link>
             <OpenInAppButton
               appUrl={buildCanonicalAppUrlForPost(shareRef)}
               linkHref={buildCanonicalShareUrlForPost(shareRef)}

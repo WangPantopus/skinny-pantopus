@@ -303,12 +303,18 @@ export type {
 // Address calendar — what recurs at this address (wedge Phase 2, D6)
 export * as addressCalendar from './endpoints/addressCalendar';
 export { getAddressCalendar, setPickupDay, clearPickupDay } from './endpoints/addressCalendar';
-export type { PickupWeekday, AddressCalendarResponse, SetPickupDayResponse } from './endpoints/addressCalendar';
+export type { PickupWeekday, AddressCalendarResponse, SetPickupDayResponse, SetPickupDayRequest } from './endpoints/addressCalendar';
 
 // Neighborhood — the density-gated door (four-tab IA, wedge Phase 1)
 export * as neighborhood from './endpoints/neighborhood';
 export { getNeighborhoodMeter, getNeighborhoodCells } from './endpoints/neighborhood';
-export type { NeighborhoodMeter, NeighborhoodMeterState } from './endpoints/neighborhood';
+export type {
+  NeighborhoodMeter,
+  NeighborhoodMeterState,
+  NeighborhoodCell,
+  NeighborhoodCellBucket,
+  NeighborhoodCells,
+} from './endpoints/neighborhood';
 
 // Funnel — pre-account instrumentation beacons (wedge Phase 1)
 export * as funnel from './endpoints/funnel';

@@ -261,50 +261,6 @@ function seedTable(name, rows) {
   tables[name] = [...rows];
 }
 
-// ── Built-in RPC handlers ───────────────────────────────────
-// Postgres functions the app calls in normal flows, mirrored against the
-// in-memory tables so the tests exercise real behaviour instead of a stub.
-// An explicit setRpcMock() still wins — these are only the fallback.
-const PICKUP_KINDS_SQL = ['garbage', 'recycling', 'yard_waste'];
-
-const DEFAULT_RPCS = {
-  // migration 199 — set_home_pickup_rules(p_home_id text, p_rows jsonb).
-  // Deletes the household's pickup rules and inserts the new set in one
-  // step, returning the inserted row count.
-  set_home_pickup_rules: ({ p_home_id: homeId, p_rows: rows }) => {
-    const table = (tables.AddressCalendarRule = tables.AddressCalendarRule || []);
-    const key = String(homeId);
-    for (let i = table.length - 1; i >= 0; i -= 1) {
-      const r = table[i];
-      if (r.scope_type === 'home' && String(r.scope_key) === key && PICKUP_KINDS_SQL.includes(r.kind)) {
-        table.splice(i, 1);
-      }
-    }
-    const incoming = Array.isArray(rows) ? rows : [];
-    for (const r of incoming) {
-      table.push({
-        id: `mock-addresscalendarrule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        scope_type: 'home',
-        scope_key: key,
-        kind: r.kind,
-        title: r.title,
-        detail: r.detail ?? null,
-        rrule: r.rrule,
-        dtstart: r.dtstart,
-        until: r.until ?? null,
-        all_day: r.all_day ?? true,
-        lead_days: r.lead_days ?? 1,
-        source: r.source ?? null,
-        source_url: r.source_url ?? null,
-        confidence: r.confidence ?? 'official',
-        created_by: r.created_by ?? null,
-        updated_at: r.updated_at ?? new Date().toISOString(),
-      });
-    }
-    return incoming.length;
-  },
-};
-
 function setRpcMock(fn) {
   _rpcMock = fn;
 }
@@ -454,69 +410,62 @@ function createQueryBuilder(tableName) {
       // Supports patterns like:
       //   "and(requester_id.eq.a,addressee_id.eq.b),and(requester_id.eq.b,addressee_id.eq.a)"
       //   "field.eq.value,field.eq.value"
+      const splitGroups = (input) => {
+        const groups = [];
+        let depth = 0;
+        let quoted = false;
+        let start = 0;
+        for (let i = 0; i < input.length; i++) {
+          const ch = input[i];
+          if (ch === '"') quoted = !quoted;
+          if (quoted) continue;
+          if (ch === '(' || ch === '{') depth++;
+          if (ch === ')' || ch === '}') depth--;
+          if (ch === ',' && depth === 0) {
+            groups.push(input.slice(start, i).trim());
+            start = i + 1;
+          }
+        }
+        groups.push(input.slice(start).trim());
+        return groups;
+      };
       const parseCondition = (cond) => {
-        // Match field.operator.value patterns
-        const match = cond.match(/^(\w+)\.(eq|neq|gt|gte|lt|lte|is)\.(.+)$/);
-        if (!match) return () => true;
+        const logic = cond.match(/^(and|or)\((.*)\)$/);
+        if (logic) {
+          const children = splitGroups(logic[2]).map(parseCondition);
+          return logic[1] === 'and'
+            ? (row) => children.every((fn) => fn(row))
+            : (row) => children.some((fn) => fn(row));
+        }
+        const match = cond.match(/^(\w+(?:->>\w+)?)\.(eq|neq|gt|gte|lt|lte|is|cs)\.(.+)$/);
+        if (!match) return () => true; // Other operators remain legacy no-ops.
         const [, field, op, val] = match;
-        // Coerce value types
+        const [column, jsonKey] = field.split('->>');
         let value = val;
         if (value === 'null') value = null;
         else if (value === 'true') value = true;
         else if (value === 'false') value = false;
-        switch (op) {
-          case 'eq':
-            return (row) => row[field] === value;
-          case 'neq':
-            return (row) => row[field] !== value;
-          case 'gt':
-            return (row) => row[field] > value;
-          case 'gte':
-            return (row) => row[field] >= value;
-          case 'lt':
-            return (row) => row[field] < value;
-          case 'lte':
-            return (row) => row[field] <= value;
-          case 'is':
-            return (row) => row[field] === value;
-          default:
-            return () => true;
-        }
+        else if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        return (row) => {
+          const actual = (jsonKey ? row[column]?.[jsonKey] : row[column]) ?? null;
+          if (op === 'is') return actual === value;
+          // SQL comparison with NULL is unknown, including neq.
+          if (actual == null || value == null) return false;
+          const compared = typeof actual === 'number' ? Number(value) : value;
+          switch (op) {
+            case 'eq': return actual === compared;
+            case 'neq': return actual !== compared;
+            case 'gt': return actual > compared;
+            case 'gte': return actual >= compared;
+            case 'lt': return actual < compared;
+            case 'lte': return actual <= compared;
+            case 'cs': return Array.isArray(actual)
+              && splitGroups(value.slice(1, -1)).every((item) => actual.includes(item));
+            default: return true;
+          }
+        };
       };
-
-      // Split into top-level groups (either "and(...)" blocks or bare conditions)
-      const groups = [];
-      let depth = 0;
-      let current = '';
-      for (let i = 0; i < filterString.length; i++) {
-        const ch = filterString[i];
-        if (ch === '(') {
-          depth++;
-          current += ch;
-        } else if (ch === ')') {
-          depth--;
-          current += ch;
-        } else if (ch === ',' && depth === 0) {
-          groups.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
-        }
-      }
-      if (current.trim()) groups.push(current.trim());
-
-      const groupFns = groups.map((g) => {
-        const andMatch = g.match(/^and\((.+)\)$/);
-        if (andMatch) {
-          // Inner conditions are comma-separated inside and(...)
-          const innerParts = andMatch[1].split(',').map((s) => s.trim());
-          const fns = innerParts.map(parseCondition);
-          return (row) => fns.every((fn) => fn(row));
-        }
-        // Bare condition
-        return parseCondition(g);
-      });
-
+      const groupFns = splitGroups(filterString).map(parseCondition);
       filters.push((row) => groupFns.some((fn) => fn(row)));
       return builder;
     },
@@ -774,16 +723,7 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
-    const [fnName, params] = args;
-    const builtin = DEFAULT_RPCS[fnName];
-    if (builtin) {
-      try {
-        return { data: builtin(params || {}), error: null };
-      } catch (err) {
-        return { data: null, error: { message: err.message } };
-      }
-    }
-    return { data: null, error: { message: `No RPC mock configured for "${fnName}"` } };
+    return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {
     signUp: (...args) => _authMocks.signUp(...args),

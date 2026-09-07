@@ -14,6 +14,11 @@ import { get, put, del } from '../client';
 import type { PlaceAddressCalendarData } from '@pantopus/types';
 
 export type PickupWeekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+export interface SetPickupDayRequest {
+  weekday: PickupWeekday;
+  recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
+  recycling_next_date?: string;
+}
 
 export interface AddressCalendarResponse {
   calendar: PlaceAddressCalendarData;
@@ -29,7 +34,7 @@ export async function getAddressCalendar(homeId: string): Promise<AddressCalenda
 
 export async function setPickupDay(
   homeId: string,
-  data: { weekday: PickupWeekday; recycling_every_other_week?: boolean },
+  data: SetPickupDayRequest,
 ): Promise<SetPickupDayResponse> {
   return put(`/api/homes/${homeId}/calendar/pickup-day`, data);
 }

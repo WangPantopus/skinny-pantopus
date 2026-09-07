@@ -4,7 +4,7 @@
 //   GET    /api/homes/:id/calendar             the next two weeks at this
 //                                              address (same payload as the
 //                                              Place `address_calendar` section)
-//   PUT    /api/homes/:id/calendar/pickup-day  { weekday: 'TU', recycling_every_other_week?: true }
+//   PUT    /api/homes/:id/calendar/pickup-day  { weekday, recycling_frequency?, recycling_next_date? }
 //   DELETE /api/homes/:id/calendar/pickup-day  back to the city default
 //
 // Any active member of the home may read; setting the pickup day needs
@@ -24,16 +24,20 @@ const addressCalendarService = require('../services/addressCalendarService');
 const pickupSchema = Joi.object({
   weekday: Joi.string().valid('MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU').required(),
   recycling_every_other_week: Joi.boolean().optional(),
+  recycling_frequency: Joi.string().valid('not_set', 'weekly', 'biweekly').optional(),
+  recycling_next_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 async function loadHomeForMember(homeId, userId) {
   const access = await checkHomePermission(homeId, userId);
+  if (access?.readFailed) return { error: { status: 503, body: { error: 'Could not check home access. Try again.' } } };
   if (!access || !access.hasAccess) return { error: { status: 403, body: { error: 'Not authorized' } } };
-  const { data: home } = await supabaseAdmin
+  const { data: home, error } = await supabaseAdmin
     .from('Home')
     .select('id, city, state, county, timezone')
     .eq('id', homeId)
     .maybeSingle();
+  if (error) throw new Error(error.message);
   if (!home) return { error: { status: 404, body: { error: 'Home not found' } } };
   return { home };
 }
@@ -56,12 +60,16 @@ router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), asyn
     if (error) return res.status(error.status).json(error.body);
     const result = await addressCalendarService.setPickupDay(home, {
       weekday: req.body.weekday,
-      recyclingEveryOtherWeek: req.body.recycling_every_other_week !== false,
+      // Older clients only send a weekday/boolean. Accept them, but do not
+      // invent recycling dates without the new explicit schedule fields.
+      recyclingFrequency: req.body.recycling_frequency || 'not_set',
+      recyclingNextDate: req.body.recycling_next_date,
       userId: req.user.id,
     });
     const calendar = await addressCalendarService.composeForHome(home);
     return res.json({ pickup: result, calendar });
   } catch (err) {
+    if (err.code === 'INVALID_PICKUP') return res.status(400).json({ error: err.message });
     logger.error('addressCalendar: set pickup day failed', { homeId: req.params.id, error: err.message });
     return res.status(500).json({ error: 'Could not save your pickup day' });
   }

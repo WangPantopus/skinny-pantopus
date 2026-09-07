@@ -13,7 +13,7 @@
 
 /** Literals, not tokens: Satori resolves no CSS variables. */
 const BODY = '#0284C7'; // --color-primary-600
-const CHECK = '#16A34A'; // --color-identity-home
+const CHECK = '#16A34A'; // --color-brand-check
 const REVERSE = '#ffffff'; // body and check together, on a coloured ground
 
 // The stamp body (x4 y4 w56 h56 rx13) traced clockwise. Each perforation

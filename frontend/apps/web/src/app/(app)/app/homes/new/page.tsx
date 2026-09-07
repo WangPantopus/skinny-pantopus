@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -119,6 +119,16 @@ export default function NewHomePage() {
 
   // Step 1 — Location
   const [addressText, setAddressText] = useState('');
+  useEffect(() => {
+    const savedId = new URLSearchParams(window.location.search).get('savedPlace');
+    if (!savedId) return;
+    let cancelled = false;
+    api.savedPlaces.getSavedPlaces().then(({ savedPlaces }) => {
+      const place = savedPlaces.find((p) => p.id === savedId);
+      if (!cancelled && place) setAddressText((current) => current || place.label);
+    }).catch(() => { if (!cancelled) setError('Could not load your saved address. Reload to try again, or enter it below.'); });
+    return () => { cancelled = true; };
+  }, []);
   const [normalized, setNormalized] = useState<NormalizedAddress | null>(null);
   const [unit, setUnit] = useState('');
   const [validatedAddressId, setValidatedAddressId] = useState<string | null>(null);

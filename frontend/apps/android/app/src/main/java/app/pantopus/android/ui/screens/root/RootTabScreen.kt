@@ -1204,6 +1204,7 @@ private object ChildRoutes {
      * row; gig-only search stays reachable from its Tasks tab and from
      * the Gigs feed search bar.
      */
+    const val BEACON_SEARCH = "search/beacons"
     const val UNIVERSAL_SEARCH = "search"
 
     /** Gig detail target — placeholder until T2.6 Transactional Detail. */
@@ -2269,86 +2270,104 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
                     LaunchedEffect(placeLanding) {
                         val landing = placeLanding
-                        if (!didLandPlace && landing is HomeLanding.PlaceDashboard) {
+                        val canRestoreLanding =
+                            !didLandPlace &&
+                                navController.currentDestination?.route == PantopusRoute.Place.path
+                        val hasPendingLink =
+                            DeepLinkRouter.pending.value != null ||
+                                app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
+                        if (canRestoreLanding && landing is HomeLanding.PlaceDashboard && !hasPendingLink) {
                             didLandPlace = true
                             navController.navigate(ChildRoutes.placeDashboard(landing.homeId))
                         }
                     }
-                    HubWithDebugFiveTap(navController = navController) {
-                        HubScreen(onIntent = { intent ->
-                            when (intent) {
-                                HubNavigationIntent.OpenNotifications ->
-                                    navController.navigate(ChildRoutes.NOTIFICATIONS)
-                                HubNavigationIntent.OpenAudienceNotifications ->
-                                    navController.navigate(
-                                        ChildRoutes.notificationsZone(NotificationsZone.Audience.rawValue),
-                                    )
-                                HubNavigationIntent.OpenMenu ->
-                                    navDrawerScope.launch { navDrawerState.open() }
-                                HubNavigationIntent.OpenProfile ->
-                                    navController.navigate(ChildRoutes.profile())
-                                HubNavigationIntent.StartVerification ->
-                                    navController.navigate(ChildRoutes.ADD_HOME)
-                                is HubNavigationIntent.ActionTapped ->
-                                    when (intent.kind) {
-                                        ActionChipContent.Kind.AddHome ->
-                                            navController.navigate(ChildRoutes.ADD_HOME)
-                                        ActionChipContent.Kind.ScanMail ->
-                                            navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                                        ActionChipContent.Kind.PostTask ->
-                                            navController.navigate(ChildRoutes.quickPostGig(GigsCategory.All.key))
-                                        ActionChipContent.Kind.SnapAndSell ->
-                                            navController.navigate(ChildRoutes.COMPOSE_LISTING)
-                                    }
-                                is HubNavigationIntent.PillarTapped ->
-                                    when (intent.pillar) {
-                                        PillarTile.Pillar.Mail ->
-                                            navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                                        PillarTile.Pillar.Pulse ->
-                                            navController.navigateToRootTab(PantopusRoute.Pulse)
-                                        PillarTile.Pillar.Marketplace ->
-                                            navController.navigateToRootTab(PantopusRoute.Marketplace)
-                                        PillarTile.Pillar.Gigs ->
-                                            navController.navigateToRootTab(PantopusRoute.Tasks)
-                                    }
-                                is HubNavigationIntent.DiscoveryTapped ->
-                                    routeForDiscovery(intent.item).also { navController.navigate(it) }
-                                HubNavigationIntent.OpenDiscoverHub ->
-                                    navController.navigate(ChildRoutes.DISCOVER_HUB)
-                                HubNavigationIntent.OpenExploreMap ->
-                                    navController.navigate(ChildRoutes.EXPLORE)
-                                HubNavigationIntent.OpenFindBusinesses ->
-                                    navController.navigate(ChildRoutes.DISCOVER_BUSINESSES)
-                                is HubNavigationIntent.JumpBackTapped ->
-                                    if (intent.item.route.startsWith("/app/chat")) {
-                                        navController.navigateToRootTab(PantopusRoute.Messages)
-                                    } else {
-                                        navController.navigate(routeForJumpBackIn(intent.item))
-                                    }
-                                // `statusItems[].route` uses the same canonical web
-                                // paths as `jumpBackIn[].route`, so they share one
-                                // resolver.
-                                is HubNavigationIntent.StatusItemTapped ->
-                                    if (intent.item.route.startsWith("/app/chat")) {
-                                        navController.navigateToRootTab(PantopusRoute.Messages)
-                                    } else {
+                    if (placeLanding is HomeLanding.Review) {
+                        val arrival by placeHostVm.arrival.collectAsStateWithLifecycle()
+                        app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen(
+                            state = arrival,
+                            onSave = placeHostVm::save,
+                            onDone = placeHostVm::finish,
+                            onSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
+                            onSetUpHome = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            onRetryPreview = placeHostVm::loadPreview,
+                        )
+                    } else {
+                        HubWithDebugFiveTap(navController = navController) {
+                            HubScreen(onIntent = { intent ->
+                                when (intent) {
+                                    HubNavigationIntent.OpenNotifications ->
+                                        navController.navigate(ChildRoutes.NOTIFICATIONS)
+                                    HubNavigationIntent.OpenAudienceNotifications ->
                                         navController.navigate(
-                                            routeForJumpBackIn(
-                                                JumpBackItem(
-                                                    id = intent.item.id,
-                                                    title = intent.item.title,
-                                                    icon = intent.item.icon,
-                                                    route = intent.item.route,
-                                                ),
-                                            ),
+                                            ChildRoutes.notificationsZone(NotificationsZone.Audience.rawValue),
                                         )
-                                    }
-                                HubNavigationIntent.OpenToday ->
-                                    navController.navigate(ChildRoutes.todayDetail())
-                                HubNavigationIntent.OpenRecentActivity ->
-                                    navController.navigate(ChildRoutes.RECENT_ACTIVITY)
-                            }
-                        })
+                                    HubNavigationIntent.OpenMenu ->
+                                        navDrawerScope.launch { navDrawerState.open() }
+                                    HubNavigationIntent.OpenProfile ->
+                                        navController.navigate(ChildRoutes.profile())
+                                    HubNavigationIntent.StartVerification ->
+                                        navController.navigate(ChildRoutes.ADD_HOME)
+                                    is HubNavigationIntent.ActionTapped ->
+                                        when (intent.kind) {
+                                            ActionChipContent.Kind.AddHome ->
+                                                navController.navigate(ChildRoutes.ADD_HOME)
+                                            ActionChipContent.Kind.ScanMail ->
+                                                navController.navigate(ChildRoutes.MAILBOX_ROOT)
+                                            ActionChipContent.Kind.PostTask ->
+                                                navController.navigate(ChildRoutes.quickPostGig(GigsCategory.All.key))
+                                            ActionChipContent.Kind.SnapAndSell ->
+                                                navController.navigate(ChildRoutes.COMPOSE_LISTING)
+                                        }
+                                    is HubNavigationIntent.PillarTapped ->
+                                        when (intent.pillar) {
+                                            PillarTile.Pillar.Mail ->
+                                                navController.navigate(ChildRoutes.MAILBOX_ROOT)
+                                            PillarTile.Pillar.Pulse ->
+                                                navController.navigateToRootTab(PantopusRoute.Pulse)
+                                            PillarTile.Pillar.Marketplace ->
+                                                navController.navigateToRootTab(PantopusRoute.Marketplace)
+                                            PillarTile.Pillar.Gigs ->
+                                                navController.navigateToRootTab(PantopusRoute.Tasks)
+                                        }
+                                    is HubNavigationIntent.DiscoveryTapped ->
+                                        routeForDiscovery(intent.item).also { navController.navigate(it) }
+                                    HubNavigationIntent.OpenDiscoverHub ->
+                                        navController.navigate(ChildRoutes.DISCOVER_HUB)
+                                    HubNavigationIntent.OpenExploreMap ->
+                                        navController.navigate(ChildRoutes.EXPLORE)
+                                    HubNavigationIntent.OpenFindBusinesses ->
+                                        navController.navigate(ChildRoutes.DISCOVER_BUSINESSES)
+                                    is HubNavigationIntent.JumpBackTapped ->
+                                        if (intent.item.route.startsWith("/app/chat")) {
+                                            navController.navigateToRootTab(PantopusRoute.Messages)
+                                        } else {
+                                            navController.navigate(routeForJumpBackIn(intent.item))
+                                        }
+                                    // `statusItems[].route` uses the same canonical web
+                                    // paths as `jumpBackIn[].route`, so they share one
+                                    // resolver.
+                                    is HubNavigationIntent.StatusItemTapped ->
+                                        if (intent.item.route.startsWith("/app/chat")) {
+                                            navController.navigateToRootTab(PantopusRoute.Messages)
+                                        } else {
+                                            navController.navigate(
+                                                routeForJumpBackIn(
+                                                    JumpBackItem(
+                                                        id = intent.item.id,
+                                                        title = intent.item.title,
+                                                        icon = intent.item.icon,
+                                                        route = intent.item.route,
+                                                    ),
+                                                ),
+                                            )
+                                        }
+                                    HubNavigationIntent.OpenToday ->
+                                        navController.navigate(ChildRoutes.todayDetail())
+                                    HubNavigationIntent.OpenRecentActivity ->
+                                        navController.navigate(ChildRoutes.RECENT_ACTIVITY)
+                                }
+                            })
+                        }
                     }
                 }
                 // ── Wedge v2 D2: Place · Today · Nearby · Mail ──────────
@@ -2359,6 +2378,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NearbyScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
+                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                         onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                         onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
                     )
@@ -4386,15 +4407,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     BeaconsFeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                        onDiscover = { navController.navigate(ChildRoutes.DISCOVER_HUB) },
+                        onFollowing = { navController.navigate(ChildRoutes.FOLLOWING) },
+                        onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
                         onBack = { navController.popBackStack() },
                     )
                 }
                 composable(ChildRoutes.FOLLOWING) {
                     FollowingScreen(
                         onBack = { navController.popBackStack() },
-                        onDiscover = { navController.navigate(ChildRoutes.DISCOVER_HUB) },
+                        onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
                         onOpenPersona = { handle -> navController.navigate(ChildRoutes.beaconProfile(handle)) },
+                        onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                     )
                 }
                 composable(ChildRoutes.MARKETPLACE) {
@@ -4522,6 +4545,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.GIG_SEARCH) {
                     GigSearchScreen(
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(ChildRoutes.BEACON_SEARCH) {
+                    UniversalSearchScreen(
+                        initialTab = app.pantopus.android.ui.screens.universal_search.UniversalSearchTab.Beacons,
+                        onOpen = { destination -> navController.navigate(routeForUniversalSearch(destination)) },
+                        onBrowseNearbyBusinesses = { navController.navigate(ChildRoutes.DISCOVER_BUSINESSES) },
                         onBack = { navController.popBackStack() },
                     )
                 }

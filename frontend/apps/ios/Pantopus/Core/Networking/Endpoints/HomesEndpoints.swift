@@ -644,16 +644,19 @@ public enum HomesEndpoints {
 public struct SetPickupDayRequest: Encodable, Sendable {
     /// MO TU WE TH FR SA SU
     public let weekday: String
-    public let recyclingEveryOtherWeek: Bool
+    public let recyclingFrequency: String
+    public let recyclingNextDate: String?
 
-    public init(weekday: String, recyclingEveryOtherWeek: Bool = true) {
+    public init(weekday: String, recyclingFrequency: String = "not_set", recyclingNextDate: String? = nil) {
         self.weekday = weekday
-        self.recyclingEveryOtherWeek = recyclingEveryOtherWeek
+        self.recyclingFrequency = recyclingFrequency
+        self.recyclingNextDate = recyclingNextDate
     }
 
     private enum CodingKeys: String, CodingKey {
         case weekday
-        case recyclingEveryOtherWeek = "recycling_every_other_week"
+        case recyclingFrequency = "recycling_frequency"
+        case recyclingNextDate = "recycling_next_date"
     }
 }
 

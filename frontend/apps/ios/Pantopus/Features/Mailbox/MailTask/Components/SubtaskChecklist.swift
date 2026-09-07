@@ -90,7 +90,7 @@ struct SubtaskChecklist: View {
     private func checkbox(checked: Bool) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
-                .fill(checked ? Theme.Color.success : Theme.Color.appSurface)
+                .fill(checked ? Theme.Color.successSolid : Theme.Color.appSurface)
             if checked {
                 Icon(.check, size: 12, color: Theme.Color.appTextInverse)
             } else {

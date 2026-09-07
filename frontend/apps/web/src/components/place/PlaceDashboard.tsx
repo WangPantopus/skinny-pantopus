@@ -15,11 +15,10 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { MapPinned } from 'lucide-react';
 import { queryKeys } from '@/lib/query-keys';
 import type { PlaceSwitcherHome } from '@/components/archetypes/place';
 import ErrorState from '@/components/ui/ErrorState';
-import EmptyState from '@/components/ui/EmptyState';
+import SavedPlaceContext from './SavedPlaceContext';
 import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
@@ -134,13 +133,7 @@ export default function PlaceDashboard() {
   if (homeQuery.isSuccess && !homeId) {
     return (
       <Shell>
-        <EmptyState
-          icon={MapPinned}
-          title="You haven't added a place yet"
-          description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
-          actionLabel="Add your place"
-          onAction={() => router.push('/app/homes')}
-        />
+        <SavedPlaceContext />
       </Shell>
     );
   }
@@ -164,6 +157,7 @@ export default function PlaceDashboard() {
       {setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
         <div className="px-4 pt-4"><SetupBanner steps={setupSteps} /></div>
       ) : null}
+      <div className="mb-4"><button className="text-sm text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/place?savedPlace=all')}>Saved address previews</button></div>
       <PlaceDashboardView
         intelligence={intelQuery.data}
         homeId={homeId as string}

@@ -92,6 +92,7 @@ export { getCurrentSeason, getStationeryConfig, INK_CONFIGS } from './stationery
 export type { InkConfig, StationeryConfig } from './stationery';
 export {
   readAuthRedirectQuery,
+  authPageHref,
   safeRedirectPath,
   extractApiError,
   extractFieldErrors,

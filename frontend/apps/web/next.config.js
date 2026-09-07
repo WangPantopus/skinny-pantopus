@@ -17,9 +17,7 @@ const createNextConfig = (phase) => ({
   output: 'standalone',
   reactStrictMode: true,
   typescript: {
-    // Pre-existing type errors unrelated to Docker setup.
-    // Run `pnpm type-check` to see the full list and fix them over time.
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   transpilePackages: ['@pantopus/api', '@pantopus/types', '@pantopus/utils', '@pantopus/ui-utils', '@pantopus/theme'],
   images: {

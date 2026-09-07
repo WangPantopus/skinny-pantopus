@@ -890,7 +890,7 @@ private struct YourRsvpCard: View {
                         .font(.system(size: 12, weight: selected == choice ? .bold : .semibold))
                         .foregroundStyle(selected == choice ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
                         .frame(maxWidth: .infinity, minHeight: 34)
-                        .background(selected == choice ? Theme.Color.home : Color.clear)
+                        .background(selected == choice ? Theme.Color.homeSolid : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
                 }
                 .buttonStyle(.plain)

@@ -93,6 +93,7 @@ final class PlaceResidencyLetterViewModel {
 }
 
 // MARK: - Mailbox reality check VM (Wave 1, #3)
+
 // Reads the claim-time postal validation surfaced as a diagnostic —
 // zero vendor calls server-side. The physical-leg copy is per-caller,
 // which makes this card the identity page's honest verify nudge.

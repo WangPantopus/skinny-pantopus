@@ -27,15 +27,20 @@ router.post('/', verifyToken, async (req, res) => {
     const { label, placeType, latitude, longitude, city, state, sourceId,
       geocodeProvider, geocodePlaceId } = req.body;
 
-    if (!label || latitude == null || longitude == null) {
-      return res.status(400).json({ error: 'label, latitude, and longitude are required' });
+    if (req.body.expectedUserId && req.body.expectedUserId !== req.user.id) {
+      return res.status(409).json({ error: 'Your account changed. Reload before saving this place.' });
+    }
+    if (typeof label !== 'string' || !label.trim() || label.length > 500 ||
+      !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
+      !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+      return res.status(400).json({ error: 'A label and valid latitude and longitude are required' });
     }
 
     const { data, error } = await supabaseAdmin
       .from('SavedPlace')
       .upsert({
         user_id: req.user.id,
-        label,
+        label: label.trim(),
         place_type: placeType || 'searched',
         latitude,
         longitude,

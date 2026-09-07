@@ -216,18 +216,18 @@ struct CategoryStyle: Hashable {
             .nonEmpty
 
         if key.contains("handy") || key.contains("repair") || key.contains("contractor") {
-            return CategoryStyle(label: label, icon: .hammer, fill: Theme.Color.warning)
+            return CategoryStyle(label: label, icon: .hammer, fill: Theme.Color.warningSolid)
         }
         if key.contains("pet") || key.contains("dog") || key.contains("vet") {
-            return CategoryStyle(label: label, icon: .pawPrint, fill: Theme.Color.error)
+            return CategoryStyle(label: label, icon: .pawPrint, fill: Theme.Color.errorSolid)
         }
         if key.contains("tutor") || key.contains("educat") || key.contains("class") || key.contains("school") {
-            return CategoryStyle(label: label, icon: .graduationCap, fill: Theme.Color.personal)
+            return CategoryStyle(label: label, icon: .graduationCap, fill: Theme.Color.personalSolid)
         }
         if key.contains("clean") {
-            return CategoryStyle(label: label, icon: .sparkles, fill: Theme.Color.success)
+            return CategoryStyle(label: label, icon: .sparkles, fill: Theme.Color.successSolid)
         }
-        return CategoryStyle(label: label, icon: .building2, fill: Theme.Color.business)
+        return CategoryStyle(label: label, icon: .building2, fill: Theme.Color.businessSolid)
     }
 }
 

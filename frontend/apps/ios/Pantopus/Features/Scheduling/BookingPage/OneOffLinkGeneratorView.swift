@@ -572,7 +572,7 @@ private struct OneOffResultURL: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
-                .background(copied ? Theme.Color.success : Theme.Color.primary600)
+                .background(copied ? Theme.Color.successSolid : Theme.Color.primary600)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)

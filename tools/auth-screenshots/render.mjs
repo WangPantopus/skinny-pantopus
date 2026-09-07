@@ -15,7 +15,7 @@
 // Chromium comes from the web app's @playwright/test, driven through the
 // locally installed Chrome channel so no browser download is needed.
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -32,22 +32,20 @@ const DOCS = join(REPO, 'docs/screenshots');
 const VIEWPORT = { width: 408, height: 800 };
 const SCALE = 2;
 
-// Design tokens — mirror `PantopusColors` verbatim.
-const P = {
-  primary100: '#e0f2fe',
-  primary400: '#38bdf8',
-  primary600: '#0284c7',
-  home: '#16a34a',
-  surface: '#ffffff',
-  border: '#e5e7eb',
-  borderStrong: '#d1d5db',
-  fg: '#111827',
-  fg2: '#6b7280',
-  fg3: '#9ca3af',
-  error: '#dc2626',
-  errorBg: '#fef2f2',
-  success: '#16a34a',
+// Use the shipped Android palette; these remain design references, not native
+// render tests. Fail if a token disappears instead of falling back to stale ink.
+const tokenSource = await readFile(join(REPO, 'frontend/apps/android/app/src/main/java/app/pantopus/android/ui/theme/Color.kt'), 'utf8');
+const tokens = Object.fromEntries([...tokenSource.matchAll(/val (\w+) = Color\(0xFF([a-fA-F\d]{6})\)/g)].map(m => [m[1], '#' + m[2]]));
+const aliases = {
+  primary100: 'primary100', primary400: 'primary400', primary600: 'primary600',
+  brandCheck: 'brandCheck', home: 'home', surface: 'appSurface', border: 'appBorder',
+  borderStrong: 'appBorderStrong', fg: 'appText', fg2: 'appTextSecondary',
+  fg3: 'appTextMuted', error: 'error', errorBg: 'errorBg', success: 'success',
 };
+const P = Object.fromEntries(Object.entries(aliases).map(([alias, token]) => {
+  if (!tokens[token]) throw new Error(`Missing Android color token: ${token}`);
+  return [alias, tokens[token]];
+}));
 
 const PERFORATIONS = [
   [23.5, 4], [40.5, 4], [23.5, 60], [40.5, 60],
@@ -61,7 +59,7 @@ let markSeq = 0;
  * knocked-out window, and the check inside it. Geometry is the canonical
  * 64-unit grid shared with `PantopusMark.tsx` / `.swift` / `.kt`.
  */
-function mark(size, { body = P.primary600, check = P.home } = {}) {
+function mark(size, { body = P.primary600, check = P.brandCheck } = {}) {
   const id = `ptmask${markSeq++}`;
   const holes = PERFORATIONS
     .map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="4.5" fill="#000"/>`)

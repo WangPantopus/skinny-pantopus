@@ -2,7 +2,10 @@
 
 Renders the Log in / Create account / Auth error visual contract inside a
 device frame (408 x 800 CSS px at `deviceScaleFactor: 2` → 816 x 1600 PNG)
-and writes the Android baselines that `AuthScreensSnapshotTest` guards.
+and writes the Android references that `AuthScreensSnapshotTest` guards.
+Colors are read from the shipped `PantopusColors` source. These HTML frames
+are design references; native rendering is checked separately with Paparazzi
+and instrumented tests.
 
 ```sh
 node tools/auth-screenshots/render.mjs

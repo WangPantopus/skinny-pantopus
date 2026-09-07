@@ -172,7 +172,7 @@ struct UploadSlot: View {
     private func ocrRow(detail: String, isWarn: Bool) -> some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             ZStack {
-                Circle().fill(isWarn ? Theme.Color.warning : Theme.Color.success)
+                Circle().fill(isWarn ? Theme.Color.warningSolid : Theme.Color.successSolid)
                 Icon(
                     isWarn ? .alertTriangle : .check,
                     size: 11,
