@@ -51,6 +51,7 @@ public struct FeedView: View {
     private let onOpenPost: @MainActor (String) -> Void
     private let onCompose: @MainActor (PulseIntent) -> Void
     private let onEmptyCTA: (@MainActor () -> Void)?
+    private let onFollowing: (@MainActor () -> Void)?
     private let onBack: (@MainActor () -> Void)?
 
     init(
@@ -59,6 +60,7 @@ public struct FeedView: View {
         onOpenPost: @escaping @MainActor (String) -> Void = { _ in },
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
         onEmptyCTA: (@MainActor () -> Void)? = nil,
+        onFollowing: (@MainActor () -> Void)? = nil,
         onBack: (@MainActor () -> Void)? = nil
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
@@ -73,6 +75,7 @@ public struct FeedView: View {
         self.onOpenPost = onOpenPost
         self.onCompose = onCompose
         self.onEmptyCTA = onEmptyCTA
+        self.onFollowing = onFollowing
         self.onBack = onBack
     }
 
@@ -80,6 +83,24 @@ public struct FeedView: View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: Spacing.s0) {
                 topBar
+                if viewModel.surface == .beacons {
+                    HStack(spacing: Spacing.s4) {
+                        if let onEmptyCTA {
+                            Button("Find Beacons", action: onEmptyCTA)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("beacons.find")
+                        }
+                        if let onFollowing {
+                            Button("Following", action: onFollowing)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("beacons.following")
+                        }
+                        Spacer()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.vertical, Spacing.s2)
+                }
                 if viewModel.showsSurfaceToggle {
                     surfaceTabs
                 }
@@ -134,9 +155,11 @@ public struct FeedView: View {
                 }
             }
             .background(Theme.Color.appBg)
-            FeedComposeFAB { onCompose(viewModel.activeIntent) }
-                .padding(.trailing, Spacing.s4)
-                .padding(.bottom, Spacing.s10)
+            if viewModel.surface != .beacons {
+                FeedComposeFAB { onCompose(viewModel.activeIntent) }
+                    .padding(.trailing, Spacing.s4)
+                    .padding(.bottom, Spacing.s10)
+            }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
@@ -176,6 +199,7 @@ public struct FeedView: View {
                 }
             )
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseFeed")
     }
 

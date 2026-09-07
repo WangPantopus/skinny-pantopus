@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import PantopusBadge from '@/components/PantopusBadge';
 import * as api from '@pantopus/api';
-import { extractApiError, normalizeEmail } from '@/lib/auth-utils';
+import { authPageHref, safeRedirectPath, readAuthRedirectQuery, extractApiError, normalizeEmail } from '@/lib/auth-utils';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
+  const params = useSearchParams();
+  const redirectTo = safeRedirectPath(readAuthRedirectQuery(params), '/app/place');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +38,7 @@ export default function ForgotPasswordPage() {
     setError('');
     setSuccess('');
     try {
-      const response = await api.auth.requestPasswordReset(normalizeEmail(email));
+      const response = await api.auth.requestPasswordReset(normalizeEmail(email), redirectTo);
       setSuccess(response?.message || 'If that email exists, a reset link has been sent.');
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
@@ -99,7 +102,7 @@ export default function ForgotPasswordPage() {
           </form>
 
           <p className="mt-6 text-center text-sm text-app-text-secondary">
-            <Link href="/login" className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
+            <Link href={authPageHref('/login', redirectTo)} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
               Back to sign in
             </Link>
           </p>
@@ -107,4 +110,8 @@ export default function ForgotPasswordPage() {
       </div>
     </div>
   );
+}
+
+export default function ForgotPasswordPage() {
+  return <Suspense><ForgotPasswordContent /></Suspense>;
 }

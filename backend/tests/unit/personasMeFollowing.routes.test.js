@@ -35,6 +35,12 @@ const PERSONA_PAID_ID = '66666666-6666-6666-6666-666666666666';
 const PERSONA_PAUSED_ID = '77777777-7777-7777-7777-777777777777';
 const PERSONA_SUSPENDED_ID = '88888888-8888-8888-8888-888888888888';
 
+// Real Post rows carry audience metadata; make the fixtures explicit so
+// missing fields do not accidentally grant access in the route.
+function seedPosts(posts) {
+  supabaseAdmin.seedTable('Post', posts.map((post) => ({ visibility: 'followers', audience: 'followers', ...post })));
+}
+
 function buildApp() {
   const app = express();
   app.use(express.json());
@@ -90,7 +96,7 @@ function makeMembership(personaId, overrides = {}) {
     notification_level: overrides.notification_level || 'all',
     status: overrides.status || 'active',
     muted_until: overrides.muted_until || null,
-    last_seen_at: overrides.last_seen_at || '2026-05-01T00:00:00Z',
+    last_seen_at: 'last_seen_at' in overrides ? overrides.last_seen_at : '2026-05-01T00:00:00Z',
     joined_at: overrides.joined_at || '2026-04-01T00:00:00Z',
     // Pre-joined fields — the mock does not expand FK selects.
     persona,
@@ -120,7 +126,40 @@ beforeEach(() => {
 
 afterEach(() => {
   featureFlagService.invalidateFlagCache();
+  jest.restoreAllMocks();
 });
+
+// The shared adapter historically ignores ORDER BY/LIMIT. Enforce both for
+// the high-volume route regressions so a shared query cap cannot pass them.
+function enforcePostQueryWindow() {
+  const originalFrom = supabaseAdmin.from;
+  jest.spyOn(supabaseAdmin, 'from').mockImplementation((table) => {
+    const query = originalFrom(table);
+    if (table !== 'Post') return query;
+    const execute = query._execute;
+    const ordering = [];
+    let limit = Infinity;
+    query.order = (field, { ascending = true } = {}) => {
+      ordering.push({ field, ascending });
+      return query;
+    };
+    query.limit = (count) => { limit = count; return query; };
+    query._execute = () => {
+      const result = execute();
+      if (!Array.isArray(result.data)) return result;
+      result.data.sort((a, b) => {
+        for (const { field, ascending } of ordering) {
+          const diff = String(a[field]).localeCompare(String(b[field]));
+          if (diff) return ascending ? diff : -diff;
+        }
+        return 0;
+      });
+      result.data = result.data.slice(0, limit);
+      return result;
+    };
+    return query;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/personas/me/following
@@ -128,7 +167,7 @@ afterEach(() => {
 describe('GET /api/personas/me/following', () => {
   test('returns an empty list when the viewer follows nothing', async () => {
     seedTable('PersonaMembership', []);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -145,7 +184,7 @@ describe('GET /api/personas/me/following', () => {
         last_seen_at: '2026-05-01T00:00:00Z',
       }),
     ]);
-    seedTable('Post', [
+    seedPosts( [
       {
         id: 'post-old',
         identity_context_type: 'persona',
@@ -195,7 +234,7 @@ describe('GET /api/personas/me/following', () => {
         persona: { handle: 'aurora', display_name: 'Aurora', credential_status: 'pending' },
       }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -212,7 +251,7 @@ describe('GET /api/personas/me/following', () => {
         joined_at: '2026-05-10T00:00:00Z',
       }),
     ]);
-    seedTable('Post', [
+    seedPosts( [
       // Pre-follow post — must NOT be counted.
       { id: 'p-before', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID,
         content: 'Old post', archived_at: null, created_at: '2026-05-01T00:00:00Z' },
@@ -232,7 +271,7 @@ describe('GET /api/personas/me/following', () => {
       makeMembership(PERSONA_B_ID, { id: 'mem-b', persona: { handle: 'beacon_b', display_name: 'Zebra' } }),
       makeMembership(PERSONA_A_ID, { id: 'mem-a', persona: { handle: 'aurora', display_name: 'Aurora' } }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(
       request(buildApp()).get('/api/personas/me/following?sort=alpha'),
@@ -248,7 +287,7 @@ describe('GET /api/personas/me/following', () => {
       makeMembership(PERSONA_A_ID, { id: 'mem-a', last_seen_at: '2026-05-10T00:00:00Z' }),
       makeMembership(PERSONA_B_ID, { id: 'mem-b', last_seen_at: '2026-05-01T00:00:00Z' }),
     ]);
-    seedTable('Post', [
+    seedPosts( [
       // B has 2 unread (newer than last_seen_at), A has 0.
       { id: 'p-b-1', identity_context_type: 'persona', identity_context_id: PERSONA_B_ID,
         content: 'B new', archived_at: null, created_at: '2026-05-09T00:00:00Z' },
@@ -278,7 +317,7 @@ describe('GET /api/personas/me/following', () => {
         persona: { handle: 'paid_one', display_name: 'Paid One' },
       }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -298,7 +337,7 @@ describe('GET /api/personas/me/following', () => {
         persona: { handle: 'gone', display_name: 'Gone', status: 'suspended' },
       }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -312,7 +351,7 @@ describe('GET /api/personas/me/following', () => {
       makeMembership(PERSONA_A_ID, { id: 'mem-active' }),
       makeMembership(PERSONA_B_ID, { id: 'mem-canceled', status: 'canceled' }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -326,7 +365,7 @@ describe('GET /api/personas/me/following', () => {
       makeMembership(PERSONA_A_ID, { id: 'mem-viewer', userId: VIEWER_ID }),
       makeMembership(PERSONA_B_ID, { id: 'mem-other', userId: OTHER_USER_ID }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
 
@@ -344,7 +383,7 @@ describe('POST /api/personas/me/following/:personaId/seen', () => {
     seedTable('PersonaMembership', [
       makeMembership(PERSONA_A_ID, { id: 'mem-a', last_seen_at: '2026-04-01T00:00:00Z' }),
     ]);
-    seedTable('Post', [
+    seedPosts( [
       { id: 'p-new', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID,
         content: 'Recent', archived_at: null, created_at: '2026-05-09T00:00:00Z' },
     ]);
@@ -447,7 +486,7 @@ describe('PATCH /api/personas/me/following/:personaId/mute', () => {
     seedTable('PersonaMembership', [
       makeMembership(PERSONA_A_ID, { id: 'mem-a' }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     // 1. Before muting: list shows mutedUntil = null.
     const before = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
@@ -487,9 +526,87 @@ describe('PATCH /api/personas/me/following/:personaId/mute', () => {
         muted_until: '2020-01-01T00:00:00Z',
       }),
     ]);
-    seedTable('Post', []);
+    seedPosts( []);
 
     const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
     expect(res.body.items[0].mutedUntil).toBeNull();
+  });
+});
+
+describe('Following uses the post audience before exposing snippets or unread counts', () => {
+  test('a busy Beacon cannot crowd a quieter Beacon out of Following', async () => {
+    enforcePostQueryWindow();
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID), makeMembership(PERSONA_B_ID)]);
+    seedPosts([
+      ...Array.from({ length: 80 }, (_, index) => ({
+        id: `busy-${String(index).padStart(3, '0')}`, identity_context_type: 'persona',
+        identity_context_id: PERSONA_A_ID, content: 'Busy Beacon', archived_at: null,
+        created_at: new Date(Date.parse('2026-05-10T00:00:00Z') + index * 1000).toISOString(),
+      })),
+      { id: 'quiet-update', identity_context_type: 'persona', identity_context_id: PERSONA_B_ID,
+        content: 'Still new to this follower', archived_at: null, created_at: '2026-05-09T00:00:00Z' },
+    ]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following?sort=unread'), VIEWER_ID);
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((row) => [row.latestPost?.id, row.unreadCount])).toEqual([
+      ['busy-079', 25], ['quiet-update', 1],
+    ]);
+    expect(res.body.counts.unreadBeacons).toBe(2);
+    const page = await asUser(request(buildApp()).get('/api/personas/me/following?sort=unread&offset=1&limit=1'), VIEWER_ID);
+    expect(page.body.items[0].latestPost.id).toBe('quiet-update');
+    expect(page.body.counts).toEqual(res.body.counts);
+  });
+
+  test('restricted and unpublished posts do not consume a follower’s query cap', async () => {
+    enforcePostQueryWindow();
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID)]);
+    seedPosts([
+      ...Array.from({ length: 80 }, (_, index) => ({
+        id: `hidden-${index}`, identity_context_type: 'persona', identity_context_id: PERSONA_A_ID,
+        content: 'Restricted secret', archived_at: null, created_at: '2026-05-10T00:00:00Z',
+        ...(index % 2 ? { target_tier_rank: 2 } : { post_metadata: { broadcast_status: 'draft' } }),
+      })),
+      { id: 'allowed-older', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID,
+        content: 'Available to followers', archived_at: null, created_at: '2026-05-09T00:00:00Z' },
+    ]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({ latestPost: { id: 'allowed-older' }, unreadCount: 1 });
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+  });
+
+  test('a free follower sees the latest permitted update, never paid, draft or private content', async () => {
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID)]);
+    seedPosts([
+      { id: 'allowed', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID, content: 'Follower update', created_at: '2026-05-08T00:00:00Z', archived_at: null },
+      { id: 'paid', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID, content: 'Paid secret', target_tier_rank: 2, created_at: '2026-05-09T00:00:00Z', archived_at: null },
+      { id: 'draft', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID, content: 'Draft secret', post_metadata: { broadcast_status: 'draft' }, created_at: '2026-05-10T00:00:00Z', archived_at: null },
+      { id: 'private', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID, content: 'Private secret', audience: 'private', visibility: 'private', created_at: '2026-05-11T00:00:00Z', archived_at: null },
+    ]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({ latestPost: { id: 'allowed' }, unreadCount: 1 });
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+  });
+
+  test('paid membership reads its tier, including while notifications are muted', async () => {
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID, { tier: { rank: 2, name: 'Member', price_cents: 500 }, muted_until: '2099-01-01T00:00:00Z' })]);
+    seedPosts([{ id: 'paid', identity_context_type: 'persona', identity_context_id: PERSONA_A_ID, content: 'Member update', target_tier_rank: 2, created_at: '2026-05-09T00:00:00Z', archived_at: null }]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
+    expect(res.body.items[0]).toMatchObject({ latestPost: { id: 'paid' }, unreadCount: 1 });
+  });
+
+  test('pending and expired memberships are not presented as active follows', async () => {
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID, { status: 'pending' }), makeMembership(PERSONA_B_ID, { status: 'expired' })]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
+    expect(res.body.items).toEqual([]);
+  });
+
+  test('an explicit block hides even a stale active membership', async () => {
+    seedTable('PersonaMembership', [makeMembership(PERSONA_A_ID)]);
+    seedTable('PersonaBlock', [{ persona_id: PERSONA_A_ID, blocked_user_id: VIEWER_ID }]);
+    const res = await asUser(request(buildApp()).get('/api/personas/me/following'), VIEWER_ID);
+    expect(res.body.items).toEqual([]);
+    expect(res.body.counts.totalFollowing).toBe(0);
   });
 });

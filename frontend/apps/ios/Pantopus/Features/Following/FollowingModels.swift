@@ -221,6 +221,7 @@ public struct FollowingRow: Identifiable, Sendable, Hashable {
     public let isPaid: Bool
     /// Paused Beacons render dimmed and the bell is disabled (RN parity).
     public let isPaused: Bool
+    public var latestPostId: String?
 
     public var tone: FollowingAvatarTone {
         FollowingAvatarTone.forKey(toneKey)
@@ -361,8 +362,8 @@ public enum FollowingProjection {
     }
 
     static func project(_ dto: FollowingRowDTO, now: Date) -> (FollowingSectionKind, FollowingRow) {
-        let muted = dto.mutedUntil != nil
-        let unread = muted ? 0 : max(0, dto.unreadCount ?? 0)
+        let muted = parseDate(dto.mutedUntil).map { $0 > now } ?? false
+        let unread = max(0, dto.unreadCount ?? 0)
         let createdAt = dto.latestPost?.createdAt
         let recent = isRecent(createdAt, now: now)
 
@@ -378,7 +379,7 @@ public enum FollowingProjection {
         let bodyIsQuiet: Bool
         let timeLabel: String?
         if kind == .quiet {
-            bodyText = muted ? "No updates while muted" : "No recent updates"
+            bodyText = muted ? "Notifications muted" : "No recent updates"
             bodyIsQuiet = true
             timeLabel = nil
         } else {
@@ -417,7 +418,8 @@ public enum FollowingProjection {
             isMuted: muted,
             notificationLevel: FollowingNotificationLevel.from(dto.notificationLevel),
             isPaid: (dto.paidTier?.rank ?? 0) > 1,
-            isPaused: dto.persona.status?.lowercased() == "paused"
+            isPaused: dto.persona.status?.lowercased() == "paused",
+            latestPostId: dto.latestPost?.id
         )
         return (kind, row)
     }

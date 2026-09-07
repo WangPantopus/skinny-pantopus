@@ -25,7 +25,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   MapPinned,
   Globe,
-  Lock as LockIcon,
   ArrowRight,
   ShieldCheck,
   Trash2,
@@ -53,11 +52,11 @@ import { Group, SectionCard, LockedCard, DensityCard, PlaceHeader, TextButton, A
 import { renderSection } from '@/components/place/presentation';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { getStoreDownloadCta } from '@/lib/publicShare';
-import { stashPendingPlace } from './pendingPlace';
+import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
+import { authPageHref } from '@/lib/auth-utils';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
 
-const REGISTER_HREF = '/register?redirectTo=%2Fapp%2Fplace';
 
 // ── Brand lockup + static region pill ───────────────────────
 function TopBar() {
@@ -261,7 +260,7 @@ function PreviewHeroCard() {
             Here&apos;s what&apos;s public about your address — a free, one-time look.
           </p>
           <p className="text-[13.5px] text-app-text-secondary leading-[19px] mt-1.5">
-            Claim it to save this page and get it every morning.
+            Keep this preview, then choose whether to save it to your account.
           </p>
         </div>
       </div>
@@ -528,16 +527,16 @@ function WallBar({ onWall, shareAddress }: { onWall: () => void; shareAddress: s
       <div className="flex items-center gap-3.5">
         <div className="flex-1 min-w-0">
           <p className="text-[14.5px] font-semibold text-app-text leading-[19px] -tracking-[0.01em]">
-            This address has one page. Claim it, free.
+            Keep this address handy.
           </p>
-          <p className="text-[12.5px] text-app-text-secondary mt-0.5">Save it, get it every morning, see everything.</p>
+          <p className="text-[12.5px] text-app-text-secondary mt-0.5">Continue to save. Your preview stays on this device for 24 hours.</p>
         </div>
         <button
           type="button"
           onClick={onWall}
           className="shrink-0 rounded-xl bg-primary-600 text-white px-4 py-3 text-[15px] font-semibold -tracking-[0.01em] shadow-[var(--shadow-primary)] hover:bg-primary-700 transition-colors whitespace-nowrap"
         >
-          Claim it
+          Continue
         </button>
       </div>
       <div className="mt-2 flex items-center justify-center gap-4">
@@ -691,23 +690,34 @@ export default function StartFunnel() {
     }
   }, [submitted, previewStatus, aha]);
 
-  const goBrowse = () => router.push(REGISTER_HREF);
+  const [continuationError, setContinuationError] = useState('');
+  const goBrowse = () => {
+    clearPendingPlaces();
+    router.push(authPageHref('/register', '/app/feed?surface=personas'));
+  };
 
-  const goWall = () => {
+  const continueWithPreview = (page: '/login' | '/register') => {
     // Funnel: the soft wall converted a preview into intent.
     api.recordFunnelEvent('t0_wall_viewed');
     if (selected) {
       const place = previewQuery.data?.place;
-      stashPendingPlace({
+      const previewId = stashPendingPlace({
         label: selected.label,
         latitude: selected.latitude,
         longitude: selected.longitude,
         city: place?.city ?? null,
         state: place?.state ?? null,
       });
+      if (!previewId) {
+        setContinuationError('Your browser could not keep this preview. Allow site storage and try again.');
+        return;
+      }
+      router.push(authPageHref(page, `/app/place?preview=${previewId}`));
+      return;
     }
-    router.push(REGISTER_HREF);
+    router.push(authPageHref(page, '/app/place'));
   };
+  const goWall = () => continueWithPreview('/register');
 
   const submit = () => {
     if (selected) setSubmitted(selected.label);
@@ -740,6 +750,7 @@ export default function StartFunnel() {
   return (
     <div className="min-h-screen bg-app-bg">
       <div className="mx-auto w-full max-w-[480px] sm:max-w-[540px] px-5 pt-3 flex flex-col min-h-screen">
+        {continuationError ? <p role="alert" className="py-3 text-red-700 dark:text-red-300">{continuationError}</p> : null}
         {previewQuery.isPending ? (
           <PreviewSkeleton />
         ) : previewQuery.isError ? (
@@ -762,7 +773,7 @@ export default function StartFunnel() {
                 rightSlot={
                   <button
                     type="button"
-                    onClick={() => router.push('/login')}
+                    onClick={() => continueWithPreview('/login')}
                     className="text-sm font-semibold text-primary-600 hover:text-primary-700"
                   >
                     Sign in

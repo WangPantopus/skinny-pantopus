@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.feed.pulse
 
+import app.pantopus.android.data.api.models.feed.FeedAuthorCredential
 import app.pantopus.android.data.api.models.feed.FeedPagination
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedPostCreator
@@ -18,6 +19,7 @@ import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
+import app.pantopus.android.ui.screens.feed.FeedSurface
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -131,6 +133,20 @@ class PulseFeedViewModelTest {
             sportsRepo,
             FeedModerationStore(),
         )
+
+    @Test fun beacon_badges_require_a_verified_public_credential() =
+        runTest {
+            for (status in listOf("none", "verified")) {
+                val post = askPost().let { it.copy(creator = it.creator?.copy(credential = FeedAuthorCredential(status))) }
+                coEvery { repo.feed("personas", null, null, null, 20) } returns
+                    NetworkResult.Success(FeedResponse(listOf(post), FeedPagination(null, false)))
+                val vm = makeVm()
+                vm.configureSurface(FeedSurface.Beacons)
+                vm.load()
+                val loaded = vm.state.value as PulseFeedUiState.Loaded
+                assertEquals(status == "verified", loaded.rows.single().authorVerified)
+            }
+        }
 
     @Test fun load_with_posts_transitions_loaded() =
         runTest {

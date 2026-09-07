@@ -185,11 +185,12 @@ async function sendOne(url, accessToken, token, message) {
 
 /**
  * Send one message to many FCM tokens. The v1 API is one-token-per-request;
- * we fan out and collect the tokens FCM reported as permanently invalid.
+ * we collect explicit provider acceptance and permanently invalid tokens.
+ * Acceptance does not confirm display or delivery on the device.
  */
 async function sendMany(tokens, message) {
   if (!isConfigured() || !tokens || tokens.length === 0) {
-    return { invalidTokens: [] };
+    return { invalidTokens: [], acceptedTokens: [] };
   }
 
   let accessToken;
@@ -197,14 +198,15 @@ async function sendMany(tokens, message) {
     accessToken = await getAccessToken();
   } catch (err) {
     logger.error('FCM auth failed — skipping send', { error: err.message });
-    return { invalidTokens: [] };
+    return { invalidTokens: [], acceptedTokens: [] };
   }
 
   const sa = getServiceAccount();
   const url = `https://fcm.googleapis.com/v1/projects/${sa.projectId}/messages:send`;
   const results = await Promise.all(tokens.map((token) => sendOne(url, accessToken, token, message)));
   const invalidTokens = results.filter((r) => r.action === 'invalid').map((r) => r.token);
-  return { invalidTokens };
+  const acceptedTokens = results.filter((r) => r.action === 'ok').map((r) => r.token);
+  return { invalidTokens, acceptedTokens };
 }
 
 /** Clear the cached OAuth2 access token (used on shutdown / tests). */

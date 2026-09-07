@@ -157,7 +157,7 @@ public struct RootTabView: View {
     // clearer than a lookup table for the reader chasing a mis-routed link.
     // swiftlint:disable:next cyclomatic_complexity
     private func consumeInviteDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        guard let pending else { return }
+        guard let pending, pending == router.pending else { return }
         // Root owns cross-tab dispatch. Concrete drill-down links stay
         // pending so the selected tab can push them into its own
         // NavigationStack.

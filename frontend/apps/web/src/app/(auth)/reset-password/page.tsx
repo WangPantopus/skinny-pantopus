@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PantopusBadge from '@/components/PantopusBadge';
 import * as api from '@pantopus/api';
-import { extractApiError } from '@/lib/auth-utils';
+import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
 
 const PASSWORD_MIN_LENGTH = 12;
 
 function ResetPasswordPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const loginHref = authPageHref('/login', safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place'));
   const [tokenFromHash, setTokenFromHash] = useState('');
   const [emailFromHash, setEmailFromHash] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -25,15 +26,15 @@ function ResetPasswordPageContent() {
 
   const token = useMemo(() => {
     return (
-      searchParams.get('token_hash') ||
-      searchParams.get('token') ||
-      searchParams.get('access_token') ||
+      searchParams?.get('token_hash') ||
+      searchParams?.get('token') ||
+      searchParams?.get('access_token') ||
       tokenFromHash
     );
   }, [searchParams, tokenFromHash]);
 
   const email = useMemo(() => {
-    return searchParams.get('email') || emailFromHash || '';
+    return searchParams?.get('email') || emailFromHash || '';
   }, [searchParams, emailFromHash]);
 
   useEffect(() => {
@@ -73,7 +74,7 @@ function ResetPasswordPageContent() {
     try {
       const response = await api.auth.resetPassword(token, newPassword, email || undefined);
       setSuccess(response?.message || 'Password reset successful.');
-      redirectTimeoutRef.current = setTimeout(() => router.push('/login'), 1200);
+      redirectTimeoutRef.current = setTimeout(() => router.push(loginHref), 1200);
     } catch (err: unknown) {
       setError(extractApiError(err, 'Failed to reset password.'));
     } finally {
@@ -168,7 +169,7 @@ function ResetPasswordPageContent() {
           </form>
 
           <p className="mt-6 text-center text-sm text-app-text-secondary">
-            <Link href="/login" className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
+            <Link href={loginHref} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
               Back to sign in
             </Link>
           </p>

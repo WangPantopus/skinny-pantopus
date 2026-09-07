@@ -11,6 +11,11 @@
 
 import Foundation
 
+/// Public-profile credential supplied by the identity serializer.
+public struct FeedAuthorCredentialDTO: Decodable, Sendable, Hashable {
+    public let status: String?
+}
+
 /// Author / business-author projection on a post. Accepts both the legacy
 /// `{ username, name, first_name }` shape and the P0.4 identity projection
 /// `{ handle, displayName, avatarUrl }` returned by `attachIdentityAuthors`.
@@ -25,10 +30,11 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
     public let state: String?
     public let accountType: String?
     private let wireDisplayName: String?
+    public let credential: FeedAuthorCredentialDTO?
 
     private enum CodingKeys: String, CodingKey {
         case id, username, name, handle
-        case displayName
+        case displayName, credential
         case firstName = "first_name"
         case lastName = "last_name"
         case profilePictureURL = "profile_picture_url"
@@ -58,6 +64,7 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         self.state = state
         self.accountType = accountType
         wireDisplayName = nil
+        credential = nil
     }
 
     public init(from decoder: any Decoder) throws {
@@ -68,6 +75,7 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         id = rawId ?? usernameValue ?? handleValue ?? "pantopus"
         username = usernameValue ?? handleValue
         wireDisplayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        credential = try c.decodeIfPresent(FeedAuthorCredentialDTO.self, forKey: .credential)
         name = try c.decodeIfPresent(String.self, forKey: .name)
         firstName = try c.decodeIfPresent(String.self, forKey: .firstName)
         lastName = try c.decodeIfPresent(String.self, forKey: .lastName)

@@ -94,6 +94,7 @@ fun FeedScreen(
     onOpenPost: (String) -> Unit = {},
     onCompose: (PulseIntent) -> Unit = {},
     onEmptyCta: (() -> Unit)? = null,
+    onFollowing: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     /** Sports-lane starter tapped in the empty state — opens the composer
      *  with the prompt already in the body. */
@@ -175,6 +176,16 @@ fun FeedScreen(
                 viewMode = viewMode.takeIf { surface.supportsMapMode },
                 onViewModeChange = { viewMode = it },
             )
+            if (surface == FeedSurface.Beacons) {
+                Row(modifier = Modifier.padding(horizontal = Spacing.s4)) {
+                    onEmptyCta?.let { action ->
+                        TextButton(onClick = action, modifier = Modifier.testTag("beacons.find")) { Text("Find Beacons") }
+                    }
+                    onFollowing?.let { action ->
+                        TextButton(onClick = action, modifier = Modifier.testTag("beacons.following")) { Text("Following") }
+                    }
+                }
+            }
             if (surface in FeedSurface.toggleSurfaces) {
                 FeedSurfaceTabs(active = activeSurface) { next ->
                     viewMode = FeedViewMode.List
@@ -364,13 +375,15 @@ fun FeedScreen(
                 onDismiss = { contextBarViewModel.closeSwitcher() },
             )
         }
-        FeedComposeFAB(
-            onClick = { onCompose(activeIntent) },
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = Spacing.s4, bottom = Spacing.s10),
-        )
+        if (surface != FeedSurface.Beacons) {
+            FeedComposeFAB(
+                onClick = { onCompose(activeIntent) },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = Spacing.s4, bottom = Spacing.s10),
+            )
+        }
     }
 
     val loadedRows = (state as? PulseFeedUiState.Loaded)?.rows.orEmpty()

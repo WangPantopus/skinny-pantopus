@@ -2,17 +2,8 @@
 //  NeighborhoodView.swift
 //  Pantopus
 //
-//  Wedge Phase 1 — the density-gated Neighborhood door.
-//
-//  One honest meter decides what this screen is:
-//    no_place → claim prompt (the door needs to know where home is)
-//    forming  → "be one of the first N" + invite (count withheld below
-//               the k-anon floor, mirroring the backend contract)
-//    growing  → progress toward the unlock threshold + invite
-//    unlocked → the neighborhood surfaces (Pulse, Marketplace, Tasks)
-//
-//  Cold-start rule: locked surfaces render as a preview of a reward with
-//  a meter — never as empty rooms.
+//  Social discovery is available in every meter state. The meter controls
+//  the local marketplace and tasks preview and preserves privacy floors.
 //
 
 import SwiftUI
@@ -27,21 +18,28 @@ struct NeighborhoodView: View {
     private let onOpenSurface: @MainActor (NeighborhoodDoorStore.Surface) -> Void
     /// Route to the Place tab's claim flow (no_place state).
     private let onClaimPlace: @MainActor () -> Void
+    private let onOpenBeacons: @MainActor () -> Void
+    private let onOpenConnections: @MainActor () -> Void
 
     init(
         viewModel: NeighborhoodViewModel = NeighborhoodViewModel(),
         onOpenSurface: @escaping @MainActor (NeighborhoodDoorStore.Surface) -> Void,
-        onClaimPlace: @escaping @MainActor () -> Void
+        onClaimPlace: @escaping @MainActor () -> Void,
+        onOpenBeacons: @escaping @MainActor () -> Void,
+        onOpenConnections: @escaping @MainActor () -> Void
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenSurface = onOpenSurface
         self.onClaimPlace = onClaimPlace
+        self.onOpenBeacons = onOpenBeacons
+        self.onOpenConnections = onOpenConnections
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
+                socialDestinations
 
                 switch viewModel.state {
                 case .loading:
@@ -53,10 +51,10 @@ struct NeighborhoodView: View {
                     case .noPlace:
                         EmptyState(
                             icon: .home,
-                            headline: "First, tell us where home is",
-                            subcopy: "Your neighborhood is measured around your place. "
-                                + "Claim your address and this page becomes your block's progress meter.",
-                            cta: .init(title: "Claim your address") {
+                            headline: "Add a home for neighborhood context",
+                            subcopy: "Adding a home gives you neighborhood context and household tools. "
+                                + "You can browse Pulse and follow Beacons before setting it up.",
+                            cta: .init(title: "Set up a home") {
                                 await MainActor.run { onClaimPlace() }
                             }
                         )
@@ -86,8 +84,8 @@ struct NeighborhoodView: View {
                 .font(.system(size: 28, weight: .heavy))
                 .foregroundStyle(Theme.Color.appText)
             Text(
-                "Feed, marketplace, and local tasks open when enough households nearby have "
-                    + "verified their address — so day one here is real neighbors, not empty rooms."
+                "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
+                    + "Following Beacons needs no home address."
             )
             .pantopusTextStyle(.small)
             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -97,6 +95,38 @@ struct NeighborhoodView: View {
     }
 
     // MARK: - Loading / error
+
+    private var socialDestinations: some View {
+        VStack(spacing: Spacing.s3) {
+            socialRow("Pulse", detail: "Browse a chosen area or catch up with your connections", icon: .rss) { onOpenSurface(.pulse) }
+            socialRow("Beacons", detail: "Find public profiles and return to the people you follow", icon: .radio, action: onOpenBeacons)
+            socialRow("Connections", detail: "Keep up with people you know", icon: .users, action: onOpenConnections)
+        }
+    }
+
+    private func socialRow(_ title: String, detail: String, icon: PantopusIcon, action: @escaping @MainActor () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.s3) {
+                Icon(icon, size: 20, color: .white)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.Color.primary600)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.Color.appText)
+                    Text(detail).pantopusTextStyle(.small).foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                Spacer(minLength: 0)
+                Icon(.chevronRight, size: 18, color: Theme.Color.appTextSecondary)
+            }
+            .padding(Spacing.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+            .overlay(RoundedRectangle(cornerRadius: Radii.lg).stroke(Theme.Color.appBorder))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("nearbySocial.\(title.lowercased())")
+    }
 
     private var loadingBody: some View {
         VStack(spacing: Spacing.s3) {
@@ -131,7 +161,7 @@ struct NeighborhoodView: View {
             if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
             meterCard(meter)
             inviteButton
-            Text("What opens at \(meter.threshold)")
+            Text("Local marketplace and tasks")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.top, Spacing.s2)
@@ -151,9 +181,9 @@ struct NeighborhoodView: View {
             : max(0.08, min(1, Double(meter.verifiedCount ?? 0) / Double(max(meter.threshold, 1))))
         let copy = isForming
             ? "Your area is just forming — be one of the first \(meter.kAnonMin) verified households "
-            + "here. The neighborhood opens at \(meter.threshold)."
+            + "here. Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
             : "\(meter.verifiedCount ?? 0) households have verified their address nearby. "
-            + "At \(meter.threshold), the neighborhood opens for everyone."
+            + "Local marketplace and tasks open at \(meter.threshold). Pulse and Beacons are available now."
 
         return VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack {
@@ -177,7 +207,7 @@ struct NeighborhoodView: View {
             }
             .frame(height: 10)
             .accessibilityElement()
-            .accessibilityLabel("Verified neighbors toward unlocking the neighborhood")
+            .accessibilityLabel("Verified households toward local marketplace and tasks")
             .accessibilityValue("\(countLabel) of \(meter.threshold)")
             Text(copy)
                 .font(.system(size: 13.5))
@@ -246,7 +276,8 @@ struct NeighborhoodView: View {
             if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
             HStack(spacing: Spacing.s2) {
                 Icon(.sparkles, size: 16, color: Theme.Color.primary600)
-                Text("Your neighborhood is open — \(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")
+                Text("Local marketplace and tasks are open — "
+                    + "\(meter.verifiedCount ?? meter.threshold) verified households \(areaSuffix(meter)).")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary600)
                     .fixedSize(horizontal: false, vertical: true)
@@ -296,12 +327,6 @@ struct NeighborhoodView: View {
     }
 
     private static let surfaces: [SurfaceRow] = [
-        .init(
-            icon: .rss,
-            title: "Pulse",
-            subtitle: "What your neighbors are posting, asking, and sharing",
-            destination: .pulse
-        ),
         .init(
             icon: .shoppingBag,
             title: "Marketplace",

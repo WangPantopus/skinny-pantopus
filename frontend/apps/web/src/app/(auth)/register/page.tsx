@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client';
 
 // ============================================================
@@ -15,8 +14,10 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import {
+  authPageHref,
   extractApiError,
   extractFieldErrors,
   normalizeEmail,
@@ -30,8 +31,8 @@ const PASSWORD_MIN_LENGTH = 12;
 function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefillEmail = (searchParams.get('email') || '').trim().toLowerCase();
-  const redirectTo = readAuthRedirectQuery(searchParams) || undefined;
+  const prefillEmail = (searchParams?.get('email') || '').trim().toLowerCase();
+  const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   type FieldErrors = Record<string, string>;
   const [formData, setFormData] = useState({
     email: '',
@@ -117,17 +118,17 @@ function RegisterContent() {
       const response = await api.auth.register({
         email: normalizeEmail(formData.email),
         password: formData.password,
+        redirectTo,
         ...(anonId ? { anon_id: anonId } : {}),
       });
 
-      const respObj = response as Record<string, any>;
-      const token = (respObj.accessToken || respObj.token) as string | undefined;
+      bindPlaceArrival(redirectTo, response.user?.id);
+      const token = response.accessToken || response.token;
       if (token) {
         // Backend sets httpOnly cookies via same-origin proxy.
         router.push(safeRedirectPath(redirectTo, '/app/place'));
       } else {
-        const emailForNext = encodeURIComponent(normalizeEmail(formData.email));
-        router.push(`/verify-email-sent?email=${emailForNext}`);
+        router.push(authPageHref('/verify-email-sent', redirectTo, { email: normalizeEmail(formData.email) }));
       }
     } catch (err: unknown) {
       setFieldErrors(extractFieldErrors(err));
@@ -176,7 +177,7 @@ function RegisterContent() {
         </h2>
 
         <p className="mt-2 text-center text-sm text-app-text-secondary">
-          Save your place and get daily updates about it.
+          Keep track of your home, join conversations, and follow Beacons.
         </p>
       </div>
 
@@ -362,7 +363,7 @@ function RegisterContent() {
 
         <p className="mt-6 text-center text-sm text-app-text-secondary dark:text-app-text-muted">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
+          <Link href={authPageHref('/login', redirectTo)} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
             Sign in
           </Link>
         </p>

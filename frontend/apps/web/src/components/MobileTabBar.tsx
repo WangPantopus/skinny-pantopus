@@ -22,7 +22,7 @@ const starts = (path: string, ...prefixes: string[]) => prefixes.some((p) => pat
 export const MOBILE_TABS: Tab[] = [
   { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/hub', '/app/homes') && !starts(p, '/app/hub/today') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
-  { key: 'nearby', label: 'Nearby', href: '/app/nearby', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/gigs', '/app/marketplace') },
+  { key: 'nearby', label: 'Nearby', href: '/app/nearby', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/connections', '/app/gigs', '/app/marketplace') },
   { key: 'mail', label: 'Mail', href: '/app/mailbox?scope=personal', icon: NavIcons.mail, matches: (p) => starts(p, '/app/mailbox', '/app/chat') },
 ];
 

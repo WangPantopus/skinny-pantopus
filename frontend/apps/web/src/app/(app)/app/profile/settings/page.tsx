@@ -1,6 +1,8 @@
 // @ts-nocheck
 'use client';
 
+import { clearPendingPlaces } from '@/components/place/pendingPlace';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -71,6 +73,7 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try { await api.auth.logout(); } catch { /* cookies cleared by backend */ }
+    clearPendingPlaces();
     clearAuthToken();
     router.push('/login');
   };
@@ -79,6 +82,7 @@ export default function SettingsPage() {
     setDeleting(true);
     try {
       await api.users.deleteAccount();
+      clearPendingPlaces();
       clearAuthToken();
       toast.success('Account scheduled for deletion');
       router.push('/login');

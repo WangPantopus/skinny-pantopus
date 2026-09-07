@@ -14,7 +14,7 @@ import java.time.Instant
 
 /**
  * §1A① — locks the client-side grouping contract for the Following screen
- * (New updates / Active / Quiet), the muted-row unread suppression, the
+ * (New updates / Active / Quiet), notification-only muting, the
  * "25+" cap, and the quiet placeholder copy. Mirrors the iOS
  * `FollowingProjectionTests`.
  */
@@ -50,7 +50,7 @@ class FollowingProjectionTest {
                 row("b", unread = 0, hoursAgo = 48),
                 // no post → Quiet
                 row("c", unread = 0, hoursAgo = null),
-                // muted suppresses unread → Active
+                // mute silences notifications, not updates
                 row("d", unread = 5, hoursAgo = 1, muted = true),
             )
         val sections = FollowingProjection.sections(dtos, now)
@@ -58,8 +58,8 @@ class FollowingProjectionTest {
             listOf(FollowingSectionKind.NewUpdates, FollowingSectionKind.Active, FollowingSectionKind.Quiet),
             sections.map { it.kind },
         )
-        assertEquals(listOf("a"), sections[0].rows.map { it.id })
-        assertEquals(setOf("b", "d"), sections[1].rows.map { it.id }.toSet())
+        assertEquals(listOf("a", "d"), sections[0].rows.map { it.id })
+        assertEquals(setOf("b"), sections[1].rows.map { it.id }.toSet())
         assertEquals(listOf("c"), sections[2].rows.map { it.id })
     }
 
@@ -71,18 +71,18 @@ class FollowingProjectionTest {
     }
 
     @Test
-    fun mutedRowShowsBellOffNotBadge() {
+    fun mutedRowKeepsUnreadUpdates() {
         val (kind, projected) = FollowingProjection.project(row("m", unread = 9, hoursAgo = 1, muted = true), now)
-        assertEquals(FollowingSectionKind.Active, kind)
+        assertEquals(FollowingSectionKind.NewUpdates, kind)
         assertTrue(projected.isMuted)
-        assertEquals(FollowingRowTrailing.Muted, projected.trailing)
+        assertEquals(FollowingRowTrailing.Unread("9"), projected.trailing)
     }
 
     @Test
     fun quietPlaceholderCopy() {
         assertEquals("No recent updates", FollowingProjection.project(row("q", 0, null), now).second.bodyText)
         assertEquals(
-            "No updates while muted",
+            "Notifications muted",
             FollowingProjection.project(row("qm", 0, null, muted = true), now).second.bodyText,
         )
     }
@@ -92,6 +92,15 @@ class FollowingProjectionTest {
         val (kind, projected) = FollowingProjection.project(row("t", unread = 1, hoursAgo = 1, tier = "Insiders"), now)
         assertEquals(FollowingSectionKind.NewUpdates, kind)
         assertEquals("Insiders", projected.tierName)
+        assertEquals("post-t", projected.latestPostId)
         assertEquals(FollowingRowTrailing.Unread("1"), projected.trailing)
+    }
+
+    @Test
+    fun expiredMuteRestoresNormalPresentation() {
+        val dto = row("expired", 0, 1).copy(mutedUntil = now.minusSeconds(1).toString())
+        val (_, projected) = FollowingProjection.project(dto, now)
+        assertEquals(false, projected.isMuted)
+        assertEquals(FollowingRowTrailing.Chevron, projected.trailing)
     }
 }

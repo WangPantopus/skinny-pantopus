@@ -6,6 +6,7 @@ import androidx.fragment.app.FragmentActivity
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.PendingDeepLinkStore
+import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.auth.AuthErrorBody
@@ -474,6 +475,7 @@ class AuthRepository
             user: UserDto,
             token: String,
         ) {
+            PlacePendingStore.bind(user.id)
             observability.identify(userId = user.id, email = user.email)
             Analytics.identify(userId = user.id)
             socketManager.connect(token)
@@ -926,6 +928,7 @@ class AuthRepository
                             inviteCode = inviteCode,
                         ),
                     )
+                PlacePendingStore.bind(response.user.id)
                 observability.track("auth.signed_up")
                 return SignUpResult(
                     user = response.user,
@@ -1172,6 +1175,7 @@ class AuthRepository
             Analytics.identify(userId = null)
             observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
             // Workstream 1.4 — never resume a prior user's deferred destination.
+            PlacePendingStore.clear()
             PendingDeepLinkStore.clear()
             DeepLinkRouter.clearPending()
             feedModeration.clear()

@@ -163,6 +163,14 @@ that file.
 
 ## 7. Verification
 
+The manual `backend/scripts/push-smoke.js` now requires explicit provider
+acceptance for the tested token; an empty invalid-token list is not a success.
+Use `--check --platform ios|android` to inspect configuration without sending.
+For a live send, `PUSH_SMOKE_TOKEN` can supply the token without putting it in
+process arguments. Follow the
+[Beacon staging verification runbook](beacon-staging-verification-2026-09-07.md)
+for environment readiness, device delivery, and the complete follower journey.
+
   - `backend/tests/unit/push/*` covers token routing, dispatch fan-out +
     invalid-token aggregation, the APNs `.p8` ES256 JWT mint and payload,
     and the FCM OAuth2 exchange + data-only message build (a mocked

@@ -28,6 +28,7 @@ public struct SavedPlaceResponse: Decodable, Sendable, Hashable {
 /// modelled (the geocode-provenance columns are ignored).
 public struct SavedPlaceDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let userId: String?
     public let label: String
     /// `home | work | searched | saved`.
     public let placeType: String
@@ -41,6 +42,7 @@ public struct SavedPlaceDTO: Decodable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case userId = "user_id"
         case label
         case latitude
         case longitude
@@ -62,8 +64,10 @@ public struct SavedPlaceDTO: Decodable, Sendable, Hashable, Identifiable {
         state: String?,
         sourceId: String?,
         geocodePlaceId: String?,
-        createdAt: String?
+        createdAt: String?,
+        userId: String? = nil
     ) {
+        self.userId = userId
         self.id = id
         self.label = label
         self.placeType = placeType
@@ -84,6 +88,7 @@ public struct SavedPlaceDTO: Decodable, Sendable, Hashable, Identifiable {
 /// `(user, latitude, longitude)`, so re-posting the same coordinate replaces
 /// the row rather than duplicating it.
 public struct SavePlaceBody: Encodable, Sendable {
+    public let expectedUserId: String?
     public let label: String
     public let placeType: String
     public let latitude: Double
@@ -101,8 +106,10 @@ public struct SavePlaceBody: Encodable, Sendable {
         city: String? = nil,
         state: String? = nil,
         geocodePlaceId: String? = nil,
-        sourceId: String? = nil
+        sourceId: String? = nil,
+        expectedUserId: String? = nil
     ) {
+        self.expectedUserId = expectedUserId
         self.label = label
         self.placeType = placeType
         self.latitude = latitude

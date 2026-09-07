@@ -80,6 +80,7 @@ public struct BeaconProfileView: View {
             }
         )
         .accessibilityIdentifier("beaconProfile")
+        .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
     }
 

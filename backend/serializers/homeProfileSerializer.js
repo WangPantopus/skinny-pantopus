@@ -8,8 +8,8 @@
 //                                             to see themselves as an
 //                                             outsider — the privacy mirror)
 // They MUST agree, so both call this. `reveal` is the only switch:
-// insiders (members, creator, claimants) see the exact address and the
-// owner's full name; everyone else gets the street and a first name.
+// current authorized household members see the exact address and the
+// owner's full name; everyone else gets the street without an account link.
 //
 // HIDDEN_FROM_OUTSIDERS is the list the mirror prints. Keep it true: it
 // is checked by tests against the projection itself.
@@ -30,7 +30,7 @@ function serializeHomeForViewer(home, { reveal }) {
   if (!home) return null;
   return {
     id: home.id,
-    name: home.name,
+    name: reveal ? home.name : null,
     address: reveal ? home.address : redactStreet(home.address),
     address_redacted: !reveal,
     city: home.city,
@@ -38,7 +38,7 @@ function serializeHomeForViewer(home, { reveal }) {
     zipcode: reveal ? home.zipcode : null,
     home_type: home.home_type,
     visibility: home.visibility,
-    description: home.description || null,
+    description: reveal ? home.description || null : null,
     created_at: home.created_at,
   };
 }
@@ -62,11 +62,14 @@ function neighborFacingName(user) {
 }
 
 function serializeOwnerForViewer(user, { reveal }) {
-  if (!user) return null;
+  // The owner envelope is already nullable on released web/native clients.
+  // Returning a partially redacted object with id:null would break older
+  // native decoders; a generated/fake account id would create broken links.
+  if (!user || !reveal) return null;
   return {
     id: user.id,
     username: user.username,
-    name: reveal ? fullName(user) : neighborFacingName(user),
+    name: fullName(user),
     profile_picture_url: user.profile_picture_url || null,
   };
 }

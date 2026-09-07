@@ -91,6 +91,7 @@ struct SignUpView: View {
             .accessibilityIdentifier("signUpTermsCheckbox")
             .padding(.horizontal, Spacing.s4)
         }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { seedInviteCode() }
         .onChange(of: viewModel.didSucceed) { _, succeeded in
             guard succeeded else { return }

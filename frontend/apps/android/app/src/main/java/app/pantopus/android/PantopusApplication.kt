@@ -37,6 +37,7 @@ class PantopusApplication :
 
         // Workstream 1.4 — persist pre-auth deep links across process death.
         PendingDeepLinkStore.init(this)
+        app.pantopus.android.core.routing.PlacePendingStore.init(this)
 
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

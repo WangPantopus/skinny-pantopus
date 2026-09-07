@@ -18,6 +18,7 @@ import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 export type FilterType = PostType | 'all';
 
 interface UseFeedDataOptions {
+  initialSurface?: FeedSurface;
   viewingLat: number | null;
   viewingLng: number | null;
   userLat: number | null;
@@ -52,6 +53,7 @@ function buildFeedKey(
 }
 
 export function useFeedData({
+  initialSurface = 'place',
   viewingLat,
   viewingLng,
   userLat,
@@ -63,13 +65,19 @@ export function useFeedData({
   const queryClient = useQueryClient();
 
   const [user, setUser] = useState<User | null>(null);
-  const [surface, setSurface] = useState<FeedSurface>('place');
+  const [surface, setSurface] = useState<FeedSurface>(initialSurface);
   const [filter, setFilter] = useState<FilterType>('all');
   const [topic, setTopicState] = useState<TopicKey | null>(null);
   const [sportsMode, setSportsMode] = useState<SportsMode>('for_you');
   const [eventKey, setEventKey] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSurface(initialSurface);
+    setFilter('all');
+    if (initialSurface !== 'place') setTopicState(null);
+  }, [initialSurface]);
 
   // Place eligibility
   const [placeEligible, setPlaceEligible] = useState(true);

@@ -14,7 +14,7 @@ import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import PlaceDashboard from '@/components/place/PlaceDashboard';
-import PendingPlaceSaver from '@/components/place/PendingPlaceSaver';
+import SavedPlaceContext from '@/components/place/SavedPlaceContext';
 import PlaceDashboardSkeleton from '@/components/place/PlaceDashboardSkeleton';
 import VerifiedSuccess from '@/components/place/VerifiedSuccess';
 
@@ -22,7 +22,9 @@ function PlaceRoute() {
   const router = useRouter();
   const params = useSearchParams();
   const queryClient = useQueryClient();
-  const justVerified = params.get('verified') === '1';
+  const justVerified = params?.get('verified') === '1';
+  const previewId = params?.get('preview');
+  const savedPlaceId = params?.get('savedPlace');
 
   if (justVerified) {
     return (
@@ -38,8 +40,9 @@ function PlaceRoute() {
 
   return (
     <>
-      <PendingPlaceSaver />
-      <PlaceDashboard />
+      {previewId || savedPlaceId ? (
+        <div className="mx-auto max-w-[760px] px-4 py-6"><SavedPlaceContext previewId={previewId ?? undefined} savedPlaceId={savedPlaceId ?? undefined} /></div>
+      ) : <PlaceDashboard />}
     </>
   );
 }

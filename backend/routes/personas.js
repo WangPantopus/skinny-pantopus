@@ -11,6 +11,8 @@ const notificationService = require('../services/notificationService');
 const { isFeatureEnabled } = require('../services/featureFlagService');
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const requireFeatureFlag = require('../middleware/requireFeatureFlag');
+const { loadFollowingActivity } = require('../services/followingActivityService');
+const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const {
   LOW_RISK_PERSONA_CATEGORIES,
@@ -131,19 +133,6 @@ const AUDIENCE_LABEL_RELATIONSHIP_TYPE = {
 
 function defaultRelationshipTypeForPersona(persona) {
   return AUDIENCE_LABEL_RELATIONSHIP_TYPE[persona?.audience_label] || 'follower';
-}
-
-function personaPostVisibleToViewer(post, viewerRank = 0) {
-  if (!post) return false;
-  if (post.archived_at || post.status === 'removed') return false;
-  if (post.audience === 'public' || post.visibility === 'public') return true;
-  const requiredRank = Number(post.target_tier_rank || 0);
-  if (requiredRank > 0) return viewerRank >= requiredRank;
-  const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
-  const followerOnly = post.audience === 'followers'
-    || post.visibility === 'followers'
-    || targets.includes('persona_followers');
-  return viewerRank >= 1 && followerOnly;
 }
 
 async function ensureBroadcastChannel(persona) {
@@ -440,13 +429,13 @@ router.get('/me/following', verifyToken, async (req, res) => {
     const { data: memberships, error: mErr } = await supabaseAdmin
       .from('PersonaMembership')
       .select(`
-        id, persona_id, tier_id, fan_handle, notification_level, status,
+        id, persona_id, tier_id, relationship_type, fan_handle, notification_level, status,
         muted_until, last_seen_at, joined_at,
         persona:PublicPersona!persona_id(id, handle, display_name, avatar_url, status, credential_status, follower_count),
         tier:PersonaTier!tier_id(rank, name, price_cents)
       `)
       .eq('user_id', userId)
-      .not('status', 'in', '(removed,blocked,canceled,expired)');
+      .in('status', ['active', 'past_due']);
 
     if (mErr) {
       logger.error('personas.me.following.list_error', { error: mErr.message, userId });
@@ -454,59 +443,20 @@ router.get('/me/following', verifyToken, async (req, res) => {
     }
 
     const rows = memberships || [];
-    const visibleRows = rows.filter((m) => m.persona && m.persona.status !== 'suspended');
-    const personaIds = visibleRows.map((m) => m.persona_id);
-
-    // One batched query for the post snippet + unread count. We over-fetch
-    // recent posts across all followed personas and group in JS rather than
-    // issuing N per-persona queries. The MAX_RECENT_PER_PERSONA cap also
-    // doubles as an unread-count ceiling — the UI shows "25+" beyond it.
-    const MAX_RECENT_PER_PERSONA = 25;
-    let recentPosts = [];
-    if (personaIds.length > 0) {
-      const { data: posts, error: pErr } = await supabaseAdmin
-        .from('Post')
-        .select('id, identity_context_id, content, title, created_at')
-        .eq('identity_context_type', 'persona')
-        .in('identity_context_id', personaIds)
-        .is('archived_at', null)
-        .order('created_at', { ascending: false })
-        .limit(personaIds.length * MAX_RECENT_PER_PERSONA);
-      if (pErr) {
-        logger.error('personas.me.following.posts_error', { error: pErr.message, userId });
-      } else {
-        recentPosts = posts || [];
-      }
+    const { data: blocks, error: blockError } = rows.length
+      ? await supabaseAdmin.from('PersonaBlock').select('persona_id')
+        .eq('blocked_user_id', userId).in('persona_id', rows.map((m) => m.persona_id))
+      : { data: [], error: null };
+    if (blockError) return res.status(503).json({ error: 'Followed Beacons are temporarily unavailable' });
+    const blockedIds = new Set((blocks || []).map((b) => b.persona_id));
+    const visibleRows = rows.filter((m) => m.persona && m.persona.status !== 'suspended' && !blockedIds.has(m.persona_id));
+    let decorated;
+    try {
+      decorated = await loadFollowingActivity(visibleRows);
+    } catch (error) {
+      logger.error('personas.me.following.posts_error', { error: error.message, userId });
+      return res.status(503).json({ error: 'Beacon updates are temporarily unavailable' });
     }
-
-    // Defensive sort: in production Postgres ORDER BY handles this, but
-    // keeping the JS sort here makes the function correct against any
-    // unordered query response and simplifies test seeding.
-    recentPosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    const postsByPersona = new Map();
-    for (const post of recentPosts) {
-      const arr = postsByPersona.get(post.identity_context_id) || [];
-      if (arr.length < MAX_RECENT_PER_PERSONA) arr.push(post);
-      postsByPersona.set(post.identity_context_id, arr);
-    }
-
-    // Decorate each membership with its computed extras (no mutation of
-    // the source row — keeps the route → serializer contract explicit).
-    const decorated = visibleRows.map((m) => {
-      const posts = postsByPersona.get(m.persona_id) || [];
-      const latestPost = posts[0] || null;
-      // For brand-new follows the column may be null (the follow path
-      // does not set last_seen_at on insert); fall back to joined_at so
-      // the user doesn't see every historical post as "unread" right
-      // after following.
-      const cutoffIso = m.last_seen_at || m.joined_at;
-      const cutoffMs = cutoffIso ? new Date(cutoffIso).getTime() : 0;
-      const unreadCount = cutoffMs
-        ? posts.filter((p) => new Date(p.created_at).getTime() > cutoffMs).length
-        : posts.length;
-      return { membership: m, latestPost, unreadCount };
-    });
 
     decorated.sort((a, b) => {
       const ma = a.membership;

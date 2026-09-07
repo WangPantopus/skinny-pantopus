@@ -371,7 +371,8 @@ final class DeepLinkRouter {
     /// segments matter — so this needed no change when `pantopus.com` became
     /// the claimed associated domain; the entitlement and the AASA carry that.
     func resolve(url: URL) -> Destination {
-        let segments = routeSegments(for: url)
+        let rawSegments = routeSegments(for: url)
+        let segments = rawSegments.first == "app" ? Array(rawSegments.dropFirst()) : rawSegments
         let firstSegment = segments.first ?? ""
         if firstSegment.hasPrefix("@"), firstSegment.count > 1 {
             return .beaconProfile(handle: String(firstSegment.dropFirst()))
@@ -389,7 +390,8 @@ final class DeepLinkRouter {
 
         switch firstSegment {
         case "feed":
-            return .feed
+            if let postId = queryValue("post", in: comps), !postId.isEmpty { return .post(id: postId) }
+            return queryValue("surface", in: comps) == "personas" ? .beacons : .feed
         case "home":
             return .home
         case "notifications":

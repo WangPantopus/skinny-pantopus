@@ -398,8 +398,6 @@ private fun weatherTint(code: WeatherConditionCode): Color =
 // everything else comes from the registry. Parity twin of the iOS
 // `AddressCalendarCard`.
 
-private val WEEKDAYS = listOf("MO" to "Mon", "TU" to "Tue", "WE" to "Wed", "TH" to "Thu", "FR" to "Fri", "SA" to "Sat", "SU" to "Sun")
-
 @Composable
 private fun AddressCalendarSection(
     intel: PlaceIntelligence,
@@ -428,9 +426,9 @@ private fun AddressCalendarCard(
         modifier = Modifier.fillMaxWidth().placeCard().padding(16.dp).testTag("place.today.addressCalendar"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        CalendarHeader(windowDays = data.windowDays, picking = picking, canPick = viewModel != null) { picking = !picking }
+        CalendarHeader(windowDays = data.windowDays, picking = picking, canPick = viewModel != null) { if (!busy) picking = !picking }
         when {
-            picking && viewModel != null -> PickupDayPicker(data, viewModel, busy)
+            picking && viewModel != null -> PickupScheduleEditor(data, viewModel, busy)
             data.needsPickupDay && viewModel != null -> PickupPrompt { picking = true }
         }
         errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
@@ -456,52 +454,13 @@ private fun CalendarHeader(
         )
         if (canPick) {
             Text(
-                if (picking) "Done" else "Pickup day",
+                if (picking) "Cancel" else "Pickup schedule",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.primary600,
                 modifier = Modifier.clickable(onClick = onToggle).testTag("addressCalendarPickupToggle"),
             )
         }
-    }
-}
-
-@Composable
-private fun PickupDayPicker(
-    data: PlaceAddressCalendarData,
-    viewModel: AddressCalendarActions,
-    busy: Boolean,
-) {
-    Text(
-        "Which day is garbage picked up? Recycling is assumed every other week.",
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        color = PantopusColors.appTextSecondary,
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        WEEKDAYS.forEach { (code, label) ->
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(PantopusColors.appSurfaceSunken)
-                        .clickable(enabled = !busy) { viewModel.setPickupDay(code) }
-                        .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            }
-        }
-    }
-    if (!data.needsPickupDay) {
-        Text(
-            "Clear my pickup day",
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appTextSecondary,
-            modifier = Modifier.clickable(enabled = !busy) { viewModel.clearPickupDay() },
-        )
     }
 }
 
@@ -520,7 +479,7 @@ private fun PickupPrompt(onClick: () -> Unit) {
     ) {
         PantopusIconImage(PantopusIcon.Trash2, null, size = 18.dp, strokeWidth = 2f, tint = PantopusColors.home)
         Text(
-            "Set your pickup day and we'll remind you the night before.",
+            "Add your pickup schedule to your household calendar.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             fontWeight = FontWeight.SemiBold,

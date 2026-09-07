@@ -1,6 +1,6 @@
 /**
  * The privacy mirror: a member sees their home exactly as an outsider
- * does — street and first name only — through the same serializer the
+ * does — street without owner identity — through the same serializer the
  * public-profile route uses. Non-members get nothing.
  */
 jest.mock('../../config/supabaseAdmin', () => jest.requireActual('../__mocks__/supabaseAdmin'));
@@ -12,7 +12,7 @@ const { resetTables, seedTable } = require('../__mocks__/supabaseAdmin');
 const { loadHomeMirror } = require('../../services/homeMirror');
 const { serializeHomeForViewer, serializeOwnerForViewer, HIDDEN_FROM_OUTSIDERS } = require('../../serializers/homeProfileSerializer');
 
-const HOME = { id: 'h1', name: 'Home', address: '2518 NW Lacamas Dr', city: 'Camas', state: 'WA', zipcode: '98607', home_type: 'house', visibility: 'public_preview', owner_id: 'member', description: null, created_at: '2026-09-01T00:00:00Z' };
+const HOME = { id: 'h1', name: 'Yingpeng Wang household', address: '2518 NW Lacamas Dr', city: 'Camas', state: 'WA', zipcode: '98607', home_type: 'house', visibility: 'public_preview', owner_id: 'member', description: 'Gate code 1234', created_at: '2026-09-01T00:00:00Z' };
 const USER = { id: 'member', username: 'yp', name: 'Yingpeng Wang', first_name: 'Yingpeng', last_name: 'Wang', profile_picture_url: null };
 
 beforeEach(() => {
@@ -22,12 +22,12 @@ beforeEach(() => {
   seedTable('HomeOwner', [{ home_id: 'h1', subject_type: 'user', subject_id: 'member', owner_status: 'verified', is_primary_owner: true }]);
 });
 
-it('shows a member the street and a first name — never the number, zip, or surname', async () => {
+it('shows a member the outsider view without account identity or private home details', async () => {
   const m = await loadHomeMirror({ homeId: 'h1', userId: 'member' });
   expect(m).toMatchObject({ surface: 'home', viewer: 'neighbor', discoverable: true });
   expect(m.home).toMatchObject({ address: 'NW Lacamas Dr', address_redacted: true, zipcode: null, city: 'Camas', state: 'WA' });
-  expect(JSON.stringify(m)).not.toMatch(/2518|98607|Wang/);
-  expect(m.owner).toMatchObject({ name: 'Yingpeng' });
+  expect(JSON.stringify(m)).not.toMatch(/2518|98607|Wang|Gate code/);
+  expect(m.owner).toBeNull();
   expect(m.hidden).toBe(HIDDEN_FROM_OUTSIDERS);
 });
 
@@ -50,10 +50,10 @@ it('the serializer reveals to insiders and every hidden item really is hidden fr
   expect(outside.zipcode).toBeNull();
   expect(Object.keys(outside)).not.toEqual(expect.arrayContaining(['move_in_date', 'owner_id']));
   expect(HIDDEN_FROM_OUTSIDERS.map((h) => h.key)).toEqual(['house_number', 'zipcode', 'surname', 'household', 'documents', 'move_in']);
-  expect(serializeOwnerForViewer({ id: 'u', username: 'x', first_name: 'Ada', last_name: 'Lovelace' }, { reveal: false }).name).toBe('Ada');
+  expect(serializeOwnerForViewer({ id: 'u', username: 'x', first_name: 'Ada', last_name: 'Lovelace' }, { reveal: false })).toBeNull();
   // A generated username is never what a neighbor sees.
-  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: null, first_name: null }, { reveal: false }).name).toBeNull();
-  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: 'Ada Lovelace' }, { reveal: false }).name).toBe('Ada');
+  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: null, first_name: null }, { reveal: false })).toBeNull();
+  expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: 'Ada Lovelace' }, { reveal: false })).toBeNull();
   expect(serializeOwnerForViewer({ id: 'u', username: 'review_c99a41', name: null }, { reveal: true }).name).toBe('review_c99a41');
   expect(serializeOwnerForViewer(null, { reveal: false })).toBeNull();
 });

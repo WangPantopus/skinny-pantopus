@@ -691,13 +691,13 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
     <div className="space-y-0.5">
       {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Mail —
           every tab alive at zero density. Today is the briefing; Nearby is
-          the density-gated door at /app/nearby (Pulse / Marketplace /
+          social discovery at /app/nearby (Pulse / Beacons / Marketplace /
           Tasks open behind its meter); Mail holds the mailbox AND the
           Messages inbox (chat routes stay at /app/chat). Hub and the my-x
           screens keep their routes (deep links resolve) but leave the nav. */}
       <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
-      <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
+      <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/connections') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
       <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
       {webFeatureFlags.scheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
       {audienceFlag.enabled ? <SidebarItem icon={NavIcons.audience} label="Audience" active={startsWith('/app/audience')} onClick={() => go('/app/audience')} onPrefetch={prefetchAudience} showLabel={showLabels} accent="teal" testId="sidebar-audience" /> : null}

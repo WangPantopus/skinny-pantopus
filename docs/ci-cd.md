@@ -8,6 +8,10 @@ fails the aggregate. PR path filtering happens at the job level. Pushes to
 `master` and `dev` validate every surface. Database replay joins the aggregate
 only after the verified baseline is adopted.
 
+The backend job also checks Following activity against disposable PostgreSQL
+and PostgREST containers with synthetic fixtures. This tests real filtering,
+ordering, and per-Beacon limits without accessing the application database.
+
 ## Mobile checks
 
 Android runs lint, JVM tests, Paparazzi verification, a debug build and emulator

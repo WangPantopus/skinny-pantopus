@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import {
+  authPageHref,
   extractApiError,
   extractFieldErrors,
   normalizeEmail,
@@ -14,8 +16,10 @@ import {
   safeRedirectPath,
 } from '@/lib/auth-utils';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   type FieldErrors = Record<string, string>;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,18 +41,18 @@ export default function LoginPage() {
     try {
       const response = await api.auth.login({ email: normalizeEmail(email), password });
 
+      bindPlaceArrival(redirectTo, response.user?.id);
+
       // api.auth.login() stores tokens in memory. Backend sets httpOnly
       // cookies via same-origin proxy — no separate session sync needed.
 
       // If the backend says email verification is required, redirect there
       if (response.requiresEmailVerification) {
-        const emailForNext = encodeURIComponent(normalizeEmail(email));
-        router.push(`/verify-email-sent?email=${emailForNext}`);
+        router.push(authPageHref('/verify-email-sent', redirectTo, { email: normalizeEmail(email) }));
         return;
       }
 
-      const params = new URLSearchParams(window.location.search);
-      router.push(safeRedirectPath(readAuthRedirectQuery(params), '/app/place'));
+      router.push(redirectTo);
     } catch (err: unknown) {
       setFieldErrors(extractFieldErrors(err));
       setError(extractApiError(err, 'Login failed. Please try again.'));
@@ -67,7 +71,7 @@ export default function LoginPage() {
     setResending(true);
     setInfo('');
     try {
-      const res = await api.auth.resendVerification(normalizeEmail(email));
+      const res = await api.auth.resendVerification(normalizeEmail(email), redirectTo);
       setInfo(res?.message || 'If that email exists, a verification email has been sent.');
     } catch (err: unknown) {
       setError(extractApiError(err, 'Could not resend verification email.'));
@@ -209,7 +213,7 @@ export default function LoginPage() {
             <div className="flex items-center justify-end">
               <div className="text-sm">
                 <Link
-                  href="/forgot-password"
+                  href={authPageHref('/forgot-password', redirectTo)}
                   className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90"
                 >
                   Forgot password?
@@ -285,11 +289,15 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-app-text-secondary dark:text-app-text-muted">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
+          <Link href={authPageHref('/register', redirectTo)} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
             Sign up
           </Link>
         </p>
       </div>
     </div>
   );
+}
+
+export default function LoginPage() {
+  return <Suspense><LoginContent /></Suspense>;
 }

@@ -1,3 +1,4 @@
+const { safeRedirectPath } = require('../utils/authRedirect');
 const express = require('express');
 const router = express.Router();
 const { createServerSupabaseClient } = require('../config/supabaseClient');
@@ -879,6 +880,7 @@ async function ensureOAuthUserProfile({ userId, email, meta, source }) {
 // ============ VALIDATION SCHEMAS ============
 
 const registerSchema = Joi.object({
+  redirectTo: Joi.string().max(2048).optional(),
   email: Joi.string().email().required(),
   password: Joi.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH).required(),
   phoneNumber: Joi.string().pattern(/^\+[1-9]\d{1,14}$/), // E.164 format
@@ -936,6 +938,7 @@ const updatePasswordSchema = Joi.object({
 });
 
 const forgotPasswordSchema = Joi.object({
+  redirectTo: Joi.string().max(2048).optional(),
   email: Joi.string().email().required(),
 });
 
@@ -946,6 +949,7 @@ const resetPasswordSchema = Joi.object({
 });
 
 const resendVerificationSchema = Joi.object({
+  redirectTo: Joi.string().max(2048).optional(),
   email: Joi.string().email().required(),
 });
 
@@ -1194,6 +1198,7 @@ function buildVerifyEmailUrl(req, hashedToken, email, type = 'signup') {
     type,
   });
   if (email) params.set('email', email);
+  params.set('redirectTo', safeRedirectPath(req.body?.redirectTo));
   return `${base}/verify-email?${params.toString()}`;
 }
 
@@ -1208,6 +1213,7 @@ function buildPasswordResetUrl(req, hashedToken, email) {
     type: 'recovery',
   });
   if (email) params.set('email', email);
+  params.set('redirectTo', safeRedirectPath(req.body?.redirectTo));
   return `${base}/reset-password?${params.toString()}`;
 }
 

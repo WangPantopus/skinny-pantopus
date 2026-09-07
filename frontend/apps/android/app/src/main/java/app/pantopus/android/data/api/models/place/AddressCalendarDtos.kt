@@ -13,5 +13,6 @@ data class AddressCalendarResponse(
 @JsonClass(generateAdapter = true)
 data class SetPickupDayRequest(
     val weekday: String,
-    @Json(name = "recycling_every_other_week") val recyclingEveryOtherWeek: Boolean = true,
+    @Json(name = "recycling_frequency") val recyclingFrequency: String = "not_set",
+    @Json(name = "recycling_next_date") val recyclingNextDate: String? = null,
 )

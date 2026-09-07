@@ -410,69 +410,62 @@ function createQueryBuilder(tableName) {
       // Supports patterns like:
       //   "and(requester_id.eq.a,addressee_id.eq.b),and(requester_id.eq.b,addressee_id.eq.a)"
       //   "field.eq.value,field.eq.value"
+      const splitGroups = (input) => {
+        const groups = [];
+        let depth = 0;
+        let quoted = false;
+        let start = 0;
+        for (let i = 0; i < input.length; i++) {
+          const ch = input[i];
+          if (ch === '"') quoted = !quoted;
+          if (quoted) continue;
+          if (ch === '(' || ch === '{') depth++;
+          if (ch === ')' || ch === '}') depth--;
+          if (ch === ',' && depth === 0) {
+            groups.push(input.slice(start, i).trim());
+            start = i + 1;
+          }
+        }
+        groups.push(input.slice(start).trim());
+        return groups;
+      };
       const parseCondition = (cond) => {
-        // Match field.operator.value patterns
-        const match = cond.match(/^(\w+)\.(eq|neq|gt|gte|lt|lte|is)\.(.+)$/);
-        if (!match) return () => true;
+        const logic = cond.match(/^(and|or)\((.*)\)$/);
+        if (logic) {
+          const children = splitGroups(logic[2]).map(parseCondition);
+          return logic[1] === 'and'
+            ? (row) => children.every((fn) => fn(row))
+            : (row) => children.some((fn) => fn(row));
+        }
+        const match = cond.match(/^(\w+(?:->>\w+)?)\.(eq|neq|gt|gte|lt|lte|is|cs)\.(.+)$/);
+        if (!match) return () => true; // Other operators remain legacy no-ops.
         const [, field, op, val] = match;
-        // Coerce value types
+        const [column, jsonKey] = field.split('->>');
         let value = val;
         if (value === 'null') value = null;
         else if (value === 'true') value = true;
         else if (value === 'false') value = false;
-        switch (op) {
-          case 'eq':
-            return (row) => row[field] === value;
-          case 'neq':
-            return (row) => row[field] !== value;
-          case 'gt':
-            return (row) => row[field] > value;
-          case 'gte':
-            return (row) => row[field] >= value;
-          case 'lt':
-            return (row) => row[field] < value;
-          case 'lte':
-            return (row) => row[field] <= value;
-          case 'is':
-            return (row) => row[field] === value;
-          default:
-            return () => true;
-        }
+        else if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        return (row) => {
+          const actual = (jsonKey ? row[column]?.[jsonKey] : row[column]) ?? null;
+          if (op === 'is') return actual === value;
+          // SQL comparison with NULL is unknown, including neq.
+          if (actual == null || value == null) return false;
+          const compared = typeof actual === 'number' ? Number(value) : value;
+          switch (op) {
+            case 'eq': return actual === compared;
+            case 'neq': return actual !== compared;
+            case 'gt': return actual > compared;
+            case 'gte': return actual >= compared;
+            case 'lt': return actual < compared;
+            case 'lte': return actual <= compared;
+            case 'cs': return Array.isArray(actual)
+              && splitGroups(value.slice(1, -1)).every((item) => actual.includes(item));
+            default: return true;
+          }
+        };
       };
-
-      // Split into top-level groups (either "and(...)" blocks or bare conditions)
-      const groups = [];
-      let depth = 0;
-      let current = '';
-      for (let i = 0; i < filterString.length; i++) {
-        const ch = filterString[i];
-        if (ch === '(') {
-          depth++;
-          current += ch;
-        } else if (ch === ')') {
-          depth--;
-          current += ch;
-        } else if (ch === ',' && depth === 0) {
-          groups.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
-        }
-      }
-      if (current.trim()) groups.push(current.trim());
-
-      const groupFns = groups.map((g) => {
-        const andMatch = g.match(/^and\((.+)\)$/);
-        if (andMatch) {
-          // Inner conditions are comma-separated inside and(...)
-          const innerParts = andMatch[1].split(',').map((s) => s.trim());
-          const fns = innerParts.map(parseCondition);
-          return (row) => fns.every((fn) => fn(row));
-        }
-        // Bare condition
-        return parseCondition(g);
-      });
-
+      const groupFns = splitGroups(filterString).map(parseCondition);
       filters.push((row) => groupFns.some((fn) => fn(row)));
       return builder;
     },

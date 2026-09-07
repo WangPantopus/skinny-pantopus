@@ -765,7 +765,7 @@ class PulseFeedViewModel
                 if (loadedPosts.isEmpty()) return
                 _state.value =
                     PulseFeedUiState.Empty(
-                        content = _surface.value.emptyContent(scopeLabel = scopeLabel, followCount = 0),
+                        content = _surface.value.emptyContent(scopeLabel = scopeLabel),
                     )
                 return
             }
@@ -817,7 +817,6 @@ class PulseFeedViewModel
                                         content =
                                             _surface.value.emptyContent(
                                                 scopeLabel = scopeLabel,
-                                                followCount = 0,
                                             ),
                                     )
                                 } else {
@@ -899,9 +898,8 @@ class PulseFeedViewModel
                 id = post.id,
                 authorName = authorName,
                 authorInitials = initials(authorName),
-                // Beacons authors are all verified by definition; on Pulse, fall
-                // back to account-type until the backend surfaces creator.verified.
-                authorVerified = surfaceValue.authorsAlwaysVerified || isBusiness,
+                // Beacon credentials come from the public profile, never the surface.
+                authorVerified = if (surfaceValue == FeedSurface.Beacons) post.creator?.credential?.status == "verified" else isBusiness,
                 avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
                 meta = metaString(post),
                 intent = intent,

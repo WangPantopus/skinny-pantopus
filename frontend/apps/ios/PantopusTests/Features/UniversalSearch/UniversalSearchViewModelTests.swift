@@ -15,6 +15,12 @@ import XCTest
 
 @MainActor
 final class UniversalSearchViewModelTests: XCTestCase {
+    func testBeaconEntryStartsWithOnlyPublicProfileSearch() {
+        let viewModel = UniversalSearchViewModel(initialTab: .beacons)
+        XCTAssertEqual(viewModel.activeTab, .beacons)
+        XCTAssertEqual(viewModel.state, .idle)
+    }
+
     func testThresholdHintOnlyBelowTwoCharacters() {
         let viewModel = UniversalSearchViewModel()
         XCTAssertNil(viewModel.thresholdHint)

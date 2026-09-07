@@ -48,6 +48,9 @@ data class FeedPost(
  * shape and SAFE_CREATOR_SELECT + identity-author attachment.
  */
 @JsonClass(generateAdapter = true)
+data class FeedAuthorCredential(val status: String? = null)
+
+@JsonClass(generateAdapter = true)
 data class FeedPostCreator(
     val id: String? = null,
     val username: String? = null,
@@ -59,6 +62,7 @@ data class FeedPostCreator(
     val handle: String? = null,
     @Json(name = "avatarUrl") val avatarUrl: String? = null,
     val type: String? = null,
+    val credential: FeedAuthorCredential? = null,
     val city: String? = null,
     val state: String? = null,
     @Json(name = "account_type") val accountType: String? = null,

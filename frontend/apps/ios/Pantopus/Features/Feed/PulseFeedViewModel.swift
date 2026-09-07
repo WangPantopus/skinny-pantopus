@@ -727,9 +727,8 @@ public final class PulseFeedViewModel {
             id: post.id,
             authorName: post.creator?.displayName ?? "Pantopus user",
             authorInitials: initials,
-            // Beacons authors are all verified by definition; on Pulse, fall
-            // back to account-type until the backend surfaces creator.verified.
-            authorVerified: surface.authorsAlwaysVerified || isBusiness,
+            // Beacon credentials come from the public profile, never the surface.
+            authorVerified: surface == .beacons ? post.creator?.credential?.status == "verified" : isBusiness,
             avatarTint: isBusiness ? .violet : .sky,
             meta: Self.metaString(post: post, intent: intent),
             intent: intent,

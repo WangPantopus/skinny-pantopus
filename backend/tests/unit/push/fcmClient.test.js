@@ -125,11 +125,12 @@ describe('push/fcmClient.sendMany (mocked transport)', () => {
       return { ok: true, status: 200, json: async () => ({ name: 'projects/pantopus/messages/1' }) };
     });
 
-    const { invalidTokens } = await fcmClient.sendMany(['good', 'bad'], {
+    const { invalidTokens, acceptedTokens } = await fcmClient.sendMany(['good', 'bad'], {
       title: 'T', body: 'B', data: { link: '/x', type: 'system' },
     });
 
     expect(invalidTokens).toEqual(['bad']);
+    expect(acceptedTokens).toEqual(['good']);
     // 1 token exchange + 2 sends
     expect(global.fetch).toHaveBeenCalledTimes(3);
     const sendUrl = global.fetch.mock.calls[1][0];
@@ -139,8 +140,26 @@ describe('push/fcmClient.sendMany (mocked transport)', () => {
   it('no-ops when not configured', async () => {
     delete process.env.FCM_PROJECT_ID;
     global.fetch = jest.fn();
-    const { invalidTokens } = await fcmClient.sendMany(['x'], { title: 'T' });
-    expect(invalidTokens).toEqual([]);
+    expect(await fcmClient.sendMany(['x'], { title: 'T' })).toEqual({
+      invalidTokens: [], acceptedTokens: [],
+    });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not report acceptance after OAuth authentication fails', async () => {
+    global.fetch = jest.fn(async () => ({ ok: false, status: 401 }));
+    expect(await fcmClient.sendMany(['x'], {})).toEqual({ invalidTokens: [], acceptedTokens: [] });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([403, 429, 500, 'network'])('does not report acceptance after send failure %s', async (failure) => {
+    global.fetch = jest.fn(async (url) => {
+      if (url === 'https://oauth2.googleapis.com/token') {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'AT' }) };
+      }
+      if (failure === 'network') throw new Error('connection reset');
+      return { ok: false, status: failure, json: async () => ({ error: { status: 'FAILED' } }) };
+    });
+    expect(await fcmClient.sendMany(['x'], {})).toEqual({ invalidTokens: [], acceptedTokens: [] });
   });
 });

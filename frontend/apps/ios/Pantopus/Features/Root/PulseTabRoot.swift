@@ -20,6 +20,7 @@ public enum PulseRoute: Hashable {
 public struct PulseTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @State private var path = RouteStack<PulseRoute>()
+    @State private var navigationReady = false
     @State private var router = DeepLinkRouter.shared
 
     public init() {}
@@ -50,6 +51,9 @@ public struct PulseTabRoot: View {
             consumeDeepLinkIfNeeded(pending: pending)
         }
         .task {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            navigationReady = true
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
     }
@@ -62,7 +66,7 @@ public struct PulseTabRoot: View {
     }
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        guard let pending else { return }
+        guard navigationReady, let pending, pending == router.pending else { return }
         switch pending {
         case .feed:
             path.replaceNavigationPath(NavigationPath())

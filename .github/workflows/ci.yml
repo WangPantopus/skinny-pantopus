@@ -99,6 +99,12 @@ jobs:
         working-directory: backend
         run: pnpm test
 
+      - name: Following query contract (isolated PostgREST)
+        working-directory: backend
+        env:
+          PANTOPUS_POSTGREST_CONTRACT: "1"
+        run: node --test tests/contract/followingActivity.postgrest.test.cjs
+
   # ─── Backend: the production Docker image still builds ─────────────────────
   # Validate the production image before any commit is eligible for deployment.
   backend-image:

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -73,13 +74,23 @@ fun PlaceLaunchScreen(
     viewModel: PlaceLaunchViewModel = hiltViewModel(),
 ) {
     val step by viewModel.step.collectAsStateWithLifecycle()
+    val browse = {
+        PlacePendingStore.clear()
+        app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
+        onCreateAccount()
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         when (val current = step) {
-            LaunchStep.Hero -> Hero(viewModel, onSignIn, onCreateAccount)
+            LaunchStep.Hero -> Hero(viewModel, onSignIn, browse)
             is LaunchStep.Preview ->
-                PreviewBody(current.preview, onSignIn, onCreateAccount, onBack = viewModel::backToHero)
-            is LaunchStep.Region -> RegionBody(current.message, onCreateAccount, onBack = viewModel::backToHero)
+                PreviewBody(
+                    current.preview,
+                    { if (viewModel.prepareForAuth()) onSignIn() },
+                    { if (viewModel.prepareForAuth()) onCreateAccount() },
+                    onBack = viewModel::backToHero,
+                )
+            is LaunchStep.Region -> RegionBody(current.message, browse, onBack = viewModel::backToHero)
         }
     }
 }
@@ -94,6 +105,7 @@ private fun Hero(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val loading by viewModel.loadingPreview.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
 
     // Signed-out root: nothing above us pads the status bar, so do it here.
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
@@ -148,6 +160,7 @@ private fun Hero(
                 color = PantopusColors.appTextSecondary,
             )
 
+            error?.let { Text(it, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("place.launch.error")) }
             AddressField(query = query, onChange = viewModel::onQueryChange, onClear = { viewModel.onQueryChange("") })
 
             if (query.isNotBlank() && suggestions.isNotEmpty()) {
@@ -462,12 +475,17 @@ private fun PreviewBody(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                "Create a free account to save this place and get daily updates",
+                "Keep this address handy. Choose whether to save it privately after sign-in.",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
-            PrimaryButton(title = "Create account", onClick = onCreateAccount, modifier = Modifier.fillMaxWidth())
+            PrimaryButton(title = "Continue", onClick = onCreateAccount, modifier = Modifier.fillMaxWidth())
+            Text(
+                "Your preview stays on this device for up to 24 hours while you sign in.",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = PantopusColors.appTextMuted,
+            )
             preview.place?.let { place -> ShareAddressLink(place) }
         }
     }

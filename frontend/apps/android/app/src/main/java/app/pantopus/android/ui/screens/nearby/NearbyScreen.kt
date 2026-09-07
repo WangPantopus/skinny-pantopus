@@ -55,19 +55,13 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
 
-// ============================================================
-// Nearby — the density-gated door and its window (Wedge v2 D2 / §4).
-// One honest meter decides what this page is; the cells map is alive
-// from the first minute. Locked surfaces render as a preview of a
-// reward with a meter, never as empty rooms. Mirrors the web
-// `/app/nearby` page.
-// ============================================================
+// Social discovery is available in every meter state. The meter controls
+// the local marketplace and tasks preview and preserves privacy floors.
 
 private data class NearbySurface(val icon: PantopusIcon, val title: String, val subtitle: String)
 
 private val SURFACES =
     listOf(
-        NearbySurface(PantopusIcon.Rss, "Pulse", "What your verified neighbors are saying"),
         NearbySurface(PantopusIcon.ShoppingBag, "Marketplace", "Buy, sell, and lend within walking distance"),
         NearbySurface(PantopusIcon.Briefcase, "Tasks", "Small jobs for the people next door"),
     )
@@ -76,29 +70,52 @@ private val SURFACES =
 fun NearbyScreen(
     onClaim: () -> Unit,
     onOpenPulse: () -> Unit,
+    onOpenBeacons: () -> Unit,
+    onOpenConnections: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
+    NearbyContent(state, onClaim, onOpenPulse, onOpenBeacons, onOpenConnections, onOpenMarketplace, onOpenTasks, viewModel::refresh)
+}
+
+// Keep each destination callback explicit at this screen boundary.
+@Suppress("LongParameterList")
+@Composable
+internal fun NearbyContent(
+    state: NearbyUiState,
+    onClaim: () -> Unit,
+    onOpenPulse: () -> Unit,
+    onOpenBeacons: () -> Unit,
+    onOpenConnections: () -> Unit,
+    onOpenMarketplace: () -> Unit,
+    onOpenTasks: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).verticalScroll(rememberScrollState()).testTag("nearbyTab"),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
             Text("Nearby", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
             Text(
-                "Who's verified around your place, and what opens when enough households have. " +
-                    "Day one here is real neighbors, not empty rooms.",
+                "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. " +
+                    "Following Beacons needs no home address.",
                 fontSize = 13.5.sp,
                 lineHeight = 19.sp,
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SocialRow("Pulse", "Browse a chosen area or catch up with your connections", PantopusIcon.Rss, onOpenPulse)
+            SocialRow("Beacons", "Find public profiles and return to the people you follow", PantopusIcon.Radio, onOpenBeacons)
+            SocialRow("Connections", "Keep up with people you know", PantopusIcon.Users, onOpenConnections)
+        }
         when (val current = state) {
             NearbyUiState.Loading -> Placeholders()
-            is NearbyUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+            is NearbyUiState.Error -> ErrorState(message = current.message, onRetry = onRetry)
             is NearbyUiState.Loaded ->
                 Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (current.meter.state == "no_place") {
@@ -115,29 +132,57 @@ fun NearbyScreen(
                                     tint = PantopusColors.primary600,
                                 )
                                 Text(
-                                    "Your neighborhood is open — ${current.meter.verifiedCount ?: 0} verified households ${areaLabel(
-                                        current.meter,
-                                    )}.",
+                                    "Local marketplace and tasks are open — " +
+                                        "${current.meter.verifiedCount ?: 0} verified households ${areaLabel(current.meter)}.",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = PantopusColors.primary600,
                                 )
                             }
-                            SurfaceRows(locked = false, onOpenPulse, onOpenMarketplace, onOpenTasks)
+                            SurfaceRows(locked = false, onOpenMarketplace, onOpenTasks)
                         } else {
                             MeterCard(current.meter)
                             Text(
-                                "What opens at ${current.meter.threshold}",
+                                "Local marketplace and tasks",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PantopusColors.appText,
                             )
-                            SurfaceRows(locked = true, onOpenPulse, onOpenMarketplace, onOpenTasks)
+                            SurfaceRows(locked = true, onOpenMarketplace, onOpenTasks)
                         }
                     }
                     Spacer(modifier = Modifier.height(96.dp))
                 }
         }
+    }
+}
+
+@Composable
+private fun SocialRow(
+    title: String,
+    subtitle: String,
+    icon: PantopusIcon,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier.fillMaxWidth().placeCard().clickable(
+                onClick = onClick,
+            ).padding(16.dp).testTag("nearbySocial.${title.lowercase()}"),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(PantopusColors.primary600),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon, null, size = 20.dp, tint = PantopusColors.appSurface)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+            Text(subtitle, fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+        }
+        PantopusIconImage(PantopusIcon.ChevronRight, null, size = 18.dp, tint = PantopusColors.appTextSecondary)
     }
 }
 
@@ -351,9 +396,10 @@ private fun MeterCard(meter: NeighborhoodMeter) {
         Text(
             if (forming) {
                 "Your area is just forming — be one of the first ${meter.kAnonMin} verified households here. " +
-                    "The neighborhood opens at ${meter.threshold}."
+                    "Local marketplace and tasks open at ${meter.threshold}. Pulse and Beacons are available now."
             } else {
-                "$count households have verified their address nearby. At ${meter.threshold}, the neighborhood opens for everyone."
+                "$count households have verified their address nearby. " +
+                    "Local marketplace and tasks open at ${meter.threshold}. Pulse and Beacons are available now."
             },
             fontSize = 13.5.sp,
             lineHeight = 19.sp,
@@ -365,11 +411,10 @@ private fun MeterCard(meter: NeighborhoodMeter) {
 @Composable
 private fun SurfaceRows(
     locked: Boolean,
-    onOpenPulse: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
 ) {
-    val actions = listOf(onOpenPulse, onOpenMarketplace, onOpenTasks)
+    val actions = listOf(onOpenMarketplace, onOpenTasks)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SURFACES.forEachIndexed { i, s ->
             Row(
@@ -427,15 +472,16 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
         ) {
             PantopusIconImage(PantopusIcon.Home, null, size = 28.dp, strokeWidth = 2f, tint = PantopusColors.home)
         }
-        Text("First, tell us where home is", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+        Text("Add a home for neighborhood context", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            "Your neighborhood is measured around your place. Claim your address and this page becomes your block's progress meter.",
+            "Adding a home gives you neighborhood context and household tools. " +
+                "You can browse Pulse and follow Beacons before setting it up.",
             fontSize = 14.sp,
             lineHeight = 20.sp,
             textAlign = TextAlign.Center,
             color = PantopusColors.appTextSecondary,
         )
-        PrimaryButton(title = "Claim your address", onClick = onClaim, modifier = Modifier.fillMaxWidth())
+        PrimaryButton(title = "Set up a home", onClick = onClaim, modifier = Modifier.fillMaxWidth())
     }
 }
 

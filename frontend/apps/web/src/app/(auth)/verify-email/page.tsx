@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PantopusBadge from '@/components/PantopusBadge';
-import { extractApiError, normalizeEmail } from '@/lib/auth-utils';
+import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError, normalizeEmail } from '@/lib/auth-utils';
 
 type VerifyState = 'verifying' | 'success' | 'error';
 
 function VerifyEmailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const hasStartedRef = useRef(false);
+  const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
+  const loginHref = authPageHref('/login', redirectTo);
+  const requestRef = useRef<{ key: string; promise: ReturnType<typeof api.auth.verifyEmail> } | null>(null);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<VerifyState>('verifying');
@@ -28,9 +30,6 @@ function VerifyEmailPageContent() {
   }, []);
 
   useEffect(() => {
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -39,10 +38,10 @@ function VerifyEmailPageContent() {
         typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : ''
       );
 
-      const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash') || '';
-      const token = searchParams.get('token') || hashParams.get('token') || '';
-      const email = normalizeEmail(searchParams.get('email') || hashParams.get('email') || '');
-      const typeParam = searchParams.get('type') || hashParams.get('type') || 'signup';
+      const tokenHash = searchParams?.get('token_hash') || hashParams.get('token_hash') || '';
+      const token = searchParams?.get('token') || hashParams.get('token') || '';
+      const email = normalizeEmail(searchParams?.get('email') || hashParams.get('email') || '');
+      const typeParam = searchParams?.get('type') || hashParams.get('type') || 'signup';
       const allowedTypes = new Set(['email', 'signup', 'magiclink']);
       const type = (allowedTypes.has(typeParam) ? typeParam : 'signup') as 'email' | 'signup' | 'magiclink';
 
@@ -64,17 +63,19 @@ function VerifyEmailPageContent() {
           setMessage('Verification request timed out. Please try again or contact support.');
         }, 15000);
 
-        const res = await api.auth.verifyEmail({
-          tokenHash: tokenHash || undefined,
-          token: token || undefined,
-          email: email || undefined,
-          type,
-        });
+        const key = JSON.stringify([tokenHash, token, email, type]);
+        if (requestRef.current?.key !== key) {
+          requestRef.current = { key, promise: api.auth.verifyEmail({
+            tokenHash: tokenHash || undefined, token: token || undefined,
+            email: email || undefined, type,
+          }) };
+        }
+        const res = await requestRef.current.promise;
         if (timeoutId) clearTimeout(timeoutId);
         if (!cancelled) {
           setState('success');
           setMessage(res?.message || 'Email verified successfully. You can now sign in.');
-          redirectTimeoutRef.current = setTimeout(() => router.push('/login'), 1200);
+          redirectTimeoutRef.current = setTimeout(() => router.push(loginHref), 1200);
         }
       } catch (err: unknown) {
         if (timeoutId) clearTimeout(timeoutId);
@@ -90,7 +91,7 @@ function VerifyEmailPageContent() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [searchParams, router]);
+  }, [searchParams, router, loginHref]);
 
   const resend = async () => {
     if (!emailHint) {
@@ -100,7 +101,7 @@ function VerifyEmailPageContent() {
     }
     setResending(true);
     try {
-      const res = await api.auth.resendVerification(emailHint);
+      const res = await api.auth.resendVerification(emailHint, redirectTo);
       setMessage(res?.message || 'If that email exists, a verification email has been sent.');
     } catch (err: unknown) {
       setMessage(extractApiError(err, 'Could not resend verification email.'));
@@ -135,7 +136,7 @@ function VerifyEmailPageContent() {
 
           <div className="mt-6 space-y-3">
             <Link
-              href="/login"
+              href={loginHref}
               className="w-full inline-flex justify-center py-2.5 px-4 rounded-lg shadow-sm text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700"
             >
               Go to Sign in

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { authPageHref, extractApiError } from '@/lib/auth-utils';
 import { Bell, BellOff, Check, ChevronRight, Diamond, FileText, Globe, LayoutDashboard, Link as LinkIcon, Lock, MapPin, Megaphone, ShieldCheck, SlidersHorizontal, Sparkles, UserPlus, Users } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { AudienceProfile, BroadcastChannel, BroadcastMessage, PersonaNotificationLevel, Post } from '@pantopus/types';
@@ -57,6 +59,10 @@ export default function AudienceProfileClient({
   fallbackUrl: string | null;
   storeCta: StoreCta | null;
 }) {
+  const router = useRouter();
+  const [followError, setFollowError] = useState('');
+  const [following, setFollowing] = useState(false);
+  const followInFlight = useRef(false);
   const [persona, setPersona] = useState(initialPersona);
   const [posts, setPosts] = useState<Post[]>([]);
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
@@ -74,7 +80,7 @@ export default function AudienceProfileClient({
   const markedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const markMessagesRead = (nextMessages: BroadcastMessage[], nextPersona: AudienceProfile) => {
-    if (nextPersona.viewer?.isOwner) return;
+    if (!api.getAuthToken() || nextPersona.viewer?.isOwner) return;
     nextMessages.forEach((message) => {
       if (!message.id || markedMessageIdsRef.current.has(message.id)) return;
       // Locked-preview rows have no body to mark read, and the
@@ -130,6 +136,14 @@ export default function AudienceProfileClient({
   }, [persona.handle, paidMembershipsEnabled]);
 
   const follow = async () => {
+    if (followInFlight.current) return;
+    if (!api.getAuthToken()) {
+      router.push(authPageHref('/login', `/persona/${persona.handle}`));
+      return;
+    }
+    followInFlight.current = true;
+    setFollowing(true);
+    setFollowError('');
     try {
       const res = await api.personas.followPersona(persona.id);
       trackIdentityEvent('identity_public_profile_follow_changed', {
@@ -147,8 +161,11 @@ export default function AudienceProfileClient({
           notificationLevel: res.status === 'active' ? 'all' : prev.viewer.notificationLevel,
         },
       }));
-    } catch {
-      // Public profile remains readable even if follow fails.
+    } catch (err) {
+      setFollowError(extractApiError(err, 'Could not follow this Beacon. Please try again.'));
+    } finally {
+      followInFlight.current = false;
+      setFollowing(false);
     }
   };
 
@@ -243,6 +260,7 @@ export default function AudienceProfileClient({
               </div>
             </div>
 
+            {followError ? <p role="alert" className="text-sm text-red-700 dark:text-red-300">{followError}</p> : null}
             {/* Action area */}
             {!persona.viewer.isOwner ? (
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -265,7 +283,7 @@ export default function AudienceProfileClient({
                   <button
                     type="button"
                     onClick={follow}
-                    disabled={isFollowing || isPending}
+                    disabled={following || isFollowing || isPending}
                     aria-label={isFollowing ? 'Following this Beacon' : isPending ? 'Follow request pending' : `Follow ${persona.displayName}`}
                     className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed ${
                       isFollowing
@@ -276,7 +294,7 @@ export default function AudienceProfileClient({
                     }`}
                   >
                     {isFollowing ? <Check className="h-4 w-4" /> : isPending ? <Bell className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                    {isFollowing ? 'Following' : isPending ? 'Requested' : `Follow ${persona.audienceLabel}`}
+                    {following ? 'Following…' : isFollowing ? 'Following' : isPending ? 'Requested' : `Follow ${persona.audienceLabel}`}
                   </button>
                 )}
                 {persona.viewer.isFollowing && (

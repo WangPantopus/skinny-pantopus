@@ -48,6 +48,10 @@ final class UITestStubProtocol: URLProtocol {
             return
         }
 
+        if let response = UITestArrivalFixture.response(request) {
+            finishWith(status: response.status, body: response.data)
+            return
+        }
         let path = url.path
         let method = request.httpMethod?.uppercased() ?? "GET"
         let env = ProcessInfo.processInfo.environment

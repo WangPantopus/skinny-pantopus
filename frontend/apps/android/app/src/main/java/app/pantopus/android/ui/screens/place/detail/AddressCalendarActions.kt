@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -11,7 +12,7 @@ interface AddressCalendarActions {
     val calendarBusy: StateFlow<Boolean>
     val calendarError: StateFlow<String?>
 
-    fun setPickupDay(weekday: String)
+    fun setPickupDay(request: SetPickupDayRequest)
 
     fun clearPickupDay()
 }

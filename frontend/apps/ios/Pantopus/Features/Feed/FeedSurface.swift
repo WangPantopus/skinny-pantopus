@@ -4,10 +4,10 @@
 //
 //  The A03 feed archetype renders two surfaces from one screen: Pulse
 //  (the public neighborhood feed, `surface=place`) and Beacon Updates
-//  (broadcasts from verified beacons the user follows, `surface=personas`).
+//  (broadcasts from public profiles the user follows, `surface=personas`).
 //  Design ref: docs/designs/A03 — feed-frames.jsx (A03.1) + beacons-frames.jsx
-//  (A03.2). They share chrome, chip row, card recipe, FAB, and tab bar;
-//  only the title, backend surface, verified-floor, and empty state differ.
+//  (A03.2). They share chrome, chip row, card recipe, discovery controls, and tab bar;
+//  only the title, backend surface, credential presentation, and empty state differ.
 //
 
 import Foundation
@@ -84,15 +84,6 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
         self == .pulse
     }
 
-    /// Beacons are verified people / businesses / civic accounts, so every
-    /// author on that surface carries the verified check disc (A03.2).
-    public var authorsAlwaysVerified: Bool {
-        switch self {
-        case .pulse, .connections: false
-        case .beacons: true
-        }
-    }
-
     /// Whether the header shows the List / Map toggle. RN hides it on the
     /// `personas` surface because beacon broadcasts aren't geo-pinned —
     /// `src/components/feed/FeedHeader.tsx:36`.
@@ -109,7 +100,7 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
     ///   - scopeLabel: Active neighborhood (Pulse footer). `nil` hides the
     ///     Pulse footer chip.
     ///   - followCount: Beacons followed (Beacons footer).
-    public func emptyContent(scopeLabel: String?, followCount: Int) -> FeedEmptyContent {
+    public func emptyContent(scopeLabel: String?, followCount _: Int) -> FeedEmptyContent {
         switch self {
         case .pulse:
             FeedEmptyContent(
@@ -140,15 +131,15 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
         case .beacons:
             FeedEmptyContent(
                 icon: .rss,
-                headline: "Follow a beacon to see updates here",
-                body: "Beacons are verified people, businesses, and civic accounts you can follow."
+                headline: "No Beacon updates yet",
+                body: "Beacons are public profiles you choose to follow."
                     + " Their posts land in this feed only.",
                 ctaLabel: "Discover beacons",
                 ctaIcon: .compass,
                 footerIcon: .users,
                 footerLead: "You follow ",
-                footerEmphasis: "\(followCount) beacons",
-                footerTrail: " · suggestions nearby"
+                footerEmphasis: nil,
+                footerTrail: " · find more by name or handle"
             )
         }
     }

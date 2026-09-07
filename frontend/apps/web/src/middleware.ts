@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // cannot see it and must never treat "access cookie missing" as "signed out".
 // See docs/01-authentication-authorization.md §1.5 (web session recovery).
 import { SESSION_REFRESH_PATH } from './lib/session-refresh';
+import { readAuthRedirectQuery, safeRedirectPath } from '@pantopus/ui-utils';
 
 // Backend sets these via same-origin proxy (no separate Next.js session route needed).
 const ACCESS_COOKIE = 'pantopus_access';
@@ -114,7 +115,8 @@ export function middleware(req: NextRequest) {
 
   // Keep authenticated users out of login/register pages.
   if (AUTH_PAGES.has(pathname) && isAuthenticated) {
-    return NextResponse.redirect(new URL('/app/place', req.url));
+    const destination = safeRedirectPath(readAuthRedirectQuery(req.nextUrl.searchParams), '/app/place');
+    return NextResponse.redirect(new URL(destination, req.url));
   }
 
   // App routes require session.

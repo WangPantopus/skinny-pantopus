@@ -12,6 +12,22 @@ import XCTest
 
 @MainActor
 final class HubRouteTests: XCTestCase {
+    func testPlaceAndMailStacksCannotStealNearbyDestinations() {
+        let destinations: [DeepLinkRouter.Destination] = [.feed, .post(id: "post"), .gig(id: "gig"), .listing(id: "listing")]
+        for destination in destinations {
+            XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .place))
+            XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .mail))
+        }
+    }
+
+    func testBeaconAndMailboxLinksHaveOneOwningStackDuringTabChanges() {
+        let beacon = DeepLinkRouter.Destination.beaconProfile(handle: "mayabuilds")
+        XCTAssertTrue(HubTabRoot.ownsDeepLink(beacon, tab: .place))
+        XCTAssertFalse(HubTabRoot.ownsDeepLink(beacon, tab: .mail))
+        XCTAssertTrue(HubTabRoot.ownsDeepLink(.vacationHold, tab: .mail))
+        XCTAssertFalse(HubTabRoot.ownsDeepLink(.vacationHold, tab: .place))
+    }
+
     /// `Hashable` conformance is what keeps the route in
     /// `NavigationStack(path:)`. Without it the push compiles but
     /// silently no-ops.

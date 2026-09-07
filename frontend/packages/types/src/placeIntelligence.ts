@@ -270,6 +270,12 @@ export interface PlaceAddressCalendarData {
   rule_count: number;
   /** The home's local "today", YYYY-MM-DD. */
   today: string;
+  /** Explicit household schedule; omitted by older servers. */
+  pickup_schedule?: {
+    weekday: 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU' | null;
+    recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
+    recycling_next_date: string | null;
+  } | null;
 }
 
 // ── Risk & readiness ─────────────────────────────────────────

@@ -1,6 +1,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const notificationService = require('./notificationService');
+const { getPersonaNotificationRecipientIds } = require('./personaNotificationRecipients');
 
 function newPostFanoutLinkAndMeta(post) {
   if (post?.ref_task_id) {
@@ -51,12 +52,12 @@ async function resolvePostFanoutRecipients({
   const notifyConnections = targets.includes('connections');
 
   if (!recipientUserIds && notifyPersonaFollowers && personaContext?.id) {
-    const { data: personaFollowers } = await supabaseAdmin
-      .from('PersonaMembership')
-      .select('user_id')
-      .eq('persona_id', personaContext.id)
-      .in('status', ['active', 'past_due']);
-    (personaFollowers || []).forEach(f => recipientIds.add(f.user_id));
+    const personaFollowers = await getPersonaNotificationRecipientIds(
+      personaContext,
+      post.target_tier_rank ? 'tier_or_above' : (post.post_metadata?.broadcast_visibility || 'followers'),
+      post.target_tier_rank,
+    );
+    personaFollowers.forEach((id) => recipientIds.add(id));
   }
 
   if (!recipientUserIds && notifyConnections) {
