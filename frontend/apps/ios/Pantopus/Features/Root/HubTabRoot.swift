@@ -2012,6 +2012,7 @@ public struct HubTabRoot: View {
                     Task { @MainActor in push(.businessProfile(businessId: username)) }
                 }
             )
+            .toolbar(.hidden, for: .navigationBar)
         case .mailboxVault:
             // T6.5e (P19.5) — Mailbox Vault list. Personal-pillar
             // surface — both the FAB ("Save mail to vault") and the
@@ -2079,6 +2080,9 @@ public struct HubTabRoot: View {
                 onDiscover: { Task { @MainActor in push(.beaconSearch) } },
                 onOpenPersona: { handle in
                     Task { @MainActor in push(.beaconProfile(handle: handle)) }
+                },
+                onOpenPost: { postId in
+                    Task { @MainActor in push(.pulsePost(postId: postId)) }
                 }
             ))
         case .myBeacon:

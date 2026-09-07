@@ -3,8 +3,7 @@
 //  PantopusTests
 //
 //  §1A① — locks the client-side grouping contract for the Following
-//  screen: New updates / Active / Quiet bucketing, the muted-row unread
-//  suppression, the "25+" cap, and the quiet placeholder copy.
+//  screen: New updates / Active / Quiet bucketing, notification-only muting, the "25+" cap, and the quiet placeholder copy.
 //
 
 import XCTest
@@ -22,7 +21,8 @@ final class FollowingProjectionTests: XCTestCase {
         unread: Int,
         hoursAgo: Double?,
         muted: Bool = false,
-        tier: String? = nil
+        tier: String? = nil,
+        muteExpiresIn: TimeInterval = 86400 * 3
     ) -> FollowingRowDTO {
         let post = hoursAgo.map {
             FollowingPostDTO(
@@ -44,7 +44,7 @@ final class FollowingProjectionTests: XCTestCase {
             ),
             fanHandle: nil,
             notificationLevel: "all",
-            mutedUntil: muted ? iso(now.addingTimeInterval(86400 * 3)) : nil,
+            mutedUntil: muted ? iso(now.addingTimeInterval(muteExpiresIn)) : nil,
             paidTier: tier.map {
                 FollowingTierDTO(
                     rank: 2,
@@ -64,12 +64,12 @@ final class FollowingProjectionTests: XCTestCase {
             row(id: "a", unread: 3, hoursAgo: 2), // unread → New updates
             row(id: "b", unread: 0, hoursAgo: 48), // recent post, no unread → Active
             row(id: "c", unread: 0, hoursAgo: nil), // no post → Quiet
-            row(id: "d", unread: 5, hoursAgo: 1, muted: true) // muted suppresses unread → Active
+            row(id: "d", unread: 5, hoursAgo: 1, muted: true) // mute silences notifications, not updates
         ]
         let sections = FollowingProjection.sections(from: dtos, now: now)
         XCTAssertEqual(sections.map(\.kind), [.newUpdates, .active, .quiet])
-        XCTAssertEqual(sections[0].rows.map(\.id), ["a"])
-        XCTAssertEqual(Set(sections[1].rows.map(\.id)), ["b", "d"])
+        XCTAssertEqual(sections[0].rows.map(\.id), ["a", "d"])
+        XCTAssertEqual(sections[1].rows.map(\.id), ["b"])
         XCTAssertEqual(sections[2].rows.map(\.id), ["c"])
     }
 
@@ -79,13 +79,13 @@ final class FollowingProjectionTests: XCTestCase {
         XCTAssertEqual(FollowingProjection.unreadBadge(40), "25+")
     }
 
-    func testMutedRowShowsBellOffNotBadge() {
+    func testMutedRowKeepsUnreadUpdates() {
         let (kind, projected) = FollowingProjection.project(
             row(id: "m", unread: 9, hoursAgo: 1, muted: true), now: now
         )
-        XCTAssertEqual(kind, .active)
+        XCTAssertEqual(kind, .newUpdates)
         XCTAssertTrue(projected.isMuted)
-        XCTAssertEqual(projected.trailing, .muted)
+        XCTAssertEqual(projected.trailing, .unread("9"))
     }
 
     func testQuietPlaceholderCopy() {
@@ -96,7 +96,7 @@ final class FollowingProjectionTests: XCTestCase {
         let mutedQuiet = FollowingProjection.project(
             row(id: "qm", unread: 0, hoursAgo: nil, muted: true), now: now
         ).1
-        XCTAssertEqual(mutedQuiet.bodyText, "No updates while muted")
+        XCTAssertEqual(mutedQuiet.bodyText, "Notifications muted")
     }
 
     func testNewUpdateRowCarriesTierAndBadge() {
@@ -105,6 +105,15 @@ final class FollowingProjectionTests: XCTestCase {
         )
         XCTAssertEqual(kind, .newUpdates)
         XCTAssertEqual(projected.tierName, "Insiders")
+        XCTAssertEqual(projected.latestPostId, "post-t")
         XCTAssertEqual(projected.trailing, .unread("1"))
     }
+    func testExpiredMuteRestoresNormalPresentation() {
+        let (_, projected) = FollowingProjection.project(
+            row(id: "expired", unread: 0, hoursAgo: 1, muted: true, muteExpiresIn: -1), now: now
+        )
+        XCTAssertFalse(projected.isMuted)
+        XCTAssertEqual(projected.trailing, .chevron)
+    }
+
 }

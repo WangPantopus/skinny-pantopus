@@ -70,6 +70,7 @@ fun FollowingScreen(
     onBack: () -> Unit,
     onDiscover: () -> Unit = {},
     onOpenPersona: (String) -> Unit = {},
+    onOpenPost: ((String) -> Unit)? = null,
     viewModel: FollowingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -117,6 +118,7 @@ fun FollowingScreen(
                         isSelecting = isSelecting,
                         selectedRowIds = selectedRowIds,
                         onOpenPersona = onOpenPersona,
+                        onOpenPost = onOpenPost,
                         onToggleSelect = viewModel::toggleSelection,
                         onLongPress = viewModel::beginSelection,
                         onBell = viewModel::cycleNotificationLevel,
@@ -342,6 +344,7 @@ private fun FollowingLoadedList(
     isSelecting: Boolean,
     selectedRowIds: Set<String>,
     onOpenPersona: (String) -> Unit,
+    onOpenPost: ((String) -> Unit)?,
     onToggleSelect: (FollowingRow) -> Unit,
     onLongPress: (FollowingRow) -> Unit,
     onBell: (FollowingRow) -> Unit,
@@ -358,6 +361,7 @@ private fun FollowingLoadedList(
                     isSelecting = isSelecting,
                     selectedRowIds = selectedRowIds,
                     onOpenPersona = onOpenPersona,
+                    onOpenPost = onOpenPost,
                     onToggleSelect = onToggleSelect,
                     onLongPress = onLongPress,
                     onBell = onBell,
@@ -399,6 +403,7 @@ private fun FollowingRowGroup(
     isSelecting: Boolean,
     selectedRowIds: Set<String>,
     onOpenPersona: (String) -> Unit,
+    onOpenPost: ((String) -> Unit)?,
     onToggleSelect: (FollowingRow) -> Unit,
     onLongPress: (FollowingRow) -> Unit,
     onBell: (FollowingRow) -> Unit,
@@ -428,6 +433,7 @@ private fun FollowingRowGroup(
                 isSelecting = isSelecting,
                 isSelected = row.id in selectedRowIds,
                 onOpenPersona = onOpenPersona,
+                onOpenPost = onOpenPost,
                 onToggleSelect = onToggleSelect,
                 onLongPress = onLongPress,
                 onBell = onBell,
@@ -438,11 +444,12 @@ private fun FollowingRowGroup(
 }
 
 @Composable
-private fun FollowingRowItem(
+internal fun FollowingRowItem(
     row: FollowingRow,
     isSelecting: Boolean,
     isSelected: Boolean,
     onOpenPersona: (String) -> Unit,
+    onOpenPost: ((String) -> Unit)?,
     onToggleSelect: (FollowingRow) -> Unit,
     onLongPress: (FollowingRow) -> Unit,
     onBell: (FollowingRow) -> Unit,
@@ -453,7 +460,7 @@ private fun FollowingRowItem(
             Modifier
                 .fillMaxWidth()
                 .background(if (isSelected) PantopusColors.primary50 else Color.Transparent)
-                .alpha(if (row.isMuted || row.isPaused) 0.62f else 1f)
+                .alpha(if (row.isPaused) 0.62f else 1f)
                 .padding(start = 14.dp, end = Spacing.s3, top = 11.dp, bottom = 11.dp)
                 .testTag("followingRow.${row.id}"),
         verticalAlignment = Alignment.CenterVertically,
@@ -468,20 +475,32 @@ private fun FollowingRowItem(
             )
             Spacer(Modifier.width(Spacing.s2))
         }
-        Row(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .combinedClickable(
-                        onClick = { if (isSelecting) onToggleSelect(row) else onOpenPersona(row.handle) },
-                        onLongClick = { onLongPress(row) },
-                    ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            FollowingAvatar(row.initials, row.tone.color, row.avatarUrl, row.verified, 44.dp)
-            FollowingRowText(row, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = { if (isSelecting) onToggleSelect(row) else onOpenPersona(row.handle) },
+                            onLongClick = { onLongPress(row) },
+                        ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                FollowingAvatar(row.initials, row.tone.color, row.avatarUrl, row.verified, 44.dp)
+                FollowingRowText(row, modifier = Modifier.weight(1f))
+            }
+            val postId = row.latestPostId
+            if (!isSelecting && postId != null && onOpenPost != null) {
+                TextButton(
+                    onClick = { onOpenPost(postId) },
+                    modifier = Modifier.testTag("followingRead.$postId"),
+                ) {
+                    Text("Read update", color = PantopusColors.primary600)
+                }
+            }
         }
+
         if (!isSelecting) {
             FollowingTrailing(row.trailing)
             Spacer(Modifier.width(Spacing.s1))
@@ -514,7 +533,7 @@ private fun FollowingBellButton(
     onBell: (FollowingRow) -> Unit,
 ) {
     val tint =
-        if (row.isPaused || row.notificationLevel == FollowingNotificationLevel.Off) {
+        if (row.isMuted || row.isPaused || row.notificationLevel == FollowingNotificationLevel.Off) {
             PantopusColors.appTextMuted
         } else {
             PantopusColors.primary600
@@ -531,13 +550,13 @@ private fun FollowingBellButton(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         PantopusIconImage(
-            icon = row.notificationLevel.icon,
-            contentDescription = "Notifications: ${row.notificationLevel.label}",
+            icon = if (row.isMuted) PantopusIcon.BellOff else row.notificationLevel.icon,
+            contentDescription = "Notifications: ${if (row.isMuted) "Muted" else row.notificationLevel.label}",
             size = 14.dp,
             tint = tint,
         )
         Text(
-            text = row.notificationLevel.label,
+            text = if (row.isMuted) "Muted" else row.notificationLevel.label,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (row.isPaused) PantopusColors.appTextMuted else PantopusColors.appTextStrong,

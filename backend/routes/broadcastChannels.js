@@ -6,6 +6,7 @@ const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+const { getPersonaNotificationRecipientIds } = require('../services/personaNotificationRecipients');
 const { broadcastPublishLimiter } = require('../middleware/rateLimiter');
 const { isFanBlockedFromPersona } = require('../services/personaBlockService');
 const { runPostCreatedHooks } = require('../services/postCreationHooksService');
@@ -323,63 +324,6 @@ function serializeBroadcastChannel(channel) {
   };
 }
 
-// Compute notification recipients for a broadcast. visibility/targetRank
-// pair determines which active memberships qualify:
-//   * public / followers      → every active fan opted in to notifications.
-//   * tier_or_above N         → fans whose tier rank >= N (or legacy
-//                                relationship_type = 'subscriber' for
-//                                untagged paid members).
-//   * subscribers (legacy)    → equivalent to tier_or_above 2.
-async function getBroadcastNotificationRecipientIds(persona, visibility, targetRank = null) {
-  const { data, error } = await supabaseAdmin
-    .from('PersonaMembership')
-    .select('user_id, relationship_type, notification_level, tier_id')
-    .eq('persona_id', persona.id)
-    .in('status', ['active', 'past_due'])
-    .neq('notification_level', 'none');
-  if (error) {
-    logger.warn('broadcast.notification_recipients.error', { error: error.message, personaId: persona.id });
-    return [];
-  }
-
-  let memberships = data || [];
-  const tierGated = visibility === 'tier_or_above' || visibility === 'subscribers';
-  if (tierGated) {
-    const requiredRank = visibility === 'tier_or_above'
-      ? Number(targetRank || 1)
-      : 2; // legacy 'subscribers'
-    const tierIds = [...new Set(memberships.map((membership) => membership.tier_id).filter(Boolean))];
-    let rankByTierId = new Map();
-    if (tierIds.length) {
-      const { data: tiers, error: tierError } = await supabaseAdmin
-        .from('PersonaTier')
-        .select('id, rank')
-        .in('id', tierIds);
-      if (tierError) {
-        logger.warn('broadcast.notification_recipients.tier_error', { error: tierError.message, personaId: persona.id });
-      } else {
-        rankByTierId = new Map((tiers || []).map((tier) => [tier.id, Number(tier.rank || 0)]));
-      }
-    }
-    memberships = memberships.filter((membership) => {
-      const rank = Number(rankByTierId.get(membership.tier_id) || 0);
-      if (rank >= requiredRank) return true;
-      // Legacy fallback: pre-tier rows tagged relationship_type =
-      // 'subscriber' qualify for the historical 'subscribers' visibility
-      // and for new Member+ broadcasts while they are being migrated onto
-      // explicit PersonaTier rows.
-      if (requiredRank <= 2 && membership.relationship_type === 'subscriber') {
-        return true;
-      }
-      return false;
-    });
-  }
-
-  return [...new Set(memberships
-    .map((membership) => membership.user_id)
-    .filter((userId) => userId && userId !== persona.user_id))];
-}
-
 router.get('/channels/:channelId/messages', optionalAuth, async (req, res) => {
   try {
     const channel = await getChannel(req.params.channelId);
@@ -562,7 +506,7 @@ router.post('/channels/:channelId/messages', verifyToken, broadcastPublishLimite
       }
     }
 
-    const recipientUserIds = await getBroadcastNotificationRecipientIds(
+    const recipientUserIds = await getPersonaNotificationRecipientIds(
       persona, visibility, targetTierRank,
     );
     const media = req.body.media || [];
@@ -675,6 +619,10 @@ router.post('/channels/:channelId/messages', verifyToken, broadcastPublishLimite
         visibility: broadcastMessage.visibility,
         bodyPreview: broadcastMessage.body || '',
       },
+    }).catch((err) => {
+      // The update is already stored. A notification outage must not make the
+      // creator retry a successful publish and produce a duplicate update.
+      logger.warn('broadcast.publish.notification_error', { postId: message.id, error: err.message });
     });
     res.status(201).json({ message: broadcastMessage });
   } catch (err) {

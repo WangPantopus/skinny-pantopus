@@ -66,7 +66,7 @@ function BeaconDirectory({ userId }: { userId: string }) {
     retry: false,
   });
   const results = (discovery.data?.results ?? []).filter(
-    (r) => r.type === 'public_profile' && /^\/@[a-zA-Z0-9_-]+$/.test(r.href),
+    (r) => r.type === 'public_profile' && /^\/@[a-zA-Z0-9_.-]+$/.test(r.href),
   );
 
   async function manage(
@@ -119,6 +119,7 @@ function BeaconDirectory({ userId }: { userId: string }) {
           className="mt-4 flex flex-wrap gap-4 text-sm font-semibold text-primary-600"
         >
           <Link href="/app/feed?surface=personas">Read updates</Link>
+          <Link href="/app/notifications?context=audience">Notifications</Link>
           <Link href="/app/nearby">Pulse and Nearby</Link>
           {webFeatureFlags.persona ? (
             <Link href="/app/persona">My Beacon</Link>

@@ -220,3 +220,25 @@ it('paginates without carrying another page’s followers forward', async () => 
   ).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument();
 });
+
+it('supports dotted Beacon handles and links to audience notifications', async () => {
+  searchProfiles.mockResolvedValue({
+    results: [
+      {
+        id: 'dotted',
+        type: 'public_profile',
+        href: '/@maya.builds',
+        title: 'Maya Builds',
+      },
+    ],
+  });
+  show();
+  await search('maya.builds');
+  expect(
+    await screen.findByRole('link', { name: /Maya Builds/ }),
+  ).toHaveAttribute('href', '/@maya.builds');
+  expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+    'href',
+    '/app/notifications?context=audience',
+  );
+});

@@ -136,9 +136,10 @@ function defaultRelationshipTypeForPersona(persona) {
 function personaPostVisibleToViewer(post, viewerRank = 0) {
   if (!post) return false;
   if (post.archived_at || post.status === 'removed') return false;
-  if (post.audience === 'public' || post.visibility === 'public') return true;
+  if (post.post_metadata?.broadcast_status && post.post_metadata.broadcast_status !== 'published') return false;
   const requiredRank = Number(post.target_tier_rank || 0);
   if (requiredRank > 0) return viewerRank >= requiredRank;
+  if (post.audience === 'public' || post.visibility === 'public') return true;
   const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
   const followerOnly = post.audience === 'followers'
     || post.visibility === 'followers'
@@ -440,13 +441,13 @@ router.get('/me/following', verifyToken, async (req, res) => {
     const { data: memberships, error: mErr } = await supabaseAdmin
       .from('PersonaMembership')
       .select(`
-        id, persona_id, tier_id, fan_handle, notification_level, status,
+        id, persona_id, tier_id, relationship_type, fan_handle, notification_level, status,
         muted_until, last_seen_at, joined_at,
         persona:PublicPersona!persona_id(id, handle, display_name, avatar_url, status, credential_status, follower_count),
         tier:PersonaTier!tier_id(rank, name, price_cents)
       `)
       .eq('user_id', userId)
-      .not('status', 'in', '(removed,blocked,canceled,expired)');
+      .in('status', ['active', 'past_due']);
 
     if (mErr) {
       logger.error('personas.me.following.list_error', { error: mErr.message, userId });
@@ -454,7 +455,13 @@ router.get('/me/following', verifyToken, async (req, res) => {
     }
 
     const rows = memberships || [];
-    const visibleRows = rows.filter((m) => m.persona && m.persona.status !== 'suspended');
+    const { data: blocks, error: blockError } = rows.length
+      ? await supabaseAdmin.from('PersonaBlock').select('persona_id')
+        .eq('blocked_user_id', userId).in('persona_id', rows.map((m) => m.persona_id))
+      : { data: [], error: null };
+    if (blockError) return res.status(503).json({ error: 'Followed Beacons are temporarily unavailable' });
+    const blockedIds = new Set((blocks || []).map((b) => b.persona_id));
+    const visibleRows = rows.filter((m) => m.persona && m.persona.status !== 'suspended' && !blockedIds.has(m.persona_id));
     const personaIds = visibleRows.map((m) => m.persona_id);
 
     // One batched query for the post snippet + unread count. We over-fetch
@@ -466,7 +473,7 @@ router.get('/me/following', verifyToken, async (req, res) => {
     if (personaIds.length > 0) {
       const { data: posts, error: pErr } = await supabaseAdmin
         .from('Post')
-        .select('id, identity_context_id, content, title, created_at')
+        .select('id, identity_context_id, content, title, created_at, visibility, audience, distribution_targets, target_tier_rank, post_metadata')
         .eq('identity_context_type', 'persona')
         .in('identity_context_id', personaIds)
         .is('archived_at', null)
@@ -474,6 +481,7 @@ router.get('/me/following', verifyToken, async (req, res) => {
         .limit(personaIds.length * MAX_RECENT_PER_PERSONA);
       if (pErr) {
         logger.error('personas.me.following.posts_error', { error: pErr.message, userId });
+        return res.status(503).json({ error: 'Beacon updates are temporarily unavailable' });
       } else {
         recentPosts = posts || [];
       }
@@ -494,7 +502,9 @@ router.get('/me/following', verifyToken, async (req, res) => {
     // Decorate each membership with its computed extras (no mutation of
     // the source row — keeps the route → serializer contract explicit).
     const decorated = visibleRows.map((m) => {
-      const posts = postsByPersona.get(m.persona_id) || [];
+      const viewerRank = Math.max(Number(m.tier?.rank || 0), m.relationship_type === 'subscriber' ? 2 : 1);
+      const posts = (postsByPersona.get(m.persona_id) || [])
+        .filter((post) => personaPostVisibleToViewer(post, viewerRank));
       const latestPost = posts[0] || null;
       // For brand-new follows the column may be null (the follow path
       // does not set last_seen_at on insert); fall back to joined_at so

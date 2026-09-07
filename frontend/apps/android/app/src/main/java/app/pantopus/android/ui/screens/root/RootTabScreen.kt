@@ -4415,6 +4415,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onDiscover = { navController.navigate(ChildRoutes.BEACON_SEARCH) },
                         onOpenPersona = { handle -> navController.navigate(ChildRoutes.beaconProfile(handle)) },
+                        onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                     )
                 }
                 composable(ChildRoutes.MARKETPLACE) {

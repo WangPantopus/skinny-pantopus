@@ -144,6 +144,7 @@ data class FollowingRow(
     val isPaid: Boolean = false,
     /** Paused Beacons render dimmed and their bell is disabled (RN parity). */
     val isPaused: Boolean = false,
+    val latestPostId: String? = null,
 ) {
     val tone: FollowingAvatarTone get() = FollowingAvatarTone.forKey(toneKey)
     val subtitle: String
@@ -268,8 +269,8 @@ object FollowingProjection {
         dto: FollowingRowDto,
         now: Instant,
     ): Pair<FollowingSectionKind, FollowingRow> {
-        val muted = dto.mutedUntil != null
-        val unread = if (muted) 0 else (dto.unreadCount ?: 0).coerceAtLeast(0)
+        val muted = parseInstant(dto.mutedUntil)?.isAfter(now) == true
+        val unread = (dto.unreadCount ?: 0).coerceAtLeast(0)
         val createdAt = dto.latestPost?.createdAt
         val recent = isRecent(createdAt, now)
 
@@ -284,7 +285,7 @@ object FollowingProjection {
         val bodyIsQuiet: Boolean
         val timeLabel: String?
         if (kind == FollowingSectionKind.Quiet) {
-            bodyText = if (muted) "No updates while muted" else "No recent updates"
+            bodyText = if (muted) "Notifications muted" else "No recent updates"
             bodyIsQuiet = true
             timeLabel = null
         } else {
@@ -322,6 +323,7 @@ object FollowingProjection {
                 notificationLevel = FollowingNotificationLevel.from(dto.notificationLevel),
                 isPaid = (dto.paidTier?.rank ?: 0) > 1,
                 isPaused = dto.persona.status?.lowercase() == "paused",
+                latestPostId = dto.latestPost?.id,
             )
         return kind to row
     }

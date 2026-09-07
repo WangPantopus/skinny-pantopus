@@ -135,6 +135,20 @@ final class EntryContinuityUITests: XCTestCase {
         capture("Following without a home")
     }
 
+    func testFollowingOpensTheExactUpdateWhileNotificationsAreMuted() {
+        app.launchEnvironment["UI_TESTS_BEACON_UPDATE"] = "1"
+        launch(reset: true, link: "/beacons")
+        signIn()
+        tap("beacons.following")
+        XCTAssertTrue(app.staticTexts["A new workshop for our followers"].waitForExistence(timeout: 10))
+        capture("Muted Beacon still has a readable update")
+        tap("followingRead.beacon-return")
+        XCTAssertTrue(element("pulsePostDetail").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["A new workshop for our followers"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Maya Builds"].exists)
+        capture("Exact update opened from Following")
+    }
+
     private func launch(reset: Bool = false, link: String? = nil) {
         if app.state != .notRunning { app.terminate() }
         app.launchEnvironment["UI_TESTS_ENTRY_RESET"] = reset ? "1" : "0"

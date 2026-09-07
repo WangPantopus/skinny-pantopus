@@ -129,6 +129,24 @@ enum UITestArrivalFixture {
         case ("GET", "/api/posts/feed"):
             return json(["posts": [], "pagination": ["hasMore": false]])
         case ("GET", "/api/personas/me/following"):
+            if ProcessInfo.processInfo.environment["UI_TESTS_BEACON_UPDATE"] == "1" {
+                return json([
+                    "items": [
+                        [
+                            "membershipId": "return-member",
+                            "persona": ["id": "p_demo", "handle": "mayabuilds", "displayName": "Maya Builds"],
+                            "notificationLevel": "all", "mutedUntil": "2099-01-01T00:00:00Z",
+                            "latestPost": [
+                                "id": "beacon-return", "snippet": "A new workshop for our followers",
+                                "createdAt": ISO8601DateFormatter().string(from: Date())
+                            ],
+                            "unreadCount": 1
+                        ]
+                    ],
+                    "counts": ["totalFollowing": 1, "unreadBeacons": 1],
+                    "pagination": ["hasMore": false, "nextOffset": NSNull()]
+                ])
+            }
             return json([
                 "items": [], "counts": ["totalFollowing": 0, "unreadBeacons": 0],
                 "pagination": ["hasMore": false, "nextOffset": NSNull()]
@@ -142,12 +160,17 @@ enum UITestArrivalFixture {
                     ]
                 ]
             ])
-        case ("GET", "/api/posts/entry-post"):
+        case ("GET", "/api/posts/entry-post"), ("GET", "/api/posts/beacon-return"):
             return json([
                 "post": [
-                    "id": "entry-post",
+                    "id": path.hasSuffix("beacon-return") ? "beacon-return" : "entry-post",
                     "user_id": "neighbor",
-                    "content": "Anyone up for a park cleanup?",
+                    "creator": [
+                        "id": path.hasSuffix("beacon-return") ? "p_demo" : "neighbor",
+                        "displayName": path.hasSuffix("beacon-return") ? "Maya Builds" : "A neighbor"
+                    ],
+                    "content": path.hasSuffix("beacon-return")
+                        ? "A new workshop for our followers" : "Anyone up for a park cleanup?",
                     "created_at": "2026-09-01T12:00:00Z",
                     "visibility": "public",
                     "comments": []

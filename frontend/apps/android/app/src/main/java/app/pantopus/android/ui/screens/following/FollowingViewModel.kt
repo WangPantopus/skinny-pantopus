@@ -106,7 +106,7 @@ class FollowingViewModel
                 return
             }
             val sections = FollowingProjection.sections(items, nowProvider())
-            val unread = items.count { it.mutedUntil == null && (it.unreadCount ?: 0) > 0 }
+            val unread = items.count { (it.unreadCount ?: 0) > 0 }
             _state.value =
                 FollowingUiState.Loaded(
                     sections = sections,
@@ -203,6 +203,10 @@ class FollowingViewModel
          */
         fun cycleNotificationLevel(row: FollowingRow) {
             if (row.isPaused) return
+            if (row.isMuted) {
+                openActions(row)
+                return
+            }
             applyNotificationLevel(row.id, row.personaId, row.notificationLevel.next)
         }
 

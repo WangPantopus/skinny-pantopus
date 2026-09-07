@@ -270,7 +270,8 @@ public struct FollowingView: View {
                     },
                     onLongPress: { viewModel.beginSelection(row) },
                     onBell: { Task { await viewModel.cycleNotificationLevel(row) } },
-                    onOverflow: { viewModel.openActions(for: row) }
+                    onOverflow: { viewModel.openActions(for: row) },
+                    onOpenPost: viewModel.onOpenPost
                 )
             }
         }
@@ -394,30 +395,41 @@ struct FollowingRowView: View {
     var onLongPress: @MainActor () -> Void = {}
     var onBell: @MainActor () -> Void = {}
     let onOverflow: @MainActor () -> Void
+    var onOpenPost: (@MainActor (String) -> Void)?
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
             if isSelecting {
                 selectionTick
             }
-            Button(action: onTap) {
-                HStack(spacing: Spacing.s3) {
-                    FollowingAvatar(
-                        initials: row.initials,
-                        color: row.tone.color,
-                        imageURL: row.avatarURL,
-                        verified: row.verified,
-                        size: 44,
-                        dim: row.isMuted
-                    )
-                    textColumn
+            VStack(alignment: .leading, spacing: 0) {
+                Button(action: onTap) {
+                    HStack(spacing: Spacing.s3) {
+                        FollowingAvatar(
+                            initials: row.initials,
+                            color: row.tone.color,
+                            imageURL: row.avatarURL,
+                            verified: row.verified,
+                            size: 44,
+                            dim: row.isPaused
+                        )
+                        textColumn
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.35).onEnded { _ in onLongPress() }
+                )
+                if !isSelecting, let postId = row.latestPostId, let onOpenPost {
+                    Button("Read update") { onOpenPost(postId) }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.Color.primary600)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("followingRead.\(postId)")
+                }
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.35).onEnded { _ in onLongPress() }
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if !isSelecting {
                 trailingAccessory
@@ -428,7 +440,7 @@ struct FollowingRowView: View {
         .padding(.leading, 14)
         .padding(.trailing, Spacing.s3)
         .padding(.vertical, 11)
-        .opacity(row.isMuted || row.isPaused ? 0.62 : 1)
+        .opacity(row.isPaused ? 0.62 : 1)
         .background(isSelected ? Theme.Color.primary50 : Color.clear)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("followingRow.\(row.id)")
@@ -449,11 +461,11 @@ struct FollowingRowView: View {
         Button(action: onBell) {
             HStack(spacing: Spacing.s1) {
                 Icon(
-                    row.notificationLevel.icon,
+                    row.isMuted ? .bellOff : row.notificationLevel.icon,
                     size: 14,
                     color: bellTint
                 )
-                Text(row.notificationLevel.label)
+                Text(row.isMuted ? "Muted" : row.notificationLevel.label)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(
                         row.isPaused ? Theme.Color.appTextMuted : Theme.Color.appTextStrong
@@ -469,12 +481,12 @@ struct FollowingRowView: View {
         }
         .buttonStyle(.plain)
         .disabled(row.isPaused)
-        .accessibilityLabel("Notifications: \(row.notificationLevel.label)")
+        .accessibilityLabel("Notifications: \(row.isMuted ? "Muted" : row.notificationLevel.label)")
         .accessibilityIdentifier("followingRow.bell")
     }
 
     private var bellTint: Color {
-        if row.isPaused || row.notificationLevel == .none {
+        if row.isMuted || row.isPaused || row.notificationLevel == .none {
             return Theme.Color.appTextMuted
         }
         return Theme.Color.primary600
