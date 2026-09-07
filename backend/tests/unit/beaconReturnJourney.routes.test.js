@@ -241,6 +241,7 @@ test.each(['PersonaBlock', 'Post'])(
         eq: () => query,
         in: () => query,
         is: () => query,
+        or: () => query,
         order: () => query,
         limit: () => query,
         then: (resolve) =>

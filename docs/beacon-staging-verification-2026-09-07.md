@@ -108,9 +108,9 @@ pass against the real staging database, and evidence is recorded for the
 tested commit. Report any unavailable state/platform as unverified.
 
 `BroadcastMessage.delivered_count` remains an eligible-recipient estimate.
-Following's existing global post-fetch cap can undercount older unread updates
-under uneven/high-volume activity; this matrix does not establish exhaustive
-unread counts. The transport change adds explicit acceptance results for the
+Following now selects permitted updates per Beacon before applying its 25+
+unread cap; see [the activity-query validation](following-activity-reliability-2026-09-07.md).
+The count remains capped rather than lifetime-exact. The transport change adds explicit acceptance results for the
 smoke tool; it does not add delivery receipts, retries, or durable analytics.
 
 Local validation of this follow-up passes 114 tests across 11 push, Beacon

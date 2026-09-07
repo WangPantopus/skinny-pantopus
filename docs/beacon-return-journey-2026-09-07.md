@@ -33,6 +33,6 @@ At the original checkpoint, the web type-check gate reported the same six pre-ex
 
 This is local validation, not a deployed or production-device push-delivery check. Staging should exercise actual PostgREST joins/RLS, creator publishing, follower notification preferences, and background/terminated-app notification opening on physical iOS and Android devices.
 
-The existing Following implementation samples recent posts with a global over-fetch limit and caps each Beacon at 25. Under uneven posting volume or many restricted updates, older permitted posts can be absent from the sample. Exact per-Beacon latest-post/unread retrieval remains a separate database query improvement.
+The original global over-fetch limitation is resolved by [per-Beacon activity retrieval](following-activity-reliability-2026-09-07.md): permitted posts are selected before each Beacon's limit, so uneven posting volume and restricted updates no longer hide its latest allowed post. Unread counts retain the 25+ display cap.
 
 Broadcast delivered_count remains an eligible-recipient estimate; this work does not introduce delivery receipts, notification retries, or exact read analytics. Legacy Settings/YouTabRoot placeholder navigation remains the separate cleanup already recorded in the social discovery note.
