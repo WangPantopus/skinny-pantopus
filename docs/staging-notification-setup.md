@@ -24,22 +24,47 @@ Current discovery and remaining prerequisites:
 | Backend host | API and worker release `9d1fe24dc` are healthy on the existing server. Staging API uses loopback port 18001 behind nginx; the old production container is preserved. |
 | DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
-| Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
-| Push server credentials | Private staging runtime env exists, with isolated database credentials and test vendors. APNs/FCM, isolated storage and email delivery remain unconfigured. |
-| iOS | Paired iPhone 16 Pro is available; a local Apple Development signing identity exists. The private staging overlay resolves the live HTTPS endpoint and development APNs entitlement; no app was installed. |
-| Android | No ADB-connected phone. |
+| Firebase | Created `Pantopus Staging` (`pantopus-staging`) with the owner's terms approval. The console confirms Spark, $0/month; Analytics and the Developer Program opt-in were left off. Registered `app.pantopus.android.debug`; the downloaded client configuration is privately saved in the ignored debug variant directory and passes the native config check. |
+| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. APNs EC P-256 format and local signing passed; Apple authorization remains unverified. The live staging API passed Google OAuth and an FCM validation-only request. Physical push delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
+| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. Bundle ID remains `app.pantopus.ios`; installing it could replace an existing Pantopus app. No app was installed. A paired iPhone 16 Pro is available. |
+| Android | The debug APK build succeeded with the real staging client configuration. APK signature, `app.pantopus.android.debug` package, and packaged Firebase project/sender ID were verified. No app was installed; no ADB-connected phone. |
 | Recipients | Test accounts/devices have not yet been designated. |
 
 Do not label provider acceptance, a simulator test, or the presence of config
 fields as proof of device delivery. Record text evidence; screenshots are not
 required for this milestone.
 
-Local preparation validation passed: 26 deployment/migration/configuration tests,
+The dedicated Google service account `pantopus-staging-push` was granted only
+`roles/firebasecloudmessaging.admin` in `pantopus-staging`, with the owner's
+explicit approval. Key generation initially failed because the inherited
+`iam.disableServiceAccountKeyCreation` policy was enforced. The owner separately
+approved a temporary exception for this staging project. One JSON key was
+generated, then the original inheritance was immediately restored; the console
+again showed **Enforced**. No organization-wide policy or other project was
+changed. Both the service-account JSON and mobile client configuration remain
+private and excluded from Git.
+
+The FCM credential passed local RSA signing checks. Using the unchanged deployed
+backend image on AWS, it then passed Google OAuth authentication and an FCM HTTP v1
+`validate_only: true` request (HTTP 200). The validation used a dedicated test
+topic and did not deliver a notification. It establishes sender permission,
+not device-token registration, physical delivery, or notification tap behavior.
+
+Only the three approved FCM fields were transferred over pinned SSH and combined
+with the existing host configuration. The rollout reused backend release
+`9d1fe24dc` and its unchanged image. Both live staging processes passed APNs and
+FCM configuration checks; the running API repeated the FCM validation-only
+request successfully. Public HTTPS `/health` returned HTTP 200 with the database
+connected. The old production container remained healthy. The prior staging
+environment and stopped containers are retained for recovery.
+
+Initial local preparation validation passed: 26 deployment/migration/configuration tests,
 Android `ktlintCheck`, Xcode's resolved Staging settings, and Android's generated
 BuildConfig/Firebase resources. The native checks used synthetic public config;
 both explicit staging paths rejected a missing env file. Test inputs and
 generated secret overlays were removed afterward. No signed app was installed,
-and no staging release or live notification was sent.
+and that initial validation sent no staging release or live notification. Later
+deployment and credential configuration are recorded in the current status above.
 
 Read-only inspection of the existing **testing** database found PostgreSQL 17.6 and 288 public
 tables. A schema-only export was saved outside the repository with private

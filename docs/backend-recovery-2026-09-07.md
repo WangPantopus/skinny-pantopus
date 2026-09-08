@@ -20,10 +20,56 @@ No production migration, ledger repair, database reset, or DNS cutover has been
 performed. Read-only queries confirmed existing production records are present.
 Its REST schema metadata lacks current device/session, Lob webhook and address
 calendar tables. A custom-format database backup includes Auth data and storage
-metadata, and all archive sections passed a read-through check. This does not
-include externally stored file contents and is not yet a verified full restore.
-A restore rehearsal and SQL schema upgrade audit remain necessary before
-upgrading production.
+metadata. A full local database restore now passes, with every archived data
+section verified against the restored rows. Externally stored file contents are
+not included. The production upgrade rehearsal below still has unresolved
+schema gaps; production is not ready for the current backend.
+
+## Production backup restore and upgrade rehearsal
+
+The actual production archive was restored into a separate local Supabase
+PostgreSQL 17.6 container using `--network none`, no published ports, and only a
+Unix socket. No application, queue consumer, or external provider was connected.
+All artifacts and logs remain private and excluded from Git.
+
+- `pg_restore --exit-on-error --single-transaction` completed with owners and
+  ACLs retained. The cluster was initialized with `supabase_admin` as its
+  bootstrap role so PostgreSQL 17 could restore the original role grantors.
+  Role passwords were not exported.
+- All **299 COPY data sections** matched the archive by row count and
+  order-independent row hashes, with no missing, extra, or mismatched sections.
+- The logical replication publication was restored. The expected warning about
+  non-logical `wal_level` applies to this disconnected local rehearsal; it does
+  not establish working hosted replication or external-file recovery.
+
+A second database was cloned locally from that verified restore for upgrade
+experiments. The first restored database and original archive remain intact.
+The normalized catalog comparison uses the same `pg_catalog` search path in both
+databases to avoid treating qualified and unqualified expressions as changes.
+
+Before the upgrade, production had 264 application tables and staging had 317.
+Staging contained 54 tables and 51 columns missing from production. Production
+also contained `ListingAddressGrant` and legacy columns absent from staging;
+these must not be dropped just to make catalog counts equal.
+
+All 49 unchanged June–September migration files used in staging executed on the
+local production copy. The rollback-only SQL contracts then reproduced the
+job-lock boolean/integer error. After applying the nine function corrections
+already rehearsed in staging, those contracts passed, including ownership,
+inventory limits, chat names, profile ordering, storage totals, credential-access
+denials, and atomic calendar replacement. Synthetic fixtures were rolled back.
+Across 268 original application/auth/storage tables, record counts were retained
+and every available primary-key set matched. Two legacy tables have no primary
+key and were checked by count only. This check does not claim that intentional
+column transformations preserve every old value.
+
+The historical migrations still leave **four missing tables and 35 missing
+columns** relative to staging: `AnalyticsEvent`, `GigShare`, `ListingShare`, and
+`MailDeliveryIntent`, plus onboarding, sharing, task pricing, neighborhood
+statistics, and notification idempotency fields. These gaps require reviewed
+forward changes, data transformations, and application compatibility checks.
+The rehearsal does not authorize blindly replaying the frozen history, adopting
+the testing schema over production, or enabling hosted migration automation.
 
 ## Existing AWS host
 
