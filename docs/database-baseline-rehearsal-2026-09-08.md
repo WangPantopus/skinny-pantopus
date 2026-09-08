@@ -4,6 +4,9 @@ The September 8 continuation closes the previously identified table/column gaps
 on an isolated local upgrade candidate. This is a prerequisite for the remaining
 Beacon push preference, whose additive migration is blocked by legacy mode.
 Neither the canonical baseline nor a hosted ledger has been adopted.
+The reviewable diagnostics/contracts and this record are in draft
+[PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on the
+Beacon fixes in PR #10.
 
 ## Candidate and preservation
 

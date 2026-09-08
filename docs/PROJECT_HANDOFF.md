@@ -76,6 +76,9 @@ Beacon repairs remain on `codex/beacon-full-journey` in
 `codex/database-baseline-adoption` in `/private/tmp/pantopus-database-baseline-adoption`,
 based on the Beacon branch so its current handoff/evidence are retained. The main
 checkout and all other worktrees/ignored artifacts are preserved.
+Draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on
+PR #10, contains the adoption diagnostics, SQL contracts and sanitized evidence;
+it does not adopt a baseline or deploy the private forward candidate.
 
 Start a new session by:
 
