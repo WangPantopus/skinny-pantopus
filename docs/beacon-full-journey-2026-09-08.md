@@ -279,3 +279,15 @@ preserving the disclosure and question-list assertions without depending on
 provider latency. All 38 Scout tests pass locally. This is a test-only change;
 no Scout runtime or staged backend file changed. Consult PR #10 checks for the
 final combined backend, image and Android jobs.
+
+
+## Final application CI
+
+[CI passed](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34269119056)
+on application head `817785af1456382966e6521bd410b011a89f6279`. Backend/privacy,
+Docker, deployment safeguards and Android lint/unit tests/snapshots/assembly
+all passed. The initial instrumented job failed while installing an unreadable
+SDK system-image ZIP, before any tests ran. Retrying that failed job succeeded:
+all 45 instrumented tests finished on the API 34 emulator, and `CI OK` is green.
+Unchanged web/iOS/database jobs were skipped as intended. The subsequent
+handoff/evidence update changes documentation only.

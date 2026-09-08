@@ -15,7 +15,9 @@ push opt-out/restore have owner confirmation. Android emulator foreground,
 background and process-absent notifications opened the exact post; an old
 blocked notification denied access. Native registration/author-projection
 repairs pass 86 targeted tests; a rebuilt staging APK received a fresh push and
-opened the exact post with the correct public author. Test fixtures are cleaned up. Physical Android and a Beacon push-only type setting remain
+opened the exact post with the correct public author. Application CI also passes,
+including 45 instrumented Android tests after an SDK-download retry. Test fixtures
+are cleaned up. Physical Android and a Beacon push-only type setting remain
 unverified/unimplemented, respectively. This is not complete release acceptance.
 
 ## Initial readiness inspection — September 7

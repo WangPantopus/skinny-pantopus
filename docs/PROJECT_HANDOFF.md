@@ -42,10 +42,13 @@ rebuilt APK passed a fresh notification tap with the correct public author. Scop
 two new Beacons/accounts and three memberships removed. The original device
 accounts, prior notifications and iPhone registration are preserved; Android
 is signed out with zero tokens and original preferences restored. The final
-[PR checks](https://github.com/WangPantopus/skinny-pantopus/pull/10/checks) track
-the Android changes separately from the earlier backend CI. A subsequent
-CI timeout exposed a live provider call in the existing Scout fallback test;
-its isolation fix passes all 38 Scout tests and changes no runtime behavior.
+[application CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34269119056)
+passes at `817785af1456382966e6521bd410b011a89f6279`, including backend/privacy,
+Docker, safeguards, Android build/tests/snapshots and 45 instrumented tests.
+An initial emulator SDK ZIP download failed before tests; the retry passed.
+The Scout fallback test also received a test-only isolation repair after an
+external-provider timeout; all 38 Scout tests pass. Later documentation commits
+do not change the tested application code.
 
 Full acceptance remains open: there is no Beacon-specific push-only preference,
 and physical Android hardware is unavailable. The schema's legacy migration
