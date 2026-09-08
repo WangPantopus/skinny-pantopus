@@ -5,6 +5,15 @@
 For the latest infrastructure inventory and explicit native staging build
 commands, see [staging notification setup](staging-notification-setup.md).
 
+September 8 update: staging is live. The owner verified a generic push on a
+physical iPhone; real chat pushes, chat navigation, global opt-out and logout
+token removal passed on an [Android emulator](android-staging-verification-2026-09-08.md).
+Those checks do not establish the full Beacon journey below. Physical Android,
+Beacon publication/fanout, mute, membership and revoked-access cases remain
+unverified against the live staging app.
+
+## Initial readiness inspection — September 7
+
 The master integration commit `4172e37fcacead6cb3cea1e6c1398604b7f356fe`
 passed the complete [PR #4 CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34142598999),
 including the web type-check gate, backend/privacy tests, Android build and

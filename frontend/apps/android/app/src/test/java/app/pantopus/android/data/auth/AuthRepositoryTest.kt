@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.auth.AuthMessageResponse
 import app.pantopus.android.data.api.models.auth.AuthenticatedUser
 import app.pantopus.android.data.api.models.auth.ForgotPasswordRequest
 import app.pantopus.android.data.api.models.auth.LoginResponse
+import app.pantopus.android.data.api.models.auth.LogoutResponse
 import app.pantopus.android.data.api.models.auth.RefreshResponse
 import app.pantopus.android.data.api.models.auth.RegisterRequest
 import app.pantopus.android.data.api.models.auth.RegisterResponse
@@ -695,6 +696,44 @@ class AuthRepositoryTest {
             assertEquals("u_1", hints.payload?.accounts?.single()?.userId)
             assertEquals("u_1", repo.rememberedAccounts.value.single().userId)
             assertEquals(AuthRepository.State.SignedOut, repo.state.value)
+        }
+
+    @Test
+    fun `manual logout stays neutral when its revocation is confirmed before the response`() =
+        runTest {
+            val authApi = mockk<AuthApi>(relaxed = true)
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val sockets = mockk<SocketManager>(relaxed = true)
+            val repo = buildRepo(authApi = authApi, storage = storage, socketManager = sockets)
+            coEvery { authApi.logout(any(), any(), any(), any()) } coAnswers {
+                verify { sockets.disconnect() }
+                repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+                assertEquals(null, repo.sessionEndReason.value)
+                LogoutResponse(success = true)
+            }
+
+            repo.signOut()
+
+            coVerify(exactly = 1) { authApi.logout(any(), any(), any(), any()) }
+            assertEquals(null, storage.accessToken())
+            assertEquals(AuthRepository.State.SignedOut, repo.state.value)
+            assertEquals(null, repo.sessionEndReason.value)
+        }
+
+    @Test
+    fun `late revocation does not add a security warning after manual logout`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val repo = buildRepo(storage = storage)
+
+            repo.signOut()
+            repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+
+            assertEquals(AuthRepository.State.SignedOut, repo.state.value)
+            assertEquals(null, storage.accessToken())
+            assertEquals(null, repo.sessionEndReason.value)
         }
 
     @Test

@@ -7,7 +7,10 @@ The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
 checks are available. The runtime preparation below adds sandbox vendor checks
 without disabling production security settings. **The staging backend is live
 at `https://staging-api.pantopus.com`; iPhone push display and tap navigation are
-verified on a physical device. Android delivery is still unverified.**
+verified on a physical device. Android FCM display, chat navigation, global
+push opt-out and logout token removal are verified on a Google APIs emulator;
+physical Android verification remains pending.** See the
+[Android test record](android-staging-verification-2026-09-08.md).
 
 The operator subsequently authorized restarting the existing server, configuring
 its management access, and deploying the current backend to staging, while
@@ -26,10 +29,10 @@ Current discovery and remaining prerequisites:
 | DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Created `Pantopus Staging` (`pantopus-staging`) with the owner's terms approval. The console confirms Spark, $0/month; Analytics and the Developer Program opt-in were left off. Registered `app.pantopus.android.debug`; the downloaded client configuration is privately saved in the ignored debug variant directory and passes the native config check. |
-| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. With explicit owner approval, a new sandbox key restricted to `app.pantopus.ios` was created and configured in both staging processes. The retry was accepted by APNs with HTTP 200; the owner confirmed arrival on their iPhone and navigation to the notification screen after tapping. The live staging API passed Google OAuth and an FCM validation-only request. Android device delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
+| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. With explicit owner approval, a new sandbox key restricted to `app.pantopus.ios` was created and configured in both staging processes. The retry was accepted by APNs with HTTP 200; the owner confirmed arrival on their iPhone and navigation to the notification screen after tapping. The live staging API passed Google OAuth and an FCM validation-only request; subsequent real chat pushes appeared on the Android emulator and opened the correct conversation. Isolated storage and backend email delivery remain unconfigured. |
 | iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. The app was installed on the paired iPhone 16 Pro after confirming no existing Pantopus installation. The owner logged in with a dedicated synthetic staging account. Its APNs token is registered and linked to the device, with push enabled. The owner confirmed that the test arrived and tapping opened notifications. |
-| Android | The debug APK build succeeded with the real staging client configuration. APK signature, `app.pantopus.android.debug` package, and packaged Firebase project/sender ID were verified. No app was installed; no ADB-connected phone. |
-| Recipients | The owner designated their iPhone and logged into a dedicated synthetic account. The first push was rejected due to the wrong key. One authorized retry through the current notification service was accepted by Apple after the key replacement. Only the designated iPhone account was targeted. |
+| Android | The staging debug APK was installed on the existing Google APIs ARM64 emulator (Android 14 / API 34). A synthetic account registered one linked FCM token. Real chat push display and conversation navigation passed, as did global push opt-out across re-registration, restoration and logout token removal. Two exposed Android UI/auth bugs were fixed and verified. No physical Android phone is available. |
+| Recipients | Only dedicated synthetic staging accounts were used. The owner confirmed the iPhone retry. Android chat tests used the synthetic iPhone account as sender and a new synthetic Android account as the sole recipient. The Android account is now signed out with no registered token, and its original push preference is restored. |
 
 Do not label provider acceptance, a simulator test, or the presence of config
 fields as proof of device delivery. Record text evidence; screenshots are not
@@ -132,9 +135,11 @@ previous notification with the retry marker. This establishes server-side
 notification creation, registration, routing and provider acceptance. The owner
 then confirmed **“Arrived and opened notifications”** on the physical iPhone
 16 Pro (iOS 26.5.2), establishing device display and the `/notifications` tap
-route for this test. No additional push was sent. Foreground/cold-start cases,
-notification opt-outs, sign-out/revocation behavior, Beacon-triggered delivery,
-and Android delivery still need separate verification.
+route for this test. No additional iPhone push was sent. iPhone foreground/cold-start
+cases, notification opt-outs, sign-out/revocation behavior and Beacon-triggered
+delivery still need separate verification. The subsequent Android emulator
+checks and their limits are recorded in the
+[Android test report](android-staging-verification-2026-09-08.md).
 
 Before future device tests, verify the live table contract explicitly (this
 read-only query returns no device data):

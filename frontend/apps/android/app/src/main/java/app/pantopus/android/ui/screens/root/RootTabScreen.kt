@@ -1441,7 +1441,9 @@ private object ChildRoutes {
     /** Build the invoice-detail path. */
     fun invoiceDetail(invoiceId: String): String = "invoices/$invoiceId"
 
-    /** Build the chat-conversation path with all header context encoded. */
+    /** Build the chat-conversation path with all header context encoded.
+     *  Navigation decodes URI escapes, not form encoding: spaces must be
+     *  `%20`, while literal plus signs remain encoded as `%2B`. */
     fun chatConversation(row: ConversationRowContent): String {
         val kind =
             when (row.variant) {
@@ -1456,7 +1458,7 @@ private object ChildRoutes {
                 null -> ""
             }
 
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/$kind/${enc(row.id)}?" +
             "$CHAT_NAME_KEY=${enc(row.displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(row.initials)}" +
@@ -1493,7 +1495,7 @@ private object ChildRoutes {
         topicRefId: String? = null,
         topicTitle: String? = null,
     ): String {
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/person/${enc(userId)}?" +
             "$CHAT_NAME_KEY=${enc(displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(initials)}" +
@@ -1516,7 +1518,7 @@ private object ChildRoutes {
         initials: String,
         verified: Boolean,
     ): String {
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
             "$CHAT_NAME_KEY=${enc(displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(initials)}" +
@@ -1548,7 +1550,7 @@ private object ChildRoutes {
                 null -> ""
             }
 
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/$kind/${enc(result.conversationId)}?" +
             "$CHAT_NAME_KEY=${enc(result.displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(result.initials)}" +

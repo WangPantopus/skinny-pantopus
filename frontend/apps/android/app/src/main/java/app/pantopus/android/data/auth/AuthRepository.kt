@@ -48,6 +48,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import timber.log.Timber
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -299,6 +300,10 @@ class AuthRepository
 
         /** Single-flight guard for the network refresh (see [refreshTokens]). */
         private val refreshMutex = Mutex()
+
+        // A normal logout can trigger a revocation signal before its HTTP
+        // response arrives. Keep that expected signal from becoming a warning.
+        private val manualLogoutInProgress = AtomicBoolean(false)
 
         init {
             // Workstream 1.4 — DeepLinkRouter is a process singleton; bind
@@ -877,7 +882,7 @@ class AuthRepository
          * A transient failure or a successful rotation changes nothing.
          */
         suspend fun confirmSessionRevoked() {
-            if (_state.value !is State.SignedIn) return
+            if (manualLogoutInProgress.get() || _state.value !is State.SignedIn) return
             when (val outcome = refreshTokens()) {
                 is RefreshOutcome.AuthRejected -> signOut(reason = outcome.reason)
                 else -> Unit
@@ -1164,26 +1169,38 @@ class AuthRepository
          * login screen can prefill (design §2.9).
          */
         suspend fun signOut(reason: SessionEndReason? = null) {
-            val access = tokenStorage.accessToken()
-            val refresh = tokenStorage.refreshToken()
-            if (reason == null && !(access.isNullOrBlank() && refresh.isNullOrBlank())) {
-                revokeOnServer(access, refresh)
+            val manual = reason == null
+            if (manual) {
+                if (!manualLogoutInProgress.compareAndSet(false, true)) return
+            } else if (manualLogoutInProgress.get() || _state.value == State.SignedOut) {
+                // Ignore confirmations racing with (or arriving after) a
+                // completed local logout. The session is already being ended.
+                return
             }
-            tokenStorage.clear()
-            socketManager.disconnect()
-            observability.identify(userId = null)
-            Analytics.identify(userId = null)
-            observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
-            // Workstream 1.4 — never resume a prior user's deferred destination.
-            PlacePendingStore.clear()
-            PendingDeepLinkStore.clear()
-            DeepLinkRouter.clearPending()
-            feedModeration.clear()
-            runCatching { accountHints.clearGrant() }
-            _rememberedAccounts.value = runCatching { accountHints.read() }.getOrNull()?.accounts.orEmpty()
-            _lastInteractiveSignInAt.value = null
-            if (reason != null) _sessionEndReason.value = reason
-            _state.value = State.SignedOut
+            try {
+                val access = tokenStorage.accessToken()
+                val refresh = tokenStorage.refreshToken()
+                socketManager.disconnect()
+                if (manual && !(access.isNullOrBlank() && refresh.isNullOrBlank())) {
+                    revokeOnServer(access, refresh)
+                }
+                tokenStorage.clear()
+                observability.identify(userId = null)
+                Analytics.identify(userId = null)
+                observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
+                // Workstream 1.4 — never resume a prior user's deferred destination.
+                PlacePendingStore.clear()
+                PendingDeepLinkStore.clear()
+                DeepLinkRouter.clearPending()
+                feedModeration.clear()
+                runCatching { accountHints.clearGrant() }
+                _rememberedAccounts.value = runCatching { accountHints.read() }.getOrNull()?.accounts.orEmpty()
+                _lastInteractiveSignInAt.value = null
+                _sessionEndReason.value = reason
+                _state.value = State.SignedOut
+            } finally {
+                if (manual) manualLogoutInProgress.set(false)
+            }
         }
 
         /** Best-effort, bounded `POST /logout` with proof (never throws). */
