@@ -14,25 +14,31 @@ the exact permitted post in staging**, after integrating the staging recovery
 branch. A generic push arriving is already proven; it does not prove Beacon
 fanout, membership rules or all notification destinations.
 
-Integration is tracked in [PR #9](https://github.com/WangPantopus/skinny-pantopus/pull/9),
-`codex/current-backend-release` → `master`. At review creation, master was
-`e60c19cc6` with no base divergence. The latest application change is
-`fd9a60dcd`, followed by the committed handoff. Full final-head CI is requested
-through the PR. Read its actual state to decide whether integration remains
-the first step; do not re-merge an already integrated branch.
+Integration completed in [PR #9](https://github.com/WangPantopus/skinny-pantopus/pull/9)
+on September 8 at 08:44 UTC as `a373b10940813bc5deef37b29f67dcc9b6375994`.
+The final PR and [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34206108701)
+now pass. Fresh inspection confirms deployment and database switches remain
+false in both environments; the backend workflow skipped its rollout steps.
+The deployed backend is still a separate release from merged source.
+
+The current first unfinished priority is the full Beacon staging journey,
+including mute, notification preferences, membership and revoked/block access.
+The [first live matrix](beacon-full-journey-2026-09-08.md) passed baseline exact-post
+return and mute, then exposed silent fanout throttling and restricted-content
+leaks through broadcast channel/read routes. The repairs pass the full backend suite (4,305 tests,
+16 skipped) and privacy gates; staging rollout and a fresh matrix are next. Physical Beacon taps remain pending.
+Work starts from merged master on `codex/beacon-full-journey` in
+`/private/tmp/pantopus-beacon-journey`. The main checkout is now clean on master;
+previous worktrees and ignored local artifacts are preserved.
 
 Start a new session by:
 
-1. Reading this file, then checking `git status --short --branch`, remote refs
-   and the PR for `codex/current-backend-release`.
-2. Completing its merge review if still open: full current-head `CI OK`, no
-   unresolved review findings, no conflicts, and deployment switches checked.
-   Preserve published history and unrelated worktrees.
-3. Reading the [Beacon test matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey)
+1. Refreshing Git, PR/CI and staging observations; preserve unrelated work.
+2. Reading the [Beacon test matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey)
    and [staging setup](staging-notification-setup.md). Prepare only synthetic,
    isolated creator/follower fixtures and verify their audience before sending.
-4. Recording exact results and any missing platform states, fixing failures,
-   then advancing through the ordered backlog below.
+3. Recording exact results and missing platform states, fixing failures,
+   and updating this handoff after each milestone.
 
 Suggested new-session prompt:
 
@@ -108,7 +114,7 @@ production gap audit; the historical migration ledger was not altered.
 
 | Order | Deliverable | Exit criterion |
 | --- | --- | --- |
-| 1. Integrate this branch | Consolidated PR for recovery/runtime/notification fixes plus this handoff. | Current PR head passes `CI OK`, reviewed changes have no unresolved blocking finding, merge is confirmed, and next session starts from the merged baseline. PR #6 and #8 contain overlapping work; inspect final diffs before closing them as superseded. PR #7 (iOS deep-link diagnostics privacy) is separate and still requires review. |
+| 1. Integrate this branch — complete | PR #9 merged as `a373b1094`; final PR and merged-master CI pass. | Current work starts from merged master. Deployment/migration switches remain disabled. PRs #6–#8 remain separate review housekeeping; do not treat their state as a blocker to Beacon verification. |
 | 2. Beacon end-to-end staging | Dedicated creator and address-free follower publish/read/follow/mute/return through the actual staging API and native UI. | One stored post ID matches Following, audience notification and opened post. No unrelated recipients. Mute/global/type opt-out and restore work; restricted membership and revoked/block access deny correctly, including old notification taps. Record every case in the linked matrix. Do not enable feature flags globally simply to populate fixtures. |
 | 3. Finish released-platform notification coverage | Actual post/chat destinations, foreground/background/ordinary cold start, denied permission, expired session/login continuation, token rotation/logout and relevant settings UI. | Exact permitted destination opens on each released platform/state; unread behavior is coherent. Owner confirms physical iPhone observations; physical Android remains explicitly pending until hardware is available. Emulator results are useful but not physical acceptance. |
 | 4. Finish isolated vendor/account flows | Safe staging signup/recovery/verification email and real OAuth callbacks; isolated media/document storage; reachable sandbox payments and address-verification states. | New user can authenticate/recover, upload/read only authorized files, and complete reachable test-mode actions. Failures/retries are visible and idempotent; no live charge or postcard is triggered by staging. Use existing/free capacity unless further spending is authorized. |
@@ -153,10 +159,10 @@ restart. The branch is pushed and key evidence is copied to the durable private
 root. If the checkout is gone, create a fresh feature worktree from current
 master after confirming the integration state; never reconstruct code from logs.
 
-The main checkout `/Users/yingpengwang/skinny-pantopus` remains on
-`codex/entry-continuity-and-calendar` with unrelated changes: the migration
-runbook draft, `AD_pantopus_tiktok_ladder.mp4`, and the product-design proposal.
-Do not reset, clean, stash wholesale, or commit those into this branch.
+Fresh September 8 inspection finds the main checkout
+`/Users/yingpengwang/skinny-pantopus` clean on merged master. Preserve ignored
+artifacts, the product-design proposal and all other worktrees. Do not reset,
+clean, stash wholesale or incidentally commit unrelated files.
 
 Native rebuild commands and environment selection are in staging setup. Android
 uses ignored `.env.staging` and `app/src/debug/google-services.json`; iOS uses

@@ -97,7 +97,6 @@ const createBroadcastMessageSchema = Joi.object({
 // broadcast's target_tier_rank, the list still includes the row so the
 // fan can see "you're missing N member-only updates" — but the body,
 // media, and analytics are stripped. Audience-profile §11.3.
-const LOCKED_TEASER_LENGTH = 60;
 
 async function getChannel(channelId) {
   const { data } = await supabaseAdmin
@@ -122,6 +121,7 @@ async function canReadChannel(channel, viewerId) {
 function viewerCanReadBroadcast(message, persona, viewerRank, viewerId) {
   if (!message || !persona) return false;
   if (persona.user_id === viewerId) return true;
+  if (message.status !== 'published') return false;
   if (message.visibility === 'public') return true;
   if (viewerRank < 1) return false;
   if (message.visibility === 'followers') return true;
@@ -294,11 +294,8 @@ function serializeChannelBroadcastMessage(row, channelId) {
 function serializeLockedBroadcast(message) {
   if (!message) return null;
   const required = Number(message.target_tier_rank || (message.visibility === 'subscribers' ? 2 : 1));
-  const teaser = (() => {
-    const raw = message.body == null ? '' : String(message.body);
-    if (raw.length <= LOCKED_TEASER_LENGTH) return raw;
-    return raw.slice(0, LOCKED_TEASER_LENGTH).trimEnd() + '…';
-  })();
+  // A teaser must never be derived from content the viewer cannot read.
+  const teaser = 'Members-only update';
   return {
     id: message.id,
     channel_id: message.channel_id,
@@ -347,7 +344,8 @@ router.get('/channels/:channelId/messages', optionalAuth, async (req, res) => {
     // their effective rank to at least 2 so the legacy 'subscribers'
     // and tier_or_above-rank-2 broadcasts remain visible after the
     // P1.10 rank-based filter.
-    if (!isOwner && follow?.relationship_type === 'subscriber' && viewerRank < 2) {
+    if (!isOwner && ['active', 'past_due'].includes(follow?.status)
+        && follow.relationship_type === 'subscriber' && viewerRank < 2) {
       viewerRank = 2;
     }
 
@@ -613,6 +611,9 @@ router.post('/channels/:channelId/messages', verifyToken, broadcastPublishLimite
       targets: message.distribution_targets || [],
       recipientUserIds,
       notificationMode: 'persona_broadcast',
+      // The publish route has its own explicit limiter. Do not silently drop
+      // an accepted broadcast through the ordinary post fanout hourly cap.
+      rateLimit: false,
       defer: false,
       broadcast: {
         messageId: message.id,
@@ -667,7 +668,8 @@ router.post('/messages/:messageId/read', verifyToken, async (req, res) => {
 
     const follow = await getPersonaFollow(persona.id, req.user.id);
     let viewerRank = await getViewerTierRankForPersona(persona.id, req.user.id);
-    if (follow?.relationship_type === 'subscriber' && viewerRank < 2) viewerRank = 2;
+    if (['active', 'past_due'].includes(follow?.status)
+        && follow.relationship_type === 'subscriber' && viewerRank < 2) viewerRank = 2;
     const canRead = viewerCanReadBroadcast(message, persona, viewerRank, req.user.id);
     if (!canRead) return res.status(403).json({ error: 'You cannot view this broadcast message' });
 
