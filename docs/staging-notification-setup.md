@@ -20,7 +20,7 @@ Read-only discovery found:
 | Staging source branch | No remote `dev` branch exists yet. |
 | Supabase | The authenticated account lists only `Pantopus-backend`; no project has been designated for staging. |
 | Backend host | AWS CLI access works. The Pantopus EC2 instance in Oregon is stopped, with reason `Client.UserInitiatedShutdown`; no staging host is confirmed. |
-| DNS | The operator can access Cloudflare for both domains. The public `api.pantopus.com/health` returned HTTP 522; its configured origin has not yet been verified. |
+| DNS | Cloudflare's API A record is proxied, with an active origin rule rewriting `api.pantopus.com` to port 8000. The API returned HTTP 522. The main website uses a separate Vercel origin and a fresh request returned HTTP 200. No DNS records or rules were changed. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
 | Push server credentials | No APNs/FCM credentials in the active local backend env; no staging runtime env exists. |
