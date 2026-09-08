@@ -11,6 +11,11 @@ the Mac's database production were incorrect.
 | `gzzdqechcbfpalfvgyro` / Pantopus-backend | Existing local testing database | Preserve existing data and schema; read-only source for the staging rehearsal. |
 | `ptudkfqdhqpkbkzqlabu` / Pantopus-staging | New isolated staging database | Created on the verified Free plan in Oregon; contains no copied user, home, message, or notification records. |
 
+The new staging schema has been initialized with 317 application tables, 3,128
+public county-radon reference rows, and 3,223 public rent reference rows. Hosted
+synthetic SQL contracts passed and rolled their account/home/chat/file fixtures
+back. Both existing databases remain unchanged.
+
 No production migration, ledger repair, database reset, or DNS cutover has been
 performed. An inaccessible hostname does not prove that production data has been
 deleted. Recover the owning Supabase account before deciding how to restore it.
@@ -73,6 +78,13 @@ synthetic SQL contracts passed for job ownership/expiry, listing caps, chat name
 profile ordering, storage totals, verification-credential grants, and atomic
 calendar replacement. All account/home/chat/file fixtures were rolled back.
 
+The hosted restore required explicit ACL reconciliation: Supabase's new-project
+default grants otherwise reintroduced browser access that was absent locally.
+After correction, all 8,461 normalized application permission statements matched
+the tested local schema exactly. Include this step and verify effective grants
+when preparing the eventual canonical baseline; a schema dump alone did not
+preserve the intended effective permissions on a fresh hosted project.
+
 With pinned Supabase CLI 2.116.0, no application-function lint errors remained.
 Six diagnostics remain in PostGIS-owned routines; the full `db lint --fail-on
 error` command still exits nonzero. No CI gate has been weakened. The unused
@@ -94,6 +106,9 @@ adoption described in the migration runbook remain separate release gates.
 - Configure the Lob **test** webhook and save its signing secret privately.
   Proposed endpoint: `https://staging-api.pantopus.com/api/v1/webhooks/lob`.
 - Keep `NODE_ENV=production`, `APP_ENV=staging`, Lob test mode and Stripe test keys.
+- The image includes Supabase's public database CA under `config/certificates`.
+  Configure the worker's private connection URL with `sslmode=verify-full` and
+  that CA path. Client TLS 1.3 with full verification was checked against staging.
 - Configure isolated storage, email testing, and push-provider credentials.
   Never copy the old host's entire production environment into staging.
 - Verify API and queue-worker readiness, HTTPS, authentication, and test-account
