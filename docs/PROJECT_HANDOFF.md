@@ -14,11 +14,12 @@ the exact permitted post in staging**, after integrating the staging recovery
 branch. A generic push arriving is already proven; it does not prove Beacon
 fanout, membership rules or all notification destinations.
 
-At handoff preparation, `codex/current-backend-release` is 17 commits ahead of
-`master` (`e60c19cc6`) with no base divergence. Its latest application change is
-`fd9a60dcd`, already pushed. This handoff is being added before opening the
-consolidated PR and running final CI. Use the actual PR state to decide whether
-integration remains the first step; do not re-merge an already integrated branch.
+Integration is tracked in [PR #9](https://github.com/WangPantopus/skinny-pantopus/pull/9),
+`codex/current-backend-release` → `master`. At review creation, master was
+`e60c19cc6` with no base divergence. The latest application change is
+`fd9a60dcd`, followed by the committed handoff. Full final-head CI is requested
+through the PR. Read its actual state to decide whether integration remains
+the first step; do not re-merge an already integrated branch.
 
 Start a new session by:
 
