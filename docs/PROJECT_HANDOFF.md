@@ -62,7 +62,10 @@ repairs a listing RPC return-type mismatch in that private candidate. Additional
 application lint passes for 111 functions / 71 trigger bindings. The later
 [empty replay](database-empty-replay-2026-09-08.md) now passes through the pinned
 CLI with matching captured ACLs and two explicitly tested CHECK-expression
-format differences; canonical reference data and the full lint gate remain open.
+format differences. The [reference/lint milestone](database-reference-lint-2026-09-08.md)
+now adds all 6,467 static rows with matching fingerprints. A reviewed function
+gate passes: full CLI scanning remains, six exact stock PostGIS diagnostics
+require verified provenance/runtime tests, and application errors still fail.
 The expanded audit found a new Beacon access blocker: the database's permissive
 `Post` policy permits raw draft reads outside the backend. The local restrictive
 policy and service-only maintenance RPC grants pass actual role tests; staging's
@@ -93,8 +96,10 @@ Start a new session by:
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
    Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
-   finish deterministic reference-data/permission-matrix review, remaining
-   managed-object coverage and the full lint gate. The normal-role empty schema
+   read the [reference/lint decision](database-reference-lint-2026-09-08.md), then
+   finish canonical baseline review and remaining managed-object coverage.
+   Existing permissions are preserved; new role grants are a separate change.
+   The normal-role empty schema
    replay and Home boundaries already pass; carry its explicit ACL restoration
    into canonical baseline review. Include Beacon storage/RPC restrictions,
    activate verified canonical replay/SQL/integration checks, then add the

@@ -137,8 +137,16 @@ database to obtain a clean test environment.
 
 - `pnpm db:check` must pass.
 - `supabase db start` must apply the complete baseline on an empty local stack.
-- `supabase db lint --local --fail-on error` must pass. Fix baseline errors; do
-  not silently lower the gate to warnings just to make adoption green.
+- `node scripts/db/check-function-lint.cjs` must pass. It runs the pinned
+  `supabase db lint --local --fail-on error` scan, checks application routines
+  and attached triggers, and executes the PostGIS runtime contract. Fix
+  application errors; do not lower the failure threshold. The only accepted
+  CLI errors are the six stock PostGIS diagnostics recorded in the reviewed
+  manifest, with exact extension membership, version, function hashes and
+  diagnostic contents. Unknown errors, application-name collisions and changed
+  provenance fail. This explicit exception replaces the raw CLI exit-code gate;
+  the raw CLI still exits 1 for these six diagnostics. See the
+  [reference and lint evidence](database-reference-lint-2026-09-08.md).
 - Add pgTAP SQL tests under `supabase/tests/` for auth-user triggers, RLS as actual
   `anon`/`authenticated` roles, sensitive grants, storage policies and core RPCs.
   `supabase test db` must pass with real assertions, not an empty test directory.
@@ -227,8 +235,10 @@ adds real SQL contracts plus read-only catalog comparison tools. It also finds
 and locally corrects a direct Beacon-storage authorization gap. These results
 do not activate this runbook's baseline/hosted gates; its forward SQL and private
 catalogs remain in the operator evidence root until canonical adoption review.
-The additional application linter is a diagnostic, not a replacement for the
-required pinned Supabase lint command.
+The additional application linter cannot pass the gate by itself. The
+[reviewed function gate](../scripts/db/check-function-lint.cjs) retains the
+complete pinned CLI scan and adds provenance checks and real PostGIS calls.
+Its narrowly reviewed extension exceptions do not permit application errors.
 
 Production baselining is deliberately deferred. Completion requires: privately
 verified backups, exact schema equivalence, custom managed-schema objects and

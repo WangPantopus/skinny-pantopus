@@ -1,4 +1,4 @@
--- Local adoption diagnostic, not a replacement for the required Supabase lint gate.
+-- Application component of check-function-lint.cjs; it cannot waive CLI errors alone.
 -- Run with psql -X -v ON_ERROR_STOP=1 against an isolated rehearsal database.
 -- The transaction always rolls back, including installation of the checker.
 -- Unlike the pinned CLI's public-schema scan, distinguish extension members by

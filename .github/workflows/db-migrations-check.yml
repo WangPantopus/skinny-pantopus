@@ -14,13 +14,16 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: supabase/setup-cli@v3
         with:
           version: ${{ inputs.cli-version }}
       - name: Replay from an empty database
         run: supabase db start
       - name: Reject invalid database functions
-        run: supabase db lint --local --fail-on error
+        run: node scripts/db/check-function-lint.cjs
       - name: Run SQL contracts
         run: supabase test db
       - name: Stop this job's local database
