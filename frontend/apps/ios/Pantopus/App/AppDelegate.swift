@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let tokenString = deviceToken.map { String(format: "%02x", $0) }.joined()
-        logger.info("APNs token received", metadata: ["token": .string(tokenString)])
+        logger.info("APNs token received")
         Task {
             // POST the APNs device token to /api/notifications/register with
             // platform=ios. The backend stores it as an APNs provider token
