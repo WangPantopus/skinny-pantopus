@@ -38,7 +38,7 @@ fs.writeFileSync(file,JSON.stringify(s));if(out)console.log(out);
 if(a[0]==='run'&&a[a.indexOf('--name')+1]==='pantopus-backend'&&['SIGHUP','SIGTERM'].includes(fail))process.kill(process.ppid,fail);
 process.exit(code);
 `;
-function rollout(failure, first = false, target = 'production') {
+function rollout(failure, first = false, target = 'production', binding) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantopus-rollout-test-'));
   try {
     const state = path.join(dir, 'state.json');
@@ -49,7 +49,9 @@ function rollout(failure, first = false, target = 'production') {
     fs.writeFileSync(path.join(dir, 'docker'), docker, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'flock'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const envFile = path.join(dir, 'env'); fs.writeFileSync(envFile, '');
-    const result = spawnSync('bash', [script, target, image], { encoding: 'utf8', env: {
+    const args = [script, target, image];
+    if (binding !== undefined) args.push(binding);
+    const result = spawnSync('bash', args, { encoding: 'utf8', env: {
       ...process.env, PATH: `${dir}:${process.env.PATH}`, DOCKER_STATE: state,
       NEW_IMAGE: image, FAILURE: failure || '', PANTOPUS_ENV_FILE: envFile,
       PANTOPUS_LOCK_DIR: dir, PANTOPUS_HEALTH_ATTEMPTS: '1', PANTOPUS_HEALTH_INTERVAL: '0',
@@ -91,3 +93,28 @@ test('failed first deployment removes partial new services', () => {
   const r = rollout('worker', true); assert.notEqual(r.status, 0);
   assert.deepEqual(r.state.containers, {});
 });
+
+test('staging binds a separate loopback port while retaining running production', () => {
+  const r = rollout(undefined, false, 'staging', '127.0.0.1:18001');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.state.containers['pantopus-backend'].image, 'previous-api');
+  assert.equal(r.state.containers['pantopus-worker'].image, 'previous-worker');
+  const args = r.state.containers['pantopus-backend-staging'].args;
+  assert.equal(args[args.indexOf('-p') + 1], '127.0.0.1:18001:8000');
+  assert.ok(!r.state.containers['pantopus-worker-staging'].args.includes('-p'));
+});
+
+test('default deployment keeps the existing port', () => {
+  const r = rollout();
+  assert.equal(r.status, 0, r.stderr);
+  const args = r.state.containers['pantopus-backend'].args;
+  assert.equal(args[args.indexOf('-p') + 1], '8000:8000');
+});
+
+for (const binding of ['0', '65536', '127.0.0.1:0', '18001:8000', 'localhost:18001', '18001; touch /tmp/unsafe']) {
+  test(`invalid binding is rejected before Docker changes: ${binding}`, () => {
+    const r = rollout(undefined, false, 'staging', binding);
+    assert.equal(r.status, 2);
+    assert.deepEqual(r.state.calls, []);
+  });
+}

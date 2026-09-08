@@ -8,18 +8,20 @@ checks are available. The runtime preparation below adds sandbox vendor checks
 without disabling production security settings. **Staging is not deployed and
 physical push delivery is not verified.**
 
-The operator requested preparation **without new paid resources**. Do not create
-a paid host/database, restart the existing stopped server, or enable deployment
-as part of this preparation.
+The operator subsequently authorized restarting the existing server, configuring
+its management access, and deploying the current backend to staging, while
+retaining the restriction **against new paid resources**. A separate Free
+Supabase project has been created. See the [recovery record](backend-recovery-2026-09-07.md)
+for the corrected database ownership, local schema rehearsal, and host sharing.
 
-Read-only discovery found:
+Current discovery and remaining prerequisites:
 
 | Dependency | Observed state |
 | --- | --- |
 | GitHub staging | Exists; no environment secrets; backend deployment and DB migration flags are false. |
 | Staging source branch | No remote `dev` branch exists yet. |
-| Supabase | The authenticated account lists only `Pantopus-backend`; no project has been designated for staging. |
-| Backend host | AWS CLI access works. The Pantopus EC2 instance in Oregon is stopped, with reason `Client.UserInitiatedShutdown`; no staging host is confirmed. |
+| Supabase | `Pantopus-backend` is the existing testing database. New Free project `Pantopus-staging` is isolated from both it and production; preserve both existing projects. |
+| Backend host | The existing Oregon instance is running; SSM and pinned-key SSH work. Staging will use separate container names and a distinct host port. |
 | DNS | Cloudflare's API A record is proxied, with an active origin rule rewriting `api.pantopus.com` to port 8000. The API returned HTTP 522. The main website uses a separate Vercel origin and a fresh request returned HTTP 200. No DNS records or rules were changed. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
@@ -39,13 +41,14 @@ both explicit staging paths rejected a missing env file. Test inputs and
 generated secret overlays were removed afterward. No signed app was installed,
 and no staging release or live notification was sent.
 
-Read-only hosted database inspection found PostgreSQL 17.6 and 288 public
+Read-only inspection of the existing **testing** database found PostgreSQL 17.6 and 288 public
 tables. A schema-only export was saved outside the repository with private
 permissions; it contains no row INSERT/COPY statements. This is an inspection
-artifact, not an adopted or restore-validated baseline. Both `AuthDevice` and
+artifact, not an adopted production baseline. Both `AuthDevice` and
 `AuthSession`, used by the current device/session implementation, are absent.
-Prepare and validate the missing schema in isolation before testing native login.
-No production application schema or migration ledger was changed.
+The missing schema has since been rehearsed in isolation, with corrections and
+limitations recorded in the recovery document. No production application schema
+or migration ledger was changed.
 
 Runtime preparation validation passed: 4,279 backend tests (16 skipped), all
 privacy gates, and 28 deployment/native-configuration/database-safeguard tests.

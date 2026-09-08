@@ -2,8 +2,11 @@
 # Runs on the EC2 host. Deploy and rollback use this same transaction.
 set -Eeuo pipefail
 
-target=${1:?Usage: backend.sh staging|production repository@sha256:digest}
+target=${1:?Usage: backend.sh staging|production repository@sha256:digest [host-bind]}
 image=${2:?An immutable image digest is required}
+api_bind=${3:-8000}
+[[ "$api_bind" =~ ^((127\.0\.0\.1|0\.0\.0\.0):)?([1-9][0-9]{0,4})$ ]] &&
+  (( BASH_REMATCH[3] <= 65535 )) || { echo 'Invalid API host binding' >&2; exit 2; }
 case "$target" in
   production) api=pantopus-backend; worker=pantopus-worker; suffix=prod ;;
   staging) api=pantopus-backend-staging; worker=pantopus-worker-staging; suffix=staging ;;
@@ -111,7 +114,7 @@ api_created=true
 docker run -d --name "$api" --env-file "$env_file" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
-  -p 8000:8000 --restart unless-stopped \
+  -p "$api_bind:8000" --restart unless-stopped \
   --health-cmd='node scripts/healthcheck.js' --health-interval=5s --health-start-period=20s \
   "$image" >/dev/null
 healthy "$api"
