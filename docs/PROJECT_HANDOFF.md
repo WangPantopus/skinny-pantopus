@@ -128,6 +128,18 @@ the immediate direction unless the owner changes priorities.
 
 ## Evidence index and local continuation
 
+Product-design milestone, September 8, 2026: the owner's nationwide, useful-without-neighbors
+direction is developed in the [detailed product and experience design](pantopus-nationwide-product-design-2026-09-08.md),
+with a [formatted reader](pantopus-nationwide-product-design-2026-09-08.html) and
+[interactive screen companion](designs/pantopus-nationwide-experience-2026-09-08.html).
+It retains Home/Pulse/Beacon and the original proposal's privacy boundaries while
+replacing its single-community acquisition assumption with nationwide discovery.
+This milestone creates documentation and fictional, session-only design screens;
+it does not implement application features or authorize release operations. The
+original proposal and unrelated local work are preserved. Review the new design's
+phased work packages before starting its implementation; refresh operational state
+separately because GitHub CLI connectivity failed during this documentation task.
+
 Public, versioned reports contain sanitized findings rather than raw secrets:
 
 - [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
