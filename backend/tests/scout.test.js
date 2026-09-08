@@ -286,7 +286,17 @@ describe('the composer makes no outbound call carrying the address', () => {
 
   test('the scope note claims only what is true, and discloses the hop that is real', async () => {
     resetTables();
-    const report = await scoutService.getScoutReport(PLACE, {});
+    // This is the no-external-data case below. A live Census/FEMA lookup
+    // made the copy assertion depend on provider latency and availability.
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false, status: 503, json: async () => ({}),
+    });
+    let report;
+    try {
+      report = await scoutService.getScoutReport(PLACE, {});
+    } finally {
+      fetchMock.mockRestore();
+    }
 
     // This assertion is written against the FAILURE MODE, not against a
     // sentence, because the sentence has been wrong twice and a test that

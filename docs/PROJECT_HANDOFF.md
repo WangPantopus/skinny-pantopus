@@ -43,7 +43,9 @@ two new Beacons/accounts and three memberships removed. The original device
 accounts, prior notifications and iPhone registration are preserved; Android
 is signed out with zero tokens and original preferences restored. The final
 [PR checks](https://github.com/WangPantopus/skinny-pantopus/pull/10/checks) track
-the Android changes separately from the earlier backend CI.
+the Android changes separately from the earlier backend CI. A subsequent
+CI timeout exposed a live provider call in the existing Scout fallback test;
+its isolation fix passes all 38 Scout tests and changes no runtime behavior.
 
 Full acceptance remains open: there is no Beacon-specific push-only preference,
 and physical Android hardware is unavailable. The schema's legacy migration

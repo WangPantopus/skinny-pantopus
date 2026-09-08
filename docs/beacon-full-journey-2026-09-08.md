@@ -268,3 +268,14 @@ other token-lifecycle states on the released builds. Publications here used
 the actual authenticated creator API; native composer interaction and every
 settings-screen control were not separately exercised. This report certifies
 only the recorded staging cases, not full cross-platform release acceptance.
+
+
+## CI isolation follow-up
+
+The first native-source CI run hit an existing five-second timeout in
+`tests/scout.test.js`: its no-external-data disclosure case made live Census/
+FEMA requests. The test now supplies 503 responses and restores `fetch` afterward,
+preserving the disclosure and question-list assertions without depending on
+provider latency. All 38 Scout tests pass locally. This is a test-only change;
+no Scout runtime or staged backend file changed. Consult PR #10 checks for the
+final combined backend, image and Android jobs.
