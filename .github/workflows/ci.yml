@@ -133,6 +133,28 @@ jobs:
       - name: Exercise production image readiness
         run: docker run --rm --entrypoint node -v "$PWD/scripts/deploy/check-image.cjs:/checks.cjs:ro" pantopus-ci/backend:check /checks.cjs
 
+      - name: Exercise production queue library against isolated PostgreSQL
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f pantopus-queue-db >/dev/null 2>&1 || true
+            docker network rm pantopus-queue-check >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker network create pantopus-queue-check
+          docker run -d --name pantopus-queue-db --network pantopus-queue-check \
+            --tmpfs /var/lib/postgresql/data -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine
+          ready=false
+          for attempt in {1..60}; do
+            if docker exec pantopus-queue-db pg_isready -h 127.0.0.1 -U postgres; then ready=true; break; fi
+            sleep 1
+          done
+          test "$ready" = true
+          docker run --rm --network pantopus-queue-check --entrypoint node \
+            -e DATABASE_URL=postgres://postgres@pantopus-queue-db:5432/postgres \
+            -v "$PWD/scripts/deploy/check-worker-queue.cjs:/checks.cjs:ro" \
+            pantopus-ci/backend:check /checks.cjs
+
   # ─── Web: lint, typecheck gate, Jest ───────────────────────────────────────
   web:
     name: Web (lint, typecheck gate, Jest)

@@ -7,7 +7,7 @@ the Mac's database production were incorrect.
 
 | Project | Purpose | Handling |
 | --- | --- | --- |
-| `ankjdyvoduutkhhaxvhx` | Existing production database | Preserve; project is absent from the currently authenticated Supabase account and its API/database hostnames return NXDOMAIN. Account/project recovery remains necessary. |
+| `ankjdyvoduutkhhaxvhx` | Existing production database | Owner resumed the paused project. DNS, authenticated Auth health and read-only REST access now work from the existing server. The operator CLI still lacks management access to this project. |
 | `gzzdqechcbfpalfvgyro` / Pantopus-backend | Existing local testing database | Preserve existing data and schema; read-only source for the staging rehearsal. |
 | `ptudkfqdhqpkbkzqlabu` / Pantopus-staging | New isolated staging database | Created on the verified Free plan in Oregon; contains no copied user, home, message, or notification records. |
 
@@ -17,8 +17,10 @@ synthetic SQL contracts passed and rolled their account/home/chat/file fixtures
 back. Both existing databases remain unchanged.
 
 No production migration, ledger repair, database reset, or DNS cutover has been
-performed. An inaccessible hostname does not prove that production data has been
-deleted. Recover the owning Supabase account before deciding how to restore it.
+performed. Read-only queries confirmed existing production records are present.
+Its REST schema metadata lacks current device/session, Lob webhook and address
+calendar tables. A recoverable backup and full SQL schema audit remain necessary
+before upgrading production.
 
 ## Existing AWS host
 
@@ -31,7 +33,7 @@ Parameter Store or S3 permissions.
 SSH's host key was obtained through authenticated SSM and pinned before use.
 The June 12 production image and its container remain intact. A private copy of
 its environment and container configuration is retained on the host; this is
-**not** a backup of the inaccessible production database.
+**not** a backup of the production database.
 
 The server's public address changed when it started. Cloudflare's existing
 `api.pantopus.com` record still points to the old address. Do not direct traffic
@@ -111,8 +113,14 @@ adoption described in the migration runbook remain separate release gates.
 
 ## Remaining runtime setup
 
-- Configure the Lob **test** webhook and save its signing secret privately.
-  Proposed endpoint: `https://staging-api.pantopus.com/api/v1/webhooks/lob`.
+- The Lob **test** webhook signing secret is saved in the private staging env.
+  Endpoint: `https://staging-api.pantopus.com/api/v1/webhooks/lob`.
+- The staging A record points directly to the current server (DNS only).
+  Existing Cloudflare zone TLS is Flexible, so staging is being prepared with
+  its own certificate instead of inheriting that origin transport. The HTTP
+  bootstrap config serves only ACME challenges and maintenance responses.
+  Opening ports 80/443 was rejected by automatic approval review; explicit
+  operator approval is pending. Public HTTPS is not ready.
 - Keep `NODE_ENV=production`, `APP_ENV=staging`, Lob test mode and Stripe test keys.
 - The image includes Supabase's public database CA under `config/certificates`.
   Configure the worker's private connection URL with `sslmode=verify-full` and
@@ -122,3 +130,25 @@ adoption described in the migration runbook remain separate release gates.
 - Verify API and queue-worker readiness, HTTPS, authentication, and test-account
   flows before describing staging as ready. A passing Docker health check alone
   does not prove these flows or physical notification delivery.
+
+## Runtime verification and fixes
+
+The private API preflight passed authenticated password login, notification
+preferences and ownership, mark-read behavior, secure cookie transport, CSRF
+enforcement, and Lob signature/age/duplicate checks. Synthetic Auth accounts were
+created without sending signup email, and their profiles/notifications and the
+webhook event were deleted afterward. These checks do not verify email signup,
+external Lob delivery, storage uploads, or physical push delivery.
+
+CI's Following contract failed twice before executing its assertions because the
+Supabase ECR mirror rate-limited the image pull. The test now uses upstream
+`postgrest/postgrest:v14.10`, pinned to the identical multi-platform digest. All
+five contract cases passed locally and the backend CI job subsequently passed.
+
+The hosted worker preflight exposed a pg-boss 12 import incompatibility hidden
+by cron fallback. The manager now uses the library's named `PgBoss` export.
+Hosted workers exit on queue initialization or registration failure, and clear
+the previous readiness marker before startup. Development fallback and explicit
+queue disable remain supported. CI now exercises actual enqueue/consumption in
+the production image against disposable PostgreSQL, alongside startup failure
+and rollback tests; no hosted credentials are used by these checks.
