@@ -59,8 +59,10 @@ policy prevents adding its preference migration before baseline adoption. The
 closes the four table / 37 column gaps on a separate local candidate, preserves
 all original values across 345 tables, and passes real SQL contracts. It also
 repairs a listing RPC return-type mismatch in that private candidate. Additional
-application lint passes for 111 functions / 71 trigger bindings; full baseline
-replay, catalog/ACL equivalence and the existing Supabase lint gate remain open.
+application lint passes for 111 functions / 71 trigger bindings. The later
+[empty replay](database-empty-replay-2026-09-08.md) now passes through the pinned
+CLI with matching captured ACLs and two explicitly tested CHECK-expression
+format differences; canonical reference data and the full lint gate remain open.
 The expanded audit found a new Beacon access blocker: the database's permissive
 `Post` policy permits raw draft reads outside the backend. The local restrictive
 policy and service-only maintenance RPC grants pass actual role tests; staging's
@@ -68,7 +70,12 @@ matching permissive policy was confirmed read-only. These corrections are **not
 deployed** and must be included in adoption and hosted authorization verification.
 The six forward steps also replay on a second clone with an equal captured public
 catalog, passing SQL contracts and identical original-value hashes. The repeatable
-upgrade evidence does not replace empty-database baseline replay.
+upgrade evidence is now complemented by a separate empty schema replay. That
+replay caught and corrected fresh-platform default grants on 49 tables and
+22 routines before its Beacon denial contract passed. Real Home-role checks
+also support retaining production's stricter policies. Managed-surface evidence
+and the incomplete permission/reference matrix are recorded in the new report;
+no hosted corrections or repository baseline transition have been applied.
 Preserve the current global feature flag and deployment/migration switches.
 
 Beacon repairs remain on `codex/beacon-full-journey` in
@@ -85,11 +92,14 @@ Start a new session by:
 1. Refreshing Git, PR #10/CI and staging observations; preserve unrelated work.
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
-   Continue Home-policy/managed-schema/reference reconciliation and canonical
-   fresh replay from the preserved local candidate. Include the tested Beacon
-   storage restriction and maintenance-RPC grants, resolve the full lint gate,
-   then add the preference migration/API/native setting and verify hosted role
-   denial. Do not mutate frozen history.
+   Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
+   finish deterministic reference-data/permission-matrix review, remaining
+   managed-object coverage and the full lint gate. The normal-role empty schema
+   replay and Home boundaries already pass; carry its explicit ACL restoration
+   into canonical baseline review. Include Beacon storage/RPC restrictions,
+   activate verified canonical replay/SQL/integration checks, then add the
+   preference migration/API/native setting and verify hosted role denial.
+   Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
    next concrete test and verify the audience before sending. Physical Android

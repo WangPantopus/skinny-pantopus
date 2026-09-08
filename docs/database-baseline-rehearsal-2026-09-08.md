@@ -1,5 +1,10 @@
 # Database baseline adoption rehearsal
 
+The later [empty-database milestone](database-empty-replay-2026-09-08.md)
+supersedes this report's pending empty-schema/Home-policy checks. It records
+normal-role CLI replay, the fresh-platform ACL correction, managed-surface
+comparison and remaining reference/lint limits.
+
 The September 8 continuation closes the previously identified table/column gaps
 on an isolated local upgrade candidate. This is a prerequisite for the remaining
 Beacon push preference, whose additive migration is blocked by legacy mode.

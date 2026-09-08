@@ -1,0 +1,74 @@
+-- Preserve production's stricter Home boundary during baseline reconciliation.
+-- The backend owns creator onboarding and verified-primary-owner deletion.
+-- An editor's home.edit permission must not grant direct Home deletion.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+SET LOCAL search_path = public, extensions, pg_catalog;
+
+INSERT INTO auth.users (id, email)
+SELECT id, 'home-policy-' || n || '@example.invalid'
+FROM (VALUES
+  ('ddd00000-0000-4000-8000-000000000001'::uuid, 1),
+  ('ddd00000-0000-4000-8000-000000000002'::uuid, 2),
+  ('ddd00000-0000-4000-8000-000000000003'::uuid, 3)
+) users(id, n);
+INSERT INTO public."User" (id, email, username, name)
+SELECT id, email, 'home_policy_' || right(id::text, 1), 'Home policy fixture'
+FROM auth.users WHERE id IN (
+  'ddd00000-0000-4000-8000-000000000001', 'ddd00000-0000-4000-8000-000000000002',
+  'ddd00000-0000-4000-8000-000000000003');
+INSERT INTO public."Home" (id, owner_id, created_by_user_id, address, city, state, zipcode)
+VALUES ('ddd00000-0000-4000-8000-000000000010', 'ddd00000-0000-4000-8000-000000000001',
+        'ddd00000-0000-4000-8000-000000000003', '100 Synthetic Street', 'Test City', 'WA', '98607');
+INSERT INTO public."HomeOccupancy" (home_id, user_id, role, role_base, is_active)
+VALUES ('ddd00000-0000-4000-8000-000000000010', 'ddd00000-0000-4000-8000-000000000002',
+        'admin', 'admin', true);
+-- Isolate the policy behavior from the incomplete historical reference matrix.
+INSERT INTO public."HomeRolePermission" (role_base, permission, allowed)
+VALUES ('admin', 'home.edit', true)
+ON CONFLICT (role_base, permission) DO UPDATE SET allowed = true;
+
+SET LOCAL ROLE anon;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
+    RAISE EXCEPTION 'Anonymous role can read a private home';
+  END IF;
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000003', true);
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
+    RAISE EXCEPTION 'Nonmember creator can read an established private home directly';
+  END IF;
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000002', true);
+DO $$
+DECLARE affected integer;
+BEGIN
+  IF NOT EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
+    RAISE EXCEPTION 'Active member cannot read their home';
+  END IF;
+  UPDATE public."Home" SET name = 'Edited by fixture'
+  WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  IF affected <> 1 THEN RAISE EXCEPTION 'Authorized editor cannot update home'; END IF;
+  DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  IF affected <> 0 THEN RAISE EXCEPTION 'home.edit allowed direct deletion'; END IF;
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000001', true);
+DO $$
+DECLARE affected integer;
+BEGIN
+  DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  IF affected <> 1 THEN RAISE EXCEPTION 'Primary legacy owner cannot delete their home'; END IF;
+END $$;
+RESET ROLE;
+ROLLBACK;
+SELECT 'PASS: private Home denial, member/editor access and owner-only direct deletion' AS result;
