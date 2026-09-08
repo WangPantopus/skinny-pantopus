@@ -1,6 +1,6 @@
 # Staging setup for physical notification tests
 
-## Status — September 7, 2026
+## Status — September 8, 2026
 
 The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
 (including merged PR #5). Explicit native staging inputs and local configuration
@@ -25,10 +25,10 @@ Current discovery and remaining prerequisites:
 | DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Created `Pantopus Staging` (`pantopus-staging`) with the owner's terms approval. The console confirms Spark, $0/month; Analytics and the Developer Program opt-in were left off. Registered `app.pantopus.android.debug`; the downloaded client configuration is privately saved in the ignored debug variant directory and passes the native config check. |
-| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. APNs EC P-256 format and local signing passed; Apple authorization remains unverified. The live staging API passed Google OAuth and an FCM validation-only request. Physical push delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
-| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. Bundle ID remains `app.pantopus.ios`; installing it could replace an existing Pantopus app. No app was installed. A paired iPhone 16 Pro is available. |
+| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. A sandbox, topic-specific APNs key is prepared and awaits owner approval. The live staging API passed Google OAuth and an FCM validation-only request. Physical push delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
+| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. The app was installed on the paired iPhone 16 Pro after confirming no existing Pantopus installation. The owner logged in with a dedicated synthetic staging account. Its APNs token is registered and linked to the device, with push enabled. |
 | Android | The debug APK build succeeded with the real staging client configuration. APK signature, `app.pantopus.android.debug` package, and packaged Firebase project/sender ID were verified. No app was installed; no ADB-connected phone. |
-| Recipients | Test accounts/devices have not yet been designated. |
+| Recipients | The owner designated their iPhone and logged into a dedicated synthetic account. One stored test notification was created; Apple rejected its push before acceptance. No other recipient was targeted. |
 
 Do not label provider acceptance, a simulator test, or the presence of config
 fields as proof of device delivery. Record text evidence; screenshots are not
@@ -79,6 +79,51 @@ Runtime preparation validation passed: 4,279 backend tests (16 skipped), all
 privacy gates, and 28 deployment/native-configuration/database-safeguard tests.
 The backend total includes 16 new staging startup checks. These tests use
 synthetic credentials and do not deploy or call live providers.
+
+## First iPhone test — September 8, 2026
+
+Login succeeded. Registration then exposed a schema gap: `PushToken.platform`
+and `provider` were missing. Numbered migration
+`backend/database/migrations/152_push_token_platform_provider.sql` contains the
+required change, but it has no counterpart in the timestamped migrations used
+for the initial reconciliation. Passing the identity-firewall checks did not
+establish native-push schema readiness.
+
+The local Docker rehearsal database was unavailable. The exact narrow DDL was
+therefore tested in a short, rollback-only staging transaction before applying
+it: iOS/APNs insert, Android/FCM upsert, device linkage, legacy Expo backfill,
+idempotent replay, unchanged security settings, and complete rollback all
+passed. The guarded staging transaction then added the two nullable text fields
+and provider index and notified PostgREST to reload its schema. No migration
+ledger or existing production/testing database was changed.
+
+After a background app restart, the authenticated iPhone registered one APNs
+token with device linkage and push preferences enabled. The current
+`notificationService.createNotification` path created one notification and
+invoked the native sender once. Apple returned **HTTP 403,
+`InvalidProviderToken`**, with zero accepted or invalid device tokens. The
+private token was retained. Display and tap navigation remain unverified.
+
+The live key's signature and JWT timestamps were valid locally. In the Apple
+Developer portal, its Key ID belongs to **Pantopus WeatherKit** and has no APNs
+capability. An existing Expo APNs key is listed, but its private file was not
+found in the checked recovery locations. A proposed **Pantopus Staging Push**
+key is prepared with **Sandbox**, **Topic Specific**, and only
+`app.pantopus.ios`. Creation is pending the owner's explicit approval; no
+existing Apple key has been modified or revoked.
+
+Before future device tests, verify the live table contract explicitly (this
+read-only query returns no device data):
+
+```sql
+SELECT token, platform, provider, device_id, updated_at
+FROM public."PushToken" WHERE false;
+```
+
+A matching staging schema is still not proof of a complete production upgrade.
+Include native-push columns when finishing the production gap audit; both old
+schemas lacked them, so comparing only against the initial staging catalog
+could not detect this omission.
 
 ## Hosted staging runtime
 

@@ -71,6 +71,22 @@ forward changes, data transformations, and application compatibility checks.
 The rehearsal does not authorize blindly replaying the frozen history, adopting
 the testing schema over production, or enabling hosted migration automation.
 
+## First physical iPhone attempt — September 8
+
+The owner logged into the signed staging app on their iPhone. The test exposed
+missing `PushToken.platform` and `provider` columns, despite the earlier schema
+checks. The narrow numbered-migration-152 change passed transactional rehearsal
+and was applied only to staging, with access rules and the migration ledger
+preserved. The phone then registered an APNs token linked to its auth device.
+The production gap audit must include these additional native-push columns;
+the initial staging comparison was not a complete application contract.
+
+One notification went through the current notification service to the designated
+synthetic account. Apple rejected the push with `403 InvalidProviderToken`.
+The Developer portal identified the supplied key as WeatherKit-only. A separate
+sandbox APNs key restricted to `app.pantopus.ios` is prepared but not created,
+pending explicit owner approval. See the [staging test record](staging-notification-setup.md#first-iphone-test--september-8-2026).
+
 ## Existing AWS host
 
 The owner authorized restarting the existing Oregon server and attaching a
