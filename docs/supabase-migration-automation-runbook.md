@@ -43,9 +43,11 @@ the version prefix, so these files cannot safely be replayed unchanged.
 
 The existing numbered SQL remains historical evidence and test fixtures. Do not
 rename duplicate versions and replay them against production: matching filenames
-does not prove matching production state. The one hosted project described by the
-original research is production, even where a local filename calls it “dev”.
-Re-verify the current project inventory at adoption time.
+does not prove matching production state. On September 7 the owner confirmed that
+`gzzdqechcbfpalfvgyro` (Pantopus-backend, used by this Mac) is a testing database;
+the old AWS backend's `ankjdyvoduutkhhaxvhx` is production. Preserve both. See the
+[recovery record](backend-recovery-2026-09-07.md) and re-verify the owning account
+and current schema before production adoption.
 
 ## Corrections to the original proposal
 

@@ -134,6 +134,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DEPLOY_TARGET: ${{ needs.preflight.outputs.target }}
+          DEPLOY_API_BIND: ${{ vars.BACKEND_API_BIND }}
           DEPLOY_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ steps.image.outputs.digest }}
         run: bash scripts/deploy/remote.sh
       - name: Record release

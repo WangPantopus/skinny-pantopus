@@ -1,4 +1,4 @@
-const PgBoss = require('pg-boss');
+const { PgBoss } = require('pg-boss');
 const logger = require('../utils/logger');
 
 let boss = null;

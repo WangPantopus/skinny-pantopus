@@ -308,17 +308,18 @@ router.post('/register', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid push token' });
     }
 
-    // Mirror the legacy /push-token route: the user just opted into push on
-    // their device, so ensure push_notifications is enabled at the
-    // preference level (create the row if missing, flip it on if disabled).
+    // Registration also runs automatically on app open and token rotation.
+    // Initialize defaults only for a new preference row; an existing opt-out
+    // belongs to the user and must survive device registration. Resolve this
+    // atomically so a concurrent settings save cannot be overwritten.
     await supabaseAdmin
       .from('MailPreferences')
       .upsert(
         { user_id: userId, push_notifications: true, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' },
+        { onConflict: 'user_id', ignoreDuplicates: true },
       )
       .then(({ error: prefErr }) => {
-        if (prefErr) logger.warn('Failed to enable push preference', { error: prefErr.message, userId });
+        if (prefErr) logger.warn('Failed to initialize push preference', { error: prefErr.message, userId });
       });
 
     res.json({ message: 'Device registered for push', pushToken: saved });
@@ -347,18 +348,16 @@ router.post('/push-token', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid push token format' });
     }
 
-    // Ensure push_notifications is enabled in MailPreferences.
-    // The user just accepted push notifications on their device, so we
-    // create the preference row (if missing) with push enabled, or
-    // flip the flag on if it was previously disabled.
+    // Legacy token refreshes must preserve an existing account-level opt-out
+    // too. Only initialize defaults if no preference row exists.
     await supabaseAdmin
       .from('MailPreferences')
       .upsert(
         { user_id: userId, push_notifications: true, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' },
+        { onConflict: 'user_id', ignoreDuplicates: true },
       )
       .then(({ error: prefErr }) => {
-        if (prefErr) logger.warn('Failed to enable push preference', { error: prefErr.message, userId });
+        if (prefErr) logger.warn('Failed to initialize push preference', { error: prefErr.message, userId });
       });
 
     res.json({ message: 'Push token registered', pushToken: saved });
