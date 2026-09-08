@@ -88,8 +88,11 @@ sandbox APNs key restricted to `app.pantopus.ios` was created and configured in
 both healthy staging processes using the unchanged application image. One
 authorized retry through the current notification service was accepted by Apple
 with HTTP 200. The owner confirmed that the notification arrived on the physical
-iPhone and tapping it opened the notification screen. Android delivery and the
-remaining notification behavior checks are still unverified. See the [staging test record](staging-notification-setup.md#first-iphone-test--september-8-2026).
+iPhone and tapping it opened the notification screen. Subsequent real FCM chat
+delivery, navigation, global opt-out and logout checks passed on an Android
+emulator; physical Android and the full Beacon journey remain unverified. See
+the [staging test record](staging-notification-setup.md#first-iphone-test--september-8-2026)
+and [Android results](android-staging-verification-2026-09-08.md).
 
 ## Existing AWS host
 
@@ -197,7 +200,8 @@ adoption described in the migration runbook remain separate release gates.
 - The image includes Supabase's public database CA under `config/certificates`.
   Configure the worker's private connection URL with `sslmode=verify-full` and
   that CA path. Client TLS 1.3 with full verification was checked against staging.
-- Configure isolated storage, email testing, and push-provider credentials.
+- Configure isolated storage and email testing. Push-provider credentials are
+  now configured; device results and remaining cases are recorded above.
   Never copy the old host's entire production environment into staging.
 - Verify API and queue-worker readiness, HTTPS, authentication, and test-account
   flows before describing staging as ready. A passing Docker health check alone

@@ -1,0 +1,176 @@
+# Pantopus project handoff
+
+Updated September 8, 2026. This is the continuing-work entry point. Detailed
+reports below retain their original dates; their historical blockers must not
+be mistaken for current status. Refresh Git, CI and infrastructure observations
+before changing anything. A merged branch is not a production release.
+
+## Current objective and first action
+
+Finish the existing **Home, Pulse and Beacon** journeys with reliable privacy,
+useful behavior at low neighborhood density, and verified return experiences.
+The immediate engineering milestone is **Beacon publication → notification →
+the exact permitted post in staging**, after integrating the staging recovery
+branch. A generic push arriving is already proven; it does not prove Beacon
+fanout, membership rules or all notification destinations.
+
+At handoff preparation, `codex/current-backend-release` is 17 commits ahead of
+`master` (`e60c19cc6`) with no base divergence. Its latest application change is
+`fd9a60dcd`, already pushed. This handoff is being added before opening the
+consolidated PR and running final CI. Use the actual PR state to decide whether
+integration remains the first step; do not re-merge an already integrated branch.
+
+Start a new session by:
+
+1. Reading this file, then checking `git status --short --branch`, remote refs
+   and the PR for `codex/current-backend-release`.
+2. Completing its merge review if still open: full current-head `CI OK`, no
+   unresolved review findings, no conflicts, and deployment switches checked.
+   Preserve published history and unrelated worktrees.
+3. Reading the [Beacon test matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey)
+   and [staging setup](staging-notification-setup.md). Prepare only synthetic,
+   isolated creator/follower fixtures and verify their audience before sending.
+4. Recording exact results and any missing platform states, fixing failures,
+   then advancing through the ordered backlog below.
+
+Suggested new-session prompt:
+
+> Read AGENTS.md and docs/PROJECT_HANDOFF.md, inspect the current branch and PR/CI
+> state, and continue the first unfinished priority. Preserve unrelated local
+> work and both existing databases. Start with the Beacon staging journey if
+> integration is complete. Update the handoff when the milestone is finished.
+
+## Decisions to preserve
+
+- Home, Pulse and Beacon are all product pillars. Address-free social discovery
+  and Beacon following must remain available; local posting eligibility remains
+  enforced. Do not require a household simply to follow a publisher.
+- Private home usefulness must work without recruiting neighbors. Saving a
+  public address preview, household membership, residency verification and
+  property ownership are separate facts. Entering an address grants no access
+  to another household. Keep private/public identity boundaries explicit.
+- Preserve authorized Home intelligence: supported ATTOM/property data,
+  weather, air quality, alerts, sunrise/sunset and the visual daylight arc,
+  environmental and civic/election sections. Existing provider coverage and
+  verification/licensing restrictions still apply; availability is not certified
+  merely because the UI code remains present.
+- Keep setup progressive and destinations durable across login, signup and
+  retry. A follow, save or post requires the relevant explicit action. Distinguish
+  saved data from delivered reminders, physical mail or completed payments.
+- The owner authorized staging recovery on the existing AWS host, designated
+  synthetic-device tests, and feature-branch commits/pushes. Existing paid host
+  operation was approved; creating new paid resources was declined. The new
+  Supabase and Firebase staging projects use free plans. Do not treat that
+  history as authorization for new spending or a production database/DNS cutover.
+- Screenshots are not required for this milestone. Sanitized textual evidence
+  is sufficient; keep secrets and private database contents out of reports.
+
+The [v1 release brief](v1-release-brief-2026-09-06.md) and
+[journey audit](v1-journey-audit-2026-09-06.md) define acceptance. Navigation
+redesigns in those documents are proposals, not claims about the deployed UI.
+
+## What is complete, and what the evidence proves
+
+| Work | Latest evidence / limits |
+| --- | --- |
+| Entry continuity and private address saving | Web/native implementations preserve destinations and explicit private saves. Home access/redaction repairs and calendar continuity are integrated through PR #4. Real provider and device scenarios still need release-level coverage. See [web/shared entry](entry-continuity-implementation-2026-09-06.md), [native entry](native-entry-continuity-2026-09-06.md) and [master integration](master-integration-2026-09-07.md). The old six web type errors were fixed; do not reopen them solely from earlier notes. |
+| Social discovery and Beacon return | Address-free discovery, following, publication and permitted Following updates exist. See [social discovery](social-discovery-2026-09-06.md), [Beacon return](beacon-return-journey-2026-09-07.md) and [activity reliability](following-activity-reliability-2026-09-07.md). Live Beacon delivery/access matrix remains open. |
+| CI and prior integration | PRs #1–#5 are merged, including contrast/brand work, entry/calendar integration and explicit staging configuration. Full CI passed for deployed backend release `9d1fe24dc`; final consolidated-branch CI must be checked separately. |
+| Staging infrastructure | Current backend API and separate worker run on the existing AWS host, with isolated Free Supabase, HTTPS and verified renewal, sandbox Lob/Stripe settings, database TLS, real queue schedules and job consumption. No new instance was created. |
+| Hosted API contracts | Authenticated API, secure cookies/CSRF, notification ownership/preferences/read state, Home/Hub/Following/identity/device queries, authenticated WebSocket, CORS and Lob webhook signature/replay checks passed. This does not certify email delivery, storage or real postcards. |
+| Production preservation | Production backup captured and restored locally in isolation. All 299 archived COPY sections matched restored row counts/hashes. Upgrade rehearsal retained original records but exposed schema gaps. No production schema/ledger/DNS cutover occurred. External file contents are not included in the database backup. |
+| Notification opt-out | Both native and legacy token registration preserve existing global opt-outs. Backend regression/privacy tests and real PostgREST checks passed; Android staging exercised opt-out, re-registration and restore. Raw APNs token logging was removed. See [lifecycle audit](notification-lifecycle-audit-2026-09-07.md). |
+| Physical iPhone | iPhone 16 Pro, iOS 26.5.2, development-signed Staging build. APNs accepted the designated synthetic push with HTTP 200; owner confirmed arrival and tap to `/notifications`. That fixture intentionally links to the list. Re-tapping its row returns there. It does not test an actual post/chat destination. |
+| Android emulator | Google APIs ARM64 Android 14/API 34. Real FCM chat notifications displayed and opened the exact conversation. Global opt-out persisted across registration, restored delivery worked, logout removed tokens, re-login registered again. Physical Android remains unverified; owner has no Android phone. See [Android report](android-staging-verification-2026-09-08.md). |
+| Android fixes | `fd9a60dcd` fixes `+` in chat titles and a false security warning after voluntary logout. 98 routing/dispatcher tests and 93 auth/matching-view-model tests passed; lint/build and final emulator checks passed. This is targeted evidence, not final all-surface CI. |
+
+## Environments and release identity
+
+| Environment | Recorded state |
+| --- | --- |
+| Production database | Supabase `ankjdyvoduutkhhaxvhx`; existing users/data must be preserved. Resumed after pause; session-pooler TLS connection and backup verified. Current application schema is not ready for the new backend. |
+| Existing testing database | Supabase `gzzdqechcbfpalfvgyro`, “Pantopus-backend”; preserve it. It is not production and is not the new staging runtime's database. |
+| Isolated staging database | Supabase `ptudkfqdhqpkbkzqlabu`, “Pantopus-staging”; synthetic test accounts plus permitted reference data, no copied real user records. |
+| Staging API | `https://staging-api.pantopus.com`; API and worker release `9d1fe24dc1f9ba4d6c07137405fa85b5b2cc3afb`. Image ID `sha256:11d9be44b28cca79b8a2e7ec1af764af9ebdd8c98aab8b07ce4b169d8d6e6d46`. Repository HEAD may be newer than this deployed image. |
+| AWS host | Existing Oregon EC2; staging API binds `127.0.0.1:18001` behind nginx; worker has no public port. Container names `pantopus-backend-staging` and `pantopus-worker-staging`. Original production container is retained. Exact host/access details are in the private operator handoff. |
+| Production DNS | Last inspected production API DNS points to the old address and times out. Fixing DNS alone would route users to an obsolete backend. Reconcile production first, then perform a planned cutover. |
+| GitHub automation | On September 8, both production and staging have `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false`. Merging source does not deploy while these switches remain false. Re-read them before merging/enabling releases; do not enable deployment to make a source PR mergeable. |
+| Firebase | `pantopus-staging`, free Spark; debug Android package `app.pantopus.android.debug`. FCM is used for Android push, not Firebase Auth/database. A narrowly scoped sender key exists privately. The approved temporary project-only key-creation exception was removed and the inherited block restored. |
+| Apple push | Sandbox APNs, topic `app.pantopus.ios`; signed app entitlement is development. The supplied WeatherKit and Sign in with Apple keys could not send push. A separately approved APNs key is active; do not substitute the older `.p8` files merely because they parse. Distribution/TestFlight requires separately matching credentials/entitlement. |
+
+Numbered migration 152's `PushToken.platform` / `provider` change was rehearsed
+transactionally and applied only to staging. Earlier comparison against staging
+missed this contract because both old databases lacked it. Include it in the
+production gap audit; the historical migration ledger was not altered.
+
+## Ordered backlog and exit criteria
+
+| Order | Deliverable | Exit criterion |
+| --- | --- | --- |
+| 1. Integrate this branch | Consolidated PR for recovery/runtime/notification fixes plus this handoff. | Current PR head passes `CI OK`, reviewed changes have no unresolved blocking finding, merge is confirmed, and next session starts from the merged baseline. PR #6 and #8 contain overlapping work; inspect final diffs before closing them as superseded. PR #7 (iOS deep-link diagnostics privacy) is separate and still requires review. |
+| 2. Beacon end-to-end staging | Dedicated creator and address-free follower publish/read/follow/mute/return through the actual staging API and native UI. | One stored post ID matches Following, audience notification and opened post. No unrelated recipients. Mute/global/type opt-out and restore work; restricted membership and revoked/block access deny correctly, including old notification taps. Record every case in the linked matrix. Do not enable feature flags globally simply to populate fixtures. |
+| 3. Finish released-platform notification coverage | Actual post/chat destinations, foreground/background/ordinary cold start, denied permission, expired session/login continuation, token rotation/logout and relevant settings UI. | Exact permitted destination opens on each released platform/state; unread behavior is coherent. Owner confirms physical iPhone observations; physical Android remains explicitly pending until hardware is available. Emulator results are useful but not physical acceptance. |
+| 4. Finish isolated vendor/account flows | Safe staging signup/recovery/verification email and real OAuth callbacks; isolated media/document storage; reachable sandbox payments and address-verification states. | New user can authenticate/recover, upload/read only authorized files, and complete reachable test-mode actions. Failures/retries are visible and idempotent; no live charge or postcard is triggered by staging. Use existing/free capacity unless further spending is authorized. |
+| 5. Make production upgrade reviewable | Resume the verified local production-copy rehearsal. Produce forward changes, compatibility checks, reference-data/ACL verification, external-file recovery plan, and deploy/rollback manifest. | Resolve four known missing tables (`AnalyticsEvent`, `GigShare`, `ListingShare`, `MailDeliveryIntent`), 35 catalog-gap columns and the additional native-push contract; inventory further application contracts. Preserve legacy production fields/tables and records. Validate grants/functions and adoption policy. No hosted write/cutover until the concrete plan is reviewed and authorized. |
+| 6. Complete v1 journeys and reachable features | Run Home/Pulse/Beacon acceptance on release candidates; inventory adjacent mailbox, tasks, marketplace, payments and household actions. | Address-free paths, private-address boundaries, correct calendar outcomes, exact-content returns, error/retry/accessibility and real provider coverage pass. Finish or honestly constrain unfinished reachable operations; preserve records, balances and entitlements. |
+| 7. Release/pilot | Tie exact web/iOS/Android builds, backend, migrations, flags and rollback together; configure deployment only after its prerequisites. | Approved production cutover and post-deploy checks pass; small consenting pilot measures actual first value and voluntary returns. Passing engineering tests alone is not product-market fit or proof every feature is finished. |
+
+The owner has a separate, uncommitted proposal at
+`docs/pantopus-next-stage-design-2026-09-08.md` in the main Mac checkout. It
+explores coherent Home/Nearby/Following/Inbox destinations, a private note →
+public question → private bookmark journey, and reviewed personal calendar
+saves from Beacon events. It explicitly describes new work, not a release.
+Preserve it and review it with the owner before treating its label choices,
+personal-record contracts or implementation packages as approved scope. Do not
+copy it into this recovery PR incidentally. The current v1 gates above remain
+the immediate direction unless the owner changes priorities.
+
+## Evidence index and local continuation
+
+Public, versioned reports contain sanitized findings rather than raw secrets:
+
+- [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
+- [Staging inventory, native setup and physical iPhone record](staging-notification-setup.md).
+- [Android delivery, navigation, opt-out and logout record](android-staging-verification-2026-09-08.md).
+- [Beacon scenario matrix](beacon-staging-verification-2026-09-07.md).
+- [CI/CD setup](ci-cd.md) and [migration adoption runbook](supabase-migration-automation-runbook.md).
+- [Following query validation](following-activity-reliability-2026-09-07.md) and
+  [notification lifecycle audit](notification-lifecycle-audit-2026-09-07.md).
+
+On the owner's Mac, the private durable evidence root is
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/20260907/`.
+Start with its `OPERATOR_HANDOFF.md`. It indexes backups, schema rehearsals,
+operator logs, private test-account fixtures, push configuration and native test
+evidence. Keep these materials private; some logs and SQL archives include
+credentials or application records. They are not part of a Git clone. A new
+machine needs a separately authorized private transfer and its own access.
+
+The working checkout for this recovery is
+`/private/tmp/pantopus-current-backend-release`. Temporary build files live in
+`/private/tmp/pantopus-native-staging-build`; do not assume either survives a
+restart. The branch is pushed and key evidence is copied to the durable private
+root. If the checkout is gone, create a fresh feature worktree from current
+master after confirming the integration state; never reconstruct code from logs.
+
+The main checkout `/Users/yingpengwang/skinny-pantopus` remains on
+`codex/entry-continuity-and-calendar` with unrelated changes: the migration
+runbook draft, `AD_pantopus_tiktok_ladder.mp4`, and the product-design proposal.
+Do not reset, clean, stash wholesale, or commit those into this branch.
+
+Native rebuild commands and environment selection are in staging setup. Android
+uses ignored `.env.staging` and `app/src/debug/google-services.json`; iOS uses
+the Staging scheme and generated private overlay. Operator scripts may send or
+mutate when executed: inspect their intended action, recipient and idempotency
+marker before reuse. The Android test app ended signed out with zero registered
+tokens and its original push preference restored; the designated iPhone token
+remains. Inspect fresh registration state before another send.
+
+## Keep this handoff current
+
+After each milestone, update the top next action, exact commit/deployment state,
+results and remaining coverage. Add a dated report for substantial work and
+link it here. Record blockers with the concrete next action and any required
+owner input. Keep proposals distinct from implementation and device acceptance.
+Refresh private operator state when credentials, server configuration or test
+fixtures change. Do not append an unfiltered chat/tool transcript: the indexed
+reports and private evidence are the durable record.
