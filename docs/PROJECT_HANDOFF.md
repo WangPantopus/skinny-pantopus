@@ -11,8 +11,8 @@ Finish the existing **Home, Pulse and Beacon** journeys with reliable privacy,
 useful behavior at low neighborhood density, and verified return experiences.
 The immediate engineering milestone is **Beacon publication → notification →
 the exact permitted post in staging**, after integrating the staging recovery
-branch. A generic push arriving is already proven; it does not prove Beacon
-fanout, membership rules or all notification destinations.
+branch. Actual publication and permitted return are verified on the designated iPhone
+and Android emulator; the remaining acceptance gates are listed below.
 
 Integration completed in [PR #9](https://github.com/WangPantopus/skinny-pantopus/pull/9)
 on September 8 at 08:44 UTC as `a373b10940813bc5deef37b29f67dcc9b6375994`.
@@ -21,32 +21,50 @@ now pass. Fresh inspection confirms deployment and database switches remain
 false in both environments; the backend workflow skipped its rollout steps.
 The deployed backend is still a separate release from merged source.
 
-The current first unfinished priority is the full Beacon staging journey,
-including mute, notification preferences, membership and revoked/block access.
-The [first live matrix](beacon-full-journey-2026-09-08.md) passed baseline exact-post
-return and mute, then exposed silent fanout throttling and restricted-content
-leaks through broadcast channel/read routes. The repairs pass the full backend suite (4,305 tests,
-16 skipped), privacy gates and 49 final targeted tests. API/worker now run
-`982851170cf5f1bba080b291dbfa07dac3f3188b` in staging; the fresh matrix
-passed all 17 checks, including WebSocket, mute/restore, Member/revoked/block
-access, and draft/archive denial. Physical iPhone background Beacon delivery and exact-post tap now pass,
-with APNs acceptance separately recorded. iPhone foreground and closed-app exact returns also pass. Android feed
-inspection found a separate draft leak; its shared-policy fix passes 50 feed
-tests and needs staging rollout. Android registration recovery, remaining
-restriction taps, and cleanup are next. Draft [PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10)
-tracks the repairs; `CI OK` and the backend image job pass. Physical Beacon taps remain pending.
-Work starts from merged master on `codex/beacon-full-journey` in
-`/private/tmp/pantopus-beacon-journey`. The main checkout is now clean on master;
-previous worktrees and ignored local artifacts are preserved.
+The first unfinished priority remains the full Beacon staging journey. The
+[September 8 evidence report](beacon-full-journey-2026-09-08.md) records 17
+passing live API checks, authenticated WebSocket fanout, exact-post returns,
+mute/resume, per-Beacon opt-out, Member/revoked/block access, and draft/archive
+denial. Physical iPhone foreground, background, closed-app return, old blocked
+notification denial, mute/resume, and repeated global push off/restore all have
+owner confirmation. Android emulator foreground/background/process-absent
+notification taps and old blocked-notification denial also pass.
+
+Draft [PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10) repairs
+hidden fanout throttling, restricted teaser/membership leaks and draft exposure
+in the native Beacon feed. API and worker run
+`5d911ca48c8fc8466a0e3943aa698f0e4642fca0`; 4,308 backend tests pass (16
+skipped), privacy gates pass and [application CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34265566560)
+is green. Android revision `58f1978e5751adea21dd24f5c55a792050215f3d` repairs stale registration acknowledgment
+retry and decoding of the public Beacon author; all 86 targeted native tests
+pass; formatting, Detekt, Android lint and the staging APK build pass. The
+rebuilt APK passed a fresh notification tap with the correct public author. Scoped cleanup is complete: 27 posts, 34 notifications,
+two new Beacons/accounts and three memberships removed. The original device
+accounts, prior notifications and iPhone registration are preserved; Android
+is signed out with zero tokens and original preferences restored. The final
+[PR checks](https://github.com/WangPantopus/skinny-pantopus/pull/10/checks) track
+the Android changes separately from the earlier backend CI.
+
+Full acceptance remains open: there is no Beacon-specific push-only preference,
+and physical Android hardware is unavailable. The schema's legacy migration
+policy prevents adding its preference migration before baseline adoption; the
+report records the concrete remaining contract and verification work. Preserve
+the current global feature flag and deployment/migration switches.
+
+Current work is isolated on `codex/beacon-full-journey` in
+`/private/tmp/pantopus-beacon-journey`, based on merged master. The main checkout
+and all other worktrees/ignored artifacts are preserved.
 
 Start a new session by:
 
-1. Refreshing Git, PR/CI and staging observations; preserve unrelated work.
-2. Reading the [Beacon test matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey)
-   and [staging setup](staging-notification-setup.md). Prepare only synthetic,
-   isolated creator/follower fixtures and verify their audience before sending.
-3. Recording exact results and missing platform states, fixing failures,
-   and updating this handoff after each milestone.
+1. Refreshing Git, PR #10/CI and staging observations; preserve unrelated work.
+2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
+   and baseline-adoption runbook. Make its additive schema/API/native setting
+   implementable under the migration policy; do not mutate frozen history.
+3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
+   Prior fixtures are cleaned up; create fresh isolated fixtures only for the
+   next concrete test and verify the audience before sending. Physical Android
+   requires hardware; the iPhone cases already recorded do not need repeating.
 
 Suggested new-session prompt:
 
@@ -89,14 +107,14 @@ redesigns in those documents are proposals, not claims about the deployed UI.
 | Work | Latest evidence / limits |
 | --- | --- |
 | Entry continuity and private address saving | Web/native implementations preserve destinations and explicit private saves. Home access/redaction repairs and calendar continuity are integrated through PR #4. Real provider and device scenarios still need release-level coverage. See [web/shared entry](entry-continuity-implementation-2026-09-06.md), [native entry](native-entry-continuity-2026-09-06.md) and [master integration](master-integration-2026-09-07.md). The old six web type errors were fixed; do not reopen them solely from earlier notes. |
-| Social discovery and Beacon return | Address-free discovery, following, publication and permitted Following updates exist. See [social discovery](social-discovery-2026-09-06.md), [Beacon return](beacon-return-journey-2026-09-07.md) and [activity reliability](following-activity-reliability-2026-09-07.md). Live Beacon delivery/access matrix remains open. |
+| Social discovery and Beacon return | Address-free discovery, following, publication and permitted Following updates exist. See [social discovery](social-discovery-2026-09-06.md), [Beacon return](beacon-return-journey-2026-09-07.md) and [activity reliability](following-activity-reliability-2026-09-07.md). The live API/access matrix and iPhone/Android emulator returns pass; remaining acceptance limits are recorded in the [full journey report](beacon-full-journey-2026-09-08.md). |
 | CI and prior integration | PRs #1–#5 are merged, including contrast/brand work, entry/calendar integration and explicit staging configuration. Full CI passed for deployed backend release `9d1fe24dc`; final consolidated-branch CI must be checked separately. |
 | Staging infrastructure | Current backend API and separate worker run on the existing AWS host, with isolated Free Supabase, HTTPS and verified renewal, sandbox Lob/Stripe settings, database TLS, real queue schedules and job consumption. No new instance was created. |
 | Hosted API contracts | Authenticated API, secure cookies/CSRF, notification ownership/preferences/read state, Home/Hub/Following/identity/device queries, authenticated WebSocket, CORS and Lob webhook signature/replay checks passed. This does not certify email delivery, storage or real postcards. |
 | Production preservation | Production backup captured and restored locally in isolation. All 299 archived COPY sections matched restored row counts/hashes. Upgrade rehearsal retained original records but exposed schema gaps. No production schema/ledger/DNS cutover occurred. External file contents are not included in the database backup. |
 | Notification opt-out | Both native and legacy token registration preserve existing global opt-outs. Backend regression/privacy tests and real PostgREST checks passed; Android staging exercised opt-out, re-registration and restore. Raw APNs token logging was removed. See [lifecycle audit](notification-lifecycle-audit-2026-09-07.md). |
-| Physical iPhone | iPhone 16 Pro, iOS 26.5.2, development-signed Staging build. APNs accepted the designated synthetic push with HTTP 200; owner confirmed arrival and tap to `/notifications`. That fixture intentionally links to the list. Re-tapping its row returns there. It does not test an actual post/chat destination. |
-| Android emulator | Google APIs ARM64 Android 14/API 34. Real FCM chat notifications displayed and opened the exact conversation. Global opt-out persisted across registration, restored delivery worked, logout removed tokens, re-login registered again. Physical Android remains unverified; owner has no Android phone. See [Android report](android-staging-verification-2026-09-08.md). |
+| Physical iPhone | iPhone 16 Pro, iOS 26.5.2, development-signed Staging build. Actual Beacon foreground/background/closed-app notifications opened the exact permitted post. Old blocked-notification denial, mute/resume and repeated global push off/restore passed with owner confirmation; provider acceptance is recorded separately. |
+| Android emulator | Google APIs ARM64 Android 14/API 34. Real FCM chat notifications opened the exact conversation; Beacon foreground/background/process-absent notifications opened the exact post, and an old blocked notification denied access. Global opt-out persisted across registration, restored delivery worked, logout removed tokens, re-login registered again. Physical Android remains unverified; owner has no Android phone. See [Android report](android-staging-verification-2026-09-08.md). |
 | Android fixes | `fd9a60dcd` fixes `+` in chat titles and a false security warning after voluntary logout. 98 routing/dispatcher tests and 93 auth/matching-view-model tests passed; lint/build and final emulator checks passed. This is targeted evidence, not final all-surface CI. |
 
 ## Environments and release identity
@@ -106,7 +124,7 @@ redesigns in those documents are proposals, not claims about the deployed UI.
 | Production database | Supabase `ankjdyvoduutkhhaxvhx`; existing users/data must be preserved. Resumed after pause; session-pooler TLS connection and backup verified. Current application schema is not ready for the new backend. |
 | Existing testing database | Supabase `gzzdqechcbfpalfvgyro`, “Pantopus-backend”; preserve it. It is not production and is not the new staging runtime's database. |
 | Isolated staging database | Supabase `ptudkfqdhqpkbkzqlabu`, “Pantopus-staging”; synthetic test accounts plus permitted reference data, no copied real user records. |
-| Staging API | `https://staging-api.pantopus.com`; API and worker release `982851170cf5f1bba080b291dbfa07dac3f3188b`. Image ID `sha256:f84a3ae2ae95f0d2642a7ebefcb6da53edb7a7663139a74a0c74d32bd483b111`. Repository HEAD may be newer than this deployed image. |
+| Staging API | `https://staging-api.pantopus.com`; API and worker release `5d911ca48c8fc8466a0e3943aa698f0e4642fca0`. Image ID `sha256:01af6b0acabfa658bb6c5b0aaa1069a4da7eec6369f77f5d3d73b1d8c90c5914`. Repository HEAD may be newer than this deployed image. |
 | AWS host | Existing Oregon EC2; staging API binds `127.0.0.1:18001` behind nginx; worker has no public port. Container names `pantopus-backend-staging` and `pantopus-worker-staging`. Original production container is retained. Exact host/access details are in the private operator handoff. |
 | Production DNS | Last inspected production API DNS points to the old address and times out. Fixing DNS alone would route users to an obsolete backend. Reconcile production first, then perform a planned cutover. |
 | GitHub automation | On September 8, both production and staging have `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false`. Merging source does not deploy while these switches remain false. Re-read them before merging/enabling releases; do not enable deployment to make a source PR mergeable. |
@@ -147,7 +165,8 @@ Public, versioned reports contain sanitized findings rather than raw secrets:
 - [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
 - [Staging inventory, native setup and physical iPhone record](staging-notification-setup.md).
 - [Android delivery, navigation, opt-out and logout record](android-staging-verification-2026-09-08.md).
-- [Beacon scenario matrix](beacon-staging-verification-2026-09-07.md).
+- [Beacon live results and fixes](beacon-full-journey-2026-09-08.md) and
+  [scenario matrix](beacon-staging-verification-2026-09-07.md).
 - [CI/CD setup](ci-cd.md) and [migration adoption runbook](supabase-migration-automation-runbook.md).
 - [Following query validation](following-activity-reliability-2026-09-07.md) and
   [notification lifecycle audit](notification-lifecycle-audit-2026-09-07.md).
@@ -160,8 +179,8 @@ evidence. Keep these materials private; some logs and SQL archives include
 credentials or application records. They are not part of a Git clone. A new
 machine needs a separately authorized private transfer and its own access.
 
-The working checkout for this recovery is
-`/private/tmp/pantopus-current-backend-release`. Temporary build files live in
+The current Beacon checkout is `/private/tmp/pantopus-beacon-journey`; the
+prior recovery checkout `/private/tmp/pantopus-current-backend-release` is retained. Temporary build files live in
 `/private/tmp/pantopus-native-staging-build`; do not assume either survives a
 restart. The branch is pushed and key evidence is copied to the durable private
 root. If the checkout is gone, create a fresh feature worktree from current
