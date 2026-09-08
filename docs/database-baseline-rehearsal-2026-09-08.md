@@ -73,10 +73,84 @@ The six previously recorded PostGIS diagnostics still need an explicit,
 validated resolution in the canonical replay. A passing application diagnostic
 alone does not mean the full adoption gate passes.
 
+## Further catalog and Beacon checks
+
+### Broader catalog and compatibility milestone
+
+The read-only [catalog inventory](../scripts/db/catalog-inventory.sql) now
+captures public tables/columns, constraints, indexes, routines and their grants,
+trigger bindings, policies, enum/domain types, views, sequences, default grants
+and extension versions. It includes visible column order, public-schema grants
+and effective access for the three application roles. The offline [comparator](../scripts/db/compare-catalogs.cjs)
+reports counts and changed paths without printing private catalog values. Its
+five tests cover equal-count drift, ACL/RLS changes, invalid indexes, disabled
+triggers, enum ordering, private-value omission and malformed inventories.
+
+The broader comparison found compatibility issues that column presence missed.
+The local candidate now permits free/draft gigs and pending-recipient mail,
+preserves rejection of negative gig prices, and adds seven missing query indexes.
+It also normalizes newly introduced application-object ownership to `postgres`
+where that matches the reference. Production's equivalent geohash unique key,
+extra fields/tables, stronger RLS flags and `Payment.home_id` deletion behavior
+are retained rather than overwritten to make a comparison empty.
+
+The reference mail check had a separate NULL bug: a recipient-free row with no
+escrow status produced SQL `UNKNOWN`, which a CHECK accepts. A failing negative
+contract demonstrated it; the local correction explicitly requires a non-null
+pending/expired/withdrawn escrow state when both recipients are absent. The
+expanded real SQL contracts pass, and all 345 original-value hashes still match.
+
+### Beacon database access blocker
+
+The catalog audit also found a Beacon access route outside the backend API.
+In the local candidate, `anon` could select a synthetic public-visibility Beacon
+draft because the old permissive `Post` RLS policy checked visibility without
+checking Beacon publication state. A read-only inspection of current staging
+confirmed the same permissive public-read policy and browser SELECT grants,
+with no restrictive Beacon policy. No hosted fixture or schema was changed.
+
+A local restrictive policy now reserves raw persona/broadcast rows for the
+backend service, where identity projection and membership/block/draft checks
+already run. It guards both reads and writes, including attempts to convert an
+ordinary post into a persona post. The
+[storage access contract](../scripts/db/contracts/beacon-storage-access.sql)
+failed before this correction and now passes for `anon`, `authenticated` with
+an owner claim, and `service_role`. It covers published, draft, Member-only,
+archived and legacy persona markers, while preserving ordinary public reads.
+Repository inspection found no direct frontend `Post` table/RPC consumer.
+
+Three SECURITY DEFINER Post maintenance RPCs also retained browser EXECUTE:
+`auto_archive_expired_posts`, `get_seeder_tapering_metrics`, and
+`record_post_unique_view`. Their local candidate grants are now service-only.
+Actual denied browser calls and successful service calls pass. The current
+backend and seeder callers use the service role. No public view directly
+referencing `Post` was found in this candidate.
+
+**These database corrections are not deployed.** The successful device/API
+journey does not certify direct PostgREST authorization. Carry the restrictive
+policy and RPC grants into the reviewed forward upgrade/canonical baseline,
+then verify hosted denial before marking Beacon access acceptance complete.
+Full Home-policy reconciliation, managed-schema customizations, effective-role
+membership, composite types, reference rows and external files remain outside
+this public-catalog diagnostic's coverage.
+
+### Repeatable upgrade evidence
+
+All six private forward SQL steps were replayed on a second new clone of the
+preserved prior upgrade. The captured catalogs compare equal, including
+definitions, RLS, explicit/effective grants and object ordering: 318 tables,
+1,242 indexes, 135 routines, 71 trigger bindings, 511 policies, 81 enum/domain
+types, 12 views and two sequences. Both new SQL contract suites and application
+lint pass on this second candidate, with all 345 original-value hashes matching.
+This is a repeatable **upgrade** check; it is not an empty-database baseline
+replay. A fresh private candidate archive and ordered SQL/hash manifest are saved
+in the operator evidence root. Sequence counter values are not part of the
+column-value comparison; rolled-back tests can advance them on these local copies.
+
 ## Remaining adoption work
 
 The legacy policy and all historical hashes remain unchanged; `db:check` and its
-six regression tests pass. No migration, baseline hash, feature flag, hosted
+six regression tests plus the five comparator tests pass. No migration, baseline hash, feature flag, hosted
 schema, ledger or deployment switch changed. The Beacon push-only field/API/UI
 is still pending.
 

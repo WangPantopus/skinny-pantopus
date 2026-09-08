@@ -96,6 +96,27 @@ BEGIN
   END IF;
 END $$;
 
+-- Legacy checks must admit current free/draft and pending-recipient workflows.
+INSERT INTO public."Gig" (user_id, title, description, price, status)
+VALUES ('aaa00000-0000-4000-8000-000000000001', 'Synthetic free draft', 'Local fixture', 0, 'draft');
+INSERT INTO public."Mail" (sender_user_id, type, content, escrow_status)
+VALUES ('aaa00000-0000-4000-8000-000000000001', 'letter', 'Pending recipient fixture', 'pending');
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO public."Gig" (user_id, title, description, price)
+    VALUES ('aaa00000-0000-4000-8000-000000000001', 'Invalid price fixture', 'Local fixture', -1);
+    RAISE EXCEPTION 'Negative gig price was allowed';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public."Mail" (sender_user_id, type, content)
+    VALUES ('aaa00000-0000-4000-8000-000000000001', 'letter', 'Missing recipient fixture');
+    RAISE EXCEPTION 'Recipient-free mail without pending escrow was allowed';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $$;
+
 INSERT INTO public."Notification" (user_id, type, title, idempotency_key)
 VALUES ('aaa00000-0000-4000-8000-000000000001', 'test', 'Local fixture', 'adoption-contract-notification');
 INSERT INTO public."Notification" (user_id, type, title, idempotency_key)
@@ -117,4 +138,4 @@ BEGIN
 END $$;
 RESET ROLE;
 ROLLBACK;
-SELECT 'PASS: browser denial, service writes, share counts, intent uniqueness, pricing constraints/RPCs, listing returns, notification idempotency, native push columns' AS result;
+SELECT 'PASS: browser denial, service writes, share counts, intent uniqueness, pricing constraints/RPCs, listing returns, free/draft gigs, pending recipients, notification idempotency, native push columns' AS result;

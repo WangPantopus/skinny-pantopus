@@ -221,6 +221,15 @@ rollback never runs down migrations or modifies the database ledger.
 
 ## Acceptance evidence still required
 
+The [September 8 local continuation](database-baseline-rehearsal-2026-09-08.md)
+closes the known table/column gaps on a preserved production-upgrade copy and
+adds real SQL contracts plus read-only catalog comparison tools. It also finds
+and locally corrects a direct Beacon-storage authorization gap. These results
+do not activate this runbook's baseline/hosted gates; its forward SQL and private
+catalogs remain in the operator evidence root until canonical adoption review.
+The additional application linter is a diagnostic, not a replacement for the
+required pinned Supabase lint command.
+
 Production baselining is deliberately deferred. Completion requires: privately
 verified backups, exact schema equivalence, custom managed-schema objects and
 reference data captured, real SQL/integration tests, local replay, an adopted

@@ -61,6 +61,14 @@ all original values across 345 tables, and passes real SQL contracts. It also
 repairs a listing RPC return-type mismatch in that private candidate. Additional
 application lint passes for 111 functions / 71 trigger bindings; full baseline
 replay, catalog/ACL equivalence and the existing Supabase lint gate remain open.
+The expanded audit found a new Beacon access blocker: the database's permissive
+`Post` policy permits raw draft reads outside the backend. The local restrictive
+policy and service-only maintenance RPC grants pass actual role tests; staging's
+matching permissive policy was confirmed read-only. These corrections are **not
+deployed** and must be included in adoption and hosted authorization verification.
+The six forward steps also replay on a second clone with an equal captured public
+catalog, passing SQL contracts and identical original-value hashes. The repeatable
+upgrade evidence does not replace empty-database baseline replay.
 Preserve the current global feature flag and deployment/migration switches.
 
 Beacon repairs remain on `codex/beacon-full-journey` in
@@ -74,9 +82,11 @@ Start a new session by:
 1. Refreshing Git, PR #10/CI and staging observations; preserve unrelated work.
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
-   Continue complete object/ACL/reference inventory and canonical fresh replay
-   from the preserved local candidate; resolve the full lint gate before adding
-   the preference migration/API/native setting. Do not mutate frozen history.
+   Continue Home-policy/managed-schema/reference reconciliation and canonical
+   fresh replay from the preserved local candidate. Include the tested Beacon
+   storage restriction and maintenance-RPC grants, resolve the full lint gate,
+   then add the preference migration/API/native setting and verify hosted role
+   denial. Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
    next concrete test and verify the audience before sending. Physical Android
