@@ -5,8 +5,8 @@
 The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
 (including merged PR #5). Explicit native staging inputs and local configuration
 checks are available. The runtime preparation below adds sandbox vendor checks
-without disabling production security settings. **A private API preflight is
-running; public staging and physical push delivery are not yet verified.**
+without disabling production security settings. **The staging backend is live
+at `https://staging-api.pantopus.com`; physical push delivery is not verified.**
 
 The operator subsequently authorized restarting the existing server, configuring
 its management access, and deploying the current backend to staging, while
@@ -21,12 +21,12 @@ Current discovery and remaining prerequisites:
 | GitHub staging | Exists; no environment secrets; backend deployment and DB migration flags are false. |
 | Staging source branch | No remote `dev` branch exists yet. |
 | Supabase | `Pantopus-backend` is the existing testing database. New Free project `Pantopus-staging` is isolated from both it and production; preserve both existing projects. |
-| Backend host | The existing Oregon instance is running; SSM and pinned-key SSH work. Private staging preflight uses a separate loopback port and preserves the old production container. |
-| DNS | Production API DNS still points to the old address. New DNS-only `staging-api.pantopus.com` points to the current server. Public HTTPS awaits explicit approval for ports 80/443 and certificate setup. |
+| Backend host | API and worker release `9d1fe24dc` are healthy on the existing server. Staging API uses loopback port 18001 behind nginx; the old production container is preserved. |
+| DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
 | Push server credentials | Private staging runtime env exists, with isolated database credentials and test vendors. APNs/FCM, isolated storage and email delivery remain unconfigured. |
-| iOS | Paired iPhone 16 Pro is available; a local Apple Development signing identity exists. |
+| iOS | Paired iPhone 16 Pro is available; a local Apple Development signing identity exists. The private staging overlay resolves the live HTTPS endpoint and development APNs entitlement; no app was installed. |
 | Android | No ADB-connected phone. |
 | Recipients | Test accounts/devices have not yet been designated. |
 

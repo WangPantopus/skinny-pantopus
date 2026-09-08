@@ -7,7 +7,7 @@ the Mac's database production were incorrect.
 
 | Project | Purpose | Handling |
 | --- | --- | --- |
-| `ankjdyvoduutkhhaxvhx` | Existing production database | Owner resumed the paused project. DNS, authenticated Auth health and read-only REST access now work from the existing server. The operator CLI still lacks management access to this project. |
+| `ankjdyvoduutkhhaxvhx` | Existing production database | Owner resumed the paused project. Auth/REST access and a TLS-verified PostgreSQL session-pooler connection work. A private database backup was captured; the operator CLI still lacks project management access. |
 | `gzzdqechcbfpalfvgyro` / Pantopus-backend | Existing local testing database | Preserve existing data and schema; read-only source for the staging rehearsal. |
 | `ptudkfqdhqpkbkzqlabu` / Pantopus-staging | New isolated staging database | Created on the verified Free plan in Oregon; contains no copied user, home, message, or notification records. |
 
@@ -19,8 +19,11 @@ back. Both existing databases remain unchanged.
 No production migration, ledger repair, database reset, or DNS cutover has been
 performed. Read-only queries confirmed existing production records are present.
 Its REST schema metadata lacks current device/session, Lob webhook and address
-calendar tables. A recoverable backup and full SQL schema audit remain necessary
-before upgrading production.
+calendar tables. A custom-format database backup includes Auth data and storage
+metadata, and all archive sections passed a read-through check. This does not
+include externally stored file contents and is not yet a verified full restore.
+A restore rehearsal and SQL schema upgrade audit remain necessary before
+upgrading production.
 
 ## Existing AWS host
 
@@ -117,10 +120,13 @@ adoption described in the migration runbook remain separate release gates.
   Endpoint: `https://staging-api.pantopus.com/api/v1/webhooks/lob`.
 - The staging A record points directly to the current server (DNS only).
   Existing Cloudflare zone TLS is Flexible, so staging is being prepared with
-  its own certificate instead of inheriting that origin transport. The HTTP
-  bootstrap config serves only ACME challenges and maintenance responses.
-  Opening ports 80/443 was rejected by automatic approval review; explicit
-  operator approval is pending. Public HTTPS is not ready.
+  its own certificate instead of inheriting that origin transport. The owner
+  opened ports 80/443. A hostname-only TLS virtual host now serves staging;
+  existing nginx configurations and default listeners were preserved after
+  automatic review rejected broader changes. HTTP serves ACME challenges and
+  maintenance responses. Public HTTPS is verified with TLS 1.3.
+  Certbot's renewal timer is enabled, with a staging-scoped nginx reload hook;
+  a simulated renewal including the hook passed.
 - Keep `NODE_ENV=production`, `APP_ENV=staging`, Lob test mode and Stripe test keys.
 - The image includes Supabase's public database CA under `config/certificates`.
   Configure the worker's private connection URL with `sslmode=verify-full` and
@@ -133,11 +139,24 @@ adoption described in the migration runbook remain separate release gates.
 
 ## Runtime verification and fixes
 
-The private API preflight passed authenticated password login, notification
+Release `9d1fe24dc1f9ba4d6c07137405fa85b5b2cc3afb` passed the complete
+[CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34184722652)
+and is deployed as `pantopus-backend-staging` and `pantopus-worker-staging`.
+The API binds only to `127.0.0.1:18001` behind nginx. Both containers passed
+readiness with zero restarts after deployment. All 11 application queue
+schedules registered, and actual scheduled jobs completed in staging.
+
+The public HTTPS API passed authenticated password login, notification
 preferences and ownership, mark-read behavior, secure cookie transport, CSRF
-enforcement, and Lob signature/age/duplicate checks. Synthetic Auth accounts were
+enforcement, and Lob signature/age/duplicate checks. Home list, Hub, Following,
+Identity Center and device registry queries also passed. Authenticated WebSocket
+connections worked through nginx; unauthenticated socket connections were
+rejected. CORS allowed the designated staging web origin and withheld access for
+an unrelated origin. Debug and metrics routes are not publicly exposed.
+Synthetic Auth accounts were
 created without sending signup email, and their profiles/notifications and the
-webhook event were deleted afterward. These checks do not verify email signup,
+webhook event were deleted afterward; staging had no remaining Auth users.
+These checks do not verify email signup,
 external Lob delivery, storage uploads, or physical push delivery.
 
 CI's Following contract failed twice before executing its assertions because the
