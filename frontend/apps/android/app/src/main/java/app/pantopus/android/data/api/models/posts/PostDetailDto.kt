@@ -4,8 +4,8 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /**
- * Author / business-author projection on a post. Mirrors the
- * `CREATOR_SELECT` columns from `backend/services/feedService.js:60`.
+ * Supports legacy user columns and the public identity projection emitted
+ * by `attachIdentityAuthors` (displayName, handle, avatarUrl).
  */
 @JsonClass(generateAdapter = true)
 data class PostCreatorDto(
@@ -18,13 +18,18 @@ data class PostCreatorDto(
     val city: String?,
     val state: String?,
     @Json(name = "account_type") val accountType: String?,
+    @Json(name = "displayName") val projectedDisplayName: String? = null,
+    val handle: String? = null,
+    val avatarUrl: String? = null,
 ) {
     /** Best-effort display name across the various populated fields. */
     val displayName: String
         get() {
+            if (!projectedDisplayName.isNullOrBlank()) return projectedDisplayName
             if (!name.isNullOrEmpty()) return name
             val combined = listOfNotNull(firstName, lastName).filter { it.isNotEmpty() }.joinToString(" ")
             if (combined.isNotEmpty()) return combined
+            if (!handle.isNullOrBlank()) return "@$handle"
             if (!username.isNullOrEmpty()) return "@$username"
             return "Pantopus user"
         }

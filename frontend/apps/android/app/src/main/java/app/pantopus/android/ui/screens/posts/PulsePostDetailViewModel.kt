@@ -443,7 +443,7 @@ class PulsePostDetailViewModel
             return PulsePostDetailContent(
                 post = post,
                 authorDisplayName = post.creator?.displayName ?: "Pantopus user",
-                authorAvatarUrl = post.creator?.profilePictureUrl,
+                authorAvatarUrl = post.creator?.avatarUrl ?: post.creator?.profilePictureUrl,
                 authorIdentity = identity,
                 // TODO(backend): backend `CREATOR_SELECT` for posts does
                 // not include the `verified` column today, so the post
@@ -525,7 +525,7 @@ class PulsePostDetailViewModel
             PostCommentRow(
                 id = comment.id,
                 authorName = comment.author?.displayName ?: "Pantopus user",
-                authorAvatarUrl = comment.author?.profilePictureUrl,
+                authorAvatarUrl = comment.author?.avatarUrl ?: comment.author?.profilePictureUrl,
                 authorIdentity = mapAccountType(comment.author?.accountType),
                 body = comment.comment,
                 timestamp = relativeTimestamp(comment.createdAt),

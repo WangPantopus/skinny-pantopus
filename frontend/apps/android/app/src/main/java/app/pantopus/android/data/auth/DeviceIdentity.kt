@@ -106,6 +106,11 @@ class DeviceIdentity
             persist(Keys.REGISTRATION_FINGERPRINT, fingerprint)
         }
 
+        /** An ended session or forced retry invalidates the earlier server acknowledgment. */
+        fun clearRegistration() {
+            prefs.edit().remove(Keys.REGISTRATION_FINGERPRINT).apply()
+        }
+
         /** User id whose interactive session enrolled the step-up key on this device, if any. */
         fun stepUpEnrolledFor(): String? = prefs.getString(Keys.STEP_UP_ENROLLED_FOR, null)
 
