@@ -2,9 +2,10 @@
 # Runs on the EC2 host. Deploy and rollback use this same transaction.
 set -Eeuo pipefail
 
-target=${1:?Usage: backend.sh staging|production repository@sha256:digest [host-bind]}
+target=${1:?Usage: backend.sh staging|production repository@sha256:digest [host-bind] [--local-image]}
 image=${2:?An immutable image digest is required}
 api_bind=${3:-8000}
+image_mode=${4:-registry}
 [[ "$api_bind" =~ ^((127\.0\.0\.1|0\.0\.0\.0):)?([1-9][0-9]{0,4})$ ]] &&
   (( BASH_REMATCH[3] <= 65535 )) || { echo 'Invalid API host binding' >&2; exit 2; }
 case "$target" in
@@ -12,7 +13,24 @@ case "$target" in
   staging) api=pantopus-backend-staging; worker=pantopus-worker-staging; suffix=staging ;;
   *) echo 'Invalid environment' >&2; exit 2 ;;
 esac
-[[ "$image" =~ ^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$ ]] || { echo 'Use an immutable image digest' >&2; exit 2; }
+case "$image_mode" in
+  registry)
+    [[ "$image" =~ ^[a-z0-9./_-]+@sha256:[a-f0-9]{64}$ ]] || { echo 'Use an immutable image digest' >&2; exit 2; }
+    ;;
+  --local-image)
+    # Recovery on an existing host can use an image transferred over pinned SSH.
+    # Keep the same immutable identity and rollback checks without publishing it.
+    [[ "$target" == staging && "$image" =~ ^sha256:[a-f0-9]{64}$ &&
+       "${PANTOPUS_EXPECTED_REVISION:-}" =~ ^[a-f0-9]{40}$ ]] || {
+      echo 'Local images require staging, a full image ID and an expected commit SHA' >&2; exit 2;
+    }
+    actual_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
+    [[ "$actual_revision" == "$PANTOPUS_EXPECTED_REVISION" ]] || {
+      echo 'Local image revision does not match the verified release' >&2; exit 2;
+    }
+    ;;
+  *) echo 'Invalid image mode' >&2; exit 2 ;;
+esac
 env_file=${PANTOPUS_ENV_FILE:-$HOME/pantopus/.env.$suffix}
 [[ -r "$env_file" ]] || { echo "Missing environment file: $env_file" >&2; exit 2; }
 health_attempts=${PANTOPUS_HEALTH_ATTEMPTS:-40}
@@ -74,7 +92,7 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-docker pull "$image"
+if [[ "$image_mode" == registry ]]; then docker pull "$image"; fi
 # The candidate is unexposed and runs no background jobs. Verify DB readiness
 # before interrupting the old API or worker, even on a first-ever deployment.
 docker rm -f "$candidate" >/dev/null 2>&1 || true

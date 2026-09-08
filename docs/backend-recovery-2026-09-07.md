@@ -53,6 +53,14 @@ phones or webhook providers can connect. Changing this variable alone does not
 configure nginx, DNS, Cloudflare origin rules, or certificates. Production and
 staging must use different host ports when they share a server.
 
+For a manual staging recovery without a registry upload, transfer the image over
+pinned SSH and use its full `sha256:` image ID with the fourth argument
+`--local-image`. Set `PANTOPUS_EXPECTED_REVISION` to the exact verified commit.
+The script verifies the image's revision label, skips registry access, and retains
+the same candidate readiness and rollback transaction. This mode rejects mutable
+tags and production deployments. Normal GitHub releases still require registry
+digests and their existing CI checks.
+
 ## Schema rehearsal evidence and limits
 
 A private schema-only export from the **testing** database was restored to a new
