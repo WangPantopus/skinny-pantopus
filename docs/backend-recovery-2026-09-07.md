@@ -83,9 +83,13 @@ the initial staging comparison was not a complete application contract.
 
 One notification went through the current notification service to the designated
 synthetic account. Apple rejected the push with `403 InvalidProviderToken`.
-The Developer portal identified the supplied key as WeatherKit-only. A separate
-sandbox APNs key restricted to `app.pantopus.ios` is prepared but not created,
-pending explicit owner approval. See the [staging test record](staging-notification-setup.md#first-iphone-test--september-8-2026).
+The Developer portal identified the supplied key as WeatherKit-only. With explicit owner approval, a separate
+sandbox APNs key restricted to `app.pantopus.ios` was created and configured in
+both healthy staging processes using the unchanged application image. One
+authorized retry through the current notification service was accepted by Apple
+with HTTP 200. The owner confirmed that the notification arrived on the physical
+iPhone and tapping it opened the notification screen. Android delivery and the
+remaining notification behavior checks are still unverified. See the [staging test record](staging-notification-setup.md#first-iphone-test--september-8-2026).
 
 ## Existing AWS host
 

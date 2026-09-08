@@ -6,7 +6,8 @@ The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
 (including merged PR #5). Explicit native staging inputs and local configuration
 checks are available. The runtime preparation below adds sandbox vendor checks
 without disabling production security settings. **The staging backend is live
-at `https://staging-api.pantopus.com`; physical push delivery is not verified.**
+at `https://staging-api.pantopus.com`; iPhone push display and tap navigation are
+verified on a physical device. Android delivery is still unverified.**
 
 The operator subsequently authorized restarting the existing server, configuring
 its management access, and deploying the current backend to staging, while
@@ -25,10 +26,10 @@ Current discovery and remaining prerequisites:
 | DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
 | Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
 | Firebase | Created `Pantopus Staging` (`pantopus-staging`) with the owner's terms approval. The console confirms Spark, $0/month; Analytics and the Developer Program opt-in were left off. Registered `app.pantopus.android.debug`; the downloaded client configuration is privately saved in the ignored debug variant directory and passes the native config check. |
-| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. A sandbox, topic-specific APNs key is prepared and awaits owner approval. The live staging API passed Google OAuth and an FCM validation-only request. Physical push delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
-| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. The app was installed on the paired iPhone 16 Pro after confirming no existing Pantopus installation. The owner logged in with a dedicated synthetic staging account. Its APNs token is registered and linked to the device, with push enabled. |
+| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. With explicit owner approval, a new sandbox key restricted to `app.pantopus.ios` was created and configured in both staging processes. The retry was accepted by APNs with HTTP 200; the owner confirmed arrival on their iPhone and navigation to the notification screen after tapping. The live staging API passed Google OAuth and an FCM validation-only request. Android device delivery remains unverified. Isolated storage and backend email delivery remain unconfigured. |
+| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. The app was installed on the paired iPhone 16 Pro after confirming no existing Pantopus installation. The owner logged in with a dedicated synthetic staging account. Its APNs token is registered and linked to the device, with push enabled. The owner confirmed that the test arrived and tapping opened notifications. |
 | Android | The debug APK build succeeded with the real staging client configuration. APK signature, `app.pantopus.android.debug` package, and packaged Firebase project/sender ID were verified. No app was installed; no ADB-connected phone. |
-| Recipients | The owner designated their iPhone and logged into a dedicated synthetic account. One stored test notification was created; Apple rejected its push before acceptance. No other recipient was targeted. |
+| Recipients | The owner designated their iPhone and logged into a dedicated synthetic account. The first push was rejected due to the wrong key. One authorized retry through the current notification service was accepted by Apple after the key replacement. Only the designated iPhone account was targeted. |
 
 Do not label provider acceptance, a simulator test, or the presence of config
 fields as proof of device delivery. Record text evidence; screenshots are not
@@ -102,15 +103,38 @@ token with device linkage and push preferences enabled. The current
 `notificationService.createNotification` path created one notification and
 invoked the native sender once. Apple returned **HTTP 403,
 `InvalidProviderToken`**, with zero accepted or invalid device tokens. The
-private token was retained. Display and tap navigation remain unverified.
+private token was retained. That rejected attempt did not verify display or tap navigation.
 
 The live key's signature and JWT timestamps were valid locally. In the Apple
 Developer portal, its Key ID belongs to **Pantopus WeatherKit** and has no APNs
 capability. An existing Expo APNs key is listed, but its private file was not
 found in the checked recovery locations. A proposed **Pantopus Staging Push**
-key is prepared with **Sandbox**, **Topic Specific**, and only
-`app.pantopus.ios`. Creation is pending the owner's explicit approval; no
-existing Apple key has been modified or revoked.
+key was prepared with **Sandbox**, **Topic Specific**, and only
+`app.pantopus.ios`. The owner explicitly approved its creation and the retry.
+No existing Apple key was modified or revoked.
+
+The approved key was created and its downloaded file was saved privately. The
+Developer portal confirmed **1 Topic** and **Sandbox**. Local P-256 signing
+verification passed. Only the five APNs fields were transferred over pinned SSH,
+then combined with the existing staging environment after checking that all
+unrelated values were unchanged. The existing deployment transaction rolled out
+the same application image to API and worker; both were healthy with the new key
+and FCM configuration intact. Public HTTPS health returned HTTP 200 with the
+database connected. Private configuration backups and previous containers remain
+available for recovery.
+
+At **2026-09-08 07:23:41 UTC**, the current notification service created the
+authorized retry and invoked APNs once for the designated iPhone. Apple returned
+**HTTP 200**: one accepted token, zero invalid tokens. The sender guard checked
+the staging project, new Key ID, bundle topic, sandbox mode, exact synthetic
+recipient, one linked iOS token, enabled push preferences, and absence of a
+previous notification with the retry marker. This establishes server-side
+notification creation, registration, routing and provider acceptance. The owner
+then confirmed **“Arrived and opened notifications”** on the physical iPhone
+16 Pro (iOS 26.5.2), establishing device display and the `/notifications` tap
+route for this test. No additional push was sent. Foreground/cold-start cases,
+notification opt-outs, sign-out/revocation behavior, Beacon-triggered delivery,
+and Android delivery still need separate verification.
 
 Before future device tests, verify the live table contract explicitly (this
 read-only query returns no device data):
