@@ -64,3 +64,75 @@ separate privacy regression. Staging rollout and a fresh live matrix are next.
 The schema's legacy migration policy forbids adding migrations before baseline
 adoption. The missing Beacon push-only setting therefore remains an explicit
 unmet acceptance case; do not silently map it onto unrelated alert toggles.
+
+
+## Staging rollout milestone
+
+API and worker now run `982851170cf5f1bba080b291dbfa07dac3f3188b`, image
+`sha256:f84a3ae2ae95f0d2642a7ebefcb6da53edb7a7663139a74a0c74d32bd483b111`.
+This is an immutable derivative of the verified prior staging image. Git diff
+confirmed exactly three runtime files changed since its source baseline; those
+files were copied from the committed revision, with unchanged dependencies.
+The existing deployment transaction passed candidate/API/worker readiness and
+retained previous containers. No database schema, production runtime/DNS or
+GitHub deployment switch changed. Draft [PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10)
+contains the change; backend CI passes, image CI is still running at this checkpoint.
+
+
+## Fresh live matrix on repaired staging
+
+All 17 checks passed with fresh post IDs against the hosted API and real
+PostgREST joins. The authenticated WebSocket received `notification:new` for
+the same audience item. No unrelated recipient was present.
+
+| Case | Exact stored post / result |
+| --- | --- |
+| Publish → Following → audience notification → detail | `877d93bd-92ea-464b-8231-82176680279c`; notification `897f2ad2-95c9-4219-aa5d-2f3efcb621d8`; detail 200; personal stream excluded it. |
+| Seven-day mute | `b2bfaa52-6fcd-4d9f-beb7-9fa9b2944b97`; no follower notification; unread Following and detail remain available. |
+| Unmute | `36cdd06e-4dda-4bff-bf4e-75d629931cad`; fanout restored on the third publication. |
+| Per-Beacon notifications off | `27fcb160-51e3-493f-a3ac-2169ece96834`; follower fanout suppressed. |
+| Member restriction | `7ceb5751-02db-4cf2-b6c8-323b8f385a4b`; only the eligible Member sees latest content and receives notification; free detail 403 and channel has no content excerpt. |
+| Expired Member | The same Member post returns 403 from both post detail and broadcast read; channel excludes its content. |
+| Blocked follower | Old baseline detail 403; no new Following content or notification. |
+| Draft | `17d96287-bd75-4867-8ba0-05c3adf18243`; old destinations return 403; channel and Following exclude it. |
+| Archived | `75464910-acb5-4511-aba3-ac788046e0b3`; same denial and list exclusion. |
+
+The synthetic Android global push preference was disabled during API-only
+checks and restored afterward. Membership/block/mute/Beacon preferences were
+restored. Physical/native checks and fixture cleanup remain in progress.
+[PR #10 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34264541400)
+passed with backend/privacy, Docker and safeguards; unchanged native/web jobs
+were skipped, with their baseline coverage coming from merged-master CI.
+
+
+## Physical iPhone background milestone
+
+On the existing development-signed Staging build, iPhone 16 Pro / iOS 26.5.2,
+the creator published `9cf08e15-ae6e-4cf8-81d3-eeb6dffc4712` with text
+“Beacon check B1 — blue lantern.” Notification
+`afc149d4-bbc6-4f72-a75b-45d2aa901744` was stored at 18:45:09 UTC with the
+exact `/post/<id>` destination. Only the designated iPhone account was in this
+separate synthetic Beacon's audience. APNs attempted one token and accepted one.
+The owner confirmed background display and that tapping opened that exact post.
+This proves actual Beacon publication/fanout/return, beyond the earlier generic
+notification fixture. Foreground and ordinary termination are still pending.
+
+
+The owner also confirmed foreground delivery and exact return for
+`4b1029a9-8b85-4526-98b3-dd319018fb66` (“F1 — green comet”), and notification
+launch from the closed app for `f606590b-baee-4a83-ace6-35d40ec42932`
+(“C1 — amber orbit”). The latter state was an app-switcher swipe-away, not a
+reboot. Each corresponding notification has a separate APNs acceptance count
+of one. Native blocked-old-notification reopening is being checked next.
+
+## Additional feed inspection
+
+The Android Beacon Updates feed exposed the synthetic draft that Following,
+post detail and broadcast channel correctly excluded. Its separate feed
+pipeline checked tier rank but omitted publication status. The follow-up uses
+the shared visibility predicate before normalization; 50 targeted feed tests
+pass. The live matrix must now include `/api/posts/feed?surface=personas` as well
+as the Following management and channel lists. An Android sign-in during the
+rollout also ended with zero push tokens despite a locally cached registration
+acknowledgment; ordinary app sign-out/sign-in recovery is being verified. No raw
+device-token/cache value was changed to force delivery.

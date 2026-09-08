@@ -26,7 +26,15 @@ including mute, notification preferences, membership and revoked/block access.
 The [first live matrix](beacon-full-journey-2026-09-08.md) passed baseline exact-post
 return and mute, then exposed silent fanout throttling and restricted-content
 leaks through broadcast channel/read routes. The repairs pass the full backend suite (4,305 tests,
-16 skipped) and privacy gates; staging rollout and a fresh matrix are next. Physical Beacon taps remain pending.
+16 skipped), privacy gates and 49 final targeted tests. API/worker now run
+`982851170cf5f1bba080b291dbfa07dac3f3188b` in staging; the fresh matrix
+passed all 17 checks, including WebSocket, mute/restore, Member/revoked/block
+access, and draft/archive denial. Physical iPhone background Beacon delivery and exact-post tap now pass,
+with APNs acceptance separately recorded. iPhone foreground and closed-app exact returns also pass. Android feed
+inspection found a separate draft leak; its shared-policy fix passes 50 feed
+tests and needs staging rollout. Android registration recovery, remaining
+restriction taps, and cleanup are next. Draft [PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10)
+tracks the repairs; `CI OK` and the backend image job pass. Physical Beacon taps remain pending.
 Work starts from merged master on `codex/beacon-full-journey` in
 `/private/tmp/pantopus-beacon-journey`. The main checkout is now clean on master;
 previous worktrees and ignored local artifacts are preserved.
@@ -98,7 +106,7 @@ redesigns in those documents are proposals, not claims about the deployed UI.
 | Production database | Supabase `ankjdyvoduutkhhaxvhx`; existing users/data must be preserved. Resumed after pause; session-pooler TLS connection and backup verified. Current application schema is not ready for the new backend. |
 | Existing testing database | Supabase `gzzdqechcbfpalfvgyro`, “Pantopus-backend”; preserve it. It is not production and is not the new staging runtime's database. |
 | Isolated staging database | Supabase `ptudkfqdhqpkbkzqlabu`, “Pantopus-staging”; synthetic test accounts plus permitted reference data, no copied real user records. |
-| Staging API | `https://staging-api.pantopus.com`; API and worker release `9d1fe24dc1f9ba4d6c07137405fa85b5b2cc3afb`. Image ID `sha256:11d9be44b28cca79b8a2e7ec1af764af9ebdd8c98aab8b07ce4b169d8d6e6d46`. Repository HEAD may be newer than this deployed image. |
+| Staging API | `https://staging-api.pantopus.com`; API and worker release `982851170cf5f1bba080b291dbfa07dac3f3188b`. Image ID `sha256:f84a3ae2ae95f0d2642a7ebefcb6da53edb7a7663139a74a0c74d32bd483b111`. Repository HEAD may be newer than this deployed image. |
 | AWS host | Existing Oregon EC2; staging API binds `127.0.0.1:18001` behind nginx; worker has no public port. Container names `pantopus-backend-staging` and `pantopus-worker-staging`. Original production container is retained. Exact host/access details are in the private operator handoff. |
 | Production DNS | Last inspected production API DNS points to the old address and times out. Fixing DNS alone would route users to an obsolete backend. Reconcile production first, then perform a planned cutover. |
 | GitHub automation | On September 8, both production and staging have `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false`. Merging source does not deploy while these switches remain false. Re-read them before merging/enabling releases; do not enable deployment to make a source PR mergeable. |

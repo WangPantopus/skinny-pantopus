@@ -330,6 +330,70 @@ describe('Feed Service', () => {
     });
   });
 
+  it.each(['draft', 'archived'])('personas feed hides %s broadcast content before normalization', async (state) => {
+    seedTable('PersonaTier', [
+      { id: PERSONA_TIER_ID, persona_id: PERSONA_ID, rank: 1, name: 'Follower' },
+    ]);
+    seedTable('PersonaMembership', [
+      {
+        id: 'membership-1',
+        persona_id: PERSONA_ID,
+        user_id: USER_ID,
+        tier_id: PERSONA_TIER_ID,
+        relationship_type: 'follower',
+        status: 'active',
+      },
+    ]);
+    seedTable('PublicPersona', [
+      {
+        id: PERSONA_ID,
+        user_id: OTHER_USER,
+        handle: 'maya',
+        display_name: 'Maya Builds',
+        avatar_url: null,
+        status: 'active',
+      },
+    ]);
+    seedTable('Post', [
+      makePost({
+        id: 'broadcast-1',
+        user_id: OTHER_USER,
+        author_user_id: OTHER_USER,
+        identity_context_type: 'persona',
+        identity_context_id: PERSONA_ID,
+        content: 'Unpublished private update',
+        post_metadata: { broadcast_status: state === 'draft' ? 'draft' : 'published' },
+        archived_at: state === 'archived' ? new Date().toISOString() : null,
+        post_type: 'personal_update',
+        visibility: 'followers',
+        visibility_scope: 'global',
+        location_precision: 'none',
+        latitude: null,
+        longitude: null,
+        effective_latitude: null,
+        effective_longitude: null,
+        location_name: null,
+        post_as: 'persona',
+        audience: 'followers',
+        distribution_targets: ['persona_followers'],
+        profile_visibility_scope: 'followers',
+        broadcast_channel_id: 'channel-1',
+        target_tier_rank: null,
+        created_at: '2026-05-10T10:00:00.000Z',
+        updated_at: '2026-05-10T10:00:00.000Z',
+        creator: { id: OTHER_USER, username: 'other', name: 'Other User' },
+      }),
+    ]);
+    seedTable('BroadcastMessage', []);
+
+    const result = await getListFeed({
+      userId: USER_ID,
+      surface: 'personas',
+    });
+
+    expect(result.posts).toEqual([]);
+  });
+
   it('personas surface includes the viewer-owned Beacon posts', async () => {
     seedTable('PersonaMembership', []);
     seedTable('PublicPersona', [
