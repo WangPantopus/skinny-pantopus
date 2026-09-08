@@ -76,6 +76,7 @@ docker pull "$image"
 # before interrupting the old API or worker, even on a first-ever deployment.
 docker rm -f "$candidate" >/dev/null 2>&1 || true
 docker run -d --name "$candidate" --env-file "$env_file" \
+  -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
   --health-cmd='node scripts/healthcheck.js' --health-interval=5s --health-start-period=20s \
   "$image" >/dev/null
@@ -108,6 +109,7 @@ fi
 # while binding its port. Recovery must remove that partial container too.
 api_created=true
 docker run -d --name "$api" --env-file "$env_file" \
+  -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
   -p 8000:8000 --restart unless-stopped \
   --health-cmd='node scripts/healthcheck.js' --health-interval=5s --health-start-period=20s \
@@ -115,6 +117,7 @@ docker run -d --name "$api" --env-file "$env_file" \
 healthy "$api"
 worker_created=true
 docker run -d --name "$worker" --env-file "$env_file" \
+  -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=true -e CRON_ENABLED=true --restart unless-stopped \
   --health-cmd='node scripts/worker-healthcheck.js' --health-interval=5s --health-start-period=30s \
   "$image" node worker.js >/dev/null

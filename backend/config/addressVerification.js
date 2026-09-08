@@ -193,6 +193,8 @@ const PRODUCTION_REQUIRED = [
  */
 function validate() {
   const isProd = process.env.NODE_ENV === 'production';
+  const isStaging = process.env.APP_ENV === 'staging';
+  require('./stagingRuntime').validateStagingRuntime();
   const missing = [];
 
   for (const req of PRODUCTION_REQUIRED) {
@@ -201,11 +203,11 @@ function validate() {
     }
   }
 
-  if (isProd && config.lob.env !== 'live') {
+  const expectedLobEnv = isStaging ? 'test' : 'live';
+  if (isProd && config.lob.env !== expectedLobEnv) {
     logger.error(
-      `Address verification configuration error: LOB_ENV is '${config.lob.env}' in production. ` +
-      'Lob test mode does not mail anything, so every address verification would silently fail. ' +
-      'Set LOB_ENV=live.',
+      `Address verification configuration error: LOB_ENV must be '${expectedLobEnv}' ` +
+      `for ${isStaging ? 'staging' : 'production'}.`,
     );
     process.exit(1);
   }

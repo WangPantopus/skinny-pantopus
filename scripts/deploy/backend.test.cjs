@@ -38,7 +38,7 @@ fs.writeFileSync(file,JSON.stringify(s));if(out)console.log(out);
 if(a[0]==='run'&&a[a.indexOf('--name')+1]==='pantopus-backend'&&['SIGHUP','SIGTERM'].includes(fail))process.kill(process.ppid,fail);
 process.exit(code);
 `;
-function rollout(failure, first = false) {
+function rollout(failure, first = false, target = 'production') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pantopus-rollout-test-'));
   try {
     const state = path.join(dir, 'state.json');
@@ -49,7 +49,7 @@ function rollout(failure, first = false) {
     fs.writeFileSync(path.join(dir, 'docker'), docker, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'flock'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const envFile = path.join(dir, 'env'); fs.writeFileSync(envFile, '');
-    const result = spawnSync('bash', [script, 'production', image], { encoding: 'utf8', env: {
+    const result = spawnSync('bash', [script, target, image], { encoding: 'utf8', env: {
       ...process.env, PATH: `${dir}:${process.env.PATH}`, DOCKER_STATE: state,
       NEW_IMAGE: image, FAILURE: failure || '', PANTOPUS_ENV_FILE: envFile,
       PANTOPUS_LOCK_DIR: dir, PANTOPUS_HEALTH_ATTEMPTS: '1', PANTOPUS_HEALTH_INTERVAL: '0',
@@ -76,6 +76,17 @@ test('successful rollout pins both services and keeps previous images', () => {
   assert.ok(apiArgs.includes('CRON_ENABLED=false')); assert.ok(apiArgs.includes('PGBOSS_ENABLED=false'));
   assert.ok(r.state.containers['pantopus-worker'].args.includes('CRON_ENABLED=true'));
 });
+for (const target of ['staging', 'production']) {
+  test(`${target} explicitly sets the runtime environment on candidate, API and worker`, () => {
+    const r = rollout(undefined, true, target); assert.equal(r.status, 0, r.stderr);
+    const runs = r.state.calls.filter(args => args[0] === 'run');
+    assert.equal(runs.length, 3);
+    for (const args of runs) {
+      assert.ok(args.includes('NODE_ENV=production'));
+      assert.ok(args.includes(`APP_ENV=${target}`));
+    }
+  });
+}
 test('failed first deployment removes partial new services', () => {
   const r = rollout('worker', true); assert.notEqual(r.status, 0);
   assert.deepEqual(r.state.containers, {});
