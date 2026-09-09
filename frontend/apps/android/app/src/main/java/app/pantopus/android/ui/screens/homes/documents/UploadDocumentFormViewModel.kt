@@ -11,12 +11,20 @@ import app.pantopus.android.data.homes.HomePetsRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okio.ByteString
+import okio.ByteString.Companion.toByteString
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav arg key for the upload document route. */
@@ -69,7 +77,7 @@ enum class UploadDocumentCategory(
 
 /** Visibility scope for a newly uploaded document. */
 enum class UploadDocumentVisibility(val wire: String, val label: String) {
-    Owners("managers", "Owners only"),
+    Owners("managers", "Managers and owners"),
     AllMembers("members", "All members"),
 }
 
@@ -99,11 +107,12 @@ sealed interface UploadDocumentLinkOptionsState {
     data class Error(val message: String) : UploadDocumentLinkOptionsState
 }
 
-/** Display-only handle on a picked file. */
+/** Retained bytes outlive the picker URI permission. */
 data class PickedFile(
     val filename: String,
     val sizeBytes: Long? = null,
     val mimeType: String? = null,
+    val bytes: ByteString? = null,
 ) {
     val fileType: DocumentFileType
         get() = DocumentFileType.fromMime(mimeType = mimeType, filename = filename)
@@ -122,6 +131,7 @@ data class UploadDocumentFormState(
     val linkedEntity: UploadDocumentLinkOption? = null,
     val visibility: UploadDocumentVisibility = UploadDocumentVisibility.AllMembers,
     val linkOptionsState: UploadDocumentLinkOptionsState = UploadDocumentLinkOptionsState.Idle,
+    val isReadingFile: Boolean = false,
     val isSaving: Boolean = false,
     val toast: UploadDocumentToast? = null,
     val shouldDismiss: Boolean = false,
@@ -129,7 +139,7 @@ data class UploadDocumentFormState(
     private val trimmedTitle: String get() = title.value.trim()
 
     val isValid: Boolean
-        get() = pickedFile != null && trimmedTitle.isNotEmpty() && title.error == null
+        get() = pickedFile?.bytes?.size?.let { it > 0 } == true && !isReadingFile && trimmedTitle.isNotEmpty() && title.error == null
 
     val isDirty: Boolean
         get() =
@@ -155,6 +165,33 @@ class UploadDocumentFormViewModel
         private val _state = MutableStateFlow(UploadDocumentFormState())
         val state: StateFlow<UploadDocumentFormState> = _state.asStateFlow()
 
+        private var selectionId = UUID.randomUUID()
+        private var uploadAttempt: Triple<CreateDocumentRequest, PickedFile, String>? = null
+
+        suspend fun readPickedFile(
+            filename: String,
+            mimeType: String?,
+            openStream: () -> InputStream?,
+        ) {
+            val selection = UUID.randomUUID()
+            selectionId = selection
+            _state.update { it.copy(pickedFile = null, isReadingFile = true, toast = null) }
+            try {
+                val bytes = withContext(Dispatchers.IO) { readDocumentBytes(openStream) }
+                if (selectionId == selection) acceptPicked(filename, bytes.size.toLong(), mimeType, bytes)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (selectionId == selection) {
+                    _state.update {
+                        it.copy(toast = UploadDocumentToast("Choose a readable, nonempty file of 25 MB or less.", true))
+                    }
+                }
+            } finally {
+                if (selectionId == selection) _state.update { it.copy(isReadingFile = false) }
+            }
+        }
+
         /**
          * Called by the file-picker contract once the user picks a
          * file. Seeds the title from the filename when the title field
@@ -164,9 +201,11 @@ class UploadDocumentFormViewModel
             filename: String,
             sizeBytes: Long?,
             mimeType: String?,
+            bytes: ByteString? = null,
         ) {
             val previous = _state.value.pickedFile
-            val picked = PickedFile(filename = filename, sizeBytes = sizeBytes, mimeType = mimeType)
+            val picked = PickedFile(filename = filename, sizeBytes = bytes?.size?.toLong() ?: sizeBytes, mimeType = mimeType, bytes = bytes)
+            uploadAttempt = null
             _state.update { snapshot ->
                 val needsTitle = snapshot.title.value.isEmpty() || !snapshot.title.touched
                 val newTitle =
@@ -187,7 +226,9 @@ class UploadDocumentFormViewModel
         }
 
         fun clearPickedFile() {
-            _state.update { it.copy(pickedFile = null) }
+            selectionId = UUID.randomUUID()
+            uploadAttempt = null
+            _state.update { it.copy(pickedFile = null, isReadingFile = false) }
         }
 
         fun updateTitle(value: String) {
@@ -328,9 +369,7 @@ class UploadDocumentFormViewModel
                     error = validateTitle(snapshot.title.value),
                 )
             _state.update { it.copy(title = validatedTitle) }
-            if (snapshot.pickedFile == null || validatedTitle.error != null ||
-                validatedTitle.value.trim().isEmpty()
-            ) {
+            if (!snapshot.copy(title = validatedTitle).isValid) {
                 _state.update {
                     it.copy(toast = UploadDocumentToast("Pick a file and add a title.", isError = true))
                 }
@@ -339,6 +378,7 @@ class UploadDocumentFormViewModel
             if (snapshot.isSaving) return
             _state.update { it.copy(isSaving = true, toast = null) }
 
+            val picked = checkNotNull(snapshot.pickedFile)
             val details =
                 buildMap {
                     if (snapshot.tags.isNotEmpty()) put("tags", snapshot.tags.joinToString(","))
@@ -352,19 +392,28 @@ class UploadDocumentFormViewModel
                 CreateDocumentRequest(
                     docType = snapshot.category.docType,
                     title = validatedTitle.value.trim(),
-                    mimeType = snapshot.pickedFile.mimeType,
-                    sizeBytes = snapshot.pickedFile.sizeBytes,
+                    mimeType = picked.mimeType,
+                    sizeBytes = picked.sizeBytes,
                     visibility = snapshot.visibility.wire,
                     details = if (details.isEmpty()) null else details,
                 )
+            val previous = uploadAttempt
+            val uploadId = if (previous?.first == request && previous.second == picked) previous.third else UUID.randomUUID().toString()
+            uploadAttempt = Triple(request, picked, uploadId)
             viewModelScope.launch {
-                when (val result = homesRepo.createHomeDocument(homeId, request)) {
+                when (val result = homesRepo.uploadHomeDocument(homeId, uploadId, picked.filename, checkNotNull(picked.bytes), request)) {
                     is NetworkResult.Success ->
                         _state.update {
+                            val document = result.data.document
+                            val saved = document.id == uploadId && document.fileId == uploadId && document.contentUrl != null
                             it.copy(
                                 isSaving = false,
-                                toast = UploadDocumentToast("Document uploaded.", isError = false),
-                                shouldDismiss = true,
+                                toast =
+                                    UploadDocumentToast(
+                                        if (saved) "Document uploaded." else "The file was not saved. Try again.",
+                                        isError = !saved,
+                                    ),
+                                shouldDismiss = saved,
                             )
                         }
                     is NetworkResult.Failure ->
@@ -385,3 +434,20 @@ class UploadDocumentFormViewModel
             return null
         }
     }
+
+/** Bound actual bytes, including providers that omit or misreport the file size. */
+internal fun readDocumentBytes(openStream: () -> InputStream?): ByteString {
+    val limit = 25 * 1024 * 1024
+    return checkNotNull(openStream()).use { input ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(256 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            require(output.size() + count <= limit)
+            output.write(buffer, 0, count)
+        }
+        require(output.size() > 0)
+        output.toByteArray().toByteString()
+    }
+}

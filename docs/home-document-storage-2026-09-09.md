@@ -30,8 +30,8 @@ authenticated-user rate limit and a 25 MiB file limit.
 
 ## Verification so far
 
-All 4,414 backend tests pass (281 suites; 16 existing tests and one suite skipped).
-The 74 targeted document/file tests cover exact bytes, private bucket checks,
+All 4,415 backend tests pass (281 suites; 16 existing tests and one suite skipped).
+The 75 targeted document/file tests cover exact bytes, private bucket checks,
 corruption, invalid paths, duplicate/conflicting retries, partial database
 failure, quota, revoked access, sensitive scopes and old deleted-file links.
 Storage is mocked in these tests. Hosted bucket setup and live concurrent
@@ -51,17 +51,20 @@ clears previously loaded content; backgrounding clears the document and a return
 reloads it. Open/Share first check access again, then pass a private temporary
 copy containing the exact bytes to the system share sheet; the copy is removed
 when sharing closes or the screen leaves. Strict Swift lint and formatting pass.
-Android upload tests pass; its matching preview/export checks are still running.
+Android document coverage passes 49 tests, with five existing snapshot tests
+skipped; formatting, Detekt and Android lint pass. Its preview uses the
+authenticated endpoint, clears denied/background content, and shares a private
+FileProvider copy after checking access again. PDF preview temp files are removed.
 These are stubbed local tests, not hosted storage or physical-device acceptance.
 
 The backend also normalizes UUID case and prevents a retry from revealing a
-document whose visibility was restricted after upload. Its final 4,414-test run
+document whose visibility was restricted after upload. Its final 4,415-test run
 passes. PRs #17–#19 have merged with passing integrated checks; #19 is master
 `0021cb59d6649f501a86bacd4d69edfc932c0e94`.
 
 ## Next action
 
-Finish Android preview/export verification and native visual acceptance. The existing detail screens
+Finish live staging and native visual acceptance. The existing detail screens
 also have unfinished delete/replace/share actions; finish the authorized
 operations or make their limits explicit in the user flow. Correct the current
 “Owners only” label, whose stored `managers` scope also includes managers.
@@ -69,5 +72,19 @@ operations or make their limits explicit in the user flow. Correct the current
 Then provision only the isolated staging private bucket on existing/free
 capacity, run upload/read/retry/revocation/cleanup acceptance through the actual
 API and native clients, and verify the proxy body limit matches the file limit.
-No bucket has been created yet. Native changes remain development builds;
+A private `pantopus-home-documents-staging` bucket now exists only in the free
+staging project. A separate local-only API candidate runs backend `776c54c0a`
+on the existing host. Three synthetic documents were uploaded, including
+concurrent identical attempts. The member initially failed closed because
+staging has no default member permission rows; document grants were added only
+for this synthetic Home. Do not mistake those scoped grants for verification
+of the unadopted default IAM reference data. Live matrix completion is pending.
+
+A new regression reproduced restricted document metadata appearing in the
+legacy Home File listing. Byte-contract records are now excluded from that
+older API and remain available through the permission-aware document API.
+All 4,415 backend tests pass with that repair; the live candidate still needs
+the new commit before rechecking this case.
+
+Native changes remain development builds;
 public staging API/worker and production remain unchanged.

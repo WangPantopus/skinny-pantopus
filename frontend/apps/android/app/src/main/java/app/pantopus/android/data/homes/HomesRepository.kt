@@ -58,9 +58,12 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomesApi
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.ByteString
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -217,6 +220,47 @@ open class HomesRepository
             homeId: String,
             request: CreateDocumentRequest,
         ): NetworkResult<CreateDocumentResponse> = safeApiCall { api.createHomeDocument(homeId, request) }
+
+        /** Private bytes and metadata travel together through the authenticated Retrofit client. */
+        @Suppress("LongParameterList")
+        open suspend fun uploadHomeDocument(
+            homeId: String,
+            uploadId: String,
+            filename: String,
+            bytes: ByteString,
+            request: CreateDocumentRequest,
+        ): NetworkResult<CreateDocumentResponse> =
+            safeApiCall {
+                val mapType = Types.newParameterizedType(Map::class.java, String::class.java, String::class.java)
+                val details =
+                    Moshi.Builder().build().adapter<Map<String, String>>(mapType)
+                        .toJson(request.details.orEmpty())
+                val fields =
+                    mapOf(
+                        "upload_id" to uploadId,
+                        "doc_type" to request.docType,
+                        "title" to request.title,
+                        "visibility" to (request.visibility ?: "members"),
+                        "details" to details,
+                    ).mapValues { (_, value) -> value.toRequestBody("text/plain".toMediaTypeOrNull()) }
+                val safeName = filename.replace(Regex("[\\\"\\\\\\r\\n]"), "_")
+                val file =
+                    MultipartBody.Part.createFormData(
+                        "file",
+                        safeName,
+                        bytes.toRequestBody((request.mimeType ?: "application/octet-stream").toMediaTypeOrNull()),
+                    )
+                api.uploadHomeDocument(homeId, file, fields)
+            }
+
+        /** Uses the authenticated API path, never a document-supplied URL. */
+        open suspend fun homeDocumentContent(
+            homeId: String,
+            documentId: String,
+        ): NetworkResult<ByteString> =
+            safeApiCall {
+                api.homeDocumentContent(homeId, documentId).use { it.byteString() }
+            }
 
         /** `GET /api/homes/:id/packages`. */
         open suspend fun getHomePackages(

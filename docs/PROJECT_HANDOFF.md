@@ -109,9 +109,13 @@ PR #19 merged as `0021cb59d6649f501a86bacd4d69edfc932c0e94` after its integrated
 The [byte-delivery report](home-document-storage-2026-09-09.md) tracks work in
 `/private/tmp/pantopus-home-file-access`, branch `codex/home-document-storage`.
 Both native upload test sets pass. All 22 iOS upload/preview/denial/export tests
-and strict Swift lint pass; Android preview/export checks are in progress.
-All 4,414 backend tests pass, including private storage and retry/visibility denial.
-No hosted bucket has been created. PR #18 merged with passing checks at 12:51 UTC
+and strict Swift lint pass. Android document tests pass (49, with five existing
+skips), along with formatting, Detekt and lint. All 4,415 backend tests pass,
+including a new repair that excludes restricted document metadata from the old
+Home File list. An isolated private staging bucket and local-only API candidate
+are now running. Live matrix/native acceptance is next. Staging lacks default
+member IAM rows; fixture-only grants permit this test, without certifying the
+unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
 as `fd8a94eef727342340fc522f7196e6e64814ed08`.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.

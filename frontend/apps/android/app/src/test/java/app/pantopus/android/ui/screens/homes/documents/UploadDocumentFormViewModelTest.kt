@@ -25,14 +25,18 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import okio.ByteString.Companion.encodeUtf8
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.math.BigDecimal
 
 /**
@@ -77,7 +81,12 @@ class UploadDocumentFormViewModelTest {
 
     @Test fun `accepting a file seeds the title from the filename`() {
         val vm = makeVm()
-        vm.acceptPicked(filename = "Lease-Renewal.pdf", sizeBytes = 12_345L, mimeType = "application/pdf")
+        vm.acceptPicked(
+            filename = "Lease-Renewal.pdf",
+            sizeBytes = 12_345L,
+            mimeType = "application/pdf",
+            bytes = "exact PDF bytes".encodeUtf8(),
+        )
         val state = vm.state.value
         assertEquals("Lease-Renewal.pdf", state.pickedFile?.filename)
         assertEquals("Lease-Renewal", state.title.value)
@@ -87,7 +96,12 @@ class UploadDocumentFormViewModelTest {
     @Test fun `accepting a file leaves a touched title alone`() {
         val vm = makeVm()
         vm.updateTitle("Custom title")
-        vm.acceptPicked(filename = "State-Farm-Policy.pdf", sizeBytes = null, mimeType = "application/pdf")
+        vm.acceptPicked(
+            filename = "State-Farm-Policy.pdf",
+            sizeBytes = null,
+            mimeType = "application/pdf",
+            bytes = "exact PDF bytes".encodeUtf8(),
+        )
         assertEquals("Custom title", vm.state.value.title.value)
     }
 
@@ -203,14 +217,15 @@ class UploadDocumentFormViewModelTest {
     @Test fun `submit posts the expected request shape`() =
         runTest {
             val captured = slot<CreateDocumentRequest>()
-            coEvery { homesRepo.createHomeDocument("home-1", capture(captured)) } returns
+            coEvery { homesRepo.uploadHomeDocument("home-1", any(), "Lease-2024.pdf", any(), capture(captured)) } coAnswers {
                 NetworkResult.Success(
                     CreateDocumentResponse(
                         document =
                             HomeDocumentDto(
-                                id = "doc-1",
+                                id = secondArg(),
                                 homeId = "home-1",
-                                fileId = null,
+                                fileId = secondArg(),
+                                contentUrl = "/api/homes/home-1/documents/content",
                                 docType = "lease",
                                 title = "Lease-2024",
                                 storageBucket = null,
@@ -225,9 +240,15 @@ class UploadDocumentFormViewModelTest {
                             ),
                     ),
                 )
+            }
 
             val vm = makeVm()
-            vm.acceptPicked(filename = "Lease-2024.pdf", sizeBytes = 1_024L, mimeType = "application/pdf")
+            vm.acceptPicked(
+                filename = "Lease-2024.pdf",
+                sizeBytes = 1_024L,
+                mimeType = "application/pdf",
+                bytes = "exact PDF bytes".encodeUtf8(),
+            )
             // acceptPicked auto-selected Mortgage from the filename.
             vm.updateTagDraft("signed")
             vm.commitTagDraft()
@@ -264,11 +285,16 @@ class UploadDocumentFormViewModelTest {
 
     @Test fun `submit failure surfaces error toast`() =
         runTest {
-            coEvery { homesRepo.createHomeDocument(any(), any()) } returns
+            coEvery { homesRepo.uploadHomeDocument(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "Server is down"))
 
             val vm = makeVm()
-            vm.acceptPicked(filename = "Receipt.pdf", sizeBytes = 200L, mimeType = "application/pdf")
+            vm.acceptPicked(
+                filename = "Receipt.pdf",
+                sizeBytes = 200L,
+                mimeType = "application/pdf",
+                bytes = "exact PDF bytes".encodeUtf8(),
+            )
             vm.submit()
 
             val state = vm.state.value
@@ -276,4 +302,57 @@ class UploadDocumentFormViewModelTest {
             assertTrue(state.toast?.isError == true)
             assertFalse(state.shouldDismiss)
         }
+
+    @Test fun `metadata without bytes cannot claim upload success`() {
+        val vm = makeVm()
+        vm.acceptPicked("missing.pdf", 500, "application/pdf")
+        assertFalse(vm.state.value.isValid)
+        vm.submit()
+        assertFalse(vm.state.value.shouldDismiss)
+    }
+
+    @Test fun `failed upload retries identical bytes with the same identifier`() =
+        runTest {
+            val ids = mutableListOf<String>()
+            coEvery { homesRepo.uploadHomeDocument(any(), capture(ids), any(), any(), any()) } returns
+                NetworkResult.Failure(NetworkError.Server(503, null))
+            val vm = makeVm()
+            vm.acceptPicked("retry.pdf", null, "application/pdf", "retry bytes".encodeUtf8())
+            vm.submit()
+            vm.submit()
+            assertEquals(2, ids.size)
+            assertEquals(ids[0], ids[1])
+            vm.updateTitle("Different title")
+            vm.submit()
+            assertFalse(ids[1] == ids[2])
+        }
+
+    @Test fun `file reader retains bytes and closes the picker stream`() {
+        var closed = false
+        val source =
+            object : ByteArrayInputStream("retained bytes".toByteArray()) {
+                override fun close() {
+                    closed = true
+                    super.close()
+                }
+            }
+        val bytes = readDocumentBytes { source }
+        assertTrue(closed)
+        assertEquals("retained bytes", bytes.utf8())
+    }
+
+    @Test fun `reader rejects empty and oversized providers`() {
+        assertThrows(IllegalArgumentException::class.java) { readDocumentBytes { ByteArrayInputStream(byteArrayOf()) } }
+        val oversized =
+            object : InputStream() {
+                override fun read(): Int = 0
+
+                override fun read(
+                    buffer: ByteArray,
+                    offset: Int,
+                    length: Int,
+                ): Int = length
+            }
+        assertThrows(IllegalArgumentException::class.java) { readDocumentBytes { oversized } }
+    }
 }
