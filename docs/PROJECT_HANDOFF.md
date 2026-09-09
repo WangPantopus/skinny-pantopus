@@ -48,24 +48,70 @@ Docker, safeguards, Android build/tests/snapshots and 45 instrumented tests.
 An initial emulator SDK ZIP download failed before tests; the retry passed.
 The Scout fallback test also received a test-only isolation repair after an
 external-provider timeout; all 38 Scout tests pass. Later documentation commits
-do not change the tested application code.
+do not change the tested application code. The latest documentation head
+`37a49cce82dc2721c736e3a0971f6fe0f4f896f4` also has a fully passing
+[CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34274045637).
 
 Full acceptance remains open: there is no Beacon-specific push-only preference,
 and physical Android hardware is unavailable. The schema's legacy migration
-policy prevents adding its preference migration before baseline adoption; the
-report records the concrete remaining contract and verification work. Preserve
-the current global feature flag and deployment/migration switches.
+policy prevents adding its preference migration before baseline adoption. The
+[September 8 adoption continuation](database-baseline-rehearsal-2026-09-08.md)
+closes the four table / 37 column gaps on a separate local candidate, preserves
+all original values across 345 tables, and passes real SQL contracts. It also
+repairs a listing RPC return-type mismatch in that private candidate. Additional
+application lint passes for 111 functions / 71 trigger bindings. The later
+[empty replay](database-empty-replay-2026-09-08.md) now passes through the pinned
+CLI with matching captured ACLs and two explicitly tested CHECK-expression
+format differences. The [reference/lint milestone](database-reference-lint-2026-09-08.md)
+now adds all 6,467 static rows with matching fingerprints. A reviewed function
+gate passes: full CLI scanning remains, six exact stock PostGIS diagnostics
+require verified provenance/runtime tests, and application errors still fail.
+The expanded audit found a new Beacon access blocker: the database's permissive
+`Post` policy permits raw draft reads outside the backend. The local restrictive
+policy and service-only maintenance RPC grants pass actual role tests; staging's
+matching permissive policy was confirmed read-only. These corrections are **not
+deployed** and must be included in adoption and hosted authorization verification.
+The six forward steps also replay on a second clone with an equal captured public
+catalog, passing SQL contracts and identical original-value hashes. The repeatable
+upgrade evidence is now complemented by a separate empty schema replay. That
+replay caught and corrected fresh-platform default grants on 49 tables and
+22 routines before its Beacon denial contract passed. Real Home-role checks
+also support retaining production's stricter policies. Managed-surface evidence
+and the incomplete permission matrix are recorded in the linked reports.
+The [canonical baseline milestone](database-canonical-baseline-2026-09-08.md)
+now archives frozen history without changing its bytes and activates the two
+canonical baseline files. Local CLI replay, seven pgTAP contracts and five real
+PostgREST/Following integration tests pass. Reference hashes match; the strict
+catalog still reports only the two reviewed CHECK-format differences. Fresh
+read-only production managed-object inspection is recorded in that report.
+No hosted corrections or ledger adoption have been applied. Canonical CI is
+the next verification gate before continuing the Beacon preference migration.
+Preserve the current global feature flag and deployment/migration switches.
 
-Current work is isolated on `codex/beacon-full-journey` in
-`/private/tmp/pantopus-beacon-journey`, based on merged master. The main checkout
-and all other worktrees/ignored artifacts are preserved.
+Beacon repairs remain on `codex/beacon-full-journey` in
+`/private/tmp/pantopus-beacon-journey`. Baseline prerequisite work is isolated on
+`codex/database-baseline-adoption` in `/private/tmp/pantopus-database-baseline-adoption`,
+based on the Beacon branch so its current handoff/evidence are retained. The main
+checkout and all other worktrees/ignored artifacts are preserved.
+Draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on
+PR #10, now contains the canonical source baseline, archived history and required
+database CI in addition to diagnostics, SQL contracts and sanitized evidence.
+It does not adopt a hosted ledger or deploy the private forward candidate.
 
 Start a new session by:
 
 1. Refreshing Git, PR #10/CI and staging observations; preserve unrelated work.
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
-   and baseline-adoption runbook. Make its additive schema/API/native setting
-   implementable under the migration policy; do not mutate frozen history.
+   and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
+   Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
+   read the [reference/lint decision](database-reference-lint-2026-09-08.md), then
+   read the [canonical milestone](database-canonical-baseline-2026-09-08.md) and
+   verify its exact-head database CI.
+   Existing permissions are preserved; new role grants are a separate change.
+   Normal-role replay, Home boundaries, explicit ACLs, Beacon storage/RPC
+   restrictions and local SQL/integration checks already pass. Add the
+   preference migration/API/native setting and verify hosted role denial.
+   Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
    next concrete test and verify the audience before sending. Physical Android
@@ -149,7 +195,7 @@ production gap audit; the historical migration ledger was not altered.
 | 2. Beacon end-to-end staging | Dedicated creator and address-free follower publish/read/follow/mute/return through the actual staging API and native UI. | One stored post ID matches Following, audience notification and opened post. No unrelated recipients. Mute/global/type opt-out and restore work; restricted membership and revoked/block access deny correctly, including old notification taps. Record every case in the linked matrix. Do not enable feature flags globally simply to populate fixtures. |
 | 3. Finish released-platform notification coverage | Actual post/chat destinations, foreground/background/ordinary cold start, denied permission, expired session/login continuation, token rotation/logout and relevant settings UI. | Exact permitted destination opens on each released platform/state; unread behavior is coherent. Owner confirms physical iPhone observations; physical Android remains explicitly pending until hardware is available. Emulator results are useful but not physical acceptance. |
 | 4. Finish isolated vendor/account flows | Safe staging signup/recovery/verification email and real OAuth callbacks; isolated media/document storage; reachable sandbox payments and address-verification states. | New user can authenticate/recover, upload/read only authorized files, and complete reachable test-mode actions. Failures/retries are visible and idempotent; no live charge or postcard is triggered by staging. Use existing/free capacity unless further spending is authorized. |
-| 5. Make production upgrade reviewable | Resume the verified local production-copy rehearsal. Produce forward changes, compatibility checks, reference-data/ACL verification, external-file recovery plan, and deploy/rollback manifest. | Resolve four known missing tables (`AnalyticsEvent`, `GigShare`, `ListingShare`, `MailDeliveryIntent`), 35 catalog-gap columns and the additional native-push contract; inventory further application contracts. Preserve legacy production fields/tables and records. Validate grants/functions and adoption policy. No hosted write/cutover until the concrete plan is reviewed and authorized. |
+| 5. Make production upgrade reviewable | The [local continuation](database-baseline-rehearsal-2026-09-08.md) now closes the four table / 37 column gaps and verifies original-value preservation plus SQL contracts. Complete object/reference/ACL comparison, fresh baseline replay, external-file recovery and deploy/rollback plans remain. | Preserve legacy production fields/tables and records; resolve all further application contracts and the full lint/adoption gates. Local expansion success is not hosted upgrade readiness. No hosted write/cutover until the concrete plan is reviewed and authorized. |
 | 6. Complete v1 journeys and reachable features | Run Home/Pulse/Beacon acceptance on release candidates; inventory adjacent mailbox, tasks, marketplace, payments and household actions. | Address-free paths, private-address boundaries, correct calendar outcomes, exact-content returns, error/retry/accessibility and real provider coverage pass. Finish or honestly constrain unfinished reachable operations; preserve records, balances and entitlements. |
 | 7. Release/pilot | Tie exact web/iOS/Android builds, backend, migrations, flags and rollback together; configure deployment only after its prerequisites. | Approved production cutover and post-deploy checks pass; small consenting pilot measures actual first value and voluntary returns. Passing engineering tests alone is not product-market fit or proof every feature is finished. |
 
@@ -168,6 +214,7 @@ the immediate direction unless the owner changes priorities.
 Public, versioned reports contain sanitized findings rather than raw secrets:
 
 - [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
+- [Local baseline prerequisite expansion and SQL contracts](database-baseline-rehearsal-2026-09-08.md).
 - [Staging inventory, native setup and physical iPhone record](staging-notification-setup.md).
 - [Android delivery, navigation, opt-out and logout record](android-staging-verification-2026-09-08.md).
 - [Beacon live results and fixes](beacon-full-journey-2026-09-08.md) and

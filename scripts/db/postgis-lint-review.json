@@ -1,0 +1,144 @@
+{
+  "formatVersion": 1,
+  "cliVersion": "2.116.0",
+  "scope": "Exact stock PostGIS diagnostics; application and unknown errors must fail. Runtime contract required.",
+  "runtimeContract": "scripts/db/contracts/postgis-lint-runtime.sql",
+  "source": "https://github.com/supabase/cli/blob/v2.116.0/apps/cli/src/legacy/commands/db/lint/lint.lint-sql.ts",
+  "entries": [
+    {
+      "identity": "public.addauth(text)",
+      "function": "public.addauth",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "1b7f8c7443ffd9ffa0b8bfc76642220ec7300c0ab41d2b398d0bc885398d7da1",
+      "issue": {
+        "level": "error",
+        "message": "relation \"temp_lock_have_table\" does not exist",
+        "statement": {
+          "lineNumber": "24",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "13",
+          "text": "INSERT INTO temp_lock_have_table VALUES (getTransactionID(), lockid)"
+        },
+        "sqlState": "42P01"
+      },
+      "reason": "Creates its transaction-local authorization table inside the routine before inserting."
+    },
+    {
+      "identity": "public.lockrow(text,text,text,text,timestamp without time zone)",
+      "function": "public.lockrow",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "f183f3ed04530da337ff9f591b337808a9746c00c7c2d53a904330d48f88278e",
+      "issue": {
+        "level": "error",
+        "message": "relation \"authorization_table\" does not exist",
+        "statement": {
+          "lineNumber": "18",
+          "text": "EXECUTE"
+        },
+        "query": {
+          "position": "13",
+          "text": "DELETE FROM authorization_table WHERE expires < now()"
+        },
+        "sqlState": "42P01"
+      },
+      "reason": "Requires EnableLongTransactions to create authorization_table before use."
+    },
+    {
+      "identity": "public.populate_geometry_columns(oid,boolean)",
+      "function": "public.populate_geometry_columns",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "4e103cd4c07cb30e11b66b19651512d8241a094fcea850b37308c7091a98b73e",
+      "issue": {
+        "level": "error",
+        "message": "record \"gc\" is not assigned yet",
+        "statement": {
+          "lineNumber": "55",
+          "text": "assignment"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "PL/pgSQL assignment \"gsrid := gc.srid\"",
+        "sqlState": "55000"
+      },
+      "reason": "Dynamic SQL assigns the geometry metadata record before it is read."
+    },
+    {
+      "identity": "public.postgis_full_version()",
+      "function": "public.postgis_full_version",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "bbeb7c3e45380ca6f82b6b89517b6c100d57bf6098c5245c62dc9d21e40e0c67",
+      "issue": {
+        "level": "error",
+        "message": "function public.postgis_gdal_version() does not exist",
+        "statement": {
+          "lineNumber": "35",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "8",
+          "text": "SELECT public.postgis_gdal_version()"
+        },
+        "hint": "No function matches the given name and argument types. You might need to add explicit type casts.",
+        "sqlState": "42883"
+      },
+      "reason": "Handles missing optional raster functions at runtime."
+    },
+    {
+      "identity": "public.st_findextent(text,text)",
+      "function": "public.st_findextent",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "f9e82e84171bd2a3da2ee9053b737f2d2f2b00a4a4e9e52c7df511d9d12b758c",
+      "issue": {
+        "level": "error",
+        "message": "record \"myrec\" is not assigned yet",
+        "statement": {
+          "lineNumber": "9",
+          "text": "RETURN"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "SQL expression \"myrec.extent\"",
+        "sqlState": "55000"
+      },
+      "reason": "Dynamic aggregate query assigns the extent record before RETURN."
+    },
+    {
+      "identity": "public.st_findextent(text,text,text)",
+      "function": "public.st_findextent",
+      "extension": "postgis",
+      "extensionVersion": "3.3.7",
+      "definitionHash": "b356a5c33b834da4d756229772e4014ad1b85275817eb24b9c7e0724b7da9a96",
+      "issue": {
+        "level": "error",
+        "message": "record \"myrec\" is not assigned yet",
+        "statement": {
+          "lineNumber": "9",
+          "text": "RETURN"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "SQL expression \"myrec.extent\"",
+        "sqlState": "55000"
+      },
+      "reason": "Dynamic aggregate query assigns the extent record before RETURN."
+    }
+  ],
+  "unattachedApplicationTriggers": [
+    {
+      "identity": "public.decrement_comment_count()",
+      "summaryName": "decrement_comment_count()",
+      "definitionHash": "647595daebd65422027ae70f8dd63d1fd09425067127a1233563fc3825e3cfcf",
+      "reason": "Existing unattached legacy comment trigger; not invoked by current schema. Changes or new unattached triggers require review."
+    },
+    {
+      "identity": "public.increment_comment_count()",
+      "summaryName": "increment_comment_count()",
+      "definitionHash": "fcf7c8eae06a7ef600797818e8217de25e2cb875b056d63ca1423bbeef15e4ca",
+      "reason": "Existing unattached legacy comment trigger; not invoked by current schema. Changes or new unattached triggers require review."
+    }
+  ]
+}
