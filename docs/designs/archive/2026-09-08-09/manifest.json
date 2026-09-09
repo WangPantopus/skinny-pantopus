@@ -1,0 +1,212 @@
+{
+  "description": "Source hashes for design artifacts collected on September 9, 2026. Any publication-only edits are recorded per entry.",
+  "base_commit": "6fbdcce1203780b475bd209ed4f6fc5e03bfb487",
+  "artifacts": [
+    {
+      "path": "docs/pantopus-next-stage-design-2026-09-08.md",
+      "source": "git:6664315bb6d9e0036723f79bad8c9e3b1202ff05:docs/pantopus-next-stage-design-2026-09-08.md",
+      "sha256": "2390701d1b2c40f469bb21d7ececce26794cd5683e4b2c9bef3349c6bf90da6d",
+      "bytes": 17714
+    },
+    {
+      "path": "docs/pantopus-nationwide-product-design-2026-09-08.md",
+      "source": "git:6664315bb6d9e0036723f79bad8c9e3b1202ff05:docs/pantopus-nationwide-product-design-2026-09-08.md",
+      "sha256": "12b408b5c5e7f4200e5403c1f5c038943c4cfeba416f98a89b8c45bd18cb9f45",
+      "bytes": 110945
+    },
+    {
+      "path": "docs/pantopus-nationwide-product-design-2026-09-08.html",
+      "source": "git:6664315bb6d9e0036723f79bad8c9e3b1202ff05:docs/pantopus-nationwide-product-design-2026-09-08.html",
+      "sha256": "c3fe371d9d489bb89a14cf2af664c1565f2a8719e7b7eb7803d637b1af1193ba",
+      "bytes": 137619
+    },
+    {
+      "path": "docs/designs/pantopus-nationwide-experience-2026-09-08.html",
+      "source": "git:6664315bb6d9e0036723f79bad8c9e3b1202ff05:docs/designs/pantopus-nationwide-experience-2026-09-08.html",
+      "sha256": "66f1833a3439fce55c49af917036a4efbcfb5336af9f29bb5be384dbb5262d54",
+      "bytes": 73822
+    },
+    {
+      "path": "docs/pantopus-place-social-design-2026-09-09.md",
+      "source": "original checkout:docs/pantopus-place-social-design-2026-09-09.md",
+      "sha256": "ab8394e3b37ad0b4740375a9424b0926b9bfb0d2e86a7ec418854724cb60fdec",
+      "bytes": 59084,
+      "published_sha256": "69049be45b8834f2cc3bf09f7135ca6420d996cd729d363d35884eadd8cad00d",
+      "publication_change": "Updated only the relationship paragraph to use collected local links and record nationwide-document provenance."
+    },
+    {
+      "path": "docs/designs/pantopus-place-page-concept-2026-09-09.html",
+      "source": "original checkout:docs/designs/pantopus-place-page-concept-2026-09-09.html",
+      "sha256": "3b90d3ed79272491ef3e1e9f70014908274cdcbb48783f948464862605d28d32",
+      "bytes": 76023
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/fragments/pantopus-bill-insight.html",
+      "source": "thread visualization:pantopus-bill-insight.html",
+      "sha256": "bd2378a1fc7bb8fcf7f479025f3658c368218920d1d5267271417ab7bdd68468",
+      "bytes": 9695
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/fragments/place-conversations.html",
+      "source": "thread visualization:place-conversations.html",
+      "sha256": "bbf79e7f953de3dc7f8796ab0e508239fdb598ef8356c7013ee72b2346fc8e20",
+      "bytes": 17678
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/fragments/place-conversations-v2.html",
+      "source": "thread visualization:place-conversations-v2.html",
+      "sha256": "8d39a0e442576345e47bed1f9e920c2536b7bba05e298ece2e244eddf2725a03",
+      "bytes": 29050
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/fragments/pantopus-next-stage.html",
+      "source": "earlier proposal visualization:pantopus-next-stage.html",
+      "sha256": "e61bc4b9c08730d135badb83950d31891b1ff47b56982d73649df9501eae3657",
+      "bytes": 27613
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/drafts/pantopus-tech-design.md",
+      "source": "temporary design draft:pantopus-tech-design.md",
+      "sha256": "57f8f49898270a18d5a10ba318309d2c4828cb4ede247261582c722ab51043d0",
+      "bytes": 23906
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/drafts/pantopus-journeys-design.md",
+      "source": "temporary design draft:pantopus-journeys-design.md",
+      "sha256": "0e9e815de4710362869100aa330fa83c4356ad039f989fe58470a054cc956cd3",
+      "bytes": 17687
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/authoring/pantopus-render-design.mjs",
+      "source": "historical temporary authoring script:pantopus-render-design.mjs",
+      "sha256": "8fdcd17ef8be84369d412d1b61b4418a0cde8777e61af46f41d9b13127fffd64",
+      "bytes": 9548
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/authoring/pantopus-doc-qa.mjs",
+      "source": "historical temporary authoring script:pantopus-doc-qa.mjs",
+      "sha256": "79858a4667a02b2d3cdb5abb5b67b9be61dd5d389aa292f1379a512c550adfb8",
+      "bytes": 8896
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/authoring/pantopus-integrate-design.py",
+      "source": "historical temporary authoring script:pantopus-integrate-design.py",
+      "sha256": "68f1d7653b2fa4fc150a2950ecdb55e15ca0377af702d08089451fa8e3e4b59b",
+      "bytes": 7546
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/authoring/pantopus-design-qa.py",
+      "source": "historical temporary authoring script:pantopus-design-qa.py",
+      "sha256": "212603ef4777a7d1d15dec02d44b7811335b93521b9ba0d2899eb70d3ee35163",
+      "bytes": 1924
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-reader-qa.json",
+      "source": "historical temporary QA report:pantopus-reader-qa.json",
+      "sha256": "c96bc032419892b3771fa29e3a27e822b32605e2d6ac9834ef16ec73cc6a9e44",
+      "bytes": 810
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-qa.json",
+      "source": "historical temporary QA report:pantopus-concept-qa.json",
+      "sha256": "e24539a2b487e3dbc76ad9c021ae00cceede6cc4282d18840fa9e9ed5fed0a7f",
+      "bytes": 2736
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-reader-desktop.png",
+      "source": "historical temporary design screenshot:pantopus-reader-desktop.png",
+      "sha256": "715f0175f6f3a3c4b78e4e2dcb5b3d9d768465e45387761245261222caa9fbd4",
+      "bytes": 255768
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-reader-dark.png",
+      "source": "historical temporary design screenshot:pantopus-reader-dark.png",
+      "sha256": "85b91d4ba3f3b2be2a02926be399687dc9cafbb09d592b702721411a726528a3",
+      "bytes": 258395
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-reader-mobile.png",
+      "source": "historical temporary design screenshot:pantopus-reader-mobile.png",
+      "sha256": "818d690e30bb05d51db425ed2875d95393c91b8526d1b22412b8537a712b10c5",
+      "bytes": 66631
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-desktop.png",
+      "source": "historical temporary design screenshot:pantopus-concept-desktop.png",
+      "sha256": "e7d1b0fe305d9abbba2769e700dc658640204dba6d92981420d039746d47edf3",
+      "bytes": 320240
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-dark.png",
+      "source": "historical temporary design screenshot:pantopus-concept-dark.png",
+      "sha256": "a079e0ecc14d6981d3478ab5858586fb4fa8a72d85e1d029837a3182d6aff893",
+      "bytes": 259706
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-mobile.png",
+      "source": "historical temporary design screenshot:pantopus-concept-mobile.png",
+      "sha256": "6b9211c3529d21765c16cc12494b865f6b5efcd308b7f92c3540b7c609f438d2",
+      "bytes": 285103
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-bill.png",
+      "source": "historical temporary design screenshot:pantopus-concept-bill.png",
+      "sha256": "bf7f4abc85bad51ec271385ecb4b6bdf3682d971644cdd01b357a8c2966cdec3",
+      "bytes": 231678
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-bill-mobile.png",
+      "source": "historical temporary design screenshot:pantopus-concept-bill-mobile.png",
+      "sha256": "b1ca509116151ecb41dd74fc2c91534868a9a510c16d2cea4d5ac20e2fb68b72",
+      "bytes": 67966
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-event-mobile.png",
+      "source": "historical temporary design screenshot:pantopus-concept-event-mobile.png",
+      "sha256": "96489ce5a05dc0377cb61e2ad3da5ef4001c383334316ee38a40027feef89db6",
+      "bytes": 83360
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-concept-opportunity-dark-mobile.png",
+      "source": "historical temporary design screenshot:pantopus-concept-opportunity-dark-mobile.png",
+      "sha256": "e86e48d39729cae573243fc947d5f7ce1dd566ee106b343d769c42319e68e741",
+      "bytes": 73349
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-bill-360-dark.png",
+      "source": "historical temporary design screenshot:pantopus-bill-360-dark.png",
+      "sha256": "f8160f000fdbe499d378f907eb52f96f97b30a256a3c567588328f8a9a2bf234",
+      "bytes": 58448
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-bill-360-light.png",
+      "source": "historical temporary design screenshot:pantopus-bill-360-light.png",
+      "sha256": "5c35416e58d9e1ce5172e4c6818ca6b1713c59230e865f8988e6b37488cad91e",
+      "bytes": 58028
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-bill-736-dark.png",
+      "source": "historical temporary design screenshot:pantopus-bill-736-dark.png",
+      "sha256": "f57da38763cf78a83acd985a25b425831f255adbde61ce6302a86fd5745fe320",
+      "bytes": 60976
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-bill-736-light.png",
+      "source": "historical temporary design screenshot:pantopus-bill-736-light.png",
+      "sha256": "56cf4d21e684f0ae627277d13b3bfaab49ce3d9fc7dc0f1b41d74c9e10e837d6",
+      "bytes": 60245
+    },
+    {
+      "path": "docs/designs/archive/2026-09-08-09/evidence/pantopus-bill-final.png",
+      "source": "historical temporary design screenshot:pantopus-bill-final.png",
+      "sha256": "e0ca27ec277538082e5c98843d9e8c5ba6fdf73be65ac4b813f56362017a9598",
+      "bytes": 57321
+    },
+    {
+      "path": "docs/designs/pantopus-bill-insight-concept-2026-09-08.html",
+      "source": "temporary exported concept:pantopus-bill-insight-preview.html",
+      "sha256": "8b79306051765cb8b44646b1fff3001f842c38f2440296f1834dc0a72b630758",
+      "bytes": 50651
+    }
+  ]
+}
