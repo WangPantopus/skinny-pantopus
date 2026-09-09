@@ -25,12 +25,18 @@ candidate and synthetic-only SMTP capture; public staging API/worker and the
 separate Home candidate are preserved. Fresh Chrome signup → captured verification
 → exact return and password recovery → immediate login → exact return now pass.
 Secure cookie/CSRF, old-session denial, single-use links, refresh/logout and the
-certificate renewal dry run also pass. Next repair the observed sandbox saved-card
-retry false success, then continue remaining OAuth/address/payment acceptance.
+certificate renewal dry run also pass. The saved-card retry repair now passes
+4,462 backend tests, privacy gates and real sandbox setup/add/concurrent retry/
+default/access-denial/delete acceptance. Its exact test cards/customers are
+cleaned up and fixture tokens are denied. Next continue remaining OAuth/address/
+payment UI and transaction acceptance; saved-card API coverage is not a charge,
+Connect or subscription acceptance result.
 See the [vendor report](staging-vendor-acceptance-2026-09-09.md) for runtime scope,
-pending fixtures and verification limits. PR #23's CI remains running at
-`f6f250ff0`; merge only after its current-head checks pass. PR #22's merged-master
-CI passed. Historical DNS/access blockers below are superseded by this update.
+pending fixtures and verification limits. PR #23 merged as `4eed00746` after
+current-head full CI passed at `f6f250ff0`; its merged-master checks are pending.
+PR #22's merged-master CI passed. Historical DNS/access blockers below are
+superseded by this update. The Home/vendor private candidate runs `9f970feb2`
+(`bede11a5cc04`); browser API and public staging API/worker remain separate.
 
 - PRs #9 and #10 are on master. PR #13 merged to master as
   `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline

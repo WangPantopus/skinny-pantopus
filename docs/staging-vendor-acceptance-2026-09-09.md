@@ -1,7 +1,9 @@
 # Staging browser and vendor acceptance — September 9, 2026
 
 Work continues on `codex/staging-vendor-acceptance`, initially based on PR #23
-at `f6f250ff0`. PR #23's current-head CI is still running; PR #22's
+at `f6f250ff0`. PR #23 merged as `4eed00746ca6f16870debb933e51f908dc6f8b4f`
+at 17:54 UTC after its [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34382198124)
+passed, including all native jobs. Its merged-master checks remain pending. PR #22's
 [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34378389968)
 passed. Preserve the original checkout and its unrelated Places design work.
 
@@ -69,8 +71,37 @@ A real sandbox saved-card retry exposed a defect: the first add creates one
 owned payment method, but repeating it returns HTTP 201 with `paymentMethod:
 null` after the duplicate database insert fails. The list still contains exactly
 one card; the other synthetic account cannot read or change its default.
-Repair and repeat acceptance are pending. The exact test customer, card and
-unconfirmed SetupIntent are privately recorded for scoped cleanup after testing.
+The repair at `9f970feb2` now returns the same durable owned row on retry,
+reconciles a competing unique insert, and fails on database errors or an invalid
+saved-record binding. A retry also completes a previously failed default update.
+It preserves a different selected default. It does not detach a provider method
+after an uncertain save, because another request may already have saved it.
+
+All 12 payment service tests pass, including nine new retry/error/ownership
+regressions. The full backend run passes 4,462 tests (16 skipped), and all privacy
+gates pass. The initial simultaneous runs had unrelated socket-hang-up failures;
+both complete sequential reruns pass. No assertion was removed or softened.
+
+The private Home/vendor candidate now runs `9f970feb2`, image `bede11a5cc04`, on
+port 18003, retaining the prior `428d140a04e8` image stopped for rollback. Public
+API/worker and the browser account candidate are preserved. No migration changed.
+
+Real Stripe sandbox acceptance passes two successful SetupIntents, retry returning
+the original card, concurrent adds producing one row, default selection and
+preservation, cross-account read/add/default/delete denial, default-card deletion
+promoting the fallback, and final deletion clearing the provider default. The
+accelerated script hit the existing ten-writes/minute limit during final cleanup;
+cleanup resumed after that window without disabling the limiter or repeating
+setup. Both test cards are detached, the exact two test customers are deleted,
+their local customer references and saved cards are cleared, and both fixture
+accounts are logged out with their old tokens denied. No PaymentIntent or charge
+was created. Successful test SetupIntent records remain with Stripe as evidence.
+
+This certifies the API saved-card journey, not native/web PaymentSheet UI, Connect
+onboarding, charge/capture/refund, or subscription entitlements. Those remain in
+the vendor backlog alongside OAuth and address-provider acceptance. Provider
+behavior was checked against Stripe's [attach](https://docs.stripe.com/api/payment_methods/attach)
+and [idempotency](https://docs.stripe.com/api/idempotent_requests) documentation.
 
 Private evidence and resumable helpers live under the ignored operator directory
 `20260907/staging-vendor`; credentials, email links and raw logs stay there.
