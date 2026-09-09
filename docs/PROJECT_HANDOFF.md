@@ -17,21 +17,26 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 ### Source integration checkpoint — September 9
 
 **Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
-`codex/staging-mail-unit-binding`, starting from PR #28 source `95842b119`.
-[Modern mail unit binding](staging-mail-unit-binding-2026-09-09.md) now passes
-193 focused regressions for exact apartment selection, destination preservation,
-scoped claims and current access denial. Privacy gates pass. Two full runs hit
-different unrelated HTTP test failures; both affected suites pass independently.
-The detailed report preserves those limits; no full green result is claimed.
-Next make modern confirmation and membership atomic, repair exact-membership
-retry, and prove rollback/concurrency before integration. No changes from this
-new branch are hosted and it must not be merged as a completed release yet.
+`codex/staging-mail-unit-binding`. The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
+records exact apartment/destination binding plus atomic confirmation, current
+membership retry/status and legacy partial-proof recovery. All 4,540 backend
+tests and privacy gates pass. The database has 16 passing SQL contracts,
+122 application functions/73 trigger bindings, and 14 competing connections
+proving one membership, bounded guesses and concurrent-freeze denial.
 
-The prior native worktree remains `/private/tmp/pantopus-staging-native-mail`,
-branch `codex/staging-native-mail`; ready PR #28 awaits full current-head CI
-at `95842b119` (run `34401283503`). Its backend, image, database and iOS lint
-checks pass; native build/simulator jobs remain. The earlier Docker Hub 500 is
-resolved on this head. Native simulator fixtures are all cleaned.
+Next apply the checked additive confirmation function only to Free staging,
+refresh the private candidate from a committed source, and run scoped live
+multi-unit/rollback/retry acceptance with exact cleanup before PR integration.
+Nothing from this modern-mail branch is hosted yet. The private candidate remains
+`26102bfb2` (`312b5a382fd6`); public/browser/production runtimes are unchanged.
+
+[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) merged as
+`2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after
+[full current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34401283503)
+passed at `95842b119`, including all three iOS simulator jobs and Android
+quality/build/snapshots/instrumented tests. Its merged-master CI is pending.
+The prior native worktree and branch are preserved. All native simulator mail
+fixtures are cleaned; no owner device check is pending.
 
 [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
 19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)
@@ -82,10 +87,9 @@ Both exact Lob test postcards and temporary Home/proof/claim/occupancy records
 are removed; all fixture sessions are revoked, no push tokens remain, and the
 original document IDs are preserved. Do not rerun these completed publishers.
 
-[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) awaits full
-current-head CI and integration. Its earlier auxiliary Docker Hub pull returned
-HTTP 500; the latest source must pass that check as well. Next continue modern
-multi-unit attachment and remaining payment/OAuth acceptance while CI runs.
+[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) is integrated
+after full CI, including the successful replacement for the earlier Docker Hub
+HTTP 500. Continue modern mail acceptance, then the remaining payment/OAuth work.
 No owner device observation is pending. Simulator proof is not physical mail or
 an externally delivered Lob callback.
 

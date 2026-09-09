@@ -82,7 +82,7 @@ function seedHome(overrides = {}) {
     city: 'Portland',
     state: 'OR',
     zipcode: '97201',
-    owner_id: 'other-user',
+    owner_id: null,
     ...overrides,
   }]);
 }
@@ -576,14 +576,15 @@ describe('getVerificationStatus', () => {
     }));
   });
 
-  test('returns confirmed for verified attempts', async () => {
+  test('does not report a legacy partial proof as usable membership', async () => {
     seedActiveAttempt({ status: 'verified' });
     seedToken();
 
     const result = await service.getVerificationStatus('attempt-1', 'user-1');
 
-    expect(result.success).toBe(true);
-    expect(result.status).toBe('confirmed');
+    expect(result.success).toBe(false);
+    expect(result.statusCode).toBe(409);
+    expect(result.status).toBeUndefined();
   });
 
   test('marks overdue active attempts as expired on status read', async () => {
@@ -631,6 +632,7 @@ describe('confirmCode', () => {
 
   test('marks attempt as verified on success', async () => {
     seedAddress();
+    seedHome();
     seedActiveAttempt();
     seedToken({ code_hash: hashCode('123456') });
 
@@ -642,6 +644,7 @@ describe('confirmCode', () => {
 
   test('sets used_at on token on success', async () => {
     seedAddress();
+    seedHome();
     seedActiveAttempt();
     seedToken({ code_hash: hashCode('123456') });
 
@@ -662,14 +665,8 @@ describe('confirmCode', () => {
     expect(result.occupancy_id).toBeTruthy();
 
     // Verify delegation to occupancyAttachService
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'user-1',
-        method: 'mail_code',
-        claimType: 'resident',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 
   test('updates existing occupancy verification_status', async () => {
@@ -696,13 +693,8 @@ describe('confirmCode', () => {
     const result = await service.confirmCode('attempt-1', '123456', 'user-1');
 
     expect(result.occupancy_id).toBe('occ-existing');
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'user-1',
-        method: 'mail_code',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 
   // ── Wrong code ────────────────────────────────────────────
@@ -833,7 +825,8 @@ describe('Full flow: start → confirm', () => {
     const confirmResult = await service.confirmCode(startResult.attempt_id, code, 'user-1');
     expect(confirmResult.verified).toBe(true);
     expect(confirmResult.occupancy_id).toBeTruthy();
-    expect(mockAttach).toHaveBeenCalled();
+    expect(getTable('HomeOccupancy')).toHaveLength(1);
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 
   test('start then resend then confirm with new code', async () => {

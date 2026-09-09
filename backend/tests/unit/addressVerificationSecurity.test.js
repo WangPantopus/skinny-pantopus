@@ -242,12 +242,12 @@ describe('SCN-06 — a correct code with no occupancy is not reported as success
     const res = await mailVerificationService.confirmCode(start.attempt_id, code, 'user-1');
 
     expect(res.verified).toBe(false);
-    expect(res.code_accepted).toBe(true);
-    expect(res.needs_support).toBe(true);
+    expect(res.statusCode).toBe(409);
+    expect(res.occupancy_id).toBeUndefined();
     expect(res.error).toMatch(/contact support/i);
   });
 
-  test('the code is still consumed, so it cannot be replayed', async () => {
+  test('the code remains usable when no membership could be committed', async () => {
     const start = await mailVerificationService.startVerification('user-1', 'addr-1');
     const code = mockDispatchPostcard.mock.calls[0][1];
 
@@ -255,7 +255,8 @@ describe('SCN-06 — a correct code with no occupancy is not reported as success
 
     const attempt = getTable('AddressVerificationAttempt')
       .find((a) => a.id === start.attempt_id);
-    expect(attempt.status).toBe('verified');
+    expect(attempt.status).toBe('created');
+    expect(getTable('AddressVerificationToken')[0].used_at).toBeFalsy();
   });
 });
 

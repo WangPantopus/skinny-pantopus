@@ -1,5 +1,5 @@
 /**
- * The mail channel, end to end, with nothing in the middle mocked.
+ * Mail orchestration through the real provider and the in-memory RPC boundary.
  *
  * Every prior suite mocked either the vendor or the attach service — which is
  * how "a correct postcard code can never produce an occupancy" shipped twice:
@@ -7,9 +7,10 @@
  * demanded a pre-verified AddressClaim that nothing in the mail path creates.
  * The code that was physically mailed IS the proof; this suite drives the real
  * startVerification → real Lob provider (only fetch stubbed) → real
- * confirmCode → real occupancyAttachService, and asserts the whole chain:
+ * confirmCode → confirmation RPC boundary, and asserts the whole chain:
  * the mailed postcard carries the code, and entering that code produces a
- * verified member occupancy with an expiry stamp.
+ * verified member occupancy with an expiry stamp. PostgreSQL contracts separately
+ * execute the real confirmation transaction, locks, grants and rollback.
  */
 
 // Lob must be "available" before any module under test loads its config.
@@ -367,4 +368,45 @@ test('a shared address with known apartments requires a unit before sending', as
   getTable('Home')[0].address2 = '4';
   expect((await mailVerificationService.startVerification(USER_ID, ADDRESS_ID)).success).toBe(false);
   expect(lobRequests).toHaveLength(0);
+});
+
+
+test('status and correct-code retry observe the original active membership', async () => {
+  const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+  const code = codeOnTheMailedPostcard();
+  const first = await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID);
+  const original = { ...getTable('HomeOccupancy')[0] };
+  expect((await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).status).toBe('confirmed');
+  expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: true, occupancy_id: first.occupancy_id, reused: true });
+  expect(getTable('HomeOccupancy')[0]).toEqual(original);
+  expect(getTable('AddressVerificationToken')[0].attempt_count).toBe(1);
+  getTable('HomeOccupancy')[0].is_active = false;
+  expect(await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).toMatchObject({ success: false, statusCode: 403 });
+  expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: false, statusCode: 403 });
+  expect(getTable('HomeOccupancy')[0].is_active).toBe(false);
+});
+
+test('a legacy consumed code can complete its missing membership once', async () => {
+  const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+  const code = codeOnTheMailedPostcard();
+  getTable('AddressVerificationAttempt')[0].status = 'verified';
+  Object.assign(getTable('AddressVerificationToken')[0], { used_at: new Date().toISOString(), attempt_count: 1 });
+  expect(await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).toMatchObject({ success: false, statusCode: 409 });
+  expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
+  expect(getTable('HomeOccupancy')).toHaveLength(1);
+  expect(getTable('AddressVerificationToken')[0].attempt_count).toBe(1);
+});
+
+
+test('missing Home recovery uses the same unconsumed code and sends no more mail', async () => {
+  const home = { ...getTable('Home')[0] };
+  const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+  const code = codeOnTheMailedPostcard();
+  seedTable('Home', []);
+  expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: false, statusCode: 409 });
+  expect(getTable('AddressVerificationToken')[0].used_at).toBeFalsy();
+  seedTable('Home', [home]);
+  expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
+  expect(getTable('AddressVerificationToken')[0].attempt_count).toBe(1);
+  expect(lobRequests).toHaveLength(1);
 });

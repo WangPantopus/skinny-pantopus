@@ -2,8 +2,8 @@
 
 Worktree `/private/tmp/pantopus-staging-mail-unit-binding`, branch
 `codex/staging-mail-unit-binding`, starts from PR #28 source `95842b119`.
-PR #28 contains completed native postcard simulator acceptance and is separately
-awaiting current-head full CI/integration. No new hosted changes or mail fixtures
+PR #28 contains completed native postcard simulator acceptance and merged as
+`2259b8ee9` after full current-head CI `34401283503` passed. No new hosted changes or mail fixtures
 have been created for this next milestone.
 
 ## Destination and apartment milestone
@@ -35,7 +35,7 @@ jobs without snapshots retain only the old single-address, no-unit path. Legacy
 multi-unit jobs need support; their historical printed destination cannot be
 reconstructed safely. No snapshot is represented as proof of physical delivery.
 
-## Next required work before integration
+## Earlier checkpoint limits (superseded by the atomic milestone)
 
 Modern code consumption and membership still use separate writes. A failure can
 leave a consumed proof with no membership, and the current route's old
@@ -52,3 +52,53 @@ native/API test fixtures are cleaned, sessions revoked and original Home documen
 preserved. Public/browser/production runtimes and hosted migration ledger remain
 unchanged. Smarty activation/retest, payment/OAuth acceptance and release gates
 remain in the project handoff.
+
+
+## Atomic confirmation milestone
+
+The additive service-only `confirm_mail_verification` RPC now owns code attempts,
+exact destination/Home resolution, membership, matching claim updates, completion
+metadata and audit in one transaction. It locks the owned mail attempt/token/job,
+canonical address and selected Home; native and modern mail share the Home lock.
+A later household authority, frozen Home, rejected unit claim or ended/removed/
+suspended/timed-out member cannot be bypassed. New grants use the shared member
+permission templates, preserve minor restrictions and cannot acquire management
+rights. Independently verified membership retains its role and verification age.
+
+A correct retry requires the same proof and the original active membership; it
+cannot reattach a removed member or extend verification. Legacy consumed proofs
+with missing membership can recover once while the proof remains valid and its
+safe destination is identifiable. Legacy jobs without destination evidence are
+limited to one Home with no unit; ambiguous or multi-unit legacy mail needs
+support. No historical address snapshot is invented.
+
+The API has no separate-write fallback when the RPC is unavailable. It returns
+retryable 503 and does not falsely consume proof. The old route shortcut that
+reported `Attempt is verified` as confirmed is removed. Read-only confirmed
+status checks the recorded original membership and current address/access;
+a partial proof requests same-code recovery instead of claiming usable residency.
+
+Verification:
+
+- Full backend: 4,540 passed, 16 skipped; privacy gates pass. Two older tests
+  expecting partial proof consumption were updated to require atomic preservation.
+  The earlier unrelated HTTP failures belong to the preceding checkpoint, not
+  this successful full run.
+- All 16 SQL contracts pass; function lint checks 122 application functions and
+  73 trigger bindings, with six reviewed stock PostGIS findings and 38 existing
+  warnings. The expanded real-SQL contract also covers child permissions,
+  later household ownership, rejected claims and expired proofs.
+- Four competing correct confirmations create one exact-Home membership with
+  three unchanged retries. Eight wrong guesses stop at five; the correct code
+  cannot bypass the lock. Two concurrent connections prove a Home freeze wins
+  before membership can commit. All 14 competing connections and cleanup pass.
+- A forced audit failure rolls back proof, token, claim and membership together.
+  Correct retry, changed unit, freeze and revoked-membership denial pass against
+  the actual PostgreSQL function, with all contract rows rolled back.
+
+Next apply this additive function only to existing Free staging, refresh the
+private candidate from committed source, and run real Lob test + HTTP multi-unit/
+recovery/access acceptance with exact fixture cleanup. The migration has only
+been applied to the disposable local `mail_confirmation_contract` database so
+far. Source CI/integration and hosted acceptance remain; no production or public
+runtime change is authorized by this engineering checkpoint.

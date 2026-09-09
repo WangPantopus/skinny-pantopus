@@ -91,7 +91,7 @@ function seedHome(overrides = {}) {
     city: 'Portland',
     state: 'OR',
     zipcode: '97201',
-    owner_id: 'other-user',
+    owner_id: null,
     ...overrides,
   }]);
 }
@@ -186,11 +186,8 @@ describe('full flow: start → confirm → occupancy', () => {
     expect(attempts[0].status).toBe('verified');
 
     // OccupancyAttachService was called
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'mail_code',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 
   test('confirmed code results in member role (never admin)', async () => {
@@ -203,11 +200,8 @@ describe('full flow: start → confirm → occupancy', () => {
     await service.confirmCode(startResult.attempt_id, code, 'user-1');
 
     // mail_code always maps to member
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'mail_code',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 });
 

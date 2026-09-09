@@ -734,6 +734,7 @@ const supabaseAdmin = {
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
     if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
+    if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {
