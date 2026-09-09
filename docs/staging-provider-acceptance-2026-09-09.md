@@ -62,3 +62,13 @@ confirms test requests do not print or mail a physical piece. Test rendering
 does not verify a real address or prove delivery. Browser account API and web
 images remain as recorded in the vendor report; production and the public
 staging API/worker are preserved. No migration or new paid resource was introduced.
+
+## Integration checkpoint
+
+[PR #26](https://github.com/WangPantopus/skinny-pantopus/pull/26) merged as
+`635f57571f24d8db8d710a5032353a0bf9c6e99a` at 18:19 UTC after
+[required CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34387534158)
+passed at `b9f1e1174101a47cefdf78bf0fe1fec585f6f26e`. Unchanged web/native
+jobs were skipped by the workflow's change detection. No deployment switches
+were enabled and the existing private candidate was not replaced for this merge.
+Application mail-code confirmation and uncertain-send recovery remain unfinished.
