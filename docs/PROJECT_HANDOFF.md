@@ -43,7 +43,8 @@ after PR #10 merged. Consequently, master does not yet contain the baseline;
 [PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13), now ready for review, supplies
 that integration, including the large-baseline checker repair from PR #12.
 Its initial merge tree exactly matched PR #11; both migration-base checks and
-six checker tests pass. Its fresh CI is pending. Integrate #13 before retargeting
+six checker tests pass. Its [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319428996)
+passes at `ea8cfcedaa1007f0d721e51a57b65bf9edc1ee77`. Integrate #13 before retargeting
 #12 to master. PR #12 remains unmerged, as the owner confirmed.
 Frozen migration bytes are archived unchanged. The two canonical files replay
 through the pinned CLI with reference fingerprints matching all 6,467 static
@@ -132,7 +133,9 @@ Android remains unavailable. Documentation-head
 failed on iPhone SE because a settings test used a fixed delay and left its save
 running into a later test. The test now awaits the save task; all 16 settings tests
 pass five repetitions (80 executions), along with formatting and strict lint.
-Fresh PR #12 CI is required. Installed application code remains at the previously verified revision.
+[Full PR #12 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319484968)
+passes at `289612d4e37b4b40a4b6753d6f837dca41e5b353`, including iPhone SE.
+Installed application code remains at the previously verified revision.
 
 Preserve global/internal feature disablement, unrelated local work and both
 release/migration switches. Only fresh synthetic fixtures and designated device

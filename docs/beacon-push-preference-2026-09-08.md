@@ -223,7 +223,8 @@ after a fixed 500 ms sleep before its delayed request finished; that request the
 consumed later tests' stub responses, also failing the quiet-hours test. The test
 now awaits the actual save loop and drains its timer before returning. This is
 a test-only change; all 16 settings tests pass five repetitions (80 executions),
-with passing SwiftFormat and strict SwiftLint. Fresh PR #12 CI is still required.
+with passing SwiftFormat and strict SwiftLint. [Full PR #12 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319484968)
+now passes at `289612d4e37b4b40a4b6753d6f837dca41e5b353`, including iPhone SE.
 
 PR #10 is merged to master at `c9fd509e3`. PR #11 subsequently merged into
 `codex/beacon-full-journey` at `6113691c9`, so the baseline still needs a follow-up
@@ -231,6 +232,8 @@ integration PR to master. Draft [PR #13](https://github.com/WangPantopus/skinny-
 now provides it, preserving merge ancestry and including the migration checker
 fix already present in PR #12. Legacy-base and canonical-base checks plus six
 checker tests pass; its initial merge tree exactly matched the PR #11 result.
-PR #13 CI is pending. PR #12 remains draft and unmerged. Its current base is
+[PR #13 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319428996)
+passes at `ea8cfcedaa1007f0d721e51a57b65bf9edc1ee77` and that PR is ready for
+review. PR #12 remains draft and unmerged. Its current base is
 `codex/database-baseline-adoption`; retarget it after baseline integration so its
 review contains only the additive preference and native fixes.
