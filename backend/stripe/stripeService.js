@@ -1717,6 +1717,35 @@ class StripeService {
     try {
       const customerId = await this.getOrCreateCustomer(userId);
 
+      const { data: existingMethods, error: readError } = await supabaseAdmin
+        .from('PaymentMethod')
+        .select('*')
+        .eq('user_id', userId);
+      if (readError || !Array.isArray(existingMethods)) {
+        throw new Error('Could not load saved payment methods');
+      }
+
+      const finishSavedMethod = async (method) => {
+        if (!method?.id || method.user_id !== userId ||
+            method.stripe_customer_id !== customerId ||
+            method.stripe_payment_method_id !== paymentMethodId) {
+          throw new Error('Could not confirm saved payment method');
+        }
+        // A previous request may have saved the row before Stripe's default
+        // update failed. Retrying completes that step without another insert.
+        if (method.is_default) {
+          await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: paymentMethodId }
+          });
+        }
+        return { success: true, paymentMethod: method };
+      };
+
+      const existing = existingMethods.find(
+        (method) => method.stripe_payment_method_id === paymentMethodId
+      );
+      if (existing) return await finishSavedMethod(existing);
+
       const paymentMethod = await stripe.paymentMethods.attach(paymentMethodId, {
         customer: customerId
       });
@@ -1739,12 +1768,7 @@ class StripeService {
         details.bank_account_type = paymentMethod.us_bank_account.account_type;
       }
 
-      const { data: existingMethods } = await supabaseAdmin
-        .from('PaymentMethod')
-        .select('id')
-        .eq('user_id', userId);
-
-      const isFirstMethod = !existingMethods || existingMethods.length === 0;
+      const isFirstMethod = existingMethods.length === 0;
 
       const { data: savedMethod, error: dbError } = await supabaseAdmin
         .from('PaymentMethod')
@@ -1757,17 +1781,27 @@ class StripeService {
         .single();
 
       if (dbError) {
-        logger.error('Error saving payment method', { error: dbError.message });
+        // Another request can win the unique Stripe-method insert. Only the
+        // same user's durable row can satisfy this retry. Other failures must
+        // remain failures; never return HTTP 201 with a null payment method.
+        if (dbError.code === '23505') {
+          const { data: winner, error: winnerError } = await supabaseAdmin
+            .from('PaymentMethod')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('stripe_payment_method_id', paymentMethodId)
+            .maybeSingle();
+          if (!winnerError && winner) return await finishSavedMethod(winner);
+        }
+        logger.error('Error saving payment method', { code: dbError.code });
+        // Keep the provider attachment for a later retry. Detaching here could
+        // break an overlapping successful request for the same method.
+        throw new Error('Could not save payment method. Please try again.');
       }
 
-      if (isFirstMethod) {
-        await stripe.customers.update(customerId, {
-          invoice_settings: { default_payment_method: paymentMethodId }
-        });
-      }
-
+      const result = await finishSavedMethod(savedMethod);
       logger.info('Payment method attached', { userId, paymentMethodId });
-      return { success: true, paymentMethod: savedMethod };
+      return result;
 
     } catch (err) {
       logger.error('Error attaching payment method', { error: err.message, userId });
