@@ -116,6 +116,29 @@ final class EntryContinuityUITests: XCTestCase {
         )
     }
 
+    func testChatReturnsAfterARevokedSessionRequiresLoginAgain() {
+        assertChatSessionReturn(code: "SESSION_REVOKED", message: "You were signed out for security. Sign in again.")
+    }
+
+    func testChatReturnsAfterAnExpiredSessionRequiresLoginAgain() {
+        assertChatSessionReturn(code: "UNAUTHORIZED", message: "Your session has expired. Please sign in again.")
+    }
+
+    private func assertChatSessionReturn(code: String, message: String) {
+        app.launchEnvironment["UI_TESTS_SESSION_END_CODE"] = code
+        launch(reset: true, link: "/beacons")
+        signIn()
+        XCTAssertTrue(element("beacons.find").waitForExistence(timeout: 10))
+        launch(link: "/chat/entry-room")
+        XCTAssertTrue(element("loginEmailField").waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts[message].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Chat return — violet compass"].exists)
+        tapButton("Dismiss")
+        signIn()
+        XCTAssertTrue(element("chatConversation").waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Chat return — violet compass"].waitForExistence(timeout: 15))
+    }
+
     private func assertSessionReturn(code: String, message: String) {
         app.launchEnvironment["UI_TESTS_SESSION_END_CODE"] = code
         launch(reset: true, link: "/beacons")

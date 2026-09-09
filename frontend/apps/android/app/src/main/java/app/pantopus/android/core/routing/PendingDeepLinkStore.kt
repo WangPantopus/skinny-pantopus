@@ -7,7 +7,7 @@ import android.content.SharedPreferences
 
 /**
  * SharedPreferences-backed one-shot stash for a content deep link that
- * arrived while signed out, or a post arrival still awaiting its first load.
+ * arrived while signed out, or a post/chat arrival still awaiting its first load.
  * In-progress arrivals are bound to the original account so a server-ended
  * session can resume after reauthentication without crossing accounts.
  * Survives process death with a 24h TTL; explicit logout always clears it.

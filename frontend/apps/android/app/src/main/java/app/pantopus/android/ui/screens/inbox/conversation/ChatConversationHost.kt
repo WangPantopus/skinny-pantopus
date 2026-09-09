@@ -3,10 +3,12 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.auth.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,10 @@ fun ChatConversationHost(
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
     val currentUserId = (state as? AuthRepository.State.SignedIn)?.user?.id.orEmpty()
+    val arrival = (mode as? ChatThreadMode.Room)?.let { DeepLinkRouter.Destination.Conversation(it.id) }
+    DisposableEffect(arrival) {
+        onDispose { arrival?.let(DeepLinkRouter::completeArrival) }
+    }
     ChatConversationScreen(
         args =
             ChatConversationRouteArgs(
@@ -61,5 +67,6 @@ fun ChatConversationHost(
         onUseAIDraft = onUseAIDraft,
         onOpenGig = onOpenGig,
         onOpenListing = onOpenListing,
+        onContentLoaded = { arrival?.let(DeepLinkRouter::completeArrival) },
     )
 }

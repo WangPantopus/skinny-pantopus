@@ -695,10 +695,72 @@ final class DeepLinkRouterSessionReturnTests: XCTestCase {
 
     func testSignedInPostRemainsPendingUntilItsContentLoads() {
         beginArrival()
-        XCTAssertEqual(DeepLinkRouter.shared.activePostArrivalID, "session-return")
+        XCTAssertEqual(DeepLinkRouter.shared.activeContentArrival, .post(id: "session-return"))
         XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
         DeepLinkRouter.shared.completePostArrival(id: "session-return")
-        XCTAssertNil(DeepLinkRouter.shared.activePostArrivalID)
+        XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testSignedInConversationRemainsPendingAfterNavigationConsumption() {
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .conversation(id: "session-room"))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/session-room")
+    }
+
+    func testConversationReplaysAfterServerRejectionAndLateDeparture() throws {
+        for reason in [SessionEndReason.sessionRevoked, .expired] {
+            userID = "original-user"
+            let manager = try makeManager()
+            DeepLinkRouter.shared.handle(path: "/chat/session-room")
+            _ = DeepLinkRouter.shared.consume()
+            XCTAssertEqual(DeepLinkRouter.shared.activeContentArrival, .conversation(id: "session-room"))
+            manager.endSession(reason: reason)
+            manager.endSession(reason: reason)
+            DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+            XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/session-room")
+            XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
+            userID = nil
+            let replay = try XCTUnwrap(PendingDeepLinkStore.take(userID: "original-user"))
+            userID = "original-user"
+            DeepLinkRouter.shared.handle(path: replay)
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .conversation(id: "session-room"))
+            DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+            XCTAssertNil(PendingDeepLinkStore.peek())
+        }
+    }
+
+    func testConversationCannotReplayForAnotherAccount() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        manager.endSession(reason: .sessionRevoked)
+        XCTAssertNil(PendingDeepLinkStore.take(userID: "different-user"))
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testManualLogoutClearsConversationHandoff() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        manager.endSession(reason: .expired)
+        manager.clearLocalSession()
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testPostAndConversationCompletionDoNotClearEachOther() {
+        DeepLinkRouter.shared.handle(path: "/post/shared-id")
+        DeepLinkRouter.shared.handle(path: "/chat/shared-id")
+        DeepLinkRouter.shared.completePostArrival(id: "shared-id")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/shared-id")
+        DeepLinkRouter.shared.handle(path: "/post/shared-id")
+        DeepLinkRouter.shared.completeConversationArrival(id: "shared-id")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/shared-id")
+    }
+
+    func testCompletedConversationDoesNotReplayAfterLaterSessionEnd() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+        manager.endSession(reason: .expired)
         XCTAssertNil(PendingDeepLinkStore.peek())
     }
 
@@ -709,7 +771,7 @@ final class DeepLinkRouterSessionReturnTests: XCTestCase {
             beginArrival()
             manager.endSession(reason: reason)
             manager.endSession(reason: reason)
-            XCTAssertNil(DeepLinkRouter.shared.activePostArrivalID)
+            XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
             XCTAssertNil(manager.accessToken)
             XCTAssertEqual(manager.sessionEndReason, reason)
             XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")

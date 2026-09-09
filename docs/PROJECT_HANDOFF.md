@@ -33,21 +33,37 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
   subsequently passed in full, including all three iOS simulator jobs and
   Android quality/build/instrumented tests. The earlier waiver was not itself
   evidence of passing checks.
+- [PR #15](https://github.com/WangPantopus/skinny-pantopus/pull/15) merged as
+  `0e57e4f2a3517de386acf8e69f2218ca5f8bc8f1` after its
+  [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34331005965)
+  passed, including all three iOS simulator jobs. It preserves iOS post
+  destinations through session recovery. Its
+  [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34333762148)
+  also passed.
 - Both deployment and migration switches were freshly verified false in staging
   and production. Source integration is not a production deployment. Hosted
   canonical ledger adoption and production cutover remain separate work.
 
 The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
-`codex/ios-notification-continuation`, based on merged master `939878b4f`;
+`codex/beacon-native-acceptance`, based on merged master `0e57e4f2a`;
 other worktrees, ignored operator artifacts and the owner's design proposal are
 preserved. The [iOS session-return repair](ios-notification-continuation-2026-09-09.md)
 now passes 177 targeted unit tests, strict lint and actual simulator expiry/
 revocation → sign-in → exact-post journeys. It also fixes the login presentation
 transition and keeps the form when its reason banner is dismissed. Six existing
 entry/Beacon UI journeys pass. A fresh native composer fixture has two synthetic accounts,
-one Beacon/follower, global device push disabled and zero tokens. No publication
-has been sent and no iPhone observation is pending. Native Beacon publishing is
-the first active case, followed by remaining chat/session/token states. Update
+one Beacon/follower, global device push disabled and zero tokens. The
+[native Beacon journey](beacon-native-acceptance-2026-09-09.md) now passes:
+composer publication, audience notification, exact post/author, cold-start
+session restoration and normal logout. N2 alone is read; N1 remains unread.
+Both stored markers are reconciled and must never be republished. The fixture
+is parked for natural token expiry; its dedicated simulator must remain
+untouched until the private runner's elapsed-time guard passes. The
+[chat continuation repair](chat-notification-continuation-2026-09-09.md) now
+passes 220 iOS unit tests, four post/chat expiry/revocation UI journeys and
+190 Android tests. Android ktlint/Detekt pass; staging APK/lint and live
+Android chat return are active next checks.
+No iPhone observation is pending. Update
 this handoff after each meaningful milestone.
 
 ### Completed Beacon and platform evidence
@@ -98,7 +114,7 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Finish native Beacon composer publication and remaining notification states
+1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
    Cover live session/login return, natural expiry, chat destinations and token
    lifecycle; preserve the already revoked test sessions. Physical Android is
@@ -111,9 +127,10 @@ are retained for rollback. Production and the old testing database are preserved
    preparation and preserve records, balances and entitlements.
 
 Start each continuation by fetching origin, checking PR/master CI and staging
-state, and reading the linked report for the next concrete case. All current
+state, and reading the linked report for the next concrete case. Earlier physical
 Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. Read the private operator checkpoint before sending or
+Beacons or post IDs. The fresh simulator fixture above remains active. Read the
+private operator checkpoint before sending or
 mutating. No user device observation is currently pending.
 
 ## Decisions to preserve
