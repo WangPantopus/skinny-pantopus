@@ -88,3 +88,21 @@ the new commit before rechecking this case.
 
 Native changes remain development builds;
 public staging API/worker and production remain unchanged.
+
+## Live private storage milestone
+
+The updated isolated candidate runs `bcba6739c` (image
+`sha256:ba9e7669b6f9651f1c4902e38d641c8d6b5726967f36b9c5d79f98d14e60c5bb`).
+Live upload → listing → exact-byte retrieval passes for the synthetic owner and
+explicitly permitted member. Three concurrent identical uploads produce one
+File/HomeDocument and one quota charge. Changed metadata conflicts, unauthenticated
+content fails, sensitive content is denied to the member, and the bucket's public
+object URL does not return bytes. The repaired legacy list excludes all three
+byte-contract records. Explicit document-permission denial and inactive
+membership both deny old content paths; restoring the fixture's access works.
+
+The three synthetic documents, Home, member and private bucket are retained for
+native acceptance. The existing account-delivery account is the synthetic owner;
+no real household, device token, production service or public staging API was
+changed. The older candidate is stopped and retained for rollback. Do not rerun
+one-time candidate creation scripts without reconciling current container state.
