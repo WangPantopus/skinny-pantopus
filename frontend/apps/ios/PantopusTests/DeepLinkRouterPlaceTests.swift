@@ -22,13 +22,13 @@ final class DeepLinkRouterPlaceTests: XCTestCase {
     /// the test host happens to hold. Mirrors `DeepLinkRouterTests.setUp`.
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
         super.tearDown()

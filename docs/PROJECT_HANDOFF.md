@@ -40,14 +40,14 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
 `codex/ios-notification-continuation`, based on merged master `939878b4f`;
 other worktrees, ignored operator artifacts and the owner's design proposal are
-preserved. iOS's analogous in-progress destination loss is reproduced by a new
-regression. The account-bound repair passes 177 targeted unit tests and strict
-lint; actual simulator session-return tests exposed an additional navigation
-transition failure that is still being repaired. Six existing entry/Beacon UI
-journeys pass. A fresh native composer fixture now has two synthetic accounts,
+preserved. The [iOS session-return repair](ios-notification-continuation-2026-09-09.md)
+now passes 177 targeted unit tests, strict lint and actual simulator expiry/
+revocation → sign-in → exact-post journeys. It also fixes the login presentation
+transition and keeps the form when its reason banner is dismissed. Six existing
+entry/Beacon UI journeys pass. A fresh native composer fixture has two synthetic accounts,
 one Beacon/follower, global device push disabled and zero tokens. No publication
-has been sent and no iPhone observation is pending. Finish the simulator repair,
-then native Beacon publishing. Update
+has been sent and no iPhone observation is pending. Native Beacon publishing is
+the first active case, followed by remaining chat/session/token states. Update
 this handoff after each meaningful milestone.
 
 ### Completed Beacon and platform evidence
