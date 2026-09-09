@@ -74,8 +74,12 @@ strict Swift lint/format pass. A private SMTP capture service and an unexposed
 API candidate run on the existing host. Synthetic signup, captured verification
 and resend, single-use verification, and verified login pass. Live recovery
 exposed an immediate-login timestamp boundary after reset; its repair and two new
-regressions now pass all 4,340 backend tests. Live verification of the updated
-candidate remains next. Final frontend CI is running. The configured
+regressions now pass all 4,340 backend tests. Two fresh live recovery cycles now pass immediate login/profile access while
+old tokens remain denied. A live SMTP outage returned the same 503 for known and
+unknown accounts without creating a user; restored delivery and login pass.
+Final CI passed all three iOS simulators and Android instrumentation but found
+two outdated Android email screenshots. Both were inspected and updated; all
+seven status-screen snapshots pass local verification. Final CI is rerunning. The configured
 `staging.pantopus.com` frontend hostname does not resolve, so real browser link
 completion remains unfinished.
 
@@ -136,7 +140,7 @@ are retained for rollback. Production and the old testing database are preserved
 1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
    The native Beacon, natural-expiry and chat return milestones now pass; finish
-   fixture cleanup and retain explicit platform/build limits. Preserve revoked
+   retain explicit platform/build limits after completed fixture cleanup. Preserve revoked
    session state and evidence. Physical Android is
    unavailable, and simulator-only results cannot establish hardware delivery.
 2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
@@ -149,7 +153,7 @@ are retained for rollback. Production and the old testing database are preserved
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical
 Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. The fresh simulator fixture above remains active. Read the
+Beacons or post IDs. The simulator fixture above is also cleaned. Read the
 private operator checkpoint before sending or
 mutating. No user device observation is currently pending.
 
