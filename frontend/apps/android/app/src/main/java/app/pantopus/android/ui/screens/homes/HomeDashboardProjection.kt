@@ -132,6 +132,9 @@ object HomeDashboardProjection {
                     ),
                 )
             }
+            if (access?.hasAccess == true && (access.isOwner || "docs.view" in access.permissions)) {
+                add(tile("view_docs", "Documents", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
+            }
             add(
                 tile(
                     "add_member",

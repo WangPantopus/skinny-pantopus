@@ -114,8 +114,17 @@ skips), along with formatting, Detekt and lint. All 4,415 backend tests pass,
 including a new repair that excludes restricted document metadata from the old
 Home File list. An isolated private staging bucket and local-only API candidate
 are now running. Live exact bytes, concurrent retry/quota, sensitive scope, old-link revocation
-and legacy metadata isolation now pass. Native screen acceptance and remaining
-delete/replace operations are next. Staging lacks default
+and legacy metadata isolation now pass. Native acceptance exposed missing Home
+tools/Documents entry points; both clients now connect them with confirmed
+document permissions. Android OS picker → upload → exact PDF preview/share and
+iOS opening/sharing that same document now pass; both share copies match all
+609 original bytes. Android foreground return after permission revocation hides
+the content; fixture access is restored. All 47 focused Android tests, its Place
+snapshot/quality checks, 18 iOS dashboard/access tests, ten list tests and strict
+Swift lint pass. Delete/replace, abandoned-upload cleanup and quota concurrency
+remain next; iOS picker upload itself has unit coverage, not a live picker run.
+Android private HTTP logging is repaired. PR #19's merged-master CI passes.
+See the byte-delivery report for exact limits. Staging lacks default
 member IAM rows; fixture-only grants permit this test, without certifying the
 unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
 as `fd8a94eef727342340fc522f7196e6e64814ed08`.

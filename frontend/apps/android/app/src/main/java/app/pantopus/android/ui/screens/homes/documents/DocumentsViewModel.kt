@@ -11,7 +11,6 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
-import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCta
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.ChipStripConfig
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -191,8 +190,7 @@ class DocumentsViewModel
                         icon = PantopusIcon.FolderLock,
                         headline = "No documents yet",
                         subcopy =
-                            "Upload your lease, insurance, or warranties. Stored end-to-end " +
-                                "encrypted, shareable with household members.",
+                            "Save leases, insurance and warranties privately. Choose which household members can access each file.",
                         ctaTitle = "Upload document",
                         onCta = { onUpload() },
                     )
@@ -247,14 +245,7 @@ class DocumentsViewModel
                 icon = PantopusIcon.FolderLock,
                 title = bannerTitle(summary),
                 subtitle = bannerSubtitle(summary),
-                cta =
-                    BannerCta(
-                        label = "Export",
-                        icon = PantopusIcon.Download,
-                        accessibilityLabel = "Export documents",
-                        tint = BannerCtaTint.Home,
-                        onClick = { onExport() },
-                    ),
+                cta = null,
                 tint = BannerCtaTint.Home,
             )
         }
@@ -270,7 +261,7 @@ class DocumentsViewModel
                 val unit = if (summary.expiringCount == 1) "document" else "documents"
                 return "${summary.expiringCount} $unit expiring in the next 90 days"
             }
-            return "All current · vault end-to-end encrypted"
+            return "All current · access limited to permitted household members"
         }
 
         private fun rowFor(

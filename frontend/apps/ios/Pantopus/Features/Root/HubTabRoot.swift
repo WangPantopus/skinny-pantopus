@@ -3052,7 +3052,7 @@ public struct HubTabRoot: View {
                     onOpenInbox: { push(.neighborInbox) },
                     onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
-                    onOpenHubHome: {}
+                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
                 )
             )
         case let .placeDetail(homeId, group):

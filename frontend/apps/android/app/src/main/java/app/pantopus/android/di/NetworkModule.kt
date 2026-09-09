@@ -5,6 +5,7 @@ import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequestJsonAdapter
 import app.pantopus.android.data.api.net.RetryInterceptor
+import app.pantopus.android.data.api.net.SafeHttpLoggingInterceptor
 import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.api.services.AccountDeletionApi
 import app.pantopus.android.data.api.services.AdminApi
@@ -129,7 +130,6 @@ import io.sentry.android.okhttp.SentryOkHttpInterceptor
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.io.File
@@ -207,15 +207,7 @@ object NetworkModule {
         retryInterceptor: RetryInterceptor,
         cache: Cache,
     ): OkHttpClient {
-        val logging =
-            HttpLoggingInterceptor().apply {
-                level =
-                    if (BuildConfig.DEBUG) {
-                        HttpLoggingInterceptor.Level.BODY
-                    } else {
-                        HttpLoggingInterceptor.Level.NONE
-                    }
-            }
+        val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
         return OkHttpClient
             .Builder()
             .cache(cache)
@@ -285,15 +277,7 @@ object NetworkModule {
         retryInterceptor: RetryInterceptor,
         cache: Cache,
     ): OkHttpClient {
-        val logging =
-            HttpLoggingInterceptor().apply {
-                level =
-                    if (BuildConfig.DEBUG) {
-                        HttpLoggingInterceptor.Level.BODY
-                    } else {
-                        HttpLoggingInterceptor.Level.NONE
-                    }
-            }
+        val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
         val platformHeader =
             Interceptor { chain ->
                 chain.proceed(
