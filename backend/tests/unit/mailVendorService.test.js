@@ -118,6 +118,7 @@ describe('LobMailProvider', () => {
       expect(sentBody.to.address_city).toBe('Portland');
       expect(sentBody.to.address_state).toBe('OR');
       expect(sentBody.to.address_zip).toBe('97201');
+      expect(sentBody.use_type).toBe('operational');
     });
 
     test('omits address_line2 when not provided', async () => {
@@ -153,6 +154,7 @@ describe('LobMailProvider', () => {
 
       expect(sentBody.front).toBe('tmpl_custom');
       expect(sentBody.back).toBe('tmpl_custom');
+      expect(sentBody.use_type).toBe('operational');
     });
 
     test('uses inline HTML when no template ID', async () => {
@@ -212,6 +214,32 @@ describe('LobMailProvider', () => {
       await provider.sendPostcard(testAddress, '123456');
 
       expect(calledUrl).toBe('https://api.lob.com/v1/postcards');
+    });
+  });
+
+  describe('sendCustomPostcard', () => {
+    test.each(['marketing', 'operational'])('sends an explicit %s use type without relying on account defaults', async (useType) => {
+      let sentBody;
+      mockFetchImpl = (_url, opts) => {
+        sentBody = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, json: async () => ({ id: 'psc_custom', object: 'postcard' }) });
+      };
+      const provider = new LobMailProvider();
+      provider.apiKey = 'test_key';
+      const result = await provider.sendCustomPostcard(testAddress, {
+        frontHtml: '<p>Invitation</p>', backHtml: '<p>Details</p>', useType,
+      });
+      expect(sentBody.use_type).toBe(useType);
+      expect(result.vendorJobId).toBe('psc_custom');
+    });
+
+    test.each([undefined, 'unknown'])('rejects an unspecified or invalid purpose before sending', async (useType) => {
+      const provider = new LobMailProvider();
+      provider.apiKey = 'test_key';
+      await expect(provider.sendCustomPostcard(testAddress, {
+        frontHtml: '<p>Invitation</p>', backHtml: '<p>Details</p>', useType,
+      })).rejects.toThrow('Postcard use type must be marketing or operational');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
