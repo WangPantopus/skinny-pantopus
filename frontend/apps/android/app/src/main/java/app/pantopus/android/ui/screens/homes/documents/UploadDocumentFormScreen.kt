@@ -71,7 +71,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Allowed picker MIME types — PDF / image / DOC / DOCX / XLSX. */
-private val ALLOWED_UPLOAD_MIMES: Array<String> =
+internal val ALLOWED_UPLOAD_MIMES: Array<String> =
     arrayOf(
         "application/pdf",
         "image/*",

@@ -13,6 +13,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,17 +94,20 @@ import java.io.File
 @Composable
 fun DocumentDetailScreen(
     onBack: () -> Unit,
-    onReplace: () -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
+    val replacementFile by viewModel.replacementFile.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
     val exports = remember { mutableListOf<File>() }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showReplacementConfirm by remember { mutableStateOf(false) }
+    val replacementPicker = rememberDocumentReplacementPicker(viewModel)
+    LaunchedEffect(replacementFile) { showReplacementConfirm = replacementFile != null }
 
     DisposableEffect(lifecycle) {
         val observer =
@@ -161,7 +166,7 @@ fun DocumentDetailScreen(
                         onShare = {
                             viewModel.export { dto, bytes -> scope.launch { exportDocument(context, dto, bytes, true, exports) } }
                         },
-                        onReplace = onReplace,
+                        onReplace = { if (viewModel.beginReplacement()) replacementPicker.launch(ALLOWED_UPLOAD_MIMES) },
                         onDelete = { showDeleteConfirm = true },
                     )
                 is DocumentDetailUiState.Error ->
@@ -191,6 +196,29 @@ fun DocumentDetailScreen(
         }
     }
 
+    if (showReplacementConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showReplacementConfirm = false
+                viewModel.cancelReplacement()
+            },
+            title = { Text("Replace this file?") },
+            text = { Text("The document link and details will stay the same.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showReplacementConfirm = false
+                    viewModel.replace()
+                }) { Text("Replace file") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showReplacementConfirm = false
+                    viewModel.cancelReplacement()
+                }) { Text("Cancel") }
+            },
+        )
+    }
+
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -210,6 +238,30 @@ fun DocumentDetailScreen(
                 }
             },
         )
+    }
+}
+
+/** Read only the selected file; the view-model enforces size and cancellation. */
+@Composable
+private fun rememberDocumentReplacementPicker(
+    viewModel: DocumentDetailViewModel,
+): androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?> {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    return rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) {
+            viewModel.cancelReplacement()
+        } else {
+            val resolver = context.contentResolver
+            val mime = runCatching { resolver.getType(uri) }.getOrNull()
+            val filename =
+                runCatching {
+                    resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+                }.getOrNull() ?: "document"
+            scope.launch { viewModel.readReplacement(filename, mime) { resolver.openInputStream(uri) } }
+        }
     }
 }
 
@@ -340,6 +392,7 @@ private fun LoadedShell(
         )
         StickyActionFooter(
             isMutating = isMutating,
+            canReplace = dto.fileVersion != null,
             onOpenExternally = onOpenExternally,
             onShare = onShare,
             onReplace = onReplace,
@@ -720,6 +773,7 @@ private fun LinkedToCard(
 @Composable
 private fun StickyActionFooter(
     isMutating: Boolean,
+    canReplace: Boolean,
     onOpenExternally: () -> Unit,
     onShare: () -> Unit,
     onReplace: () -> Unit,
@@ -763,7 +817,7 @@ private fun StickyActionFooter(
                 testTag = "documentDetailReplace",
                 tint = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
-                enabled = !isMutating,
+                enabled = !isMutating && canReplace,
                 onClick = onReplace,
             )
             FooterButton(

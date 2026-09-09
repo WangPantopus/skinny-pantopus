@@ -260,6 +260,31 @@ open class HomesRepository
                 api.uploadHomeDocument(homeId, file, fields)
             }
 
+        /** Replaces only bytes; the server preserves the current document metadata. */
+        @Suppress("LongParameterList")
+        open suspend fun replaceHomeDocument(
+            homeId: String,
+            documentId: String,
+            uploadId: String,
+            expectedVersion: String,
+            filename: String,
+            mimeType: String?,
+            bytes: ByteString,
+        ): NetworkResult<CreateDocumentResponse> =
+            safeApiCall {
+                val fields =
+                    mapOf("upload_id" to uploadId, "expected_version" to expectedVersion)
+                        .mapValues { (_, value) -> value.toRequestBody("text/plain".toMediaTypeOrNull()) }
+                val safeName = filename.replace(Regex("[\\\"\\\\\\r\\n]"), "_")
+                val file =
+                    MultipartBody.Part.createFormData(
+                        "file",
+                        safeName,
+                        bytes.toRequestBody((mimeType ?: "application/octet-stream").toMediaTypeOrNull()),
+                    )
+                api.replaceHomeDocument(homeId, documentId, file, fields)
+            }
+
         /** Uses the authenticated API path, never a document-supplied URL. */
         open suspend fun homeDocumentContent(
             homeId: String,

@@ -178,9 +178,15 @@ passed at `134b25751`. Its merged-master checks are pending. Replacement work is
 [replacement report](home-document-replacement-2026-09-09.md). Initial replacement
 backend/SQL work passes 4,453 backend tests, 12 contracts and the full function
 linter in a separate owned local database. Explicit backend privacy gates and
-three real replacement/expiry/deletion races also pass. Both native pickers and
-confirmation controls are wired; their regression/build validation and hosted
-acceptance remain. The recovery report preserves
+three real replacement/expiry/deletion races also pass. The compatible migration and private staging candidate are now applied without
+changing existing rows or public runtime. Two live API replacement cycles pass;
+provider cleanup has the documented eventual-read limit. All 41 iOS focused tests
+and signed simulator build pass. The live iOS picker → confirmation → same document → Share also passes, with all
+1,292 bytes matching and its temporary copy removed on restart. Both native picker → confirmation → same document → Share journeys now pass,
+with 41 focused tests per platform and matching 1,292-byte exports removed on
+restart. Both disposable documents and the temporary manage grant are removed;
+original five documents and quotas remain. All local checks pass, including final Android lint. PR publication/integration
+is the remaining replacement step. The recovery report preserves
 the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
 PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree
@@ -236,18 +242,24 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Finish remaining notification states after the completed native composer journey
-   using iOS simulators, Android emulators and isolated staging API fixtures.
-   The native Beacon, natural-expiry, chat return and fixture cleanup milestones
-   now pass; retain explicit platform/build limits. Preserve revoked
-   session state and evidence. Physical Android is
-   unavailable, and simulator-only results cannot establish hardware delivery.
-2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
-   sandbox payments and address verification. Use existing/free capacity.
-3. Complete the remaining production upgrade/ledger, external-file recovery and
+1. Finish PR publication and integration for
+   `codex/home-document-replacement`. Backend/database, live isolated API and both
+   native picker → replace → same document → exact Share journeys pass. Both
+   disposable documents and the temporary manage grant are cleaned; original five
+   Home documents and quotas remain. See the replacement report and private
+   operator checkpoint for exact build/fixture state.
+2. Continue staging browser signup/recovery/verification, real OAuth callbacks,
+   reachable sandbox payments and address verification. The frontend hostname/TLS
+   and OAuth provider setup remain unresolved; use existing/free capacity.
+3. Complete the production upgrade/ledger, external-file recovery and
    deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
    reachable-feature acceptance. Keep actual production cutover distinct from
    preparation and preserve records, balances and entitlements.
+
+Beacon publication, mute/access/preferences, native post/chat return, natural
+expiry and their fixture cleanup are complete within the recorded platform
+limits. Do not repeat the completed iPhone observations. Physical Android remains
+unverified; simulator/emulator results do not establish physical-device delivery.
 
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical

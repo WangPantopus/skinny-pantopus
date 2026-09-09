@@ -10,11 +10,16 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okio.ByteString
+import java.io.InputStream
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav arg keys for the Document Detail route. */
@@ -63,8 +68,13 @@ class DocumentDetailViewModel
         val shouldDismiss: StateFlow<Boolean> = _shouldDismiss.asStateFlow()
 
         private var loadId = 0
-        private var deleting = false
+        private var mutating = false
         private var deleted = false
+        private var replacementDocument: HomeDocumentDto? = null
+        private var replacementSelection = UUID.randomUUID()
+        private var replacementAttempt: Triple<PickedFile, String, String>? = null
+        private val _replacementFile = MutableStateFlow<PickedFile?>(null)
+        val replacementFile: StateFlow<PickedFile?> = _replacementFile.asStateFlow()
 
         fun clearContent() {
             loadId += 1
@@ -84,7 +94,7 @@ class DocumentDetailViewModel
         }
 
         private suspend fun loadDocument() {
-            if (deleting || deleted) return
+            if (mutating || deleted) return
             clearContent()
             val requestId = loadId
             when (val result = repo.getHomeDocuments(homeId)) {
@@ -114,10 +124,89 @@ class DocumentDetailViewModel
             }
         }
 
+        fun beginReplacement(): Boolean {
+            val current = _state.value as? DocumentDetailUiState.Loaded ?: return false
+            if (mutating || deleted) return false
+            if (current.document.fileVersion == null || current.document.contentUrl == null) return false
+            replacementSelection = UUID.randomUUID()
+            replacementDocument = current.document
+            _replacementFile.value = null
+            return true
+        }
+
+        suspend fun readReplacement(
+            filename: String,
+            mimeType: String?,
+            openStream: () -> InputStream?,
+        ) {
+            if (replacementDocument == null) return
+            val selection = replacementSelection
+            try {
+                val bytes = withContext(Dispatchers.IO) { readDocumentBytes(openStream) }
+                if (selection == replacementSelection) {
+                    _replacementFile.value = PickedFile(filename, bytes.size.toLong(), mimeType, bytes)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (selection == replacementSelection) {
+                    _toast.value = DocumentDetailToast("Choose a readable, nonempty file of 25 MB or less.", true)
+                }
+            }
+        }
+
+        fun cancelReplacement() {
+            replacementSelection = UUID.randomUUID()
+            replacementDocument = null
+            _replacementFile.value = null
+            replacementAttempt = null
+        }
+
+        @Suppress("ReturnCount") // An incomplete or cancelled picker cannot start a mutation.
+        fun replace() {
+            val original = replacementDocument ?: return
+            val version = original.fileVersion ?: return
+            val file = _replacementFile.value ?: return
+            val bytes = file.bytes ?: return
+            if (mutating || deleted) return
+            val previous = replacementAttempt
+            val uploadId = if (previous?.first == file && previous.second == version) previous.third else UUID.randomUUID().toString()
+            replacementAttempt = Triple(file, version, uploadId)
+            mutating = true
+            loadId += 1
+            _state.value = DocumentDetailUiState.Loaded(original, isMutating = true)
+            viewModelScope.launch {
+                val result = repo.replaceHomeDocument(homeId, documentId, uploadId, version, file.filename, file.mimeType, bytes)
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val document = result.data.document
+                        val matchesDocument = document.id == documentId && document.fileId == documentId
+                        val matchesVersion = document.fileVersion == uploadId && document.contentUrl != null
+                        if (matchesDocument && matchesVersion) {
+                            cancelReplacement()
+                            mutating = false
+                            loadDocument()
+                            val loaded = _state.value as? DocumentDetailUiState.Loaded
+                            if (loaded?.document?.fileVersion == uploadId && loaded.content != null) {
+                                _toast.value = DocumentDetailToast("File replaced.", false)
+                            }
+                        } else {
+                            _state.value = DocumentDetailUiState.Error("Couldn't confirm replacement. Reload this document.")
+                        }
+                    }
+                    is NetworkResult.Failure -> {
+                        _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't replace this file."))
+                    }
+                }
+                mutating = false
+            }
+        }
+
         fun delete() {
             val current = _state.value as? DocumentDetailUiState.Loaded ?: return
-            if (deleting || deleted) return
-            deleting = true
+            if (mutating || deleted) return
+            mutating = true
+            cancelReplacement()
             loadId += 1
             _state.value = current.copy(isMutating = true, content = null)
             viewModelScope.launch {
@@ -135,7 +224,7 @@ class DocumentDetailViewModel
                         _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't delete this document."))
                     }
                 }
-                deleting = false
+                mutating = false
             }
         }
 
