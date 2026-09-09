@@ -66,7 +66,7 @@ synthetic accounts and already revoked session records remain as evidence,
 with zero push tokens and all their registry sessions revoked. The owned
 iOS simulator is closed. No iPhone observation is pending.
 
-Current development is `/private/tmp/pantopus-staging-account-delivery`, branch
+Account development is `/private/tmp/pantopus-staging-account-delivery`, branch
 `codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
 now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
 records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
@@ -74,10 +74,16 @@ strict Swift lint/format pass. A private SMTP capture service and an unexposed
 API candidate run on the existing host. Synthetic signup, captured verification
 and resend, single-use verification, and verified login pass. Live recovery
 exposed an immediate-login timestamp boundary after reset; its repair and two new
-regressions now pass all 4,340 backend tests. Live verification of the updated
-candidate remains next. Final frontend CI is running. The configured
+regressions now pass all 4,340 backend tests. The updated candidate passes two fresh live reset → immediate login → own-profile
+cycles while denying prior tokens. SMTP outage verification and staging web
+delivery are next. Final frontend CI is running. The configured
 `staging.pantopus.com` frontend hostname does not resolve, so real browser link
 completion remains unfinished.
+
+Staging web preparation is in `/private/tmp/pantopus-staging-web-delivery`,
+branch `codex/staging-web-delivery`. The container build now accepts an explicit
+public app origin as well as the API origin, keeping staging links isolated.
+The image build and hostname/TLS setup are pending.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree

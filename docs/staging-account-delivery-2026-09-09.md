@@ -68,3 +68,13 @@ fails DNS resolution. Captured token/API verification proves backend behavior,
 not browser completion through that hostname. Staging web hosting remains next.
 Private account/capture artifacts are under `account-delivery/`; no credentials
 or captured messages belong in Git or chat.
+
+## Repaired candidate — live reset passed twice
+
+Updated candidate source `ca47de8b043c7ae5ec2b7f9d4c6e161843bd831d`, image
+`sha256:f18f0f4a05ca17dd6c195bbdfc9feb07592ba3b0221fc4b6594d3641b8545df8`,
+passes two fresh recovery-link cycles. Each reset was followed immediately by
+credential login and an authenticated own-profile request, with no harness
+sleep. The JWT issuance offsets were +804 ms and +143 ms after their precise
+cutoffs. The prior access token was denied in both cycles. All 4,340 backend
+tests pass. Original consumed links and earlier revoked sessions were not reused.
