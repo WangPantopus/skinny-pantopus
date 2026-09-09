@@ -78,8 +78,7 @@ preserves the typed code; only explicit `LOCKED` means the proof is exhausted.
 
 The printed native postcard link now targets the exact Home's existing
 `verify-postcard` route, with the code kept off the URL. Focused provider tests
-verify that link and the separate idempotency/correlation namespace. This last
-link repair is not yet in the live candidate below; simulator acceptance remains.
+verify that link and the separate idempotency/correlation namespace. This link repair is running in the refreshed candidate; simulator acceptance remains.
 
 ## Live private-candidate acceptance
 
@@ -116,3 +115,27 @@ Next finish native simulator acceptance and current-head integration checks.
 The signed synthetic callback is not externally delivered Lob webhook proof.
 Modern multi-unit completion and remaining payment/OAuth acceptance remain open.
 Smarty activation and a real DPV/unit retest remain required before launch.
+
+
+## Simulator navigation milestone
+
+The private candidate was refreshed to `26102bfb2072f9e8a89a534bbe03a9860c372875`,
+image `sha256:312b5a382fd6e1b3a7cbcf6cf2695550ff3ee41213b27c385a49da19bd00523a`.
+The preceding `a5157a836a41` container is retained stopped. Public runtimes remain
+unchanged. Two separate synthetic actors and Homes each have one real Lob test
+postcard, with exact unit and printed Home link checked; no physical mail.
+These simulator fixtures are separate from the cleaned API journey above.
+
+The signed-in Place landing hides iOS back navigation, making its old Hub menu
+unreachable. Both native Place headers now expose the existing account menu.
+iOS build and strict lint pass; Android build, Detekt and the updated Place
+snapshot pass. The snapshot was visually inspected. Normal iOS menu → Settings
+→ logout → designated fixture login passes. The first harness attempts failed
+before login (hidden back navigation), then before submission (SwiftUI inherited
+container identifier); neither consumed a code attempt or sent more mail.
+
+Android printed link → real pending status → read-only refresh → cold restart
+→ wrong code rejection → exact code acceptance passes. The database confirms one
+verified member for only its designated Home and two attempts (wrong + correct).
+iOS final code submission, both same-code retries, final normal logout and exact
+fixture cleanup remain. Do not mark these fixtures cleaned or republish them.

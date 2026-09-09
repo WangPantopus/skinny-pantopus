@@ -23,7 +23,7 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 passed at `d24632cda`. Backend, web, database replay/contracts and image checks
 passed; native jobs were correctly skipped because that PR did not change them.
 PRs #23, #25 and #26 are also merged. PR #26's merged-master CI passed;
-PR #27's merged-master CI remains under observation.
+PR #27's latest merged-master CI also passed (run `34396663166`).
 
 The [mail recovery report](staging-mail-recovery-2026-09-09.md) records real Lob
 test lost-response and concurrent HTTP admission acceptance. Three keyed sends
@@ -48,15 +48,26 @@ connections pass. iOS passes 44 focused tests; Android passes 40 plus formatting
 assembly. Both clients now distinguish a temporary throttle from an exhausted
 code and show live request metadata instead of sample tracking. The final native
 mail link repair targets the exact Home without putting a code in its URL; it
-requires the next private-candidate refresh and simulator acceptance.
+is running in the refreshed private candidate; simulator acceptance is active.
 
-The private candidate now runs `f5f85188b` (`a5157a836a41`). Both additive native
+The private candidate now runs `26102bfb2` (`312b5a382fd6`). Both additive native
 mail migrations are applied only to Free staging, preserving existing records and
 the absent ledger. Real Lob test/API acceptance passes: one postcard across
 three lost receipts, own status/retry, signed synthetic receipt recovery, one
 member across concurrent confirmations, and foreign/unit/revoked-access denial.
 All disposable test mail/Home/proof/notification fixtures are cleaned, fixture
 sessions revoked, and original document IDs preserved. Public runtimes are unchanged.
+
+Simulator acceptance exposed an inaccessible account menu on iOS after Place
+became the landing screen. Both Place headers now expose the existing menu;
+iOS build/strict lint and Android build/Detekt/updated Place snapshot pass.
+Android printed-link status, read-only refresh, cold launch and wrong/exact code
+entry pass against its own real Lob test postcard, creating one verified member.
+iOS has reached code entry; final submission/retry/logout acceptance remains.
+Two exact simulator mail/Home fixtures remain pending cleanup; do not republish.
+Draft [PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) has passing
+backend/database checks; an auxiliary Docker Hub pull returned HTTP 500, so a
+fresh current-head full CI pass is still required before integration.
 
 Next finish native simulator acceptance and current-head PR integration checks,
 then modern multi-unit attachment and remaining payment/OAuth acceptance.
