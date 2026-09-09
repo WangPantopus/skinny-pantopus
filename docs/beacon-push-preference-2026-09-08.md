@@ -115,7 +115,7 @@ the fixtures were deleted during cleanup.
 | A-restored | `a4264b3f-3414-4276-b435-40dbcae48e40` | `627d2412-ad3b-43b3-be56-591de42e21c7` |
 
 The native test audience contained only the designated Android account and the
-token-free API follower. The iPhone was not enrolled or notified. These are
+token-free API follower. During that Android test, the iPhone was not enrolled or notified. These are
 emulator observations; physical Android remains unverified.
 
 Every original Android notification preference compared equal after restoration,
@@ -135,9 +135,17 @@ remains unchanged.
 ## Remaining acceptance
 
 Hosted raw-role denial, API off/restore, retained audience rows, exact permitted
-return and no replay now pass. Next install the prepared staging iPhone build once
-the owner confirms device readiness, create a fresh isolated Beacon, and verify
-the new preference's off/restore behavior. Verify the audience before every
-publication and restore test preferences afterward. Physical Android remains unavailable.
+return and no replay now pass. On resume, the prepared iPhone build's executable
+hash, signature, staging API and development push entitlement were verified; it
+installed successfully on the designated iPhone 16 Pro / iOS 26.5.2. A fresh
+synthetic owner and Beacon have only that iPhone account as a follower, with one
+linked APNs registration. Original preference values were saved; global/internal
+enablement remains false. No publication has been sent in this resumed fixture.
+
+The owner is now asked to turn the new native Beacon toggle off and background
+the app. Next verify no device alert while the in-app row remains and opens the
+exact post, then restore the toggle and verify the next notification's exact
+return without replay. Verify the audience before every publication and restore
+test preferences afterward. Physical Android remains unavailable.
 Previously confirmed background/foreground/closed-app, block, mute and global
 push cases remain in the [full journey report](beacon-full-journey-2026-09-08.md).

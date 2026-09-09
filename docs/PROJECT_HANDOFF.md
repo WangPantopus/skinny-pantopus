@@ -72,7 +72,7 @@ not replayed. The audience was limited to the designated emulator and token-free
 API follower. Original preferences were restored and compared; normal logout
 removed the Android token. Scoped cleanup removed 11 posts, 12 notifications,
 one Beacon and two fresh accounts. The two original device accounts, prior
-notifications and iPhone registration are preserved; the beta list is empty.
+notifications and iPhone registration were preserved.
 The emulator is closed. Signed iPhone and Android staging builds pass.
 The native walkthrough exposed inactive menu/notification callbacks on Android's
 first-run Hub. Revision `8022e9b05253a91a579f52e883e067514843234a` repairs them;
@@ -80,8 +80,15 @@ formatting, static checks and the staging build pass. Actual first-run menu →
 settings → notification preferences navigation now works without a home. Its
 [new CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34298026294)
 fully passes at that application revision. The later documentation checkpoint
-does not change application code. Physical iPhone availability is still unconfirmed for this new
-preference check; prior confirmed cases do not need repeating. Physical Android
+does not change application code. On resume, the signed staging iPhone build was
+verified and installed successfully on the designated device. A fresh synthetic
+owner/Beacon now has only the iPhone account as a follower; original preferences
+and the existing APNs registration are recorded for preservation. Only that
+owner and designated iPhone account are in the beta list; global/internal
+enablement remains false. No new iPhone
+publication has been sent. The next action is the native Beacon toggle off →
+background publication → retained in-app return, then restore → device alert →
+exact post. Prior confirmed iPhone cases do not need repeating. Physical Android
 remains unavailable.
 
 Preserve global/internal feature disablement, unrelated local work and both
@@ -115,8 +122,9 @@ Start a new session by:
    restrictions and local SQL/integration checks already pass. Read the
    [preference milestone and staging plan](beacon-push-preference-2026-09-08.md),
    verify its CI, then finish physical iPhone acceptance for the new preference.
-   Earlier preference fixtures are cleaned up; create a fresh isolated Beacon
-   only after device readiness is confirmed.
+   Android/API preference fixtures are cleaned up. The resumed iPhone fixture is
+   now prepared; inspect its private checkpoint and pending device step before
+   creating anything or sending a publication.
    Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
