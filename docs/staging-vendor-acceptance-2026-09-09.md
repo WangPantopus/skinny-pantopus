@@ -6,6 +6,8 @@ at 17:54 UTC after its [full CI](https://github.com/WangPantopus/skinny-pantopus
 passed, including all native jobs. Its merged-master checks remain pending. PR #22's
 [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34378389968)
 passed. Preserve the original checkout and its unrelated Places design work.
+The saved-card repair is pushed in ready [PR #25](https://github.com/WangPantopus/skinny-pantopus/pull/25);
+its current-head CI/integration are pending.
 
 ## Frontend DNS and HTTPS
 
@@ -87,7 +89,7 @@ port 18003, retaining the prior `428d140a04e8` image stopped for rollback. Publi
 API/worker and the browser account candidate are preserved. No migration changed.
 
 Real Stripe sandbox acceptance passes two successful SetupIntents, retry returning
-the original card, concurrent adds producing one row, default selection and
+the original card, concurrent adds of that same card producing one row, default selection and
 preservation, cross-account read/add/default/delete denial, default-card deletion
 promoting the fallback, and final deletion clearing the provider default. The
 accelerated script hit the existing ten-writes/minute limit during final cleanup;

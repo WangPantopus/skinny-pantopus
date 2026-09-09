@@ -37,6 +37,9 @@ current-head full CI passed at `f6f250ff0`; its merged-master checks are pending
 PR #22's merged-master CI passed. Historical DNS/access blockers below are
 superseded by this update. The Home/vendor private candidate runs `9f970feb2`
 (`bede11a5cc04`); browser API and public staging API/worker remain separate.
+The saved-card repair and this browser/vendor evidence are pushed in ready
+[PR #25](https://github.com/WangPantopus/skinny-pantopus/pull/25). Its current-head
+CI/integration remain; continue independent provider acceptance while checks run.
 
 - PRs #9 and #10 are on master. PR #13 merged to master as
   `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline
