@@ -22,23 +22,26 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 - PR #12 merged as `92593d4f68b7703355ba154f75ecb18d63157dc3` into
   `codex/database-baseline-adoption`, so it did not by itself deliver its Beacon
   preference changes to master. Its final CI passed at `d33a33c1a`.
-- [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14) now consolidates
-  that completed merge history with master and the Android session-return fix.
-  Only the handoff conflicted; application and migration bytes are unchanged
-  from its already tested branch. It is being retargeted to master.
-- The owner explicitly authorizes merging #14 **without waiting for CI** and
-  continuing the rest autonomously. Local Android checks and prior source CI
-  are recorded below; the new consolidated-head CI must be tracked separately.
-  Do not represent this explicit waiver as passing CI.
+- [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14) merged into
+  master at 07:59 UTC as `939878b4f6cd1c3084b1d2811cb98270ab38a440`, integrating
+  #12's completed preference changes and the Android session-return repair.
+  Only the handoff conflicted; application/migration bytes matched the tested
+  branch. The owner explicitly waived waiting for CI. GitHub's administrator
+  enforcement was temporarily lifted solely for this merge and the complete
+  original protection was immediately restored and compared successfully.
+- [Merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34326720080)
+  is queued/running and remains follow-up work. Do not label the waiver as
+  passing checks. Continue any failures independently.
 - Both deployment and migration switches were freshly verified false in staging
   and production. Source integration is not a production deployment. Hosted
   canonical ledger adoption and production cutover remain separate work.
 
 The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
-`codex/notification-session-return`. Main remains at its existing local master;
+`codex/ios-notification-continuation`, based on merged master `939878b4f`;
 other worktrees, ignored operator artifacts and the owner's design proposal are
-preserved. After integration, continue on an isolated child branch from the
-merged result. Update this handoff after each meaningful milestone.
+preserved. iOS has the analogous in-progress destination-loss pattern; verification and
+repair are the first active step, followed by native Beacon publishing. Update
+this handoff after each meaningful milestone.
 
 ### Completed Beacon and platform evidence
 
@@ -86,7 +89,7 @@ only the rehearsed compatible preference/security expansion, preserving its
 hosted migration ledger. API and worker still run `65d2cc2d9`; earlier containers
 are retained for rollback. Production and the old testing database are preserved.
 
-### First unfinished work after integration
+### First unfinished work
 
 1. Finish native Beacon composer publication and remaining notification states
    using iOS simulators, Android emulators and isolated staging API fixtures.
