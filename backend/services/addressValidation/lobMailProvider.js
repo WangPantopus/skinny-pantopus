@@ -137,6 +137,10 @@ class LobMailProvider {
     }
 
     const qrUrl = `pantopus://verify?code=${code}`;
+    if (options.jobId && options.homePostcardId) throw new Error('Conflicting mail correlation IDs');
+    const idempotencyKey = options.homePostcardId
+      ? `pantopus-home-postcard-${options.homePostcardId}`
+      : options.jobId ? `pantopus-verification-${options.jobId}` : null;
 
     const body = {
       description: 'Pantopus Address Verification',
@@ -152,6 +156,7 @@ class LobMailProvider {
       from: getReturnAddress(),
       size: POSTCARD_SIZE,
       ...(options.jobId && { metadata: { pantopus_verification_job_id: options.jobId } }),
+      ...(options.homePostcardId && { metadata: { pantopus_home_postcard_id: options.homePostcardId } }),
     };
 
     // Use a Lob template only when a real one is configured. Lob template ids
@@ -188,7 +193,7 @@ class LobMailProvider {
       headers: {
         Authorization: authHeader(this.apiKey),
         'Content-Type': 'application/json',
-        ...(options.jobId && { 'Idempotency-Key': `pantopus-verification-${options.jobId}` }),
+        ...(idempotencyKey && { 'Idempotency-Key': idempotencyKey }),
       },
       body: JSON.stringify(body),
     };
@@ -197,7 +202,7 @@ class LobMailProvider {
     // retry queue. An unresolved outcome is retained for reconciliation.
     let data;
     let possiblyAccepted = false;
-    for (let attempt = 0; attempt < (options.jobId ? 3 : 1); attempt += 1) {
+    for (let attempt = 0; attempt < (idempotencyKey ? 3 : 1); attempt += 1) {
       let retryAfterMs = 1000;
       try {
         const res = await fetch(`${LOB_API_URL}/postcards`, {
@@ -220,7 +225,7 @@ class LobMailProvider {
       } catch (error) {
         possiblyAccepted ||= error.definitelyRejected !== true;
         error.definitelyRejected = !possiblyAccepted && error.definitelyRejected === true;
-        if (!options.jobId || attempt === 2 || error.retryable === false) throw error;
+        if (!idempotencyKey || attempt === 2 || error.retryable === false) throw error;
         // Definitive input/auth rejections are not transient.
         if (error.definitelyRejected && !error.retryable) throw error;
         await new Promise((resolve) => setTimeout(resolve, retryAfterMs));

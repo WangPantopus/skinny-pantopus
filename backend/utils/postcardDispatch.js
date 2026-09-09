@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const logger = require('./logger');
 const mailVendorService = require('../services/addressValidation/mailVendorService');
 const addressConfig = require('../config/addressVerification');
+const lobMailProvider = require('../services/addressValidation/lobMailProvider');
 
 /**
  * Generate a postcard verification code.
@@ -38,9 +39,15 @@ function hashPostcardCode(code) {
  * @param {string} code
  * @returns {Promise<{success: boolean, vendorJobId?: string, error?: string}>}
  */
-async function dispatchPostcardCode(home, code) {
+async function dispatchPostcardCode(home, code, homePostcardId) {
+  if (!homePostcardId) return { success: false, error: 'Postcard admission is required' };
   if (!home || !home.address || !home.city || !home.state || !home.zipcode) {
     return { success: false, error: 'Home is missing a mailable address' };
+  }
+
+  if ((process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV))
+    && !lobMailProvider.isAvailable()) {
+    return { success: false, error: 'Mail provider is not configured' };
   }
 
   try {
@@ -55,11 +62,13 @@ async function dispatchPostcardCode(home, code) {
       },
       code,
       addressConfig.lob.postcardTemplateId || null,
+      { homePostcardId },
     );
-    return { success: true, vendorJobId: result?.vendorJobId || null };
+    if (!result?.vendorJobId) return { success: false, deliveryUnknown: true, error: 'Mail receipt is not confirmed' };
+    return { success: true, vendorJobId: result.vendorJobId };
   } catch (err) {
-    logger.error('dispatchPostcardCode: provider error', { error: err.message });
-    return { success: false, error: err.message };
+    logger.error('dispatchPostcardCode: provider error', { definitelyRejected: err.definitelyRejected === true });
+    return { success: false, deliveryUnknown: err.definitelyRejected !== true, error: 'Mail provider did not confirm delivery' };
   }
 }
 

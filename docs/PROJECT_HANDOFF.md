@@ -39,11 +39,17 @@ The private candidate runs `a00629db1` (`7cd158c515ed`); the last unit guard at
 web remain separate, older runtimes. Externally delivered Lob callbacks remain
 unverified; the signed synthetic callback is not that evidence.
 
-Next repair and validate native ownership postcard request/confirmation and
-multi-unit completion, then remaining payment/OAuth acceptance. Inspection found
-that native requests do not preserve uncertain provider receipts, omit the
-Home's unit, and the clients interpret general 400/429 failures as pending mail.
-These are findings, not completed repairs. No owner device observation is pending.
+The [native postcard report](staging-native-mail-2026-09-09.md) records the next
+request-reliability milestone: atomic per-user/Home admission, saved unit,
+idempotent provider dispatch, uncertain receipt preservation and own read-only
+status. It passes 4,497 backend tests, privacy gates, all 14 SQL contracts and ten
+competing PostgreSQL connections. Its migration is local-clone only; no running
+candidate changed. Native UI changes remain unverified in progress.
+
+Next finish native UI validation and atomic confirmation/access restrictions,
+then real synthetic provider/simulator acceptance and modern multi-unit
+completion before remaining payment/OAuth checks. Do not equate safe request
+admission with completed native verification. No owner device observation is pending.
 
 The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
 browser synthetic email entry/recovery, cookies/CSRF, session revocation and
