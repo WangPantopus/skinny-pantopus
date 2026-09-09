@@ -16,75 +16,49 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
-**Next active work:** `/private/tmp/pantopus-staging-mail-retry`, branch
-`codex/staging-mail-retry`, starting from merged master `635f57571`.
-[PR #26](https://github.com/WangPantopus/skinny-pantopus/pull/26) merged at
-18:19 UTC after [all required checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34387534158)
-passed at `b9f1e1174`. PR #25 is also merged; merged-master checks remain under
-observation. The [provider report](staging-provider-acceptance-2026-09-09.md)
-records Google validation success, Smarty's inactive subscription, disabled
-staging Google/Apple OAuth, and successful Lob test creation/read/deletion.
-The mail-purpose repair passes 105 focused and 4,466 backend tests plus privacy
-gates. Address-provider failure/retry and claim denial pass; disposable provider
-fixtures are cleaned. The private candidate remains `9f37ca975` (`94a41144a829`);
-public staging API/worker and browser API are separate and unchanged.
+**Next active work:** `/private/tmp/pantopus-staging-native-mail`, branch
+`codex/staging-native-mail`, starting from merged master `3ce4018f5`.
+[PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
+19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)
+passed at `d24632cda`. Backend, web, database replay/contracts and image checks
+passed; native jobs were correctly skipped because that PR did not change them.
+PRs #23, #25 and #26 are also merged. PR #26's merged-master CI passed;
+PR #27's merged-master CI remains under observation.
 
-The [mail recovery report](staging-mail-recovery-2026-09-09.md) records a completed
-real Lob test lost-response journey: three keyed requests produced one postcard,
-API retries retained proof, foreign/wrong-code access was denied, a signed
-synthetic webhook recovered the receipt, and exact code confirmation created
-one member occupancy. Disposable mail/Home/proof/webhook fixtures are cleaned,
-original Home document IDs are preserved, and fixture sessions are revoked.
-Private candidate `593cfbafa` (`6465d0406c2d`) is healthy; public/browser runtimes
-remain unchanged. Draft [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27)
-passed its initial CI. PR #26's merged-master CI also passed.
+The [mail recovery report](staging-mail-recovery-2026-09-09.md) records real Lob
+test lost-response and concurrent HTTP admission acceptance. Three keyed sends
+produced one postcard; retries retained proof, foreign/wrong-code access was
+denied, a signed synthetic webhook recovered the receipt, and exact confirmation
+created one member occupancy. Atomic admission passes all 13 SQL contracts,
+119 application functions/73 trigger bindings, nine competing PostgreSQL
+connections, 4,480 backend tests and privacy gates. Its additive migration was
+applied only to Free staging, preserving the absent ledger and existing rows.
+All disposable mail/Home/proof fixtures are cleaned and fixture sessions revoked.
+The private candidate runs `a00629db1` (`7cd158c515ed`); the last unit guard at
+`d24632cda` is source-tested but not deployed. Public API/worker, browser API and
+web remain separate, older runtimes. Externally delivered Lob callbacks remain
+unverified; the signed synthetic callback is not that evidence.
 
-Atomic admission is committed as `a00629db1`, with its additive function applied
-only to Free staging and its absent ledger/existing mail/file records preserved.
-The matching private image `7cd158c515ed` is healthy. Three real parallel HTTP
-starts returned one verification, token, job and provider postcard; an extra
-write hit the existing limiter, and read-only status recovered the same receipt.
-Disposable mail/address/proof fixtures and their actor session are cleaned.
-All 13 SQL contracts, 119 application functions/73 trigger bindings, nine competing
-PostgreSQL connections, 4,480 backend tests and privacy gates pass. A last guard
-prevents changing units during an uncertain retry; its 88 focused tests pass,
-and final current-head CI remains required before merging PR #27.
+Next repair and validate native ownership postcard request/confirmation and
+multi-unit completion, then remaining payment/OAuth acceptance. Inspection found
+that native requests do not preserve uncertain provider receipts, omit the
+Home's unit, and the clients interpret general 400/429 failures as pending mail.
+These are findings, not completed repairs. No owner device observation is pending.
 
-Next finish PR #27 integration, then validate the separate native ownership mail
-path and multi-unit completion before remaining payment/OAuth acceptance. The
-public browser source and externally delivered Lob callbacks have not received
-this private-candidate proof. No owner device observation is pending.
+The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
+browser synthetic email entry/recovery, cookies/CSRF, session revocation and
+saved-card sandbox API acceptance. Staging frontend DNS and trusted TLS now work.
+The [provider report](staging-provider-acceptance-2026-09-09.md) records Google
+validation, operational Lob test mail and fail-closed address-provider outage
+handling. Google/Apple staging OAuth remains disabled; saved-card API proof does
+not cover PaymentSheet, charges, Connect or subscriptions.
 
 The owner confirmed no active Smarty subscription and plans to obtain one for
 testing and launch. Activation plus real DPV/unit/eligibility/error/access retests
 is a required prelaunch step. A one-time reminder is scheduled for September 10
 at 9 a.m. Pacific. Continue independent work without purchasing a plan. Preserve
-the unrelated main-checkout design work and PR #24.
-
-**Current continuation:** staging account/vendor work is isolated in
-`/private/tmp/pantopus-staging-vendor-acceptance`, branch
-`codex/staging-vendor-acceptance`. Cloudflare access is now available and
-`https://staging.pantopus.com` has working DNS and trusted TLS. Five browser
-account entry pages return 200. Same-origin browser APIs use the tested account
-candidate and synthetic-only SMTP capture; public staging API/worker and the
-separate Home candidate are preserved. Fresh Chrome signup → captured verification
-→ exact return and password recovery → immediate login → exact return now pass.
-Secure cookie/CSRF, old-session denial, single-use links, refresh/logout and the
-certificate renewal dry run also pass. The saved-card retry repair now passes
-4,462 backend tests, privacy gates and real sandbox setup/add/concurrent retry/
-default/access-denial/delete acceptance. Its exact test cards/customers are
-cleaned up and fixture tokens are denied. Next continue remaining OAuth/address/
-payment UI and transaction acceptance; saved-card API coverage is not a charge,
-Connect or subscription acceptance result.
-See the [vendor report](staging-vendor-acceptance-2026-09-09.md) for runtime scope,
-pending fixtures and verification limits. PR #23 merged as `4eed00746` after
-current-head full CI passed at `f6f250ff0`; its merged-master checks are pending.
-PR #22's merged-master CI passed. Historical DNS/access blockers below are
-superseded by this update. The Home/vendor private candidate runs `9f970feb2`
-(`bede11a5cc04`); browser API and public staging API/worker remain separate.
-The saved-card repair and this browser/vendor evidence are pushed in ready
-[PR #25](https://github.com/WangPantopus/skinny-pantopus/pull/25). Its current-head
-CI/integration remain; continue independent provider acceptance while checks run.
+the unrelated main-checkout design work and PR #24. Detailed historical reports
+below retain their original runtime/verification limits.
 
 - PRs #9 and #10 are on master. PR #13 merged to master as
   `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline
