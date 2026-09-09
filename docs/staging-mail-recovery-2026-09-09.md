@@ -100,6 +100,33 @@ the checked additive function only to Free staging, preserving mail/file rows an
 its absent migration ledger, build the matching private candidate, and run real
 concurrent API starts. No production migration or release is implied.
 
+## Free-staging admission and concurrent API acceptance
+
+The additive function is now applied only to Free staging. Its SHA-256 is
+`94f5eee19a7fef5d2aa2aff78a415004572de673fc577f7e6075ab119a717af9`.
+Before/after hashes match for existing attempts, tokens, jobs, Files, HomeDocuments
+and FileQuota rows; the hosted migration ledger remains absent. Production was
+not changed. The private candidate now runs `a00629db12cb4e8e57ab8e2598a0bd3e7b24ec8f`
+(image `7cd158c515edfe7ec381a9b9b69fb5dd1d215cf5a5daeeb2af39b053b3f1e0b6`),
+with image `6465d0406c2d` retained stopped before it. The API requires this function;
+rollback to the prior API does not require deleting the function or mail rows.
+
+Three real parallel HTTP starts returned one verification ID: one confirmed
+response and two retained/uncertain responses during dispatch. There was exactly
+one attempt, secret hash, job and correlated Lob operational test receipt. A
+fourth start hit the existing write limiter (429). Read-only status then returned
+the same verification and expiry with its receipt confirmed; the limiter was not
+disabled and no additional postcard was sent. The exact test postcard, address, attempt/token/job and actor session are cleaned.
+The actor has zero push tokens/occupancies; original Home document IDs remain.
+
+A final retry guard also rejects substituting another unit while delivery remains
+uncertain. All 88 focused service, route and end-to-end regressions pass with this
+guard; final current-head CI will cover it. Live candidate evidence above is
+explicitly at `a00629db1`, before this last guard, rather than implying every
+pushed commit is already deployed. Multi-unit completion and the separate native
+ownership mail path still need their own acceptance; this work grants no broader
+address-provider certification while Smarty remains inactive.
+
 A crash before dispatch may still require reconciliation; this is not an outbox
 worker or a claim of automatically recovering every process interruption. The
 separate native landlord/ownership postcard path remains unverified by these

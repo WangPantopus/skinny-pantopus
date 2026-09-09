@@ -128,12 +128,13 @@ class MailVerificationService {
     const attempt = attempts?.[0];
     if (!attempt) return null;
     const { job, error: jobError } = await this._latestMailJob(attempt.id);
-    if (jobError || !job || !job.vendor_job_id) {
+    if (jobError || !job) {
       return this._deliveryUnknown(attempt.id, addressId);
     }
     if ((job.metadata?.unit || '') !== (unit || '')) {
       return { success: false, statusCode: 409, error: 'A mail verification is already active. Finish it before changing the unit.' };
     }
+    if (!job.vendor_job_id) return this._deliveryUnknown(attempt.id, addressId);
     return this.getVerificationStatus(attempt.id, userId);
   }
 

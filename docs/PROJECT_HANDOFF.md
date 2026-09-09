@@ -39,15 +39,21 @@ Private candidate `593cfbafa` (`6465d0406c2d`) is healthy; public/browser runtim
 remain unchanged. Draft [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27)
 passed its initial CI. PR #26's merged-master CI also passed.
 
-A separate simultaneous-new-start race is now repaired through service-only
-transactional admission. Its local SQL contract, nine competing PostgreSQL
-connections, all 13 SQL contracts and application-function lint pass; the new
-backend passes all 4,480 tests and privacy gates, including missing-migration
-denial. Next commit/push this milestone, apply only the checked
-additive Free-staging function with row/ledger preservation, and run the matching
-private candidate's concurrent API acceptance. Then continue remaining payment/
-OAuth and separate native ownership mail acceptance. No owner device observation
-is pending.
+Atomic admission is committed as `a00629db1`, with its additive function applied
+only to Free staging and its absent ledger/existing mail/file records preserved.
+The matching private image `7cd158c515ed` is healthy. Three real parallel HTTP
+starts returned one verification, token, job and provider postcard; an extra
+write hit the existing limiter, and read-only status recovered the same receipt.
+Disposable mail/address/proof fixtures and their actor session are cleaned.
+All 13 SQL contracts, 119 application functions/73 trigger bindings, nine competing
+PostgreSQL connections, 4,480 backend tests and privacy gates pass. A last guard
+prevents changing units during an uncertain retry; its 88 focused tests pass,
+and final current-head CI remains required before merging PR #27.
+
+Next finish PR #27 integration, then validate the separate native ownership mail
+path and multi-unit completion before remaining payment/OAuth acceptance. The
+public browser source and externally delivered Lob callbacks have not received
+this private-candidate proof. No owner device observation is pending.
 
 The owner confirmed no active Smarty subscription and plans to obtain one for
 testing and launch. Activation plus real DPV/unit/eligibility/error/access retests

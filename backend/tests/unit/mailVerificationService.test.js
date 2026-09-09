@@ -123,6 +123,16 @@ function seedToken(overrides = {}) {
 // ============================================================
 
 describe('startVerification', () => {
+  test('an uncertain retry cannot substitute a different unit', async () => {
+    seedAddress();
+    mockDispatchPostcard.mockResolvedValueOnce({ success: false, deliveryUnknown: true });
+    const first = await service.startVerification('user-1', 'addr-1', 'Unit 4');
+    expect(first.delivery_unknown).toBe(true);
+    const retry = await service.startVerification('user-1', 'addr-1', 'Unit 5');
+    expect(retry).toMatchObject({ success: false, statusCode: 409 });
+    expect(mockDispatchPostcard).toHaveBeenCalledTimes(1);
+    expect(getTable('MailVerificationJob')[0].metadata.unit).toBe('Unit 4');
+  });
   test('a missing admission RPC fails closed without dispatch or partial records', async () => {
     seedAddress();
     const { setRpcMock } = require('../__mocks__/supabaseAdmin');
