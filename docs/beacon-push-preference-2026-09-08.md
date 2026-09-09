@@ -175,14 +175,38 @@ the repaired startup and native save milestone.
 The I-off publication has now been sent once, after verifying the sole designated
 iPhone follower, its APNs registration and the saved opt-out. Its single audience
 row points to the exact post and the API return passes. No APNs acceptance
-receipt was recorded during 71 seconds. Physical absence of an alert and the
-retained in-app exact return await owner confirmation. Then restore the toggle
-and verify the next notification's exact return
+receipt was recorded during 71 seconds. The owner confirms no alert and the
+retained in-app exact return. I-off now passes on the physical device.
+The owner also reported push restored and the app backgrounded, but API and
+direct database reads at 06:24 UTC still showed Beacon false, last updated
+03:24 UTC. No native requests reached staging in the latest 30-minute window.
+The publication guard stopped before writing anything; I-restored has not been
+sent. A durable native on value is pending. Then verify the next notification's exact return
 without replay. Verify the audience before every publication and restore
 test preferences afterward. Physical Android remains unavailable.
 Previously confirmed background/foreground/closed-app, block, mute and global
 push cases remain in the [full journey report](beacon-full-journey-2026-09-08.md).
 
 Current synthetic I-off evidence: post `ca5e6f87-38fd-47bb-b7cc-3dd0a66ef6a0`, audience notification
-`a66e1230-0efb-4cc4-aa40-b6d4849dc4e6`. These remain present for the owner’s
-in-app check; cleanup is pending.
+`a66e1230-0efb-4cc4-aa40-b6d4849dc4e6`. These remain present while restore
+acceptance and cleanup are pending.
+
+## CI continuation and integration state
+
+The documentation-head [CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34307328711)
+failed only on iPhone SE and the aggregate gate. The in-flight save test asserted
+after a fixed 500 ms sleep before its delayed request finished; that request then
+consumed later tests' stub responses, also failing the quiet-hours test. The test
+now awaits the actual save loop and drains its timer before returning. This is
+a test-only change; all 16 settings tests pass five repetitions (80 executions),
+with passing SwiftFormat and strict SwiftLint. Fresh PR #12 CI is still required.
+
+PR #10 is merged to master at `c9fd509e3`. PR #11 subsequently merged into
+`codex/beacon-full-journey` at `6113691c9`, so the baseline still needs a follow-up
+integration PR to master. Draft [PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13)
+now provides it, preserving merge ancestry and including the migration checker
+fix already present in PR #12. Legacy-base and canonical-base checks plus six
+checker tests pass; its initial merge tree exactly matched the PR #11 result.
+PR #13 CI is pending. PR #12 remains draft and unmerged. Its current base is
+`codex/database-baseline-adoption`; retarget it after baseline integration so its
+review contains only the additive preference and native fixes.

@@ -27,13 +27,21 @@ API/access matrix and owner-confirmed iPhone foreground, background, closed-app,
 blocked-old-link, mute/resume and global push off/restore cases. Android emulator
 foreground/background/process-absent notification returns and blocked-old-link
 denial also pass. Earlier fixtures were cleaned up; original device accounts,
-prior notifications and the iPhone registration were preserved. Draft
+prior notifications and the iPhone registration were preserved.
 [PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10) contains those
-repairs; its [final CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34274045637)
+repairs and is merged into master as `c9fd509e31b409ced357a83bf6c445a7738eea1b`;
+its [final CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34274045637)
 passes at `37a49cce82dc2721c736e3a0971f6fe0f4f896f4`.
 
 The [canonical database baseline](database-canonical-baseline-2026-09-08.md)
-is adopted in source on draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11).
+is adopted in source on [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11).
+That PR merged into `codex/beacon-full-journey` as `6113691c94279aa9fbafb9566870bbe714f418dd`,
+after PR #10 merged. Consequently, master does not yet contain the baseline;
+draft [PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13) now supplies
+that integration, including the large-baseline checker repair from PR #12.
+Its initial merge tree exactly matched PR #11; both migration-base checks and
+six checker tests pass. Its fresh CI is pending. Integrate #13 before retargeting
+#12 to master. PR #12 remains unmerged, as the owner confirmed.
 Frozen migration bytes are archived unchanged. The two canonical files replay
 through the pinned CLI with reference fingerprints matching all 6,467 static
 rows, reviewed full function lint, seven SQL contracts and five real
@@ -100,11 +108,21 @@ reads agree, preserving global push and unrelated settings. Native traffic shows
 two authenticated socket connections, two preference writes and only one refresh;
 the earlier startup burst is absent. One I-off publication has now been sent to
 the sole iPhone follower. Its audience row and exact API destination pass; no APNs
-acceptance receipt was recorded during 71 seconds. Physical absence of an alert
-and the retained in-app return are awaiting owner observation. Then restore
-the native toggle, verify the next alert's exact post without replay, and clean
+acceptance receipt was recorded during 71 seconds. The owner confirms no alert
+and the exact retained in-app return, completing I-off. Although the owner reported
+restored push, fresh API and direct database reads still show false, last updated
+at 03:24 UTC; no native traffic reached staging during the latest 30-minute window.
+The I-restored guard stopped before publication: no restore post or alert was sent.
+The owner has been asked to reopen the specific Beacon setting and verify a durable
+on value. Once that value and device readiness agree, send I-restored once,
+verify the next alert's exact post without replay, and clean
 up this fixture. Prior confirmed iPhone cases do not need repeating. Physical
-Android remains unavailable.
+Android remains unavailable. Documentation-head
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34307328711)
+failed on iPhone SE because a settings test used a fixed delay and left its save
+running into a later test. The test now awaits the save task; all 16 settings tests
+pass five repetitions (80 executions), along with formatting and strict lint.
+Fresh PR #12 CI is required. Installed application code remains at the previously verified revision.
 
 Preserve global/internal feature disablement, unrelated local work and both
 release/migration switches. Only fresh synthetic fixtures and designated device
@@ -118,8 +136,8 @@ Beacon repairs remain on `codex/beacon-full-journey` in
 `codex/beacon-push-preference` for the new setting,
 based on the Beacon branch so its current handoff/evidence are retained. The main
 checkout and all other worktrees/ignored artifacts are preserved.
-Draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on
-PR #10, now contains the canonical source baseline, archived history and required
+[PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), merged into the
+Beacon branch but not yet master, contains the canonical source baseline, archived history and required
 database CI in addition to diagnostics, SQL contracts and sanitized evidence.
 It does not adopt a hosted ledger or deploy the private forward candidate.
 

@@ -360,23 +360,26 @@ private extension URLRequest {
 }
 
 extension NotificationSettingsViewModelTests {
-    func testNewToggleDoesNotCancelAnInFlightSaveOrReplayItsOldValue() async throws {
+    func testNewToggleDoesNotCancelAnInFlightSaveOrReplayItsOldValue() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.prefsJSON(beacon: false)),
             .status(200, body: Self.prefsJSON(beacon: true), delay: 0.25),
             .status(200, body: Self.prefsJSON(beacon: false))
         ]
-        let vm = NotificationSettingsViewModel(api: makeAPI(), saveDebounce: .milliseconds(1))
+        let vm = makeViewModel()
         await vm.load()
         await vm.toggleRow(RowID.beaconPush, isOn: true)
-        for _ in 0..<100 {
+        let save = Task { await vm.flushPendingSaveNow() }
+        for _ in 0..<1000 {
             if SequencedURLProtocol.capturedRequests.contains(where: { $0.httpMethod == "PUT" }) { break }
-            try await Task.sleep(for: .milliseconds(5))
+            try? await Task.sleep(for: .milliseconds(5))
         }
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "PUT" }.count, 1)
         await vm.toggleRow(RowID.beaconPush, isOn: false)
-        // The older request is deliberately delayed; let both writes settle.
-        try await Task.sleep(for: .milliseconds(500))
+        // Await the actual save loop: a fixed sleep can expire on a busy
+        // simulator and leave this request consuming the next test's stubs.
+        await save.value
+        await vm.flushPendingSaveNow()
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT", "PUT"])
         XCTAssertEqual(row(loadedGroups(vm), RowID.beaconPush)?.control, .toggle(isOn: false))
         XCTAssertEqual(vm.toast?.text, "Saved")
