@@ -71,10 +71,15 @@ connections pass, in addition to the ten admission connections.
 
 Native UI changes remove sample tracking from live screens, add read-only
 saved/uncertain/empty/error status, and stop interpreting general request failures
-as mailed postcards. iOS passes 43 focused tests and strict Swift lint. Android
-passes 39 focused tests; a single Detekt magic-number finding was corrected and
-quality/build gates are running. Transient confirmation throttles still need an
-explicit UI distinction from an exhausted code before native completion.
+as mailed postcards. iOS passes 44 focused tests and strict Swift lint. Android
+passes 40 focused tests, formatting, Detekt and assembly at the final throttle
+fix; its preceding full quality pass includes Android lint. A transient HTTP 429
+preserves the typed code; only explicit `LOCKED` means the proof is exhausted.
+
+The printed native postcard link now targets the exact Home's existing
+`verify-postcard` route, with the code kept off the URL. Focused provider tests
+verify that link and the separate idempotency/correlation namespace. This last
+link repair is not yet in the live candidate below; simulator acceptance remains.
 
 ## Live private-candidate acceptance
 

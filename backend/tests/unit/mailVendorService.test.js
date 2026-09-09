@@ -199,6 +199,23 @@ describe('LobMailProvider', () => {
         .rejects.toThrow('Lob API key not configured');
     });
 
+    test('native mail uses its own key and opens the exact Home without a code in the URL', async () => {
+      let sent;
+      mockFetchImpl = (_url, options) => {
+        sent = options;
+        return Promise.resolve({ ok: true, json: async () => ({ id: 'psc_native', object: 'postcard' }) });
+      };
+      const provider = new LobMailProvider();
+      provider.apiKey = 'test_key';
+      await provider.sendPostcard(testAddress, '123456', null, { homePostcardId: 'card-id', homeId: 'home-id' });
+      expect(sent.headers['Idempotency-Key']).toBe('pantopus-home-postcard-card-id');
+      const payload = JSON.parse(sent.body);
+      expect(payload.metadata).toEqual({ pantopus_home_postcard_id: 'card-id' });
+      expect(payload.back).toContain('pantopus://homes/home-id/verify-postcard');
+      expect(payload.back).not.toContain('?code=');
+      expect(payload.back).toContain('<div class="code">123456</div>');
+    });
+
     test('posts to /v1/postcards endpoint', async () => {
       let calledUrl;
       mockFetchImpl = (url) => {

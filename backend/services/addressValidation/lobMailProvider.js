@@ -136,7 +136,9 @@ class LobMailProvider {
       throw new Error('Lob API key not configured');
     }
 
-    const qrUrl = `pantopus://verify?code=${code}`;
+    const qrUrl = options.homePostcardId && options.homeId
+      ? `pantopus://homes/${encodeURIComponent(options.homeId)}/verify-postcard`
+      : `pantopus://verify?code=${code}`;
     if (options.jobId && options.homePostcardId) throw new Error('Conflicting mail correlation IDs');
     const idempotencyKey = options.homePostcardId
       ? `pantopus-home-postcard-${options.homePostcardId}`

@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.homes.RequestPostcardResponse
 import app.pantopus.android.data.api.models.homes.VerifyPostcardRequest
 import app.pantopus.android.data.api.models.homes.VerifyPostcardResponse
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -21,6 +22,12 @@ interface HomeVerificationApi {
      */
     @POST("api/homes/{id}/request-postcard")
     suspend fun requestPostcard(
+        @Path("id") homeId: String,
+    ): RequestPostcardResponse
+
+    /** GET /api/homes/:id/postcard — backend/routes/homeOwnership.js:2553. Read-only status. */
+    @GET("api/homes/{id}/postcard")
+    suspend fun postcardStatus(
         @Path("id") homeId: String,
     ): RequestPostcardResponse
 

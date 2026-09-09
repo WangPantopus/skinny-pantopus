@@ -39,8 +39,8 @@ function hashPostcardCode(code) {
  * @param {string} code
  * @returns {Promise<{success: boolean, vendorJobId?: string, error?: string}>}
  */
-async function dispatchPostcardCode(home, code, homePostcardId) {
-  if (!homePostcardId) return { success: false, error: 'Postcard admission is required' };
+async function dispatchPostcardCode(home, code, homePostcardId, homeId) {
+  if (!homePostcardId || !homeId) return { success: false, error: 'Postcard admission is required' };
   if (!home || !home.address || !home.city || !home.state || !home.zipcode) {
     return { success: false, error: 'Home is missing a mailable address' };
   }
@@ -62,7 +62,7 @@ async function dispatchPostcardCode(home, code, homePostcardId) {
       },
       code,
       addressConfig.lob.postcardTemplateId || null,
-      { homePostcardId },
+      { homePostcardId, homeId },
     );
     if (!result?.vendorJobId) return { success: false, deliveryUnknown: true, error: 'Mail receipt is not confirmed' };
     return { success: true, vendorJobId: result.vendorJobId };

@@ -41,7 +41,7 @@ test('sends the saved unit and stable identity once, exposing no proof or provid
   const result = await service.request('home', 'user');
   expect(result.status).toBe(201);
   expect(result.body.delivery_unknown).toBe(false);
-  expect(dispatchPostcardCode).toHaveBeenCalledWith(destination, '123456', ID);
+  expect(dispatchPostcardCode).toHaveBeenCalledWith(destination, '123456', ID, 'home');
   expect(JSON.stringify(result.body)).not.toMatch(/code_hash|vendor_job_id|psc_native|Synthetic street/);
   expect(db.getTable('HomePostcardCode')[0]).toMatchObject({ dispatch_status: 'accepted', status: 'pending', code_hash: 'a'.repeat(64) });
 });

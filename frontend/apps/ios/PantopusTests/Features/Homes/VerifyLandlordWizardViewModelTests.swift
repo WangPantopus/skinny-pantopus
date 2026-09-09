@@ -326,4 +326,18 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         vm.setEmail("typing@")
         XCTAssertNil(vm.errors, "Errors must not materialise until the user attempts submit")
     }
+
+    func testPostcardInputAndRateFailuresDoNotClaimMailWasSent() async {
+        for status in [400, 429] {
+            let requester: VerifyLandlordWizardViewModel.PostcardRequester = {
+                .failure(APIError.clientError(status: status, message: "Request rejected"))
+            }
+            let vm = makeVM(postcardRequester: requester)
+            await vm.startPostcardFallback()
+            XCTAssertNil(vm.pendingEvent)
+            guard case .error = vm.submitState else {
+                return XCTFail("Request failures must stay actionable")
+            }
+        }
+    }
 }

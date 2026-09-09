@@ -44,9 +44,11 @@ request admission and confirmation: unit/receipt preservation, member role
 ceiling, revoked/frozen/changed-address denial, rollback and retry safety.
 Confirmation passes 4,509 backend tests plus privacy gates; a final request guard
 passes all 29 focused mail tests. All 15 SQL contracts and 22 competing PostgreSQL
-connections pass. Both migrations remain local-clone only. iOS passes 43 focused
-tests; Android passes 39, with final quality/build work underway. Transient
-confirmation throttling still needs a distinct native UI result.
+connections pass. iOS passes 44 focused tests; Android passes 40 plus formatting, Detekt and
+assembly. Both clients now distinguish a temporary throttle from an exhausted
+code and show live request metadata instead of sample tracking. The final native
+mail link repair targets the exact Home without putting a code in its URL; it
+requires the next private-candidate refresh and simulator acceptance.
 
 The private candidate now runs `f5f85188b` (`a5157a836a41`). Both additive native
 mail migrations are applied only to Free staging, preserving existing records and

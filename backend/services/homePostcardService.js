@@ -53,7 +53,7 @@ async function request(homeId, userId) {
     .update({ dispatch_status: 'dispatching', updated_at: new Date().toISOString() })
     .eq('id', card.id).eq('status', 'pending').eq('dispatch_status', 'pending').select('id');
   if (claimError || !claimed?.length) return { status: 202, body: envelope(card) };
-  const sent = await dispatchPostcardCode(card.destination, code, card.id);
+  const sent = await dispatchPostcardCode(card.destination, code, card.id, homeId);
   // No later HTTP retry resends an uncertain request. Only this worker has the
   // original plaintext, and the provider retries that identical payload in memory.
   const changes = sent.success

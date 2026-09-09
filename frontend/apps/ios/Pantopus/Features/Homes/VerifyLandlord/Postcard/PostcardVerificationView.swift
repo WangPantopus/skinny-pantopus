@@ -41,6 +41,7 @@ public struct PostcardVerificationView: View {
     public var body: some View {
         rootContent
             .background(Theme.Color.appBg)
+            .task { await viewModel.loadStatus() }
             .onChange(of: viewModel.pendingEvent) { _, event in
                 handle(event)
             }
@@ -65,19 +66,34 @@ public struct PostcardVerificationView: View {
 
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: Spacing.s5) {
-            postcardPreview
-            PostcardHero(
-                stage: viewModel.stage,
-                codeEntryMode: viewModel.showsCodeEntryFrame,
-                needsNewCode: viewModel.needsNewCode,
-                deliveredOn: viewModel.content.deliveredOn
-            )
-            PostcardStatusTimeline(
-                stage: viewModel.stage,
-                content: viewModel.content
-            )
+            if viewModel.usesSamplePresentation {
+                postcardPreview
+                PostcardHero(
+                    stage: viewModel.stage,
+                    codeEntryMode: viewModel.showsCodeEntryFrame,
+                    needsNewCode: viewModel.needsNewCode,
+                    deliveredOn: viewModel.content.deliveredOn
+                )
+                PostcardStatusTimeline(stage: viewModel.stage, content: viewModel.content)
+            } else {
+                Text("Verify your home by mail")
+                    .pantopusTextStyle(.h2)
+                    .accessibilityIdentifier("postcardLiveHeading")
+                Text("Enter the six-digit code printed on your postcard. Delivery tracking is not available here.")
+                    .pantopusTextStyle(.body)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                if viewModel.isLoadingStatus {
+                    Shimmer(height: Spacing.s6, cornerRadius: Radii.sm)
+                }
+            }
             PostcardCodeArea(viewModel: viewModel)
-            secondaryActionBlock
+            if viewModel.usesSamplePresentation {
+                secondaryActionBlock
+            } else {
+                Button("Check postcard status") { Task { await viewModel.loadStatus() } }
+                    .disabled(viewModel.isLoadingStatus || viewModel.isRequestingCode)
+                    .accessibilityIdentifier("postcardCheckStatusCTA")
+            }
         }
     }
 
@@ -114,7 +130,7 @@ public struct PostcardVerificationView: View {
 
     private var stickyDock: some View {
         VStack(spacing: Spacing.s2) {
-            if !viewModel.showsCodeEntryFrame, !viewModel.needsNewCode {
+            if viewModel.usesSamplePresentation, !viewModel.showsCodeEntryFrame, !viewModel.needsNewCode {
                 HStack(spacing: Spacing.s1) {
                     Icon(.bell, size: 12, color: Theme.Color.appTextSecondary)
                     Text("You'll be notified the moment it's delivered")

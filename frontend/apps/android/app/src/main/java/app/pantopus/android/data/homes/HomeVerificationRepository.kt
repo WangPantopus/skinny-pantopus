@@ -25,6 +25,9 @@ open class HomeVerificationRepository
         open suspend fun requestPostcard(homeId: String): NetworkResult<RequestPostcardResponse> =
             safeApiCall { api.requestPostcard(homeId) }
 
+        /** Read own pending postcard without sending mail. */
+        open suspend fun postcardStatus(homeId: String): NetworkResult<RequestPostcardResponse> = safeApiCall { api.postcardStatus(homeId) }
+
         /** `POST /api/homes/:id/verify-postcard`. */
         open suspend fun verifyPostcard(
             homeId: String,
