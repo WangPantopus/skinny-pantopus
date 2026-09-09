@@ -132,7 +132,7 @@ automation. Never run fresh baseline DDL on a populated project. Complete separa
 per-environment ledger adoption before enabling automatic migrations; production
 remains unchanged.
 
-## Remaining acceptance
+## iPhone native preference acceptance
 
 Hosted raw-role denial, API off/restore, retained audience rows, exact permitted
 return and no replay now pass. On resume, the prepared iPhone build's executable
@@ -181,15 +181,39 @@ The owner also reported push restored and the app backgrounded, but API and
 direct database reads at 06:24 UTC still showed Beacon false, last updated
 03:24 UTC. No native requests reached staging in the latest 30-minute window.
 The publication guard stopped before writing anything; I-restored has not been
-sent. A durable native on value is pending. Then verify the next notification's exact return
-without replay. Verify the audience before every publication and restore
-test preferences afterward. Physical Android remains unavailable.
+sent at that checkpoint. On the next native attempt, the owner confirmed the on
+value survived reopening settings and the app was backgrounded. A fresh API read
+agreed. I-restored was then published once at 06:41:52 UTC, with exactly one
+audience row and a passing exact-post API return. APNs attempted one token and
+accepted one at 22 seconds. I-off still had zero acceptance receipts at 11,761
+seconds, including after restore. The owner confirms only the new notification
+arrived and opened exactly “Beacon preference I-restored — turquoise moon,”
+without I-off replay. The final I-off observation at 12,032 seconds still has no
+provider acceptance receipt. The iPhone preference journey now passes.
+Physical Android remains unavailable.
 Previously confirmed background/foreground/closed-app, block, mute and global
 push cases remain in the [full journey report](beacon-full-journey-2026-09-08.md).
 
 Current synthetic I-off evidence: post `ca5e6f87-38fd-47bb-b7cc-3dd0a66ef6a0`, audience notification
-`a66e1230-0efb-4cc4-aa40-b6d4849dc4e6`. These remain present while restore
-acceptance and cleanup are pending.
+`a66e1230-0efb-4cc4-aa40-b6d4849dc4e6`.
+
+I-restored evidence: post `8384ec5d-197a-4593-b1ce-e9fdb99835c1`, audience
+notification `6acbf590-9bdf-43bc-94c2-68c503a77a8b`, body
+“Beacon preference I-restored — turquoise moon.” These IDs are historical;
+the owned fixtures were removed during cleanup. Do not resend either case.
+
+Scoped cleanup removed two posts, three notifications, the fresh Beacon and its
+membership, and the fresh creator account. Full original preference comparison
+passed afterward; global push was preserved, as were the original iPhone account,
+its one APNs registration and two prior notifications. Global/internal feature
+enablement remains false and the beta list is empty. Both Android/API and iPhone
+preference fixtures are now cleaned up.
+
+Two current-source iOS simulator UI journeys also pass against the isolated
+stateful API fixture: login → exact post, and muted Following → exact Beacon
+update with the public author. These exercise production screens and routing;
+live expired-session recovery and denied OS notification permission remain
+separate acceptance cases.
 
 ## CI continuation and integration state
 

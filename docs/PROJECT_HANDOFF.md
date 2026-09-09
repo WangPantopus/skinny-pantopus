@@ -21,7 +21,10 @@ now pass. Fresh inspection confirms deployment and database switches remain
 false in both environments; the backend workflow skipped its rollout steps.
 The deployed backend is still a separate release from merged source.
 
-The first unfinished priority remains full Beacon staging acceptance. The
+Beacon delivery, exact returns and push preferences now pass on the designated
+iPhone and Android emulator. The next executable priority is the remaining
+OS-permission, session-return and token-lifecycle coverage. Physical Android and
+native composer interaction remain release gates. The
 [full journey report](beacon-full-journey-2026-09-08.md) records the repaired live
 API/access matrix and owner-confirmed iPhone foreground, background, closed-app,
 blocked-old-link, mute/resume and global push off/restore cases. Android emulator
@@ -37,7 +40,7 @@ The [canonical database baseline](database-canonical-baseline-2026-09-08.md)
 is adopted in source on [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11).
 That PR merged into `codex/beacon-full-journey` as `6113691c94279aa9fbafb9566870bbe714f418dd`,
 after PR #10 merged. Consequently, master does not yet contain the baseline;
-draft [PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13) now supplies
+[PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13), now ready for review, supplies
 that integration, including the large-baseline checker repair from PR #12.
 Its initial merge tree exactly matched PR #11; both migration-base checks and
 six checker tests pass. Its fresh CI is pending. Integrate #13 before retargeting
@@ -109,14 +112,21 @@ two authenticated socket connections, two preference writes and only one refresh
 the earlier startup burst is absent. One I-off publication has now been sent to
 the sole iPhone follower. Its audience row and exact API destination pass; no APNs
 acceptance receipt was recorded during 71 seconds. The owner confirms no alert
-and the exact retained in-app return, completing I-off. Although the owner reported
-restored push, fresh API and direct database reads still show false, last updated
-at 03:24 UTC; no native traffic reached staging during the latest 30-minute window.
-The I-restored guard stopped before publication: no restore post or alert was sent.
-The owner has been asked to reopen the specific Beacon setting and verify a durable
-on value. Once that value and device readiness agree, send I-restored once,
-verify the next alert's exact post without replay, and clean
-up this fixture. Prior confirmed iPhone cases do not need repeating. Physical
+and the exact retained in-app return, completing I-off. The first restore attempt
+was guarded because server push remained off. The owner subsequently reopened
+settings, confirmed a durable on value and backgrounded the app; fresh API reads
+agreed. I-restored was then sent once at 06:41 UTC. Its single audience row and
+exact API destination pass; APNs attempted and accepted one token. The owner
+confirms only the new notification arrived and opened that exact post, with no
+I-off replay. I-off still had zero provider receipts at 12,032 seconds. Scoped
+cleanup removed two posts, three notifications, the fresh Beacon/membership and
+creator account. Original iPhone preferences, its account, one APNs registration
+and two prior notifications were preserved. Global/internal enablement remains
+false and the beta list is empty. Both current preference fixtures are now
+cleaned up; do not reuse their deleted creators/Beacons. Prior confirmed iPhone
+cases do not need repeating. Two current-source iOS simulator UI checks also
+pass: post-login exact return and muted Following → exact Beacon post, using
+isolated API fixtures. They do not certify live expired-session recovery. Physical
 Android remains unavailable. Documentation-head
 [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34307328711)
 failed on iPhone SE because a settings test used a fixed delay and left its save
@@ -143,7 +153,7 @@ It does not adopt a hosted ledger or deploy the private forward candidate.
 
 Start a new session by:
 
-1. Refreshing Git, PRs #10–#12/CI and staging observations; preserve unrelated work.
+1. Refreshing Git, PRs #12–#13/CI and staging observations; preserve unrelated work.
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
    Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
@@ -154,10 +164,9 @@ Start a new session by:
    Normal-role replay, Home boundaries, explicit ACLs, Beacon storage/RPC
    restrictions and local SQL/integration checks already pass. Read the
    [preference milestone and staging plan](beacon-push-preference-2026-09-08.md),
-   verify its CI, then finish physical iPhone acceptance for the new preference.
-   Android/API preference fixtures are cleaned up. The resumed iPhone fixture is
-   now prepared; inspect its private checkpoint and pending device step before
-   creating anything or sending a publication.
+   verify its CI, then continue OS-permission/session/token lifecycle acceptance.
+   Android/API and iPhone preference fixtures are cleaned up. Inspect the private
+   checkpoint before creating a fresh isolated fixture for a concrete next case.
    Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
