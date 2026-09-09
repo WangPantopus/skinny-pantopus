@@ -97,6 +97,17 @@ const homeOutboundLimiter = rateLimit({
   message: { error: 'Too many requests. Please try again later.' },
 });
 
+// File bytes and retries use their own authenticated-user budget, without
+// consuming home creation or outbound email allowances.
+const homeDocumentUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: req => req.user.id,
+  message: { error: 'Too many document uploads. Please try again later.' },
+});
+
 /**
  * Limiter for ownership claims and verification endpoints.
  * 10 requests per 15 minutes per user.
@@ -377,6 +388,7 @@ module.exports = {
   contentCreationLimiter,
   homeCreationLimiter,
   homeOutboundLimiter,
+  homeDocumentUploadLimiter,
   ownershipClaimLimiter,
   postcardLimiter,
   verificationAttemptLimiter,

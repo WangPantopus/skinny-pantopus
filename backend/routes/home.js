@@ -24,8 +24,8 @@ const {
   applyOccupancyTemplate,
   getActiveOccupancy,
   assertCanMutateTarget,
-  ROLE_RANK,
 } = require('../utils/homePermissions');
+const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
 const { getClaimRiskScore } = require('../utils/homeSecurityPolicy');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
@@ -5501,31 +5501,24 @@ router.post('/:id/events/:eventId/rsvp', verifyToken, async (req, res) => {
 
 // ============ HOME DOCUMENTS ============
 
-const HOME_DOCUMENT_VISIBILITIES = ['public', 'members', 'managers', 'sensitive'];
 const createHomeDocumentSchema = Joi.object({
-  doc_type: Joi.string().valid('lease', 'insurance', 'warranty', 'manual', 'permit', 'floor_plan', 'receipt', 'photo', 'paint_color', 'other').required(),
+  doc_type: Joi.string().valid(...HOME_DOCUMENT_TYPES).required(),
   title: Joi.string().trim().min(1).max(255).required(),
   visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES).default('members'),
-  file_id: Joi.string().uuid().allow(null),
-  storage_bucket: Joi.string().max(255).allow(null, ''),
-  storage_path: Joi.string().max(2048).allow(null, ''),
+  // File attachments are created by the authenticated multipart route, which
+  // owns the storage path and verifies bytes. Metadata cannot attach a raw key.
+  file_id: Joi.any().valid(null),
+  storage_bucket: Joi.any().valid(null, ''),
+  storage_path: Joi.any().valid(null, ''),
   mime_type: Joi.string().max(255).allow(null, ''),
   size_bytes: Joi.number().integer().min(0).allow(null),
-  details: Joi.object().default({}),
+  details: Joi.object().custom((value, helpers) => {
+    if (Object.keys(value).some(key => key.startsWith('upload_') || ['storage_contract', 'preview_url', 'original_filename'].includes(key))) {
+      return helpers.error('any.invalid');
+    }
+    return value;
+  }).default({}),
 });
-
-async function homeDocumentVisibilities(homeId, userId, access) {
-  if (access.isOwner) return { allowed: HOME_DOCUMENT_VISIBILITIES };
-  // Match home_can_see_visibility: manager scope follows the current role,
-  // while sensitive scope follows its explicit IAM permission/overrides.
-  const allowed = ['public', 'members'];
-  const role = access.occupancy?.role_base || mapLegacyRole(access.occupancy?.role);
-  if ((ROLE_RANK[role] || 0) >= ROLE_RANK.manager) allowed.push('managers');
-  const sensitive = await checkHomePermission(homeId, userId, 'sensitive.view');
-  if (sensitive.readFailed) return { allowed: [], readFailed: true };
-  if (sensitive.hasAccess) allowed.push('sensitive');
-  return { allowed };
-}
 
 /**
  * GET /api/homes/:id/documents
@@ -5555,7 +5548,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    res.json({ documents: data || [] });
+    res.json({ documents: (data || []).map(serializeHomeDocument) });
   } catch (err) {
     logger.error('Documents fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch documents' });

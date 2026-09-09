@@ -101,8 +101,12 @@ and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
 Home document upload: both clients currently save metadata without bytes and
 report success. Complete real scoped upload/retrieval on existing/free storage,
 including retry and revoked-access denial. Hosted storage is not yet certified.
-The active isolated worktree is `/private/tmp/pantopus-home-file-access`, branch
-`codex/home-file-access`. PR #18 carries the verified web image/origin change.
+The active isolated worktree is `/private/tmp/pantopus-home-file-access`, now on
+`codex/home-document-storage`. The [byte-delivery report](home-document-storage-2026-09-09.md)
+records the new private upload and authenticated retrieval backend, including
+idempotent retries, quota and old-link denial: all 4,412 backend tests pass.
+Native byte upload/preview and hosted storage acceptance are next; no bucket
+or native client has changed yet. PR #18 carries the verified web image/origin change.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
