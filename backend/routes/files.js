@@ -567,27 +567,14 @@ router.post('/home/:homeId', verifyToken, upload.single('file'), validate(upload
     const userId = req.user.id;
     const file = req.file;
     
-    // Check if user has access to this home
-    const { data: home, error: homeError } = await supabase
-      .from('Home')
-      .select(`
-        owner_id,
-        occupants:HomeOccupancy!home_id(user_id)
-      `)
-      .eq('id', homeId)
-      .single();
-
-    if (homeError || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
     const fileUploadAccess = await checkHomePermission(homeId, userId, 'docs.upload');
-    const isOwner = fileUploadAccess.isOwner;
-    const isOccupant = home.occupants.some(occ => occ.user_id === userId);
-
-    if (!isOwner && !isOccupant) {
+    if (fileUploadAccess.readFailed) {
+      return res.status(503).json({ error: 'Could not check home access. Try again.' });
+    }
+    if (!fileUploadAccess.hasAccess) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
+    const isOwner = fileUploadAccess.isOwner;
 
     // Only owner can upload to home profile
     if (!isOwner && (fileType === 'home_photo' || visibility === 'public')) {
@@ -679,7 +666,7 @@ router.post('/home/:homeId', verifyToken, upload.single('file'), validate(upload
     
     // If it's a home photo and it's the first one, set as home profile picture
     if (fileType === 'home_photo' && visibility === 'public') {
-      const { data: existingPhotos } = await supabase
+      const { data: existingPhotos } = await supabaseAdmin
         .from('File')
         .select('id')
         .eq('home_id', homeId)
@@ -727,30 +714,31 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { visibility = 'public' } = req.query;
     
-    // Check access
-    const { data: home, error: homeError } = await supabase
-      .from('Home')
-      .select(`
-        owner_id,
-        occupants:HomeOccupancy!home_id(user_id)
-      `)
-      .eq('id', homeId)
-      .single();
-
-    if (homeError || !home) {
-      return res.status(404).json({ error: 'Home not found' });
+    if (visibility !== 'public' && visibility !== 'private') {
+      return res.status(400).json({ error: 'Visibility must be public or private' });
     }
 
-    const fileViewAccess = await checkHomePermission(homeId, userId, 'docs.view');
-    const isOwner = fileViewAccess.isOwner;
-    const isOccupant = home.occupants.some(occ => occ.user_id === userId);
-
-    // Only owner/occupants can see private files
-    if (visibility === 'private' && !isOwner && !isOccupant) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (visibility === 'private') {
+      // The permission helper checks active membership, time windows and IAM
+      // overrides. A historical occupancy row is not an access grant.
+      const fileViewAccess = await checkHomePermission(homeId, userId, 'docs.view');
+      if (fileViewAccess.readFailed) {
+        return res.status(503).json({ error: 'Could not check home access. Try again.' });
+      }
+      if (!fileViewAccess.hasAccess) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    } else {
+      // Explicitly public files remain visible to authenticated visitors.
+      const { data: home, error: homeError } = await supabaseAdmin
+        .from('Home').select('id').eq('id', homeId).maybeSingle();
+      if (homeError) {
+        return res.status(503).json({ error: 'Could not load home. Try again.' });
+      }
+      if (!home) return res.status(404).json({ error: 'Home not found' });
     }
     
-    const { data: files, error } = await supabase
+    const { data: files, error } = await supabaseAdmin
       .from('File')
       .select('*')
       .eq('home_id', homeId)

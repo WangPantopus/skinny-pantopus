@@ -24,6 +24,7 @@ const {
   applyOccupancyTemplate,
   getActiveOccupancy,
   assertCanMutateTarget,
+  ROLE_RANK,
 } = require('../utils/homePermissions');
 const { getClaimRiskScore } = require('../utils/homeSecurityPolicy');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
@@ -5500,6 +5501,32 @@ router.post('/:id/events/:eventId/rsvp', verifyToken, async (req, res) => {
 
 // ============ HOME DOCUMENTS ============
 
+const HOME_DOCUMENT_VISIBILITIES = ['public', 'members', 'managers', 'sensitive'];
+const createHomeDocumentSchema = Joi.object({
+  doc_type: Joi.string().valid('lease', 'insurance', 'warranty', 'manual', 'permit', 'floor_plan', 'receipt', 'photo', 'paint_color', 'other').required(),
+  title: Joi.string().trim().min(1).max(255).required(),
+  visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES).default('members'),
+  file_id: Joi.string().uuid().allow(null),
+  storage_bucket: Joi.string().max(255).allow(null, ''),
+  storage_path: Joi.string().max(2048).allow(null, ''),
+  mime_type: Joi.string().max(255).allow(null, ''),
+  size_bytes: Joi.number().integer().min(0).allow(null),
+  details: Joi.object().default({}),
+});
+
+async function homeDocumentVisibilities(homeId, userId, access) {
+  if (access.isOwner) return { allowed: HOME_DOCUMENT_VISIBILITIES };
+  // Match home_can_see_visibility: manager scope follows the current role,
+  // while sensitive scope follows its explicit IAM permission/overrides.
+  const allowed = ['public', 'members'];
+  const role = access.occupancy?.role_base || mapLegacyRole(access.occupancy?.role);
+  if ((ROLE_RANK[role] || 0) >= ROLE_RANK.manager) allowed.push('managers');
+  const sensitive = await checkHomePermission(homeId, userId, 'sensitive.view');
+  if (sensitive.readFailed) return { allowed: [], readFailed: true };
+  if (sensitive.hasAccess) allowed.push('sensitive');
+  return { allowed };
+}
+
 /**
  * GET /api/homes/:id/documents
  */
@@ -5508,25 +5535,19 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'docs.view');
+    if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
-    // Filter by visibility based on permissions
-    const canViewSensitive = access.isOwner || (access.occupancy && access.occupancy.can_view_sensitive);
-    const canManageHome = access.isOwner || (access.occupancy && access.occupancy.can_manage_home);
+    const visibility = await homeDocumentVisibilities(homeId, userId, access);
+    if (visibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
 
-    let query = supabaseAdmin
+    const query = supabaseAdmin
       .from('HomeDocument')
       .select('*')
       .eq('home_id', homeId)
+      .in('visibility', visibility.allowed)
       .order('created_at', { ascending: false });
-
-    // Restrict based on visibility
-    if (!canViewSensitive && !canManageHome) {
-      query = query.eq('visibility', 'members');
-    } else if (!canViewSensitive) {
-      query = query.in('visibility', ['members', 'managers']);
-    }
 
     const { data, error } = await query;
     if (error) {
@@ -5544,19 +5565,20 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/documents
  */
-router.post('/:id/documents', verifyToken, async (req, res) => {
+router.post('/:id/documents', verifyToken, validate(createHomeDocumentSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'docs.upload');
+    if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { file_id, doc_type, title, storage_bucket, storage_path, mime_type, size_bytes, visibility, details } = req.body;
 
-    if (!doc_type || !title) {
-      return res.status(400).json({ error: 'doc_type and title are required' });
-    }
+    const documentVisibility = await homeDocumentVisibilities(homeId, userId, access);
+    if (documentVisibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
+    if (!documentVisibility.allowed.includes(visibility)) return res.status(403).json({ error: 'No access to that document visibility' });
 
     const { data, error } = await supabaseAdmin
       .from('HomeDocument')
@@ -6612,6 +6634,11 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
     const perms = new Set(myAccess.permissions || []);
 
     const canFinance = myAccess.isOwner || perms.has('finance.view') || perms.has('finance.manage');
+    const canViewDocuments = access.isOwner || myAccess.isOwner || perms.has('docs.view');
+    const documentVisibility = canViewDocuments
+      ? await homeDocumentVisibilities(homeId, userId, access)
+      : { allowed: [] };
+    if (documentVisibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
 
     // Build date boundaries for "today" queries
     const now = new Date();
@@ -6725,10 +6752,13 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
         .eq('home_id', homeId)
         .in('status', ['ordered', 'shipped', 'out_for_delivery']),
       // counts: documents
-      supabaseAdmin
-        .from('HomeDocument')
-        .select('id', { count: 'exact', head: true })
-        .eq('home_id', homeId),
+      canViewDocuments
+        ? supabaseAdmin
+            .from('HomeDocument')
+            .select('id', { count: 'exact', head: true })
+            .eq('home_id', homeId)
+            .in('visibility', documentVisibility.allowed)
+        : Promise.resolve({ count: 0 }),
       // counts: upcoming events
       supabaseAdmin
         .from('HomeCalendarEvent')

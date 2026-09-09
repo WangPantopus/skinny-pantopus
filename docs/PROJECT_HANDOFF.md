@@ -96,6 +96,21 @@ Cloudflare sign-in is pending before configuring the currently absent frontend
 hostname and completing browser email links. PR #17 is merged with passing final CI.
 PR #16's merged-master CI passed in full.
 
+The [Home file access repair](home-file-access-2026-09-09.md),
+[PR #19](https://github.com/WangPantopus/skinny-pantopus/pull/19), now enforces
+both legacy file and current document permissions, manager/sensitive visibility,
+and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
+4,376 backend tests and privacy gates pass. The next concrete gap is native
+Home document upload: both clients currently save metadata without bytes and
+report success. Complete real scoped upload/retrieval on existing/free storage,
+including retry and revoked-access denial. Hosted storage is not yet certified.
+PR #19 integration is isolated in `/private/tmp/pantopus-home-access-integration`.
+Byte delivery continues separately in `/private/tmp/pantopus-home-file-access`,
+branch `codex/home-document-storage`: backend byte tests and the first iOS
+upload tests pass; Android upload and both authenticated previews are in progress.
+No hosted bucket has been created. PR #18 merged with passing checks at 12:51 UTC
+as `fd8a94eef727342340fc522f7196e6e64814ed08`.
+
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
 `/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
