@@ -36,33 +36,108 @@ A failed final save reloads server truth.
 | Complete schema | Eight pgTAP contracts and six real SDK/PostgREST/Following tests pass, including preference defaults/false/restore, null rejection and preservation of unrelated settings |
 | Migration tooling | 19 tests pass; the history guard now compares exact Git blob identities, avoiding Node's stdout buffer limit for baselines larger than 1 MiB while still rejecting modified applied SQL |
 
-Canonical predecessor f9362cbca55a25ea51f9a1ebbcb60b72fb7fad22 has a passing
-database job in [CI run 34293457260](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34293457260).
-The preference changes require their own CI. Private logs/credentials remain
-outside Git. No new preference-test publication has been sent to a device yet.
+Canonical predecessor f9362cbca55a25ea51f9a1ebbcb60b72fb7fad22 has fully passing
+[CI run 34293457260](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34293457260).
+Preference revision 65d2cc2d9ab4857e044325315f0023a6d8f4bf54 is in
+[PR #12](https://github.com/WangPantopus/skinny-pantopus/pull/12); its
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34295357368)
+fully passes backend/privacy, web, Docker, safeguards, database and every native
+job. Private logs and credentials remain outside Git.
 
-## Staging plan and remaining acceptance
+## Staging rollout
 
-Read-only staging inspection confirms the new column and restrictive Post policy
-are absent, the three reviewed maintenance RPCs exist, and Post RLS is enabled.
-The audience flag is globally/internal disabled with zero beta accounts; both
-staging release switches remain false. No hosted schema or ledger changed.
+Before expansion, read-only staging inspection confirmed the column and restrictive
+Post policy were absent, the three reviewed maintenance RPCs existed, and Post
+RLS was enabled. Global/internal feature enablement and both staging release
+switches remain false. The starting beta list was empty.
+The scoped staging SQL rehearsal has now passed both actual-role contracts and
+rolled back completely, preserving existing preferences and migration history.
+The reviewed SQL SHA-256 is fe9bf1bdc2225588b99edbe89d3868ff9bc9811aef27ea9b73ea46a9d04fcb46.
 
-Prepare an atomic staging rehearsal for the new column, restrictive
-post_persona_service_only policy and service-only grants for
-auto_archive_expired_posts, get_seeder_tapering_metrics and record_post_unique_view.
-Run actual-role contracts, then apply those compatible changes before the new
-API/worker image. Retain previous containers/image for app rollback; the additive
-schema works with the old runtime.
+The reviewed forward SQL has now been applied on staging after the complete CI
+pass. The new column, restrictive post_persona_service_only policy and service-only
+grants for auto_archive_expired_posts, get_seeder_tapering_metrics and
+record_post_unique_view are present. Existing preference values and the hosted
+migration ledger retain their fingerprints. The API and worker now run verified
+revision 65d2cc2d9ab4857e044325315f0023a6d8f4bf54, image
+sha256:c7d81368d0fac60b73134c0fd3d0243696de6fef4cb40ed6e32bf0c8f9a527f5,
+both healthy. HTTPS health reports database connectivity. Previous containers
+and their image remain available for rollback.
+
+All 20 fresh live API checks pass. Push off retains the exact audience row,
+Following unread/latest-post state, permitted return and authenticated WebSocket
+event. Restore persists without replay; the next publication points to its own
+post. Per-Beacon mute suppresses rows, unmute restores them, and Member/block/
+draft/archive restrictions still deny content. Explicit refollow restores access.
+Real anonymous and authenticated-owner PostgREST clients can read an ordinary
+public control but cannot read the Beacon, convert a personal post into a Beacon,
+or invoke the reviewed view-maintenance RPC. Service access succeeds. This matrix
+used only the token-free synthetic follower and sent no device alerts.
+
+Both native staging builds pass. The signed iPhone app uses the staging API and
+development APNs entitlement. Android signed in normally and registered one linked
+FCM token, then joined the test Beacon after the API-only matrix completed.
+Global/internal feature enablement remained false throughout; only the fresh
+synthetic accounts and designated Android account entered its beta list.
+Physical iPhone availability remains unconfirmed.
+
+The Android walkthrough exposed no-op menu and notification callbacks in the
+first-run Hub. Both now dispatch the existing navigation intents, matching iOS,
+so an account without a home can reach notifications and the settings drawer.
+Revision 8022e9b05253a91a579f52e883e067514843234a passes ktlint, Detekt and the
+staging build. Its installed APK successfully opens first-run menu → Settings →
+Notification preferences without a home; the Beacon toggle displays and saves.
+The [new CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34298026294)
+fully passes at that application revision, including all native jobs. The later
+documentation checkpoint changes only the handoff and evidence reports.
+
+## Android native preference acceptance
+
+The rebuilt staging APK SHA-256 is
+8ec4055aed0fa4f5b604c0fe0e9d78326824baf75bc30864d23decf8a28baf97.
+The designated Android 14/API 34 emulator passed the full preference journey:
+
+| Native action | Observed result |
+| --- | --- |
+| Turn Beacon push off in settings | Saved false in the API and remained off after reopening settings; global push remained true |
+| Background app and publish A-off | One audience row for the device account, correct exact-post link; no system alert or FCM acceptance receipt during 72 seconds |
+| Open the retained in-app notification | Displayed exactly “Beacon preference A-off — quiet violet” with public author “Beacon Preference Test” |
+| Restore the setting and publish A-restored | FCM attempted one token and accepted one; only the new notification appeared in the system shade |
+| Tap that device notification | Opened exactly “Beacon preference A-restored — coral sunrise” with the correct author |
+| Check the muted publication after restore | Still no device alert or provider receipt at 301 seconds; no notification replay |
+
+These synthetic identifiers correlate the stored post, audience row and native return;
+the fixtures were deleted during cleanup.
+
+| Case | Post ID | Notification ID |
+| --- | --- | --- |
+| A-off | `9dc385e3-7735-42cf-b157-8a6ce55dee0b` | `1351554d-1c52-455b-a20a-0ef48c5bcd4b` |
+| A-restored | `a4264b3f-3414-4276-b435-40dbcae48e40` | `627d2412-ad3b-43b3-be56-591de42e21c7` |
+
+The native test audience contained only the designated Android account and the
+token-free API follower. The iPhone was not enrolled or notified. These are
+emulator observations; physical Android remains unverified.
+
+Every original Android notification preference compared equal after restoration,
+as did global push. Native logout removed its token. Scoped cleanup removed all
+11 posts, 12 notifications, one Beacon, the remaining membership and two new
+synthetic accounts. Both original device accounts, their two prior notifications
+and the iPhone registration were preserved. Global/internal enablement stays
+false and the beta list is empty again. The emulator was closed after logout.
+Future iPhone checks must create a fresh isolated fixture; do not reuse the
+deleted creator/channel IDs.
 
 This forward preparation does not adopt a hosted canonical ledger or enable
 automation. Never run fresh baseline DDL on a populated project. Complete separate
 per-environment ledger adoption before enabling automatic migrations; production
 remains unchanged.
 
-Next verify hosted raw-role denial, API off/restore, retained audience rows,
-exact permitted return and no replay. Use fresh synthetic Beacon fixtures and
-verify the audience before device publications. Reconfirm iPhone availability
-and restore test preferences afterward. Physical Android remains unavailable.
+## Remaining acceptance
+
+Hosted raw-role denial, API off/restore, retained audience rows, exact permitted
+return and no replay now pass. Next install the prepared staging iPhone build once
+the owner confirms device readiness, create a fresh isolated Beacon, and verify
+the new preference's off/restore behavior. Verify the audience before every
+publication and restore test preferences afterward. Physical Android remains unavailable.
 Previously confirmed background/foreground/closed-app, block, mute and global
 push cases remain in the [full journey report](beacon-full-journey-2026-09-08.md).

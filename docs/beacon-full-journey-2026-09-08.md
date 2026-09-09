@@ -217,6 +217,12 @@ The staging APK was built and installed; `ktlintCheck`, Detekt and Android
 
 ## Remaining Beacon preference contract
 
+The subsequent [preference milestone](beacon-push-preference-2026-09-08.md)
+implements this contract, deploys the compatible staging expansion, and records
+20 passing live API checks plus Android native off/restore and exact-post
+acceptance. Physical iPhone acceptance for this new setting remains open. The
+paragraphs below describe the original gap and baseline prerequisite.
+
 The current controls differ deliberately: per-Beacon notification off/mute
 suppresses creation of that follower's notification; global push off retains
 the in-app row and suppresses transport. A Beacon-specific **push-only** setting
