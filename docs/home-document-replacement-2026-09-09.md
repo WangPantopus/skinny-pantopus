@@ -6,6 +6,8 @@ Work is isolated in `/private/tmp/pantopus-home-document-replacement`, branch
 `6fbdcce1203780b475bd209ed4f6fc5e03bfb487`, whose
 [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34374779134)
 passed at `134b25751`.
+[PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) is ready; its
+current-head CI must pass before integration.
 
 ## Result
 

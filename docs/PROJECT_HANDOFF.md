@@ -185,8 +185,9 @@ and signed simulator build pass. The live iOS picker → confirmation → same d
 1,292 bytes matching and its temporary copy removed on restart. Both native picker → confirmation → same document → Share journeys now pass,
 with 41 focused tests per platform and matching 1,292-byte exports removed on
 restart. Both disposable documents and the temporary manage grant are removed;
-original five documents and quotas remain. All local checks pass, including final Android lint. PR publication/integration
-is the remaining replacement step. The recovery report preserves
+original five documents and quotas remain. [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) is ready with
+all local checks passing, including final Android lint. Its CI/integration remain;
+continue independent staging account/vendor work while checks run. The recovery report preserves
 the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
 PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree
@@ -242,15 +243,17 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Finish PR publication and integration for
-   `codex/home-document-replacement`. Backend/database, live isolated API and both
-   native picker → replace → same document → exact Share journeys pass. Both
-   disposable documents and the temporary manage grant are cleaned; original five
-   Home documents and quotas remain. See the replacement report and private
-   operator checkpoint for exact build/fixture state.
-2. Continue staging browser signup/recovery/verification, real OAuth callbacks,
+1. Continue staging browser signup/recovery/verification, real OAuth callbacks,
    reachable sandbox payments and address verification. The frontend hostname/TLS
    and OAuth provider setup remain unresolved; use existing/free capacity.
+   A fresh browser check still shows Cloudflare's sign-in page. No credentials
+   were entered and no DNS changed; continue independent vendor checks.
+2. Monitor [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) and
+   merge it only after current-head CI passes. Home replacement's backend/database,
+   live isolated API and both native picker → replace → same document → exact Share
+   journeys pass. Both disposable documents and the temporary manage grant are
+   cleaned; original five Home documents and quotas remain. The public runtime
+   has not received this private-candidate work.
 3. Complete the production upgrade/ledger, external-file recovery and
    deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
    reachable-feature acceptance. Keep actual production cutover distinct from
