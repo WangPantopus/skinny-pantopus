@@ -155,7 +155,7 @@ The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 [PR #21](https://github.com/WangPantopus/skinny-pantopus/pull/21) merged as
 `c1f411c583e9375616e06570bdcea062f16bf532` after its
 [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34369706912)
-passed. Its merged-master checks are running. Next work is isolated in
+passed. Its merged-master CI also passed. The completed recovery work is isolated in
 `/private/tmp/pantopus-home-upload-recovery`, branch `codex/home-upload-recovery`.
 The [upload recovery report](home-upload-recovery-2026-09-09.md) records passing
 local quota/access SQL contracts and three real competing-connection checks for
@@ -169,7 +169,25 @@ exact bytes and quotas/limits are preserved. Native launch cleanup passes 35 iOS
 and 34 Android tests plus lint/build checks. Both native share → process restart
 checks pass with exact 609-byte copies removed on relaunch. The zero-cache
 candidate follow-up also passes exact upload and immediate post-delete denial.
-Publish recovery and finish document replacement. The report preserves
+[PR #22](https://github.com/WangPantopus/skinny-pantopus/pull/22) merged as
+`6fbdcce1203780b475bd209ed4f6fc5e03bfb487` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34374779134)
+passed at `134b25751`. Its merged-master checks are pending. Replacement work is isolated in
+`/private/tmp/pantopus-home-document-replacement`, branch
+`codex/home-document-replacement`; see the
+[replacement report](home-document-replacement-2026-09-09.md). Initial replacement
+backend/SQL work passes 4,453 backend tests, 12 contracts and the full function
+linter in a separate owned local database. Explicit backend privacy gates and
+three real replacement/expiry/deletion races also pass. The compatible migration and private staging candidate are now applied without
+changing existing rows or public runtime. Two live API replacement cycles pass;
+provider cleanup has the documented eventual-read limit. All 41 iOS focused tests
+and signed simulator build pass. The live iOS picker → confirmation → same document → Share also passes, with all
+1,292 bytes matching and its temporary copy removed on restart. Both native picker → confirmation → same document → Share journeys now pass,
+with 41 focused tests per platform and matching 1,292-byte exports removed on
+restart. Both disposable documents and the temporary manage grant are removed;
+original five documents and quotas remain. [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) is ready with
+all local checks passing, including final Android lint. Its CI/integration remain;
+continue independent staging account/vendor work while checks run. The recovery report preserves
 the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
 PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree
@@ -225,18 +243,26 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Finish remaining notification states after the completed native composer journey
-   using iOS simulators, Android emulators and isolated staging API fixtures.
-   The native Beacon, natural-expiry, chat return and fixture cleanup milestones
-   now pass; retain explicit platform/build limits. Preserve revoked
-   session state and evidence. Physical Android is
-   unavailable, and simulator-only results cannot establish hardware delivery.
-2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
-   sandbox payments and address verification. Use existing/free capacity.
-3. Complete the remaining production upgrade/ledger, external-file recovery and
+1. Continue staging browser signup/recovery/verification, real OAuth callbacks,
+   reachable sandbox payments and address verification. The frontend hostname/TLS
+   and OAuth provider setup remain unresolved; use existing/free capacity.
+   A fresh browser check still shows Cloudflare's sign-in page. No credentials
+   were entered and no DNS changed; continue independent vendor checks.
+2. Monitor [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) and
+   merge it only after current-head CI passes. Home replacement's backend/database,
+   live isolated API and both native picker → replace → same document → exact Share
+   journeys pass. Both disposable documents and the temporary manage grant are
+   cleaned; original five Home documents and quotas remain. The public runtime
+   has not received this private-candidate work.
+3. Complete the production upgrade/ledger, external-file recovery and
    deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
    reachable-feature acceptance. Keep actual production cutover distinct from
    preparation and preserve records, balances and entitlements.
+
+Beacon publication, mute/access/preferences, native post/chat return, natural
+expiry and their fixture cleanup are complete within the recorded platform
+limits. Do not repeat the completed iPhone observations. Physical Android remains
+unverified; simulator/emulator results do not establish physical-device delivery.
 
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical

@@ -2018,12 +2018,8 @@ public struct YouTabRoot: View {
             DocumentDetailView(
                 homeId: homeId,
                 documentId: documentId,
-                onBack: { Task { @MainActor in pop() } },
-                onReplace: {
-                    Task { @MainActor in
-                        path.append(.uploadDocument(homeId: homeId))
-                    }
-                }
+                // swiftlint:disable:next trailing_closure
+                onBack: { Task { @MainActor in pop() } }
             )
         case let .documentSearch(homeId):
             DocumentSearchView(

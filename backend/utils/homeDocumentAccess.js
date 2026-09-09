@@ -18,12 +18,13 @@ async function homeDocumentVisibilities(homeId, userId, access) {
 
 function serializeHomeDocument(document) {
   if (document.details?.storage_contract !== 'home_document_v1' || document.file_id !== document.id) return document;
-  const { upload_fingerprint, upload_sha256, storage_contract, ...details } = document.details;
+  const { upload_fingerprint, upload_sha256, upload_version, storage_contract, ...details } = document.details;
   return {
     ...document,
     details,
     storage_bucket: null,
     storage_path: null,
+    file_version: upload_version || document.id,
     content_url: `/api/homes/${document.home_id}/documents/${document.id}/content`,
   };
 }

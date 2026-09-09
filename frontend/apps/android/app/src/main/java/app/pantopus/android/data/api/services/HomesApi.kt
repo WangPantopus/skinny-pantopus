@@ -336,6 +336,16 @@ interface HomesApi {
         @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>,
     ): CreateDocumentResponse
 
+    /** Replace bytes at a stable document — route `backend/routes/homeDocumentReplacement.js:62`. */
+    @Multipart
+    @POST("api/homes/{id}/documents/{documentId}/replace")
+    suspend fun replaceHomeDocument(
+        @Path("id") homeId: String,
+        @Path("documentId") documentId: String,
+        @Part file: MultipartBody.Part,
+        @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>,
+    ): CreateDocumentResponse
+
     /** Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:166`. */
     @GET("api/homes/{id}/documents/{documentId}/content")
     suspend fun homeDocumentContent(
@@ -343,7 +353,7 @@ interface HomesApi {
         @Path("documentId") documentId: String,
     ): ResponseBody
 
-    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:190`. */
+    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:191`. */
     @DELETE("api/homes/{id}/documents/{documentId}")
     suspend fun deleteHomeDocument(
         @Path("id") homeId: String,

@@ -12,7 +12,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Allowed picker types — PDF, image, .doc/.docx, .xls/.xlsx.
-private let allowedUploadTypes: [UTType] = {
+let allowedUploadTypes: [UTType] = {
     var types: [UTType] = [.pdf, .image]
     if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
     if let doc = UTType(filenameExtension: "doc") { types.append(doc) }

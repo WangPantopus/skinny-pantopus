@@ -55,6 +55,31 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         waitForExpectations(timeout: 20)
     }
 
+    func testMemberReplacesFileAtTheSameDocumentAndSharesIt() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["DOCUMENT_TEST_REPLACE"] == "1", "Requires a disposable replacement document")
+        try openDocument()
+        tap("documentDetailReplace")
+        let file = element("replacement-picker-R4, pdf")
+        if !file.waitForExistence(timeout: 5) {
+            let browse = app.tabBars.buttons["Browse"].firstMatch
+            if browse.waitForExistence(timeout: 5) { browse.tap() }
+            if !file.exists {
+                let local = app.staticTexts["On My iPhone"].firstMatch
+                if local.waitForExistence(timeout: 5) { local.tap() }
+            }
+        }
+        XCTAssertTrue(file.waitForExistence(timeout: 20))
+        file.tap()
+        let confirm = app.sheets.buttons["Replace file"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 20))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["File replaced."].firstMatch.waitForExistence(timeout: 30))
+        XCTAssertEqual(element("documentDetailTitle").label, inputs["DOCUMENT_TEST_TITLE"])
+        XCTAssertTrue(element("documentDetailPreview").exists)
+        tap("documentDetailShare")
+        XCTAssertTrue(app.cells["Save to Files"].firstMatch.waitForExistence(timeout: 20))
+    }
+
     func testMemberUploadsFromSystemPickerAndOpensExactDocument() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["DOCUMENT_TEST_UPLOAD"] == "1", "Requires a disposable picker file")
         try openDocuments()

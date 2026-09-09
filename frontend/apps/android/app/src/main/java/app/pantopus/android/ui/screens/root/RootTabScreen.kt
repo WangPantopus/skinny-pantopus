@@ -3596,13 +3596,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(DOCUMENT_DETAIL_HOME_ID_KEY) { type = NavType.StringType },
                             navArgument(DOCUMENT_DETAIL_DOC_ID_KEY) { type = NavType.StringType },
                         ),
-                ) { entry ->
-                    val homeId = entry.arguments?.getString(DOCUMENT_DETAIL_HOME_ID_KEY).orEmpty()
+                ) {
                     DocumentDetailScreen(
                         onBack = { navController.popBackStack() },
-                        onReplace = {
-                            navController.navigate(ChildRoutes.uploadDocument(homeId))
-                        },
                     )
                 }
                 composable(

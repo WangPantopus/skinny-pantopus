@@ -34,6 +34,16 @@ final class DocumentDetailViewModel {
     private var loadId = UUID()
     private var exportDirectory: URL?
     private var deleted = false
+    private var replacementDocument: HomeDocumentDTO?
+    private var replacementSelection = UUID()
+    private struct ReplacementAttempt {
+        let file: PickedFile
+        let version: String
+        let id: String
+    }
+
+    private var replacementAttempt: ReplacementAttempt?
+    private(set) var replacementFile: PickedFile?
     private(set) var isMutating: Bool = false
     var toast: ToastMessage?
     private(set) var shouldDismiss: Bool = false
@@ -41,17 +51,20 @@ final class DocumentDetailViewModel {
     private let homeId: String
     private let documentId: String
     private let api: APIClient
+    private let uploader: MultipartUploader
     private let onChanged: @Sendable () -> Void
 
     init(
         homeId: String,
         documentId: String,
         api: APIClient = .shared,
+        uploader: MultipartUploader = .shared,
         onChanged: @escaping @Sendable () -> Void = {}
     ) {
         self.homeId = homeId
         self.documentId = documentId
         self.api = api
+        self.uploader = uploader
         self.onChanged = onChanged
     }
 
@@ -129,9 +142,86 @@ final class DocumentDetailViewModel {
         await load()
     }
 
+    func beginReplacement() -> Bool {
+        guard !isMutating, !deleted, case let .loaded(document) = state,
+              document.fileVersion != nil, document.contentURL != nil else { return false }
+        replacementSelection = UUID()
+        replacementDocument = document
+        replacementFile = nil
+        return true
+    }
+
+    func pickReplacement(url: URL) async {
+        let selection = replacementSelection
+        guard replacementDocument != nil else { return }
+        do {
+            let file = try await Task.detached(priority: .userInitiated) { try DocumentFileReader.read(url) }.value
+            guard selection == replacementSelection else { return }
+            replacementFile = file
+        } catch {
+            guard selection == replacementSelection else { return }
+            toast = ToastMessage(text: (error as? APIError)?.errorDescription ?? "Couldn't read that file. Choose it again.", kind: .error)
+        }
+    }
+
+    func cancelReplacement() {
+        replacementSelection = UUID()
+        replacementDocument = nil
+        replacementFile = nil
+        replacementAttempt = nil
+    }
+
+    func replace() async {
+        guard !isMutating, !deleted, let original = replacementDocument,
+              let version = original.fileVersion, let file = replacementFile, let bytes = file.data else { return }
+        let previous = replacementAttempt
+        let uploadId: String = if let previous, previous.file == file, previous.version == version {
+            previous.id
+        } else {
+            UUID().uuidString.lowercased()
+        }
+        replacementAttempt = ReplacementAttempt(file: file, version: version, id: uploadId)
+        isMutating = true
+        loadId = UUID()
+        content = nil
+        clearExport()
+        defer { isMutating = false }
+        do {
+            let response = try await uploader.replaceHomeDocument(
+                homeId: homeId,
+                documentId: documentId,
+                uploadId: uploadId,
+                expectedVersion: version,
+                file: MultipartFile(
+                    fieldName: "file",
+                    filename: file.filename,
+                    mimeType: file.mimeType ?? "application/octet-stream",
+                    data: bytes
+                )
+            )
+            guard response.document.id.lowercased() == documentId.lowercased(),
+                  response.document.fileId?.lowercased() == documentId.lowercased(),
+                  response.document.fileVersion?.lowercased() == uploadId,
+                  response.document.contentURL != nil else {
+                state = .error(message: "Couldn't confirm replacement. Reload this document.")
+                return
+            }
+            cancelReplacement()
+            isMutating = false
+            onChanged()
+            await load()
+            if case let .loaded(current) = state, current.fileVersion?.lowercased() == uploadId, content != nil {
+                toast = ToastMessage(text: "File replaced.", kind: .success)
+            }
+        } catch {
+            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't replace this file. Try again.")
+        }
+    }
+
     func delete() async {
         guard !deleted, !isMutating, case .loaded = state else { return }
         isMutating = true
+        cancelReplacement()
         loadId = UUID()
         content = nil
         clearExport()
@@ -164,9 +254,10 @@ public struct DocumentDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: DocumentDetailViewModel
     @State private var showsDeleteConfirm = false
+    @State private var showsReplacementPicker = false
+    @State private var showsReplacementConfirm = false
     @State private var shareItem: ShareItem?
     private let onBack: () -> Void
-    private let onReplace: () -> Void
     private let onOpenExternally: (HomeDocumentDTO) -> Void
 
     public init(
@@ -174,7 +265,6 @@ public struct DocumentDetailView: View {
         documentId: String,
         seedDocument: HomeDocumentDTO? = nil,
         onBack: @escaping () -> Void = {},
-        onReplace: @escaping () -> Void = {},
         onOpenExternally: @escaping (HomeDocumentDTO) -> Void = { _ in }
     ) {
         let vm = DocumentDetailViewModel(homeId: homeId, documentId: documentId)
@@ -183,7 +273,6 @@ public struct DocumentDetailView: View {
         }
         _viewModel = State(initialValue: vm)
         self.onBack = onBack
-        self.onReplace = onReplace
         self.onOpenExternally = onOpenExternally
     }
 
@@ -200,8 +289,7 @@ public struct DocumentDetailView: View {
                     onBack: onBack,
                     onOpenExternally: { Task { await exportFile() } },
                     onShare: { Task { await exportFile() } },
-                    onReplace: onReplace,
-                    // swiftlint:disable:next trailing_closure
+                    onReplace: { if viewModel.beginReplacement() { showsReplacementPicker = true } },
                     onDelete: { showsDeleteConfirm = true }
                 )
             case let .error(message):
@@ -226,6 +314,21 @@ public struct DocumentDetailView: View {
         }
         .onDisappear { viewModel.clearContent()
             viewModel.clearExport()
+        }
+        .fileImporter(isPresented: $showsReplacementPicker, allowedContentTypes: allowedUploadTypes) { result in
+            switch result {
+            case let .success(url): Task { await viewModel.pickReplacement(url: url) }
+            case .failure: viewModel.cancelReplacement()
+            }
+        }
+        .onChange(of: viewModel.replacementFile) { _, file in
+            if file != nil { showsReplacementConfirm = true }
+        }
+        .confirmationDialog("Replace this file?", isPresented: $showsReplacementConfirm, titleVisibility: .visible) {
+            Button("Replace file") { Task { await viewModel.replace() } }
+            Button("Cancel", role: .cancel) { viewModel.cancelReplacement() }
+        } message: {
+            Text("The document link and details will stay the same.")
         }
         .confirmationDialog(
             "Delete this document?",
@@ -363,6 +466,7 @@ private struct LoadedShell: View {
                 StickyActionFooter(
                     isMutating: isMutating,
                     hasFile: content != nil,
+                    canReplace: dto.fileVersion != nil,
                     onOpenExternally: onOpenExternally,
                     onShare: onShare,
                     onReplace: onReplace,
@@ -696,6 +800,7 @@ private struct LinkedToCard: View {
 private struct StickyActionFooter: View {
     let isMutating: Bool
     let hasFile: Bool
+    let canReplace: Bool
     let onOpenExternally: () -> Void
     let onShare: () -> Void
     let onReplace: () -> Void
@@ -725,7 +830,7 @@ private struct StickyActionFooter: View {
                     accessibilityLabel: "Replace file",
                     identifier: "documentDetailReplace",
                     action: onReplace
-                )
+                ).disabled(!canReplace)
                 FooterButton(
                     icon: .trash2,
                     label: "Delete",
