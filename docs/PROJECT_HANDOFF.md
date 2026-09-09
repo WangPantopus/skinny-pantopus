@@ -150,8 +150,13 @@ cleanup removed four posts, five notifications, the fresh Beacon and creator;
 normal logout removed the Android token. Original account/device/preferences/OS
 permission are preserved, global/internal flags remain false and beta is empty.
 Formatting, Detekt, Android lint and the staging build pass; the owned emulator
-is closed after cleanup. The draft repair PR is the next action on
+is closed after cleanup. Draft [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14)
+contains application fix `9c443b69afb4e0b488491f4d895fcee55ab9cc3c` on
 `codex/notification-session-return`, based on PR #12's `d33a33c1a` checkpoint.
+Its [CI checks](https://github.com/WangPantopus/skinny-pantopus/pull/14/checks)
+are pending. Check them before integration; the source order is #13 → retarget
+#12 to master → retarget #14 to master after #12. None has been merged in this
+continuation. Then continue the remaining platform states below.
 Keep the already revoked sessions revoked; preserve other sessions and the
 original AuthDevice. The iPhone preference
 fixture is already cleaned up, and its completed checks need no repetition.
@@ -176,7 +181,7 @@ It does not adopt a hosted ledger or deploy the private forward candidate.
 
 Start a new session by:
 
-1. Refreshing Git, PRs #12–#13/CI and staging observations; preserve unrelated work.
+1. Refreshing Git, PRs #12–#14/CI and staging observations; preserve unrelated work.
 2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
    Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
