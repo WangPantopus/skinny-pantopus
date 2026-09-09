@@ -53,6 +53,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
     public var aqiAlertsEnabled: Bool
     public var mailSummaryEnabled: Bool
     public var gigUpdatesEnabled: Bool
+    public var beaconPushEnabled: Bool
     public var homeRemindersEnabled: Bool
     /// `HH:mm` or nil. Nil on *either* end means quiet hours are off.
     public var quietHoursStartLocal: String?
@@ -83,6 +84,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         aqiAlertsEnabled: Bool = true,
         mailSummaryEnabled: Bool = true,
         gigUpdatesEnabled: Bool = true,
+        beaconPushEnabled: Bool = true,
         homeRemindersEnabled: Bool = true,
         quietHoursStartLocal: String? = nil,
         quietHoursEndLocal: String? = nil,
@@ -97,6 +99,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         self.aqiAlertsEnabled = aqiAlertsEnabled
         self.mailSummaryEnabled = mailSummaryEnabled
         self.gigUpdatesEnabled = gigUpdatesEnabled
+        self.beaconPushEnabled = beaconPushEnabled
         self.homeRemindersEnabled = homeRemindersEnabled
         self.quietHoursStartLocal = quietHoursStartLocal
         self.quietHoursEndLocal = quietHoursEndLocal
@@ -113,6 +116,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         case aqiAlertsEnabled = "aqi_alerts_enabled"
         case mailSummaryEnabled = "mail_summary_enabled"
         case gigUpdatesEnabled = "gig_updates_enabled"
+        case beaconPushEnabled = "beacon_push_enabled"
         case homeRemindersEnabled = "home_reminders_enabled"
         case quietHoursStartLocal = "quiet_hours_start_local"
         case quietHoursEndLocal = "quiet_hours_end_local"
@@ -133,6 +137,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
             aqiAlertsEnabled: container.decodeIfPresent(Bool.self, forKey: .aqiAlertsEnabled) ?? true,
             mailSummaryEnabled: container.decodeIfPresent(Bool.self, forKey: .mailSummaryEnabled) ?? true,
             gigUpdatesEnabled: container.decodeIfPresent(Bool.self, forKey: .gigUpdatesEnabled) ?? true,
+            beaconPushEnabled: container.decodeIfPresent(Bool.self, forKey: .beaconPushEnabled) ?? true,
             homeRemindersEnabled: container.decodeIfPresent(Bool.self, forKey: .homeRemindersEnabled) ?? true,
             quietHoursStartLocal: container.decodeIfPresent(String.self, forKey: .quietHoursStartLocal),
             quietHoursEndLocal: container.decodeIfPresent(String.self, forKey: .quietHoursEndLocal),

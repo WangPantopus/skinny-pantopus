@@ -50,6 +50,10 @@ final class SocketClient {
     /// In-flight auth-error recovery, so a burst of `error` frames from one
     /// stale token triggers one refresh + reconnect, not a storm.
     private var authRecoveryTask: Task<Void, Never>?
+    /// One refresh until the socket authenticates successfully. A rejected
+    /// replacement token must not start an unbounded refresh/reconnect loop.
+    private var attemptedAuthRecovery = false
+    private var connectionGeneration = 0
     /// Set once the server said the device / session is revoked: reconnecting
     /// with any token from this session is pointless, so we stop until the
     /// HTTP path confirms (401 `SESSION_REVOKED`) and a fresh sign-in
@@ -80,13 +84,13 @@ final class SocketClient {
             // may reconnect.
             if stoppedForRevocation { return }
             if connectionState == .disconnected {
-                socket?.connect()
+                socket?.connect(withPayload: ["token": token])
                 setConnectionState(.connecting)
             }
             return
         }
         if socket != nil {
-            disconnect()
+            disconnectTransport()
         }
         authToken = token
         // A fresh token (post-login / post-refresh) lifts a revocation stop.
@@ -100,30 +104,30 @@ final class SocketClient {
                 .compress,
                 .reconnects(true),
                 .reconnectAttempts(-1),
-                .reconnectWait(2),
-                .extraHeaders(["Authorization": "Bearer \(token)"]),
-                .connectParams(["token": token])
+                .reconnectWait(2)
             ]
         )
         self.manager = manager
         let socket = manager.defaultSocket
         self.socket = socket
+        let generation = connectionGeneration
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             Task { @MainActor in
-                self?.setConnectionState(.connected)
-                self?.logger.info("Socket connected")
+                guard let self, self.connectionGeneration == generation else { return }
+                self.handleSocketConnected()
             }
         }
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             Task { @MainActor in
-                self?.setConnectionState(.disconnected)
-                self?.logger.info("Socket disconnected")
+                guard let self, self.connectionGeneration == generation else { return }
+                self.setConnectionState(.disconnected)
+                self.logger.info("Socket disconnected")
             }
         }
         socket.on(clientEvent: .error) { [weak self] data, _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.connectionGeneration == generation else { return }
                 self.logger.error("Socket error: \(data)")
                 self.handleSocketError(Self.errorMessage(from: data))
             }
@@ -134,16 +138,26 @@ final class SocketClient {
         // and `AuthManager` ends the session with the right reason.
         socket.on("auth:session_revoked") { [weak self] _, _ in
             Task { @MainActor in
-                self?.stopForRevocation(reason: "auth:session_revoked")
+                guard let self, self.connectionGeneration == generation else { return }
+                self.stopForRevocation(reason: "auth:session_revoked")
             }
         }
 
-        socket.connect()
+        // Socket.IO namespace auth is read as handshake.auth on the server.
+        // Engine.IO query parameters and HTTP headers do not populate it.
+        socket.connect(withPayload: ["token": token])
     }
 
     func disconnect() {
         authRecoveryTask?.cancel()
         authRecoveryTask = nil
+        attemptedAuthRecovery = false
+        disconnectTransport()
+    }
+
+    private func disconnectTransport() {
+        connectionGeneration += 1
+        socket?.removeAllHandlers()
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -152,6 +166,12 @@ final class SocketClient {
     }
 
     // MARK: - Auth-error recovery
+
+    func handleSocketConnected() {
+        attemptedAuthRecovery = false
+        setConnectionState(.connected)
+        logger.info("Socket connected")
+    }
 
     /// Best-effort human message from a Socket.IO error payload
     /// (`[String]`, `[[String: Any]]` with `message`, or an `Error`).
@@ -176,7 +196,8 @@ final class SocketClient {
             return
         }
         guard Self.refreshableAuthErrorMarkers.contains(where: { lower.contains($0) }) else { return }
-        guard authRecoveryTask == nil, !stoppedForRevocation, socket != nil else { return }
+        guard authRecoveryTask == nil, !attemptedAuthRecovery, !stoppedForRevocation, socket != nil else { return }
+        attemptedAuthRecovery = true
         authRecoveryTask = Task { [weak self] in
             guard let self else { return }
             defer { self.authRecoveryTask = nil }
