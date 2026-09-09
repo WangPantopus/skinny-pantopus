@@ -27,10 +27,37 @@ The account candidate uses the Free staging database and private SMTP capture,
 accepting only synthetic `@example.com` recipients, without relay. No capture UI
 is exposed. This is not yet a unified release candidate or real email delivery.
 
-Page availability is not account acceptance. Fresh browser signup, captured-link
-verification, password recovery, cookie/CSRF and exact return remain next.
-The Mac's system resolver temporarily retains the earlier negative answer;
-public DNS and certificate checks use the verified address with hostname checks.
+A separate nginx renewal hook now reloads only for this frontend certificate.
+The existing API hook is preserved. Certbot's scoped renewal dry run, including
+the deploy hook, passes; the existing renewal timer remains enabled.
+
+## Completed browser email journey
+
+Fresh real Chrome browser checks now pass against the HTTPS staging hostname:
+
+- Signup requires verification, sets no authentication cookie and preserves the
+  requested `/app/place?account_return=browser-check` destination in the captured
+  email. The capture uses only a new synthetic `@example.com` account.
+- Opening the captured verification link succeeds, reaches sign-in, and returns
+  to that exact path and query after sign-in. Reusing the link displays an
+  invalid/expired error and receives a denial response.
+- Access and refresh cookies are Secure, HttpOnly, SameSite=Lax and scoped to
+  the staging hostname. Refresh has its narrower endpoint path. Tokens are
+  absent from the login/refresh JSON and inaccessible to page JavaScript.
+- Missing CSRF denies a profile mutation with 403. A valid CSRF header permits
+  the synthetic edit; the original profile value is restored afterward.
+- Browser forgot-password → captured recovery link → new password → immediate
+  sign-in returns to the exact requested destination. The old password and old
+  access/refresh cookies are denied; the recovery link is single-use.
+- Cookie refresh and subsequent profile access succeed. Local logout clears
+  cookies and invalidates both the saved access and refresh credentials.
+
+One private test selector initially matched both the intended error and Next's
+empty route announcer. Narrowing it to the visible error completed the replay
+check; the verified signup was not repeated. The browser fixture is retained as
+synthetic evidence, with its profile restored, push disabled and no device tokens.
+No physical iPhone step was needed. Real SMTP relay and Google/Apple OAuth
+callbacks remain unverified; the captured email journey does not certify them.
 
 ## Sandbox payment probe
 

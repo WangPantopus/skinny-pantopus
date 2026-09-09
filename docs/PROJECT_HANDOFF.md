@@ -22,8 +22,11 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 `https://staging.pantopus.com` has working DNS and trusted TLS. Five browser
 account entry pages return 200. Same-origin browser APIs use the tested account
 candidate and synthetic-only SMTP capture; public staging API/worker and the
-separate Home candidate are preserved. Complete fresh browser verification and
-recovery next, then repair the observed sandbox saved-card retry false success.
+separate Home candidate are preserved. Fresh Chrome signup → captured verification
+→ exact return and password recovery → immediate login → exact return now pass.
+Secure cookie/CSRF, old-session denial, single-use links, refresh/logout and the
+certificate renewal dry run also pass. Next repair the observed sandbox saved-card
+retry false success, then continue remaining OAuth/address/payment acceptance.
 See the [vendor report](staging-vendor-acceptance-2026-09-09.md) for runtime scope,
 pending fixtures and verification limits. PR #23's CI remains running at
 `f6f250ff0`; merge only after its current-head checks pass. PR #22's merged-master
