@@ -140,7 +140,7 @@ hash, signature, staging API and development push entitlement were verified; it
 installed successfully on the designated iPhone 16 Pro / iOS 26.5.2. A fresh
 synthetic owner and Beacon have only that iPhone account as a follower, with one
 linked APNs registration. Original preference values were saved; global/internal
-enablement remains false. No publication has been sent in this resumed fixture.
+enablement remains false.
 
 The owner reported initial toggle attempts showed “Failed to save” before later
 attempts showed “Saved.” The current device registration matches the successful
@@ -159,20 +159,30 @@ replacement tokens, transient failures, recovery after successful authentication
 and a fresh session. SwiftFormat and strict SwiftLint pass. Revision
 `e328c33580a1e01f2629210668a1a29de303d80d` is pushed to PR #12 and its
 [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34302923001)
-is running. The repaired signed staging build passed; signature, API/socket hosts,
+fully passes. The repaired signed staging build passed; signature, API/socket hosts,
 development APNs entitlement and signing team were verified. Installation succeeded
 and the device's current app location matches that installer result. The repaired
 executable SHA-256 is
 `f5ea0be2fb26ba4246f94d863cc6d8ee7aa08f0df51f59b1529801bf6c1f540a`.
-The launch attempt was blocked because the phone was locked. The owner is now
-asked to open the app and verify both a single on-save and off-save, then leave
-it off/backgrounded. Physical startup/first-save verification remains pending.
-No test publication has been sent during this investigation.
+The first launch attempt was blocked by the locked phone. After opening it, the
+owner confirms “saved” and Beacon push off. The API independently verifies false,
+global push true and preservation of unrelated preferences. Native traffic after
+installation contains two authenticated socket connections, two preference writes
+and one refresh across 27 requests from the same client, with no other native
+client in that observation. The earlier refresh burst is absent. This verifies
+the repaired startup and native save milestone.
 
-After verifying save reliability, background the app and verify no device alert
-while the in-app row remains and opens the
-exact post, then restore the toggle and verify the next notification's exact
-return without replay. Verify the audience before every publication and restore
+The I-off publication has now been sent once, after verifying the sole designated
+iPhone follower, its APNs registration and the saved opt-out. Its single audience
+row points to the exact post and the API return passes. No APNs acceptance
+receipt was recorded during 71 seconds. Physical absence of an alert and the
+retained in-app exact return await owner confirmation. Then restore the toggle
+and verify the next notification's exact return
+without replay. Verify the audience before every publication and restore
 test preferences afterward. Physical Android remains unavailable.
 Previously confirmed background/foreground/closed-app, block, mute and global
 push cases remain in the [full journey report](beacon-full-journey-2026-09-08.md).
+
+Current synthetic I-off evidence: post `ca5e6f87-38fd-47bb-b7cc-3dd0a66ef6a0`, audience notification
+`a66e1230-0efb-4cc4-aa40-b6d4849dc4e6`. These remain present for the owner’s
+in-app check; cleanup is pending.

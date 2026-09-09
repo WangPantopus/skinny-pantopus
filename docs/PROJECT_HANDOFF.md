@@ -85,8 +85,7 @@ verified and installed successfully on the designated device. A fresh synthetic
 owner/Beacon now has only the iPhone account as a follower; original preferences
 and the existing APNs registration are recorded for preservation. Only that
 owner and designated iPhone account are in the beta list; global/internal
-enablement remains false. No new iPhone
-publication has been sent. The owner reported initial native toggle saves failed
+enablement remains false. The owner reported initial native toggle saves failed
 before later attempts saved. The installed app was reverified, and the API now
 holds Beacon push off with global push on. Investigation found an iOS Socket.IO
 auth payload mismatch and repeated refreshes exhausting the shared write budget.
@@ -94,15 +93,18 @@ The corrected handshake passes a live staging comparison; 50 targeted iOS tests
 pass, including bounded socket recovery, session refresh and preference saves.
 Revision `e328c33580a1e01f2629210668a1a29de303d80d` is pushed to PR #12;
 its [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34302923001)
-is in progress. The repaired signed staging build passed and was installed
+fully passes. The repaired signed staging build passed and was installed
 successfully; its signature, endpoints and current device registration match.
-The phone was locked when launch was attempted. The owner is asked to open it,
-verify one on/off save each, then leave the setting off with the app backgrounded.
-That observation and native connection verification are still pending before
-the Beacon toggle off →
-background publication → retained in-app return, then restore → device alert →
-exact post. Prior confirmed iPhone cases do not need repeating. Physical Android
-remains unavailable.
+The owner now confirms the repaired app saved and Beacon push is off. Independent
+reads agree, preserving global push and unrelated settings. Native traffic shows
+two authenticated socket connections, two preference writes and only one refresh;
+the earlier startup burst is absent. One I-off publication has now been sent to
+the sole iPhone follower. Its audience row and exact API destination pass; no APNs
+acceptance receipt was recorded during 71 seconds. Physical absence of an alert
+and the retained in-app return are awaiting owner observation. Then restore
+the native toggle, verify the next alert's exact post without replay, and clean
+up this fixture. Prior confirmed iPhone cases do not need repeating. Physical
+Android remains unavailable.
 
 Preserve global/internal feature disablement, unrelated local work and both
 release/migration switches. Only fresh synthetic fixtures and designated device
