@@ -48,11 +48,17 @@ connections pass. Both migrations remain local-clone only. iOS passes 43 focused
 tests; Android passes 39, with final quality/build work underway. Transient
 confirmation throttling still needs a distinct native UI result.
 
-Next commit/push the checked backend, apply guarded migrations to Free staging
-and build a private candidate on existing capacity. Complete native gates and
-real synthetic provider/simulator acceptance before source integration. Then
-finish modern multi-unit attachment and remaining payment/OAuth acceptance.
-No public runtime or owner device observation changed.
+The private candidate now runs `f5f85188b` (`a5157a836a41`). Both additive native
+mail migrations are applied only to Free staging, preserving existing records and
+the absent ledger. Real Lob test/API acceptance passes: one postcard across
+three lost receipts, own status/retry, signed synthetic receipt recovery, one
+member across concurrent confirmations, and foreign/unit/revoked-access denial.
+All disposable test mail/Home/proof/notification fixtures are cleaned, fixture
+sessions revoked, and original document IDs preserved. Public runtimes are unchanged.
+
+Next finish native simulator acceptance and current-head PR integration checks,
+then modern multi-unit attachment and remaining payment/OAuth acceptance.
+No owner device observation is pending.
 
 The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
 browser synthetic email entry/recovery, cookies/CSRF, session revocation and

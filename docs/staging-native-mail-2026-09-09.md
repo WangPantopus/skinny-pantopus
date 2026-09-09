@@ -76,12 +76,38 @@ passes 39 focused tests; a single Detekt magic-number finding was corrected and
 quality/build gates are running. Transient confirmation throttles still need an
 explicit UI distinction from an exhausted code before native completion.
 
-Both migrations are applied only to the disposable local clone; Free staging
-and all running candidates remain unchanged. Next commit the checked backend,
-apply it with before/after data and ledger guards to Free staging, then build a
-private candidate on existing capacity. Finish native gates and live synthetic
-provider/simulator acceptance before merging the complete branch. No real
-provider postcard or native live acceptance has run for this branch. Public
-API/worker/browser runtimes remain separate. Externally delivered Lob callbacks,
-modern multi-unit completion and remaining payment/OAuth acceptance are open.
+## Live private-candidate acceptance
+
+Both committed migrations were applied only to Free staging
+`ptudkfqdhqpkbkzqlabu`. Existing Home, occupancy, residency, native/modern mail and
+file records hash identically before/after; the hosted ledger remains absent.
+Migration SHA-256 values:
+
+- Admission: `f57501c19e5105a413ba1d6346b584d831ea62dbc3dfd82019f83f48cc77b11e`.
+- Confirmation: `76374e3e75bb38d35e5a3b65e1ca4a4188849169e40eebfe44717859cdf8abf8`.
+
+The healthy private candidate runs committed source
+`f5f85188b73c4df71ae7b8bbc772422a8412e992`, image
+`sha256:a5157a836a41bdc35d97b37e7301c644d1cff0325bdb7b0d8b5b8a10b7a7c608`.
+The preceding `7cd158c515ed` image/container is retained stopped for rollback.
+Public API/worker/browser/production container identities are unchanged.
+
+Real Lob test acceptance passes: three identical keyed provider calls returned
+one postcard after their receipts were deliberately discarded. The saved Apt 4
+and code hash remained valid. Real HTTP status/retry reported uncertainty;
+unauthenticated/foreign access was denied. A wrong code created no membership.
+A locally signed synthetic Lob webhook recovered the receipt. Three concurrent
+HTTP correct-code submissions returned one member occupancy and consumed one
+successful attempt. Self-claimed ownership, another unit and subsequently revoked
+access did not gain access. Unrelated Home document IDs stayed identical.
+
+Cleanup passes: the exact test postcard, disposable Home/proof/claim/occupancy,
+synthetic notifications and signed webhook record are deleted. Both fixture
+sessions are revoked and denied; zero push tokens remain. Synthetic accounts
+remain with global push off. No physical mail was sent. These publishers and
+cleanup scripts are complete and must not be blindly repeated.
+
+Next finish native simulator acceptance and current-head integration checks.
+The signed synthetic callback is not externally delivered Lob webhook proof.
+Modern multi-unit completion and remaining payment/OAuth acceptance remain open.
 Smarty activation and a real DPV/unit retest remain required before launch.
