@@ -156,8 +156,17 @@ now uses the namespace payload and bounds recovery until a successful connection
 All 50 targeted iOS tests pass: eight socket recovery, 20 session refresh,
 16 notification settings and six API client tests. The regressions cover rejected
 replacement tokens, transient failures, recovery after successful authentication
-and a fresh session. SwiftFormat and strict SwiftLint pass. The signed device
-build and installation of the repaired app are pending.
+and a fresh session. SwiftFormat and strict SwiftLint pass. Revision
+`e328c33580a1e01f2629210668a1a29de303d80d` is pushed to PR #12 and its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34302923001)
+is running. The repaired signed staging build passed; signature, API/socket hosts,
+development APNs entitlement and signing team were verified. Installation succeeded
+and the device's current app location matches that installer result. The repaired
+executable SHA-256 is
+`f5ea0be2fb26ba4246f94d863cc6d8ee7aa08f0df51f59b1529801bf6c1f540a`.
+The launch attempt was blocked because the phone was locked. The owner is now
+asked to open the app and verify both a single on-save and off-save, then leave
+it off/backgrounded. Physical startup/first-save verification remains pending.
 No test publication has been sent during this investigation.
 
 After verifying save reliability, background the app and verify no device alert

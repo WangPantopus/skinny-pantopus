@@ -92,8 +92,14 @@ holds Beacon push off with global push on. Investigation found an iOS Socket.IO
 auth payload mismatch and repeated refreshes exhausting the shared write budget.
 The corrected handshake passes a live staging comparison; 50 targeted iOS tests
 pass, including bounded socket recovery, session refresh and preference saves.
-The repaired signed device build is in progress. Install and verify it before
-the native Beacon toggle off →
+Revision `e328c33580a1e01f2629210668a1a29de303d80d` is pushed to PR #12;
+its [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34302923001)
+is in progress. The repaired signed staging build passed and was installed
+successfully; its signature, endpoints and current device registration match.
+The phone was locked when launch was attempted. The owner is asked to open it,
+verify one on/off save each, then leave the setting off with the app backgrounded.
+That observation and native connection verification are still pending before
+the Beacon toggle off →
 background publication → retained in-app return, then restore → device alert →
 exact post. Prior confirmed iPhone cases do not need repeating. Physical Android
 remains unavailable.
