@@ -24,10 +24,10 @@ module.exports = async function homeDocumentRecovery() {
       if (file.id !== id || file.is_deleted !== true || !file.metadata?.storage_cleanup_claim
         || file.metadata.storage_contract !== 'home_document_v1'
         || file.metadata.storage_bucket !== bucket
-        || file.file_path !== storage.documentKey(file.home_id, file.id, file.metadata.upload_sha256)) {
+        || file.file_path !== storage.documentKey(file.home_id, file.metadata.storage_key_id || file.id, file.metadata.upload_sha256)) {
         throw new Error('Invalid cleanup reference');
       }
-      await storage.remove({ homeId: file.home_id, documentId: file.id,
+      await storage.remove({ homeId: file.home_id, documentId: file.metadata.storage_key_id || file.id,
         sha256: file.metadata.upload_sha256, bucketName: bucket });
       succeeded = true;
     } catch { /* Keep the tombstone pending; never emit private paths or provider errors. */ }

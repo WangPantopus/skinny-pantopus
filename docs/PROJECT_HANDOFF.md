@@ -155,7 +155,7 @@ The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 [PR #21](https://github.com/WangPantopus/skinny-pantopus/pull/21) merged as
 `c1f411c583e9375616e06570bdcea062f16bf532` after its
 [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34369706912)
-passed. Its merged-master checks are running. Next work is isolated in
+passed. Its merged-master CI also passed. The completed recovery work is isolated in
 `/private/tmp/pantopus-home-upload-recovery`, branch `codex/home-upload-recovery`.
 The [upload recovery report](home-upload-recovery-2026-09-09.md) records passing
 local quota/access SQL contracts and three real competing-connection checks for
@@ -169,7 +169,18 @@ exact bytes and quotas/limits are preserved. Native launch cleanup passes 35 iOS
 and 34 Android tests plus lint/build checks. Both native share → process restart
 checks pass with exact 609-byte copies removed on relaunch. The zero-cache
 candidate follow-up also passes exact upload and immediate post-delete denial.
-Publish recovery and finish document replacement. The report preserves
+[PR #22](https://github.com/WangPantopus/skinny-pantopus/pull/22) merged as
+`6fbdcce1203780b475bd209ed4f6fc5e03bfb487` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34374779134)
+passed at `134b25751`. Its merged-master checks are pending. Replacement work is isolated in
+`/private/tmp/pantopus-home-document-replacement`, branch
+`codex/home-document-replacement`; see the
+[replacement report](home-document-replacement-2026-09-09.md). Initial replacement
+backend/SQL work passes 4,453 backend tests, 12 contracts and the full function
+linter in a separate owned local database. Explicit backend privacy gates and
+three real replacement/expiry/deletion races also pass. Both native pickers and
+confirmation controls are wired; their regression/build validation and hosted
+acceptance remain. The recovery report preserves
 the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
 PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree

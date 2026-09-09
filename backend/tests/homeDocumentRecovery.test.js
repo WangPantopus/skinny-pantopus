@@ -30,6 +30,12 @@ test('does nothing without a configured bucket', async () => {
   delete process.env.HOME_DOCUMENTS_BUCKET;
   await recovery(); expect(rpc).not.toHaveBeenCalled();
 });
+test('a replaced version uses its retained unique storage key rather than its tombstone UUID', async () => {
+  file.metadata.storage_key_id = home;
+  file.file_path = `${home}/${home}/${sha}`;
+  expect(await recovery()).toMatchObject({ removed: 1 });
+  expect(storage.remove).toHaveBeenCalledWith({ homeId: home, documentId: home, sha256: sha, bucketName: 'private-recovery-test' });
+});
 test('selection failure performs no provider mutation', async () => {
   rpc.mockResolvedValue({ error: { message: 'private database error' } });
   await expect(recovery()).rejects.toThrow('Home document recovery selection unavailable');
