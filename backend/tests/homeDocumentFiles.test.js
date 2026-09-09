@@ -89,6 +89,13 @@ test('an identical retry returns one existing document and consumes quota once',
   expect(quota).toHaveBeenCalledTimes(1);
 });
 
+test('normalizes native uppercase UUIDs to the database and storage identities', async () => {
+  const result = await uploading({ upload_id: documentId.toUpperCase() });
+  expect(result.status).toBe(201);
+  expect(result.body.document.id).toBe(documentId);
+  expect((await request(app).get(contentPath)).status).toBe(200);
+});
+
 test.each(['metadata', 'bytes'])('a reused identifier cannot overwrite different %s', async kind => {
   await uploading();
   const response = kind === 'metadata' ? await uploading({ title: 'Changed title' }) : await uploading({}, Buffer.from('changed bytes'));
@@ -191,4 +198,13 @@ test.each([
   const response = await request(app).post(`/api/homes/${homeId}/documents`).send({ title: 'Untrusted attachment', doc_type: 'receipt', ...fields });
   expect(response.status).toBe(400);
   expect(db.getTable('HomeDocument')).toHaveLength(0);
+});
+
+
+test('retry cannot reveal a document moved into a restricted visibility', async () => {
+  await uploading();
+  db.getTable('HomeDocument')[0].visibility = 'managers';
+  const retry = await uploading();
+  expect(retry.status).toBe(403);
+  expect(retry.body.document).toBeUndefined();
 });

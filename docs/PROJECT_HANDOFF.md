@@ -66,7 +66,7 @@ synthetic accounts and already revoked session records remain as evidence,
 with zero push tokens and all their registry sessions revoked. The owned
 iOS simulator is closed. No iPhone observation is pending.
 
-Account development is `/private/tmp/pantopus-staging-account-delivery`, branch
+Account evidence remains in `/private/tmp/pantopus-staging-account-delivery`, branch
 `codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
 now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
 records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
@@ -74,23 +74,26 @@ strict Swift lint/format pass. A private SMTP capture service and an unexposed
 API candidate run on the existing host. Synthetic signup, captured verification
 and resend, single-use verification, and verified login pass. Live recovery
 exposed an immediate-login timestamp boundary after reset; its repair and two new
-regressions now pass all 4,340 backend tests. The updated candidate passes two fresh live reset → immediate login → own-profile
-cycles while denying prior tokens. SMTP outage verification and staging web
-delivery are next. Final frontend CI is running. The configured
+regressions now pass all 4,340 backend tests. Two fresh live recovery cycles now pass immediate login/profile access while
+old tokens remain denied. A live SMTP outage returned the same 503 for known and
+unknown accounts without creating a user; restored delivery and login pass.
+Two outdated Android email screenshots were inspected and updated; all seven
+status-screen snapshots pass local verification. Final CI at `61139c1bd` passed
+after rerunning an unrelated iPhone 16 search timing failure. PR #17 merged as
+`82d57ee0f70d182776ec88af8aaab52d0317635d` at 12:44 UTC. The configured
 `staging.pantopus.com` frontend hostname does not resolve, so real browser link
 completion remains unfinished.
 
 Staging web preparation is in `/private/tmp/pantopus-staging-web-delivery`,
 branch `codex/staging-web-delivery`. The container build now accepts an explicit
 public app origin as well as the API origin, keeping staging links isolated.
-The image build and hostname/TLS setup are pending.
+The image build passes; hostname/TLS setup is pending.
 
 The [staging web report](staging-web-delivery-2026-09-09.md) records a successful
 production image build and six entry/account pages served on the existing host,
 loopback only. The image has verified staging origins and a sandbox Stripe key.
 Cloudflare sign-in is pending before configuring the currently absent frontend
-hostname and completing browser email links. PR #17's iOS CI passed; Android
-caught two old email-copy screenshot baselines, now being updated and verified.
+hostname and completing browser email links. PR #17 is merged with passing final CI.
 PR #16's merged-master CI passed in full.
 
 The [Home file access repair](home-file-access-2026-09-09.md),
@@ -101,12 +104,15 @@ and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
 Home document upload: both clients currently save metadata without bytes and
 report success. Complete real scoped upload/retrieval on existing/free storage,
 including retry and revoked-access denial. Hosted storage is not yet certified.
-The active isolated worktree is `/private/tmp/pantopus-home-file-access`, now on
-`codex/home-document-storage`. The [byte-delivery report](home-document-storage-2026-09-09.md)
-records the new private upload and authenticated retrieval backend, including
-idempotent retries, quota and old-link denial: all 4,412 backend tests pass.
-Native byte upload/preview and hosted storage acceptance are next; no bucket
-or native client has changed yet. PR #18 carries the verified web image/origin change.
+PR #19 merged as `0021cb59d6649f501a86bacd4d69edfc932c0e94` after its integrated checks passed. Its integration worktree is
+`/private/tmp/pantopus-home-access-integration`.
+The [byte-delivery report](home-document-storage-2026-09-09.md) tracks work in
+`/private/tmp/pantopus-home-file-access`, branch `codex/home-document-storage`.
+Both native upload test sets pass. All 22 iOS upload/preview/denial/export tests
+and strict Swift lint pass; Android preview/export checks are in progress.
+All 4,414 backend tests pass, including private storage and retry/visibility denial.
+No hosted bucket has been created. PR #18 merged with passing checks at 12:51 UTC
+as `fd8a94eef727342340fc522f7196e6e64814ed08`.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree

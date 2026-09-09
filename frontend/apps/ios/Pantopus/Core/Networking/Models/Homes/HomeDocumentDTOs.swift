@@ -30,6 +30,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdBy: String?
     public let createdAt: String?
     public let updatedAt: String?
+    public let contentURL: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -46,6 +47,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdBy = "created_by"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case contentURL = "content_url"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -64,6 +66,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        contentURL = try container.decodeIfPresent(String.self, forKey: .contentURL)
     }
 
     public init(
@@ -80,7 +83,8 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         details: [String: String] = [:],
         createdBy: String? = nil,
         createdAt: String? = nil,
-        updatedAt: String? = nil
+        updatedAt: String? = nil,
+        contentURL: String? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -96,6 +100,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
         self.createdBy = createdBy
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.contentURL = contentURL
     }
 }
 

@@ -379,6 +379,11 @@ public enum HomesEndpoints {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/documents", body: request)
     }
 
+    /// Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:156`.
+    public static func documentContent(homeId: String, documentId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/documents/\(documentId)/content")
+    }
+
     // MARK: - Packages (T6.3d / P14)
 
     /// `GET /api/homes/:id/packages` — route `backend/routes/home.js:4673`.

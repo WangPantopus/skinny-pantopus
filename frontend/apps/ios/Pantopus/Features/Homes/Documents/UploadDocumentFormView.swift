@@ -93,9 +93,7 @@ public struct UploadDocumentFormView: View {
         switch result {
         case let .success(urls):
             guard let url = urls.first else { return }
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-            viewModel.acceptPicked(url: url)
+            Task { await viewModel.acceptPicked(url: url) }
         case let .failure(error):
             viewModel.toast = ToastMessage(
                 text: error.localizedDescription,
@@ -108,7 +106,9 @@ public struct UploadDocumentFormView: View {
 
     private var fileSection: some View {
         FormFieldGroup("File") {
-            if let file = viewModel.pickedFile {
+            if viewModel.isReadingFile {
+                ProgressView("Reading file…")
+            } else if let file = viewModel.pickedFile {
                 PickedFileCard(file: file) {
                     showsFilePicker = true
                 } onRemove: {

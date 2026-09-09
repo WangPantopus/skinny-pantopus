@@ -30,18 +30,38 @@ authenticated-user rate limit and a 25 MiB file limit.
 
 ## Verification so far
 
-All 4,412 backend tests pass (281 suites; 16 existing tests and one suite skipped).
-The 72 targeted document/file tests cover exact bytes, private bucket checks,
+All 4,414 backend tests pass (281 suites; 16 existing tests and one suite skipped).
+The 74 targeted document/file tests cover exact bytes, private bucket checks,
 corruption, invalid paths, duplicate/conflicting retries, partial database
 failure, quota, revoked access, sensitive scopes and old deleted-file links.
 Storage is mocked in these tests. Hosted bucket setup and live concurrent
 requests remain unverified.
 
+## Native upload and iOS file access
+
+Both native pickers now retain the actual bounded file bytes after the picker
+closes and send multipart uploads. A retry keeps its UUID while the bytes and
+metadata match; success requires a linked File and authenticated content path.
+Empty/oversized files and metadata without bytes cannot claim a completed upload.
+The visibility label now says “Managers and owners,” matching its stored scope.
+
+The iOS simulator passes all 22 upload/preview/export tests. Private previews use
+APIClient's authenticated Home/document endpoint, never a supplied URL. Denial
+clears previously loaded content; backgrounding clears the document and a return
+reloads it. Open/Share first check access again, then pass a private temporary
+copy containing the exact bytes to the system share sheet; the copy is removed
+when sharing closes or the screen leaves. Strict Swift lint and formatting pass.
+Android upload tests pass; its matching preview/export checks are still running.
+These are stubbed local tests, not hosted storage or physical-device acceptance.
+
+The backend also normalizes UUID case and prevents a retry from revealing a
+document whose visibility was restricted after upload. Its final 4,414-test run
+passes. PRs #17–#19 have merged with passing integrated checks; #19 is master
+`0021cb59d6649f501a86bacd4d69edfc932c0e94`.
+
 ## Next action
 
-Connect both native file pickers and forms to real multipart bytes with durable
-retry identifiers. Add authenticated file preview/retrieval and clear seeded
-document content when the server denies access. The existing detail screens
+Finish Android preview/export verification and native visual acceptance. The existing detail screens
 also have unfinished delete/replace/share actions; finish the authorized
 operations or make their limits explicit in the user flow. Correct the current
 “Owners only” label, whose stored `managers` scope also includes managers.
@@ -49,5 +69,5 @@ operations or make their limits explicit in the user flow. Correct the current
 Then provision only the isolated staging private bucket on existing/free
 capacity, run upload/read/retry/revocation/cleanup acceptance through the actual
 API and native clients, and verify the proxy body limit matches the file limit.
-No bucket has been created yet, and neither native client has changed at this
-checkpoint. Public staging API/worker and production remain unchanged.
+No bucket has been created yet. Native changes remain development builds;
+public staging API/worker and production remain unchanged.

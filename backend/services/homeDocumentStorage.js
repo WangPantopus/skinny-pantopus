@@ -21,7 +21,7 @@ function documentKey(homeId, documentId, sha256) {
   }
   // Always derive the path from the authorized record; never fetch a supplied
   // storage_path or preview_url. File extensions are presentation metadata.
-  return `${homeId}/${documentId}/${sha256}`;
+  return `${homeId.toLowerCase()}/${documentId.toLowerCase()}/${sha256}`;
 }
 
 async function privateBucket() {

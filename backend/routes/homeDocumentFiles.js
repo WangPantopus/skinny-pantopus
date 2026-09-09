@@ -45,6 +45,8 @@ function gate(permission) {
       if (uuid.validate(req.params.homeId).error || (req.params.documentId && uuid.validate(req.params.documentId).error)) {
         throw fail('INVALID_DOCUMENT_ID', 'Invalid home or document identifier.', 400);
       }
+      req.params.homeId = req.params.homeId.toLowerCase();
+      if (req.params.documentId) req.params.documentId = req.params.documentId.toLowerCase();
       const access = await checkHomePermission(req.params.homeId, req.user.id, permission);
       if (access.readFailed) throw fail('DOCUMENT_ACCESS_UNAVAILABLE', 'Could not check home access. Try again.');
       if (!access.hasAccess) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this home document operation.', 403);
@@ -73,7 +75,7 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
 
     const homeId = req.params.homeId;
     const userId = req.user.id;
-    const documentId = value.upload_id;
+    const documentId = value.upload_id.toLowerCase();
     const filename = req.file.originalname.replace(/[\\/\x00-\x1f\x7f]/g, '_').slice(0, 255);
     const sha256 = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
@@ -84,6 +86,7 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
     const identity = { homeId, userId, fingerprint };
     const existing = await row('HomeDocument', documentId);
     if (existing) {
+      if (!req.documentVisibilities.includes(existing.visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this document.', 403);
       assertSameUpload(existing, identity, 'HomeDocument');
       const file = await row('File', existing.file_id);
       if (!file) throw fail('DOCUMENT_UPLOAD_INCOMPLETE', 'This document upload is incomplete. Try again.');
