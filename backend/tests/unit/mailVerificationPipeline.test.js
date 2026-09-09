@@ -43,9 +43,10 @@ beforeEach(() => {
   resetTables();
   mockAttach.mockClear();
   mockDispatchPostcard.mockClear();
-  mockDispatchPostcard.mockResolvedValue({
-    success: true,
-    vendorJobId: 'mock-vendor-job-1',
+  mockDispatchPostcard.mockImplementation(async (jobId) => {
+    const job = getTable('MailVerificationJob').find((row) => row.id === jobId);
+    if (job) { job.vendor_job_id = 'mock-vendor-job-1'; job.vendor_status = 'sent'; }
+    return { success: true, vendorJobId: 'mock-vendor-job-1' };
   });
   mockAttach.mockResolvedValue({
     success: true,
@@ -316,11 +317,15 @@ describe('rate limiting', () => {
     const r1 = await service.startVerification('user-1', 'addr-1');
     expect(r1.success).toBe(true);
 
-    // Second start — OK
+    getTable('AddressVerificationAttempt')[0].status = 'canceled';
+
+    // Second fresh attempt — OK
     const r2 = await service.startVerification('user-1', 'addr-1');
     expect(r2.success).toBe(true);
 
-    // Third start — rate limited
+    getTable('AddressVerificationAttempt')[1].status = 'canceled';
+
+    // Third fresh attempt — rate limited
     const r3 = await service.startVerification('user-1', 'addr-1');
     expect(r3.success).toBe(false);
     expect(r3.error).toMatch(/rate limit|too many/i);

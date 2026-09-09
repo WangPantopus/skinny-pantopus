@@ -474,3 +474,21 @@ describe('Route registration', () => {
     );
   });
 });
+
+
+test.each([
+  ['startVerification', startHandler, { body: { address_id: 'addr-uuid-1' } }],
+  ['resendCode', resendHandler, { params: { verification_id: 'attempt-uuid-1' } }],
+])('preserves the recoverable verification ID on uncertain %s', async (method, handler, input) => {
+  mailVerificationService[method].mockResolvedValue({
+    success: false, statusCode: 503, delivery_unknown: true,
+    verification_id: 'attempt-uuid-1', address_id: 'addr-uuid-1', error: 'Mail delivery is not confirmed yet.',
+  });
+  const res = mockRes();
+  await handler(mockReq(input), res);
+  expect(res._status).toBe(503);
+  expect(res._json).toEqual({
+    error: 'Mail delivery is not confirmed yet.', delivery_unknown: true,
+    verification_id: 'attempt-uuid-1', address_id: 'addr-uuid-1',
+  });
+});

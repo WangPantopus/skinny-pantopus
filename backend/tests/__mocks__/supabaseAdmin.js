@@ -254,6 +254,11 @@ function getTable(name) {
 }
 
 function seedTable(name, rows) {
+  if (name === 'AddressVerificationToken') {
+    // This nullable database column defaults to SQL NULL, not undefined.
+    tables[name] = rows.map((row) => ({ used_at: null, ...row }));
+    return;
+  }
   if (isPersonaFollowView(name)) {
     tables[PERSONA_MEMBERSHIP_TABLE] = rows.map(reverseProjectFollowAsMembership);
     return;

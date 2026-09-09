@@ -70,6 +70,12 @@ class MailVendorService {
       logger.warn('MailVendorService.dispatchPostcard: already dispatched', { jobId, vendorJobId: job.vendor_job_id });
       return { success: true, vendorJobId: job.vendor_job_id };
     }
+    // Once dispatch starts, neither another worker nor a later request may
+    // blindly send again. The first worker performs bounded keyed retries;
+    // an interrupted worker leaves a durable, reconcilable outcome.
+    if (job.vendor_status !== 'pending') {
+      return { success: false, deliveryUnknown: true, error: 'Mail delivery is not yet confirmed' };
+    }
 
     // ── 2. Fetch the address ────────────────────────────────
     const { data: attempt } = await supabaseAdmin
@@ -117,32 +123,51 @@ class MailVendorService {
     const provider = this.getProvider();
     const providerName = lobMailProvider.isAvailable() ? 'lob' : 'mock';
 
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from('MailVerificationJob')
+      .update({
+        vendor: providerName,
+        vendor_status: 'dispatching',
+        metadata: { ...stripCode(job.metadata), dispatch_started_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', jobId)
+      .eq('vendor_status', 'pending')
+      .select('id');
+    if (claimError || !claimed?.length) {
+      return { success: false, deliveryUnknown: true, error: 'Mail dispatch could not be claimed' };
+    }
+
     let result;
     try {
-      result = await provider.sendPostcard(normalizedAddress, effectiveCode, job.template_id);
+      result = await provider.sendPostcard(normalizedAddress, effectiveCode, job.template_id, { jobId });
     } catch (err) {
       logger.error('MailVendorService.dispatchPostcard: provider error', {
         jobId,
         provider: providerName,
-        error: err.message,
+        definitelyRejected: err.definitelyRejected === true,
       });
 
-      // Mark job as failed
+      // A network error is not evidence that no postcard was accepted. Keep
+      // the token valid and the job available to the signed vendor webhook.
       await supabaseAdmin
         .from('MailVerificationJob')
         .update({
           vendor: providerName,
-          vendor_status: 'failed',
-          metadata: { ...stripCode(job.metadata), dispatch_error: err.message },
+          vendor_status: err.definitelyRejected === true ? 'rejected' : 'delivery_unknown',
           updated_at: new Date().toISOString(),
         })
         .eq('id', jobId);
 
-      return { success: false, error: `Mail provider error: ${err.message}` };
+      return {
+        success: false,
+        deliveryUnknown: err.definitelyRejected !== true,
+        error: 'Mail provider did not confirm delivery',
+      };
     }
 
     // ── 5. Update job record ────────────────────────────────
-    const { error: updateErr } = await supabaseAdmin
+    const { data: saved, error: updateErr } = await supabaseAdmin
       .from('MailVerificationJob')
       .update({
         vendor: providerName,
@@ -151,13 +176,15 @@ class MailVendorService {
         sent_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .select('id');
 
-    if (updateErr) {
+    if (updateErr || !saved?.length) {
       logger.error('MailVendorService.dispatchPostcard: job update failed', {
         jobId,
-        error: updateErr.message,
+        error: updateErr?.message,
       });
+      return { success: false, deliveryUnknown: true, error: 'Mail receipt could not be saved' };
     }
 
     // ── 6. Update attempt status to 'sent' ──────────────────
@@ -200,18 +227,34 @@ class MailVendorService {
    */
   async processWebhookEvent(vendorJobId, eventType, eventData) {
     // ── 1. Find the job by vendor_job_id ────────────────────
-    const { data: job, error: jobErr } = await supabaseAdmin
+    let { data: job, error: jobErr } = await supabaseAdmin
       .from('MailVerificationJob')
       .select('*')
       .eq('vendor_job_id', vendorJobId)
       .maybeSingle();
+
+    // The signed Lob event carries our job ID even if its original HTTP
+    // receipt was lost. Bind only an unresolved Lob job, never overwrite a
+    // different receipt or use untrusted client-supplied correlation data.
+    const correlationId = eventData?.body?.metadata?.pantopus_verification_job_id;
+    if (!jobErr && !job && typeof correlationId === 'string'
+      && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(correlationId)
+      && eventData?.body?.id === vendorJobId && eventData?.body?.object === 'postcard') {
+      const recovered = await supabaseAdmin.from('MailVerificationJob')
+        .update({ vendor_job_id: vendorJobId, sent_at: new Date().toISOString() })
+        .eq('id', correlationId).eq('vendor', 'lob').is('vendor_job_id', null)
+        .in('vendor_status', ['dispatching', 'delivery_unknown'])
+        .select('*').maybeSingle();
+      job = recovered.data;
+      jobErr = recovered.error;
+    }
 
     if (jobErr || !job) {
       logger.warn('MailVendorService.processWebhookEvent: job not found', {
         vendorJobId,
         eventType,
       });
-      return { success: false, error: 'Job not found for vendor_job_id' };
+      return { success: false, retryable: !!jobErr, error: 'Job not found for vendor_job_id' };
     }
 
     // ── 2. Map event type to vendor_status ──────────────────
@@ -234,7 +277,7 @@ class MailVendorService {
     const newStatus = statusMap[eventType] || 'unknown';
 
     // ── 3. Update job ───────────────────────────────────────
-    await supabaseAdmin
+    const { error: statusError } = await supabaseAdmin
       .from('MailVerificationJob')
       .update({
         vendor_status: newStatus,
@@ -246,6 +289,7 @@ class MailVendorService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', job.id);
+    if (statusError) return { success: false, retryable: true, error: 'Could not save mail status' };
 
     // ── 4. Transition attempt status on key events ──────────
     if (eventType === 'postcard.delivered') {

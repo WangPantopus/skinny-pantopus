@@ -29,13 +29,20 @@ gates. Address-provider failure/retry and claim denial pass; disposable provider
 fixtures are cleaned. The private candidate remains `9f37ca975` (`94a41144a829`);
 public staging API/worker and browser API are separate and unchanged.
 
-Next complete application mail dispatch/confirmation and uncertain-send recovery.
-Inspection found that a lost provider response currently deletes the attempt and
-invalidates a possibly mailed code. Reproduce and repair that failure before
-claiming mail journey acceptance. The new private mail fixture has no actors or
-mail jobs yet. An existing Smarty account inquiry remains pending; continue
-independent work without purchasing a plan. Preserve the unrelated main-checkout
-design work and PR #24.
+The [mail recovery report](staging-mail-recovery-2026-09-09.md) records a real
+Lob test acceptance followed by a simulated lost response, reproducing destructive
+attempt rollback. Its exact test postcard/address are cleaned. The repair now
+passes all 4,478 backend tests, privacy gates, 1,000 web tests and web type/lint
+gates. Repaired live acceptance remains. Next exercise simultaneous new starts
+and transactional admission before claiming
+complete retry acceptance. The separate native ownership postcard path remains
+outside this proof.
+
+The owner confirmed no active Smarty subscription and plans to obtain one for
+testing and launch. Activation plus real DPV/unit/eligibility/error/access retests
+is a required prelaunch step. A one-time reminder is scheduled for September 10
+at 9 a.m. Pacific. Continue independent work without purchasing a plan. Preserve
+the unrelated main-checkout design work and PR #24.
 
 **Current continuation:** staging account/vendor work is isolated in
 `/private/tmp/pantopus-staging-vendor-acceptance`, branch
