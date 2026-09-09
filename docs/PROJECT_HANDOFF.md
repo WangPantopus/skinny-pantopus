@@ -44,38 +44,46 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
   and production. Source integration is not a production deployment. Hosted
   canonical ledger adoption and production cutover remain separate work.
 
-The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
-`codex/beacon-native-acceptance`, based on merged master `0e57e4f2a`;
-other worktrees, ignored operator artifacts and the owner's design proposal are
-preserved. The [iOS session-return repair](ios-notification-continuation-2026-09-09.md)
-now passes 177 targeted unit tests, strict lint and actual simulator expiry/
-revocation → sign-in → exact-post journeys. It also fixes the login presentation
-transition and keeps the form when its reason banner is dismissed. Six existing
-entry/Beacon UI journeys pass. A fresh native composer fixture has two synthetic accounts,
-one Beacon/follower, global device push disabled and zero tokens. The
-[native Beacon journey](beacon-native-acceptance-2026-09-09.md) now passes:
-composer publication, audience notification, exact post/author, cold-start
-session restoration and normal logout. N2 alone is read; N1 remains unread.
-Both stored markers are reconciled and must never be republished. The fixture
-is parked for natural token expiry; its dedicated simulator must remain
-untouched until the private runner's elapsed-time guard passes. The
-[chat continuation repair](chat-notification-continuation-2026-09-09.md) now
-passes 220 iOS unit tests, four post/chat expiry/revocation UI journeys and
-190 Android tests. Android ktlint/Detekt, staging APK/lint and actual FCM
-notification → security sign-in → exact chat return pass. Unread clears,
-normal logout removes all fresh fixture tokens, and its global push is restored
-off. The owned Android emulator is closed; its revoked session remains revoked.
-PR #16 is ready/open with CI running. Natural iOS expiry remains parked.
-Independent account-delivery work is in `/private/tmp/pantopus-staging-account-delivery`,
-branch `codex/staging-account-delivery`: staging has no SMTP transport and both
-Supabase OAuth providers are disabled. The [account delivery repair](staging-account-delivery-2026-09-09.md) passes
-all 4,338 backend tests and privacy gates. Missing/unreachable SMTP now fails
-before account lookup; late registration delivery failure preserves the account
-with explicit resend guidance. Native/web acknowledgements no longer promise
-delivery from a request alone. Strict Swift lint/format pass. SMTP capture, live
-verification/recovery and final frontend CI remain next; no runtime update yet.
-No iPhone observation is pending. Update
-this handoff after each meaningful milestone.
+[PR #16](https://github.com/WangPantopus/skinny-pantopus/pull/16) merged at
+11:20 UTC as `8e856dcd9619d4e42557a803619582fff76ec719` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34341032792)
+passed. It adds native Beacon acceptance and preserves chat destinations through
+session recovery. The [chat report](chat-notification-continuation-2026-09-09.md)
+records 220 iOS unit tests, four native post/chat expiry/revocation UI journeys,
+190 Android tests, and live staging/FCM → security sign-in → exact chat return.
+Unread clears; normal Android logout removes all fresh fixture tokens and its
+global push is restored off. Its revoked sessions stay revoked; the owned
+Android emulator is closed.
+
+The [native Beacon report](beacon-native-acceptance-2026-09-09.md) records native
+composer publication, audience notification, exact post/author, cold start and
+logout. Natural expiry now also passes: after more than 3,605 seconds untouched,
+the existing Staging app refreshed the same hosted session and opened exact N2
+without login, rebuild or token replacement. N1/N2 and the single chat marker
+must never be republished. Final native logout and scoped cleanup pass: two Beacon posts, their audience
+notifications, the direct chat and beta enrollment are removed. The two
+synthetic accounts and already revoked session records remain as evidence,
+with zero push tokens and all their registry sessions revoked. The owned
+iOS simulator is closed. No iPhone observation is pending.
+
+Current development is `/private/tmp/pantopus-staging-account-delivery`, branch
+`codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
+now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
+records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
+strict Swift lint/format pass. A private SMTP capture service and an unexposed
+API candidate run on the existing host. Synthetic signup, captured verification
+and resend, single-use verification, and verified login pass. Live recovery
+exposed an immediate-login timestamp boundary after reset; its repair and two new
+regressions now pass all 4,340 backend tests. Live verification of the updated
+candidate remains next. Final frontend CI is running. The configured
+`staging.pantopus.com` frontend hostname does not resolve, so real browser link
+completion remains unfinished.
+
+The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
+No production changes or new paid resources were made. The earlier worktree
+`/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
+including the owner's design proposal, remain preserved. Update this handoff
+after each meaningful milestone.
 
 ### Completed Beacon and platform evidence
 
@@ -127,8 +135,9 @@ are retained for rollback. Production and the old testing database are preserved
 
 1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
-   Cover live session/login return, natural expiry, chat destinations and token
-   lifecycle; preserve the already revoked test sessions. Physical Android is
+   The native Beacon, natural-expiry and chat return milestones now pass; finish
+   fixture cleanup and retain explicit platform/build limits. Preserve revoked
+   session state and evidence. Physical Android is
    unavailable, and simulator-only results cannot establish hardware delivery.
 2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
    sandbox payments and address verification. Use existing/free capacity.

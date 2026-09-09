@@ -49,8 +49,9 @@ a chat sharing the same textual ID cannot complete each other's arrival.
 The live Android build is source `699c531a86a286803fb8832aa1e0fc563f977b41`,
 APK SHA-256 `8f45829c3cb67f2f7ea5f7132813209381781ea93086aab962f937c0802af28e`.
 Its API/Socket URLs and Firebase project were verified as staging before install.
-The synthetic direct room and single message remain with the isolated Beacon
-fixture for the remaining checks; never resend the same marker.
+The synthetic direct room and single message were removed in the final scoped
+Beacon fixture cleanup. Revoked session records are preserved; never resend the
+same marker or reuse the completed fixture.
 
 The iOS UI cases use the opt-in Debug API fixture with fake credentials. They
 exercise native screens and API-client/session behavior, not live APNs or

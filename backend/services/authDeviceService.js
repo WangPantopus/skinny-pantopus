@@ -1204,7 +1204,8 @@ async function revokeAll({ userId, accessToken = null, req, reason = 'lockdown',
   const revokedDevices = await revokeOtherDevices(userId, null, reason);
   await pushService.removeAllTokens(userId);
   await authSessionService.revokeGrantsForUser(userId);
-  await authSessionService.setSessionsValidAfter(userId, new Date());
+  const validAfter = new Date();
+  await authSessionService.setSessionsValidAfter(userId, validAfter);
   await authSessionService.recordSecurityEvent({
     userId,
     type: eventType,
@@ -1214,6 +1215,12 @@ async function revokeAll({ userId, accessToken = null, req, reason = 'lockdown',
   if (notify) {
     await authNotifyService.lockdown({ userId, req, cause: reason === 'password_reset' ? 'password_reset' : 'lockdown' });
   }
+  // JWT iat has whole-second precision; the revocation cutoff has milliseconds.
+  // Do not return a completed reset/lockdown while an immediate credential
+  // login could still mint a token in the cutoff's second. Keep the precise
+  // cutoff so older tokens remain denied, including ones from that second.
+  const remaining = Math.ceil(validAfter.getTime() / 1000) * 1000 - Date.now();
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
   return { ok: true, revoked, revokedDevices };
 }
 

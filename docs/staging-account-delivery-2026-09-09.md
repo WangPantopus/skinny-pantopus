@@ -37,3 +37,34 @@ change is established by these local tests. Use an isolated capture inbox on
 existing capacity for synthetic staging messages, then record exact runtime
 identity and cleanup. No paid service or live charge/postcard is authorized by
 this report.
+
+## Live candidate findings
+
+Candidate source `41372f71657e3462938c8b15dbfde9ab0a97cf48`, image
+`sha256:9891109b915f54d7a2e8e6d822e257972a28eefe4aadb0e34f64b16b1efe0e12`,
+runs separately from the public staging API with jobs disabled. Mailpit v1.31.1
+is pinned by image digest; SMTP binds only to the host's Docker bridge and its
+inbox API binds to loopback. No relay is configured and recipients are restricted
+to synthetic example.com addresses. This uses existing capacity. Configuration
+follows the [official Docker](https://mailpit.axllent.org/docs/install/docker/)
+and [SMTP](https://mailpit.axllent.org/docs/configuration/smtp/) documentation.
+
+Actual signup sends one captured verification email and rejects pre-verification
+login. Resend sends a second captured link with the exact private return target;
+verification succeeds once, replay fails, and verified login reaches the account
+profile. Recovery rejects an ordinary access token and gives identical request
+acknowledgements for known/unknown addresses. Its captured recovery link changes
+the password and rejects link reuse and the old password.
+
+The immediate new login exposed a real bug: JWT issuance was 127 ms before the
+millisecond revocation cutoff because JWT `iat` uses whole seconds. Login returned
+200, then the profile request returned SESSION_REVOKED. New deterministic cases
+at millisecond 127 and 999 reproduce it. The repair preserves the precise cutoff
+and waits for the next token second before acknowledging reset/lockdown; 141 targeted auth/delivery tests and all 4,340 backend tests pass. Live
+verification of the updated candidate is next. Do not repeat the consumed recovery token.
+
+The configured auth-link origin is `https://staging.pantopus.com`, which currently
+fails DNS resolution. Captured token/API verification proves backend behavior,
+not browser completion through that hostname. Staging web hosting remains next.
+Private account/capture artifacts are under `account-delivery/`; no credentials
+or captured messages belong in Git or chat.

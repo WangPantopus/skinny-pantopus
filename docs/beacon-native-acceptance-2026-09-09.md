@@ -49,6 +49,20 @@ mute/access/preference restrictions. Simulator coverage does not replace them.
 Private results and app hashes are retained under `ios-continuation/` in the
 durable recovery root; credentials and operator logs are not versioned.
 
-The fixture remains active for natural elapsed token expiry and remaining
-notification/session cases. Do not reuse the old cleaned device fixtures or
-republish N1/N2. Chat continuation is the next repair under investigation.
+## Natural elapsed expiry — passed
+
+The dedicated simulator remained untouched for more than a full 3,605-second
+token window. The existing Staging app then launched without login and opened
+the exact N2 audience post. No token was shortened or replaced, and no app was
+rebuilt or reinstalled for this check. The native case passed in 19.967 seconds.
+The server confirmed the same session, account and device remained active,
+its refresh hash rotated, and the refresh timestamp followed the elapsed guard.
+
+Final normal native logout passed again after natural expiry. Scoped cleanup
+removed N1/N2, their audience notifications, the synthetic Beacon/membership,
+the direct chat and added beta enrollment. The two synthetic accounts and all
+previously revoked session records are retained as evidence; remaining registry
+sessions are revoked and device tokens are zero. The owned simulator is closed.
+Do not reuse these completed fixtures or republish N1/N2. Chat
+continuation now passes the native fixture UI matrix and live Android FCM
+return, as recorded in the [chat report](chat-notification-continuation-2026-09-09.md).
