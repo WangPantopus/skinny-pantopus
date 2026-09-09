@@ -76,6 +76,60 @@ final class SocketClientAuthErrorTests: XCTestCase {
         XCTAssertFalse(client.stoppedForRevocation)
     }
 
+    func testRejectedReplacementTokenDoesNotStartAnotherRefreshUntilConnected() async {
+        var calls = 0
+        client.tokenRefresher = {
+            calls += 1
+            return "t\(calls + 1)"
+        }
+        client.connect(token: "t1")
+        client.handleSocketError("Authentication required")
+        for _ in 0..<200 where client.authToken != "t2" {
+            await Task.yield()
+        }
+        XCTAssertEqual(client.authToken, "t2")
+
+        // These arrive on separate reconnect attempts, after the first
+        // recovery task finished. In-flight coalescing alone cannot stop it.
+        for _ in 0..<5 {
+            client.handleSocketError("Authentication required")
+            await Task.yield()
+        }
+        XCTAssertEqual(calls, 1, "A rejected replacement must not exhaust the HTTP write limit")
+
+        // Once authenticated, a later expiry gets its own recovery attempt.
+        client.handleSocketConnected()
+        client.handleSocketError("jwt expired")
+        for _ in 0..<200 where client.authToken != "t3" {
+            await Task.yield()
+        }
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(client.authToken, "t3")
+    }
+
+    func testTransientRefreshDoesNotStormAndNewSessionCanRecover() async {
+        var calls = 0
+        client.tokenRefresher = {
+            calls += 1
+            return nil
+        }
+        client.connect(token: "t1")
+        for _ in 0..<5 {
+            client.handleSocketError("Invalid token")
+            await Task.yield()
+        }
+        XCTAssertEqual(calls, 1)
+        XCTAssertFalse(client.stoppedForRevocation, "Transport failure must not revoke the session")
+
+        client.disconnect()
+        client.connect(token: "new-session")
+        client.handleSocketError("Invalid token")
+        for _ in 0..<200 where calls != 2 {
+            await Task.yield()
+        }
+        XCTAssertEqual(calls, 2, "A fresh session must not inherit the previous recovery guard")
+    }
+
     func testRevocationCodesStopReconnectingAndConfirmOverHTTP() async {
         let confirmed = expectation(description: "confirmer called")
         client.revocationConfirmer = { confirmed.fulfill() }

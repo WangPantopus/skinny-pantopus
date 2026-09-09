@@ -86,7 +86,14 @@ owner/Beacon now has only the iPhone account as a follower; original preferences
 and the existing APNs registration are recorded for preservation. Only that
 owner and designated iPhone account are in the beta list; global/internal
 enablement remains false. No new iPhone
-publication has been sent. The next action is the native Beacon toggle off →
+publication has been sent. The owner reported initial native toggle saves failed
+before later attempts saved. The installed app was reverified, and the API now
+holds Beacon push off with global push on. Investigation found an iOS Socket.IO
+auth payload mismatch and repeated refreshes exhausting the shared write budget.
+The corrected handshake passes a live staging comparison; 50 targeted iOS tests
+pass, including bounded socket recovery, session refresh and preference saves.
+The repaired signed device build is in progress. Install and verify it before
+the native Beacon toggle off →
 background publication → retained in-app return, then restore → device alert →
 exact post. Prior confirmed iPhone cases do not need repeating. Physical Android
 remains unavailable.

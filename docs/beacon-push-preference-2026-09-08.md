@@ -142,8 +142,26 @@ synthetic owner and Beacon have only that iPhone account as a follower, with one
 linked APNs registration. Original preference values were saved; global/internal
 enablement remains false. No publication has been sent in this resumed fixture.
 
-The owner is now asked to turn the new native Beacon toggle off and background
-the app. Next verify no device alert while the in-app row remains and opens the
+The owner reported initial toggle attempts showed “Failed to save” before later
+attempts showed “Saved.” The current device registration matches the successful
+installation, and an independent API read confirms Beacon push off/global push on.
+The first failed save followed 30 refresh requests during startup, exceeding the
+30-write/IP budget. iOS supplied credentials in Engine.IO query parameters/headers;
+the server expects the Socket.IO namespace auth payload. Rejected connections
+could therefore trigger repeated token rotations. Per-request response statuses
+were not retained, so rate-limiting of those saves is inferred from the request
+counts and middleware; a live staging Engine.IO/Socket.IO check reproduced rejection of the old query/header
+format and successful connection using the namespace auth payload. The repair
+now uses the namespace payload and bounds recovery until a successful connection.
+All 50 targeted iOS tests pass: eight socket recovery, 20 session refresh,
+16 notification settings and six API client tests. The regressions cover rejected
+replacement tokens, transient failures, recovery after successful authentication
+and a fresh session. SwiftFormat and strict SwiftLint pass. The signed device
+build and installation of the repaired app are pending.
+No test publication has been sent during this investigation.
+
+After verifying save reliability, background the app and verify no device alert
+while the in-app row remains and opens the
 exact post, then restore the toggle and verify the next notification's exact
 return without replay. Verify the audience before every publication and restore
 test preferences afterward. Physical Android remains unavailable.
