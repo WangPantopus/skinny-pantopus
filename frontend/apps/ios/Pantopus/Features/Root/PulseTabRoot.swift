@@ -104,8 +104,10 @@ public struct PulseTabRoot: View {
                     // public `/business/:username` link to the router, which
                     // opens it in the Hub tab's stack.
                     Task { @MainActor in DeepLinkRouter.shared.handle(path: "/business/\(username)") }
-                }
+                },
+                onContentLoaded: { router.completePostArrival(id: postId) }
             )
+            .onDisappear { router.completePostArrival(id: postId) }
         case let .compose(intent):
             PulseComposeFlowView(
                 prefillFeedIntent: PulseIntent(rawValue: intent),

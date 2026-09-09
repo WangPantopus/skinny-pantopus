@@ -174,6 +174,8 @@ final class DeepLinkRouter {
 
     /// The most recent pending destination. Consumers read this and then call `consume()`.
     private(set) var pending: Destination?
+    /// Prevent a queued auth-state replay from navigating to a post twice.
+    private(set) var activePostArrivalID: String?
 
     /// Set when a signed-out deep link should auto-present Sign-in
     /// (auth-owned or deferred content). `PlaceLaunchHost` observes this
@@ -214,9 +216,20 @@ final class DeepLinkRouter {
         return pending
     }
 
+    /// Navigation consumes the in-memory link; load or departure finishes it.
+    func completePostArrival(id: String) {
+        guard let userID = Self.signedInUserIDProvider() else { return }
+        PendingDeepLinkStore.completeArrival(userID: userID) { path in
+            guard let url = URL(string: path) else { return false }
+            return self.resolve(url: url) == .post(id: id)
+        }
+        if activePostArrivalID == id { activePostArrivalID = nil }
+    }
+
     /// Drop in-memory pending + login prompt (sign-out / invalid).
     func clearPending() {
         pending = nil
+        activePostArrivalID = nil
         prefersLoginPresentation = false
     }
 
@@ -236,6 +249,7 @@ final class DeepLinkRouter {
     // MARK: - Classification + persistence (Workstream 1.4)
 
     private func apply(destination: Destination, persistencePath: String) {
+        let userID = Self.signedInUserIDProvider()
         switch Self.routingKind(of: destination) {
         case .discard:
             // Never stash / never treat `.unknown` (or OAuth, already filtered)
@@ -245,7 +259,7 @@ final class DeepLinkRouter {
             // Auth stack (`LoginView`) owns reset / verify — park in-memory
             // only so the cover can consume; do NOT persist across process death.
             pending = destination
-            if !Self.isSignedIn {
+            if userID == nil {
                 prefersLoginPresentation = true
             }
         case .content:
@@ -254,10 +268,18 @@ final class DeepLinkRouter {
             // PlaceLaunchHost while signed out — there is no signed-out content
             // browser — so we still persist these for post-login replay rather
             // than dropping them. Do NOT treat them as "browse now without login".
-            if Self.isSignedIn {
+            if let userID {
+                if case let .post(id) = destination {
+                    activePostArrivalID = id
+                    PendingDeepLinkStore.stash(persistencePath, expectedUserID: userID)
+                } else {
+                    activePostArrivalID = nil
+                    PendingDeepLinkStore.clear()
+                }
                 prefersLoginPresentation = false
                 pending = destination
             } else {
+                activePostArrivalID = nil
                 PendingDeepLinkStore.stash(persistencePath)
                 pending = nil
                 prefersLoginPresentation = true
@@ -265,25 +287,17 @@ final class DeepLinkRouter {
         }
     }
 
-    /// Production reading of the session state. Kept separate from
-    /// `signedInProvider` so `bindSignedInProvider(nil)` can restore it.
-    private static let defaultSignedInProvider: @MainActor () -> Bool = {
-        if case .signedIn = AuthManager.shared.state { return true }
-        return false
+    /// One account-state read controls both dispatch and continuation ownership.
+    private static let defaultSignedInUserIDProvider: @MainActor () -> String? = {
+        if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+        return nil
     }
 
-    /// Seam for the signed-in check. Mirrors Android
-    /// `DeepLinkRouter.bindSignedInProvider` so both platforms' routing can be
-    /// exercised without standing up a real session.
-    private static var signedInProvider: @MainActor () -> Bool = defaultSignedInProvider
+    private static var signedInUserIDProvider: @MainActor () -> String? = defaultSignedInUserIDProvider
 
     /// Override the session check. Pass `nil` to restore the `AuthManager` read.
-    static func bindSignedInProvider(_ provider: (@MainActor () -> Bool)?) {
-        signedInProvider = provider ?? defaultSignedInProvider
-    }
-
-    private static var isSignedIn: Bool {
-        signedInProvider()
+    static func bindSignedInUserIDProvider(_ provider: (@MainActor () -> String?)?) {
+        signedInUserIDProvider = provider ?? defaultSignedInUserIDProvider
     }
 
     private static func routingKind(of destination: Destination) -> RoutingKind {

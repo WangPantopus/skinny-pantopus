@@ -21,6 +21,7 @@ public struct PulsePostDetailView: View {
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
     private let onEdit: @MainActor (String) -> Void
+    private let onContentLoaded: @MainActor () -> Void
     /// Tap-through from a "Nearby Providers" row. Carries the business
     /// *username* (the `/business/:username` public-profile key).
     private let onOpenBusiness: @MainActor (String) -> Void
@@ -31,7 +32,8 @@ public struct PulsePostDetailView: View {
         onBack: @escaping @MainActor () -> Void,
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
         onEdit: @escaping @MainActor (String) -> Void = { _ in },
-        onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in }
+        onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
+        onContentLoaded: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: PulsePostDetailViewModel(
             postId: postId,
@@ -41,6 +43,7 @@ public struct PulsePostDetailView: View {
         self.onOpenProfile = onOpenProfile
         self.onEdit = onEdit
         self.onOpenBusiness = onOpenBusiness
+        self.onContentLoaded = onContentLoaded
     }
 
     public var body: some View {
@@ -61,6 +64,9 @@ public struct PulsePostDetailView: View {
         .accessibilityIdentifier("pulsePostDetail")
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
+        .onChange(of: viewModel.state) { _, state in
+            if case .loaded = state { onContentLoaded() }
+        }
         .onChange(of: viewModel.didDeletePost) { _, deleted in
             if deleted { onBack() }
         }
