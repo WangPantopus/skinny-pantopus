@@ -30,8 +30,9 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
   enforcement was temporarily lifted solely for this merge and the complete
   original protection was immediately restored and compared successfully.
 - [Merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34326720080)
-  is queued/running and remains follow-up work. Do not label the waiver as
-  passing checks. Continue any failures independently.
+  subsequently passed in full, including all three iOS simulator jobs and
+  Android quality/build/instrumented tests. The earlier waiver was not itself
+  evidence of passing checks.
 - Both deployment and migration switches were freshly verified false in staging
   and production. Source integration is not a production deployment. Hosted
   canonical ledger adoption and production cutover remain separate work.
@@ -39,8 +40,14 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
 `codex/ios-notification-continuation`, based on merged master `939878b4f`;
 other worktrees, ignored operator artifacts and the owner's design proposal are
-preserved. iOS has the analogous in-progress destination-loss pattern; verification and
-repair are the first active step, followed by native Beacon publishing. Update
+preserved. iOS's analogous in-progress destination loss is reproduced by a new
+regression. The account-bound repair passes 177 targeted unit tests and strict
+lint; actual simulator session-return tests exposed an additional navigation
+transition failure that is still being repaired. Six existing entry/Beacon UI
+journeys pass. A fresh native composer fixture now has two synthetic accounts,
+one Beacon/follower, global device push disabled and zero tokens. No publication
+has been sent and no iPhone observation is pending. Finish the simulator repair,
+then native Beacon publishing. Update
 this handoff after each meaningful milestone.
 
 ### Completed Beacon and platform evidence

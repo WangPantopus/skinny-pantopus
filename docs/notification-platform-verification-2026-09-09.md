@@ -4,10 +4,12 @@ The Android emulator now passes OS notification permission denial and restore
 against the live staging backend. This is separate from the completed Beacon
 push-only preference acceptance. Physical Android hardware remains unavailable.
 
-The repair is on draft [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14),
-application revision `9c443b69afb4e0b488491f4d895fcee55ab9cc3c`, stacked on PR #12.
-Local checks and the live repeat pass; [PR CI](https://github.com/WangPantopus/skinny-pantopus/pull/14/checks)
-is pending. The final build after the source-only lint annotation has SHA-256
+The repair, application revision `9c443b69afb4e0b488491f4d895fcee55ab9cc3c`,
+is merged into master through [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14)
+at `939878b4f6cd1c3084b1d2811cb98270ab38a440`, together with PR #12's preference
+changes. Local checks and the live repeat pass;
+[merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34326720080)
+also passed in full after the owner-authorized merge. The final build after the source-only lint annotation has SHA-256
 `c6e306826bbdae159a86f663b753aa64a5d5737dc7b6f61140110247b84930a4`;
 the installed APK used for the live repeat is identified separately below.
 
