@@ -28,6 +28,7 @@ data class HomeDocumentDto(
     @Json(name = "created_by") val createdBy: String?,
     @Json(name = "created_at") val createdAt: String?,
     @Json(name = "updated_at") val updatedAt: String?,
+    @Json(name = "content_url") val contentUrl: String? = null,
 )
 
 /** `GET /api/homes/:id/documents` envelope. */

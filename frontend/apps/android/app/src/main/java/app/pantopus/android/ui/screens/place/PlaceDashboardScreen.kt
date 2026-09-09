@@ -79,6 +79,7 @@ fun PlaceDashboardScreen(
     modifier: Modifier = Modifier,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
+    onOpenHomeTools: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -99,6 +100,7 @@ fun PlaceDashboardScreen(
                     moveInDate = current.moveInDate,
                     onOpenMailDay = onOpenMailDay,
                     onOpenPrivacyMirror = onOpenPrivacyMirror,
+                    onOpenHomeTools = onOpenHomeTools,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
@@ -150,6 +152,7 @@ internal fun PlaceDashboardContent(
     moveInDate: String? = null,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
+    onOpenHomeTools: () -> Unit = {},
     homeId: String = "",
 ) {
     val isVerified = intel.tier == PlaceTier.T4
@@ -172,6 +175,15 @@ internal fun PlaceDashboardContent(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
                 )
             }
+        }
+        item {
+            PlaceMessagesActionRow(
+                icon = PantopusIcon.Home,
+                title = "Home tools",
+                subtitle = "Documents, household tasks and members.",
+                onTap = onOpenHomeTools,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.homeTools"),
+            )
         }
         // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
         item { PrivacyMirrorRow(onOpen = onOpenPrivacyMirror) }

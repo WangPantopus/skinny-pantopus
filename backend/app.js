@@ -363,6 +363,7 @@ app.use('/api/homes', require('./routes/homeGuest'));    // Public guest/shared 
 app.use('/api/homes', require('./routes/homeIam'));
 app.use('/api/homes', require('./routes/homeOwnership'));
 app.use('/api/homes', require('./routes/homePrivacy'));   // Per-home privacy/security toggles (/:id/privacy)
+app.use('/api/homes', require('./routes/homeDocumentFiles')); // Authenticated private document bytes
 app.use('/api/homes', require('./routes/placeIntelligence')); // Place dashboard contract (/:id/intelligence)
 app.use('/api/homes', require('./routes/residencyLetters')); // Server-attested residency letters (/:id/residency-letters)
 app.use('/api/admin/address-review', require('./routes/adminAddressReview')); // SCN-11: manual_review queue

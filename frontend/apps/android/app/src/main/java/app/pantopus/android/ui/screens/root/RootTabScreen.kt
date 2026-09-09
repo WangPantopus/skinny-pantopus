@@ -2594,6 +2594,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
                         onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
                         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
+                        onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                     )
                 }
                 composable(

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okio.ByteString
 import javax.inject.Inject
 
 /** Nav arg keys for the Document Detail route. */
@@ -28,6 +29,7 @@ sealed interface DocumentDetailUiState {
     data class Loaded(
         val document: HomeDocumentDto,
         val isMutating: Boolean = false,
+        val content: ByteString? = null,
     ) : DocumentDetailUiState
 
     data class Error(val message: String) : DocumentDetailUiState
@@ -58,28 +60,50 @@ class DocumentDetailViewModel
         private val _toast = MutableStateFlow<DocumentDetailToast?>(null)
         val toast: StateFlow<DocumentDetailToast?> = _toast.asStateFlow()
 
+        private var loadId = 0
+
+        fun clearContent() {
+            loadId += 1
+            _state.value = DocumentDetailUiState.Loading
+        }
+
         fun load() {
-            // Preserve a loaded payload while refreshing — avoids the shimmer flash on pull-to-refresh.
-            if (_state.value !is DocumentDetailUiState.Loaded) {
-                _state.value = DocumentDetailUiState.Loading
-            }
+            viewModelScope.launch { loadDocument() }
+        }
+
+        fun export(onReady: (HomeDocumentDto, ByteString) -> Unit) {
             viewModelScope.launch {
-                when (val result = repo.getHomeDocuments(homeId)) {
-                    is NetworkResult.Success -> {
-                        val match = result.data.documents.firstOrNull { it.id == documentId }
-                        if (match == null) {
-                            _state.value = DocumentDetailUiState.Error("This document is no longer available.")
-                        } else {
-                            _state.value = DocumentDetailUiState.Loaded(match)
-                        }
+                loadDocument()
+                val loaded = _state.value as? DocumentDetailUiState.Loaded ?: return@launch
+                loaded.content?.let { onReady(loaded.document, it) }
+            }
+        }
+
+        private suspend fun loadDocument() {
+            clearContent()
+            val requestId = loadId
+            when (val result = repo.getHomeDocuments(homeId)) {
+                is NetworkResult.Success -> {
+                    if (requestId != loadId) return
+                    val match = result.data.documents.firstOrNull { it.id.equals(documentId, ignoreCase = true) }
+                    if (match == null) {
+                        _state.value = DocumentDetailUiState.Error("This document is no longer available.")
+                    } else if (match.contentUrl == null) {
+                        _state.value = DocumentDetailUiState.Loaded(match)
+                    } else {
+                        val bytes = repo.homeDocumentContent(homeId, documentId)
+                        if (requestId != loadId) return
+                        _state.value =
+                            when (bytes) {
+                                is NetworkResult.Success -> DocumentDetailUiState.Loaded(match, content = bytes.data)
+                                is NetworkResult.Failure ->
+                                    DocumentDetailUiState.Error(bytes.error.displayMessage("Couldn't load this file."))
+                            }
                     }
-                    is NetworkResult.Failure -> {
-                        if (_state.value is DocumentDetailUiState.Loaded) {
-                            // Keep the prior payload visible on a transient network blip; surface a toast.
-                            _toast.value = DocumentDetailToast(result.error.message, isError = true)
-                        } else {
-                            _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't load this document."))
-                        }
+                }
+                is NetworkResult.Failure -> {
+                    if (requestId == loadId) {
+                        _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't load this document."))
                     }
                 }
             }

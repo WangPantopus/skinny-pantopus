@@ -30,6 +30,9 @@ final class DocumentDetailViewModel {
     }
 
     private(set) var state: State = .loading
+    private(set) var content: Data?
+    private var loadId = UUID()
+    private var exportDirectory: URL?
     private(set) var isMutating: Bool = false
     var toast: ToastMessage?
     private(set) var shouldDismiss: Bool = false
@@ -55,27 +58,69 @@ final class DocumentDetailViewModel {
     /// pre-seed it so the screen renders instantly. The next `load()`
     /// call refreshes against the server.
     func seed(_ dto: HomeDocumentDTO) {
-        state = .loaded(dto)
+        // A list row is presentation context, never proof of current file access.
+        if dto.id != documentId { return }
+    }
+
+    func clearContent() {
+        loadId = UUID()
+        content = nil
+        state = .loading
     }
 
     func load() async {
-        if case .loaded = state {} else { state = .loading }
+        clearContent()
+        let requestId = loadId
         do {
             let response: GetHomeDocumentsResponse = try await api.request(
                 HomesEndpoints.documents(homeId: homeId)
             )
-            guard let dto = response.documents.first(where: { $0.id == documentId }) else {
+            guard requestId == loadId else { return }
+            guard let dto = response.documents.first(where: { $0.id.lowercased() == documentId.lowercased() }) else {
                 state = .error(message: "This document is no longer available.")
                 return
             }
+            var bytes: Data?
+            if dto.contentURL != nil {
+                // Construct the path from this Home and document, not a response URL.
+                bytes = try await api.requestData(HomesEndpoints.documentContent(homeId: homeId, documentId: documentId))
+            }
+            guard requestId == loadId else { return }
+            content = bytes
             state = .loaded(dto)
         } catch {
-            // Preserve a seeded payload on transient error.
-            if case .loaded = state { return }
+            guard requestId == loadId else { return }
+            content = nil
             state = .error(
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't load this document."
             )
+        }
+    }
+
+    func clearExport() {
+        if let exportDirectory { try? FileManager.default.removeItem(at: exportDirectory) }
+        exportDirectory = nil
+    }
+
+    /// Recheck current access before handing a private copy to another app.
+    func exportFile() async -> URL? {
+        await load()
+        guard case let .loaded(dto) = state, let content else { return nil }
+        clearExport()
+        do {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            exportDirectory = directory
+            let original = dto.details["original_filename"] ?? dto.title
+            let filename = original.components(separatedBy: CharacterSet(charactersIn: "/\\\r\n")).joined(separator: "_")
+            let url = directory.appendingPathComponent(filename.isEmpty ? "document" : filename)
+            try content.write(to: url, options: [.atomic, .completeFileProtection])
+            return url
+        } catch {
+            clearExport()
+            toast = ToastMessage(text: "Couldn't prepare this file. Try again.", kind: .error)
+            return nil
         }
     }
 
@@ -104,6 +149,7 @@ final class DocumentDetailViewModel {
 // MARK: - View
 
 public struct DocumentDetailView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: DocumentDetailViewModel
     @State private var showsDeleteConfirm = false
     @State private var shareItem: ShareItem?
@@ -137,10 +183,11 @@ public struct DocumentDetailView: View {
             case let .loaded(dto):
                 LoadedShell(
                     dto: dto,
+                    content: viewModel.content,
                     isMutating: viewModel.isMutating,
                     onBack: onBack,
-                    onOpenExternally: { onOpenExternally(dto) },
-                    onShare: { shareItem = ShareItem(document: dto) },
+                    onOpenExternally: { Task { await exportFile() } },
+                    onShare: { Task { await exportFile() } },
                     onReplace: onReplace,
                     // swiftlint:disable:next trailing_closure
                     onDelete: { showsDeleteConfirm = true }
@@ -151,9 +198,17 @@ public struct DocumentDetailView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("documentDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { viewModel.clearContent() }
+            if phase == .active { Task { await viewModel.load() } }
+        }
+        .onDisappear { viewModel.clearContent()
+            viewModel.clearExport()
+        }
         .confirmationDialog(
             "Delete this document?",
             isPresented: $showsDeleteConfirm,
@@ -166,8 +221,9 @@ public struct DocumentDetailView: View {
         } message: {
             Text("The file will be removed from this home's vault.")
         }
-        .sheet(item: $shareItem) { item in
-            ShareSheet(items: [item.subject])
+        // swiftlint:disable:next multiple_closures_with_trailing_closure
+        .sheet(item: $shareItem, onDismiss: { viewModel.clearExport() }) { item in
+            ShareSheet(items: [item.url])
         }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -180,6 +236,10 @@ public struct DocumentDetailView: View {
                     }
             }
         }
+    }
+
+    private func exportFile() async {
+        if let url = await viewModel.exportFile() { shareItem = ShareItem(url: url) }
     }
 }
 
@@ -238,6 +298,7 @@ private struct ErrorShell: View {
 
 private struct LoadedShell: View {
     let dto: HomeDocumentDTO
+    let content: Data?
     let isMutating: Bool
     let onBack: () -> Void
     let onOpenExternally: () -> Void
@@ -265,7 +326,7 @@ private struct LoadedShell: View {
             },
             body: {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    PreviewPane(dto: dto, fileType: fileType) { onOpenExternally() }
+                    PreviewPane(dto: dto, fileType: fileType, bytes: content) { onOpenExternally() }
                         .padding(.horizontal, Spacing.s4)
                     MetadataGrid(dto: dto, projection: projection)
                         .padding(.horizontal, Spacing.s4)
@@ -283,6 +344,7 @@ private struct LoadedShell: View {
             cta: {
                 StickyActionFooter(
                     isMutating: isMutating,
+                    hasFile: content != nil,
                     onOpenExternally: onOpenExternally,
                     onShare: onShare,
                     onReplace: onReplace,
@@ -361,6 +423,7 @@ private struct CategoryChipBadge: View {
 private struct PreviewPane: View {
     let dto: HomeDocumentDTO
     let fileType: DocumentFileType
+    let bytes: Data?
     let onOpenExternally: () -> Void
 
     var body: some View {
@@ -380,13 +443,13 @@ private struct PreviewPane: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let url = previewURL {
+        if let bytes {
             switch fileType {
             case .pdf, .scan:
-                PDFPreview(url: url)
+                PDFPreview(data: bytes)
                     .accessibilityLabel("PDF preview of \(dto.title)")
             case .image:
-                ImagePreview(url: url)
+                ImagePreview(data: bytes)
                     .accessibilityLabel("Image preview of \(dto.title)")
             case .doc, .sheet, .archive:
                 UnsupportedPreview(fileType: fileType, onOpenExternally: onOpenExternally)
@@ -395,19 +458,10 @@ private struct PreviewPane: View {
             UnsupportedPreview(fileType: fileType, onOpenExternally: onOpenExternally)
         }
     }
-
-    private var previewURL: URL? {
-        // The backend may surface a signed URL in `details["preview_url"]`
-        // once storage signing lands; until then we honor any URL that
-        // happens to ride on `storage_path` (treat as a direct link).
-        if let raw = dto.details["preview_url"], let url = URL(string: raw) { return url }
-        if let raw = dto.storagePath, raw.hasPrefix("http"), let url = URL(string: raw) { return url }
-        return nil
-    }
 }
 
 private struct PDFPreview: UIViewRepresentable {
-    let url: URL
+    let data: Data
 
     func makeUIView(context _: Context) -> PDFView {
         let view = PDFView()
@@ -420,39 +474,21 @@ private struct PDFPreview: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: PDFView, context _: Context) {
-        if uiView.document?.documentURL != url {
-            uiView.document = PDFDocument(url: url)
-        }
+        uiView.document = PDFDocument(data: data)
     }
 }
 
 private struct ImagePreview: View {
-    let url: URL
+    let data: Data
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case let .success(image):
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failure:
-                fallback
-            case .empty:
-                Shimmer(height: 220, cornerRadius: Radii.md)
-                    .padding(Spacing.s4)
-            @unknown default:
-                fallback
-            }
-        }
-    }
-
-    private var fallback: some View {
-        VStack(spacing: Spacing.s2) {
-            Icon(.image, size: 32, color: Theme.Color.appTextMuted)
-            Text("Image unavailable")
-                .pantopusTextStyle(.caption)
+        if let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Text("Image unavailable").pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
     }
@@ -558,7 +594,7 @@ private struct MetadataGrid: View {
 
     private var visibilityLabel: String {
         switch dto.visibility {
-        case "managers": "Owners only"
+        case "managers": "Managers and owners"
         case "members": "All members"
         case "private": "Private"
         case "public": "Public"
@@ -641,6 +677,7 @@ private struct LinkedToCard: View {
 
 private struct StickyActionFooter: View {
     let isMutating: Bool
+    let hasFile: Bool
     let onOpenExternally: () -> Void
     let onShare: () -> Void
     let onReplace: () -> Void
@@ -656,14 +693,14 @@ private struct StickyActionFooter: View {
                     accessibilityLabel: "Open externally",
                     identifier: "documentDetailOpenExternally",
                     action: onOpenExternally
-                )
+                ).disabled(!hasFile)
                 FooterButton(
                     icon: .share,
                     label: "Share",
                     accessibilityLabel: "Share document",
                     identifier: "documentDetailShare",
                     action: onShare
-                )
+                ).disabled(!hasFile)
                 FooterButton(
                     icon: .refreshCw,
                     label: "Replace",
@@ -765,15 +802,7 @@ public extension DocumentDetailView {
 
 private struct ShareItem: Identifiable {
     let id = UUID()
-    let document: HomeDocumentDTO
-
-    /// Best-effort string handed to UIActivityViewController. Falls back
-    /// to the document title when no storage URL has been persisted.
-    var subject: String {
-        if let raw = document.details["preview_url"], !raw.isEmpty { return raw }
-        if let raw = document.storagePath, !raw.isEmpty { return raw }
-        return document.title
-    }
+    let url: URL
 }
 
 private struct ShareSheet: UIViewControllerRepresentable {

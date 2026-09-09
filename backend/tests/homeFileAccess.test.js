@@ -139,3 +139,16 @@ describe('Home document permissions', () => {
     expect((await request(app).get(`/api/files/home/${homeId}`)).status).toBe(503);
   });
 });
+
+
+test('the legacy Home listing excludes byte-contract documents with separate visibility rules', async () => {
+  checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: false });
+  db.seedTable('File', [
+    { id: 'legacy-private', home_id: homeId, visibility: 'private', is_deleted: false },
+    { id: 'sensitive-document', home_id: homeId, visibility: 'private', is_deleted: false,
+      metadata: { storage_contract: 'home_document_v1', original_filename: 'restricted.txt' } },
+  ]);
+  const response = await request(app).get(`/api/files/home/${homeId}?visibility=private`);
+  expect(response.status).toBe(200);
+  expect(response.body.files.map(file => file.id)).toEqual(['legacy-private']);
+});

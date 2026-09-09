@@ -104,11 +104,29 @@ and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
 Home document upload: both clients currently save metadata without bytes and
 report success. Complete real scoped upload/retrieval on existing/free storage,
 including retry and revoked-access denial. Hosted storage is not yet certified.
-PR #19 integration is isolated in `/private/tmp/pantopus-home-access-integration`.
-Byte delivery continues separately in `/private/tmp/pantopus-home-file-access`,
-branch `codex/home-document-storage`: backend byte tests and the first iOS
-upload tests pass; Android upload and both authenticated previews are in progress.
-No hosted bucket has been created. PR #18 merged with passing checks at 12:51 UTC
+PR #19 merged as `0021cb59d6649f501a86bacd4d69edfc932c0e94` after its integrated checks passed. Its integration worktree is
+`/private/tmp/pantopus-home-access-integration`.
+The [byte-delivery report](home-document-storage-2026-09-09.md) tracks work in
+`/private/tmp/pantopus-home-file-access`, branch `codex/home-document-storage`.
+Both native upload test sets pass. All 22 iOS upload/preview/denial/export tests
+and strict Swift lint pass. Android document tests pass (49, with five existing
+skips), along with formatting, Detekt and lint. All 4,415 backend tests pass,
+including a new repair that excludes restricted document metadata from the old
+Home File list. An isolated private staging bucket and local-only API candidate
+are now running. Live exact bytes, concurrent retry/quota, sensitive scope, old-link revocation
+and legacy metadata isolation now pass. Native acceptance exposed missing Home
+tools/Documents entry points; both clients now connect them with confirmed
+document permissions. Android OS picker → upload → exact PDF preview/share and
+iOS opening/sharing that same document now pass; both share copies match all
+609 original bytes. Android foreground return after permission revocation hides
+the content; fixture access is restored. All 47 focused Android tests, its Place
+snapshot/quality checks, 18 iOS dashboard/access tests, ten list tests and strict
+Swift lint pass. Delete/replace, abandoned-upload cleanup and quota concurrency
+remain next; iOS picker upload itself has unit coverage, not a live picker run.
+Android private HTTP logging is repaired. PR #19's merged-master CI passes.
+See the byte-delivery report for exact limits. Staging lacks default
+member IAM rows; fixture-only grants permit this test, without certifying the
+unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
 as `fd8a94eef727342340fc522f7196e6e64814ed08`.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.

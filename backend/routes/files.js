@@ -751,7 +751,10 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch home files' });
     }
     
-    res.json({ files: files || [] });
+    // Byte-contract documents have their own current HomeDocument visibility.
+    // Only that API may expose their metadata; legacy File visibility is broader.
+    const legacyFiles = (files || []).filter(file => file.metadata?.storage_contract !== 'home_document_v1');
+    res.json({ files: legacyFiles });
     
   } catch (err) {
     logger.error('Home files fetch error', { error: err.message });

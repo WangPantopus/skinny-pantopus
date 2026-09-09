@@ -94,6 +94,15 @@ struct PlaceDashboardView: View {
                     .padding(.horizontal, 18)
                     .padding(.top, Spacing.s2)
 
+                PlaceMessagesActionRow(
+                    icon: .house,
+                    title: "Home tools",
+                    subtitle: "Documents, household tasks and members."
+                ) { viewModel.onOpenHubHome() }
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .accessibilityIdentifier("place.homeTools")
+
                 if isClaimed {
                     PlaceVerifyBanner { showVerify = true }
                         .padding(.horizontal, 16)
