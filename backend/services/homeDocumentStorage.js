@@ -75,6 +75,14 @@ async function upload({ homeId, documentId, buffer, mimeType }) {
   return { bucket: name, key, sha256, size: buffer.length };
 }
 
+// Verify private storage and derive the immutable reference before reserving
+// quota. No provider object is written until its File reservation is durable.
+async function prepare({ homeId, documentId, sha256 }) {
+  const key = documentKey(homeId, documentId, sha256);
+  const { name } = await privateBucket();
+  return { bucket: name, key };
+}
+
 async function download({ homeId, documentId, sha256, bucketName }) {
   const key = documentKey(homeId, documentId, sha256);
   const { name, bucket } = await privateBucket();
@@ -90,4 +98,4 @@ async function remove({ homeId, documentId, sha256, bucketName }) {
   if (error) throw storageError('DOCUMENT_DELETE_UNAVAILABLE', 'Could not finish removing the stored file.');
 }
 
-module.exports = { upload, download, remove, documentKey, MAX_DOCUMENT_BYTES, MIME_TYPES, storageError };
+module.exports = { upload, prepare, download, remove, documentKey, MAX_DOCUMENT_BYTES, MIME_TYPES, storageError };

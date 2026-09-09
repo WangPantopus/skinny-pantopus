@@ -135,6 +135,31 @@ test('revoked document access denies an old content path before storage retrieva
   expect(bucket.download).not.toHaveBeenCalled();
 });
 
+test('a deletion winning an in-flight upload prevents publication and schedules its late object for cleanup', async () => {
+  const from = db.from;
+  jest.spyOn(db, 'from').mockImplementation(table => {
+    const builder = from(table);
+    if (table === 'HomeDocument') {
+      const insert = builder.insert.bind(builder);
+      builder.insert = data => {
+        const query = insert(data);
+        query.single = async () => {
+          db.getTable('File')[0].is_deleted = true;
+          return { data: null, error: { code: '23514' } };
+        };
+        return query;
+      };
+    }
+    return builder;
+  });
+  const result = await uploading();
+  expect(result.status).toBe(409);
+  expect(result.body.code).toBe('DOCUMENT_UPLOAD_CONFLICT');
+  expect(db.getTable('HomeDocument')).toHaveLength(0);
+  expect(objects.size).toBe(1);
+  expect(quota).toHaveBeenCalledWith('mark_home_document_cleanup_pending', { p_file_id: documentId });
+});
+
 test('sensitive visibility is checked again when opening an existing document', async () => {
   await uploading(); bucket.download.mockClear();
   db.getTable('HomeDocument')[0].visibility = 'sensitive';
@@ -181,6 +206,46 @@ test('quota refusal does not write storage', async () => {
   quota.mockResolvedValue({ data: { canUpload: false }, error: null });
   expect((await uploading()).status).toBe(413);
   expect(bucket.upload).not.toHaveBeenCalled();
+});
+
+test.each([
+  [{ code: 'P0001', message: 'FILE_QUOTA_EXCEEDED' }, 413],
+  [{ code: '08006', message: 'connection unavailable' }, 503],
+])('failed durable admission never writes provider bytes: %j', async (error, status) => {
+  const from = db.from;
+  jest.spyOn(db, 'from').mockImplementation(table => {
+    const builder = from(table);
+    if (table === 'File') {
+      const insert = builder.insert.bind(builder);
+      builder.insert = data => {
+        const result = insert(data);
+        result.single = async () => ({ data: null, error });
+        return result;
+      };
+    }
+    return builder;
+  });
+  const result = await uploading();
+  expect(result.status).toBe(status);
+  expect(bucket.upload).not.toHaveBeenCalled();
+  expect(objects.size).toBe(0);
+  expect(db.getTable('File')).toHaveLength(0);
+  expect(db.getTable('HomeDocument')).toHaveLength(0);
+});
+
+test('provider outage retains one recoverable reservation and retry uses the same quota', async () => {
+  bucket.upload.mockResolvedValueOnce({ error: { statusCode: '503' } });
+  expect((await uploading()).status).toBe(503);
+  expect(db.getTable('File')).toHaveLength(1);
+  expect(db.getTable('File')[0]).toMatchObject({ processing_status: 'uploading', is_deleted: false });
+  expect(db.getTable('HomeDocument')).toHaveLength(0);
+  expect(objects.size).toBe(0);
+  expect((await uploading()).status).toBe(201);
+  expect(db.getTable('File')).toHaveLength(1);
+  expect(db.getTable('File')[0].processing_status).toBe('completed');
+  expect(db.getTable('HomeDocument')).toHaveLength(1);
+  expect(objects.size).toBe(1);
+  expect(quota).toHaveBeenCalledTimes(1);
 });
 
 test.each([

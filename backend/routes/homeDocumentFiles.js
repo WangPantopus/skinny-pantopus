@@ -102,28 +102,37 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
       if (!quota.data.canUpload) throw fail('DOCUMENT_QUOTA_EXCEEDED', 'Your storage limit has been reached.', 413);
     }
 
-    const stored = await storage.upload({ homeId, documentId, buffer: req.file.buffer, mimeType: req.file.mimetype });
+    const reference = await storage.prepare({ homeId, documentId, sha256 });
     const internal = { storage_contract: 'home_document_v1', upload_fingerprint: fingerprint, upload_sha256: sha256, original_filename: filename };
     if (!file) {
       const inserted = await db.from('File').insert({
         id: documentId, user_id: userId, home_id: homeId,
-        filename, original_filename: filename, file_path: stored.key,
+        filename, original_filename: filename, file_path: reference.key,
         file_url: `/api/homes/${homeId}/documents/${documentId}/content`,
-        file_size: stored.size, mime_type: req.file.mimetype,
+        file_size: req.file.size, mime_type: req.file.mimetype,
         file_extension: path.extname(filename).toLowerCase().slice(0, 10),
         file_type: 'home_document', visibility: 'private',
-        processing_status: 'completed', is_deleted: false,
-        metadata: { ...internal, storage_bucket: stored.bucket },
+        processing_status: 'uploading', is_deleted: false,
+        metadata: { ...internal, storage_bucket: reference.bucket, upload_visibility: value.visibility },
       }).select().single();
       file = inserted.data;
       if (inserted.error || !file) {
         // The insert may have succeeded with its response lost, or a concurrent
         // identical retry may have won. Reconcile before deciding to retry.
         file = await row('File', documentId);
-        if (!file) throw fail('DOCUMENT_SAVE_UNAVAILABLE', 'The document could not be saved. Retry this upload.');
+        if (!file) {
+          if (inserted.error?.code === 'P0001' && inserted.error.message?.includes('FILE_QUOTA_EXCEEDED')) {
+            throw fail('DOCUMENT_QUOTA_EXCEEDED', 'Your storage limit has been reached.', 413);
+          }
+          throw fail('DOCUMENT_SAVE_UNAVAILABLE', 'The document could not be saved. Retry this upload.');
+        }
         assertSameUpload(file, identity, 'File');
       }
     }
+    if (file.file_path !== reference.key || file.metadata?.storage_bucket !== reference.bucket) {
+      throw fail('DOCUMENT_UPLOAD_CONFLICT', 'This upload has a different storage reference. Choose the file again.', 409);
+    }
+    const stored = await storage.upload({ homeId, documentId, buffer: req.file.buffer, mimeType: req.file.mimetype });
     const inserted = await db.from('HomeDocument').insert({
       id: documentId, home_id: homeId, file_id: file.id, created_by: userId,
       doc_type: value.doc_type, title: value.title, visibility: value.visibility,
@@ -134,9 +143,22 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
     let document = inserted.data;
     if (inserted.error || !document) {
       document = await row('HomeDocument', documentId);
-      if (!document) throw fail('DOCUMENT_SAVE_UNAVAILABLE', 'The document could not be saved. Retry this upload.');
+      if (!document) {
+        const latest = await row('File', documentId);
+        if (latest?.is_deleted) {
+          // Deletion/expiry won while the provider write was in flight. Its
+          // tombstone prevents publication; invalidate any cleanup acknowledgement.
+          await db.rpc('mark_home_document_cleanup_pending', { p_file_id: documentId });
+          throw fail('DOCUMENT_UPLOAD_CONFLICT', 'This upload has expired or was removed. Choose the file again.', 409);
+        }
+        throw fail('DOCUMENT_SAVE_UNAVAILABLE', 'The document could not be saved. Retry this upload.');
+      }
       assertSameUpload(document, identity, 'HomeDocument');
     }
+    // The authorized document row is the committed publication. A bookkeeping
+    // write failure must not turn real delivered bytes into a false failure.
+    const completed = await db.from('File').update({ processing_status: 'completed' }).eq('id', documentId).eq('is_deleted', false);
+    if (completed.error) logger.warn('Home document completion bookkeeping pending', { code: 'DOCUMENT_DATABASE_UNAVAILABLE' });
     return res.status(201).json({ document: serializeHomeDocument(document) });
   } catch (error) { next(error); }
 });
