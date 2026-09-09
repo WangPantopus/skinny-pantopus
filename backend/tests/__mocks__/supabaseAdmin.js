@@ -733,6 +733,7 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {

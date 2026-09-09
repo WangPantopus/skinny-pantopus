@@ -123,6 +123,18 @@ function seedToken(overrides = {}) {
 // ============================================================
 
 describe('startVerification', () => {
+  test('a missing admission RPC fails closed without dispatch or partial records', async () => {
+    seedAddress();
+    const { setRpcMock } = require('../__mocks__/supabaseAdmin');
+    setRpcMock(async () => ({ data: null, error: { code: 'PGRST202' } }));
+    const result = await service.startVerification('user-1', 'addr-1');
+    expect(result).toMatchObject({ success: false, statusCode: 503 });
+    expect(mockDispatchPostcard).not.toHaveBeenCalled();
+    expect(getTable('AddressVerificationAttempt')).toHaveLength(0);
+    expect(getTable('AddressVerificationToken')).toHaveLength(0);
+    expect(getTable('MailVerificationJob')).toHaveLength(0);
+  });
+
   test('succeeds with valid address and no conflicts', async () => {
     seedAddress();
 

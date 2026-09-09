@@ -16,7 +16,7 @@ access or push tokens. No physical mail was sent. Private evidence is retained
 under `staging-mail/lost-response-probe.log`; credentials, code and provider IDs
 are excluded from Git.
 
-## Repair in progress
+## Delivery recovery milestone
 
 - Dispatch claims a job before calling the provider. Concurrent workers or a
   later process cannot send the same claimed job again.
@@ -50,13 +50,60 @@ and an unrelated intermittent residency HTTP socket failure. The mock is fixed;
 all 40 affected/security tests pass. The final full run passes all 4,478 backend tests and privacy gates. All 1,000
 web tests pass; full web lint has zero errors (existing warnings remain).
 
-Live acceptance of the repaired application is still pending. Also exercise
-simultaneous *new* starts, which are a different race from competing dispatch
-workers, and finish transactional admission/rate-limit protection if needed.
-A crash before dispatch may still require reconciliation; this is not an
-outbox worker or a claim of automatically recovering every process interruption.
-The separate native landlord/ownership postcard path has not been certified by
-these web/address-service checks. No production migration or release is implied.
+The repaired private candidate runs `593cfbafabddf6425c4e6510eeac21570d28a357`
+(image `6465d0406c2d088eb3fb3b43775f97f814646e5efdc5da741162945f4a6799f4`).
+Its previous image remains stopped for rollback; public API/worker and browser
+containers are unchanged. [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27)
+is a draft; its [first CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34390656532)
+passed. PR #26's [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34388309333)
+passed; PR #25's older master run was superseded/canceled.
+
+Live service publication → API status/confirmation now passes. The probe discarded
+three actual Lob test responses; replay returned the same provider postcard ID
+all three times. API start/resend retained one attempt/job, authentication and
+foreign-account checks denied access, and a wrong code created no occupancy.
+A locally signed synthetic webhook, carrying the actual Lob receipt metadata,
+recovered the receipt through the real API. This is not evidence of an externally
+delivered Lob callback. The exact printed code then created one verified member
+occupancy; repeated confirmation did not consume proof again or add membership.
+
+Cleanup passed: the one Lob test postcard, temporary Home/occupancy/address,
+attempt/token/job, synthetic webhook and address events are removed. Both fixture
+sessions are revoked, with zero push tokens or household memberships. Original
+Home document IDs are preserved. The synthetic actors remain as private evidence.
+Do not repeat these completed publishers. The public browser has not received
+the new web source; live browser-to-current-release acceptance remains separate.
+
+## Atomic request admission milestone
+
+A new competing-start regression reproduced two attempts before either request
+could observe the other. `admit_mail_verification` now creates the attempt,
+secret hash and mail job in one transaction. Per-user and per-address locks
+serialize both duplicate requests and postage budgets. Existing proofs and unit
+selections survive retry. The function is service-only; the matching backend
+fails closed if the migration is missing. It does not rewrite historical rows.
+
+The migration `20260909184500_mail_verification_admission.sql` has been applied
+only to the owned local `mail_verification_contract` clone so far. Its SQL
+contract verifies retry/role boundaries, budgets and rollback after a duplicate
+job ID. Nine real competing PostgreSQL connections verify one attempt for a
+shared request and independent user/address budget enforcement. All 13 SQL
+contracts, 119 application functions and 73 trigger bindings pass the full lint
+harness, with six previously reviewed stock PostGIS findings. The initial local
+clone used a different database owner and could not create the PostGIS fixture;
+matching the clone owner to the existing replay fixed this setup issue without
+changing application grants or production.
+
+The final 4,480-test backend run and privacy gates pass, including the new
+missing-migration regression. Next apply
+the checked additive function only to Free staging, preserving mail/file rows and
+its absent migration ledger, build the matching private candidate, and run real
+concurrent API starts. No production migration or release is implied.
+
+A crash before dispatch may still require reconciliation; this is not an outbox
+worker or a claim of automatically recovering every process interruption. The
+separate native landlord/ownership postcard path remains unverified by these
+web/address-service checks.
 
 ## External prerequisite
 

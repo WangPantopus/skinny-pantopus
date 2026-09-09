@@ -29,14 +29,25 @@ gates. Address-provider failure/retry and claim denial pass; disposable provider
 fixtures are cleaned. The private candidate remains `9f37ca975` (`94a41144a829`);
 public staging API/worker and browser API are separate and unchanged.
 
-The [mail recovery report](staging-mail-recovery-2026-09-09.md) records a real
-Lob test acceptance followed by a simulated lost response, reproducing destructive
-attempt rollback. Its exact test postcard/address are cleaned. The repair now
-passes all 4,478 backend tests, privacy gates, 1,000 web tests and web type/lint
-gates. Repaired live acceptance remains. Next exercise simultaneous new starts
-and transactional admission before claiming
-complete retry acceptance. The separate native ownership postcard path remains
-outside this proof.
+The [mail recovery report](staging-mail-recovery-2026-09-09.md) records a completed
+real Lob test lost-response journey: three keyed requests produced one postcard,
+API retries retained proof, foreign/wrong-code access was denied, a signed
+synthetic webhook recovered the receipt, and exact code confirmation created
+one member occupancy. Disposable mail/Home/proof/webhook fixtures are cleaned,
+original Home document IDs are preserved, and fixture sessions are revoked.
+Private candidate `593cfbafa` (`6465d0406c2d`) is healthy; public/browser runtimes
+remain unchanged. Draft [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27)
+passed its initial CI. PR #26's merged-master CI also passed.
+
+A separate simultaneous-new-start race is now repaired through service-only
+transactional admission. Its local SQL contract, nine competing PostgreSQL
+connections, all 13 SQL contracts and application-function lint pass; the new
+backend passes all 4,480 tests and privacy gates, including missing-migration
+denial. Next commit/push this milestone, apply only the checked
+additive Free-staging function with row/ledger preservation, and run the matching
+private candidate's concurrent API acceptance. Then continue remaining payment/
+OAuth and separate native ownership mail acceptance. No owner device observation
+is pending.
 
 The owner confirmed no active Smarty subscription and plans to obtain one for
 testing and launch. Activation plus real DPV/unit/eligibility/error/access retests

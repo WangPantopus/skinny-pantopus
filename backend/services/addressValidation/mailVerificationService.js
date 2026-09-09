@@ -203,85 +203,45 @@ class MailVerificationService {
     const code = this._generateCode();
     const codeHash = this._hashCode(code);
 
-    const expiresAt = new Date(Date.now() + CODE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-    const cooldownUntil = new Date(Date.now() + RESEND_COOLDOWN_HOURS * 60 * 60 * 1000);
-
-    // ── 6. Create AddressVerificationAttempt ─────────────────
-    const { data: attempt, error: attemptErr } = await supabaseAdmin
-      .from('AddressVerificationAttempt')
-      .insert({
-        user_id: userId,
-        address_id: addressId,
-        method: 'mail_code',
-        status: 'created',
-        risk_tier: 'low',
-        expires_at: expiresAt.toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (attemptErr) {
-      logger.error('MailVerificationService.startVerification: attempt insert failed', {
-        userId, addressId, error: attemptErr.message,
-      });
-      return { success: false, error: 'Failed to create verification attempt' };
-    }
-
-    // ── 7. Create AddressVerificationToken ───────────────────
-    const { error: tokenErr } = await supabaseAdmin
-      .from('AddressVerificationToken')
-      .insert({
-        attempt_id: attempt.id,
-        code_hash: codeHash,
+    // Admission and both postage budgets are atomic across API processes.
+    // There is deliberately no fallback to separate inserts if the matching
+    // migration is missing or its transaction fails.
+    const { data: admission, error: admissionError } = await supabaseAdmin.rpc('admit_mail_verification', {
+      p_user_id: userId,
+      p_address_id: addressId,
+      p_job_id: crypto.randomUUID(),
+      p_code_hash: codeHash,
+      p_unit: unit || null,
+      p_template_id: addressConfig.lob.postcardTemplateId || null,
+      p_policy: {
+        code_expiry_days: CODE_EXPIRY_DAYS,
+        cooldown_hours: RESEND_COOLDOWN_HOURS,
         max_attempts: MAX_ATTEMPTS,
-        attempt_count: 0,
-        resend_count: 0,
-        used_at: null,
-        cooldown_until: cooldownUntil.toISOString(),
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (tokenErr) {
-      logger.error('MailVerificationService.startVerification: token insert failed', {
-        attemptId: attempt.id, error: tokenErr.message,
-      });
-      await supabaseAdmin
-        .from('AddressVerificationAttempt')
-        .delete()
-        .eq('id', attempt.id);
-      return { success: false, error: 'Failed to create verification token' };
+        user_rate_limit: USER_RATE_LIMIT,
+        user_window_hours: USER_RATE_WINDOW_HOURS,
+        address_rate_limit: ADDRESS_RATE_LIMIT,
+        address_window_days: ADDRESS_RATE_WINDOW_DAYS,
+        user_address_rate_limit: USER_ADDRESS_RATE_LIMIT,
+      },
+    });
+    if (admissionError || !admission) {
+      logger.error('MailVerificationService.startVerification: admission failed', { userId, addressId });
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
     }
-
-    // ── 8. Create MailVerificationJob ────────────────────────
-    const { data: job, error: jobErr } = await supabaseAdmin
-      .from('MailVerificationJob')
-      .insert({
-        id: crypto.randomUUID(),
-        attempt_id: attempt.id,
-        vendor: 'pending',
-        vendor_job_id: null,
-        template_id: addressConfig.lob.postcardTemplateId || null,
-        vendor_status: 'pending',
-        metadata: {
-          address_id: addressId,
-          unit: unit || null,
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (jobErr) {
-      logger.error('MailVerificationService.startVerification: job insert failed', {
-        attemptId: attempt.id, error: jobErr.message,
-      });
-      await this._deleteAttemptArtifacts(attempt.id);
-      return { success: false, error: 'Failed to create mail verification job' };
+    if (admission.error) {
+      if (admission.error === 'ADDRESS_NOT_FOUND') return { success: false, error: 'Address not found' };
+      if (['USER_RATE_LIMIT', 'ADDRESS_RATE_LIMIT', 'USER_ADDRESS_RATE_LIMIT'].includes(admission.error)) {
+        return { success: false, statusCode: 429, error: 'Rate limit exceeded: too many verification requests. Try again later.' };
+      }
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
+    }
+    if (admission.reused) {
+      return await this._existingVerification(userId, addressId, unit)
+        || this._deliveryUnknown(admission.attempt_id, addressId);
+    }
+    const { attempt, job } = admission;
+    if (!attempt?.id || !job?.id) {
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
     }
 
     const dispatchResult = await this._dispatchVerificationJob(job?.id, code, {
@@ -330,8 +290,8 @@ class MailVerificationService {
       verification_id: attempt.id,
       address_id: addressId,
       status: 'pending',
-      expires_at: expiresAt.toISOString(),
-      cooldown_until: cooldownUntil.toISOString(),
+      expires_at: attempt.expires_at,
+      cooldown_until: admission.cooldown_until,
       max_resends: MAX_RESENDS,
       resends_remaining: MAX_RESENDS,
     };

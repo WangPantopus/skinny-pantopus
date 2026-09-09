@@ -256,3 +256,15 @@ describe('uncertain mail delivery', () => {
     expect((await mailVerificationService.confirmCode(start.attempt_id, newCode, USER_ID)).verified).toBe(true);
   });
 });
+
+test('simultaneous new starts admit one attempt and print one postcard', async () => {
+  const results = await Promise.all([
+    mailVerificationService.startVerification(USER_ID, ADDRESS_ID),
+    mailVerificationService.startVerification(USER_ID, ADDRESS_ID),
+  ]);
+  expect(getTable('AddressVerificationAttempt')).toHaveLength(1);
+  expect(getTable('AddressVerificationToken')).toHaveLength(1);
+  expect(getTable('MailVerificationJob')).toHaveLength(1);
+  expect(lobRequests).toHaveLength(1);
+  expect(new Set(results.map((r) => r.verification_id || r.attempt_id)).size).toBe(1);
+});
