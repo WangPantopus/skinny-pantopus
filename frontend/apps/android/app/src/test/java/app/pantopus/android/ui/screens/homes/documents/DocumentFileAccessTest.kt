@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.documents
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -11,6 +12,7 @@ import app.pantopus.android.data.homes.HomesRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -98,5 +100,57 @@ class DocumentFileAccessTest {
             vm.export { _, _ -> exported = true }
             assertFalse(exported)
             assertTrue(vm.state.value is DocumentDetailUiState.Error)
+        }
+
+    @Test fun `confirmed delete dismisses once and never reloads deleted content`() =
+        runTest {
+            allow()
+            coEvery { repo.deleteHomeDocument("home-1", "doc-1") } returns
+                NetworkResult.Success(DeleteDocumentResponse(deleted = true, cleanupPending = true))
+            val vm = vm()
+            vm.load()
+            vm.delete()
+            assertTrue(vm.shouldDismiss.value)
+            assertEquals(DocumentDetailUiState.Loading, vm.state.value)
+            vm.acknowledgeDismiss()
+            vm.load()
+            vm.delete()
+            assertFalse(vm.shouldDismiss.value)
+            coVerify(exactly = 1) { repo.deleteHomeDocument("home-1", "doc-1") }
+            coVerify(exactly = 1) { repo.getHomeDocuments("home-1") }
+        }
+
+    @Test fun `denied and unconfirmed delete hides content and does not dismiss`() =
+        runTest {
+            allow()
+            for (response in listOf(
+                NetworkResult.Failure(NetworkError.Forbidden),
+                NetworkResult.Success(DeleteDocumentResponse(deleted = false, cleanupPending = false)),
+            )) {
+                coEvery { repo.deleteHomeDocument("home-1", "doc-1") } returns response
+                val vm = vm()
+                vm.load()
+                vm.delete()
+                assertFalse(vm.shouldDismiss.value)
+                assertTrue(vm.state.value is DocumentDetailUiState.Error)
+            }
+        }
+
+    @Test fun `repeated taps and foreground load cannot race pending deletion`() =
+        runTest {
+            allow()
+            val response = CompletableDeferred<NetworkResult<DeleteDocumentResponse>>()
+            coEvery { repo.deleteHomeDocument("home-1", "doc-1") } coAnswers { response.await() }
+            val vm = vm()
+            vm.load()
+            vm.delete()
+            vm.delete()
+            vm.clearContent()
+            vm.load()
+            response.complete(NetworkResult.Success(DeleteDocumentResponse(deleted = true, cleanupPending = false)))
+            assertTrue(vm.shouldDismiss.value)
+            assertEquals(DocumentDetailUiState.Loading, vm.state.value)
+            coVerify(exactly = 1) { repo.deleteHomeDocument("home-1", "doc-1") }
+            coVerify(exactly = 1) { repo.getHomeDocuments("home-1") }
         }
 }

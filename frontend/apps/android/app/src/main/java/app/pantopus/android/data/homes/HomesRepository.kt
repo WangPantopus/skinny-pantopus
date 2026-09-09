@@ -15,6 +15,7 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.CreatePackageRequest
 import app.pantopus.android.data.api.models.homes.CreatePollRequest
+import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
@@ -220,6 +221,12 @@ open class HomesRepository
             homeId: String,
             request: CreateDocumentRequest,
         ): NetworkResult<CreateDocumentResponse> = safeApiCall { api.createHomeDocument(homeId, request) }
+
+        /** `DELETE /api/homes/:id/documents/:documentId`. */
+        open suspend fun deleteHomeDocument(
+            homeId: String,
+            documentId: String,
+        ): NetworkResult<DeleteDocumentResponse> = safeApiCall { api.deleteHomeDocument(homeId, documentId) }
 
         /** Private bytes and metadata travel together through the authenticated Retrofit client. */
         @Suppress("LongParameterList")

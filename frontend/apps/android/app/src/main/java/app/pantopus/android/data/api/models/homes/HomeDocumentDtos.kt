@@ -56,3 +56,10 @@ data class CreateDocumentRequest(
 data class CreateDocumentResponse(
     val document: HomeDocumentDto,
 )
+
+/** Deletion is committed even when private object cleanup is still pending. */
+@JsonClass(generateAdapter = true)
+data class DeleteDocumentResponse(
+    val deleted: Boolean,
+    @Json(name = "cleanup_pending") val cleanupPending: Boolean,
+)

@@ -165,6 +165,47 @@ router.get('/:homeId/documents/:documentId/content', verifyToken, gate('docs.vie
   } catch (error) { next(error); }
 });
 
+router.delete('/:homeId/documents/:documentId', verifyToken, gate('docs.manage'), async (req, res, next) => {
+  try {
+    const { homeId, documentId } = req.params;
+    const document = await row('HomeDocument', documentId);
+    const file = await row('File', documentId);
+    if (!file || file.home_id !== homeId || file.metadata?.storage_contract !== 'home_document_v1') {
+      throw fail('DOCUMENT_NOT_FOUND', 'Document not found.', 404);
+    }
+    const visibility = document?.visibility || (file.is_deleted && file.metadata.deleted_document_visibility);
+    if (!visibility || (document && (document.home_id !== homeId || document.file_id !== file.id || document.created_by !== file.user_id))) {
+      throw fail('DOCUMENT_NOT_FOUND', 'Document not found.', 404);
+    }
+    if (!req.documentVisibilities.includes(visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this document.', 403);
+    if (file.file_path !== storage.documentKey(homeId, documentId, file.metadata.upload_sha256)) {
+      throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
+    }
+    const result = await db.rpc('delete_home_document_file', {
+      p_home_id: homeId, p_document_id: documentId, p_actor_id: req.user.id,
+      p_expected_fingerprint: file.metadata.upload_fingerprint,
+      p_expected_visibility: visibility,
+    });
+    if (result.error || !result.data) throw fail('DOCUMENT_DELETE_UNAVAILABLE', 'Could not remove the document. Try again.');
+    if (result.data.code) throw fail(result.data.code, 'The document changed. Reload it and try again.', result.data.code === 'DOCUMENT_NOT_FOUND' ? 404 : 409);
+    const deleted = result.data.file;
+    if (!deleted?.is_deleted || deleted.id !== documentId || deleted.home_id !== homeId) {
+      throw fail('DOCUMENT_DELETE_UNAVAILABLE', 'Could not confirm document removal. Try again.');
+    }
+    let cleanupPending = deleted.metadata.storage_cleanup_pending !== false;
+    if (cleanupPending) {
+      try {
+        await storage.remove({ homeId, documentId, sha256: deleted.metadata.upload_sha256, bucketName: deleted.metadata.storage_bucket });
+        const saved = await db.from('File').update({ metadata: { ...deleted.metadata, storage_cleanup_pending: false } }).eq('id', documentId).eq('is_deleted', true);
+        cleanupPending = Boolean(saved.error);
+      } catch (error) {
+        logger.warn('Home document storage cleanup pending', { code: error.code || 'DOCUMENT_DELETE_UNAVAILABLE' });
+      }
+    }
+    res.status(cleanupPending ? 202 : 200).json({ deleted: true, cleanup_pending: cleanupPending });
+  } catch (error) { next(error); }
+});
+
 router.use((error, _req, res, _next) => {
   const status = error instanceof multer.MulterError ? (error.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : error.status || 503;
   const code = error instanceof multer.MulterError ? 'INVALID_DOCUMENT_UPLOAD' : error.code || 'DOCUMENT_UNAVAILABLE';

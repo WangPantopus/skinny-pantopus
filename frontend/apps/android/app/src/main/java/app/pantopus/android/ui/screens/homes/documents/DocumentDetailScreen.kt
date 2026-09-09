@@ -98,6 +98,7 @@ fun DocumentDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
@@ -118,6 +119,19 @@ fun DocumentDetailScreen(
         }
     }
     LaunchedEffect(Unit) { viewModel.load() }
+
+    LaunchedEffect(shouldDismiss) {
+        if (shouldDismiss) {
+            viewModel.acknowledgeDismiss()
+            onBack()
+        }
+    }
+    LaunchedEffect(state) {
+        if (state is DocumentDetailUiState.Error || (state as? DocumentDetailUiState.Loaded)?.isMutating == true) {
+            exports.forEach { it.deleteRecursively() }
+            exports.clear()
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {

@@ -33,6 +33,7 @@ final class DocumentDetailViewModel {
     private(set) var content: Data?
     private var loadId = UUID()
     private var exportDirectory: URL?
+    private var deleted = false
     private(set) var isMutating: Bool = false
     var toast: ToastMessage?
     private(set) var shouldDismiss: Bool = false
@@ -69,6 +70,7 @@ final class DocumentDetailViewModel {
     }
 
     func load() async {
+        guard !deleted, !isMutating else { return }
         clearContent()
         let requestId = loadId
         do {
@@ -128,17 +130,28 @@ final class DocumentDetailViewModel {
         await load()
     }
 
-    /// Soft-delete: the backend has no DELETE handler for documents
-    /// today, so the action shows a stub toast. Real deletion lands
-    /// in a follow-up patch once `DELETE /api/homes/:id/documents/:id`
-    /// ships.
     func delete() async {
+        guard !deleted, !isMutating, case .loaded = state else { return }
         isMutating = true
+        loadId = UUID()
+        content = nil
+        clearExport()
         defer { isMutating = false }
-        toast = ToastMessage(
-            text: "Delete will be available once the server ships its handler.",
-            kind: .neutral
-        )
+        do {
+            let response: DeleteDocumentResponse = try await api.request(
+                HomesEndpoints.deleteDocument(homeId: homeId, documentId: documentId)
+            )
+            guard response.deleted else {
+                state = .error(message: "Couldn't delete this document. Try again.")
+                return
+            }
+            deleted = true
+            clearContent()
+            onChanged()
+            shouldDismiss = true
+        } catch {
+            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't delete this document. Try again.")
+        }
     }
 
     func acknowledgeDismiss() {
@@ -202,6 +215,12 @@ public struct DocumentDetailView: View {
         .accessibilityIdentifier("documentDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onChange(of: viewModel.shouldDismiss) { _, dismiss in
+            if dismiss {
+                viewModel.acknowledgeDismiss()
+                onBack()
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { viewModel.clearContent() }
             if phase == .active { Task { await viewModel.load() } }

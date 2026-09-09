@@ -13,7 +13,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okio.ByteString
 import javax.inject.Inject
@@ -60,7 +59,12 @@ class DocumentDetailViewModel
         private val _toast = MutableStateFlow<DocumentDetailToast?>(null)
         val toast: StateFlow<DocumentDetailToast?> = _toast.asStateFlow()
 
+        private val _shouldDismiss = MutableStateFlow(false)
+        val shouldDismiss: StateFlow<Boolean> = _shouldDismiss.asStateFlow()
+
         private var loadId = 0
+        private var deleting = false
+        private var deleted = false
 
         fun clearContent() {
             loadId += 1
@@ -80,6 +84,7 @@ class DocumentDetailViewModel
         }
 
         private suspend fun loadDocument() {
+            if (deleting || deleted) return
             clearContent()
             val requestId = loadId
             when (val result = repo.getHomeDocuments(homeId)) {
@@ -109,22 +114,33 @@ class DocumentDetailViewModel
             }
         }
 
-        /**
-         * Soft-delete stub — the backend has no DELETE handler for
-         * documents today. Surface a toast and leave the state intact;
-         * a follow-up patch wires the real DELETE call.
-         */
         fun delete() {
             val current = _state.value as? DocumentDetailUiState.Loaded ?: return
-            _state.update { current.copy(isMutating = true) }
+            if (deleting || deleted) return
+            deleting = true
+            loadId += 1
+            _state.value = current.copy(isMutating = true, content = null)
             viewModelScope.launch {
-                _toast.value =
-                    DocumentDetailToast(
-                        "Delete will be available once the server ships its handler.",
-                        isError = false,
-                    )
-                _state.update { current.copy(isMutating = false) }
+                when (val result = repo.deleteHomeDocument(homeId, documentId)) {
+                    is NetworkResult.Success -> {
+                        if (result.data.deleted) {
+                            deleted = true
+                            clearContent()
+                            _shouldDismiss.value = true
+                        } else {
+                            _state.value = DocumentDetailUiState.Error("Couldn't delete this document. Try again.")
+                        }
+                    }
+                    is NetworkResult.Failure -> {
+                        _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't delete this document."))
+                    }
+                }
+                deleting = false
             }
+        }
+
+        fun acknowledgeDismiss() {
+            _shouldDismiss.value = false
         }
 
         fun dismissToast() {

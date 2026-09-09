@@ -384,6 +384,11 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/documents/\(documentId)/content")
     }
 
+    /// `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:168`.
+    public static func deleteDocument(homeId: String, documentId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/homes/\(homeId)/documents/\(documentId)")
+    }
+
     // MARK: - Packages (T6.3d / P14)
 
     /// `GET /api/homes/:id/packages` — route `backend/routes/home.js:4673`.
