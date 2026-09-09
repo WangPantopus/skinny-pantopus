@@ -7,210 +7,104 @@ before changing anything. A merged branch is not a production release.
 
 ## Current objective and first action
 
-Finish the existing **Home, Pulse and Beacon** journeys with reliable privacy,
-useful behavior at low neighborhood density, and verified return experiences.
-The immediate engineering milestone is **Beacon publication → notification →
-the exact permitted post in staging**, after integrating the staging recovery
-branch. Actual publication and permitted return are verified on the designated iPhone
-and Android emulator; the remaining acceptance gates are listed below.
+Finish the existing **Home, Pulse and Beacon** journeys, then the remaining
+platform/account/vendor checks and production upgrade/release preparation in
+the ordered backlog below. The owner now requests autonomous continuation and
+authorizes iOS simulator use for remaining iPhone app checks. Preserve the
+recorded distinction between simulator coverage and real APNs/device delivery.
+Do not repeat completed physical iPhone Beacon preference acceptance.
 
-Integration completed in [PR #9](https://github.com/WangPantopus/skinny-pantopus/pull/9)
-on September 8 at 08:44 UTC as `a373b10940813bc5deef37b29f67dcc9b6375994`.
-The final PR and [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34206108701)
-now pass. Fresh inspection confirms deployment and database switches remain
-false in both environments; the backend workflow skipped its rollout steps.
-The deployed backend is still a separate release from merged source.
+### Source integration checkpoint — September 9
 
-Beacon delivery, exact returns and push preferences now pass on the designated
-iPhone and Android emulator. The next executable priority is the remaining
-OS-permission, session-return and token-lifecycle coverage. Physical Android and
-native composer interaction remain release gates. The
-[full journey report](beacon-full-journey-2026-09-08.md) records the repaired live
-API/access matrix and owner-confirmed iPhone foreground, background, closed-app,
-blocked-old-link, mute/resume and global push off/restore cases. Android emulator
-foreground/background/process-absent notification returns and blocked-old-link
-denial also pass. Earlier fixtures were cleaned up; original device accounts,
-prior notifications and the iPhone registration were preserved.
-[PR #10](https://github.com/WangPantopus/skinny-pantopus/pull/10) contains those
-repairs and is merged into master as `c9fd509e31b409ced357a83bf6c445a7738eea1b`;
-its [final CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34274045637)
-passes at `37a49cce82dc2721c736e3a0971f6fe0f4f896f4`.
+- PRs #9 and #10 are on master. PR #13 merged to master as
+  `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline
+  and large-baseline history checker repair; its full CI passed.
+- PR #12 merged as `92593d4f68b7703355ba154f75ecb18d63157dc3` into
+  `codex/database-baseline-adoption`, so it did not by itself deliver its Beacon
+  preference changes to master. Its final CI passed at `d33a33c1a`.
+- [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14) now consolidates
+  that completed merge history with master and the Android session-return fix.
+  Only the handoff conflicted; application and migration bytes are unchanged
+  from its already tested branch. It is being retargeted to master.
+- The owner explicitly authorizes merging #14 **without waiting for CI** and
+  continuing the rest autonomously. Local Android checks and prior source CI
+  are recorded below; the new consolidated-head CI must be tracked separately.
+  Do not represent this explicit waiver as passing CI.
+- Both deployment and migration switches were freshly verified false in staging
+  and production. Source integration is not a production deployment. Hosted
+  canonical ledger adoption and production cutover remain separate work.
 
-The [canonical database baseline](database-canonical-baseline-2026-09-08.md)
-is adopted in source on [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11).
-That PR merged into `codex/beacon-full-journey` as `6113691c94279aa9fbafb9566870bbe714f418dd`,
-after PR #10 merged. Consequently, master does not yet contain the baseline;
-[PR #13](https://github.com/WangPantopus/skinny-pantopus/pull/13), now ready for review, supplies
-that integration, including the large-baseline checker repair from PR #12.
-Its initial merge tree exactly matched PR #11; both migration-base checks and
-six checker tests pass. Its [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319428996)
-passes at `ea8cfcedaa1007f0d721e51a57b65bf9edc1ee77`. Integrate #13 before retargeting
-#12 to master. PR #12 remains unmerged, as the owner confirmed.
-Frozen migration bytes are archived unchanged. The two canonical files replay
-through the pinned CLI with reference fingerprints matching all 6,467 static
-rows, reviewed full function lint, seven SQL contracts and five real
-PostgREST/Following integration tests. All [CI jobs](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34293457260)
-pass at `f9362cbca55a25ea51f9a1ebbcb60b72fb7fad22`. The linked
-[upgrade rehearsal](database-baseline-rehearsal-2026-09-08.md),
+The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
+`codex/notification-session-return`. Main remains at its existing local master;
+other worktrees, ignored operator artifacts and the owner's design proposal are
+preserved. After integration, continue on an isolated child branch from the
+merged result. Update this handoff after each meaningful milestone.
+
+### Completed Beacon and platform evidence
+
+The [full Beacon report](beacon-full-journey-2026-09-08.md) records live publish →
+audience notification → exact permitted post, authenticated WebSocket fanout,
+mute/resume, membership/revocation/block restrictions and draft/archive denial.
+Physical iPhone foreground/background/closed-app taps, old blocked-link denial,
+mute/resume and global push off/restore were owner-confirmed. Android emulator
+foreground/background/process-absent return and old blocked-link denial passed.
+
+The [push-only preference report](beacon-push-preference-2026-09-08.md) records
+schema/API/web/iOS/Android preference support, global opt-out precedence,
+retained in-app notifications and no replay. It also records the Android
+first-run menu repair and iOS Socket.IO authentication/refresh-loop repair.
+All 20 live staging API/access checks passed. Android native off/restore passed;
+the owner confirmed repaired iPhone saves, I-off silence with exact in-app
+return, and I-restored as the sole new alert opening the exact post. Both
+preference fixtures were cleaned up; original device accounts/preferences,
+prior iPhone notifications and its APNs registration were preserved. PR #12's
+[final full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34322453803)
+passed. The earlier iPhone SE timing failure was fixed by awaiting the save task;
+16 settings tests passed five repetitions.
+
+The [September 9 platform report](notification-platform-verification-2026-09-09.md)
+records Android OS permission denial, retained in-app exact return, restoration
+and no replay through live staging/FCM. It reproduced a revoked-session
+notification losing its post after login. Fix `9c443b69a` binds unfinished post
+arrivals to the original account and clears them after load/departure or manual
+logout. All 148 targeted tests, formatting, Detekt, Android lint and the staging
+build passed. A fresh live notification → security sign-out → same-account
+login opened the exact emerald-harbor post and public Beacon author; the native
+persisted destination was verified before login and cleared after load/logout.
+Four test posts, five notifications, the fresh Beacon/membership and creator
+were removed. Android is signed out with zero FCM tokens; its original account,
+AuthDevice, preferences and OS permission remain. The owned emulator is closed.
+Global/internal Beacon enablement remains false and beta is empty.
+
+The [canonical baseline report](database-canonical-baseline-2026-09-08.md) and
+linked [upgrade rehearsal](database-baseline-rehearsal-2026-09-08.md),
 [empty replay](database-empty-replay-2026-09-08.md) and
-[reference/lint report](database-reference-lint-2026-09-08.md) retain detailed
-preservation evidence and verification limits. Hosted canonical ledger adoption
-and production cutover remain separate, unfinished work.
+[reference/lint evidence](database-reference-lint-2026-09-08.md) record unchanged
+archived history, full schema replay, all 6,467 static reference rows, reviewed
+function/ACL contracts and preservation of original values. Staging received
+only the rehearsed compatible preference/security expansion, preserving its
+hosted migration ledger. API and worker still run `65d2cc2d9`; earlier containers
+are retained for rollback. Production and the old testing database are preserved.
 
-The [Beacon push-only preference](beacon-push-preference-2026-09-08.md) is now
-implemented across schema/API/web/iOS/Android on draft
-[PR #12](https://github.com/WangPantopus/skinny-pantopus/pull/12). Source revision
-`65d2cc2d9ab4857e044325315f0023a6d8f4bf54` has fully passing
-[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34295357368).
-Targeted checks include 53 backend tests, privacy gates, four web tests and
-TypeScript, 16 iOS tests, 24 Android tests, eight SQL contracts and six real
-integrations. Native formatting/static checks pass.
+### First unfinished work after integration
 
-The rehearsed compatible forward changes are applied only to staging: the new
-preference column, restrictive Beacon Post policy and service-only grants for
-three reviewed maintenance RPCs. Existing preference values and the hosted
-migration ledger retained their fingerprints. API and worker now run
-`65d2cc2d9ab4857e044325315f0023a6d8f4bf54`, both healthy, with previous containers
-retained for rollback. All 20 fresh live API checks pass, including real anonymous/
-authenticated PostgREST denial, in-app/WebSocket continuity during push opt-out,
-no replay, exact return, mute and access restrictions. These checks used a
-fresh token-free follower and sent no device alerts.
+1. Finish native Beacon composer publication and remaining notification states
+   using iOS simulators, Android emulators and isolated staging API fixtures.
+   Cover live session/login return, natural expiry, chat destinations and token
+   lifecycle; preserve the already revoked test sessions. Physical Android is
+   unavailable, and simulator-only results cannot establish hardware delivery.
+2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
+   sandbox payments and address verification. Use existing/free capacity.
+3. Complete the remaining production upgrade/ledger, external-file recovery and
+   deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
+   reachable-feature acceptance. Keep actual production cutover distinct from
+   preparation and preserve records, balances and entitlements.
 
-Android native preference acceptance now passes. Its settings saved off/restore;
-the muted publication had no alert/provider send during 72 seconds but remained
-in-app and opened the exact post. Restore delivered only the new publication,
-whose notification opened the exact post and public author; the muted post was
-not replayed. The audience was limited to the designated emulator and token-free
-API follower. Original preferences were restored and compared; normal logout
-removed the Android token. Scoped cleanup removed 11 posts, 12 notifications,
-one Beacon and two fresh accounts. The two original device accounts, prior
-notifications and iPhone registration were preserved.
-The emulator is closed. Signed iPhone and Android staging builds pass.
-The native walkthrough exposed inactive menu/notification callbacks on Android's
-first-run Hub. Revision `8022e9b05253a91a579f52e883e067514843234a` repairs them;
-formatting, static checks and the staging build pass. Actual first-run menu →
-settings → notification preferences navigation now works without a home. Its
-[new CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34298026294)
-fully passes at that application revision. The later documentation checkpoint
-does not change application code. On resume, the signed staging iPhone build was
-verified and installed successfully on the designated device. A fresh synthetic
-owner/Beacon now has only the iPhone account as a follower; original preferences
-and the existing APNs registration are recorded for preservation. Only that
-owner and designated iPhone account are in the beta list; global/internal
-enablement remains false. The owner reported initial native toggle saves failed
-before later attempts saved. The installed app was reverified, and the API now
-holds Beacon push off with global push on. Investigation found an iOS Socket.IO
-auth payload mismatch and repeated refreshes exhausting the shared write budget.
-The corrected handshake passes a live staging comparison; 50 targeted iOS tests
-pass, including bounded socket recovery, session refresh and preference saves.
-Revision `e328c33580a1e01f2629210668a1a29de303d80d` is pushed to PR #12;
-its [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34302923001)
-fully passes. The repaired signed staging build passed and was installed
-successfully; its signature, endpoints and current device registration match.
-The owner now confirms the repaired app saved and Beacon push is off. Independent
-reads agree, preserving global push and unrelated settings. Native traffic shows
-two authenticated socket connections, two preference writes and only one refresh;
-the earlier startup burst is absent. One I-off publication has now been sent to
-the sole iPhone follower. Its audience row and exact API destination pass; no APNs
-acceptance receipt was recorded during 71 seconds. The owner confirms no alert
-and the exact retained in-app return, completing I-off. The first restore attempt
-was guarded because server push remained off. The owner subsequently reopened
-settings, confirmed a durable on value and backgrounded the app; fresh API reads
-agreed. I-restored was then sent once at 06:41 UTC. Its single audience row and
-exact API destination pass; APNs attempted and accepted one token. The owner
-confirms only the new notification arrived and opened that exact post, with no
-I-off replay. I-off still had zero provider receipts at 12,032 seconds. Scoped
-cleanup removed two posts, three notifications, the fresh Beacon/membership and
-creator account. Original iPhone preferences, its account, one APNs registration
-and two prior notifications were preserved. Global/internal enablement remains
-false and the beta list is empty. Both current preference fixtures are now
-cleaned up; do not reuse their deleted creators/Beacons. Prior confirmed iPhone
-cases do not need repeating. Two current-source iOS simulator UI checks also
-pass: post-login exact return and muted Following → exact Beacon post, using
-isolated API fixtures. They do not certify live expired-session recovery. Physical
-Android remains unavailable. Documentation-head
-[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34307328711)
-failed on iPhone SE because a settings test used a fixed delay and left its save
-running into a later test. The test now awaits the save task; all 16 settings tests
-pass five repetitions (80 executions), along with formatting and strict lint.
-[Full PR #12 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319484968)
-passes at `289612d4e37b4b40a4b6753d6f837dca41e5b353`, including iPhone SE.
-Installed application code remains at the previously verified revision.
-The later documentation checkpoint `d33a33c1a20c47111017d3c6ea0e1f67ded182e7`
-also has fully passing [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34322453803).
-
-The next [platform milestone](notification-platform-verification-2026-09-09.md)
-passes Android OS permission denial, retained in-app exact return, permission
-restore and delivery without replay through live staging/FCM. A fresh isolated
-Android-only fixture exposed a
-real bug: login succeeds but loses the requested post and opens Hub. The repair
-now passes 148 targeted tests and a fresh live notification → sign-in → exact
-post repeat. Its account-bound arrival clears after successful load. Scoped
-cleanup removed four posts, five notifications, the fresh Beacon and creator;
-normal logout removed the Android token. Original account/device/preferences/OS
-permission are preserved, global/internal flags remain false and beta is empty.
-Formatting, Detekt, Android lint and the staging build pass; the owned emulator
-is closed after cleanup. Draft [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14)
-contains application fix `9c443b69afb4e0b488491f4d895fcee55ab9cc3c` on
-`codex/notification-session-return`, based on PR #12's `d33a33c1a` checkpoint.
-Its [CI checks](https://github.com/WangPantopus/skinny-pantopus/pull/14/checks)
-are pending. Check them before integration; the source order is #13 → retarget
-#12 to master → retarget #14 to master after #12. None has been merged in this
-continuation. Then continue the remaining platform states below.
-Keep the already revoked sessions revoked; preserve other sessions and the
-original AuthDevice. The iPhone preference
-fixture is already cleaned up, and its completed checks need no repetition.
-
-Preserve global/internal feature disablement, unrelated local work and both
-release/migration switches. Only fresh synthetic fixtures and designated device
-accounts may enter the test audience. Do not run baseline DDL on a populated
-hosted database or treat this compatible staging expansion as ledger adoption.
-
-Beacon repairs remain on `codex/beacon-full-journey` in
-`/private/tmp/pantopus-beacon-journey`. Baseline prerequisite work is recorded on
-`codex/database-baseline-adoption`. Its continuing isolated worktree at
-`/private/tmp/pantopus-database-baseline-adoption` now uses child branch
-`codex/notification-session-return` for the Android continuation repair, branched
-from `codex/beacon-push-preference` after its completed preference acceptance,
-based on the Beacon branch so its current handoff/evidence are retained. The main
-checkout and all other worktrees/ignored artifacts are preserved.
-[PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), merged into the
-Beacon branch but not yet master, contains the canonical source baseline, archived history and required
-database CI in addition to diagnostics, SQL contracts and sanitized evidence.
-It does not adopt a hosted ledger or deploy the private forward candidate.
-
-Start a new session by:
-
-1. Refreshing Git, PRs #12–#14/CI and staging observations; preserve unrelated work.
-2. Reading the [remaining Beacon preference contract](beacon-full-journey-2026-09-08.md#remaining-beacon-preference-contract)
-   and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
-   Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
-   read the [reference/lint decision](database-reference-lint-2026-09-08.md), then
-   read the [canonical milestone](database-canonical-baseline-2026-09-08.md) and
-   verify its exact-head database CI.
-   Existing permissions are preserved; new role grants are a separate change.
-   Normal-role replay, Home boundaries, explicit ACLs, Beacon storage/RPC
-   restrictions and local SQL/integration checks already pass. Read the
-   [preference milestone and staging plan](beacon-push-preference-2026-09-08.md),
-   verify its CI, then continue OS-permission/session/token lifecycle acceptance.
-   Android/API and iPhone preference fixtures and the separate Android platform
-   fixture are cleaned up. Inspect the private checkpoint and finish checks on
-   the [session-return repair](notification-platform-verification-2026-09-09.md)
-   before creating another fixture. Native composer, iPhone OS permission/live
-   session return, natural expiry, chat-session and remaining token lifecycle
-   coverage remain open; physical Android requires hardware.
-   Do not mutate frozen history.
-3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
-   Prior fixtures are cleaned up; create fresh isolated fixtures only for the
-   next concrete test and verify the audience before sending. Physical Android
-   requires hardware; the iPhone cases already recorded do not need repeating.
-
-Suggested new-session prompt:
-
-> Read AGENTS.md and docs/PROJECT_HANDOFF.md, inspect the current branch and PR/CI
-> state, and continue the first unfinished priority. Preserve unrelated local
-> work and both existing databases. Start with the Beacon staging journey if
-> integration is complete. Update the handoff when the milestone is finished.
+Start each continuation by fetching origin, checking PR/master CI and staging
+state, and reading the linked report for the next concrete case. All current
+Beacon/device fixtures are cleaned up; never reuse their deleted creators,
+Beacons or post IDs. Read the private operator checkpoint before sending or
+mutating. No user device observation is currently pending.
 
 ## Decisions to preserve
 
