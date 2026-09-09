@@ -27,6 +27,22 @@ authenticated request's session.
 - Privacy gates passed. This matrix uses the test database/storage adapters;
   it does not certify hosted storage or replace live authorization acceptance.
 
+## Current Home Documents API
+
+The current `/api/homes/:id/documents` routes had the same membership-only gap.
+They now require `docs.view`/`docs.upload`. Manager visibility follows the active
+role; sensitive visibility follows its current IAM permission and overrides.
+Old occupancy booleans no longer grant those scopes. Create requests validate
+category, title and visibility, and cannot target a scope the caller cannot
+see. Dashboard document counts use the same permission and visibility bounds.
+
+All 18 additional document/dashboard regressions pass (the original document
+routes failed all 16 initial cases). Together with the legacy cases there are
+36 new regressions; 76 targeted Home access tests and all **4,376 backend tests**
+pass. The final full run had no failures; 16 pre-existing tests and one suite
+remain skipped. Final privacy gates pass. This supersedes the earlier transient
+socket result above.
+
 ## Remaining storage work
 
 The staging Supabase project has no buckets, while current native upload routes
@@ -37,3 +53,10 @@ remain capabilities until expiration. This repair gates listing and upload,
 not revocation of already-issued download URLs. Complete the download lifetime,
 authorized retrieval and live upload/delete matrix before declaring storage
 acceptance complete. No hosted file, bucket or production state changed here.
+
+The current iOS and Android “Upload document” forms were also found to retain
+only filename/type/size, POST a metadata record, then report “Document uploaded.”
+They send no file bytes. Completing authenticated upload/download and replacing
+that success path is the next concrete development milestone. Raw client-supplied
+storage references in the metadata endpoint must be verified or rejected before
+a download service can trust them. No file-byte delivery is claimed here.

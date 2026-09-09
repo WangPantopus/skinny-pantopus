@@ -93,14 +93,16 @@ hostname and completing browser email links. PR #17's iOS CI passed; Android
 caught two old email-copy screenshot baselines, now being updated and verified.
 PR #16's merged-master CI passed in full.
 
-The [Home file access repair](home-file-access-2026-09-09.md) now enforces the
-actual document permission result for private listing and uploads, including
-former occupants and explicit denials. Eighteen new regression tests and privacy
-gates pass. The full backend run passed 4,357 tests with one unrelated transient
-socket failure; all 30 tests in that failing suite passed on targeted rerun.
-This is source/test evidence; storage provider setup and live file access remain
-unfinished. The isolated worktree is `/private/tmp/pantopus-home-file-access`,
-branch `codex/home-file-access`.
+The [Home file access repair](home-file-access-2026-09-09.md),
+[PR #19](https://github.com/WangPantopus/skinny-pantopus/pull/19), now enforces
+both legacy file and current document permissions, manager/sensitive visibility,
+and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
+4,376 backend tests and privacy gates pass. The next concrete gap is native
+Home document upload: both clients currently save metadata without bytes and
+report success. Complete real scoped upload/retrieval on existing/free storage,
+including retry and revoked-access denial. Hosted storage is not yet certified.
+The active isolated worktree is `/private/tmp/pantopus-home-file-access`, branch
+`codex/home-file-access`. PR #18 carries the verified web image/origin change.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
