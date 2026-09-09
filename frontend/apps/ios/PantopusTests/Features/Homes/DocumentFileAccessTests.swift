@@ -69,4 +69,45 @@ final class DocumentFileAccessTests: XCTestCase {
         XCTAssertNil(denied)
         XCTAssertNil(vm.content)
     }
+
+    func testConfirmedDeletionDismissesAndRemovesExportWithoutReloadingDeletedContent() async throws {
+        for status in [200, 202] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: documents), .status(200, body: "private bytes"),
+                .status(status, body: #"{"deleted":true,"cleanup_pending":true}"#)
+            ]
+            let vm = makeVM()
+            let exported = await vm.exportFile()
+            let url = try XCTUnwrap(exported)
+            await vm.delete()
+            XCTAssertTrue(vm.shouldDismiss)
+            XCTAssertFalse(vm.isMutating)
+            XCTAssertNil(vm.content)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+            vm.acknowledgeDismiss()
+            await vm.load()
+            await vm.delete()
+            XCTAssertFalse(vm.shouldDismiss)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 3)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.httpMethod, "DELETE")
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.url?.path, "/api/homes/home-1/documents/doc-1")
+        }
+    }
+
+    func testDeniedFailedAndUnconfirmedDeletionNeverDismissOrKeepPrivateContent() async {
+        for (status, body) in [(403, "{}"), (503, "{}"), (200, "{}"), (200, #"{"deleted":false,"cleanup_pending":false}"#)] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: documents), .status(200, body: "private bytes"), .status(status, body: body)
+            ]
+            let vm = makeVM()
+            await vm.load()
+            await vm.delete()
+            XCTAssertFalse(vm.shouldDismiss)
+            XCTAssertFalse(vm.isMutating)
+            XCTAssertNil(vm.content)
+            guard case .error = vm.state else { return XCTFail("Deletion failure was treated as success") }
+        }
+    }
 }

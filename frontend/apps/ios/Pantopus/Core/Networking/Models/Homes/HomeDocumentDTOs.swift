@@ -116,6 +116,17 @@ public struct CreateDocumentResponse: Decodable, Sendable {
     public let document: HomeDocumentDTO
 }
 
+/// Deletion is committed even when private object cleanup is still pending.
+public struct DeleteDocumentResponse: Decodable, Sendable {
+    public let deleted: Bool
+    public let cleanupPending: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case deleted
+        case cleanupPending = "cleanup_pending"
+    }
+}
+
 /// Request body for `POST /api/homes/:id/documents`. Backend rejects
 /// the call without `doc_type` + `title`.
 public struct CreateDocumentRequest: Encodable, Sendable {

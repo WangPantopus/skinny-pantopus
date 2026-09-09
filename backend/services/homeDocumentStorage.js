@@ -82,4 +82,12 @@ async function download({ homeId, documentId, sha256, bucketName }) {
   return downloadBytes(bucket, key, sha256);
 }
 
-module.exports = { upload, download, documentKey, MAX_DOCUMENT_BYTES, MIME_TYPES, storageError };
+async function remove({ homeId, documentId, sha256, bucketName }) {
+  const key = documentKey(homeId, documentId, sha256);
+  const { name, bucket } = await privateBucket();
+  if (bucketName !== name) throw storageError('DOCUMENT_STORAGE_MISMATCH', 'Document storage could not be verified.');
+  const { error } = await bucket.remove([key]);
+  if (error) throw storageError('DOCUMENT_DELETE_UNAVAILABLE', 'Could not finish removing the stored file.');
+}
+
+module.exports = { upload, download, remove, documentKey, MAX_DOCUMENT_BYTES, MIME_TYPES, storageError };

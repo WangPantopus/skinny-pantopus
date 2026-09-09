@@ -129,6 +129,17 @@ member IAM rows; fixture-only grants permit this test, without certifying the
 unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
 as `fd8a94eef727342340fc522f7196e6e64814ed08`.
 
+[PR #20](https://github.com/WangPantopus/skinny-pantopus/pull/20) is ready for
+review at `92173368c`; all checks except the still-running Android quality/build
+job have passed. Continue checking its actual final state before merging. The
+same worktree now uses `codex/home-document-lifecycle`. The
+[lifecycle report](home-document-lifecycle-2026-09-09.md) records completed native
+Delete wiring, atomic quota release/tombstones and direct database access guards.
+All 4,425 backend tests, privacy gates, SQL contract, real concurrent deletion,
+function lint, 33 Android and 17 iOS focused tests pass. Isolated staging and
+native deletion acceptance are next, followed by replacement, abandoned upload
+cleanup and quota enforcement across different upload IDs.
+
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
 `/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,

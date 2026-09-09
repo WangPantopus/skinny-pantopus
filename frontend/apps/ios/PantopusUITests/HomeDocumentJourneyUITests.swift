@@ -36,6 +36,26 @@ final class HomeDocumentJourneyUITests: XCTestCase {
     }
 
     func testMemberOpensSharedDocumentAndSharesTheRealFile() throws {
+        try openDocument()
+        tap("documentDetailShare")
+        let save = app.cells["Save to Files"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 20), "The system did not receive a file to share")
+    }
+
+    func testMemberDeletesDocumentAndListRefreshes() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["DOCUMENT_TEST_DELETE"] == "1", "Requires a disposable document")
+        try openDocument()
+        tap("documentDetailDelete")
+        let confirm = app.sheets.buttons["Delete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        XCTAssertTrue(element("documentsList").waitForExistence(timeout: 20))
+        let row = try app.staticTexts[XCTUnwrap(inputs["DOCUMENT_TEST_TITLE"])].firstMatch
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: row)
+        waitForExpectations(timeout: 20)
+    }
+
+    private func openDocument() throws {
         app.launch()
         try signIn()
         if element("place.homeTools").waitForExistence(timeout: 5) {
@@ -58,9 +78,6 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         XCTAssertTrue(element("documentDetailTitle").waitForExistence(timeout: 20))
         XCTAssertEqual(element("documentDetailTitle").label, title)
         XCTAssertTrue(element("documentDetailPreview").exists)
-        tap("documentDetailShare")
-        let save = app.cells["Save to Files"].firstMatch
-        XCTAssertTrue(save.waitForExistence(timeout: 20), "The system did not receive a file to share")
     }
 
     private func signIn() throws {

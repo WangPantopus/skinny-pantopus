@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.homes.CreateHomeResponse
 import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.CreatePackageRequest
 import app.pantopus.android.data.api.models.homes.CreatePollRequest
+import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
@@ -341,6 +342,13 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Path("documentId") documentId: String,
     ): ResponseBody
+
+    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:168`. */
+    @DELETE("api/homes/{id}/documents/{documentId}")
+    suspend fun deleteHomeDocument(
+        @Path("id") homeId: String,
+        @Path("documentId") documentId: String,
+    ): DeleteDocumentResponse
 
     /** `GET /api/homes/:id/packages` — route `backend/routes/home.js:4673`. */
     @GET("api/homes/{id}/packages")
