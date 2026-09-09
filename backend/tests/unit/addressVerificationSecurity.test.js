@@ -34,7 +34,11 @@ function seedAddress() {
 beforeEach(() => {
   resetTables();
   mockDispatchPostcard.mockReset();
-  mockDispatchPostcard.mockResolvedValue({ success: true, vendorJobId: 'psc_1' });
+  mockDispatchPostcard.mockImplementation(async (jobId) => {
+    const job = getTable('MailVerificationJob').find((row) => row.id === jobId);
+    if (job) { job.vendor_job_id = 'psc_1'; job.vendor_status = 'sent'; }
+    return { success: true, vendorJobId: 'psc_1' };
+  });
   seedAddress();
 });
 

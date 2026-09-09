@@ -254,6 +254,11 @@ function getTable(name) {
 }
 
 function seedTable(name, rows) {
+  if (name === 'AddressVerificationToken') {
+    // This nullable database column defaults to SQL NULL, not undefined.
+    tables[name] = rows.map((row) => ({ used_at: null, ...row }));
+    return;
+  }
   if (isPersonaFollowView(name)) {
     tables[PERSONA_MEMBERSHIP_TABLE] = rows.map(reverseProjectFollowAsMembership);
     return;
@@ -728,6 +733,7 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {

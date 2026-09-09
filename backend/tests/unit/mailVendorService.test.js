@@ -745,12 +745,58 @@ describe('MailVendorService', () => {
 
       const result = await service.dispatchPostcard('job-1');
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Network timeout');
+      expect(result.deliveryUnknown).toBe(true);
 
-      // Job should be marked as failed
+      // An uncertain receipt must remain reconcilable
       const jobs = getTable('MailVerificationJob');
       const job = jobs.find((j) => j.id === 'job-1');
-      expect(job.vendor_status).toBe('failed');
+      expect(job.vendor_status).toBe('delivery_unknown');
+    });
+
+    test('concurrent dispatch workers send a job only once', async () => {
+      seedJobData();
+      const results = await Promise.all([
+        service.dispatchPostcard('job-1', '123456'),
+        service.dispatchPostcard('job-1', '123456'),
+      ]);
+      expect(mockProvider.sendPostcard).toHaveBeenCalledTimes(1);
+      expect(results.some((r) => r.success)).toBe(true);
+      expect(getTable('MailVerificationJob')[0].vendor_job_id).toBe('mock_psc_1');
+    });
+
+    test('a claimed job is never replayed after the provider key has expired', async () => {
+      seedJobData();
+      getTable('MailVerificationJob')[0].vendor_status = 'dispatching';
+      getTable('MailVerificationJob')[0].updated_at = '2026-01-01T00:00:00Z';
+      const result = await service.dispatchPostcard('job-1', '123456');
+      expect(result.deliveryUnknown).toBe(true);
+      expect(mockProvider.sendPostcard).not.toHaveBeenCalled();
+    });
+
+    test('a failed receipt write is uncertain, and retry does not print again', async () => {
+      seedJobData();
+      const db = require('../../config/supabaseAdmin');
+      const originalFrom = db.from.bind(db);
+      const spy = jest.spyOn(db, 'from').mockImplementation((table) => {
+        const q = originalFrom(table);
+        const update = q.update.bind(q);
+        q.update = (value) => {
+          update(value);
+          if (table === 'MailVerificationJob' && value.vendor_job_id) {
+            q.then = (resolve) => Promise.resolve({ data: null, error: { message: 'Receipt write unavailable' } }).then(resolve);
+          }
+          return q;
+        };
+        return q;
+      });
+      try {
+        const first = await service.dispatchPostcard('job-1', '123456');
+        expect(first.deliveryUnknown).toBe(true);
+        expect(first.success).toBe(false);
+        const second = await service.dispatchPostcard('job-1', '123456');
+        expect(second.deliveryUnknown).toBe(true);
+        expect(mockProvider.sendPostcard).toHaveBeenCalledTimes(1);
+      } finally { spy.mockRestore(); }
     });
 
     test('passes correct address to provider', async () => {
@@ -766,6 +812,7 @@ describe('MailVendorService', () => {
         }),
         '123456',
         'address_verification_v1',
+        { jobId: 'job-1' },
       );
     });
 
@@ -803,6 +850,7 @@ describe('MailVendorService', () => {
         expect.objectContaining({ line2: 'Apt 3B' }),
         '654321',
         undefined,
+        { jobId: 'job-unit' },
       );
     });
   });
@@ -1053,6 +1101,19 @@ describe('Lob webhook route', () => {
     );
   });
 
+  test('a transient webhook failure releases its claim for the next delivery', async () => {
+    mailVendorService.processWebhookEvent.mockResolvedValueOnce({ success: false, retryable: true });
+    const event = { id: 'evt_retry', event_type: { id: 'postcard.created' }, body: { id: 'psc_retry' } };
+    const first = mockRes();
+    await handler(mockReq(event), first);
+    expect(first._status).toBe(503);
+    expect(getTable('LobWebhookEvent')).toHaveLength(0);
+    const second = mockRes();
+    await handler(mockReq(event), second);
+    expect(second._status).toBe(200);
+    expect(mailVendorService.processWebhookEvent).toHaveBeenCalledTimes(2);
+  });
+
   test('returns 400 for invalid JSON', async () => {
     const req = mockReq('not-json{{{');
     const res = mockRes();
@@ -1185,7 +1246,7 @@ describe('Lob webhook route', () => {
     expect(res._json.received).toBe(true);
   });
 
-  test('returns 200 on processing exception', async () => {
+  test('requests a retry on processing exception', async () => {
     mailVendorService.processWebhookEvent.mockRejectedValue(new Error('DB error'));
 
     const event = {
@@ -1197,9 +1258,9 @@ describe('Lob webhook route', () => {
     const res = mockRes();
     await handler(req, res);
 
-    expect(res._status).toBe(200);
-    expect(res._json.received).toBe(true);
-    expect(res._json.error).toBe('DB error');
+    expect(res._status).toBe(503);
+    expect(res._json.received).toBeUndefined();
+    expect(res._json.error).not.toContain('DB error');
   });
 
   test('supports alternative event format with type and reference_id', async () => {

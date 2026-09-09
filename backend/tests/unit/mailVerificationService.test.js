@@ -34,9 +34,10 @@ beforeEach(() => {
   resetTables();
   mockAttach.mockClear();
   mockDispatchPostcard.mockClear();
-  mockDispatchPostcard.mockResolvedValue({
-    success: true,
-    vendorJobId: 'mock-vendor-job-1',
+  mockDispatchPostcard.mockImplementation(async (jobId) => {
+    const job = getTable('MailVerificationJob').find((row) => row.id === jobId);
+    if (job) { job.vendor_job_id = 'mock-vendor-job-1'; job.vendor_status = 'sent'; }
+    return { success: true, vendorJobId: 'mock-vendor-job-1' };
   });
   mockAttach.mockResolvedValue({
     success: true,
@@ -122,6 +123,28 @@ function seedToken(overrides = {}) {
 // ============================================================
 
 describe('startVerification', () => {
+  test('an uncertain retry cannot substitute a different unit', async () => {
+    seedAddress();
+    mockDispatchPostcard.mockResolvedValueOnce({ success: false, deliveryUnknown: true });
+    const first = await service.startVerification('user-1', 'addr-1', 'Unit 4');
+    expect(first.delivery_unknown).toBe(true);
+    const retry = await service.startVerification('user-1', 'addr-1', 'Unit 5');
+    expect(retry).toMatchObject({ success: false, statusCode: 409 });
+    expect(mockDispatchPostcard).toHaveBeenCalledTimes(1);
+    expect(getTable('MailVerificationJob')[0].metadata.unit).toBe('Unit 4');
+  });
+  test('a missing admission RPC fails closed without dispatch or partial records', async () => {
+    seedAddress();
+    const { setRpcMock } = require('../__mocks__/supabaseAdmin');
+    setRpcMock(async () => ({ data: null, error: { code: 'PGRST202' } }));
+    const result = await service.startVerification('user-1', 'addr-1');
+    expect(result).toMatchObject({ success: false, statusCode: 503 });
+    expect(mockDispatchPostcard).not.toHaveBeenCalled();
+    expect(getTable('AddressVerificationAttempt')).toHaveLength(0);
+    expect(getTable('AddressVerificationToken')).toHaveLength(0);
+    expect(getTable('MailVerificationJob')).toHaveLength(0);
+  });
+
   test('succeeds with valid address and no conflicts', async () => {
     seedAddress();
 
@@ -159,14 +182,14 @@ describe('startVerification', () => {
     expect(tokens[0].resend_count).toBe(0);
   });
 
-  test('creates MailVerificationJob with pending status', async () => {
+  test('creates MailVerificationJob and records the dispatch receipt', async () => {
     seedAddress();
 
     await service.startVerification('user-1', 'addr-1');
 
     const jobs = getTable('MailVerificationJob');
     expect(jobs).toHaveLength(1);
-    expect(jobs[0].vendor_status).toBe('pending');
+    expect(jobs[0].vendor_status).toBe('sent');
     expect(jobs[0].metadata.code).toBeUndefined();
     expect(mockDispatchPostcard.mock.calls[0][1]).toMatch(/^\d{6}$/);
   });
@@ -319,7 +342,7 @@ describe('startVerification', () => {
       {
         id: 'existing-1',
         user_id: 'user-1',
-        address_id: 'addr-1',
+        address_id: 'other-address',
         method: 'mail_code',
         status: 'created',
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -329,7 +352,7 @@ describe('startVerification', () => {
       {
         id: 'existing-2',
         user_id: 'user-1',
-        address_id: 'addr-1',
+        address_id: 'other-address',
         method: 'mail_code',
         status: 'sent',
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -349,7 +372,7 @@ describe('startVerification', () => {
     seedTable('AddressVerificationAttempt', [{
       id: 'existing-1',
       user_id: 'user-1',
-      address_id: 'addr-1',
+      address_id: 'other-address',
       method: 'mail_code',
       status: 'created',
       expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),

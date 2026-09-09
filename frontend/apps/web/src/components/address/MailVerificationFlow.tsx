@@ -220,6 +220,8 @@ function MailVerifyPending({
   resendsRemaining,
   maxResends,
   error,
+  deliveryUnknown,
+  onCheckDelivery,
   onEnterCode,
   onResend,
   onSwitchMethod,
@@ -232,12 +234,14 @@ function MailVerifyPending({
   resendsRemaining: number;
   maxResends: number;
   error: string | null;
+  deliveryUnknown: boolean;
+  onCheckDelivery: () => void;
   onEnterCode: () => void;
   onResend: () => void;
   onSwitchMethod?: () => void;
   onBack: () => void;
 }) {
-  const canResend = cooldownSeconds <= 0 && resendsRemaining > 0;
+  const canResend = !deliveryUnknown && cooldownSeconds <= 0 && resendsRemaining > 0;
 
   return (
     <div className="space-y-4 animate-fade-in-up">
@@ -251,10 +255,11 @@ function MailVerifyPending({
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-app-text">Code sent!</h3>
+            <h3 className="text-lg font-semibold text-app-text">{deliveryUnknown ? 'Checking mail delivery' : 'Code sent!'}</h3>
             <p className="text-sm text-app-text-secondary mt-1">
-              A verification code is on its way
-              {normalized ? ` to ${normalized.line1}` : ''}.
+              {deliveryUnknown
+                ? 'Your verification is saved, but mailing is not confirmed yet. If the postcard arrives, you can enter its code here.'
+                : `A verification code is on its way${normalized ? ` to ${normalized.line1}` : ''}.`}
             </p>
           </div>
         </div>
@@ -297,11 +302,11 @@ function MailVerifyPending({
         {/* Secondary: Resend */}
         <button
           type="button"
-          onClick={onResend}
-          disabled={!canResend}
+          onClick={deliveryUnknown ? onCheckDelivery : onResend}
+          disabled={!deliveryUnknown && !canResend}
           className="mt-2 w-full px-4 py-3 border border-app-border text-app-text-strong rounded-xl font-medium hover:bg-app-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {cooldownSeconds > 0
+          {deliveryUnknown ? 'Check delivery status' : cooldownSeconds > 0
             ? `Resend code (${formatCountdown(cooldownSeconds)})`
             : resendsRemaining > 0
               ? 'Resend code'
@@ -767,6 +772,8 @@ export default function MailVerificationFlow({
       resendsRemaining={mail.resendsRemaining}
       maxResends={mail.maxResends}
       error={mail.error}
+      deliveryUnknown={mail.deliveryUnknown}
+      onCheckDelivery={mail.refreshDeliveryStatus}
       onEnterCode={handleEnterCode}
       onResend={mail.resendCode}
       onSwitchMethod={onSwitchMethod}

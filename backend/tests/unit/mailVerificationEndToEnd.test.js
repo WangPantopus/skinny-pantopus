@@ -162,3 +162,109 @@ describe('mail verification, end to end', () => {
     expect(getTable('HomeOccupancy')).toHaveLength(0);
   });
 });
+
+describe('uncertain mail delivery', () => {
+  test('a lost receipt replays the identical keyed request and keeps the printed code valid', async () => {
+    let first = true;
+    global.fetch = jest.fn(async (url, options) => {
+      lobRequests.push({ url, body: JSON.parse(options.body), options });
+      if (first) { first = false; throw new Error('Response lost after acceptance'); }
+      return { ok: true, json: async () => ({ id: 'psc_one_card' }) };
+    });
+    const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(start.success).toBe(true);
+    expect(lobRequests).toHaveLength(2);
+    expect(lobRequests[0].options.body).toBe(lobRequests[1].options.body);
+    expect(lobRequests[0].options.headers['Idempotency-Key']).toBe(lobRequests[1].options.headers['Idempotency-Key']);
+    expect(lobRequests[0].body.metadata.pantopus_verification_job_id).toBe(getTable('MailVerificationJob')[0].id);
+    expect((await mailVerificationService.confirmCode(start.attempt_id, codeOnTheMailedPostcard(), USER_ID)).verified).toBe(true);
+  });
+
+  test('a permanently lost receipt preserves proof and repeated start/resend sends no more mail', async () => {
+    global.fetch = jest.fn(async (url, options) => {
+      lobRequests.push({ url, body: JSON.parse(options.body) });
+      throw new Error('Response lost after acceptance');
+    });
+    const first = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(first).toMatchObject({ success: false, delivery_unknown: true, statusCode: 503 });
+    expect(getTable('AddressVerificationAttempt')).toHaveLength(1);
+    expect(getTable('AddressVerificationToken')).toHaveLength(1);
+    expect(getTable('MailVerificationJob')[0].vendor_status).toBe('delivery_unknown');
+    expect(lobRequests).toHaveLength(3);
+    const second = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(second.verification_id).toBe(first.verification_id);
+    const resend = await mailVerificationService.resendCode(first.verification_id, USER_ID);
+    expect(resend.delivery_unknown).toBe(true);
+    expect(lobRequests).toHaveLength(3);
+    expect((await mailVerificationService.confirmCode(first.verification_id, codeOnTheMailedPostcard(), USER_ID)).verified).toBe(true);
+  });
+
+  test('a signed-provider correlation recovers the lost receipt without another postcard', async () => {
+    global.fetch = jest.fn(async (url, options) => {
+      lobRequests.push({ url, body: JSON.parse(options.body) });
+      throw new Error('Receipt lost');
+    });
+    const first = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    const vendor = require('../../services/addressValidation/mailVendorService');
+    const result = await vendor.processWebhookEvent('psc_recovered', 'postcard.created', {
+      body: { id: 'psc_recovered', object: 'postcard', metadata: lobRequests[0].body.metadata },
+    });
+    expect(result.success).toBe(true);
+    const resumed = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(resumed.success).toBe(true);
+    expect(resumed.verification_id).toBe(first.verification_id);
+    expect(getTable('MailVerificationJob')[0].vendor_job_id).toBe('psc_recovered');
+    expect(lobRequests).toHaveLength(3);
+  });
+
+  test('ordinary repeated start returns the same verification without printing again', async () => {
+    const first = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    const again = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(again.success).toBe(true);
+    expect(again.verification_id).toBe(first.attempt_id);
+    expect(lobRequests).toHaveLength(1);
+    expect(getTable('AddressVerificationToken')).toHaveLength(1);
+  });
+
+  test('definitively rejected mail is not reported as uncertain and can be retried', async () => {
+    global.fetch = jest.fn(async () => ({ ok: false, status: 422 }));
+    const result = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    expect(result.success).toBe(false);
+    expect(result.delivery_unknown).toBeUndefined();
+    expect(getTable('MailVerificationJob')).toHaveLength(0);
+    expect(getTable('AddressVerificationToken')).toHaveLength(0);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('an uncertain resend keeps the newly mailed code and original unit', async () => {
+    const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID, 'Unit 4');
+    const oldCode = codeOnTheMailedPostcard();
+    getTable('AddressVerificationToken')[0].cooldown_until = new Date(0).toISOString();
+    global.fetch = jest.fn(async (url, options) => {
+      lobRequests.push({ url, body: JSON.parse(options.body) });
+      throw new Error('Resend receipt lost');
+    });
+    const resent = await mailVerificationService.resendCode(start.attempt_id, USER_ID);
+    expect(resent.delivery_unknown).toBe(true);
+    const newCode = lobRequests[1].body.back.match(/\b(\d{6})\b/)[1];
+    expect(lobRequests[1].body.to.address_line2).toBe('Unit 4');
+    const again = await mailVerificationService.resendCode(start.attempt_id, USER_ID);
+    expect(again.delivery_unknown).toBe(true);
+    expect(lobRequests).toHaveLength(4);
+    expect(getTable('AddressVerificationToken')[0].resend_count).toBe(1);
+    expect((await mailVerificationService.confirmCode(start.attempt_id, oldCode, USER_ID)).verified).toBe(false);
+    expect((await mailVerificationService.confirmCode(start.attempt_id, newCode, USER_ID)).verified).toBe(true);
+  });
+});
+
+test('simultaneous new starts admit one attempt and print one postcard', async () => {
+  const results = await Promise.all([
+    mailVerificationService.startVerification(USER_ID, ADDRESS_ID),
+    mailVerificationService.startVerification(USER_ID, ADDRESS_ID),
+  ]);
+  expect(getTable('AddressVerificationAttempt')).toHaveLength(1);
+  expect(getTable('AddressVerificationToken')).toHaveLength(1);
+  expect(getTable('MailVerificationJob')).toHaveLength(1);
+  expect(lobRequests).toHaveLength(1);
+  expect(new Set(results.map((r) => r.verification_id || r.attempt_id)).size).toBe(1);
+});

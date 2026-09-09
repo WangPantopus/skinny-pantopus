@@ -118,6 +118,10 @@ router.post('/', async (req, res) => {
     );
 
     if (!result.success) {
+      if (result.retryable) {
+        if (event.id) await supabaseAdmin.from('LobWebhookEvent').delete().eq('lob_event_id', event.id);
+        return res.status(503).json({ error: 'Mail status could not be saved. Please retry.' });
+      }
       // Still return 200 to prevent Lob from retrying for "not found" cases
       logger.warn('Lob webhook: event processing issue', {
         postcardId,
@@ -135,8 +139,10 @@ router.post('/', async (req, res) => {
       stack: err.stack,
     });
 
-    // Return 200 to prevent infinite retries
-    return res.json({ received: true, error: err.message });
+    // Release this event's claim so Lob can retry a transient processing
+    // failure instead of permanently acknowledging a lost receipt.
+    if (event.id) await supabaseAdmin.from('LobWebhookEvent').delete().eq('lob_event_id', event.id);
+    return res.status(503).json({ error: 'Mail status could not be saved. Please retry.' });
   }
 });
 

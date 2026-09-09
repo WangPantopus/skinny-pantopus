@@ -86,8 +86,56 @@ class MailVerificationService {
         jobId,
         error: error.message,
       });
-      return { success: false, error: `Mail provider error: ${error.message}` };
+      return { success: false, deliveryUnknown: true, error: 'Mail dispatch outcome is unknown' };
     }
+  }
+
+  _deliveryUnknown(attemptId, addressId) {
+    return {
+      success: false,
+      statusCode: 503,
+      delivery_unknown: true,
+      verification_id: attemptId,
+      address_id: addressId,
+      error: 'Mail delivery is not confirmed yet. Your verification is saved. '
+        + 'If the postcard arrives, its code will still work. Please check again before requesting more mail.',
+    };
+  }
+
+  async _latestMailJob(attemptId) {
+    const { data, error } = await supabaseAdmin.from('MailVerificationJob')
+      .select('*').eq('attempt_id', attemptId)
+      .order('created_at', { ascending: false }).limit(MAX_RESENDS + 1);
+    // Resend number breaks ties when two jobs share the same timestamp.
+    const jobs = (data || []).sort((a, b) =>
+      (b.metadata?.resend_number || 0) - (a.metadata?.resend_number || 0)
+      || new Date(b.created_at) - new Date(a.created_at));
+    return { job: jobs[0], error };
+  }
+
+  async _existingVerification(userId, addressId, unit) {
+    const { data: attempts, error } = await supabaseAdmin
+      .from('AddressVerificationAttempt')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('address_id', addressId)
+      .eq('method', 'mail_code')
+      .in('status', ACTIVE_STATUSES)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return { success: false, statusCode: 503, error: 'Unable to check existing mail verification' };
+    const attempt = attempts?.[0];
+    if (!attempt) return null;
+    const { job, error: jobError } = await this._latestMailJob(attempt.id);
+    if (jobError || !job) {
+      return this._deliveryUnknown(attempt.id, addressId);
+    }
+    if ((job.metadata?.unit || '') !== (unit || '')) {
+      return { success: false, statusCode: 409, error: 'A mail verification is already active. Finish it before changing the unit.' };
+    }
+    if (!job.vendor_job_id) return this._deliveryUnknown(attempt.id, addressId);
+    return this.getVerificationStatus(attempt.id, userId);
   }
 
   // ================================================================
@@ -131,6 +179,9 @@ class MailVerificationService {
       return { success: false, error: conflictCheck.reason };
     }
 
+    const existing = await this._existingVerification(userId, addressId, unit);
+    if (existing) return existing;
+
     // ── 3. User rate limit (2 starts per 24 hours) ──────────
     const userRateCheck = await this._checkUserRateLimit(userId);
     if (userRateCheck.exceeded) {
@@ -153,82 +204,45 @@ class MailVerificationService {
     const code = this._generateCode();
     const codeHash = this._hashCode(code);
 
-    const expiresAt = new Date(Date.now() + CODE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-    const cooldownUntil = new Date(Date.now() + RESEND_COOLDOWN_HOURS * 60 * 60 * 1000);
-
-    // ── 6. Create AddressVerificationAttempt ─────────────────
-    const { data: attempt, error: attemptErr } = await supabaseAdmin
-      .from('AddressVerificationAttempt')
-      .insert({
-        user_id: userId,
-        address_id: addressId,
-        method: 'mail_code',
-        status: 'created',
-        risk_tier: 'low',
-        expires_at: expiresAt.toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (attemptErr) {
-      logger.error('MailVerificationService.startVerification: attempt insert failed', {
-        userId, addressId, error: attemptErr.message,
-      });
-      return { success: false, error: 'Failed to create verification attempt' };
-    }
-
-    // ── 7. Create AddressVerificationToken ───────────────────
-    const { error: tokenErr } = await supabaseAdmin
-      .from('AddressVerificationToken')
-      .insert({
-        attempt_id: attempt.id,
-        code_hash: codeHash,
+    // Admission and both postage budgets are atomic across API processes.
+    // There is deliberately no fallback to separate inserts if the matching
+    // migration is missing or its transaction fails.
+    const { data: admission, error: admissionError } = await supabaseAdmin.rpc('admit_mail_verification', {
+      p_user_id: userId,
+      p_address_id: addressId,
+      p_job_id: crypto.randomUUID(),
+      p_code_hash: codeHash,
+      p_unit: unit || null,
+      p_template_id: addressConfig.lob.postcardTemplateId || null,
+      p_policy: {
+        code_expiry_days: CODE_EXPIRY_DAYS,
+        cooldown_hours: RESEND_COOLDOWN_HOURS,
         max_attempts: MAX_ATTEMPTS,
-        attempt_count: 0,
-        resend_count: 0,
-        cooldown_until: cooldownUntil.toISOString(),
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (tokenErr) {
-      logger.error('MailVerificationService.startVerification: token insert failed', {
-        attemptId: attempt.id, error: tokenErr.message,
-      });
-      await supabaseAdmin
-        .from('AddressVerificationAttempt')
-        .delete()
-        .eq('id', attempt.id);
-      return { success: false, error: 'Failed to create verification token' };
+        user_rate_limit: USER_RATE_LIMIT,
+        user_window_hours: USER_RATE_WINDOW_HOURS,
+        address_rate_limit: ADDRESS_RATE_LIMIT,
+        address_window_days: ADDRESS_RATE_WINDOW_DAYS,
+        user_address_rate_limit: USER_ADDRESS_RATE_LIMIT,
+      },
+    });
+    if (admissionError || !admission) {
+      logger.error('MailVerificationService.startVerification: admission failed', { userId, addressId });
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
     }
-
-    // ── 8. Create MailVerificationJob ────────────────────────
-    const { data: job, error: jobErr } = await supabaseAdmin
-      .from('MailVerificationJob')
-      .insert({
-        attempt_id: attempt.id,
-        vendor: 'pending',
-        template_id: addressConfig.lob.postcardTemplateId || null,
-        vendor_status: 'pending',
-        metadata: {
-          address_id: addressId,
-          unit: unit || null,
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (jobErr) {
-      logger.error('MailVerificationService.startVerification: job insert failed', {
-        attemptId: attempt.id, error: jobErr.message,
-      });
-      await this._deleteAttemptArtifacts(attempt.id);
-      return { success: false, error: 'Failed to create mail verification job' };
+    if (admission.error) {
+      if (admission.error === 'ADDRESS_NOT_FOUND') return { success: false, error: 'Address not found' };
+      if (['USER_RATE_LIMIT', 'ADDRESS_RATE_LIMIT', 'USER_ADDRESS_RATE_LIMIT'].includes(admission.error)) {
+        return { success: false, statusCode: 429, error: 'Rate limit exceeded: too many verification requests. Try again later.' };
+      }
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
+    }
+    if (admission.reused) {
+      return await this._existingVerification(userId, addressId, unit)
+        || this._deliveryUnknown(admission.attempt_id, addressId);
+    }
+    const { attempt, job } = admission;
+    if (!attempt?.id || !job?.id) {
+      return { success: false, statusCode: 503, error: 'Failed to create mail verification job' };
     }
 
     const dispatchResult = await this._dispatchVerificationJob(job?.id, code, {
@@ -252,6 +266,9 @@ class MailVerificationService {
         reasons: [dispatchResult.error || 'dispatch_failed'],
       });
 
+      if (dispatchResult.deliveryUnknown) {
+        return this._deliveryUnknown(attempt.id, addressId);
+      }
       await this._deleteAttemptArtifacts(attempt.id);
       return { success: false, error: 'Failed to send verification mail' };
     }
@@ -274,8 +291,8 @@ class MailVerificationService {
       verification_id: attempt.id,
       address_id: addressId,
       status: 'pending',
-      expires_at: expiresAt.toISOString(),
-      cooldown_until: cooldownUntil.toISOString(),
+      expires_at: attempt.expires_at,
+      cooldown_until: admission.cooldown_until,
       max_resends: MAX_RESENDS,
       resends_remaining: MAX_RESENDS,
     };
@@ -327,6 +344,11 @@ class MailVerificationService {
       return { success: false, error: 'Verification token not found' };
     }
 
+    const { job: previousJob, error: jobsError } = await this._latestMailJob(attemptId);
+    if (jobsError || (previousJob && !previousJob.vendor_job_id)) {
+      return this._deliveryUnknown(attemptId, attempt.address_id);
+    }
+
     // ── 3. Check cooldown ────────────────────────────────────
     if (token.cooldown_until && new Date(token.cooldown_until) > new Date()) {
       return {
@@ -350,7 +372,7 @@ class MailVerificationService {
       : new Date(attempt.expires_at);
 
     // ── 6. Update token with new code ────────────────────────
-    const { error: updateErr } = await supabaseAdmin
+    const { data: rotated, error: updateErr } = await supabaseAdmin
       .from('AddressVerificationToken')
       .update({
         code_hash: newCodeHash,
@@ -358,11 +380,16 @@ class MailVerificationService {
         cooldown_until: newCooldownUntil.toISOString(),
         attempt_count: 0, // reset entry attempts on resend
       })
-      .eq('id', token.id);
+      .eq('id', token.id)
+      .eq('code_hash', token.code_hash)
+      .eq('resend_count', token.resend_count)
+      .eq('attempt_count', token.attempt_count)
+      .is('used_at', null)
+      .select('id');
 
-    if (updateErr) {
+    if (updateErr || !rotated?.length) {
       logger.error('MailVerificationService.resendCode: token update failed', {
-        attemptId, error: updateErr.message,
+        attemptId, error: updateErr?.message,
       });
       return { success: false, error: 'Failed to update verification token' };
     }
@@ -403,12 +430,15 @@ class MailVerificationService {
     const { data: job, error: jobErr } = await supabaseAdmin
       .from('MailVerificationJob')
       .insert({
+        id: crypto.randomUUID(),
         attempt_id: attemptId,
         vendor: 'pending',
+        vendor_job_id: null,
         template_id: addressConfig.lob.postcardTemplateId || null,
         vendor_status: 'pending',
         metadata: {
           address_id: attempt.address_id,
+          unit: previousJob?.metadata?.unit || null,
           resend_number: token.resend_count + 1,
         },
         created_at: new Date().toISOString(),
@@ -458,6 +488,9 @@ class MailVerificationService {
         jobId: job?.id || null,
         error: dispatchResult.error,
       });
+      if (dispatchResult.deliveryUnknown) {
+        return this._deliveryUnknown(attemptId, attempt.address_id);
+      }
       await supabaseAdmin
         .from('MailVerificationJob')
         .delete()
@@ -550,11 +583,15 @@ class MailVerificationService {
         .eq('id', attemptId);
     }
 
+    const { job, error: jobError } = status === 'pending'
+      ? await this._latestMailJob(attempt.id) : {};
+    const deliveryUnknown = status === 'pending' && (jobError || !job?.vendor_job_id);
     return {
       success: true,
       verification_id: attempt.id,
       address_id: attempt.address_id,
       status,
+      ...(deliveryUnknown && { delivery_unknown: true }),
       expires_at: attempt.expires_at,
       cooldown_until: token.cooldown_until,
       max_resends: MAX_RESENDS,
@@ -645,6 +682,8 @@ class MailVerificationService {
       .update({ attempt_count: newAttemptCount })
       .eq('id', token.id)
       .eq('attempt_count', token.attempt_count)
+      .eq('code_hash', token.code_hash)
+      .is('used_at', null)
       .select('id');
 
     // Fail closed on both arms. If the increment errored, `claimed` is null and

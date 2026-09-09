@@ -16,20 +16,50 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
-**Next active work:** `/private/tmp/pantopus-staging-provider-acceptance`, branch
-`codex/staging-provider-acceptance`. PR #25 merged as `fab8869b2` after full CI;
-its merged-master checks are pending. The new [provider report](staging-provider-acceptance-2026-09-09.md)
-records Google validation success, Smarty's inactive-subscription response, and
-disabled staging Google/Apple OAuth. No address was claimed. Lob test creation
-exposed a missing required mail purpose; the repair now passes 105 focused and
-4,466 total backend tests, privacy gates, and real Lob test creation/read/deletion.
-Real address-provider failure/retry and claim denial also pass; all disposable
-address/review rows are cleaned up. The private candidate is now `9f37ca975`
-(`94a41144a829`), with its prior image retained. Next finish application mail-code
-dispatch/confirmation and uncertain-send retry, then remaining OAuth/payment
-acceptance. An existing Smarty account inquiry is pending;
-continue independent work without purchasing a plan. The earlier vendor worktree
-and all completed fixtures remain preserved.
+**Next active work:** `/private/tmp/pantopus-staging-mail-retry`, branch
+`codex/staging-mail-retry`, starting from merged master `635f57571`.
+[PR #26](https://github.com/WangPantopus/skinny-pantopus/pull/26) merged at
+18:19 UTC after [all required checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34387534158)
+passed at `b9f1e1174`. PR #25 is also merged; merged-master checks remain under
+observation. The [provider report](staging-provider-acceptance-2026-09-09.md)
+records Google validation success, Smarty's inactive subscription, disabled
+staging Google/Apple OAuth, and successful Lob test creation/read/deletion.
+The mail-purpose repair passes 105 focused and 4,466 backend tests plus privacy
+gates. Address-provider failure/retry and claim denial pass; disposable provider
+fixtures are cleaned. The private candidate remains `9f37ca975` (`94a41144a829`);
+public staging API/worker and browser API are separate and unchanged.
+
+The [mail recovery report](staging-mail-recovery-2026-09-09.md) records a completed
+real Lob test lost-response journey: three keyed requests produced one postcard,
+API retries retained proof, foreign/wrong-code access was denied, a signed
+synthetic webhook recovered the receipt, and exact code confirmation created
+one member occupancy. Disposable mail/Home/proof/webhook fixtures are cleaned,
+original Home document IDs are preserved, and fixture sessions are revoked.
+Private candidate `593cfbafa` (`6465d0406c2d`) is healthy; public/browser runtimes
+remain unchanged. Draft [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27)
+passed its initial CI. PR #26's merged-master CI also passed.
+
+Atomic admission is committed as `a00629db1`, with its additive function applied
+only to Free staging and its absent ledger/existing mail/file records preserved.
+The matching private image `7cd158c515ed` is healthy. Three real parallel HTTP
+starts returned one verification, token, job and provider postcard; an extra
+write hit the existing limiter, and read-only status recovered the same receipt.
+Disposable mail/address/proof fixtures and their actor session are cleaned.
+All 13 SQL contracts, 119 application functions/73 trigger bindings, nine competing
+PostgreSQL connections, 4,480 backend tests and privacy gates pass. A last guard
+prevents changing units during an uncertain retry; its 88 focused tests pass,
+and final current-head CI remains required before merging PR #27.
+
+Next finish PR #27 integration, then validate the separate native ownership mail
+path and multi-unit completion before remaining payment/OAuth acceptance. The
+public browser source and externally delivered Lob callbacks have not received
+this private-candidate proof. No owner device observation is pending.
+
+The owner confirmed no active Smarty subscription and plans to obtain one for
+testing and launch. Activation plus real DPV/unit/eligibility/error/access retests
+is a required prelaunch step. A one-time reminder is scheduled for September 10
+at 9 a.m. Pacific. Continue independent work without purchasing a plan. Preserve
+the unrelated main-checkout design work and PR #24.
 
 **Current continuation:** staging account/vendor work is isolated in
 `/private/tmp/pantopus-staging-vendor-acceptance`, branch
@@ -283,17 +313,15 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Continue staging browser signup/recovery/verification, real OAuth callbacks,
-   reachable sandbox payments and address verification. The frontend hostname/TLS
-   and OAuth provider setup remain unresolved; use existing/free capacity.
-   A fresh browser check still shows Cloudflare's sign-in page. No credentials
-   were entered and no DNS changed; continue independent vendor checks.
-2. Monitor [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) and
-   merge it only after current-head CI passes. Home replacement's backend/database,
-   live isolated API and both native picker → replace → same document → exact Share
-   journeys pass. Both disposable documents and the temporary manage grant are
-   cleaned; original five Home documents and quotas remain. The public runtime
-   has not received this private-candidate work.
+1. Complete application mail-code dispatch/confirmation and uncertain-send
+   recovery, then reachable sandbox payment UI/transactions and real OAuth
+   callbacks. Browser signup/recovery and staging hostname/TLS now pass.
+   Smarty needs an existing active subscription; Google/Apple staging OAuth
+   remains disabled. Use existing/free capacity.
+2. PRs #23, #25 and #26 are merged after their required checks passed. Continue
+   monitoring merged-master CI. Home replacement, saved-card API retry and Lob
+   mail-purpose acceptance are recorded in their reports; public runtime
+   deployment remains separate from this source integration.
 3. Complete the production upgrade/ledger, external-file recovery and
    deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
    reachable-feature acceptance. Keep actual production cutover distinct from

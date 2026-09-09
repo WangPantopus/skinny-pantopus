@@ -131,7 +131,7 @@ class LobMailProvider {
    * @param {string} [templateId] - optional Lob template ID (falls back to inline HTML)
    * @returns {Promise<{vendorJobId: string, status: string}>}
    */
-  async sendPostcard(address, code, templateId) {
+  async sendPostcard(address, code, templateId, options = {}) {
     if (!this.isAvailable()) {
       throw new Error('Lob API key not configured');
     }
@@ -151,6 +151,7 @@ class LobMailProvider {
       },
       from: getReturnAddress(),
       size: POSTCARD_SIZE,
+      ...(options.jobId && { metadata: { pantopus_verification_job_id: options.jobId } }),
     };
 
     // Use a Lob template only when a real one is configured. Lob template ids
@@ -182,26 +183,49 @@ class LobMailProvider {
       });
     }
 
-    const res = await fetch(`${LOB_API_URL}/postcards`, {
+    const request = {
       method: 'POST',
       headers: {
         Authorization: authHeader(this.apiKey),
         'Content-Type': 'application/json',
+        ...(options.jobId && { 'Idempotency-Key': `pantopus-verification-${options.jobId}` }),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      logger.error('LobMailProvider.sendPostcard: API error', {
-        status: res.status,
-        body: text,
-      });
-      throw new Error(`Lob API error: ${res.status}`);
+    };
+    // Replay only this in-memory, identical payload with the same key. Lob
+    // forgets keys after 24 hours, so this is deliberately not a persisted
+    // retry queue. An unresolved outcome is retained for reconciliation.
+    let data;
+    let possiblyAccepted = false;
+    for (let attempt = 0; attempt < (options.jobId ? 3 : 1); attempt += 1) {
+      let retryAfterMs = 1000;
+      try {
+        const res = await fetch(`${LOB_API_URL}/postcards`, {
+          ...request,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        if (!res.ok) {
+          await res.body?.cancel();
+          const error = new Error(`Lob API error: ${res.status}`);
+          error.definitelyRejected = [400, 401, 402, 403, 404, 422, 429].includes(res.status);
+          error.retryable = res.status === 429 || res.status >= 500;
+          if (res.status === 429) retryAfterMs = 5000;
+          throw error;
+        }
+        data = await res.json();
+        if (typeof data.id !== 'string' || !data.id.startsWith('psc_')) {
+          throw new Error('Lob returned no postcard receipt');
+        }
+        break;
+      } catch (error) {
+        possiblyAccepted ||= error.definitelyRejected !== true;
+        error.definitelyRejected = !possiblyAccepted && error.definitelyRejected === true;
+        if (!options.jobId || attempt === 2 || error.retryable === false) throw error;
+        // Definitive input/auth rejections are not transient.
+        if (error.definitelyRejected && !error.retryable) throw error;
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+      }
     }
-
-    const data = await res.json();
 
     logger.info('LobMailProvider.sendPostcard: created', {
       postcardId: data.id,
