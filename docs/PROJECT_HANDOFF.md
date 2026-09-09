@@ -39,17 +39,20 @@ The private candidate runs `a00629db1` (`7cd158c515ed`); the last unit guard at
 web remain separate, older runtimes. Externally delivered Lob callbacks remain
 unverified; the signed synthetic callback is not that evidence.
 
-The [native postcard report](staging-native-mail-2026-09-09.md) records the next
-request-reliability milestone: atomic per-user/Home admission, saved unit,
-idempotent provider dispatch, uncertain receipt preservation and own read-only
-status. It passes 4,497 backend tests, privacy gates, all 14 SQL contracts and ten
-competing PostgreSQL connections. Its migration is local-clone only; no running
-candidate changed. Native UI changes remain unverified in progress.
+The [native postcard report](staging-native-mail-2026-09-09.md) records atomic
+request admission and confirmation: unit/receipt preservation, member role
+ceiling, revoked/frozen/changed-address denial, rollback and retry safety.
+Confirmation passes 4,509 backend tests plus privacy gates; a final request guard
+passes all 29 focused mail tests. All 15 SQL contracts and 22 competing PostgreSQL
+connections pass. Both migrations remain local-clone only. iOS passes 43 focused
+tests; Android passes 39, with final quality/build work underway. Transient
+confirmation throttling still needs a distinct native UI result.
 
-Next finish native UI validation and atomic confirmation/access restrictions,
-then real synthetic provider/simulator acceptance and modern multi-unit
-completion before remaining payment/OAuth checks. Do not equate safe request
-admission with completed native verification. No owner device observation is pending.
+Next commit/push the checked backend, apply guarded migrations to Free staging
+and build a private candidate on existing capacity. Complete native gates and
+real synthetic provider/simulator acceptance before source integration. Then
+finish modern multi-unit attachment and remaining payment/OAuth acceptance.
+No public runtime or owner device observation changed.
 
 The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
 browser synthetic email entry/recovery, cookies/CSRF, session revocation and

@@ -56,6 +56,14 @@ BEGIN
  UPDATE public."HomePostcardCode" SET status='cancelled' WHERE id=(result->'postcard'->>'id')::uuid;
  result := public.admit_home_postcard('eee00000-0000-4000-8000-000000000084','eee00000-0000-4000-8000-000000000081',repeat('d',64));
  IF result->>'error' IS DISTINCT FROM 'USER_LIMIT' THEN RAISE EXCEPTION 'User budget bypassed after definitive failures'; END IF;
+ UPDATE public."Home" SET security_state='frozen' WHERE id='eee00000-0000-4000-8000-000000000084';
+ result:=public.admit_home_postcard('eee00000-0000-4000-8000-000000000084','eee00000-0000-4000-8000-000000000083',repeat('d',64));
+ IF result->>'error' IS DISTINCT FROM 'HOME_RESTRICTED' THEN RAISE EXCEPTION 'Frozen home could spend postage'; END IF;
+ UPDATE public."Home" SET security_state='normal' WHERE id='eee00000-0000-4000-8000-000000000084';
+ INSERT INTO public."HomeOccupancy"(home_id,user_id,is_active) VALUES ('eee00000-0000-4000-8000-000000000084','eee00000-0000-4000-8000-000000000083',false);
+ result:=public.admit_home_postcard('eee00000-0000-4000-8000-000000000084','eee00000-0000-4000-8000-000000000083',repeat('d',64));
+ IF result->>'error' IS DISTINCT FROM 'HOME_RESTRICTED' THEN RAISE EXCEPTION 'Revoked user could spend postage'; END IF;
+
 END $$;
 RESET ROLE;
 

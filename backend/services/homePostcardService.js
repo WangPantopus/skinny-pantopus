@@ -37,6 +37,7 @@ async function request(homeId, userId) {
   });
   if (error || !admission) return fail(503, 'Could not save your postcard request. Please retry.', 'POSTCARD_ADMISSION_UNAVAILABLE');
   if (admission.error) {
+    if (admission.error === 'HOME_RESTRICTED') return fail(403, 'Postcard verification is unavailable for this home access. Contact the household for approval.', admission.error);
     if (admission.error === 'HOME_NOT_FOUND') return fail(404, 'Home not found.', admission.error);
     if (admission.error === 'ADDRESS_INCOMPLETE') return fail(422, 'This home needs a complete mailing address.', admission.error);
     if (['ADDRESS_LIMIT', 'USER_LIMIT'].includes(admission.error)) {
@@ -90,4 +91,44 @@ async function processWebhookEvent(vendorJobId, eventType, event) {
     .filter('vendor_job_id', card.vendor_job_id ? 'eq' : 'is', card.vendor_job_id || null).select('id');
   return { success: !saveError && !!saved?.length, retryable: !!saveError || !saved?.length };
 }
-module.exports = { request, status, processWebhookEvent };
+async function confirm(homeId, userId, code) {
+  const { applyOccupancyTemplate } = require('../utils/homePermissions');
+  const templates = {};
+  for (const band of ['adult', 'child', 'teen', 'provisional']) {
+    const prepared = await applyOccupancyTemplate(homeId, userId, 'member',
+      band === 'provisional' ? 'provisional' : 'verified',
+      { dryRun: true, ageBand: band === 'provisional' ? null : band });
+    templates[band] = prepared.template;
+  }
+  const { data, error } = await supabaseAdmin.rpc('confirm_home_postcard', {
+    p_home_id: homeId, p_user_id: userId, p_submitted_hash: hashPostcardCode(code),
+    p_templates: templates, p_validity_days: require('../utils/verificationAge').validityDays(),
+  });
+  if (error || !data) return fail(503, 'Could not complete verification. Your code is preserved; please retry.', 'POSTCARD_CONFIRM_UNAVAILABLE');
+  const errors = {
+    NO_POSTCARD: [404, 'No pending verification code found.'],
+    EXPIRED: [410, 'Verification code has expired. Request a new one.'],
+    LOCKED: [429, 'Too many attempts. Request a new code.'],
+    WRONG_CODE: [400, 'Invalid code.'],
+    ACCESS_REVOKED: [403, 'This postcard cannot restore revoked access. Contact the household for approval.'],
+    ADDRESS_CHANGED: [409, 'This home address changed after the postcard request. Contact support before continuing.'],
+  };
+  if (data.error) {
+    const known = errors[data.error];
+    const result = fail(known?.[0] || 503, known?.[1] || 'Could not complete verification. Please retry.', data.error);
+    if (data.error === 'WRONG_CODE') result.body.attempts_remaining = data.attempts_remaining;
+    return result;
+  }
+  if (!data.occupancy?.id || data.occupancy.is_active !== true) {
+    return fail(503, 'Could not confirm your membership. Please retry.', 'POSTCARD_CONFIRM_UNAVAILABLE');
+  }
+  const occupancy = data.occupancy;
+  return { status: 200, reused: data.reused === true, body: {
+    message: occupancy.verification_status === 'verified'
+      ? 'Verification successful! You are now a verified member.'
+      : 'Verification successful! Existing members have 7 days to review your access.',
+    occupancy, verification_status: occupancy.verification_status,
+    challenge_window_ends_at: occupancy.challenge_window_ends_at || null,
+  } };
+}
+module.exports = { request, status, processWebhookEvent, confirm };

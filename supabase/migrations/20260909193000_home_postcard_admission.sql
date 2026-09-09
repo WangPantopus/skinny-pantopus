@@ -23,6 +23,14 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('home-postcard:home:' || p_home_id::text, 0));
   SELECT * INTO v_home FROM public."Home" WHERE id=p_home_id FOR SHARE;
   IF NOT FOUND THEN RETURN jsonb_build_object('error','HOME_NOT_FOUND'); END IF;
+  IF v_home.security_state IN ('frozen','frozen_silent')
+    OR EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=p_home_id AND user_id=p_user_id
+      AND (is_active IS DISTINCT FROM true OR end_at IS NOT NULL OR access_end_at<=now()
+        OR access_start_at>now() OR verification_status IN ('suspended','suspended_challenged','inactive','moved_out')))
+    OR (SELECT status FROM public."HomeResidencyClaim" WHERE home_id=p_home_id AND user_id=p_user_id
+      ORDER BY created_at DESC,id DESC LIMIT 1)='rejected' THEN
+    RETURN jsonb_build_object('error','HOME_RESTRICTED');
+  END IF;
   IF nullif(trim(v_home.address),'') IS NULL OR nullif(trim(v_home.city),'') IS NULL
     OR nullif(trim(v_home.state),'') IS NULL OR nullif(trim(v_home.zipcode),'') IS NULL THEN
     RETURN jsonb_build_object('error','ADDRESS_INCOMPLETE');

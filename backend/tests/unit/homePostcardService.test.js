@@ -115,3 +115,9 @@ test('modern correlation cannot bind a native card', async () => {
   expect((await service.processWebhookEvent('psc_native', 'postcard.created', event)).success).toBe(false);
   expect(db.getTable('HomePostcardCode')[0].vendor_job_id).toBeNull();
 });
+
+test('frozen or revoked household access cannot spend postage', async () => {
+  db.setRpcMock(async () => ({ data: { error: 'HOME_RESTRICTED' }, error: null }));
+  expect((await service.request('home', 'user')).status).toBe(403);
+  expect(dispatchPostcardCode).not.toHaveBeenCalled();
+});

@@ -39,18 +39,49 @@ Verification so far:
 - Ten competing PostgreSQL connections pass same-request reuse, per-user and
   per-Home caps; six expected proofs are created and all local fixtures removed.
 
+## Confirmation and access milestone
+
+A second service-only RPC now consumes attempts and commits proof, residency,
+member permissions and audit evidence together. Wrong guesses increment under a
+row lock; five exhaust the proof. An injected audit failure after proof and
+occupancy writes rolls the entire transaction back, leaving the same code usable.
+Four concurrent correct submissions create one occupancy and consume one attempt;
+eight concurrent wrong guesses stop at five and cannot be bypassed by the correct
+code afterward. All local fixtures are cleaned.
+
+A self-claimed owner receives at most member access. Existing independently
+verified membership is preserved, including its role and verification age.
+Existing household authorities retain the seven-day provisional review window;
+retries do not reset it. Removed/suspended/timed-out access, rejected residency,
+frozen Homes and changed mailing destinations are denied. Child restrictions
+survive the shared permission template. Frozen/revoked requesters are denied
+before postage is spent. Preexisting postcard rows without a saved destination
+retain legacy verification compatibility; their historical destination cannot be
+reconstructed or newly certified by this migration.
+
+Confirmation passes 4,509 backend tests and privacy gates; the first full run
+encountered an unrelated notification device-ID socket hang-up, and its targeted
+and full reruns passed. A final restricted-request guard adds one regression;
+all 29 focused mail request/confirmation tests pass after that guard. All 15 SQL
+contracts and function lint pass (121 application functions, 73 trigger bindings,
+the same reviewed PostGIS findings/warnings). Twelve competing confirmation
+connections pass, in addition to the ten admission connections.
+
 ## Remaining work and limits
 
-Native changes are in progress: remove sample tracking from the live screens,
-show saved/uncertain/empty/error state, read-only refresh, and stop treating
-400/429 request failures as successful mailing. They are not yet built or tested.
-Confirmation still needs atomic attempt consumption and occupancy attachment,
-role/access restrictions, destination binding and idempotent retry. Do not treat
-the request milestone as completed native end-to-end acceptance.
+Native UI changes remove sample tracking from live screens, add read-only
+saved/uncertain/empty/error status, and stop interpreting general request failures
+as mailed postcards. iOS passes 43 focused tests and strict Swift lint. Android
+passes 39 focused tests; a single Detekt magic-number finding was corrected and
+quality/build gates are running. Transient confirmation throttles still need an
+explicit UI distinction from an exhausted code before native completion.
 
-This migration is applied only to the disposable local clone; Free staging and
-all running candidates remain unchanged. No real provider postcard or native
-app acceptance has run for this branch. Public API/worker/browser runtimes remain
-separate. External Lob callbacks, modern multi-unit completion and remaining
-payment/OAuth acceptance are still open. Smarty activation and the real DPV/unit
-retest remain required before launch, with the owner's reminder scheduled.
+Both migrations are applied only to the disposable local clone; Free staging
+and all running candidates remain unchanged. Next commit the checked backend,
+apply it with before/after data and ledger guards to Free staging, then build a
+private candidate on existing capacity. Finish native gates and live synthetic
+provider/simulator acceptance before merging the complete branch. No real
+provider postcard or native live acceptance has run for this branch. Public
+API/worker/browser runtimes remain separate. Externally delivered Lob callbacks,
+modern multi-unit completion and remaining payment/OAuth acceptance are open.
+Smarty activation and a real DPV/unit retest remain required before launch.
