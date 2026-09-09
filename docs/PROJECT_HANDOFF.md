@@ -85,6 +85,14 @@ branch `codex/staging-web-delivery`. The container build now accepts an explicit
 public app origin as well as the API origin, keeping staging links isolated.
 The image build and hostname/TLS setup are pending.
 
+The [staging web report](staging-web-delivery-2026-09-09.md) records a successful
+production image build and six entry/account pages served on the existing host,
+loopback only. The image has verified staging origins and a sandbox Stripe key.
+Cloudflare sign-in is pending before configuring the currently absent frontend
+hostname and completing browser email links. PR #17's iOS CI passed; Android
+caught two old email-copy screenshot baselines, now being updated and verified.
+PR #16's merged-master CI passed in full.
+
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
 `/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
@@ -141,8 +149,8 @@ are retained for rollback. Production and the old testing database are preserved
 
 1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
-   The native Beacon, natural-expiry and chat return milestones now pass; finish
-   fixture cleanup and retain explicit platform/build limits. Preserve revoked
+   The native Beacon, natural-expiry, chat return and fixture cleanup milestones
+   now pass; retain explicit platform/build limits. Preserve revoked
    session state and evidence. Physical Android is
    unavailable, and simulator-only results cannot establish hardware delivery.
 2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
@@ -155,7 +163,7 @@ are retained for rollback. Production and the old testing database are preserved
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical
 Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. The fresh simulator fixture above remains active. Read the
+Beacons or post IDs. The simulator fixture above is also cleaned. Read the
 private operator checkpoint before sending or
 mutating. No user device observation is currently pending.
 
