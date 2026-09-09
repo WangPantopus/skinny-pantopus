@@ -61,8 +61,19 @@ is parked for natural token expiry; its dedicated simulator must remain
 untouched until the private runner's elapsed-time guard passes. The
 [chat continuation repair](chat-notification-continuation-2026-09-09.md) now
 passes 220 iOS unit tests, four post/chat expiry/revocation UI journeys and
-190 Android tests. Android ktlint/Detekt pass; staging APK/lint and live
-Android chat return are active next checks.
+190 Android tests. Android ktlint/Detekt, staging APK/lint and actual FCM
+notification → security sign-in → exact chat return pass. Unread clears,
+normal logout removes all fresh fixture tokens, and its global push is restored
+off. The owned Android emulator is closed; its revoked session remains revoked.
+PR #16 is ready/open with CI running. Natural iOS expiry remains parked.
+Independent account-delivery work is in `/private/tmp/pantopus-staging-account-delivery`,
+branch `codex/staging-account-delivery`: staging has no SMTP transport and both
+Supabase OAuth providers are disabled. The [account delivery repair](staging-account-delivery-2026-09-09.md) passes
+all 4,338 backend tests and privacy gates. Missing/unreachable SMTP now fails
+before account lookup; late registration delivery failure preserves the account
+with explicit resend guidance. Native/web acknowledgements no longer promise
+delivery from a request alone. Strict Swift lint/format pass. SMTP capture, live
+verification/recovery and final frontend CI remain next; no runtime update yet.
 No iPhone observation is pending. Update
 this handoff after each meaningful milestone.
 

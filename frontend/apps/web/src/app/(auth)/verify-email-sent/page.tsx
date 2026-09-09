@@ -34,7 +34,7 @@ function VerifyEmailSentPageContent() {
     setStatus('');
     try {
       const res = await api.auth.resendVerification(email, redirectTo);
-      setStatus(res?.message || 'If that email exists, a verification email has been sent.');
+      setStatus(res?.message || 'If that email needs verification, we will attempt to send a new link.');
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setStatus(extractApiError(err, 'Could not resend verification email.'));

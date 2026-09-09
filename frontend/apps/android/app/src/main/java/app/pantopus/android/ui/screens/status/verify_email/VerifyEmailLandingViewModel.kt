@@ -131,7 +131,7 @@ class VerifyEmailLandingViewModel
                         it.copy(
                             isResending = false,
                             resendCooldownUntilEpochMs = nextCooldown,
-                            toast = ResendToast("Verification email sent.", isError = false),
+                            toast = ResendToast("Verification link requested.", isError = false),
                         )
                     }
                 } catch (e: AuthError) {

@@ -1375,7 +1375,7 @@ const isEmailAvailable = async (email, excludeUserId = null) => {
 
 /**
  * POST /api/users/register
- * Register a new user with auto-login
+ * Register a new user and deliver an email-verification link.
  */
 router.post(
   '/register',
@@ -1403,6 +1403,12 @@ router.post(
     logger.info('Registration attempt', { email, username });
 
     try {
+      if (!(await emailService.checkDeliveryAvailability()).available) {
+        return res.status(503).json({
+          code: 'EMAIL_UNAVAILABLE',
+          error: 'Email delivery is temporarily unavailable. Please try again later.',
+        });
+      }
       // ============ VALIDATION ============
 
       // If dateOfBirth is provided, enforce 18+
@@ -1637,6 +1643,7 @@ router.post(
       // ============ SEND VERIFICATION EMAIL ============
       // Sent through our own SMTP (admin.generateLink already returned
       // the hashed token when the auth user was created).
+      let verificationEmailSent = false;
       if (authData.hashedToken) {
         try {
           const verifyLink = buildVerifyEmailUrl(req, authData.hashedToken, email, 'signup');
@@ -1645,6 +1652,7 @@ router.post(
             verifyLink,
             isResend: false,
           });
+          verificationEmailSent = sendResult?.success === true;
           if (!sendResult?.success) {
             logger.error('Verification email send failed', { email, error: sendResult?.error });
           }
@@ -1653,6 +1661,17 @@ router.post(
         }
       } else {
         logger.error('No hashedToken from signup — verification email not sent', { email });
+      }
+
+      if (!verificationEmailSent) {
+        // Preserve the account: delivery can fail after SMTP accepts a message.
+        // A resend can recover without creating or deleting another identity.
+        return res.status(503).json({
+          code: 'VERIFICATION_EMAIL_UNAVAILABLE',
+          accountCreated: true,
+          requiresEmailVerification: true,
+          error: 'Your account was created, but the verification email could not be sent. Request a new link from the sign-in screen.',
+        });
       }
 
       res.status(201).json({
@@ -3456,6 +3475,12 @@ router.post('/resend-verification', resendVerificationLimiter, validate(resendVe
   const email = req.body?.email;
 
   try {
+    if (!(await emailService.checkDeliveryAvailability()).available) {
+      return res.status(503).json({
+        code: 'EMAIL_UNAVAILABLE',
+        error: 'Email delivery is temporarily unavailable. Please try again later.',
+      });
+    }
     const { data: existingUser, error: lookupError } = await supabaseAdmin
       .from('User')
       .select('id, verified')
@@ -3464,7 +3489,7 @@ router.post('/resend-verification', resendVerificationLimiter, validate(resendVe
 
     if (lookupError) {
       logger.warn('Resend verification: user lookup failed', { email, error: lookupError.message });
-      return res.json({ message: 'If that email exists, a verification email has been sent.' });
+      return res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
     }
 
     if (!existingUser || existingUser.verified === true) {
@@ -3473,7 +3498,7 @@ router.post('/resend-verification', resendVerificationLimiter, validate(resendVe
         found: Boolean(existingUser),
         verified: existingUser?.verified === true,
       });
-      return res.json({ message: 'If that email exists, a verification email has been sent.' });
+      return res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
     }
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -3507,10 +3532,10 @@ router.post('/resend-verification', resendVerificationLimiter, validate(resendVe
       }
     }
 
-    res.json({ message: 'If that email exists, a verification email has been sent.' });
+    res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
   } catch (err) {
     logger.error('Resend verification error', { error: err.message, email });
-    res.json({ message: 'If that email exists, a verification email has been sent.' });
+    res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
   }
 });
 
@@ -3608,6 +3633,13 @@ router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSc
       return res.status(400).json({ error: 'Email is required' });
     }
 
+    if (!(await emailService.checkDeliveryAvailability()).available) {
+      return res.status(503).json({
+        code: 'EMAIL_UNAVAILABLE',
+        error: 'Email delivery is temporarily unavailable. Please try again later.',
+      });
+    }
+
     const redirectTo = `${getAuthRedirectBaseUrl(req)}/reset-password`;
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -3636,12 +3668,12 @@ router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSc
 
     // Always return same message to prevent email enumeration
     res.json({
-      message: 'If that email exists, a password reset link has been sent.',
+      message: 'If that email is eligible, we will attempt to send a password reset link.',
     });
   } catch (err) {
     logger.error('Password reset error', { error: err.message });
     res.json({
-      message: 'If that email exists, a password reset link has been sent.',
+      message: 'If that email is eligible, we will attempt to send a password reset link.',
     });
   }
 });

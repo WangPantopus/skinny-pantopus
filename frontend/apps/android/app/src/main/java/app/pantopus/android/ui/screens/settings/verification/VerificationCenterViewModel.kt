@@ -109,7 +109,7 @@ class VerificationCenterViewModel
                 when (resendStatus) {
                     is ResendStatus.Idle -> "Resend verification email"
                     is ResendStatus.Sending -> "Sending…"
-                    is ResendStatus.Sent -> "Sent — check your inbox"
+                    is ResendStatus.Sent -> "Requested — check your inbox"
                     is ResendStatus.Failed -> "Try again"
                 }
             val resendSubtext = (resendStatus as? ResendStatus.Failed)?.message

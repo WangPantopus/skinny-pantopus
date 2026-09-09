@@ -34,8 +34,23 @@ a chat sharing the same textual ID cannot complete each other's arrival.
 - Android: 190 targeted tests pass: 100 router, 44 auth, 34 chat model and 12
   notification dispatcher tests. Six new chat cases cover retention, account
   ownership, late completion, optional titles and cross-destination isolation.
-- Android ktlint and Detekt pass. Staging APK/lint and live emulator acceptance
-  are the next checks; do not infer live FCM behavior from unit tests.
+- Android ktlint, Detekt, staging lint and APK assembly pass.
+- Live staging/FCM acceptance passes on the owned API 34 emulator. One message,
+  **Chat check A1 — sapphire bridge**, produced an actual system notification.
+  Only that fresh Android session was revoked. Tapping the notification showed
+  the security sign-in reason with the message hidden; normal same-account
+  login opened the exact conversation, author and message.
+- The native pending store retained the account-bound room before login and
+  cleared after content loaded and after normal logout. Server unread count
+  became zero. The original session remains revoked; the parked iOS session
+  was preserved. Logout removed all fixture FCM tokens, and the fresh follower's
+  global push preference was restored off. The owned emulator is closed.
+
+The live Android build is source `699c531a86a286803fb8832aa1e0fc563f977b41`,
+APK SHA-256 `8f45829c3cb67f2f7ea5f7132813209381781ea93086aab962f937c0802af28e`.
+Its API/Socket URLs and Firebase project were verified as staging before install.
+The synthetic direct room and single message remain with the isolated Beacon
+fixture for the remaining checks; never resend the same marker.
 
 The iOS UI cases use the opt-in Debug API fixture with fake credentials. They
 exercise native screens and API-client/session behavior, not live APNs or
