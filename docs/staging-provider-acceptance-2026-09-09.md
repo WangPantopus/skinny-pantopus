@@ -22,7 +22,7 @@ no plan was purchased. Continue independent testing while that answer is pending
 The provider checks use Google's [request example](https://developers.google.com/maps/documentation/address-validation/requests-validate-address)
 and Smarty's [response reference](https://www.smarty.com/docs/apis/us-street-api/reference).
 
-## Lob request repair in progress
+## Completed Lob request repair and outage acceptance
 
 The test-key-only postcard probe returns HTTP 422 with
 `mail_use_type_can_not_be_null`; no postcard was created. The provider omitted
@@ -31,14 +31,34 @@ Address-verification cards now explicitly use `operational`. Custom postcards
 require an explicit supported purpose; the existing block invitation caller sends
 `marketing`. Inline and template verification requests carry the same purpose.
 
-The initial 105 focused mail/provider/invitation tests pass, including four new
-custom-purpose cases and verification request assertions. Full backend/privacy
-validation and repeating the live Lob test against a committed private candidate
-remain next. Do not repeat the original probe blindly; its attempt and exact
-provider response are privately recorded under `20260907/staging-provider`.
+All 105 focused mail/provider/invitation tests pass, including four new
+custom-purpose cases and verification request assertions. All 4,466 backend tests
+and privacy gates pass. An initial full run hit an unrelated HTTP parse error in
+account-deletion tests; all 89 auth tests and the complete backend rerun pass.
+
+The committed private candidate now runs `9f37ca975`, image `94a41144a829`, on
+port 18003. The prior `bede11a5cc04` image is retained stopped for rollback.
+The actual Lob test-key request now creates a postcard successfully. A subsequent
+provider read confirms its exact ID and operational purpose; the exact test
+postcard is then deleted. The original rejected attempt created no postcard.
+No physical piece was printed or mailed.
+
+The authenticated address-outage API journey also passes against real Google
+and the unavailable Smarty account. PO Box input is rejected before validation;
+the provider failure returns `SERVICE_ERROR` with confidence zero. Repeating the
+request retains one canonical address and one review case. Attempting to claim
+that address returns 422; no claim, verification attempt, Home or occupancy is
+created. The disposable address, review case and its audit events are removed,
+and the synthetic account logs out with its old token denied and zero push tokens.
+This verifies failure handling, not successful residential verification.
+
+The exact completed attempts are privately recorded under
+`20260907/staging-provider`; do not rerun their publishers or cleanup scripts.
+Next are application mail-code dispatch/confirmation and uncertain-send retry,
+remaining PaymentSheet/transaction acceptance, and configured OAuth callbacks.
 
 Lob's [test-key documentation](https://help.lob.com/account-management/api-keys)
 confirms test requests do not print or mail a physical piece. Test rendering
-does not verify a real address or prove delivery. All current runtimes are still
-as recorded in the vendor report; production and the public staging API/worker
-are preserved. No migration or new paid resource was introduced.
+does not verify a real address or prove delivery. Browser account API and web
+images remain as recorded in the vendor report; production and the public
+staging API/worker are preserved. No migration or new paid resource was introduced.
