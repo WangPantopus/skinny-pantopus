@@ -22,6 +22,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const addressConfig = require('../../config/addressVerification');
 const mailVendorService = require('./mailVendorService');
 const observability = require('./addressVerificationObservability');
+const { unitKey, destinationFor, sameDestination } = require('./mailDestination');
 
 // ── Constants (from config, with env-var overrides) ──────────
 
@@ -162,19 +163,22 @@ class MailVerificationService {
       return { success: false, error: 'Address not found' };
     }
 
+    const delivery = destinationFor(address, unit);
+    if (!delivery) return { success: false, error: 'Requested unit does not match the canonical address' };
+
     // Check deliverability via stored validation data
     if (address.validation_raw_response) {
       const raw = address.validation_raw_response;
       if (raw.dpv_match_code === 'N') {
         return { success: false, error: 'Address is not deliverable' };
       }
-      if (raw.missing_secondary && !unit) {
+      if (raw.missing_secondary && !delivery.line2) {
         return { success: false, error: 'Address requires a unit number' };
       }
     }
 
     // ── 2. Check for household authority conflict ────────────
-    const conflictCheck = await this._checkHouseholdConflict(addressId, userId);
+    const conflictCheck = await this._checkHouseholdConflict(addressId, userId, delivery.line2, address.address_line2_norm);
     if (conflictCheck.blocked) {
       return { success: false, error: conflictCheck.reason };
     }
@@ -439,6 +443,7 @@ class MailVerificationService {
         metadata: {
           address_id: attempt.address_id,
           unit: previousJob?.metadata?.unit || null,
+          ...(previousJob?.metadata?.destination ? { destination: previousJob.metadata.destination } : {}),
           resend_number: token.resend_count + 1,
         },
         created_at: new Date().toISOString(),
@@ -733,31 +738,8 @@ class MailVerificationService {
       .update({ used_at: new Date().toISOString() })
       .eq('id', token.id);
 
-    // Possession of the mailed code is the strongest self-service proof the
-    // system has, so record it on the claim ledger: any pending AddressClaim
-    // this user holds on the address becomes verified/mail_code. Best-effort -
-    // the attach below does not depend on it (mail_code is an escalated
-    // method), but leaving the claim 'pending' after the mail proved it would
-    // make the ledger disagree with the occupancy forever.
-    try {
-      await supabaseAdmin
-        .from('AddressClaim')
-        .update({
-          claim_status: 'verified',
-          verification_method: 'mail_code',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('address_id', attempt.address_id)
-        .eq('claim_status', 'pending');
-    } catch (claimErr) {
-      logger.warn('MailVerificationService.confirmCode: claim stamp failed (non-fatal)', {
-        userId, addressId: attempt.address_id, error: claimErr.message,
-      });
-    }
-
-    // ── 8. Create/update HomeOccupancy ───────────────────────
-    const occupancyResult = await this._attachOccupancy(userId, attempt.address_id);
+    // ── 8. Attach only the Home identified by the saved mailing unit ──
+    const occupancyResult = await this._attachOccupancy(userId, attempt.address_id, attemptId);
 
     // SCN-06: this used to return verified:true with occupancy_id:null when the
     // attach silently no-opped — because the Home had been deleted mid-flight,
@@ -912,10 +894,10 @@ class MailVerificationService {
    * maintains. An address with existing residents routes through the claim and
    * approval flow instead of self-service mail.
    */
-  async _checkHouseholdConflict(addressId, userId) {
+  async _checkHouseholdConflict(addressId, userId, unit, canonicalUnit) {
     const { data: homes, error: homesErr } = await supabaseAdmin
       .from('Home')
-      .select('id')
+      .select('id, address2')
       .eq('address_id', addressId);
 
     if (homesErr) {
@@ -929,7 +911,11 @@ class MailVerificationService {
       return { blocked: false };
     }
 
-    const homeIds = homes.map((h) => h.id);
+    if (!unit && homes.some(home => unitKey(home.address2))) {
+      return { blocked: true, reason: 'Address requires a unit number' };
+    }
+    const homeIds = homes.filter(home => unitKey(home.address2 || canonicalUnit) === unitKey(unit)).map(home => home.id);
+    if (!homeIds.length) return { blocked: false };
 
     const { data: occupants, error: occErr } = await supabaseAdmin
       .from('HomeOccupancy')
@@ -968,36 +954,57 @@ class MailVerificationService {
    * @param {string} addressId
    * @returns {Promise<{occupancy_id: string|null}>}
    */
-  async _attachOccupancy(userId, addressId) {
-    // Find the Home linked to this address
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id')
-      .eq('address_id', addressId)
-      .maybeSingle();
-
-    if (!home) {
-      logger.info('MailVerificationService._attachOccupancy: no Home for address', { addressId });
+  async _attachOccupancy(userId, addressId, attemptId) {
+    const { job, error: jobError } = await this._latestMailJob(attemptId);
+    if (jobError || !job) return { occupancy_id: null };
+    const { data: address, error: addressError } = await supabaseAdmin.from('HomeAddress')
+      .select('address_line1_norm, address_line2_norm, city_norm, state, postal_code, building_type, missing_secondary_flag')
+      .eq('id', addressId).maybeSingle();
+    if (addressError || !address) return { occupancy_id: null };
+    const current = destinationFor(address, job.metadata?.unit);
+    // New dispatches snapshot exactly what was sent before calling the vendor.
+    // Legacy jobs have no historical destination evidence; keep the existing
+    // single-address path only, never infer an unrecorded apartment.
+    const hasUnit = !!(job.metadata?.unit || address.address_line2_norm);
+    const legacySingleAddress = !hasUnit && address.building_type !== 'multi_unit' && !address.missing_secondary_flag;
+    const destination = job.metadata?.destination || (legacySingleAddress ? current : null);
+    if (!destination || !sameDestination(destination, current)) return { occupancy_id: null };
+    const { data: homes, error: homeError } = await supabaseAdmin.from('Home')
+      .select('id, address2, security_state').eq('address_id', addressId);
+    if (homeError || !Array.isArray(homes)) return { occupancy_id: null };
+    const matching = homes.filter(home => unitKey(home.address2 || address.address_line2_norm) === unitKey(destination.line2));
+    if (matching.length !== 1) return { occupancy_id: null };
+    const home = matching[0];
+    if (['frozen', 'frozen_silent'].includes(home.security_state)) return { occupancy_id: null };
+    const { data: existing, error: occupancyError } = await supabaseAdmin.from('HomeOccupancy')
+      .select('id, is_active, end_at, access_start_at, access_end_at, verification_status')
+      .eq('home_id', home.id).eq('user_id', userId).maybeSingle();
+    if (occupancyError || (existing && (existing.is_active !== true || existing.end_at
+      || new Date(existing.access_start_at) > new Date() || (existing.access_end_at && new Date(existing.access_end_at) <= new Date())
+      || ['suspended', 'suspended_challenged', 'inactive', 'moved_out'].includes(existing.verification_status)))) {
       return { occupancy_id: null };
     }
-
     const occupancyAttachService = require('../occupancyAttachService');
     const result = await occupancyAttachService.attach({
       homeId: home.id,
       userId,
       method: 'mail_code',
       claimType: 'resident',
+      unitNumber: destination.line2 || undefined,
       actorId: userId,
-      metadata: { source: 'mail_verification' },
+      metadata: { source: 'mail_verification', verification_attempt_id: attemptId },
     });
+    if (!result.success) return { occupancy_id: null };
 
-    if (!result.success) {
-      logger.error('MailVerificationService._attachOccupancy: attach failed', {
-        userId, homeId: home.id, error: result.error,
-      });
-      return { occupancy_id: null };
+    // Proving one apartment must never stamp claims for the other apartments.
+    const { data: claims, error: claimError } = await supabaseAdmin.from('AddressClaim')
+      .select('id, unit_number').eq('user_id', userId).eq('address_id', addressId).eq('claim_status', 'pending');
+    if (!claimError && Array.isArray(claims)) {
+      const ids = claims.filter(claim => unitKey(claim.unit_number || address.address_line2_norm) === unitKey(destination.line2)).map(claim => claim.id);
+      if (ids.length) await supabaseAdmin.from('AddressClaim').update({
+        claim_status: 'verified', verification_method: 'mail_code', updated_at: new Date().toISOString(),
+      }).in('id', ids).eq('claim_status', 'pending');
     }
-
     return { occupancy_id: result.occupancy?.id || null };
   }
 

@@ -612,6 +612,10 @@ describe('getVerificationStatus', () => {
 // ============================================================
 
 describe('confirmCode', () => {
+  beforeEach(() => {
+    seedTable('MailVerificationJob', [{ id: 'confirm-job', attempt_id: 'attempt-1', vendor_status: 'sent', metadata: {}, created_at: new Date().toISOString() }]);
+  });
+
   // ── Successful verification ───────────────────────────────
 
   test('succeeds with correct code', async () => {

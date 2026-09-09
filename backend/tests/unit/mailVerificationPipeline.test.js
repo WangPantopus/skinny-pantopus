@@ -248,6 +248,7 @@ describe('wrong code → lockout', () => {
   });
 
   test('correct code after 4 wrong attempts still works', async () => {
+    seedTable('MailVerificationJob', [{ id: 'mailed-job', attempt_id: 'attempt-1', vendor_status: 'sent', metadata: {}, created_at: new Date().toISOString() }]);
     seedDeliverableAddress();
     seedHome();
     seedActiveAttempt();

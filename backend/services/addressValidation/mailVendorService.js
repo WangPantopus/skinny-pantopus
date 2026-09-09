@@ -15,6 +15,7 @@
  */
 
 const logger = require('../../utils/logger');
+const { destinationFor, sameDestination } = require('./mailDestination');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
@@ -98,13 +99,14 @@ class MailVendorService {
       return { success: false, error: 'Address not found' };
     }
 
-    const normalizedAddress = {
-      line1: address.address_line1_norm,
-      line2: address.address_line2_norm || job.metadata?.unit || undefined,
-      city: address.city_norm,
-      state: address.state,
-      zip: address.postal_code,
-    };
+    const destination = destinationFor(address, job.metadata?.unit);
+    if (!destination) {
+      return { success: false, error: 'Requested unit does not match the canonical address' };
+    }
+    if (job.metadata?.destination && !sameDestination(job.metadata.destination, destination)) {
+      return { success: false, error: 'Mailing destination changed; request was not dispatched' };
+    }
+    const normalizedAddress = { ...destination, line2: destination.line2 || undefined };
 
     // ── 3. Resolve the code ─────────────────────────────────
     // Supplied by the caller. Legacy rows created before the code was removed
@@ -128,7 +130,7 @@ class MailVendorService {
       .update({
         vendor: providerName,
         vendor_status: 'dispatching',
-        metadata: { ...stripCode(job.metadata), dispatch_started_at: new Date().toISOString() },
+        metadata: { ...stripCode(job.metadata), destination, dispatch_started_at: new Date().toISOString() },
         updated_at: new Date().toISOString(),
       })
       .eq('id', jobId)

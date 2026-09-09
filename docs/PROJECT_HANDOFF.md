@@ -16,8 +16,23 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
-**Next active work:** `/private/tmp/pantopus-staging-native-mail`, branch
-`codex/staging-native-mail`, starting from merged master `3ce4018f5`.
+**Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
+`codex/staging-mail-unit-binding`, starting from PR #28 source `95842b119`.
+[Modern mail unit binding](staging-mail-unit-binding-2026-09-09.md) now passes
+193 focused regressions for exact apartment selection, destination preservation,
+scoped claims and current access denial. Privacy gates pass. Two full runs hit
+different unrelated HTTP test failures; both affected suites pass independently.
+The detailed report preserves those limits; no full green result is claimed.
+Next make modern confirmation and membership atomic, repair exact-membership
+retry, and prove rollback/concurrency before integration. No changes from this
+new branch are hosted and it must not be merged as a completed release yet.
+
+The prior native worktree remains `/private/tmp/pantopus-staging-native-mail`,
+branch `codex/staging-native-mail`; ready PR #28 awaits full current-head CI
+at `95842b119` (run `34401283503`). Its backend, image, database and iOS lint
+checks pass; native build/simulator jobs remain. The earlier Docker Hub 500 is
+resolved on this head. Native simulator fixtures are all cleaned.
+
 [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
 19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)
 passed at `d24632cda`. Backend, web, database replay/contracts and image checks
