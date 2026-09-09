@@ -14,9 +14,13 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: pnpm
+      - name: Install backend integration dependencies
+        run: pnpm --filter pantopus-backend... install --frozen-lockfile
       - uses: supabase/setup-cli@v3
         with:
           version: ${{ inputs.cli-version }}
@@ -25,7 +29,14 @@ jobs:
       - name: Reject invalid database functions
         run: node scripts/db/check-function-lint.cjs
       - name: Run SQL contracts
-        run: supabase test db
+        run: |
+          node scripts/db/sync-sql-contracts.cjs --check
+          supabase test db
+      - name: Verify canonical schema through PostgREST and the Following service
+        working-directory: backend
+        env:
+          PANTOPUS_BASELINE_CONTRACT: '1'
+        run: node --test tests/contract/baseline.postgrest.test.cjs
       - name: Stop this job's local database
         if: always()
         run: supabase stop --no-backup

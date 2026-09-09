@@ -77,8 +77,15 @@ upgrade evidence is now complemented by a separate empty schema replay. That
 replay caught and corrected fresh-platform default grants on 49 tables and
 22 routines before its Beacon denial contract passed. Real Home-role checks
 also support retaining production's stricter policies. Managed-surface evidence
-and the incomplete permission/reference matrix are recorded in the new report;
-no hosted corrections or repository baseline transition have been applied.
+and the incomplete permission matrix are recorded in the linked reports.
+The [canonical baseline milestone](database-canonical-baseline-2026-09-08.md)
+now archives frozen history without changing its bytes and activates the two
+canonical baseline files. Local CLI replay, seven pgTAP contracts and five real
+PostgREST/Following integration tests pass. Reference hashes match; the strict
+catalog still reports only the two reviewed CHECK-format differences. Fresh
+read-only production managed-object inspection is recorded in that report.
+No hosted corrections or ledger adoption have been applied. Canonical CI is
+the next verification gate before continuing the Beacon preference migration.
 Preserve the current global feature flag and deployment/migration switches.
 
 Beacon repairs remain on `codex/beacon-full-journey` in
@@ -87,8 +94,9 @@ Beacon repairs remain on `codex/beacon-full-journey` in
 based on the Beacon branch so its current handoff/evidence are retained. The main
 checkout and all other worktrees/ignored artifacts are preserved.
 Draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on
-PR #10, contains the adoption diagnostics, SQL contracts and sanitized evidence;
-it does not adopt a baseline or deploy the private forward candidate.
+PR #10, now contains the canonical source baseline, archived history and required
+database CI in addition to diagnostics, SQL contracts and sanitized evidence.
+It does not adopt a hosted ledger or deploy the private forward candidate.
 
 Start a new session by:
 
@@ -97,12 +105,11 @@ Start a new session by:
    and [baseline continuation](database-baseline-rehearsal-2026-09-08.md).
    Read the [empty replay milestone](database-empty-replay-2026-09-08.md), then
    read the [reference/lint decision](database-reference-lint-2026-09-08.md), then
-   finish canonical baseline review and remaining managed-object coverage.
+   read the [canonical milestone](database-canonical-baseline-2026-09-08.md) and
+   verify its exact-head database CI.
    Existing permissions are preserved; new role grants are a separate change.
-   The normal-role empty schema
-   replay and Home boundaries already pass; carry its explicit ACL restoration
-   into canonical baseline review. Include Beacon storage/RPC restrictions,
-   activate verified canonical replay/SQL/integration checks, then add the
+   Normal-role replay, Home boundaries, explicit ACLs, Beacon storage/RPC
+   restrictions and local SQL/integration checks already pass. Add the
    preference migration/API/native setting and verify hosted role denial.
    Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).

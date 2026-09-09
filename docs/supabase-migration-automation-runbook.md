@@ -1,6 +1,9 @@
 # Supabase migration automation: adoption and activation
 
-Updated 6 September 2026 for the CI/CD implementation in PR #3.
+Updated September 8, 2026: canonical source adoption is prepared in PR #11.
+See the [canonical evidence](database-canonical-baseline-2026-09-08.md).
+The historical implementation description below records the original PR #3;
+the adoption branch now uses `mode: baselined`. Hosted adoption remains pending.
 
 **Decision: prepare automation now; defer production baselining and ledger
 changes to a dedicated adoption change.** The research in the original runbook
@@ -233,8 +236,9 @@ The [September 8 local continuation](database-baseline-rehearsal-2026-09-08.md)
 closes the known table/column gaps on a preserved production-upgrade copy and
 adds real SQL contracts plus read-only catalog comparison tools. It also finds
 and locally corrects a direct Beacon-storage authorization gap. These results
-do not activate this runbook's baseline/hosted gates; its forward SQL and private
-catalogs remain in the operator evidence root until canonical adoption review.
+now underpin the [canonical baseline](database-canonical-baseline-2026-09-08.md),
+which activates repository database CI. Hosted adoption remains pending; private
+forward SQL and catalogs stay in the operator evidence root.
 The additional application linter cannot pass the gate by itself. The
 [reviewed function gate](../scripts/db/check-function-lint.cjs) retains the
 complete pinned CLI scan and adds provenance checks and real PostGIS calls.
