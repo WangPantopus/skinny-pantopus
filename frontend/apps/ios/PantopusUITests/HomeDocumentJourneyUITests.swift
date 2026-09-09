@@ -55,7 +55,57 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         waitForExpectations(timeout: 20)
     }
 
+    func testMemberUploadsFromSystemPickerAndOpensExactDocument() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["DOCUMENT_TEST_UPLOAD"] == "1", "Requires a disposable picker file")
+        try openDocuments()
+        let title = try XCTUnwrap(inputs["DOCUMENT_TEST_TITLE"])
+        XCTAssertFalse(app.staticTexts[title].exists, "Do not repeat a completed upload")
+        tapButton("Upload document")
+        tap("uploadDocumentFileCTA")
+        let file = element("native-picker-I4, pdf")
+        if !file.waitForExistence(timeout: 5) {
+            let browse = app.tabBars.buttons["Browse"].firstMatch
+            if browse.waitForExistence(timeout: 5) { browse.tap() }
+            if !file.exists {
+                let local = app.staticTexts["On My iPhone"].firstMatch
+                if local.waitForExistence(timeout: 5) { local.tap() }
+            }
+        }
+        XCTAssertTrue(file.waitForExistence(timeout: 20))
+        file.tap()
+        let field = element("uploadDocumentTitleField")
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        field.tap()
+        if let current = field.value as? String, !current.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        }
+        field.typeText(title)
+        tap("uploadDocumentCategoryChip_receipt")
+        tapButton("Upload")
+        XCTAssertTrue(element("documentsList").waitForExistence(timeout: 30))
+        let row = app.staticTexts[title].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20))
+        reveal(row)
+        row.tap()
+        XCTAssertEqual(element("documentDetailTitle").label, title)
+        XCTAssertTrue(element("documentDetailPreview").waitForExistence(timeout: 20))
+        tap("documentDetailShare")
+        XCTAssertTrue(app.cells["Save to Files"].firstMatch.waitForExistence(timeout: 20))
+    }
+
     private func openDocument() throws {
+        try openDocuments()
+        let title = try XCTUnwrap(inputs["DOCUMENT_TEST_TITLE"])
+        let row = app.staticTexts[title].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20))
+        reveal(row)
+        row.tap()
+        XCTAssertTrue(element("documentDetailTitle").waitForExistence(timeout: 20))
+        XCTAssertEqual(element("documentDetailTitle").label, title)
+        XCTAssertTrue(element("documentDetailPreview").exists)
+    }
+
+    private func openDocuments() throws {
         app.launch()
         try signIn()
         if element("place.homeTools").waitForExistence(timeout: 5) {
@@ -70,14 +120,6 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         }
         tapButton("Documents")
         XCTAssertTrue(element("documentsList").waitForExistence(timeout: 20))
-        let title = try XCTUnwrap(inputs["DOCUMENT_TEST_TITLE"])
-        let row = app.staticTexts[title].firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20))
-        reveal(row)
-        row.tap()
-        XCTAssertTrue(element("documentDetailTitle").waitForExistence(timeout: 20))
-        XCTAssertEqual(element("documentDetailTitle").label, title)
-        XCTAssertTrue(element("documentDetailPreview").exists)
     }
 
     private func signIn() throws {

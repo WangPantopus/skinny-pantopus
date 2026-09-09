@@ -129,16 +129,26 @@ member IAM rows; fixture-only grants permit this test, without certifying the
 unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
 as `fd8a94eef727342340fc522f7196e6e64814ed08`.
 
-[PR #20](https://github.com/WangPantopus/skinny-pantopus/pull/20) is ready for
-review at `92173368c`; all checks except the still-running Android quality/build
-job have passed. Continue checking its actual final state before merging. The
+[PR #20](https://github.com/WangPantopus/skinny-pantopus/pull/20) merged as
+`7a440d61ded9b3338340c8dce3fe2da2d894d655` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34361613124)
+passed. Its merged-master checks are running. The
 same worktree now uses `codex/home-document-lifecycle`. The
 [lifecycle report](home-document-lifecycle-2026-09-09.md) records completed native
 Delete wiring, atomic quota release/tombstones and direct database access guards.
 All 4,425 backend tests, privacy gates, SQL contract, real concurrent deletion,
-function lint, 33 Android and 17 iOS focused tests pass. Isolated staging and
-native deletion acceptance are next, followed by replacement, abandoned upload
-cleanup and quota enforcement across different upload IDs.
+function lint, 33 Android and 17 iOS focused tests and native quality/build checks
+pass. Live staging concurrent deletion and both native confirmation/list-refresh
+journeys pass, including provider removal, quota release and old-content denial.
+The compatible deletion migration is applied only to Free staging, preserving
+existing rows and its absent migration ledger; public API/worker are unchanged.
+Three disposable documents were removed and the temporary delete grant was
+removed. Live iOS Files picker → upload → exact document/share now passes with
+609 matching bytes and one quota increment. It exposed and fixed duplicate
+success navigation: the upload form now closes once and remains on Documents.
+The initial I4 fixture was removed before final I5 acceptance; I5 remains with
+the original four documents. Next are replacement, abandoned upload cleanup,
+quota enforcement across different upload IDs and stale native export cleanup.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
