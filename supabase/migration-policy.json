@@ -1,7 +1,10 @@
 {
-  "mode": "legacy",
+  "mode": "baselined",
   "cliVersion": "2.116.0",
-  "baselineFiles": {},
+  "baselineFiles": {
+    "supabase/migrations/20260908234526_application_baseline.sql": "650f396116e8dc58ee7b3272aad9e952da6b22b727d25128cbb020ddc4d8a443",
+    "supabase/migrations/20260908234527_reference_baseline.sql": "26555565136eb06afc407ff055630474ab7edb187e63edd08dab91a513db2ded"
+  },
   "legacyFiles": {
     "backend/database/migrations/030_context_convert_system.sql": "f2f7468f2af9d983f26c33398be869e57ca017264f507178cad686091c7f1f00",
     "backend/database/migrations/031_home_ownership_identity_system.sql": "ef66100dcb6387b45e32c99c0a4584c26b57b10dbee3c13dadbb05ae6dc7436c",

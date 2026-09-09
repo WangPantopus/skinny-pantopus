@@ -390,7 +390,7 @@ describe('Identity Firewall regressions', () => {
       'utf8'
     );
     const supabaseMigration = fs.readFileSync(
-      path.resolve(__dirname, '../../../supabase/migrations/20260505000001_identity_firewall_personas.sql'),
+      path.resolve(__dirname, '../../../supabase/migrations-archive/20260505000001_identity_firewall_personas.sql'),
       'utf8'
     );
 
@@ -404,7 +404,7 @@ describe('Identity Firewall regressions', () => {
       'utf8'
     );
     const supabaseMigration = fs.readFileSync(
-      path.resolve(__dirname, '../../../supabase/migrations/20260505000001_identity_firewall_personas.sql'),
+      path.resolve(__dirname, '../../../supabase/migrations-archive/20260505000001_identity_firewall_personas.sql'),
       'utf8'
     );
 
