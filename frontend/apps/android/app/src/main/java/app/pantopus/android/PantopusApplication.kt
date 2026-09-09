@@ -1,6 +1,7 @@
 package app.pantopus.android
 
 import android.app.Application
+import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.PostHogAnalytics
@@ -34,6 +35,7 @@ class PantopusApplication :
 
     override fun onCreate() {
         super.onCreate()
+        HomeDocumentTemporaryFiles.clearPreviousLaunch(cacheDir)
 
         // Workstream 1.4 — persist pre-auth deep links across process death.
         PendingDeepLinkStore.init(this)

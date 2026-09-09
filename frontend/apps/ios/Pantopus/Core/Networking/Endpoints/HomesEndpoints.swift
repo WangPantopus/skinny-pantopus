@@ -379,12 +379,12 @@ public enum HomesEndpoints {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/documents", body: request)
     }
 
-    /// Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:156`.
+    /// Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:166`.
     public static func documentContent(homeId: String, documentId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/documents/\(documentId)/content")
     }
 
-    /// `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:168`.
+    /// `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:190`.
     public static func deleteDocument(homeId: String, documentId: String) -> Endpoint {
         Endpoint(method: .delete, path: "/api/homes/\(homeId)/documents/\(documentId)")
     }

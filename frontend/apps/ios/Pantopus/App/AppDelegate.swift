@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         Self.bootstrapLogging()
+        try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
             // Product analytics (PostHog). No-ops until POSTHOG_API_KEY is set,

@@ -37,16 +37,25 @@ BEGIN
   IF EXISTS (SELECT FROM public."File" WHERE id = 'eee00000-0000-4000-8000-000000000033') THEN
     RAISE EXCEPTION 'Generic File reads expose private document metadata';
   END IF;
-  UPDATE public."File" SET is_deleted = true WHERE id = 'eee00000-0000-4000-8000-000000000033';
-  GET DIAGNOSTICS affected = ROW_COUNT;
-  IF affected <> 0 THEN RAISE EXCEPTION 'Generic File update bypassed the Home contract'; END IF;
-  DELETE FROM public."File" WHERE id = 'eee00000-0000-4000-8000-000000000033';
-  GET DIAGNOSTICS affected = ROW_COUNT;
-  IF affected <> 0 THEN RAISE EXCEPTION 'Generic File delete bypassed the Home contract'; END IF;
-  IF (public.soft_delete_file('eee00000-0000-4000-8000-000000000033',
-    'eee00000-0000-4000-8000-000000000031')->>'success')::boolean THEN
-    RAISE EXCEPTION 'Generic delete RPC bypassed the Home contract';
-  END IF;
+  BEGIN
+    UPDATE public."File" SET is_deleted = true WHERE id = 'eee00000-0000-4000-8000-000000000033';
+    GET DIAGNOSTICS affected = ROW_COUNT;
+    IF affected <> 0 THEN RAISE EXCEPTION 'Generic File update bypassed the Home contract'; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    DELETE FROM public."File" WHERE id = 'eee00000-0000-4000-8000-000000000033';
+    GET DIAGNOSTICS affected = ROW_COUNT;
+    IF affected <> 0 THEN RAISE EXCEPTION 'Generic File delete bypassed the Home contract'; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    IF (public.soft_delete_file('eee00000-0000-4000-8000-000000000033',
+      'eee00000-0000-4000-8000-000000000031')->>'success')::boolean THEN
+      RAISE EXCEPTION 'Generic delete RPC bypassed the Home contract';
+    END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   BEGIN
     INSERT INTO public."File" (user_id, filename, original_filename, file_path, file_url,
       file_size, mime_type, file_extension, file_type, metadata)

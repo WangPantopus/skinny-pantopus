@@ -327,7 +327,7 @@ interface HomesApi {
         @Body body: CreateDocumentRequest,
     ): CreateDocumentResponse
 
-    /** Private byte upload — route `backend/routes/homeDocumentFiles.js:66`. */
+    /** Private byte upload — route `backend/routes/homeDocumentFiles.js:61`. */
     @Multipart
     @POST("api/homes/{id}/documents/upload")
     suspend fun uploadHomeDocument(
@@ -336,14 +336,14 @@ interface HomesApi {
         @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>,
     ): CreateDocumentResponse
 
-    /** Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:157`. */
+    /** Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:166`. */
     @GET("api/homes/{id}/documents/{documentId}/content")
     suspend fun homeDocumentContent(
         @Path("id") homeId: String,
         @Path("documentId") documentId: String,
     ): ResponseBody
 
-    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:168`. */
+    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:190`. */
     @DELETE("api/homes/{id}/documents/{documentId}")
     suspend fun deleteHomeDocument(
         @Path("id") homeId: String,

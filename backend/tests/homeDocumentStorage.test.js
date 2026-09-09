@@ -32,7 +32,7 @@ const uploading = () => storage.upload({ homeId, documentId, buffer: bytes, mime
 test('stores real bytes in a verified private bucket without issuing a public or signed URL', async () => {
   const result = await uploading();
   expect(result).toEqual({ bucket: bucketName, key: `${homeId}/${documentId}/${sha256}`, sha256, size: bytes.length });
-  expect(bucket.upload).toHaveBeenCalledWith(result.key, bytes, { contentType: 'text/plain', upsert: false });
+  expect(bucket.upload).toHaveBeenCalledWith(result.key, bytes, { contentType: 'text/plain', cacheControl: '0', upsert: false });
   expect(result.url).toBeUndefined();
 });
 

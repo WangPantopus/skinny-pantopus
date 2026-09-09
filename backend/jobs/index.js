@@ -59,6 +59,7 @@ const validateHomeCoordinates = require('./validateHomeCoordinates');
 const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
 const evidenceRetentionSweep = require('./evidenceRetentionSweep');
+const homeDocumentRecovery = require('./homeDocumentRecovery');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
@@ -415,6 +416,11 @@ function startJobs(options = {}) {
     'expireInitiatedHomeClaims',
     () => expireInitiatedHomeClaims({ dryRun: householdClaimJobsDryRun }),
   ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', homeDocumentRecovery), {
     scheduled: true,
     timezone: 'UTC',
   });

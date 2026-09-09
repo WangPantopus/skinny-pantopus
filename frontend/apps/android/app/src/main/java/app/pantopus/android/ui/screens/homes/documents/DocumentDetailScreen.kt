@@ -82,7 +82,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.ByteString
 import java.io.File
-import java.util.UUID
 
 /**
  * P2.10 — Document detail. Reads the document via the existing list
@@ -828,8 +827,7 @@ private suspend fun exportDocument(
     val file =
         try {
             withContext(Dispatchers.IO) {
-                val directory = File(context.cacheDir, "document-export-${UUID.randomUUID()}")
-                if (!directory.mkdir()) throw java.io.IOException("Could not create export directory")
+                val directory = app.pantopus.android.core.network.HomeDocumentTemporaryFiles.makeExportDirectory(context.cacheDir)
                 val filename = File(dto.details?.get("original_filename") ?: dto.title).name.ifBlank { "document" }
                 File(directory, filename).also { it.writeBytes(bytes.toByteArray()) }
             }
@@ -862,7 +860,7 @@ private suspend fun renderFirstPage(
     bytes: ByteString,
 ): Bitmap? =
     runCatching {
-        val tempFile = File.createTempFile("doc-preview-", ".pdf", context.cacheDir)
+        val tempFile = app.pantopus.android.core.network.HomeDocumentTemporaryFiles.makePreview(context.cacheDir)
         try {
             tempFile.writeBytes(bytes.toByteArray())
             ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
