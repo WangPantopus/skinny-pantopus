@@ -140,6 +140,7 @@ class LobMailProvider {
 
     const body = {
       description: 'Pantopus Address Verification',
+      use_type: 'operational',
       to: {
         name: 'Current Resident',
         address_line1: address.line1,
@@ -220,15 +221,19 @@ class LobMailProvider {
    * caps, opt-out) is enforced by the calling service, not here.
    *
    * @param {object} address - NormalizedAddress { line1, line2?, city, state, zip }
-   * @param {object} card    - { description, frontHtml, backHtml, toName? }
+   * @param {object} card    - { description, frontHtml, backHtml, useType, toName? }
    * @returns {Promise<{vendorJobId: string, status: string}>}
    */
   async sendCustomPostcard(address, card) {
     if (!this.isAvailable()) {
       throw new Error('Lob API key not configured');
     }
+    if (!['marketing', 'operational'].includes(card.useType)) {
+      throw new Error('Postcard use type must be marketing or operational');
+    }
     const body = {
       description: card.description || 'Pantopus postcard',
+      use_type: card.useType,
       to: {
         name: card.toName || 'Current Resident',
         address_line1: address.line1,

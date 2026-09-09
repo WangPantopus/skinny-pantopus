@@ -16,6 +16,21 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
+**Next active work:** `/private/tmp/pantopus-staging-provider-acceptance`, branch
+`codex/staging-provider-acceptance`. PR #25 merged as `fab8869b2` after full CI;
+its merged-master checks are pending. The new [provider report](staging-provider-acceptance-2026-09-09.md)
+records Google validation success, Smarty's inactive-subscription response, and
+disabled staging Google/Apple OAuth. No address was claimed. Lob test creation
+exposed a missing required mail purpose; the repair now passes 105 focused and
+4,466 total backend tests, privacy gates, and real Lob test creation/read/deletion.
+Real address-provider failure/retry and claim denial also pass; all disposable
+address/review rows are cleaned up. The private candidate is now `9f37ca975`
+(`94a41144a829`), with its prior image retained. Next finish application mail-code
+dispatch/confirmation and uncertain-send retry, then remaining OAuth/payment
+acceptance. An existing Smarty account inquiry is pending;
+continue independent work without purchasing a plan. The earlier vendor worktree
+and all completed fixtures remain preserved.
+
 **Current continuation:** staging account/vendor work is isolated in
 `/private/tmp/pantopus-staging-vendor-acceptance`, branch
 `codex/staging-vendor-acceptance`. Cloudflare access is now available and
