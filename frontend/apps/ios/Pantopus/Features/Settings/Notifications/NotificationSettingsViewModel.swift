@@ -61,6 +61,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// than replaced so a burst of taps on different rows all persist.
     private var pendingPatch: [String: JSONValue] = [:]
     private var saveTask: Task<Void, Never>?
+    private var saveInFlight = false
+    private var saveRevision = 0
 
     init(api: APIClient = .shared, saveDebounce: Duration = .milliseconds(600)) {
         self.api = api
@@ -102,6 +104,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         case RowID.gigUpdates:
             preferences?.gigUpdatesEnabled = isOn
             enqueue(["gig_updates_enabled": .bool(isOn)])
+        case RowID.beaconPush:
+            preferences?.beaconPushEnabled = isOn
+            enqueue(["beacon_push_enabled": .bool(isOn)])
         case RowID.mailSummary:
             preferences?.mailSummaryEnabled = isOn
             enqueue(["mail_summary_enabled": .bool(isOn)])
@@ -166,6 +171,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     /// Apply locally, re-project, and (re)arm the debounce timer.
     private func enqueue(_ patch: [String: JSONValue]) {
+        saveRevision += 1
         for (key, value) in patch {
             pendingPatch[key] = value
         }
@@ -174,8 +180,10 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         let delay = saveDebounce
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            await self?.flushPendingSave()
+            guard let self, !Task.isCancelled else { return }
+            // New taps may cancel a timer, never a request already in flight.
+            saveTask = nil
+            await flushPendingSave()
         }
     }
 
@@ -187,20 +195,26 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     }
 
     private func flushPendingSave() async {
-        let patch = pendingPatch
-        pendingPatch = [:]
-        guard !patch.isEmpty else { return }
-        do {
-            let response: NotificationPreferencesResponseDTO = try await api.request(
-                NotificationPreferencesEndpoints.update(patch)
-            )
-            preferences = response.preferences
-            state = .loaded(groups())
-            toast = ToastMessage(text: "Saved", kind: .success)
-        } catch {
-            toast = ToastMessage(text: "Failed to save", kind: .error)
-            // Roll back by re-reading server truth (RN does the same).
-            await fetch()
+        guard !saveInFlight else { return }
+        saveInFlight = true
+        defer { saveInFlight = false }
+        while !pendingPatch.isEmpty {
+            let patch = pendingPatch
+            let revision = saveRevision
+            pendingPatch = [:]
+            do {
+                let response: NotificationPreferencesResponseDTO = try await api.request(
+                    NotificationPreferencesEndpoints.update(patch)
+                )
+                guard revision == saveRevision else { continue }
+                preferences = response.preferences
+                state = .loaded(groups())
+                toast = ToastMessage(text: "Saved", kind: .success)
+            } catch {
+                guard revision == saveRevision else { continue }
+                toast = ToastMessage(text: "Failed to save", kind: .error)
+                await fetch()
+            }
         }
     }
 
@@ -310,6 +324,12 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     control: .toggle(isOn: prefs.gigUpdatesEnabled)
                 ),
                 GroupedListRow(
+                    id: RowID.beaconPush,
+                    label: "Beacon Push Notifications",
+                    subtext: "Device alerts for Beacon updates. Updates stay in the app when off.",
+                    control: .toggle(isOn: prefs.beaconPushEnabled)
+                ),
+                GroupedListRow(
                     id: RowID.mailSummary,
                     label: "Mail Summary",
                     subtext: "Daily mailbox digest",
@@ -385,6 +405,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         public static let aqiAlerts = "alerts.aqi"
         public static let homeReminders = "alerts.homeReminders"
         public static let gigUpdates = "alerts.gigUpdates"
+        public static let beaconPush = "alerts.beaconPush"
         public static let mailSummary = "alerts.mailSummary"
         public static let quietHours = "quietHours.enabled"
         public static let quietHoursStart = "quietHours.start"

@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * via [PendingDeepLinkStore] for one-shot post-login replay. OAuth
  * callback, auth reset/verify, and [Destination.Unknown] are never stashed.
  */
+// Arrival completion shares this router's account binding and path resolver.
+@Suppress("TooManyFunctions")
 object DeepLinkRouter {
     /**
      * How a resolved destination should be handled relative to auth.
@@ -292,10 +294,10 @@ object DeepLinkRouter {
      * the object router can classify without Hilt.
      */
     @Volatile
-    private var signedInProvider: () -> Boolean = { false }
+    private var signedInUserIdProvider: () -> String? = { null }
 
-    fun bindSignedInProvider(provider: () -> Boolean) {
-        signedInProvider = provider
+    fun bindSignedInUserIdProvider(provider: () -> String?) {
+        signedInUserIdProvider = provider
     }
 
     fun handle(uri: Uri) {
@@ -331,6 +333,12 @@ object DeepLinkRouter {
         return current
     }
 
+    /** Navigation consumed the link; finish it only after load or departure. */
+    fun completeArrival(destination: Destination.Post) {
+        val userId = signedInUserIdProvider() ?: return
+        PendingDeepLinkStore.completeArrival(userId) { resolveString(it) == destination }
+    }
+
     /** Drop in-memory pending + login prompt (sign-out / invalid). */
     fun clearPending() {
         _pending.value = null
@@ -345,6 +353,7 @@ object DeepLinkRouter {
         destination: Destination,
         persistencePath: String,
     ) {
+        val userId = signedInUserIdProvider()
         when (routingKind(destination)) {
             RoutingKind.Discard -> {
                 // Never stash / never treat Unknown (or OAuth, already filtered)
@@ -354,7 +363,7 @@ object DeepLinkRouter {
                 // Auth stack ([AuthNavHost]) owns reset / verify — park
                 // in-memory only; do NOT persist across process death.
                 _pending.value = destination
-                if (!signedInProvider()) {
+                if (userId == null) {
                     _prefersLoginPresentation.value = true
                 }
             }
@@ -364,7 +373,12 @@ object DeepLinkRouter {
                 // only shows PlaceLaunchHost while signed out — there is no
                 // signed-out content browser — so we still persist these for
                 // post-login replay rather than dropping them.
-                if (signedInProvider()) {
+                if (userId != null) {
+                    if (destination is Destination.Post) {
+                        PendingDeepLinkStore.stash(persistencePath, expectedUserId = userId)
+                    } else {
+                        PendingDeepLinkStore.clear()
+                    }
                     _prefersLoginPresentation.value = false
                     _pending.value = destination
                 } else {

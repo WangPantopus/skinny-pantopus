@@ -17,10 +17,13 @@ import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -69,6 +72,7 @@ class NotificationSettingsViewModelTest {
         aqi: Boolean = true,
         mail: Boolean = true,
         gigs: Boolean = true,
+        beacon: Boolean = true,
         homeReminders: Boolean = true,
         quietStart: String? = null,
         quietEnd: String? = null,
@@ -84,6 +88,7 @@ class NotificationSettingsViewModelTest {
         aqiAlertsEnabled = aqi,
         mailSummaryEnabled = mail,
         gigUpdatesEnabled = gigs,
+        beaconPushEnabled = beacon,
         homeRemindersEnabled = homeReminders,
         quietHoursStartLocal = quietStart,
         quietHoursEndLocal = quietEnd,
@@ -117,6 +122,51 @@ class NotificationSettingsViewModelTest {
         assertEquals(RowControl.Toggle(true), groups.row(RowId.GIG_UPDATES)?.control)
         assertEquals(RowControl.Toggle(false), groups.row(RowId.HOME_REMINDERS)?.control)
     }
+
+    @Test fun an_in_flight_save_finishes_before_the_next_opt_out_and_cannot_restore_its_old_value() =
+        runTest {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val patches = mutableListOf<NotificationPreferencesPatch>()
+            coEvery { repository.preferences() } returns NetworkResult.Success(prefs(beacon = false))
+            coEvery { repository.updatePreferences(any()) } coAnswers {
+                val patch = firstArg<NotificationPreferencesPatch>()
+                patches.add(patch)
+                if (patches.size == 1) {
+                    started.complete(Unit)
+                    release.await()
+                }
+                NetworkResult.Success(prefs(beacon = patch.beaconPushEnabled ?: true))
+            }
+            val vm = makeVm()
+            vm.load()
+            vm.onToggle(RowId.BEACON_PUSH, isOn = true)
+            val firstSave = launch { vm.flushPendingSaveNow() }
+            started.await()
+            vm.onToggle(RowId.BEACON_PUSH, isOn = false)
+            vm.flushPendingSaveNow()
+            runCurrent()
+            assertEquals(1, patches.size)
+            assertEquals(RowControl.Toggle(false), vm.groups().row(RowId.BEACON_PUSH)?.control)
+            release.complete(Unit)
+            firstSave.join()
+            assertEquals(listOf(true, false), patches.map { it.beaconPushEnabled })
+            assertEquals(RowControl.Toggle(false), vm.groups().row(RowId.BEACON_PUSH)?.control)
+        }
+
+    @Test fun beacon_opt_out_saves_and_reloads_without_changing_other_toggles() =
+        runTest {
+            val captured = slot<NotificationPreferencesPatch>()
+            coEvery { repository.updatePreferences(capture(captured)) } returns NetworkResult.Success(prefs(beacon = false))
+            val vm = makeVm()
+            vm.load()
+            vm.onToggle(RowId.BEACON_PUSH, isOn = false)
+            assertEquals(RowControl.Toggle(false), vm.groups().row(RowId.BEACON_PUSH)?.control)
+            vm.flushPendingSaveNow()
+            assertEquals(NotificationPreferencesPatch(beaconPushEnabled = false), captured.captured)
+            assertEquals(RowControl.Toggle(false), vm.groups().row(RowId.BEACON_PUSH)?.control)
+            assertEquals(RowControl.Toggle(true), vm.groups().row(RowId.GIG_UPDATES)?.control)
+        }
 
     @Test fun time_chips_only_render_when_the_briefing_is_on() {
         coEvery { repository.preferences() } returns

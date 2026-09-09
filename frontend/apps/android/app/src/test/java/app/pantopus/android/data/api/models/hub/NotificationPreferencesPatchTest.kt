@@ -27,6 +27,19 @@ class NotificationPreferencesPatchTest {
     private fun encode(patch: NotificationPreferencesPatch): String = moshi.adapter(NotificationPreferencesPatch::class.java).toJson(patch)
 
     @Test
+    fun beacon_wire_default_false_and_merged_restore_are_preserved() {
+        val adapter = moshi.adapter(NotificationPreferencesDto::class.java)
+        assertTrue(NotificationPreferences.from(adapter.fromJson("{}")!!).beaconPushEnabled)
+        assertFalse(NotificationPreferences.from(adapter.fromJson("""{"beacon_push_enabled":false}""")!!).beaconPushEnabled)
+        assertEquals("""{"beacon_push_enabled":false}""", encode(NotificationPreferencesPatch(beaconPushEnabled = false)))
+        val merged =
+            NotificationPreferencesPatch(beaconPushEnabled = false)
+                .mergedWith(NotificationPreferencesPatch(gigUpdatesEnabled = false))
+                .mergedWith(NotificationPreferencesPatch(beaconPushEnabled = true))
+        assertEquals("""{"gig_updates_enabled":false,"beacon_push_enabled":true}""", encode(merged))
+    }
+
+    @Test
     fun writes_only_the_changed_key() {
         assertEquals(
             """{"weather_alerts_enabled":false}""",

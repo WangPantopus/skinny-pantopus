@@ -17,6 +17,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -4157,9 +4158,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.PULSE_POST,
                     arguments = listOf(navArgument(PULSE_POST_DETAIL_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { entry ->
+                    val postId = requireNotNull(entry.arguments?.getString(PULSE_POST_DETAIL_ID_KEY))
+                    val arrival = DeepLinkRouter.Destination.Post(postId)
+                    DisposableEffect(postId) {
+                        onDispose { DeepLinkRouter.completeArrival(arrival) }
+                    }
                     PulsePostDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onContentLoaded = { DeepLinkRouter.completeArrival(arrival) },
                         onOpenProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },

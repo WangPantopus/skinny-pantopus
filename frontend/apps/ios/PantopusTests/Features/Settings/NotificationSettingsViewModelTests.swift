@@ -50,6 +50,7 @@ final class NotificationSettingsViewModelTests: XCTestCase {
         aqi: Bool = true,
         mail: Bool = true,
         gigs: Bool = true,
+        beacon: Bool = true,
         homeReminders: Bool = true,
         quietStart: String? = nil,
         quietEnd: String? = nil,
@@ -71,6 +72,7 @@ final class NotificationSettingsViewModelTests: XCTestCase {
           "aqi_alerts_enabled":\(aqi),
           "mail_summary_enabled":\(mail),
           "gig_updates_enabled":\(gigs),
+          "beacon_push_enabled":\(beacon),
           "home_reminders_enabled":\(homeReminders),
           "quiet_hours_start_local":\(quoted(quietStart)),
           "quiet_hours_end_local":\(quoted(quietEnd)),
@@ -282,12 +284,13 @@ final class NotificationSettingsViewModelTests: XCTestCase {
     func testDebounceMergesEveryPendingKeyIntoOnePut() async throws {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.prefsJSON()),
-            .status(200, body: Self.prefsJSON(aqi: false, gigs: false))
+            .status(200, body: Self.prefsJSON(aqi: false, gigs: false, beacon: false))
         ]
         let vm = makeViewModel()
         await vm.load()
         await vm.toggleRow(RowID.aqiAlerts, isOn: false)
         await vm.toggleRow(RowID.gigUpdates, isOn: false)
+        await vm.toggleRow(RowID.beaconPush, isOn: false)
         await vm.flushPendingSaveNow()
 
         let writes = SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "PUT" }
@@ -297,6 +300,7 @@ final class NotificationSettingsViewModelTests: XCTestCase {
         )
         XCTAssertEqual(body["aqi_alerts_enabled"] as? Bool, false)
         XCTAssertEqual(body["gig_updates_enabled"] as? Bool, false)
+        XCTAssertEqual(body["beacon_push_enabled"] as? Bool, false)
     }
 
     func testFailedSaveToastsAndRollsBackToServerTruth() async {
@@ -352,5 +356,55 @@ private extension URLRequest {
             data.append(buffer, count: read)
         }
         return data
+    }
+}
+
+extension NotificationSettingsViewModelTests {
+    func testNewToggleDoesNotCancelAnInFlightSaveOrReplayItsOldValue() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.prefsJSON(beacon: false)),
+            .status(200, body: Self.prefsJSON(beacon: true), delay: 0.25),
+            .status(200, body: Self.prefsJSON(beacon: false))
+        ]
+        let vm = makeViewModel()
+        await vm.load()
+        await vm.toggleRow(RowID.beaconPush, isOn: true)
+        let save = Task { await vm.flushPendingSaveNow() }
+        for _ in 0..<1000 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.httpMethod == "PUT" }) { break }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "PUT" }.count, 1)
+        await vm.toggleRow(RowID.beaconPush, isOn: false)
+        // Await the actual save loop: a fixed sleep can expire on a busy
+        // simulator and leave this request consuming the next test's stubs.
+        await save.value
+        await vm.flushPendingSaveNow()
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT", "PUT"])
+        XCTAssertEqual(row(loadedGroups(vm), RowID.beaconPush)?.control, .toggle(isOn: false))
+        XCTAssertEqual(vm.toast?.text, "Saved")
+    }
+
+    func testBeaconDefaultsAndOptOutPersistWithoutChangingOtherToggles() async throws {
+        let defaults = try JSONDecoder().decode(NotificationPreferencesDTO.self, from: Data("{}".utf8))
+        XCTAssertTrue(defaults.beaconPushEnabled)
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.prefsJSON()),
+            .status(200, body: Self.prefsJSON(beacon: false))
+        ]
+        let vm = makeViewModel()
+        await vm.load()
+        await vm.toggleRow(RowID.beaconPush, isOn: false)
+        XCTAssertEqual(row(loadedGroups(vm), RowID.beaconPush)?.control, .toggle(isOn: false))
+        await vm.flushPendingSaveNow()
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: XCTUnwrap(XCTUnwrap(SequencedURLProtocol.capturedRequests.last).httpBodyData())
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(body.count, 1)
+        XCTAssertEqual(body["beacon_push_enabled"] as? Bool, false)
+        XCTAssertEqual(row(loadedGroups(vm), RowID.beaconPush)?.control, .toggle(isOn: false))
+        XCTAssertEqual(row(loadedGroups(vm), RowID.gigUpdates)?.control, .toggle(isOn: true))
     }
 }

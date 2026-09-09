@@ -231,8 +231,8 @@ private fun FirstRunLayout(
                         unreadCount = 0,
                     ),
                 onAvatarTap = { onIntent(HubNavigationIntent.OpenProfile) },
-                onBellTap = {},
-                onMenuTap = {},
+                onBellTap = { onIntent(HubNavigationIntent.OpenNotifications) },
+                onMenuTap = { onIntent(HubNavigationIntent.OpenMenu) },
             )
             HubFirstRunHero(content = content) { onIntent(HubNavigationIntent.StartVerification) }
             HubPillarGrid(content.pillars) { onIntent(HubNavigationIntent.PillarTapped(it)) }

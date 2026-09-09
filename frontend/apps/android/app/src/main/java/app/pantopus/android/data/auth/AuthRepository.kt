@@ -309,7 +309,7 @@ class AuthRepository
         init {
             // Workstream 1.4 — DeepLinkRouter is a process singleton; bind
             // signed-in state so signed-out content links can be deferred.
-            DeepLinkRouter.bindSignedInProvider { _state.value is State.SignedIn }
+            DeepLinkRouter.bindSignedInUserIdProvider { (_state.value as? State.SignedIn)?.user?.id }
         }
 
         // ── Cold start: L1 → L2 → L3 ──────────────────────────────────────
@@ -1191,6 +1191,7 @@ class AuthRepository
             try {
                 val access = tokenStorage.accessToken()
                 val refresh = tokenStorage.refreshToken()
+                val userId = (_state.value as? State.SignedIn)?.user?.id ?: tokenStorage.userId()
                 socketManager.disconnect()
                 if (manual && !(access.isNullOrBlank() && refresh.isNullOrBlank())) {
                     revokeOnServer(access, refresh)
@@ -1200,9 +1201,14 @@ class AuthRepository
                 observability.identify(userId = null)
                 Analytics.identify(userId = null)
                 observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
-                // Workstream 1.4 — never resume a prior user's deferred destination.
+                // A server-ended session may resume only this account's
+                // unfinished arrival. Explicit logout discards every link.
                 PlacePendingStore.clear()
-                PendingDeepLinkStore.clear()
+                if (manual) {
+                    PendingDeepLinkStore.clear()
+                } else {
+                    PendingDeepLinkStore.retainForReauthentication(userId)
+                }
                 DeepLinkRouter.clearPending()
                 feedModeration.clear()
                 runCatching { accountHints.clearGrant() }
@@ -1245,6 +1251,7 @@ class AuthRepository
          */
         suspend fun eraseAllLocalState() {
             signOut(reason = SessionEndReason.expired(code = "ACCOUNT_DELETED"))
+            PendingDeepLinkStore.clear()
             runCatching { accountHints.delete() }
             _rememberedAccounts.value = emptyList()
             runCatching { deviceKeyStore.delete() }

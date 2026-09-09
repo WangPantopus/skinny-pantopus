@@ -73,6 +73,7 @@ fun PulsePostDetailScreen(
     onEdit: (String) -> Unit = {},
     /** "Nearby Providers" tap-through. Carries the business *username*. */
     onOpenBusiness: (String) -> Unit = {},
+    onContentLoaded: () -> Unit = {},
     viewModel: PulsePostDetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -94,6 +95,9 @@ fun PulsePostDetailScreen(
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(Unit) { viewModel.loadNearbyProviders() }
+    LaunchedEffect(state) {
+        if (state is PulsePostDetailUiState.Loaded) onContentLoaded()
+    }
 
     LaunchedEffect(didDelete) {
         if (didDelete) onBack()

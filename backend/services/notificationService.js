@@ -235,26 +235,31 @@ const MAIL_TYPES = new Set([
  * Returns true by default if no preferences row exists.
  */
 async function isTypeEnabled(userId, type) {
+  const isBeacon = type === 'persona_broadcast';
   try {
     let prefField = null;
     if (GIG_TYPES.has(type)) prefField = 'gig_updates_enabled';
     else if (HOME_TYPES.has(type)) prefField = 'home_reminders_enabled';
     else if (MAIL_TYPES.has(type)) prefField = 'mail_summary_enabled';
+    else if (isBeacon) prefField = 'beacon_push_enabled';
 
     // If not a categorized type, allow by default
     if (!prefField) return true;
 
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('UserNotificationPreferences')
       .select(prefField)
       .eq('user_id', userId)
       .maybeSingle();
 
+    // A read failure cannot establish that a saved Beacon opt-out is absent.
+    // Only transport uses this check; the in-app row already exists.
+    if (isBeacon && error) return false;
     // Default to enabled if no row exists
     if (!data) return true;
     return data[prefField] !== false;
   } catch {
-    return true; // Default enabled on error
+    return !isBeacon; // Preserve existing categories; fail closed for Beacon push.
   }
 }
 
