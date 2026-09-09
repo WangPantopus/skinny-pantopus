@@ -112,6 +112,7 @@ class NotificationSettingsSnapshotTest {
         aqiAlertsEnabled = true,
         mailSummaryEnabled = false,
         gigUpdatesEnabled = true,
+        beaconPushEnabled = true,
         homeRemindersEnabled = true,
         quietHoursStartLocal = quietStart,
         quietHoursEndLocal = quietEnd,

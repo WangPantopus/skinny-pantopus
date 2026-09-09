@@ -91,6 +91,7 @@ describe('Canonical baseline through real SDK, PostgREST JWT roles and Following
     try {
       if (seeded) sql(`BEGIN;
         DELETE FROM public."Notification" WHERE user_id='${owner}';
+        DELETE FROM public."UserNotificationPreferences" WHERE user_id='${owner}';
         DELETE FROM public."Post" WHERE user_id='${owner}';
         DELETE FROM public."User" WHERE id='${owner}';
         DELETE FROM auth.users WHERE id='${owner}';
@@ -137,5 +138,17 @@ describe('Canonical baseline through real SDK, PostgREST JWT roles and Following
     assert.equal((await service.from('Notification').insert(row)).error?.code, '23505');
     const result = await service.from('Notification').select('link').eq('idempotency_key', row.idempotency_key);
     assert.ifError(result.error); assert.deepEqual(result.data, [{ link: row.link }]);
+  });
+
+  it('persists Beacon opt-out and restore through real PostgREST without changing another preference', async () => {
+    const first = await service.from('UserNotificationPreferences').insert({ user_id: owner, gig_updates_enabled: false })
+      .select('beacon_push_enabled').single();
+    assert.ifError(first.error); assert.equal(first.data.beacon_push_enabled, true);
+    for (const enabled of [false, true]) {
+      const saved = await service.from('UserNotificationPreferences').update({ beacon_push_enabled: enabled }).eq('user_id', owner)
+        .select('beacon_push_enabled,gig_updates_enabled').single();
+      assert.ifError(saved.error);
+      assert.deepEqual(saved.data, { beacon_push_enabled: enabled, gig_updates_enabled: false });
+    }
   });
 });

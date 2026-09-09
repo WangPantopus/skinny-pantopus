@@ -52,9 +52,11 @@ do not change the tested application code. The latest documentation head
 `37a49cce82dc2721c736e3a0971f6fe0f4f896f4` also has a fully passing
 [CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34274045637).
 
-Full acceptance remains open: there is no Beacon-specific push-only preference,
-and physical Android hardware is unavailable. The schema's legacy migration
-policy prevents adding its preference migration before baseline adoption. The
+Full acceptance remains open. The [Beacon push-only preference](beacon-push-preference-2026-09-08.md)
+is implemented locally across schema/API/web/iOS/Android with targeted tests
+passing; staging rollout and device acceptance remain pending. Physical Android
+hardware is unavailable. Canonical source adoption now permits the additive
+migration; hosted ledger adoption remains separate. The
 [September 8 adoption continuation](database-baseline-rehearsal-2026-09-08.md)
 closes the four table / 37 column gaps on a separate local candidate, preserves
 all original values across 345 tables, and passes real SQL contracts. It also
@@ -84,13 +86,21 @@ canonical baseline files. Local CLI replay, seven pgTAP contracts and five real
 PostgREST/Following integration tests pass. Reference hashes match; the strict
 catalog still reports only the two reviewed CHECK-format differences. Fresh
 read-only production managed-object inspection is recorded in that report.
-No hosted corrections or ledger adoption have been applied. Canonical CI is
-the next verification gate before continuing the Beacon preference migration.
+No hosted corrections or ledger adoption have been applied. The canonical
+database job in [CI run 34293457260](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34293457260)
+passes at `f9362cbca55a25ea51f9a1ebbcb60b72fb7fad22`, including replay, lint,
+all seven SQL contracts and five real integration tests. Other native jobs are
+still running at this checkpoint. Beacon preference source now passes 53 targeted
+backend tests, privacy gates, four web tests/typechecking, 16 iOS tests, 24 Android
+tests, eight SQL contracts and six real integrations. Native formatting/static
+checks pass. Its own CI, staging rollout and device acceptance are next.
 Preserve the current global feature flag and deployment/migration switches.
 
 Beacon repairs remain on `codex/beacon-full-journey` in
-`/private/tmp/pantopus-beacon-journey`. Baseline prerequisite work is isolated on
-`codex/database-baseline-adoption` in `/private/tmp/pantopus-database-baseline-adoption`,
+`/private/tmp/pantopus-beacon-journey`. Baseline prerequisite work is recorded on
+`codex/database-baseline-adoption`. Its continuing isolated worktree at
+`/private/tmp/pantopus-database-baseline-adoption` now uses child branch
+`codex/beacon-push-preference` for the new setting,
 based on the Beacon branch so its current handoff/evidence are retained. The main
 checkout and all other worktrees/ignored artifacts are preserved.
 Draft [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), stacked on
@@ -109,8 +119,9 @@ Start a new session by:
    verify its exact-head database CI.
    Existing permissions are preserved; new role grants are a separate change.
    Normal-role replay, Home boundaries, explicit ACLs, Beacon storage/RPC
-   restrictions and local SQL/integration checks already pass. Add the
-   preference migration/API/native setting and verify hosted role denial.
+   restrictions and local SQL/integration checks already pass. Read the
+   [preference milestone and staging plan](beacon-push-preference-2026-09-08.md),
+   verify its CI, then continue staging rollout and hosted role denial.
    Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the
