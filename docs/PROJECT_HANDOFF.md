@@ -66,7 +66,7 @@ synthetic accounts and already revoked session records remain as evidence,
 with zero push tokens and all their registry sessions revoked. The owned
 iOS simulator is closed. No iPhone observation is pending.
 
-Current development is `/private/tmp/pantopus-staging-account-delivery`, branch
+Account development is `/private/tmp/pantopus-staging-account-delivery`, branch
 `codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
 now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
 records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
@@ -74,10 +74,33 @@ strict Swift lint/format pass. A private SMTP capture service and an unexposed
 API candidate run on the existing host. Synthetic signup, captured verification
 and resend, single-use verification, and verified login pass. Live recovery
 exposed an immediate-login timestamp boundary after reset; its repair and two new
-regressions now pass all 4,340 backend tests. Live verification of the updated
-candidate remains next. Final frontend CI is running. The configured
+regressions now pass all 4,340 backend tests. The updated candidate passes two fresh live reset → immediate login → own-profile
+cycles while denying prior tokens. SMTP outage verification and staging web
+delivery are next. Final frontend CI is running. The configured
 `staging.pantopus.com` frontend hostname does not resolve, so real browser link
 completion remains unfinished.
+
+Staging web preparation is in `/private/tmp/pantopus-staging-web-delivery`,
+branch `codex/staging-web-delivery`. The container build now accepts an explicit
+public app origin as well as the API origin, keeping staging links isolated.
+The image build and hostname/TLS setup are pending.
+
+The [staging web report](staging-web-delivery-2026-09-09.md) records a successful
+production image build and six entry/account pages served on the existing host,
+loopback only. The image has verified staging origins and a sandbox Stripe key.
+Cloudflare sign-in is pending before configuring the currently absent frontend
+hostname and completing browser email links. PR #17's iOS CI passed; Android
+caught two old email-copy screenshot baselines, now being updated and verified.
+PR #16's merged-master CI passed in full.
+
+The [Home file access repair](home-file-access-2026-09-09.md) now enforces the
+actual document permission result for private listing and uploads, including
+former occupants and explicit denials. Eighteen new regression tests and privacy
+gates pass. The full backend run passed 4,357 tests with one unrelated transient
+socket failure; all 30 tests in that failing suite passed on targeted rerun.
+This is source/test evidence; storage provider setup and live file access remain
+unfinished. The isolated worktree is `/private/tmp/pantopus-home-file-access`,
+branch `codex/home-file-access`.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 No production changes or new paid resources were made. The earlier worktree
@@ -135,8 +158,8 @@ are retained for rollback. Production and the old testing database are preserved
 
 1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
-   The native Beacon, natural-expiry and chat return milestones now pass; finish
-   fixture cleanup and retain explicit platform/build limits. Preserve revoked
+   The native Beacon, natural-expiry, chat return and fixture cleanup milestones
+   now pass; retain explicit platform/build limits. Preserve revoked
    session state and evidence. Physical Android is
    unavailable, and simulator-only results cannot establish hardware delivery.
 2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
@@ -149,7 +172,7 @@ are retained for rollback. Production and the old testing database are preserved
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical
 Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. The fresh simulator fixture above remains active. Read the
+Beacons or post IDs. The simulator fixture above is also cleaned. Read the
 private operator checkpoint before sending or
 mutating. No user device observation is currently pending.
 
