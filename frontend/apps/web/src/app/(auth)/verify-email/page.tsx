@@ -102,7 +102,7 @@ function VerifyEmailPageContent() {
     setResending(true);
     try {
       const res = await api.auth.resendVerification(emailHint, redirectTo);
-      setMessage(res?.message || 'If that email exists, a verification email has been sent.');
+      setMessage(res?.message || 'If that email needs verification, we will attempt to send a new link.');
     } catch (err: unknown) {
       setMessage(extractApiError(err, 'Could not resend verification email.'));
     } finally {

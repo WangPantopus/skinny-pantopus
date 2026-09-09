@@ -115,7 +115,7 @@ final class VerifyEmailLandingViewModel {
         do {
             try await auth.resendVerification(email: email)
             resendCooldownUntil = now.addingTimeInterval(Self.resendCooldown)
-            toast = ResendToast(message: "Verification email sent.", isError: false)
+            toast = ResendToast(message: "Verification link requested.", isError: false)
             Observability.shared.track("auth.verify.landing_resent")
         } catch let error as AuthError {
             toast = ResendToast(message: error.errorDescription ?? "Couldn't resend. Try again.", isError: true)

@@ -2,8 +2,8 @@
  * Email Service
  * 
  * Uses nodemailer for sending emails.
- * In development (no SMTP config), logs emails via logger.
- * In production, uses configured SMTP transport.
+ * Uses configured SMTP transport. Local preview requires EMAIL_DELIVERY_MODE=log;
+ * staging and production never substitute preview output for delivery.
  * 
  * Required env vars for production:
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
@@ -19,7 +19,9 @@ const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const SMTP_FROM = process.env.SMTP_FROM || 'Pantopus <hello@pantopus.com>';
 
 let transporter = null;
-let devMode = true;
+const localEnvironment = ['development', 'test'].includes(process.env.NODE_ENV)
+  && !['staging', 'production'].includes(process.env.APP_ENV);
+const previewMode = localEnvironment && process.env.EMAIL_DELIVERY_MODE === 'log';
 
 // Initialize transport
 const requiredSmtpVars = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'];
@@ -31,24 +33,40 @@ if (missingSmtpVars.length === 0) {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
-    devMode = false;
     logger.info('Email service initialized with SMTP transport');
   } catch (err) {
-    logger.warn('Failed to init SMTP transport, falling back to dev mode', { error: err.message });
+    logger.error('Failed to initialize SMTP transport', { code: err.code });
   }
 } else {
-  logger.warn('Email service running without SMTP transport. Emails will be logged only.', {
+  logger.warn('Email delivery is unavailable without SMTP transport.', {
     missing: missingSmtpVars,
   });
 }
 
+// Run before account lookup so an unavailable mail server produces the same
+// response for known and unknown addresses. Verification does not send email.
+async function checkDeliveryAvailability() {
+  if (previewMode) return { available: true, preview: true };
+  if (!transporter) return { available: false, code: 'EMAIL_UNAVAILABLE' };
+  try {
+    await transporter.verify();
+    return { available: true };
+  } catch (err) {
+    logger.error('SMTP readiness check failed', { code: err.code });
+    return { available: false, code: 'EMAIL_UNAVAILABLE' };
+  }
+}
+
 /**
- * Send an email. In dev mode, logs to console instead.
+ * Send an email. Explicit local preview logs metadata only, never auth links.
  * @param {Object} opts - { to, subject, html, text, attachments? }
  *   attachments: optional nodemailer attachment array (e.g. an .ics calendar invite).
  * @returns {Promise<{ success: boolean, messageId?: string }>}
@@ -65,33 +83,30 @@ async function sendEmail({ to, subject, html, text, attachments }) {
     mailOptions.attachments = attachments;
   }
 
-  if (devMode) {
-    logger.info('📧 [DEV EMAIL] Would send email:', {
+  if (previewMode) {
+    logger.info('Local email preview (not delivered)', {
       to: mailOptions.to,
       subject: mailOptions.subject,
     });
-    logger.debug('DEV EMAIL body', {
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-      body: mailOptions.text || '(html only)',
-    });
-    return { success: true, messageId: `dev-${Date.now()}` };
+    return { success: true, preview: true, messageId: `dev-${Date.now()}` };
   }
+
+  if (!transporter) return { success: false, error: 'EMAIL_UNAVAILABLE' };
 
   try {
     const info = await transporter.sendMail(mailOptions);
+    if (Array.isArray(info.accepted) && info.accepted.length === 0) {
+      return { success: false, error: 'EMAIL_REJECTED' };
+    }
     logger.info('Email sent', {
       to,
       subject,
       messageId: info.messageId,
-      accepted: info.accepted,
-      rejected: info.rejected,
-      response: info.response,
     });
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    logger.error('Failed to send email', { to, subject, error: err.message });
-    return { success: false, error: err.message };
+    logger.error('Failed to send email', { to, subject, code: err.code });
+    return { success: false, error: 'EMAIL_SEND_FAILED' };
   }
 }
 
@@ -1036,6 +1051,7 @@ function stripHtml(html) {
 }
 
 module.exports = {
+  checkDeliveryAvailability,
   sendEmail,
   sendHomeInviteEmail,
   sendPasswordResetEmail,

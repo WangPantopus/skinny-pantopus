@@ -72,7 +72,7 @@ function LoginContent() {
     setInfo('');
     try {
       const res = await api.auth.resendVerification(normalizeEmail(email), redirectTo);
-      setInfo(res?.message || 'If that email exists, a verification email has been sent.');
+      setInfo(res?.message || 'If that email needs verification, we will attempt to send a new link.');
     } catch (err: unknown) {
       setError(extractApiError(err, 'Could not resend verification email.'));
     } finally {

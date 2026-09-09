@@ -39,7 +39,7 @@ function ForgotPasswordContent() {
     setSuccess('');
     try {
       const response = await api.auth.requestPasswordReset(normalizeEmail(email), redirectTo);
-      setSuccess(response?.message || 'If that email exists, a reset link has been sent.');
+      setSuccess(response?.message || 'If that email is eligible, we will attempt to send a password reset link.');
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(extractApiError(err, 'Failed to send reset link.'));

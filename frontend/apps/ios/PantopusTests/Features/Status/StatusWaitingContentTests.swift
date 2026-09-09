@@ -134,7 +134,7 @@ final class StatusWaitingContentTests: XCTestCase {
     func testCheckYourEmailResentState() {
         let content = StatusWaitingContent.checkYourEmail(email: "maria.k@email.com", resent: true)
         XCTAssertEqual(content.statusPill?.tone, .success)
-        XCTAssertEqual(content.statusPill?.text, "New link sent · just now")
+        XCTAssertEqual(content.statusPill?.text, "Link requested · just now")
         XCTAssertFalse(content.statusPill?.isSpinning == true)
         let resend = content.actionStack[1]
         XCTAssertTrue(resend.isDisabled)

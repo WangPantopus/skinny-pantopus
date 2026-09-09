@@ -42,7 +42,7 @@ final class VerifyEmailViewModelTests: XCTestCase {
 
     func test_resend_success_sets_cooldown_and_didResend() async {
         SequencedURLProtocol.routeResponses["/api/users/resend-verification"] = [
-            .status(200, body: "{\"message\":\"If that email exists, a verification email has been sent.\"}")
+            .status(200, body: "{\"message\":\"If that email needs verification, we will attempt to send a new link.\"}")
         ]
         let auth = makeAuth()
         let vm = VerifyEmailViewModel(email: "alice@example.com", token: nil, softGate: true)

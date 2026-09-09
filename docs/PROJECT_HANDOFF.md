@@ -44,27 +44,50 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
   and production. Source integration is not a production deployment. Hosted
   canonical ledger adoption and production cutover remain separate work.
 
-The active worktree is `/private/tmp/pantopus-database-baseline-adoption`, branch
-`codex/beacon-native-acceptance`, based on merged master `0e57e4f2a`;
-other worktrees, ignored operator artifacts and the owner's design proposal are
-preserved. The [iOS session-return repair](ios-notification-continuation-2026-09-09.md)
-now passes 177 targeted unit tests, strict lint and actual simulator expiry/
-revocation → sign-in → exact-post journeys. It also fixes the login presentation
-transition and keeps the form when its reason banner is dismissed. Six existing
-entry/Beacon UI journeys pass. A fresh native composer fixture has two synthetic accounts,
-one Beacon/follower, global device push disabled and zero tokens. The
-[native Beacon journey](beacon-native-acceptance-2026-09-09.md) now passes:
-composer publication, audience notification, exact post/author, cold-start
-session restoration and normal logout. N2 alone is read; N1 remains unread.
-Both stored markers are reconciled and must never be republished. The fixture
-is parked for natural token expiry; its dedicated simulator must remain
-untouched until the private runner's elapsed-time guard passes. The
-[chat continuation repair](chat-notification-continuation-2026-09-09.md) now
-passes 220 iOS unit tests, four post/chat expiry/revocation UI journeys and
-190 Android tests. Android ktlint/Detekt pass; staging APK/lint and live
-Android chat return are active next checks.
-No iPhone observation is pending. Update
-this handoff after each meaningful milestone.
+[PR #16](https://github.com/WangPantopus/skinny-pantopus/pull/16) merged at
+11:20 UTC as `8e856dcd9619d4e42557a803619582fff76ec719` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34341032792)
+passed. It adds native Beacon acceptance and preserves chat destinations through
+session recovery. The [chat report](chat-notification-continuation-2026-09-09.md)
+records 220 iOS unit tests, four native post/chat expiry/revocation UI journeys,
+190 Android tests, and live staging/FCM → security sign-in → exact chat return.
+Unread clears; normal Android logout removes all fresh fixture tokens and its
+global push is restored off. Its revoked sessions stay revoked; the owned
+Android emulator is closed.
+
+The [native Beacon report](beacon-native-acceptance-2026-09-09.md) records native
+composer publication, audience notification, exact post/author, cold start and
+logout. Natural expiry now also passes: after more than 3,605 seconds untouched,
+the existing Staging app refreshed the same hosted session and opened exact N2
+without login, rebuild or token replacement. N1/N2 and the single chat marker
+must never be republished. Final native logout and scoped cleanup pass: two Beacon posts, their audience
+notifications, the direct chat and beta enrollment are removed. The two
+synthetic accounts and already revoked session records remain as evidence,
+with zero push tokens and all their registry sessions revoked. The owned
+iOS simulator is closed. No iPhone observation is pending.
+
+Current development is `/private/tmp/pantopus-staging-account-delivery`, branch
+`codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
+now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
+records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
+strict Swift lint/format pass. A private SMTP capture service and an unexposed
+API candidate run on the existing host. Synthetic signup, captured verification
+and resend, single-use verification, and verified login pass. Live recovery
+exposed an immediate-login timestamp boundary after reset; its repair and two new
+regressions now pass all 4,340 backend tests. Two fresh live recovery cycles now pass immediate login/profile access while
+old tokens remain denied. A live SMTP outage returned the same 503 for known and
+unknown accounts without creating a user; restored delivery and login pass.
+Final CI passed all three iOS simulators and Android instrumentation but found
+two outdated Android email screenshots. Both were inspected and updated; all
+seven status-screen snapshots pass local verification. Final CI is rerunning. The configured
+`staging.pantopus.com` frontend hostname does not resolve, so real browser link
+completion remains unfinished.
+
+The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
+No production changes or new paid resources were made. The earlier worktree
+`/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
+including the owner's design proposal, remain preserved. Update this handoff
+after each meaningful milestone.
 
 ### Completed Beacon and platform evidence
 
@@ -116,8 +139,9 @@ are retained for rollback. Production and the old testing database are preserved
 
 1. Finish remaining notification states after the completed native composer journey
    using iOS simulators, Android emulators and isolated staging API fixtures.
-   Cover live session/login return, natural expiry, chat destinations and token
-   lifecycle; preserve the already revoked test sessions. Physical Android is
+   The native Beacon, natural-expiry and chat return milestones now pass; finish
+   retain explicit platform/build limits after completed fixture cleanup. Preserve revoked
+   session state and evidence. Physical Android is
    unavailable, and simulator-only results cannot establish hardware delivery.
 2. Continue safe staging signup/recovery/verification, OAuth, authorized storage,
    sandbox payments and address verification. Use existing/free capacity.
@@ -129,7 +153,7 @@ are retained for rollback. Production and the old testing database are preserved
 Start each continuation by fetching origin, checking PR/master CI and staging
 state, and reading the linked report for the next concrete case. Earlier physical
 Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. The fresh simulator fixture above remains active. Read the
+Beacons or post IDs. The simulator fixture above is also cleaned. Read the
 private operator checkpoint before sending or
 mutating. No user device observation is currently pending.
 

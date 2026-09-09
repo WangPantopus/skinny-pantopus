@@ -92,6 +92,6 @@ class VerificationCenterViewModelTest {
             val loaded = vm.state.value as GroupedListUiState.Loaded
             val emailGroup = loaded.groups.first { it.id == "email" }
             val resend = emailGroup.rows.first { it.id == "email.resend" }
-            assertEquals("Sent — check your inbox", resend.label)
+            assertEquals("Requested — check your inbox", resend.label)
         }
 }
