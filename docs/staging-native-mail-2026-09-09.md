@@ -139,3 +139,33 @@ Android printed link → real pending status → read-only refresh → cold rest
 verified member for only its designated Home and two attempts (wrong + correct).
 iOS final code submission, both same-code retries, final normal logout and exact
 fixture cleanup remain. Do not mark these fixtures cleaned or republish them.
+
+
+## Completed native acceptance and cleanup
+
+The final opt-in iOS `NativePostcardJourneyUITests` run passed in 109.3 seconds.
+It uses normal login/logout and disposable runner inputs; ordinary CI skips live
+actions. Both platforms pass opening the actual printed Home link, real pending
+status, read-only refresh, cold app restart, wrong code rejection, correct code
+confirmation, and reopening/retrying the same code. Android also passes launching
+the updated app into Place and its new menu → Settings → logout path. iOS passed
+that menu path before fixture login. The earlier identifier failure was a test
+query issue: the visible button inherited the container's SwiftUI identifier;
+the final test selects its visible “Verify code” label.
+
+Database reconciliation confirms exactly one proof and one verified member for
+each designated Home, two attempts each (one wrong plus one correct), and no
+additional membership or attempt from the replay. Both native logouts revoked
+their sessions before operator cleanup. The two exact Lob test postcards are
+deleted, temporary Homes/proofs/residency/occupancy/audit/notifications removed,
+operator sessions revoked and denied, and zero fixture push tokens remain.
+Original Home document IDs are unchanged. The private setup, API journey and
+native finalization scripts are complete and must not be rerun.
+
+Evidence is retained privately in `staging-native-mail/ios-native-acceptance-20260909T202354.log`,
+the final native UI XML captures, and `native-finalize.log` (sanitized assertions
+only are described here). Credentials, printed codes and raw operator logs are
+excluded from Git. This is simulator + real Lob test API acceptance, not physical
+delivery or an external Lob callback. Current-head full CI and PR #28 integration
+remain before the next source checkpoint; multi-unit modern mail attachment,
+payment/OAuth and the launch gates remain open.

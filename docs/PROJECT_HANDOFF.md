@@ -58,20 +58,21 @@ member across concurrent confirmations, and foreign/unit/revoked-access denial.
 All disposable test mail/Home/proof/notification fixtures are cleaned, fixture
 sessions revoked, and original document IDs preserved. Public runtimes are unchanged.
 
-Simulator acceptance exposed an inaccessible account menu on iOS after Place
-became the landing screen. Both Place headers now expose the existing menu;
-iOS build/strict lint and Android build/Detekt/updated Place snapshot pass.
-Android printed-link status, read-only refresh, cold launch and wrong/exact code
-entry pass against its own real Lob test postcard, creating one verified member.
-iOS has reached code entry; final submission/retry/logout acceptance remains.
-Two exact simulator mail/Home fixtures remain pending cleanup; do not republish.
-Draft [PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) has passing
-backend/database checks; an auxiliary Docker Hub pull returned HTTP 500, so a
-fresh current-head full CI pass is still required before integration.
+Native simulator acceptance is complete on iOS and Android: exact printed link,
+real pending status/read-only refresh, cold launch, wrong-code denial, correct
+confirmation, same-code retry and normal logout all pass. Each fixture produced
+one member for only its Home and exactly two attempts. The Place menu repair
+passes on both devices, keeping account settings reachable after auto-landing.
+Both exact Lob test postcards and temporary Home/proof/claim/occupancy records
+are removed; all fixture sessions are revoked, no push tokens remain, and the
+original document IDs are preserved. Do not rerun these completed publishers.
 
-Next finish native simulator acceptance and current-head PR integration checks,
-then modern multi-unit attachment and remaining payment/OAuth acceptance.
-No owner device observation is pending.
+[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) awaits full
+current-head CI and integration. Its earlier auxiliary Docker Hub pull returned
+HTTP 500; the latest source must pass that check as well. Next continue modern
+multi-unit attachment and remaining payment/OAuth acceptance while CI runs.
+No owner device observation is pending. Simulator proof is not physical mail or
+an externally delivered Lob callback.
 
 The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
 browser synthetic email entry/recovery, cookies/CSRF, session revocation and
