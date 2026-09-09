@@ -167,8 +167,9 @@ lint and both real publication-versus-expiry races. Live private staging quota,
 expiry/outage/retry and late-write reconciliation pass; original five documents,
 exact bytes and quotas/limits are preserved. Native launch cleanup passes 35 iOS
 and 34 Android tests plus lint/build checks. Both native share → process restart
-checks pass with exact 609-byte copies removed on relaunch. Publish recovery,
-verify the zero-cache candidate follow-up, then finish document replacement. The report preserves
+checks pass with exact 609-byte copies removed on relaunch. The zero-cache
+candidate follow-up also passes exact upload and immediate post-delete denial.
+Publish recovery and finish document replacement. The report preserves
 the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
 PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree

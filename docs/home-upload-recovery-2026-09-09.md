@@ -75,10 +75,15 @@ as tombstones or a rejected admission; no test document remains published.
 The first provider-removal assertion saw a cached download after successful
 removal. Provider listing and a fresh uncached request independently proved
 absence. The resumed check uses both and passes. New uploads now request zero
-cache lifetime; all 62 focused tests pass after that change. This cache-setting
-follow-up has not yet reached the candidate. Evidence is private under
+cache lifetime; all 62 focused tests pass after that change. The follow-up
+candidate now runs `4609759e1`, image
+`14bdf3b4117a7f481ba81754f6cec407851da1a36f389a3ae5571782bc849153`.
+Live `max-age=0`, exact bytes, empty provider listing and immediate normal
+download denial after deletion pass; its disposable file is removed and quota
+restored. The original five documents remain. Evidence is private under
 `recovery-staging-migration.json`, `build-plan.json`, `recovery-journey.log`,
-`inspect-recovery.log` and `recovery-resume.log`; do not rerun completed publishers.
+`inspect-recovery.log`, `recovery-resume.log` and `cache-journey.log`; do not rerun
+completed publishers.
 
 ## Work in progress and verification limits
 
