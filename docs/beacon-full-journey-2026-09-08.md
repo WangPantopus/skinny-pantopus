@@ -227,12 +227,15 @@ check; expose it consistently in web/iOS/Android notification settings; and
 verify that off retains the audience row and exact permitted destination.
 Restore must affect future sends without replaying suppressed notifications.
 
-`supabase/migration-policy.json` is still in `legacy` mode, and
+At this report's original milestone, `supabase/migration-policy.json` was in `legacy` mode, and
 `scripts/db/check-migrations.cjs` rejects any new migration with “Finish baseline
 adoption before adding migration.” Complete the isolated baseline-adoption
 rehearsal and review its release contract before adding this schema/API/UI
 change. Do not alter frozen migration hashes or use an unrelated mail/gig toggle
-as a substitute. No schema change or production cutover is included in this PR.
+as a substitute. The subsequent [canonical source milestone](database-canonical-baseline-2026-09-08.md)
+activates the baseline on PR #11 after local replay/SQL/integration verification;
+hosted adoption and exact-head database CI remain separate gates. No production
+cutover is included in this work.
 
 
 ## Final native check and cleanup

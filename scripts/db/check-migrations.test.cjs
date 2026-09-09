@@ -43,7 +43,7 @@ test('changing the inventory cannot hide an edit to historical SQL', () => {
     assert.match(check(dir, 'HEAD').errors.join(), /historical inventory is immutable/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
-test('adopted history enforces append-only SQL and merge ordering', () => {
+test('adopted history enforces append-only SQL and merge ordering even for baselines larger than 1 MiB', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const os = require('node:os');
@@ -54,15 +54,16 @@ test('adopted history enforces append-only SQL and merge ordering', () => {
   const baseline = 'supabase/migrations/20260906000000_baseline.sql';
   const existing = 'supabase/migrations/20260908000000_existing.sql';
   const sql = "-- Backwards compatible: yes\nset local lock_timeout='5s';\nselect 1;";
+  const baselineSql = 'create table example(id int);\n-- ' + 'baseline source '.repeat(100_000);
   const put = (name, content) => {
     fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
     fs.writeFileSync(path.join(dir, name), content);
   };
   try {
     put(historical.replace('/migrations/', '/migrations-archive/'), original);
-    put(baseline, 'create table example(id int);'); put(existing, sql);
+    put(baseline, baselineSql); put(existing, sql);
     put('supabase/tests/contracts.sql', 'select plan(1); select ok(true); select * from finish();');
-    put('supabase/migration-policy.json', JSON.stringify({ ...policy, mode: 'baselined', baselineFiles: { [baseline]: hash('create table example(id int);') } }));
+    put('supabase/migration-policy.json', JSON.stringify({ ...policy, mode: 'baselined', baselineFiles: { [baseline]: hash(baselineSql) } }));
     git(['init']); git(['add', '.']);
     git(['-c', 'user.name=CI', '-c', 'user.email=ci@example.invalid', 'commit', '-m', 'Adopted history']);
     const late = 'supabase/migrations/20260907000000_late.sql';
