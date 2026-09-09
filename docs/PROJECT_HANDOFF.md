@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 8, 2026. This is the continuing-work entry point. Detailed
+Updated September 9, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -136,6 +136,25 @@ pass five repetitions (80 executions), along with formatting and strict lint.
 [Full PR #12 CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34319484968)
 passes at `289612d4e37b4b40a4b6753d6f837dca41e5b353`, including iPhone SE.
 Installed application code remains at the previously verified revision.
+The later documentation checkpoint `d33a33c1a20c47111017d3c6ea0e1f67ded182e7`
+also has fully passing [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34322453803).
+
+The next [platform milestone](notification-platform-verification-2026-09-09.md)
+passes Android OS permission denial, retained in-app exact return, permission
+restore and delivery without replay through live staging/FCM. A fresh isolated
+Android-only fixture exposed a
+real bug: login succeeds but loses the requested post and opens Hub. The repair
+now passes 148 targeted tests and a fresh live notification → sign-in → exact
+post repeat. Its account-bound arrival clears after successful load. Scoped
+cleanup removed four posts, five notifications, the fresh Beacon and creator;
+normal logout removed the Android token. Original account/device/preferences/OS
+permission are preserved, global/internal flags remain false and beta is empty.
+Formatting, Detekt, Android lint and the staging build pass; the owned emulator
+is closed after cleanup. The draft repair PR is the next action on
+`codex/notification-session-return`, based on PR #12's `d33a33c1a` checkpoint.
+Keep the already revoked sessions revoked; preserve other sessions and the
+original AuthDevice. The iPhone preference
+fixture is already cleaned up, and its completed checks need no repetition.
 
 Preserve global/internal feature disablement, unrelated local work and both
 release/migration switches. Only fresh synthetic fixtures and designated device
@@ -146,7 +165,8 @@ Beacon repairs remain on `codex/beacon-full-journey` in
 `/private/tmp/pantopus-beacon-journey`. Baseline prerequisite work is recorded on
 `codex/database-baseline-adoption`. Its continuing isolated worktree at
 `/private/tmp/pantopus-database-baseline-adoption` now uses child branch
-`codex/beacon-push-preference` for the new setting,
+`codex/notification-session-return` for the Android continuation repair, branched
+from `codex/beacon-push-preference` after its completed preference acceptance,
 based on the Beacon branch so its current handoff/evidence are retained. The main
 checkout and all other worktrees/ignored artifacts are preserved.
 [PR #11](https://github.com/WangPantopus/skinny-pantopus/pull/11), merged into the
@@ -168,8 +188,12 @@ Start a new session by:
    restrictions and local SQL/integration checks already pass. Read the
    [preference milestone and staging plan](beacon-push-preference-2026-09-08.md),
    verify its CI, then continue OS-permission/session/token lifecycle acceptance.
-   Android/API and iPhone preference fixtures are cleaned up. Inspect the private
-   checkpoint before creating a fresh isolated fixture for a concrete next case.
+   Android/API and iPhone preference fixtures and the separate Android platform
+   fixture are cleaned up. Inspect the private checkpoint and finish checks on
+   the [session-return repair](notification-platform-verification-2026-09-09.md)
+   before creating another fixture. Native composer, iPhone OS permission/live
+   session return, natural expiry, chat-session and remaining token lifecycle
+   coverage remain open; physical Android requires hardware.
    Do not mutate frozen history.
 3. Continuing the remaining platform states in the [matrix](beacon-staging-verification-2026-09-07.md#full-beacon-journey).
    Prior fixtures are cleaned up; create fresh isolated fixtures only for the

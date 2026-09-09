@@ -3,6 +3,7 @@
 package app.pantopus.android.data.auth
 
 import app.cash.turbine.test
+import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.auth.AuthMessageResponse
 import app.pantopus.android.data.api.models.auth.AuthenticatedUser
@@ -26,7 +27,10 @@ import app.pantopus.android.data.realtime.SocketManager
 import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -736,6 +740,32 @@ class AuthRepositoryTest {
             assertEquals(AuthRepository.State.SignedOut, repo.state.value)
             assertEquals(null, storage.accessToken())
             assertEquals(null, repo.sessionEndReason.value)
+        }
+
+    @Test
+    fun `server session end retains only the original account arrival while manual logout clears it`() =
+        runTest {
+            mockkObject(PendingDeepLinkStore)
+            try {
+                every { PendingDeepLinkStore.clear() } returns Unit
+                every { PendingDeepLinkStore.retainForReauthentication(any()) } returns Unit
+                val storage = AuthTestSupport.tokenStorage()
+                storage.save("at", "rt", "u_1")
+                val repo = buildRepo(storage = storage)
+
+                repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+
+                verify(exactly = 1) { PendingDeepLinkStore.retainForReauthentication("u_1") }
+                verify(exactly = 0) { PendingDeepLinkStore.clear() }
+                assertEquals(null, storage.accessToken())
+
+                repo.signOut()
+
+                verify(exactly = 1) { PendingDeepLinkStore.clear() }
+                verify(exactly = 1) { PendingDeepLinkStore.retainForReauthentication(any()) }
+            } finally {
+                unmockkObject(PendingDeepLinkStore)
+            }
         }
 
     @Test
