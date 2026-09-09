@@ -463,7 +463,7 @@ extension AuthManager {
     /// expired: wipe tokens + session metadata, keep the display hint,
     /// publish the reason. No network call — the server already knows.
     func endSession(reason: SessionEndReason) {
-        let hadSession = clearLocalSession(preservingPostArrival: true)
+        let hadSession = clearLocalSession(preservingContentArrival: true)
         setSessionEndReason(reason)
         if PendingDeepLinkStore.peek() != nil {
             DeepLinkRouter.shared.requestLoginPresentation()
@@ -482,9 +482,9 @@ extension AuthManager {
     /// one coalesced refresh fails; only the first fires the side effects
     /// (no suspension points, so the @MainActor serializes the reads).
     @discardableResult
-    func clearLocalSession(preservingPostArrival: Bool = false) -> Bool {
+    func clearLocalSession(preservingContentArrival: Bool = false) -> Bool {
         let hadSession = accessToken != nil || store.get(SecureStoreKey.accessToken) != nil
-        if preservingPostArrival {
+        if preservingContentArrival {
             // Concurrent terminal responses after the first teardown must not
             // erase the already preserved handoff when tokens are now absent.
             if hadSession {

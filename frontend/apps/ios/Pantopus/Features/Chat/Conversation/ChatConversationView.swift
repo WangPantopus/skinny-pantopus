@@ -70,6 +70,7 @@ public struct ChatConversationView: View {
     private let creatorContext: ChatCreatorThreadContext?
     private let onOpenAudienceProfile: @MainActor () -> Void
     private let onUseAIDraft: @MainActor (ChatAIDraftCard) -> Void
+    private let onContentLoaded: @MainActor () -> Void
     private let onBack: @MainActor () -> Void
 
     public init(
@@ -78,6 +79,7 @@ public struct ChatConversationView: View {
         creatorContext: ChatCreatorThreadContext? = nil,
         onOpenAudienceProfile: @escaping @MainActor () -> Void = {},
         onUseAIDraft: @escaping @MainActor (ChatAIDraftCard) -> Void = { _ in },
+        onContentLoaded: @escaping @MainActor () -> Void = {},
         onBack: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
@@ -85,6 +87,7 @@ public struct ChatConversationView: View {
         self.creatorContext = creatorContext
         self.onOpenAudienceProfile = onOpenAudienceProfile
         self.onUseAIDraft = onUseAIDraft
+        self.onContentLoaded = onContentLoaded
         self.onBack = onBack
     }
 
@@ -205,6 +208,9 @@ public struct ChatConversationView: View {
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onChange(of: hasLoadedContent, initial: true) { _, loaded in
+            if loaded { onContentLoaded() }
+        }
         .onDisappear { viewModel.teardown() }
         // RN attach-grid parity: Camera / Photos / Document / Location /
         // Task / Marketplace. Camera hides itself where no capture device
@@ -859,6 +865,13 @@ extension ChatConversationView {
     /// Named coordinate space of the conversation ScrollView — the frame
     /// of the content in this space drives the near-top pagination
     /// trigger and the at-bottom tracking.
+    private var hasLoadedContent: Bool {
+        switch viewModel.state {
+        case .loaded, .empty: true
+        case .loading, .error: false
+        }
+    }
+
     private static let scrollSpaceName = "chatConversationScroll"
 
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {

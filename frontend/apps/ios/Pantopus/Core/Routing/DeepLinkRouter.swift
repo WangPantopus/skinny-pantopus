@@ -174,8 +174,8 @@ final class DeepLinkRouter {
 
     /// The most recent pending destination. Consumers read this and then call `consume()`.
     private(set) var pending: Destination?
-    /// Prevent a queued auth-state replay from navigating to a post twice.
-    private(set) var activePostArrivalID: String?
+    /// Prevent a queued auth-state replay from dispatching an active arrival twice.
+    private(set) var activeContentArrival: Destination?
 
     /// Set when a signed-out deep link should auto-present Sign-in
     /// (auth-owned or deferred content). `PlaceLaunchHost` observes this
@@ -218,18 +218,26 @@ final class DeepLinkRouter {
 
     /// Navigation consumes the in-memory link; load or departure finishes it.
     func completePostArrival(id: String) {
+        completeArrival(.post(id: id))
+    }
+
+    func completeConversationArrival(id: String) {
+        completeArrival(.conversation(id: id))
+    }
+
+    private func completeArrival(_ destination: Destination) {
         guard let userID = Self.signedInUserIDProvider() else { return }
         PendingDeepLinkStore.completeArrival(userID: userID) { path in
             guard let url = URL(string: path) else { return false }
-            return self.resolve(url: url) == .post(id: id)
+            return self.resolve(url: url) == destination
         }
-        if activePostArrivalID == id { activePostArrivalID = nil }
+        if activeContentArrival == destination { activeContentArrival = nil }
     }
 
     /// Drop in-memory pending + login prompt (sign-out / invalid).
     func clearPending() {
         pending = nil
-        activePostArrivalID = nil
+        activeContentArrival = nil
         prefersLoginPresentation = false
     }
 
@@ -269,17 +277,18 @@ final class DeepLinkRouter {
             // browser — so we still persist these for post-login replay rather
             // than dropping them. Do NOT treat them as "browse now without login".
             if let userID {
-                if case let .post(id) = destination {
-                    activePostArrivalID = id
+                switch destination {
+                case .post, .conversation:
+                    activeContentArrival = destination
                     PendingDeepLinkStore.stash(persistencePath, expectedUserID: userID)
-                } else {
-                    activePostArrivalID = nil
+                default:
+                    activeContentArrival = nil
                     PendingDeepLinkStore.clear()
                 }
                 prefersLoginPresentation = false
                 pending = destination
             } else {
-                activePostArrivalID = nil
+                activeContentArrival = nil
                 PendingDeepLinkStore.stash(persistencePath)
                 pending = nil
                 prefersLoginPresentation = true

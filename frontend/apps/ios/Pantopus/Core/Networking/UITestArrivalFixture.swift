@@ -55,6 +55,7 @@ enum UITestArrivalFixture {
         let method = request.httpMethod ?? "GET"
         if let auth = authResponse(method: method, path: path) { return auth }
         if let social = socialResponse(method: method, path: path) { return social }
+        if let chat = chatResponse(method: method, path: path) { return chat }
         switch (method, path) {
         case ("GET", "/api/geo/autocomplete"):
             return json([
@@ -93,6 +94,30 @@ enum UITestArrivalFixture {
             return json(["savedPlaces": saved.map { [$0] } ?? []])
         default:
             return nil
+        }
+    }
+
+    private static func chatResponse(method: String, path: String) -> (status: Int, data: Data)? {
+        switch (method, path) {
+        case ("GET", "/api/chat/rooms/entry-room/messages"):
+            if let code = ProcessInfo.processInfo.environment["UI_TESTS_SESSION_END_CODE"],
+               defaults.integer(forKey: "login-count") < 2 {
+                return json(["error": "Session ended", "code": code], status: 401)
+            }
+            return json([
+                "messages": [
+                    [
+                        "id": "entry-chat-message", "room_id": "entry-room", "user_id": "entry-friend",
+                        "message_text": "Chat return — violet compass", "message_type": "text",
+                        "created_at": "2026-09-09T08:00:00Z",
+                        "sender": ["id": "entry-friend", "name": "Room sender"]
+                    ]
+                ],
+                "hasMore": false
+            ])
+        case ("POST", "/api/chat/rooms/entry-room/read"):
+            return json(["success": true])
+        default: return nil
         }
     }
 

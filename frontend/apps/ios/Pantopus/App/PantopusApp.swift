@@ -255,7 +255,7 @@ struct RootView: View {
 
     private func replayDeferredDeepLinkIfNeeded() {
         guard case let .signedIn(user) = auth.state,
-              DeepLinkRouter.shared.activePostArrivalID == nil,
+              DeepLinkRouter.shared.activeContentArrival == nil,
               let path = PendingDeepLinkStore.take(userID: user.id) else { return }
         DeepLinkRouter.shared.handle(path: path)
     }

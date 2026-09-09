@@ -57,7 +57,12 @@ one Beacon/follower, global device push disabled and zero tokens. The
 composer publication, audience notification, exact post/author, cold-start
 session restoration and normal logout. N2 alone is read; N1 remains unread.
 Both stored markers are reconciled and must never be republished. The fixture
-is being parked for natural token expiry while chat continuation is repaired.
+is parked for natural token expiry; its dedicated simulator must remain
+untouched until the private runner's elapsed-time guard passes. The
+[chat continuation repair](chat-notification-continuation-2026-09-09.md) now
+passes 220 iOS unit tests, four post/chat expiry/revocation UI journeys and
+190 Android tests. Android ktlint/Detekt pass; staging APK/lint and live
+Android chat return are active next checks.
 No iPhone observation is pending. Update
 this handoff after each meaningful milestone.
 

@@ -767,6 +767,71 @@ class DeepLinkRouterTest {
     // MARK: - WS1.4 auth-aware dispatch (DeepLinkRouter.apply)
 
     @Test
+    fun signed_in_chat_arrival_remains_pending_after_navigation() {
+        DeepLinkRouter.handle("/chat/session-room?name=Beacon%20%2B%20test")
+        assertEquals(
+            DeepLinkRouter.Destination.Conversation("session-room", "Beacon + test"),
+            DeepLinkRouter.consume(),
+        )
+        assertEquals("pantopus://chat/session-room?name=Beacon%20%2B%20test", PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun rejected_chat_session_replays_for_same_account_with_its_title() {
+        DeepLinkRouter.handle("/chat/session-room?name=Beacon%20%2B%20test")
+        DeepLinkRouter.consume()
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("session-room"))
+        signedIn = false
+        DeepLinkRouter.clearPending()
+        assertEquals("pantopus://chat/session-room?name=Beacon%20%2B%20test", PendingDeepLinkStore.peek())
+        signedIn = true
+        DeepLinkRouter.handle(requireNotNull(PendingDeepLinkStore.take(userId)))
+        assertEquals(DeepLinkRouter.Destination.Conversation("session-room", "Beacon + test"), DeepLinkRouter.consume())
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("session-room"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun another_account_cannot_complete_or_replay_chat_arrival() {
+        DeepLinkRouter.handle("/chat/private-room")
+        userId = "another-account"
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("private-room"))
+        assertEquals("pantopus://chat/private-room", PendingDeepLinkStore.peek())
+        assertNull(PendingDeepLinkStore.take(userId))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun chat_completion_matches_room_without_requiring_the_notification_title() {
+        DeepLinkRouter.handle("/chat/room?name=Beacon%20%2B%20test")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("room"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun old_chat_completion_cannot_clear_a_new_room_or_a_post_with_the_same_id() {
+        DeepLinkRouter.handle("/chat/older")
+        DeepLinkRouter.handle("/chat/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("older"))
+        assertEquals("pantopus://chat/newer", PendingDeepLinkStore.peek())
+        DeepLinkRouter.handle("/post/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("newer"))
+        assertEquals("pantopus://post/newer", PendingDeepLinkStore.peek())
+        DeepLinkRouter.handle("/chat/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("newer"))
+        assertEquals("pantopus://chat/newer", PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun completed_chat_does_not_replay_after_a_later_session_end() {
+        DeepLinkRouter.handle("/chat/room")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("room"))
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
     fun signed_in_post_arrival_survives_navigation_until_content_loads() {
         DeepLinkRouter.handle("/post/abc-123")
 

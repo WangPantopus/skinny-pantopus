@@ -334,9 +334,16 @@ object DeepLinkRouter {
     }
 
     /** Navigation consumed the link; finish it only after load or departure. */
-    fun completeArrival(destination: Destination.Post) {
+    fun completeArrival(destination: Destination) {
+        if (destination !is Destination.Post && destination !is Destination.Conversation) return
         val userId = signedInUserIdProvider() ?: return
-        PendingDeepLinkStore.completeArrival(userId) { resolveString(it) == destination }
+        PendingDeepLinkStore.completeArrival(userId) {
+            val stored = resolveString(it)
+            when (destination) {
+                is Destination.Conversation -> stored is Destination.Conversation && stored.id == destination.id
+                else -> stored == destination
+            }
+        }
     }
 
     /** Drop in-memory pending + login prompt (sign-out / invalid). */
@@ -374,7 +381,7 @@ object DeepLinkRouter {
                 // signed-out content browser — so we still persist these for
                 // post-login replay rather than dropping them.
                 if (userId != null) {
-                    if (destination is Destination.Post) {
+                    if (destination is Destination.Post || destination is Destination.Conversation) {
                         PendingDeepLinkStore.stash(persistencePath, expectedUserId = userId)
                     } else {
                         PendingDeepLinkStore.clear()

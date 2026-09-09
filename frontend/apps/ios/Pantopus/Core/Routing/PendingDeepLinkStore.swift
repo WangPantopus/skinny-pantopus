@@ -8,12 +8,12 @@
 
 import Foundation
 
-/// Deferred content links and account-bound posts whose content has not loaded.
+/// Deferred content links and account-bound post/chat arrivals awaiting content.
 /// Survives process death with a 24h TTL; replay requires the original account
 /// when a link arrived during an existing session.
 ///
 /// Successful arrival, explicit logout, expiry and an account mismatch clear
-/// the stash. Server-ended sessions preserve only their own unfinished post.
+/// the stash. Server-ended sessions preserve only their own unfinished arrival.
 @MainActor
 enum PendingDeepLinkStore {
     private static let pathKey = "pantopus.pendingDeepLink.path"
