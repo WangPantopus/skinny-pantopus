@@ -300,6 +300,7 @@ class AuthRepository
 
         /** Single-flight guard for the network refresh (see [refreshTokens]). */
         private val refreshMutex = Mutex()
+        private val deviceRegistrationMutex = Mutex()
 
         // A normal logout can trigger a revocation signal before its HTTP
         // response arrives. Keep that expected signal from becoming a warning.
@@ -688,34 +689,44 @@ class AuthRepository
          * unless [force]. Called after login / resume, and by the push layer
          * on FCM rotation / app update. Best-effort: never throws.
          */
-        suspend fun registerDevice(force: Boolean = false): Boolean {
-            if (tokenStorage.accessToken().isNullOrBlank()) return false
-            val key = deviceKeyStore.existing() ?: return false
-            val userId = tokenStorage.userId()
-            val pushToken = withTimeoutOrNull(FCM_TOKEN_TIMEOUT_MS) { fcmTokenProvider.currentToken() }?.takeIf { it.isNotBlank() }
-            val fingerprint = "${userId.orEmpty()}|${deviceDescriptors.appVersion()}|${pushToken.orEmpty()}"
-            if (!force && deviceIdentity.lastRegistrationFingerprint() == fingerprint) return true
-            return try {
-                val response =
-                    authApi.registerDevice(
-                        RegisterDeviceRequest(
-                            device = deviceDescriptors.descriptor(key.keyBacking),
-                            pushToken = pushToken,
-                            pushProvider = pushToken?.let { PUSH_PROVIDER_FCM },
-                        ),
-                        dpop.build(key, htm = "POST", htu = htu(PATH_DEVICES_REGISTER)),
-                    )
-                deviceIdentity.markRegistered(fingerprint)
-                val grant = response.resumeGrant
-                if (grant != null && userId != null) runCatching { accountHints.setGrant(grant, userId) }
-                true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                Timber.w(t, "device registration failed")
-                false
+        suspend fun registerDevice(force: Boolean = false): Boolean =
+            deviceRegistrationMutex.withLock {
+                // Login may follow server-side logout with the same user/token. A
+                // failed forced call must not leave the older success reusable.
+                if (force) deviceIdentity.clearRegistration()
+                if (tokenStorage.accessToken().isNullOrBlank()) return@withLock false
+                val key = deviceKeyStore.existing() ?: return@withLock false
+                val userId = tokenStorage.userId()
+                val sessionId = tokenStorage.sessionId()
+                val pushToken = withTimeoutOrNull(FCM_TOKEN_TIMEOUT_MS) { fcmTokenProvider.currentToken() }?.takeIf { it.isNotBlank() }
+                val fingerprint = "${userId.orEmpty()}|${deviceDescriptors.appVersion()}|${pushToken.orEmpty()}"
+                if (!force && deviceIdentity.lastRegistrationFingerprint() == fingerprint) return@withLock true
+                try {
+                    val response =
+                        authApi.registerDevice(
+                            RegisterDeviceRequest(
+                                device = deviceDescriptors.descriptor(key.keyBacking),
+                                pushToken = pushToken,
+                                pushProvider = pushToken?.let { PUSH_PROVIDER_FCM },
+                            ),
+                            dpop.build(key, htm = "POST", htu = htu(PATH_DEVICES_REGISTER)),
+                        )
+                    if (tokenStorage.accessToken().isNullOrBlank() ||
+                        tokenStorage.userId() != userId || tokenStorage.sessionId() != sessionId
+                    ) {
+                        return@withLock false
+                    }
+                    deviceIdentity.markRegistered(fingerprint)
+                    val grant = response.resumeGrant
+                    if (grant != null && userId != null) runCatching { accountHints.setGrant(grant, userId) }
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    Timber.w(t, "device registration failed")
+                    false
+                }
             }
-        }
 
         /**
          * Enrol the biometry-bound step-up key (`POST /api/auth/step-up-key`)
@@ -1185,6 +1196,7 @@ class AuthRepository
                     revokeOnServer(access, refresh)
                 }
                 tokenStorage.clear()
+                deviceIdentity.clearRegistration()
                 observability.identify(userId = null)
                 Analytics.identify(userId = null)
                 observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))

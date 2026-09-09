@@ -56,6 +56,18 @@ async function dispatchToTokens(rows, senders, message) {
     counts[provider] = tokens.length;
     try {
       const result = await sender.sendMany(tokens, message);
+      // Correlate provider acceptance with a stored notification without
+      // recording device tokens, message text, or private recipient identity.
+      const notificationId = message?.data?.notificationId;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId || '')) {
+        const accepted = new Set(Array.isArray(result?.acceptedTokens) ? result.acceptedTokens : []);
+        logger.info('Push provider acceptance', {
+          notificationId,
+          provider,
+          attemptedCount: tokens.length,
+          acceptedCount: tokens.filter((token) => accepted.has(token)).length,
+        });
+      }
       if (result && Array.isArray(result.invalidTokens)) {
         invalidTokens.push(...result.invalidTokens);
       }

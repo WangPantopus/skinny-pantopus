@@ -107,6 +107,7 @@ class MainActivity : FragmentActivity() {
         // for the on-screen conversation is skipped only while visible.
         activeChatThread.isForeground = true
         appLockManager.appDidBecomeActive()
+        launchPushTokenSync()
     }
 
     override fun onStop() {
@@ -158,8 +159,7 @@ class MainActivity : FragmentActivity() {
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            // < Android 13: implicit grant — go straight to syncing.
-            launchPushTokenSync()
+            // onStart handles token sync, including devices without a runtime prompt.
             return
         }
         val granted =
@@ -167,9 +167,7 @@ class MainActivity : FragmentActivity() {
                 this,
                 Manifest.permission.POST_NOTIFICATIONS,
             ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            launchPushTokenSync()
-        } else {
+        if (!granted) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }

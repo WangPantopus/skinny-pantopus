@@ -28,7 +28,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -950,5 +952,72 @@ class AuthRepositoryTest {
             assertEquals("a•••@b.com", hint?.maskedEmail)
             assertEquals("password", hint?.lastMethod)
             assertEquals("u_1", repo.rememberedAccounts.value.single().userId)
+        }
+
+    @Test
+    fun `failed forced registration retries despite a prior matching fingerprint`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val authApi = mockk<AuthApi>()
+            val success = app.pantopus.android.data.api.models.auth.RegisterDeviceResponse(device = null, resumeGrant = null)
+            coEvery { authApi.registerDevice(any(), any()) } returns success
+            val repo = AuthTestSupport.repository(storage = storage, authApi = authApi, deviceIdentity = identity)
+            assertTrue(repo.registerDevice())
+            val fingerprint = identity.lastRegistrationFingerprint()
+            assertTrue(!fingerprint.isNullOrBlank())
+
+            coEvery { authApi.registerDevice(any(), any()) } throws IOException("temporary outage")
+            assertEquals(false, repo.registerDevice(force = true))
+            assertEquals(null, identity.lastRegistrationFingerprint())
+
+            coEvery { authApi.registerDevice(any(), any()) } returns success
+            assertTrue(repo.registerDevice())
+            assertEquals(fingerprint, identity.lastRegistrationFingerprint())
+            assertTrue(repo.registerDevice()) // successful retry is cached again
+            coVerify(exactly = 3) { authApi.registerDevice(any(), any()) }
+        }
+
+    @Test
+    fun `logout invalidates the registration acknowledgment without rotating device identity`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val deviceId = identity.deviceId()
+            identity.markRegistered("u_1|1.0.0 (1)|fcm-token")
+            val repo = AuthTestSupport.repository(storage = storage, deviceIdentity = identity)
+
+            repo.signOut()
+
+            assertEquals(null, identity.lastRegistrationFingerprint())
+            assertEquals(deviceId, identity.deviceId())
+            assertEquals(false, repo.registerDevice())
+        }
+
+    @Test
+    fun `registration finishing after logout cannot restore its cached acknowledgment`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val authApi = mockk<AuthApi>(relaxed = true)
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            coEvery { authApi.registerDevice(any(), any()) } coAnswers {
+                started.complete(Unit)
+                release.await()
+                app.pantopus.android.data.api.models.auth.RegisterDeviceResponse(device = null, resumeGrant = null)
+            }
+            val repo = AuthTestSupport.repository(storage = storage, authApi = authApi, deviceIdentity = identity)
+            val registration = async { repo.registerDevice(force = true) }
+            started.await()
+            repo.signOut()
+            release.complete(Unit)
+
+            assertEquals(false, registration.await())
+            assertEquals(null, identity.lastRegistrationFingerprint())
+            assertEquals(null, storage.accessToken())
         }
 }

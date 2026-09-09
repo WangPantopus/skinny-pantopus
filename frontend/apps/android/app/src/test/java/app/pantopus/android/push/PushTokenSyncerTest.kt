@@ -49,7 +49,7 @@ class PushTokenSyncerTest {
         }
 
     @Test
-    fun already_acked_token_is_a_no_op() =
+    fun already_acked_token_still_checks_pending_device_registration() =
         runTest {
             coEvery { tokenProvider.currentToken() } returns "fcm-token-a"
             every { ackStore.lastAckedToken() } returns "fcm-token-a"
@@ -57,6 +57,7 @@ class PushTokenSyncerTest {
             val outcome = syncer.syncIfNeeded()
 
             assertEquals(PushTokenSyncer.Outcome.AlreadyAcked, outcome)
+            coVerify(exactly = 1) { authRepository.registerDevice(any()) }
             coVerify(exactly = 0) { repository.registerPushToken(any(), any(), any()) }
             verify(exactly = 0) { ackStore.markAcked(any()) }
         }
@@ -109,6 +110,19 @@ class PushTokenSyncerTest {
             assertTrue(outcome is PushTokenSyncer.Outcome.Failed)
             verify(exactly = 0) { ackStore.markAcked(any()) }
             coVerify(exactly = 0) { authRepository.registerDevice(any()) }
+        }
+
+    @Test
+    fun cached_push_ack_does_not_hide_a_failed_device_registration() =
+        runTest {
+            coEvery { tokenProvider.currentToken() } returns "fcm-token-a"
+            every { ackStore.lastAckedToken() } returns "fcm-token-a"
+            coEvery { authRepository.registerDevice(any()) } returns false andThen true
+
+            assertTrue(syncer.syncIfNeeded() is PushTokenSyncer.Outcome.Failed)
+            assertEquals(PushTokenSyncer.Outcome.AlreadyAcked, syncer.syncIfNeeded())
+            coVerify(exactly = 2) { authRepository.registerDevice(any()) }
+            coVerify(exactly = 0) { repository.registerPushToken(any(), any(), any()) }
         }
 
     private companion object {

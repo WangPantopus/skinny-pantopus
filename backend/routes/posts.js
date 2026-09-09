@@ -538,6 +538,10 @@ async function hasExternalShare(postId) {
 
 const canViewPost = async (post, userId) => {
   if (post.user_id === userId) return true;
+  if (post.identity_context_type === 'persona'
+      && (post.archived_at || post.status === 'removed'
+        || (post.post_metadata?.broadcast_status != null
+          && post.post_metadata.broadcast_status !== 'published'))) return false;
 
   if (
     userId

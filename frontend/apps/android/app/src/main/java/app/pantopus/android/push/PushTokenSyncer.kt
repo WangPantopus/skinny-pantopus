@@ -80,7 +80,16 @@ class PushTokenSyncer
             val token = tokenProvider.currentToken()
             if (token.isNullOrBlank()) return Outcome.NoToken
             val lastAck = ackStore.lastAckedToken()
-            if (lastAck == token) return Outcome.AlreadyAcked
+            if (lastAck == token) {
+                // The token ACK can outlive logout or a failed login-time
+                // device registration. The registry has its own fingerprint
+                // gate and retries pending linkage without another login.
+                return if (authRepository.get().registerDevice()) {
+                    Outcome.AlreadyAcked
+                } else {
+                    Outcome.Failed("Device registration is pending")
+                }
+            }
             val result =
                 repository.registerPushToken(
                     token = token,

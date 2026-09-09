@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
 const {
@@ -896,7 +897,12 @@ async function getListFeed({
     }
 
     // 8. Normalize
-    let posts = rawRows.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
+    const visibleRows = surface === 'personas'
+      ? rawRows.filter((post) => personaPostVisibleToViewer(
+          post, Number(personaRankById.get(post.identity_context_id) || 0),
+        ))
+      : rawRows;
+    let posts = visibleRows.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
 
     // 8b. Haversine distance filter for place surface (bounding box is a
     // square approximation; this removes posts outside the true radius)
@@ -914,13 +920,6 @@ async function getListFeed({
     // 9. Mute / hide / block
     posts = applyMuteHideFilters(posts, filters, surface, userId);
 
-    if (surface === 'personas') {
-      posts = posts.filter((post) => {
-        const requiredRank = Number(post.target_tier_rank || 0);
-        if (!requiredRank) return true;
-        return Number(personaRankById.get(post.identity_context_id) || 0) >= requiredRank;
-      });
-    }
 
     // 9b. Phase 1 Sports main-feed rule: national curator sports STAY OUT of
     // All surfaces. The user sees national sports content only inside the

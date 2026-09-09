@@ -79,3 +79,21 @@ describe('push/dispatch.dispatchToTokens', () => {
     expect(counts).toEqual({ apns: 0, fcm: 0, expo: 0 });
   });
 });
+
+
+test('correlates explicit provider acceptance without logging tokens or notification content', async () => {
+  const logger = require('../../../utils/logger');
+  const notificationId = '12345678-1234-4234-8234-123456789abc';
+  const sender = fakeSender();
+  sender.sendMany.mockResolvedValue({ invalidTokens: [], acceptedTokens: ['private-token'] });
+  await dispatchToTokens([{ token: 'private-token', provider: 'apns' }], { apns: sender }, {
+    title: 'Private title', body: 'Private content', data: { notificationId },
+  });
+  expect(logger.info).toHaveBeenCalledWith('Push provider acceptance', {
+    notificationId, provider: 'apns', attemptedCount: 1, acceptedCount: 1,
+  });
+  const logged = JSON.stringify(logger.info.mock.calls);
+  expect(logged).not.toContain('private-token');
+  expect(logged).not.toContain('Private content');
+  expect(logged).not.toContain('Private title');
+});
