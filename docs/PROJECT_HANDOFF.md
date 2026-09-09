@@ -16,6 +16,19 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
+**Current continuation:** staging account/vendor work is isolated in
+`/private/tmp/pantopus-staging-vendor-acceptance`, branch
+`codex/staging-vendor-acceptance`. Cloudflare access is now available and
+`https://staging.pantopus.com` has working DNS and trusted TLS. Five browser
+account entry pages return 200. Same-origin browser APIs use the tested account
+candidate and synthetic-only SMTP capture; public staging API/worker and the
+separate Home candidate are preserved. Complete fresh browser verification and
+recovery next, then repair the observed sandbox saved-card retry false success.
+See the [vendor report](staging-vendor-acceptance-2026-09-09.md) for runtime scope,
+pending fixtures and verification limits. PR #23's CI remains running at
+`f6f250ff0`; merge only after its current-head checks pass. PR #22's merged-master
+CI passed. Historical DNS/access blockers below are superseded by this update.
+
 - PRs #9 and #10 are on master. PR #13 merged to master as
   `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline
   and large-baseline history checker repair; its full CI passed.
