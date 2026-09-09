@@ -111,8 +111,7 @@ final class DocumentDetailViewModel {
         guard case let .loaded(dto) = state, let content else { return nil }
         clearExport()
         do {
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let directory = try HomeDocumentTemporaryFiles.makeDirectory()
             exportDirectory = directory
             let original = dto.details["original_filename"] ?? dto.title
             let filename = original.components(separatedBy: CharacterSet(charactersIn: "/\\\r\n")).joined(separator: "_")

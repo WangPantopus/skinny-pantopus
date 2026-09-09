@@ -62,7 +62,7 @@ async function upload({ homeId, documentId, buffer, mimeType }) {
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
   const key = documentKey(homeId, documentId, sha256);
   const { name, bucket } = await privateBucket();
-  const { error } = await bucket.upload(key, buffer, { contentType: mimeType, upsert: false });
+  const { error } = await bucket.upload(key, buffer, { contentType: mimeType, cacheControl: '0', upsert: false });
   if (error) {
     // A retry of the same operation may find its exact object after a response
     // was lost. Verify its bytes instead of overwriting or silently accepting it.

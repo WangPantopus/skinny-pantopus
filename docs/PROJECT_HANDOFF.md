@@ -152,19 +152,25 @@ quota enforcement across different upload IDs and stale native export cleanup.
 
 The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
 
-[PR #21](https://github.com/WangPantopus/skinny-pantopus/pull/21) is ready at
-`49b103f84` with CI running. Next work is isolated in
+[PR #21](https://github.com/WangPantopus/skinny-pantopus/pull/21) merged as
+`c1f411c583e9375616e06570bdcea062f16bf532` after its
+[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34369706912)
+passed. Its merged-master checks are running. Next work is isolated in
 `/private/tmp/pantopus-home-upload-recovery`, branch `codex/home-upload-recovery`.
 The [upload recovery report](home-upload-recovery-2026-09-09.md) records passing
 local quota/access SQL contracts and three real competing-connection checks for
-storage, file-count and daily limits. These changes are only in an owned local
-contract database; hosted staging and production have not received them. Durable
+storage, file-count and daily limits. The compatible migration is now applied
+only to Free staging, preserving all existing rows and its absent ledger. Durable
 reservation and the bounded abandoned-upload/deleted-object recovery worker now
 pass 4,439 backend tests, privacy gates, the SQL contract, application function
-lint and both real publication-versus-expiry races. Native launch cleanup is
-implemented with build/restart checks pending. Complete native and hosted recovery
-acceptance, then document replacement. The report preserves the earlier iOS
-unmarked temporary-copy limitation. PR #20's merged-master CI passed in full.
+lint and both real publication-versus-expiry races. Live private staging quota,
+expiry/outage/retry and late-write reconciliation pass; original five documents,
+exact bytes and quotas/limits are preserved. Native launch cleanup passes 35 iOS
+and 34 Android tests plus lint/build checks. Both native share → process restart
+checks pass with exact 609-byte copies removed on relaunch. Publish recovery,
+verify the zero-cache candidate follow-up, then finish document replacement. The report preserves
+the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
+PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
 No production changes or new paid resources were made. The earlier worktree
 `/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
 including the owner's design proposal, remain preserved. Update this handoff
