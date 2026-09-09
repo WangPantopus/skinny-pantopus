@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.CodeInput
 import app.pantopus.android.ui.components.Postcard
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.homes.verify_landlord.VerifyLandlordSubmitState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -82,6 +83,8 @@ fun PostcardVerificationScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.loadStatus() }
 
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
@@ -106,7 +109,7 @@ fun PostcardVerificationScreen(
         topBar = { PostcardTopBar(onBack = viewModel::dismissTapped) },
         bottomBar = {
             PostcardStickyDock(
-                showHint = !state.showsCodeEntryFrame && !state.needsNewCode,
+                showHint = viewModel.usesSamplePresentation && !state.showsCodeEntryFrame && !state.needsNewCode,
                 label = state.primaryCtaLabel,
                 enabled = state.primaryCtaEnabled,
                 loading = state.isSubmitting,
@@ -126,20 +129,34 @@ fun PostcardVerificationScreen(
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s4),
             verticalArrangement = Arrangement.spacedBy(Spacing.s5),
         ) {
-            Postcard(
-                recipientName = state.content.recipientName,
-                street = state.content.street,
-                cityZip = state.content.cityZip,
-                delivered = state.stage == PostcardDeliveryStage.Delivered,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-            PostcardHero(
-                codeEntryMode = state.showsCodeEntryFrame,
-                needsNewCode = state.needsNewCode,
-                deliveredOn = state.content.deliveredOn,
-                stage = state.stage,
-            )
-            PostcardStatusTimeline(stage = state.stage, content = state.content)
+            if (viewModel.usesSamplePresentation) {
+                Postcard(
+                    recipientName = state.content.recipientName,
+                    street = state.content.street,
+                    cityZip = state.content.cityZip,
+                    delivered = state.stage == PostcardDeliveryStage.Delivered,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+                PostcardHero(
+                    codeEntryMode = state.showsCodeEntryFrame,
+                    needsNewCode = state.needsNewCode,
+                    deliveredOn = state.content.deliveredOn,
+                    stage = state.stage,
+                )
+                PostcardStatusTimeline(stage = state.stage, content = state.content)
+            } else {
+                Text(
+                    "Verify your home by mail",
+                    style = PantopusTextStyle.h2,
+                    modifier = Modifier.testTag("postcardLiveHeading"),
+                )
+                Text(
+                    "Enter the six-digit code printed on your postcard. Delivery tracking is not available here.",
+                    style = PantopusTextStyle.body,
+                    color = PantopusColors.appTextSecondary,
+                )
+                if (state.isLoadingStatus) Shimmer(height = Spacing.s6, cornerRadius = Radii.sm)
+            }
             PostcardCodeArea(
                 value = state.codeInput,
                 onChange = viewModel::updateCode,
@@ -150,7 +167,13 @@ fun PostcardVerificationScreen(
                 expiryLabel = state.codeExpiryLabel,
                 notice = state.notice,
             )
-            if (state.showsCodeEntryFrame) {
+            if (!viewModel.usesSamplePresentation) {
+                TextAction(
+                    label = "Check postcard status",
+                    tag = "postcardCheckStatusCTA",
+                    onClick = viewModel::loadStatus,
+                )
+            } else if (state.showsCodeEntryFrame) {
                 DeliveredSecondaryRow(onResend = viewModel::requestNewCode)
             } else {
                 InTransitHelpBlock(onResend = viewModel::requestNewCode)

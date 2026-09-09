@@ -3043,7 +3043,7 @@ public struct HubTabRoot: View {
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
                     onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
                 )
-            )
+            ) { showNavDrawer = true }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
                 viewModel: PlaceDetailViewModel(homeId: homeId, group: group)

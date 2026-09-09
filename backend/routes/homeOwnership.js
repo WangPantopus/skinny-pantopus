@@ -28,11 +28,7 @@ const { ownershipClaimLimiter, postcardLimiter, verificationAttemptLimiter } = r
 const logger = require('../utils/logger');
 const { findHomeOwnerRowForClaimant } = require('../utils/homeOwnerRowLookup');
 const { getClaimMergeRoleForClaim } = require('../utils/homeClaimMergeRoles');
-const {
-  generatePostcardCode,
-  hashPostcardCode,
-  dispatchPostcardCode,
-} = require('../utils/postcardDispatch');
+const homePostcardService = require('../services/homePostcardService');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -2507,146 +2503,56 @@ async function processQuorumExpirations(homeId, actorUserId) {
  */
 async function mayRequestPostcard(homeId, userId) {
   const access = await checkHomePermission(homeId, userId);
+  if (access.readFailed) throw new Error('Postcard access could not be checked');
   if (access.hasAccess) return true;
 
-  const { data: claim } = await supabaseAdmin
+  const { data: claim, error: claimError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id')
     .eq('home_id', homeId)
     .eq('claimant_user_id', userId)
-    .maybeSingle();
+    .in('state', ['draft', 'submitted', 'needs_more_info', 'pending_review', 'pending_challenge_window', 'approved'])
+    .limit(1).maybeSingle();
+  if (claimError) throw new Error('Postcard claim could not be checked');
   if (claim) return true;
 
-  const { count } = await supabaseAdmin
+  const { data: residency, error: residencyError } = await supabaseAdmin.from('HomeResidencyClaim')
+    .select('id').eq('home_id', homeId).eq('user_id', userId).eq('status', 'pending').limit(1).maybeSingle();
+  if (residencyError) throw new Error('Residency claim could not be checked');
+  if (residency) return true;
+
+  const { count, error: occupancyError } = await supabaseAdmin
     .from('HomeOccupancy')
     .select('id', { count: 'exact', head: true })
     .eq('home_id', homeId)
     .eq('is_active', true);
 
-  return (count || 0) === 0;
+  if (occupancyError || count == null) throw new Error('Postcard household could not be checked');
+  return count === 0;
 }
 
 
-/**
- * POST /:id/request-postcard - Request a verification code mailed to the home address.
- * Generates a 6-digit code, stores it, and flags for manual mailing.
- * Rate-limited to 1 active pending code per user per home.
- */
+/** POST /:id/request-postcard — atomically admit one proof and preserve uncertain mail. */
 router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, res) => {
   try {
-    const homeId = req.params.id;
-    const userId = req.user.id;
-
-    // Verify home exists
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id, address, city, state, zipcode')
-      .eq('id', homeId)
-      .single();
-
-    if (!home) {
-      return res.status(404).json({ error: 'Home not found' });
+    if (!(await mayRequestPostcard(req.params.id, req.user.id))) {
+      return res.status(403).json({ error: 'You do not have a pending claim on this home.' });
     }
-
-    // Authorization. Anyone with a bearer token could previously mail a code to
-    // any address in the system by home id. Require either an existing
-    // relationship with the home, or that the home has no active household yet
-    // (the cold-start case this flow exists to serve).
-    const allowed = await mayRequestPostcard(homeId, userId);
-    if (!allowed) {
-      return res.status(403).json({
-        error: 'You do not have a pending claim on this home.',
-      });
-    }
-
-    // Check for existing pending code
-    const { data: existing } = await supabaseAdmin
-      .from('HomePostcardCode')
-      .select('id, requested_at, expires_at')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .single();
-
-    if (existing) {
-      return res.status(400).json({
-        error: 'You already have a pending verification code for this home',
-        requested_at: existing.requested_at,
-        expires_at: existing.expires_at,
-      });
-    }
-
-    // BUG 4B: Per-address postcard rate limit — max 2 pending codes per home_id
-    const { count: pendingForHome } = await supabaseAdmin
-      .from('HomePostcardCode')
-      .select('id', { count: 'exact', head: true })
-      .eq('home_id', homeId)
-      .eq('status', 'pending');
-
-    if (pendingForHome >= 2) {
-      return res.status(429).json({
-        error: 'This address already has the maximum number of pending verification codes. Please wait for existing codes to be used or expire.',
-      });
-    }
-
-    // Generate a 6-digit code with a cryptographic RNG and store only its
-    // hash. The cleartext is held in memory just long enough to mail it.
-    const code = generatePostcardCode();
-    const codeHash = hashPostcardCode(code);
-
-    const { data: postcard, error } = await supabaseAdmin
-      .from('HomePostcardCode')
-      .insert({
-        home_id: homeId,
-        user_id: userId,
-        code_hash: codeHash,
-        status: 'pending',
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select('id, requested_at, expires_at')
-      .single();
-
-    if (error) {
-      logger.error('Error creating postcard code', { error: error.message });
-      return res.status(500).json({ error: 'Failed to request verification code' });
-    }
-
-    // Actually mail it. Historically this endpoint wrote an audit row under the
-    // comment "Log for admin/mailing pipeline" and returned 201 claiming the
-    // code had been mailed — no dispatcher existed, so no code was ever sent.
-    const dispatch = await dispatchPostcardCode(home, code);
-    if (!dispatch.success) {
-      // Retire the row so the user is not blocked by a pending code for a
-      // card that was never sent.
-      await supabaseAdmin
-        .from('HomePostcardCode')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-        .eq('id', postcard.id);
-
-      logger.error('Postcard dispatch failed', { homeId, userId, error: dispatch.error });
-      return res.status(502).json({
-        error: 'We could not send mail to this address right now. Please try again later.',
-      });
-    }
-
-    // Never record the address itself in the audit payload; reference the home.
-    await writeAuditLog(homeId, userId, 'POSTCARD_CODE_REQUESTED', 'HomePostcardCode', postcard.id, {
-      home_id: homeId,
-    });
-
-    logger.info('Postcard code requested', { homeId, userId, postcardId: postcard.id });
-
-    res.status(201).json({
-      message: 'Verification code requested. A code will be mailed to the home address.',
-      postcard: {
-        id: postcard.id,
-        requested_at: postcard.requested_at,
-        expires_at: postcard.expires_at,
-      },
-    });
+    const result = await homePostcardService.request(req.params.id, req.user.id);
+    return res.status(result.status).json(result.body);
   } catch (err) {
-    logger.error('Request postcard error', { error: err.message });
-    res.status(500).json({ error: 'Failed to request verification code' });
+    logger.error('Request postcard failed', { error: err.message });
+    return res.status(503).json({ error: 'Could not check postcard access. Please retry.' });
+  }
+});
+
+/** GET /:id/postcard — own pending metadata only; never a code, hash or provider receipt. */
+router.get('/:id/postcard', verifyToken, async (req, res) => {
+  try {
+    const result = await homePostcardService.status(req.params.id, req.user.id);
+    return res.status(result.status).json(result.body);
+  } catch (_err) {
+    return res.status(503).json({ error: 'Could not check postcard status. Please retry.' });
   }
 });
 
@@ -2665,207 +2571,69 @@ router.post('/:id/verify-postcard', verifyToken, verificationAttemptLimiter, val
     const userId = req.user.id;
     const { code } = req.body;
 
-    // Fetch active pending code
-    const { data: postcard } = await supabaseAdmin
-      .from('HomePostcardCode')
-      .select('*')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .single();
+    const result = await homePostcardService.confirm(homeId, userId, code);
+    if (result.status !== 200 || result.reused) return res.status(result.status).json(result.body);
+    const { occupancy, verification_status: verificationStatus } = result.body;
+    const challengeWindowData = { challenge_window_ends_at: result.body.challenge_window_ends_at };
+    const authorityCount = verificationStatus === 'provisional' ? 1 : 0;
 
-    if (!postcard) {
-      return res.status(404).json({ error: 'No pending verification code found' });
-    }
-
-    // Check expiry
-    if (new Date(postcard.expires_at) < new Date()) {
-      await supabaseAdmin
-        .from('HomePostcardCode')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', postcard.id);
-      return res.status(410).json({ error: 'Verification code has expired. Request a new one.' });
-    }
-
-    // ── LOCKOUT CHECK: must happen BEFORE comparison ──
-    const MAX_ATTEMPTS = 5;
-    const currentAttempts = postcard.attempts || 0;
-
-    if (currentAttempts >= MAX_ATTEMPTS) {
-      await supabaseAdmin
-        .from('HomePostcardCode')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', postcard.id);
-      return res.status(429).json({ error: 'Too many attempts. Request a new code.' });
-    }
-
-    // ── TIMING-SAFE COMPARISON ──
-    // Only the SHA-256 hash is stored (migration 187). Hashing normalises the
-    // length, so the comparison is a plain fixed-width constant-time check.
-    const submittedHash = hashPostcardCode(code);
-    const storedHash = postcard.code_hash || '';
-
-    const codeMatches = storedHash.length === submittedHash.length &&
-      crypto.timingSafeEqual(
-        Buffer.from(submittedHash, 'utf8'),
-        Buffer.from(storedHash, 'utf8'),
-      );
-
-    // Increment attempts AFTER comparison (but always, regardless of result)
-    const attempts = currentAttempts + 1;
-
-    if (!codeMatches) {
-      await supabaseAdmin
-        .from('HomePostcardCode')
-        .update({ attempts, updated_at: new Date().toISOString() })
-        .eq('id', postcard.id);
-      return res.status(400).json({
-        error: 'Invalid code',
-        attempts_remaining: MAX_ATTEMPTS - attempts,
-      });
-    }
-
-    // ── CODE MATCHES — mark verified ──
-    await supabaseAdmin
-      .from('HomePostcardCode')
-      .update({
-        status: 'verified',
-        verified_at: new Date().toISOString(),
-        attempts,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', postcard.id);
-
-    // Upgrade residency claim if one exists
-    const { data: claim } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select('id, claimed_role, status')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (claim && claim.status !== 'verified') {
-      await supabaseAdmin
-        .from('HomeResidencyClaim')
-        .update({
-          status: 'verified',
-          review_note: 'Verified via postcard code',
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', claim.id);
-    }
-
-    // ── DETERMINE VERIFICATION STATUS based on authority presence ──
-    const claimedRole = claim?.claimed_role || 'member';
-    const roleBase = mapLegacyRole(claimedRole);
-
-    // Count active authorities (owner, admin, manager roles)
-    const { count: authorityCount } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id', { count: 'exact', head: true })
-      .eq('home_id', homeId)
-      .eq('is_active', true)
-      .in('role_base', ['owner', 'admin', 'manager']);
-
-    let verificationStatus;
-    let challengeWindowData = {};
-
-    if (authorityCount > 0) {
-      // HOME HAS AUTHORITIES → provisional + 7-day challenge window
-      verificationStatus = 'provisional';
-      const now = new Date();
-      const challengeEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      challengeWindowData = {
-        challenge_window_started_at: now.toISOString(),
-        challenge_window_ends_at: challengeEnd.toISOString(),
-      };
-    } else {
-      // NO AUTHORITIES (cold-start resolution) → verified with full access
-      verificationStatus = 'verified';
-    }
-
-    // Apply occupancy template (upsert)
-    const { occupancy } = await applyOccupancyTemplate(homeId, userId, roleBase, verificationStatus);
-
-    // Set challenge window columns if applicable
-    if (challengeWindowData.challenge_window_started_at && occupancy) {
-      await supabaseAdmin
-        .from('HomeOccupancy')
-        .update(challengeWindowData)
-        .eq('id', occupancy.id);
-    }
-
-    // If cold-start resolution, clear vacancy_at on the Home
-    if (verificationStatus === 'verified') {
-      await supabaseAdmin
+    try {
+      // Notify the user
+      const notificationService = require('../services/notificationService');
+      const { data: homeData } = await supabaseAdmin
         .from('Home')
-        .update({ vacancy_at: null, updated_at: new Date().toISOString() })
+        .select('name, address')
         .eq('id', homeId)
-        .not('vacancy_at', 'is', null);
-    }
-
-    // Audit log
-    await writeAuditLog(homeId, userId, 'POSTCARD_CODE_VERIFIED', 'HomePostcardCode', postcard.id, {
-      verification_status: verificationStatus,
-      has_authorities: authorityCount > 0,
-      challenge_window: challengeWindowData.challenge_window_ends_at || null,
-    });
-
-    // Notify the user
-    const notificationService = require('../services/notificationService');
-    const { data: homeData } = await supabaseAdmin
-      .from('Home')
-      .select('name, address')
-      .eq('id', homeId)
-      .single();
-
-    notificationService.createNotification({
-      userId,
-      type: 'residency_approved',
-      title: verificationStatus === 'verified' ? 'Welcome home!' : 'Verification received',
-      body: verificationStatus === 'verified'
-        ? `You've been verified at ${homeData?.name || homeData?.address || 'your home'} via mail code.`
-        : `Your mail code was accepted at ${homeData?.name || homeData?.address || 'your home'}. Existing members have 7 days to review.`,
-      icon: '🏡',
-      link: `/homes/${homeId}/dashboard`,
-      metadata: { home_id: homeId, method: 'postcard', verification_status: verificationStatus },
-    });
-
-    // If challenge window, notify authorities
-    if (authorityCount > 0) {
-      const { data: authorities } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('user_id')
-        .eq('home_id', homeId)
-        .eq('is_active', true)
-        .in('role_base', ['owner', 'admin', 'manager']);
-
-      const { data: newUser } = await supabaseAdmin
-        .from('User')
-        .select('display_name, email')
-        .eq('id', userId)
         .single();
 
-      const userName = newUser?.display_name || newUser?.email || 'Someone';
+      await notificationService.createNotification({
+        userId,
+        type: 'residency_approved',
+        title: verificationStatus === 'verified' ? 'Welcome home!' : 'Verification received',
+        body: verificationStatus === 'verified'
+          ? `You've been verified at ${homeData?.name || homeData?.address || 'your home'} via mail code.`
+          : `Your mail code was accepted at ${homeData?.name || homeData?.address || 'your home'}. Existing members have 7 days to review.`,
+        icon: '🏡',
+        link: `/homes/${homeId}/dashboard`,
+        metadata: { home_id: homeId, method: 'postcard', verification_status: verificationStatus },
+      });
 
-      for (const auth of (authorities || [])) {
-        notificationService.createNotification({
-          userId: auth.user_id,
-          type: 'challenge_window_opened',
-          title: 'New member pending review',
-          body: `${userName} verified via mail code at ${homeData?.name || 'your home'}. You have 7 days to review.`,
-          icon: '🔔',
-          link: `/homes/${homeId}/members`,
-          metadata: {
-            home_id: homeId,
-            new_user_id: userId,
-            challenge_window_ends_at: challengeWindowData.challenge_window_ends_at,
-          },
-        });
+      // If challenge window, notify authorities
+      if (authorityCount > 0) {
+        const { data: authorities } = await supabaseAdmin
+          .from('HomeOccupancy')
+          .select('user_id')
+          .eq('home_id', homeId)
+          .eq('is_active', true)
+          .in('role_base', ['owner', 'admin', 'manager']);
+
+        const { data: newUser } = await supabaseAdmin
+          .from('User')
+          .select('display_name, email')
+          .eq('id', userId)
+          .single();
+
+        const userName = newUser?.display_name || newUser?.email || 'Someone';
+
+        for (const auth of (authorities || [])) {
+          await notificationService.createNotification({
+            userId: auth.user_id,
+            type: 'challenge_window_opened',
+            title: 'New member pending review',
+            body: `${userName} verified via mail code at ${homeData?.name || 'your home'}. You have 7 days to review.`,
+            icon: '🔔',
+            link: `/homes/${homeId}/members`,
+            metadata: {
+              home_id: homeId,
+              new_user_id: userId,
+              challenge_window_ends_at: challengeWindowData.challenge_window_ends_at,
+            },
+          });
+        }
       }
+
+    } catch (_notificationError) {
+      logger.warn('Postcard verified but notification delivery failed', { homeId, userId });
     }
 
     res.json({

@@ -6,7 +6,7 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /**
- * DTOs for the postcard ownership-verification flow in
+ * DTOs for the postcard residency-verification flow in
  * `backend/routes/homeOwnership.js`:
  *   - POST /api/homes/:id/request-postcard (line 2452)
  *   - POST /api/homes/:id/verify-postcard  (line 2548)
@@ -29,6 +29,7 @@ data class PostcardInfoDto(
 data class RequestPostcardResponse(
     val message: String,
     val postcard: PostcardInfoDto,
+    @Json(name = "delivery_unknown") val deliveryUnknown: Boolean? = null,
 )
 
 /**
