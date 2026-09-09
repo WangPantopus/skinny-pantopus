@@ -78,3 +78,17 @@ credential login and an authenticated own-profile request, with no harness
 sleep. The JWT issuance offsets were +804 ms and +143 ms after their precise
 cutoffs. The prior access token was denied in both cycles. All 4,340 backend
 tests pass. Original consumed links and earlier revoked sessions were not reused.
+
+## Android visual verification
+
+Final CI at `ca47de8b0` passed iOS on all three simulators and Android
+instrumented tests, but failed two email-status screenshot baselines that
+still expected the old delivery claims. The actual CI screenshots were
+visually inspected. Only those two baselines were regenerated for the intended
+“Check your email” / “Link requested” copy; all seven status-screen snapshots
+then passed local verification. The remaining final-head CI must pass before
+merge. PR #16's merged-master CI also passed in full.
+
+Final CI at `61139c1bd` passed after an unrelated iPhone 16 search timing test
+passed its failed-job rerun. [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17)
+merged at 12:44 UTC as `82d57ee0f70d182776ec88af8aaab52d0317635d`.
