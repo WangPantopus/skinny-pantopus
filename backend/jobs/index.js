@@ -89,6 +89,8 @@ const deliverGigAcceptance = require('./deliverGigAcceptance');
 const deliverWalletSettlement = require('./deliverWalletSettlement');
 const reconcileGigAuthorizationExpiry = require('./reconcileGigAuthorizationExpiry');
 const deliverGigAuthorizationExpiry = require('./deliverGigAuthorizationExpiry');
+const deliverGigStop = require('./deliverGigStop');
+const reconcileGigStop = require('./reconcileGigStop');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 // Persistent login registry housekeeping
@@ -121,6 +123,8 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'deliverWalletSettlement',
   'reconcileGigAuthorizationExpiry',
   'deliverGigAuthorizationExpiry',
+  'deliverGigStop',
+  'reconcileGigStop',
   'reconcileGigAcceptance',
   'reconcilePaymentRefunds',
   'computeReputation',
@@ -609,6 +613,13 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('* * * * *', wrapJob('deliverGigAuthorizationExpiry', deliverGigAuthorizationExpiry), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigStop', deliverGigStop), {
+    scheduled: true, timezone: 'UTC',
+  });
+  scheduleCron('*/5 * * * *', wrapJob('reconcileGigStop', reconcileGigStop), {
     scheduled: true, timezone: 'UTC',
   });
 

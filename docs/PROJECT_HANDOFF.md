@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Durable task stop checkpoint — September 10
+
+Cancellation, reopening, worker release and closing now retain one original
+command before financial work. Pending outcomes block conflicting task/payment
+changes; only verified release/refund evidence and an exact terminal receipt
+complete the action. The [stop backend report](paid-gig-unstarted-stop-2026-09-10.md)
+records real service/SQL interruption and lock-order checks, a clean complete
+migration replay, exact populated-upgrade preservation, unchanged archived
+financial implementations and independent review. The final broad regression had
+one unrelated Home watch timeout; its unchanged affected-suite recheck passed.
+No timeout cause is claimed. Privacy gates passed.
+
+**Next:** finish native stop recovery, including reopening a saved action after
+the task has already cancelled or the worker has been released. Browser recovery
+is pushed as `650ac9ce0`. Then finish started/no-show/fee execution, tip receipt
+acceptance, disputes/Connect/debt, retained-operation support, complete provider
+journeys and capacity/integration. Native Home task browsing is under app
+verification; retained creation/editing/private attachments and durable task
+assignment notices remain next there. PR #32 and #34 remain unfinished drafts.
+All paid dependencies stay together for final launch preparation. Completed
+physical Beacon and saved-card acceptance must not be repeated. No hosted
+migration, scheduler flag or paid service changed.
+
 ### Browser task stop recovery checkpoint — September 10
 
 Both live browser gig layouts now share current-term task cancellation,

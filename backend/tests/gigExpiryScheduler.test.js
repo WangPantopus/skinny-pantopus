@@ -20,6 +20,8 @@ test('cron fallback keeps daily bookings and independent frequent Gig discovery/
  expect(find('expireUncapturedAuthorizations').map(x=>x.expression)).toEqual(['0 3 * * *']);
  expect(find('reconcileGigAuthorizationExpiry').map(x=>x.expression)).toEqual(['*/15 * * * *']);
  expect(find('deliverGigAuthorizationExpiry').map(x=>x.expression)).toEqual(['* * * * *']);
+ expect(find('deliverGigStop').map(x=>x.expression)).toEqual(['* * * * *']);
+ expect(find('reconcileGigStop').map(x=>x.expression)).toEqual(['*/5 * * * *']);
  jobs.get('./reconcileGigAuthorizationExpiry').mockRejectedValue(new Error('Unavailable'));
  await find('reconcileGigAuthorizationExpiry')[0].fn();
  await find('deliverGigAuthorizationExpiry')[0].fn();
@@ -29,6 +31,8 @@ test('pg-boss ownership suppresses both duplicate fallback schedulers without su
  const { api, registered }=load('index.js');api.startJobs({ skipPgBossBackedJobs: true });
  expect(registered.some(x=>x.fn.jobName==='reconcileGigAuthorizationExpiry')).toBe(false);
  expect(registered.some(x=>x.fn.jobName==='deliverGigAuthorizationExpiry')).toBe(false);
+ expect(registered.some(x=>x.fn.jobName==='deliverGigStop')).toBe(false);
+ expect(registered.some(x=>x.fn.jobName==='reconcileGigStop')).toBe(false);
  expect(registered.some(x=>x.fn.jobName==='expireUncapturedAuthorizations')).toBe(true);
 });
 test('pg-boss registers independent singleton queues and preserves retryable delivery failure', async () => {
@@ -38,6 +42,9 @@ test('pg-boss registers independent singleton queues and preserves retryable del
  expect(boss.schedule).toHaveBeenCalledWith('reconcile-gig-authorization-expiry','*/15 * * * *',null,expect.objectContaining({singletonKey:'reconcile-gig-authorization-expiry'}));
  expect(boss.schedule).toHaveBeenCalledWith('deliver-gig-authorization-expiry','* * * * *',null,expect.objectContaining({singletonKey:'deliver-gig-authorization-expiry'}));
  expect(boss.createQueue).toHaveBeenCalledWith('deliver-gig-authorization-expiry',expect.objectContaining({policy:'singleton',retryDelay:30}));
+ expect(boss.schedule).toHaveBeenCalledWith('deliver-gig-stop','* * * * *',null,expect.objectContaining({singletonKey:'deliver-gig-stop'}));
+ expect(boss.schedule).toHaveBeenCalledWith('reconcile-gig-stop','*/5 * * * *',null,expect.objectContaining({singletonKey:'reconcile-gig-stop'}));
+ expect(boss.createQueue).toHaveBeenCalledWith('deliver-gig-stop',expect.objectContaining({policy:'singleton',retryDelay:30}));
  jobs.get('./deliverGigAuthorizationExpiry').mockRejectedValue(new Error('Unknown acknowledgement'));
  await expect(workers.get('deliver-gig-authorization-expiry')([{id:'synthetic'}])).rejects.toThrow('Unknown acknowledgement');
 });
