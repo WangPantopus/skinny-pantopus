@@ -21,7 +21,9 @@ Active work is `/private/tmp/pantopus-staging-payment-sheet`, branch
 records owned SetupIntent preparation/resume and durable confirmation, with
 57 focused tests, 4,548 backend tests and privacy gates passing before the mail
 integration. The frozen iOS lifecycle implementation passes all 36 focused tests
-and strict formatting/lint checks; Android's final run is active. No live payment
+and strict formatting/lint checks; Android passes all 49 focused tests, formatting,
+ktlintCheck, Detekt and compilation. The native/API contract review passes.
+The iOS source milestone is pushed as `3afbf043d`. No live payment
 fixtures or candidate changes ran.
 Before acceptance, finish the reproduced default/removal race with atomic
 app-owned preference and durable removal guards, then exercise actual Stripe

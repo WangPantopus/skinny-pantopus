@@ -34,16 +34,33 @@ data class PaymentMethodDto(
 )
 
 /**
- * POST /api/payments/payment-sheet-add-card — backend/routes/pays.js:1095.
+ * POST /api/payments/payment-sheet-add-card — backend/routes/pays.js:1412.
  * SetupIntent params for the mobile PaymentSheet "add a card" flow. Keys
  * are already camelCase server-side.
  */
 @JsonClass(generateAdapter = true)
 data class AddCardSheetParamsDto(
     val setupIntent: String,
+    val setupIntentId: String,
+    val setupStatus: String,
     val ephemeralKey: String,
     val customer: String,
     val publishableKey: String? = null,
+)
+
+/** Omit the ID only for a new setup; retries recover that exact owned setup. */
+@JsonClass(generateAdapter = true)
+data class AddCardSheetRequest(val setupIntentId: String? = null)
+
+/** Owned SetupIntent identifier, retained when saved-card reconciliation needs retry. */
+@JsonClass(generateAdapter = true)
+data class ConfirmAddCardRequest(val setupIntentId: String)
+
+/** Durable saved-card receipt from POST payment-sheet-add-card/confirm. */
+@JsonClass(generateAdapter = true)
+data class ConfirmAddCardResponse(
+    val confirmed: Boolean,
+    val paymentMethod: PaymentMethodDto,
 )
 
 /** Generic `{ message }` ack returned by set-default / remove. */

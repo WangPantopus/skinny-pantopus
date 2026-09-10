@@ -5,18 +5,20 @@ package app.pantopus.android.ui.screens.settings.payments
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.connect.ConnectAccountDto
+import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.connect.ConnectRepository
 import app.pantopus.android.data.payments.PaymentHistoryRepository
 import app.pantopus.android.data.payments.PaymentsRepository
+import app.pantopus.android.data.payments.PendingCardSetupStore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -47,6 +49,7 @@ class PaymentsViewModel
         private val repository: PaymentsRepository,
         private val historyRepository: PaymentHistoryRepository,
         private val connectRepository: ConnectRepository,
+        private val pendingSetups: PendingCardSetupStore,
     ) : ViewModel() {
         private companion object {
             /** Matches the server's default page size for `GET api/payments/history`. */
@@ -58,8 +61,9 @@ class PaymentsViewModel
         private val _state = MutableStateFlow<PaymentsUiState>(PaymentsUiState.Loading)
         val state: StateFlow<PaymentsUiState> = _state.asStateFlow()
 
-        private val _events = MutableSharedFlow<PaymentsEvent>(extraBufferCapacity = 4)
-        val events: SharedFlow<PaymentsEvent> = _events.asSharedFlow()
+        // Retain one-shot presentation across a brief collector gap, such as rotation.
+        private val _events = Channel<PaymentsEvent>(Channel.BUFFERED)
+        val events: Flow<PaymentsEvent> = _events.receiveAsFlow()
 
         /** Non-null → fixture mode (previews / snapshots / projection tests). */
         private var fixtureSeed: PaymentsSeed? = null
@@ -67,6 +71,28 @@ class PaymentsViewModel
         /** Drives the pull-to-refresh indicator. */
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private var methodMutationBusy = false
+        private var methodsReadBusy = false
+        private var methodsGeneration = 0L
+        private var projectedAccountId: String? = null
+        private val cardSetup =
+            PaymentsCardSetup(
+                repository = repository,
+                pendingSetups = pendingSetups,
+                scope = viewModelScope,
+                events = _events,
+                canStart = { fixtureSeed == null && !methodMutationBusy && !methodsReadBusy },
+                onFreshMethods = { accountId, methods ->
+                    projectedAccountId = accountId
+                    val current = (_state.value as? PaymentsUiState.Loaded)?.content ?: PaymentsMapper.liveFrame(emptyList())
+                    _state.value = PaymentsUiState.Loaded(current.copy(methods = methods.map(PaymentsMapper::toUiMethod)))
+                },
+                onSavedReceipt = { accountId, receipt ->
+                    projectedAccountId = accountId
+                    saveConfirmedMethod(PaymentsMapper.toUiMethod(receipt))
+                },
+            )
+        val addCardPhase: StateFlow<AddCardPhase> = cardSetup.phase
 
         /** Override the active seed before [load] runs (fixture mode). */
         fun seed(seed: PaymentsSeed) {
@@ -74,6 +100,7 @@ class PaymentsViewModel
         }
 
         fun load() {
+            if (addCardPhase.value.isBusy || methodMutationBusy || methodsReadBusy) return
             val seed = fixtureSeed
             if (seed != null) {
                 _state.value =
@@ -85,7 +112,16 @@ class PaymentsViewModel
                     )
                 return
             }
-            viewModelScope.launch { fetch(showLoading = true) }
+            methodsReadBusy = true
+            methodsGeneration++
+            viewModelScope.launch {
+                try {
+                    cardSetup.restorePendingSetup()
+                    fetch(showLoading = true)
+                } finally {
+                    methodsReadBusy = false
+                }
+            }
         }
 
         /**
@@ -95,24 +131,36 @@ class PaymentsViewModel
          */
         private suspend fun fetch(showLoading: Boolean) {
             if (showLoading) _state.value = PaymentsUiState.Loading
-            // History, the lifetime totals and the Connect status are
-            // supplementary — a failure in any of them degrades on its own
-            // while the methods card still renders.
+            val generation = methodsGeneration
+            val accountId = pendingSetups.currentAccountId()
+            // Supplementary reads degrade independently; their latency cannot let
+            // an old methods response overwrite a later save or a different account.
             when (val result = repository.paymentMethods()) {
-                is NetworkResult.Success ->
-                    _state.value =
-                        PaymentsUiState.Loaded(
-                            PaymentsMapper.liveFrame(
-                                methods = result.data.paymentMethods.map(PaymentsMapper::toUiMethod),
-                                activity = fetchActivity(),
-                                connectAccount = fetchConnectAccount(),
-                                earnings = fetchEarnings(),
-                            ),
+                is NetworkResult.Success -> {
+                    val content =
+                        PaymentsMapper.liveFrame(
+                            methods = result.data.paymentMethods.map(PaymentsMapper::toUiMethod),
+                            activity = fetchActivity(),
+                            connectAccount = fetchConnectAccount(),
+                            earnings = fetchEarnings(),
                         )
-                is NetworkResult.Failure ->
-                    _state.value = PaymentsUiState.Error(result.error.displayMessage("Couldn't load Payments."))
+                    if (readScopeMatches(accountId, generation)) {
+                        projectedAccountId = accountId
+                        _state.value = PaymentsUiState.Loaded(content)
+                    }
+                }
+                is NetworkResult.Failure -> {
+                    if (readScopeMatches(accountId, generation)) {
+                        _state.value = PaymentsUiState.Error(result.error.displayMessage("Couldn't load Payments."))
+                    }
+                }
             }
         }
+
+        private suspend fun readScopeMatches(
+            accountId: String?,
+            generation: Long,
+        ): Boolean = accountId != null && pendingSetups.currentAccountId() == accountId && methodsGeneration == generation
 
         /**
          * `GET api/payments/history` → the Activity card. History is
@@ -157,14 +205,21 @@ class PaymentsViewModel
          * Wallet surface's `refresh()`.
          */
         fun refresh() {
+            if (addCardPhase.value.isBusy || methodMutationBusy || methodsReadBusy) return
             if (fixtureSeed != null) {
                 load()
                 return
             }
             _refreshing.value = true
+            methodsReadBusy = true
+            methodsGeneration++
             viewModelScope.launch {
-                fetch(showLoading = _state.value is PaymentsUiState.Error)
-                _refreshing.value = false
+                try {
+                    fetch(showLoading = _state.value is PaymentsUiState.Error)
+                } finally {
+                    _refreshing.value = false
+                    methodsReadBusy = false
+                }
             }
         }
 
@@ -172,54 +227,57 @@ class PaymentsViewModel
 
         fun tapAddMethod() {
             if (fixtureSeed != null) return
-            viewModelScope.launch {
-                when (val result = repository.addCardSheetParams()) {
-                    is NetworkResult.Success -> _events.emit(PaymentsEvent.PresentAddCardSheet(result.data))
-                    is NetworkResult.Failure -> _events.emit(PaymentsEvent.ShowMessage(result.error.message))
-                }
-            }
+            if (addCardPhase.value.isBusy || methodMutationBusy || methodsReadBusy) return
+            methodsGeneration++
+            cardSetup.tapAddMethod()
         }
 
-        fun onAddCardOutcome(outcome: AddCardOutcome) {
-            when (outcome) {
-                AddCardOutcome.Completed ->
-                    // The attached card is reconciled into the backend by the
-                    // `payment_method.attached` webhook; re-read server state.
-                    viewModelScope.launch { reloadMethods() }
-                AddCardOutcome.Canceled -> Unit
-                is AddCardOutcome.Failed ->
-                    viewModelScope.launch {
-                        _events.emit(PaymentsEvent.ShowMessage(outcome.message ?: "Couldn't add that card."))
-                    }
-            }
+        fun onAddCardOutcome(outcome: AddCardOutcome) = cardSetup.onAddCardOutcome(outcome)
+
+        suspend fun canPresentAddCardSheet(params: AddCardSheetParamsDto): Boolean = cardSetup.canPresentAddCardSheet(params)
+
+        private fun saveConfirmedMethod(saved: PaymentMethod) {
+            val current = (_state.value as? PaymentsUiState.Loaded)?.content ?: PaymentsMapper.liveFrame(emptyList())
+            val updated = current.copy(methods = listOf(saved) + current.methods.filter { it.id != saved.id })
+            _state.value = PaymentsUiState.Loaded(if (saved.chip == null) updated else updated.markingDefault(saved.id))
         }
 
         // MARK: - Set default / remove (optimistic, then reconcile)
 
-        fun setDefault(id: String) {
-            val loaded = (_state.value as? PaymentsUiState.Loaded)?.content ?: return
-            _state.value = PaymentsUiState.Loaded(loaded.markingDefault(id))
-            viewModelScope.launch {
-                when (repository.setDefault(id)) {
-                    is NetworkResult.Success -> reloadMethods()
-                    is NetworkResult.Failure -> {
-                        _state.value = PaymentsUiState.Loaded(loaded)
-                        _events.emit(PaymentsEvent.ShowMessage("Couldn't update your default payment method."))
-                    }
-                }
-            }
-        }
+        fun setDefault(id: String) = changeMethod(id, makeDefault = true)
 
-        fun removeMethod(id: String) {
+        fun removeMethod(id: String) = changeMethod(id, makeDefault = false)
+
+        private fun changeMethod(
+            id: String,
+            makeDefault: Boolean,
+        ) {
+            if (addCardPhase.value.isBusy || methodMutationBusy || methodsReadBusy) return
             val loaded = (_state.value as? PaymentsUiState.Loaded)?.content ?: return
-            _state.value = PaymentsUiState.Loaded(loaded.removingMethod(id))
+            methodMutationBusy = true
+            val generation = ++methodsGeneration
             viewModelScope.launch {
-                when (repository.removeMethod(id)) {
-                    is NetworkResult.Success -> reloadMethods()
-                    is NetworkResult.Failure -> {
-                        _state.value = PaymentsUiState.Loaded(loaded)
-                        _events.emit(PaymentsEvent.ShowMessage("Couldn't remove that payment method."))
+                try {
+                    val accountId = pendingSetups.currentAccountId()
+                    if (accountId == null || accountId != projectedAccountId) return@launch
+                    _state.value = PaymentsUiState.Loaded(if (makeDefault) loaded.markingDefault(id) else loaded.removingMethod(id))
+                    val result = if (makeDefault) repository.setDefault(id) else repository.removeMethod(id)
+                    if (!readScopeMatches(accountId, generation)) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> reloadMethods(accountId, generation)
+                        is NetworkResult.Failure -> {
+                            _state.value = PaymentsUiState.Loaded(loaded)
+                            val message =
+                                if (makeDefault) {
+                                    "Couldn't update your default payment method."
+                                } else {
+                                    "Couldn't remove that payment method."
+                                }
+                            _events.send(PaymentsEvent.ShowMessage(message))
+                        }
                     }
+                } finally {
+                    methodMutationBusy = false
                 }
             }
         }
@@ -231,8 +289,13 @@ class PaymentsViewModel
 
         fun tapCloseAccount() = Unit
 
-        private suspend fun reloadMethods() {
-            when (val result = repository.paymentMethods()) {
+        private suspend fun reloadMethods(
+            accountId: String,
+            generation: Long,
+        ) {
+            val result = repository.paymentMethods()
+            if (!readScopeMatches(accountId, generation)) return
+            when (result) {
                 is NetworkResult.Success -> {
                     val methods = result.data.paymentMethods.map(PaymentsMapper::toUiMethod)
                     val current = (_state.value as? PaymentsUiState.Loaded)?.content
@@ -240,7 +303,7 @@ class PaymentsViewModel
                         PaymentsUiState.Loaded(current?.copy(methods = methods) ?: PaymentsMapper.liveFrame(methods))
                 }
                 is NetworkResult.Failure ->
-                    _events.emit(PaymentsEvent.ShowMessage(result.error.message))
+                    _events.send(PaymentsEvent.ShowMessage(result.error.message))
             }
         }
     }

@@ -47,7 +47,22 @@ checks prevent a delayed list or failed optimistic action from replacing a newer
 screen state. All 36 focused iOS tests pass (13 recovery, 8 save, 15 existing),
 with strict SwiftLint, SwiftFormat and whitespace checks passing. These tests
 used explicit localhost API/socket settings and do not certify a live Stripe
-SDK journey. Android's corresponding final quality/test run is still active.
+SDK journey.
+
+## Android recovery checkpoint
+
+Android implements the same account/origin-scoped durable setup recovery and
+confirmation contract, including restored SDK activity results and failed
+persistence/clear handling. The list, optimistic row actions and setup flow
+share mutual action guards and account/generation checks. All 49 focused tests
+pass (20 existing view-model, 19 recovery, 5 DTO, 5 persistence), with
+ktlintFormat, ktlintCheck, Detekt and main/test compilation passing. Combined
+native coverage is 85 passing focused tests. A read-only review found no
+request/response mismatch between either client and the current backend.
+
+Both native source milestones are ready. The explicit opt-in iOS live-test
+harness is being prepared; actual provider calls and simulator UI acceptance
+have not run yet. Ordinary CI must skip these disposable staging actions.
 
 ## Required default/removal repair before acceptance
 
