@@ -16,6 +16,22 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Paid-gig recovery and delivery checkpoint — September 9
 
+**Native sensitive-auth integration is complete.** PR #33 merged as
+`390091cdbfb12c3f2a2b7ce331453433d6344e80` at 05:01:17 UTC September 10 after
+every [current-head CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34437250525)
+passed at `b85febb8c`, including all three iOS simulator jobs and Android
+instrumented tests. No checks were waived and no hosted runtime changed.
+
+Paid-gig work is now draft [PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34),
+with web/backend checkpoints and master `d7be416b8` integration pushed, plus
+exact test-profile cleanup `63d475474` carried from Home checkpoint `f76f16847`.
+Root's combined backend run passes **4,730 tests, 16 skipped under Node 22**, the
+CI runtime. Two earlier Node 24 runs encountered intermittent HTTP socket/timeout
+failures in unrelated Home-file/intelligence tests; all 44 focused cases pass.
+The Node 22 pass does not establish the cause of those intermittent failures.
+Current iOS/Android paid-bid recovery is uncommitted and under test. Finish this
+milestone before safely incorporating newer master into these active worktrees.
+
 The first paid-gig backend checkpoint is committed/pushed as `fa3a70a43` and
 fixture follow-up `15754b439`. Web exact-bid checkout and cold/redirect recovery
 are committed/pushed as `68cb112a4`; its [report](paid-gig-web-recovery-2026-09-09.md)
@@ -47,8 +63,8 @@ remain. No paid-gig provider call or hosted migration/runtime change has run.
 Home admission/access-secret source is committed in draft PR #32 at `0362ba8f2`,
 with master integration `4e0ecaa3e` passing 4,766 backend tests. Invitations and
 guest/scoped sharing are the next isolated Home slices. Native sensitive-auth
-PR #33 (`b85febb8c`) passes local platform checks and independent review; its
-full current-head CI is still in progress. Main-checkout design/handoff changes
+PR #33 (`b85febb8c`) is now merged after complete CI as recorded above.
+Main-checkout design/handoff changes
 and unrelated PR #24 remain preserved.
 
 ### Current source and acceptance checkpoint — September 9
