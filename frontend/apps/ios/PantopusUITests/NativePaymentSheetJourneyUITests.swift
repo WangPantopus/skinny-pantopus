@@ -54,7 +54,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         // A private operator may resume only after reconciling the exact first
         // successful setup and single default Visa against the provider/API.
         let cardA = try waitForCard(last4: "4242")
-        assertDefault(cardA)
+        assertDefault(cardA, allowPendingSetup: resumeAfterVisa)
         openSheet()
         saveTestCard("5555555555554444")
         let cardB = try waitForCard(last4: "4444")
@@ -113,7 +113,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     private func saveTestCard(_ number: String) {
         // These identifiers come from the pinned Stripe SDK's own UI tests.
         // A customer with a saved card starts at the SDK's selection screen.
-        if !app.textFields["Card number"].exists { tapButton("+ Add") }
+        if !app.textFields["Card number"].exists { tap("+ Add") }
         fillStripeField("Card number", text: number)
         fillStripeField("expiration date", text: "1234")
         fillStripeField("CVC", text: "123")
@@ -143,10 +143,12 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         return id
     }
 
-    private func assertDefault(_ id: String) {
+    private func assertDefault(_ id: String, allowPendingSetup: Bool = false) {
         // The default badge is optimistic; wait for the API/reload operation
         // to settle before treating it as durable or restarting the app.
-        assertAddLabel("Add payment method")
+        let labels = allowPendingSetup ? ["Add payment method", "Retry saving card"] : ["Add payment method"]
+        expectation(for: NSPredicate(format: "label IN %@ AND enabled == true", labels), evaluatedWith: element("payments.addMethodBtn"))
+        waitForExpectations(timeout: 30)
         XCTAssertFalse(app.alerts["Something went wrong"].exists)
         expectation(for: NSPredicate(format: "label CONTAINS[c] %@", "default"), evaluatedWith: element("payments.method.\(id)"))
         waitForExpectations(timeout: 20)
@@ -206,7 +208,9 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     private func tapBack() {
-        let back = app.buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", "Back", "BackButton")).firstMatch
+        // The enclosing navigation button returns to Hub. Use the Payments
+        // bar's Back control to return to Settings before normal logout.
+        let back = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier == %@", "Back", "paymentsTopBar")).firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
     }

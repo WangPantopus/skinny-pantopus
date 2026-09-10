@@ -187,3 +187,50 @@ checkpoint; it does not repeat successful setup or treat a partial run as full
 acceptance. It still must prove second-card setup/default/restart/removal/logout,
 then complete API/provider checks and exact cleanup. Strict lint/format and the
 new test build pass. Android remains complete and must not be replayed.
+
+## Completed native acceptance and exact cleanup
+
+Both platforms now pass real Stripe test-mode SDK setup and app reconciliation:
+
+| Check | iOS simulator | Android emulator |
+| --- | --- | --- |
+| Normal login and logout | Pass | Pass |
+| Cancel, cold launch, resume the same setup | Pass | Pass |
+| Save Visa and Mastercard through Stripe UI | Pass | Pass |
+| Select second-card default and cold persistence | Pass | Pass |
+| Cancel removal, remove default, fallback to first card | Pass | Pass |
+| Remove final card and show empty state | Pass | Pass |
+
+The iOS first-card run and final resumed run are joined by exact provider/API
+reconciliation. Its final opt-in test passes in 185.993 seconds; no successful
+card setup was replayed while repairing test selectors. The Stripe saved-card
+picker is addressed by its `+ Add` identifier (its label is “Add new payment
+method”). The final Back action targets the Payments bar, preserving the normal
+Settings logout path. Android's ten-stage private driver likewise retains exact
+checkpoints. This is simulator evidence, not physical-device payment certification.
+
+For each actor, independent provider/API checks prove exactly two successful
+owned setups, exactly two distinct removed cards and completed removal proofs.
+Foreign prepare/confirm and removed-proof reuse return 404. Real authenticated
+PostgREST calls cannot forge or clear the durable customer binding (42501), and
+removal records remain service-only. No PaymentIntent, charge or Payment row was
+created. There are zero push tokens, and the original Home document IDs match.
+
+Exact cleanup passes: both test customers are deleted, cards remain detached,
+only the fixture removal proofs are removed, and customer bindings are cleared.
+Normal UI logout completed. Historical operator sessions were also revoked via
+password step-up and global logout for the exact disposable accounts. All fixture
+sessions are revoked and original documents are preserved. Provider test history
+is retained; do not rerun these actors, SDK setups, publishers or cleanup.
+
+Native application source includes `9fbf548bf`; the final selector corrections
+are test-only. The private API remains `2e7b04293` / `2e0a32e8b0e2`. Strict
+lint/format and build pass, as do the existing 85 focused native tests, 4,607
+backend tests (16 skipped), privacy gates, 18 SQL contracts and 32-connection
+transaction checks. Final current-head CI is required before PR #31 integration.
+
+Paid-gig authorization/capture/refund, Connect/payouts, broader native identity
+failure handling and integrated release acceptance remain separate work. Source
+review found the pre-existing sensitive-screen guard treats invalid capability
+like an absent credential; that requires a dedicated failure-path repair before
+release. These completed normal-path simulator checks do not certify that branch.
