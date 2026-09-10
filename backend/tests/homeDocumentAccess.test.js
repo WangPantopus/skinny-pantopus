@@ -107,7 +107,7 @@ test.each([true, false])('dashboard document counts include only permitted recor
       ? { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }
       : { data: null, error: { message: 'Unexpected RPC' } });
   getUserAccess.mockResolvedValue({ permissions: permitted ? ['docs.view'] : [] });
-  const response = await request(app).get(`/api/homes/${homeId}/dashboard`);
+  const response = await request(app).get(`/api/homes/${homeId}/dashboard`).set('Authorization', 'Bearer synthetic-document-session');
   expect(response.status).toBe(200);
   expect(response.body.counts.documents).toBe(permitted ? 2 : 0);
 });

@@ -11,6 +11,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const homeClaimReviewService = require('../services/homeClaimReviewService');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const funnelReport = require('../services/funnelReport');
 
 // All admin routes require auth + admin role
@@ -120,7 +121,8 @@ router.get('/pending-claims', async (req, res) => {
     if (error) throw error;
 
     const enrichedClaims = await enrichClaims(claims);
-    res.json({ claims: enrichedClaims, total: enrichedClaims.length });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ claims: enrichedClaims, total: enrichedClaims.length, review_session: getRequestSessionScope(req) });
   } catch (err) {
     logger.error('Admin: Failed to fetch pending claims', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pending claims' });
@@ -237,12 +239,15 @@ router.get('/claims/counts', async (_req, res) => {
 
 /**
  * GET /api/admin/claims/:claimId
- * Returns full claim details with evidence files and presigned download URLs.
+ * Returns the current claim snapshot and safe evidence metadata.
  */
 router.get('/claims/:claimId', async (req, res) => {
   try {
+    if (!requireExpectedSessionScope(req, res)) return;
     const result = await homeClaimReviewService.read({ claimId: req.params.claimId, actorId: req.user.id, platformAdmin: true });
-    res.json({ claim: result.claim, home: result.home, claimant: result.claimant, evidence: result.evidence });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ claim: result.claim, home: result.home, claimant: result.claimant, evidence: result.evidence,
+      claim_session: { ...getRequestSessionScope(req), home_id: result.homeId, claim_id: result.claimId } });
   } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
@@ -251,6 +256,7 @@ router.post('/claims/:claimId/review', async (req, res) => {
     return res.status(400).json({ error: 'Invalid claim review action.' });
   }
   try {
+    if (!requireExpectedSessionScope(req, res)) return;
     const result = await homeClaimReviewService.mutate({ claimId: req.params.claimId, actorId: req.user.id,
       action: req.body.action, reviewToken: req.body.review_token, note: req.body.note, platformAdmin: true });
     res.json({ ...result, message: 'Claim review saved.' });

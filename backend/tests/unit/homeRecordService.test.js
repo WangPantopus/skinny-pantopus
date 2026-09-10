@@ -10,7 +10,7 @@ test('list binds Home, actor, record and date/source filters to one RPC', async 
   expect(rpc).toHaveBeenCalledWith('get_home_records', { p_home_id: 'home', p_actor_id: 'actor', p_kind: 'task',
     p_record_id: 'record', p_start_after: null, p_start_before: null, p_mail_only: true });
 });
-test.each(['create', 'update', 'delete'])('%s preserves explicit null and omission in the atomic mutation', async action => {
+test.each(['create', 'update'])('%s preserves explicit null and omission in the atomic mutation', async action => {
   const rpc = jest.fn(async () => ({ data: { ok: true, record }, error: null })); db.setRpcMock(rpc);
   const payload = { description: null, assigned_to: null, due_at: null };
   await service.mutate({ homeId: 'home', actorId: 'actor', kind: 'task', action, payload,
@@ -19,6 +19,12 @@ test.each(['create', 'update', 'delete'])('%s preserves explicit null and omissi
     p_home_id: 'home', p_actor_id: 'actor', p_kind: 'task', p_action: action, p_payload: payload,
     p_source_mail_id: action === 'create' ? 'mail' : null }));
   expect(rpc.mock.calls[0][1].p_payload).not.toHaveProperty('completed_at');
+});
+test('task deletion rejects mutation fields before beginning storage retirement', async () => {
+  const rpc = jest.fn(); db.setRpcMock(rpc);
+  await expect(service.mutate({ homeId: 'home', actorId: 'actor', kind: 'task', action: 'delete', recordId: 'record', payload: { description: null } }))
+    .rejects.toMatchObject({ statusCode: 400 });
+  expect(rpc).not.toHaveBeenCalled();
 });
 test.each([['general','chore'], ['recurring','reminder']])('legacy %s form uses canonical %s without changing caller payload', async (type, canonical) => {
   const rpc = jest.fn(async () => ({ data: { ok: true, record }, error: null })); db.setRpcMock(rpc);

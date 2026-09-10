@@ -4,21 +4,21 @@
 // claim-owner/evidence: a claim of type `resident`, residency documents
 // only, no challenge routing, and honest latency copy.
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, FileText, Upload, X } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { useClaimUploadSession } from '@/components/home/useClaimUploadSession';
 import { toast } from '@/components/ui/toast-store';
 
-type EvidenceType = 'utility_bill' | 'lease' | 'idv';
+type EvidenceType = 'utility_bill' | 'lease';
 
 // The instant door (Wedge Phase 2, D3): documents that prove you LIVE
 // here. Ownership documents have their own flow at claim-owner/evidence.
 const DOC_OPTIONS: { id: EvidenceType; label: string; desc: string }[] = [
   { id: 'utility_bill', label: 'Utility bill', desc: 'Electric, gas, water, or internet bill at this address, dated in the last 90 days' },
   { id: 'lease', label: 'Lease agreement', desc: 'Your current rental or lease agreement with this address on it' },
-  { id: 'idv', label: 'Government ID', desc: 'A driver\'s license or state ID showing this address' },
 ];
 
 const ACCEPT_TYPES = 'application/pdf,image/jpeg,image/png,image/webp,image/heic';
@@ -31,7 +31,7 @@ function sameHomeId(a: string | undefined, b: string | undefined): boolean {
 
 function isClaimUsableForEvidence(status: string | undefined): boolean {
   if (!status) return false;
-  return !['rejected', 'revoked', 'approved'].includes(status);
+  return ['draft', 'submitted', 'under_review', 'pending', 'initiated', 'needs_more_info'].includes(status);
 }
 
 function formatFileSize(bytes: number): string {
@@ -45,6 +45,10 @@ export default function VerifyResidencyPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const homeId = params?.id ?? '';
+  const uploadSession = useClaimUploadSession(homeId);
+  const uploadOperation = useRef<{ file: File; type: string; id: string } | null>(null);
+  const submitInFlight = useRef(false);
+  const savedClaim = useRef<string | undefined>(undefined);
   const existingClaimId = searchParams?.get('claimId') || undefined;
   const returnQuery = searchParams?.get('return') === 'place' ? '?return=place' : '';
 
@@ -53,27 +57,32 @@ export default function VerifyResidencyPage() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    savedClaim.current = undefined; uploadOperation.current = null;
+    setPickedFile(null); setSelectedDoc(null);
+  }, [homeId, existingClaimId, uploadSession.scope?.actor_id, uploadSession.scope?.session_scope]);
 
   const pickDocument = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+    if (uploadSession.scope) fileInputRef.current?.click();
+  }, [uploadSession.scope]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !uploadSession.scope) return;
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       toast.error(`Please select a file smaller than ${MAX_SIZE_MB} MB.`);
       return;
     }
     setPickedFile(file);
     e.target.value = '';
-  }, []);
+  }, [uploadSession.scope]);
 
   const removeFile = useCallback(() => {
     setPickedFile(null);
   }, []);
 
   const handleSubmit = useCallback(async () => {
+    if (submitInFlight.current || !uploadSession.scope) return;
     if (!selectedDoc) {
       toast.error('Please select what kind of document you are uploading.');
       return;
@@ -83,20 +92,22 @@ export default function VerifyResidencyPage() {
       return;
     }
 
+    submitInFlight.current = true;
     setSubmitting(true);
     try {
-      let claimId = existingClaimId;
+      await uploadSession.assertCurrent();
+      let claimId = savedClaim.current || existingClaimId;
       let claimCreateErr: { statusCode?: number; data?: { code?: string } } | null = null;
-      let routingClassification: string | undefined;
 
       if (!claimId) {
         try {
           const claimRes = await api.homeOwnership.submitOwnershipClaim(homeId, {
             claim_type: 'resident',
             method: 'doc_upload',
-          });
+          }, uploadSession.scope.session_scope);
           claimId = claimRes.claim?.id;
-          routingClassification = claimRes.claim?.routing_classification || undefined;
+          await uploadSession.assertCurrent();
+          savedClaim.current = claimId;
         } catch (claimErr: unknown) {
           claimCreateErr = claimErr as { statusCode?: number; data?: { code?: string } };
           console.warn('[Evidence] Failed to create claim:', claimErr);
@@ -105,10 +116,10 @@ export default function VerifyResidencyPage() {
 
       if (!claimId) {
         try {
-          const claimsRes = await api.homeOwnership.getMyOwnershipClaims();
+          const claimsRes = await api.homeOwnership.getMyOwnershipClaims(uploadSession.scope.session_scope);
           const matchingClaim = claimsRes?.claims?.find(
-            (c: { home_id: string; status: string }) =>
-              sameHomeId(c.home_id, homeId) && isClaimUsableForEvidence(c.status)
+            (c: { home_id: string; status: string; claim_type?: string }) =>
+              sameHomeId(c.home_id, homeId) && c.claim_type === 'resident' && isClaimUsableForEvidence(c.status)
           );
           if (matchingClaim?.id) claimId = matchingClaim.id;
         } catch {
@@ -131,21 +142,15 @@ export default function VerifyResidencyPage() {
         return;
       }
 
-      setUploading(true);
-      const uploadRes = await api.upload.uploadOwnershipEvidence(homeId, claimId, pickedFile, selectedDoc);
-      setUploading(false);
-
-      if (uploadRes?.evidence?.id) {
-        try {
-          await api.homeOwnership.uploadClaimEvidence(homeId, claimId, {
-            evidence_type: selectedDoc,
-            provider: 'manual',
-            storage_ref: uploadRes.evidence.file_url || null,
-          });
-        } catch {
-          // Non-fatal
-        }
+      savedClaim.current = claimId;
+      await uploadSession.assertCurrent();
+      if (!uploadOperation.current || uploadOperation.current.file !== pickedFile || uploadOperation.current.type !== selectedDoc) {
+        uploadOperation.current = { file: pickedFile, type: selectedDoc, id: crypto.randomUUID() };
       }
+      setUploading(true);
+      await api.upload.uploadOwnershipEvidence(homeId, claimId, pickedFile, selectedDoc, uploadOperation.current.id, uploadSession.scope.session_scope);
+      await uploadSession.assertCurrent();
+      setUploading(false);
 
       const submittedPath = `/app/homes/${homeId}/verify-residency/submitted${returnQuery}`;
       router.push(submittedPath);
@@ -153,9 +158,13 @@ export default function VerifyResidencyPage() {
       setUploading(false);
       toast.error(err instanceof Error ? err.message : 'Could not upload evidence. Please try again.');
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
-  }, [homeId, existingClaimId, selectedDoc, pickedFile, router, returnQuery]);
+  }, [homeId, existingClaimId, selectedDoc, pickedFile, uploadSession, router, returnQuery]);
+
+  if (!uploadSession.scope) return <div className="p-6"><p role="status">{uploadSession.error || 'Verifying your current session…'}</p>
+    {uploadSession.error && <button type="button" onClick={uploadSession.retry}>Retry</button>}</div>;
 
   return (
     <div className="min-h-screen bg-app-surface-raised">
@@ -279,7 +288,7 @@ export default function VerifyResidencyPage() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!selectedDoc || !pickedFile || submitting}
+          disabled={!uploadSession.scope || !selectedDoc || !pickedFile || submitting}
           className="mt-6 w-full py-3 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2"
         >
           {submitting ? (

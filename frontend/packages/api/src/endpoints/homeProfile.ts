@@ -5,6 +5,7 @@
 // ============================================================
 
 import { get, post, put, patch, del } from '../client';
+import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
 // ---- HomeTask ----
 
@@ -12,7 +13,7 @@ export async function getHomeTasks(homeId: string, params?: {
   status?: string;
   limit?: number;
 }) {
-  return get<{ tasks: any[] }>(`/api/homes/${homeId}/tasks`, params);
+  return get<{ tasks: any[]; task_session: HomeTaskSessionScope }>(`/api/homes/${homeId}/tasks`, params);
 }
 
 export async function createHomeTask(homeId: string, data: {
@@ -23,8 +24,11 @@ export async function createHomeTask(homeId: string, data: {
   due_at?: string;
   priority?: string;
   budget?: number;
-}) {
-  return post<{ task: any }>(`/api/homes/${homeId}/tasks`, data);
+}, scope?: HomeTaskSessionScope) {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope); }
+  const result = await post<{ task: any }>(`/api/homes/${homeId}/tasks`, data, { headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, result.task?.id || null);
+  return result;
 }
 
 export async function updateHomeTask(homeId: string, taskId: string, data: Partial<{
@@ -34,12 +38,18 @@ export async function updateHomeTask(homeId: string, taskId: string, data: Parti
   assigned_to: string;
   priority: string;
   due_at: string;
-}>) {
-  return put<{ task: any }>(`/api/homes/${homeId}/tasks/${taskId}`, data);
+}>, scope?: HomeTaskSessionScope) {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const result = await put<{ task: any }>(`/api/homes/${homeId}/tasks/${taskId}`, data, { headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, taskId);
+  return result;
 }
 
-export async function deleteHomeTask(homeId: string, taskId: string) {
-  return del(`/api/homes/${homeId}/tasks/${taskId}`);
+export async function deleteHomeTask(homeId: string, taskId: string, scope?: HomeTaskSessionScope) {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const result = await del(`/api/homes/${homeId}/tasks/${taskId}`, undefined, { headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, taskId);
+  return result;
 }
 
 // ---- Home Gigs (posted from this home) ----

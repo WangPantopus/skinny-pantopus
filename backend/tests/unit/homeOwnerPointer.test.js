@@ -137,7 +137,7 @@ describe('POST /api/homes with is_owner', () => {
 describe('DELETE /api/homes/:id after the pointer change', () => {
   function seedCreatedHome(extraMembers = []) {
     seedTable('Home', [{
-      id: 'home-del-1',
+      id: 'ddf10001-0000-4000-8000-000000000100',
       owner_id: null,
       created_by_user_id: TEST_USER,
       name: 'Mistake Home',
@@ -145,7 +145,7 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     seedTable('HomeOccupancy', [
       {
         id: 'occ-creator',
-        home_id: 'home-del-1',
+        home_id: 'ddf10001-0000-4000-8000-000000000100',
         user_id: TEST_USER,
         is_active: true,
         role_base: 'admin',
@@ -159,23 +159,25 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
 
   test('the sole creator deletion uses the exact atomic transaction without route-level partial writes', async () => {
     seedCreatedHome();
-    const rpc = jest.fn(async () => ({ data: { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+    const rpc = jest.fn(async name => ({ data: name === 'prepare_home_task_media_home_delete'
+      ? { allowed: true, deleted: false, home_id: 'ddf10001-0000-4000-8000-000000000100', cleanup: [] }
+      : { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
     setRpcMock(rpc);
     const app = createApp();
 
-    const res = await request(app).delete('/api/homes/home-del-1');
+    const res = await request(app).delete('/api/homes/ddf10001-0000-4000-8000-000000000100');
     expect(res.status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: 'home-del-1', p_user_id: TEST_USER });
+    expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: 'ddf10001-0000-4000-8000-000000000100', p_user_id: TEST_USER });
     // The real SQL contract proves deletion/cascades. This HTTP transport test
     // proves the route itself does not unlink payments or delete independently.
-    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeTruthy();
+    expect(getTable('Home').find((h) => h.id === 'ddf10001-0000-4000-8000-000000000100')).toBeTruthy();
   });
 
   test('a creator with other household members cannot delete without verifying ownership', async () => {
     setRpcMock(async () => ({ data: { allowed: false, deleted: false, code: 'DELETE_HOME_NOT_PRIMARY' }, error: null }));
     seedCreatedHome([{
       id: 'occ-roommate',
-      home_id: 'home-del-1',
+      home_id: 'ddf10001-0000-4000-8000-000000000100',
       user_id: 'user-roommate',
       is_active: true,
       role_base: 'member',
@@ -183,9 +185,9 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     }]);
     const app = createApp();
 
-    const res = await request(app).delete('/api/homes/home-del-1');
+    const res = await request(app).delete('/api/homes/ddf10001-0000-4000-8000-000000000100');
     expect(res.status).toBe(403);
-    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeTruthy();
+    expect(getTable('Home').find((h) => h.id === 'ddf10001-0000-4000-8000-000000000100')).toBeTruthy();
   });
 
   test('a stranger cannot delete someone else\'s home', async () => {
@@ -194,7 +196,7 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     const app = createApp();
 
     const res = await request(app)
-      .delete('/api/homes/home-del-1')
+      .delete('/api/homes/ddf10001-0000-4000-8000-000000000100')
       .set('x-test-user-id', 'user-stranger');
     expect(res.status).toBe(403);
   });

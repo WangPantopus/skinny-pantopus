@@ -14,7 +14,6 @@ function response() {
 }
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 test.each([
-  ['delete', '/:id', 'delete_home_authorized', { p_home_id: 'home', p_user_id: 'actor' }],
   ['post', '/:id/detach', 'mutate_home_member', { p_home_id: 'home', p_actor_id: 'actor', p_target_id: 'target', p_action: 'remove', p_payload: {} }],
   ['post', '/:id/move-out', 'mutate_home_member', { p_home_id: 'home', p_actor_id: 'actor', p_target_id: 'actor', p_action: 'remove', p_payload: {} }],
 ])('%s %s binds identity to one transaction', async (method, path, rpcName, args) => {
@@ -25,6 +24,18 @@ test.each([
   expect(res.statusCode).toBe(200);
   expect(rpc).toHaveBeenCalledTimes(1);
   expect(rpc).toHaveBeenCalledWith(rpcName, args);
+});
+test('Home deletion prepares current exact cleanup before the final deletion transaction', async () => {
+  const homeId = 'ddf10001-0000-4000-8000-000000000100';
+  const rpc = jest.fn(async name => ({ data: name === 'prepare_home_task_media_home_delete'
+    ? { allowed: true, deleted: false, home_id: homeId, cleanup: [] }
+    : { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+  db.setRpcMock(rpc); const res = response();
+  await handler(home, 'delete', '/:id')({ params: { id: homeId }, user: { id: 'actor' } }, res);
+  expect(res.statusCode).toBe(200); expect(rpc.mock.calls.map(call => call[0])).toEqual(['prepare_home_task_media_home_delete', 'delete_home_authorized']);
+  for (const name of ['prepare_home_task_media_home_delete', 'delete_home_authorized']) {
+    expect(rpc).toHaveBeenCalledWith(name, { p_home_id: homeId, p_user_id: 'actor' });
+  }
 });
 test('move-out preserves stale normalization response without replaying notification', async () => {
   db.setRpcMock(async () => ({ data: { ok: true, reconciled_stale_occupancy: true, notify_user_ids: [] }, error: null }));

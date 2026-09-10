@@ -19,6 +19,7 @@ const propertyDataService = require('../services/propertyDataService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const adminAlerts = require('../services/adminAlerts');
 const homeClaimReviewService = require('../services/homeClaimReviewService');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const homeClaimComparisonService = require('../services/homeClaimComparisonService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
@@ -158,6 +159,7 @@ async function getVerifiedHouseholdAuthority(homeId, userId) {
  */
 router.get('/my-ownership-claims', verifyToken, async (req, res) => {
   try {
+    if (!requireExpectedSessionScope(req, res)) return;
     const userId = req.user.id;
 
     const { data: claims, error } = await supabaseAdmin
@@ -179,7 +181,8 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
       updated_at: c.updated_at,
     }));
 
-    res.json({ claims: maskedClaims });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ claims: maskedClaims, upload_session: getRequestSessionScope(req) });
   } catch (err) {
     logger.error('Failed to fetch ownership claims', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch claims' });
@@ -192,6 +195,7 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
  */
 router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validate(submitClaimSchema), async (req, res) => {
   try {
+    if (!requireExpectedSessionScope(req, res)) return;
     const homeId = req.params.id;
     const userId = req.user.id;
     const { claim_type, method } = req.body;

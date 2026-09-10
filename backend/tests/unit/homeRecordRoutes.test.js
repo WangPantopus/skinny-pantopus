@@ -3,7 +3,6 @@ jest.mock('../../services/notificationService', () => ({ notifyTaskAssigned: jes
 const notifications = require('../../services/notificationService');
 const home = require('../../routes/home');
 const mail = require('../../routes/mailboxV2Phase3');
-const upload = require('../../routes/upload');
 function handler(router, method, path) {
   return router.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
@@ -11,7 +10,7 @@ function response() { return { statusCode: 200, status(n) { this.statusCode=n; r
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 const record = { id: 'record', home_id: 'home', title: 'Exact record', media: [] };
 const request = { params: { id: 'home', recordId: 'record', eventId: 'record', homeId: 'home', taskId: 'record' },
-  user: { id: 'actor' }, query: {}, body: { description: null, actorId: 'forged' } };
+  headers: { authorization: 'Bearer synthetic-unit' }, user: { id: 'actor' }, query: {}, body: { description: null, actorId: 'forged' } };
 test.each(['tasks','events'])('%s list and detail use the exact actor and current projection', async path => {
   const rpc = jest.fn(async () => ({ data: { ok: true, records: [record], attendees: [] } })); db.setRpcMock(rpc);
   for (const suffix of ['', '/:recordId']) {
@@ -23,7 +22,7 @@ test.each(['tasks','events'])('%s list and detail use the exact actor and curren
 });
 test.each([['tasks','task'],['events','event']])('%s mutations bind actor and preserve the response envelope', async (path, kind) => {
   const rpc = jest.fn(async () => ({ data: { ok: true, record } })); db.setRpcMock(rpc);
-  for (const method of ['post','put','delete']) {
+  for (const method of (kind==='task'?['post','put']:['post','put','delete'])) {
     const res = response(); await handler(home, method, '/:id/'+path+(method==='post'?'':'/:recordId'))(request,res);
     expect(res.statusCode).toBe(method==='post'?201:200);
     expect(rpc.mock.calls.at(-1)[1]).toMatchObject({ p_home_id: 'home', p_actor_id: 'actor', p_kind: kind,
@@ -31,7 +30,7 @@ test.each([['tasks','task'],['events','event']])('%s mutations bind actor and pr
     if (method!=='delete') expect(res.body[kind]).toEqual(record);
   }
 });
-test.each(['get','post','put','delete'])('%s denial never reads or writes a raw task table', async method => {
+test.each(['get','post','put'])('%s denial never reads or writes a raw task table', async method => {
   db.setRpcMock(async () => ({ data: { ok: false, code: 'HOME_RECORD_DENIED', status: 403 } }));
   const from = jest.spyOn(db,'from'); const res=response();
   await handler(home,method,'/:id/tasks'+(['put','delete'].includes(method)?'/:recordId':''))(request,res);
@@ -55,16 +54,10 @@ test('mail conversion binds immutable source and selected Home atomically',async
   expect(rpc).toHaveBeenCalledTimes(1);expect(rpc.mock.calls[0][1]).toMatchObject({p_home_id:'home',p_actor_id:'actor',p_source_mail_id:'mail',p_action:'create'});
   expect(db.getTable('HomeTask')).toHaveLength(0);
 });
-test.each([['post','/tasks/:id/to-gig',mail,'HOME_TASK_GIG_FLOW_REQUIRED'],['post','/home-task-media/:homeId/:taskId',upload,'HOME_TASK_PRIVATE_STORAGE_REQUIRED']])('%s %s exposes the explicit authorized prerequisite without writes',async(method,path,router,code)=>{
+test.each([['post','/tasks/:id/to-gig',mail,'HOME_TASK_GIG_FLOW_REQUIRED']])('%s %s exposes the explicit authorized prerequisite without writes',async(method,path,router,code)=>{
   db.setRpcMock(async()=>({data:{ok:false,code,status:409}}));const from=jest.spyOn(db,'from');const res=response();
   await handler(router,method,path)(request,res);expect(res.statusCode).toBe(409);expect(res.body.code).toBe(code);
   expect(from).not.toHaveBeenCalled();from.mockRestore();
-});
-test('media read uses the exact readable task projection and never raw URLs',async()=>{
-  const media=[{id:'media',available:false,availability_code:'HOME_TASK_MEDIA_REUPLOAD_REQUIRED'}];
-  const rpc=jest.fn(async()=>({data:{ok:true,records:[{...record,media}],attendees:[]}}));db.setRpcMock(rpc);const res=response();
-  await handler(upload,'get','/home-task-media/:homeId/:taskId')(request,res);
-  expect(res.body).toEqual({media});expect(rpc.mock.calls[0][1]).toMatchObject({p_home_id:'home',p_actor_id:'actor',p_record_id:'record'});
 });
 test.each([['get','/:id/tasks'],['post','/:id/tasks'],['put','/:id/events/:recordId']])('%s %s returns sanitized retryable transport failure',async(method,path)=>{
   db.setRpcMock(async()=>({error:{code:'55P03',message:'private database detail'}}));const res=response();
@@ -82,4 +75,17 @@ test.each([['other',false],['recipient',true]])('assignment notification recheck
   if(delivered) expect(notifications.notifyTaskAssigned).toHaveBeenCalledWith(expect.objectContaining({
     assigneeUserId:'recipient',taskTitle:'Current title',homeId:'home',taskId:'record'}));
   else expect(notifications.notifyTaskAssigned).not.toHaveBeenCalled();
+});
+
+test('task deletion uses current retirement transaction before exact deletion and never raw tables',async()=>{
+  const homeId='ddf10001-0000-4000-8000-000000000100',taskId='ddf10001-0000-4000-8000-000000000200',actorId='ddf10001-0000-4000-8000-000000000001';
+  const rpc=jest.fn(async name=>({data:name==='retire_home_task_media_for_delete'
+    ? {ok:true,home_id:homeId,task_id:taskId,cleanup:[]}: {ok:true,record:{id:taskId,home_id:homeId}}}));
+  db.setRpcMock(rpc);const res=response();await handler(home,'delete','/:id/tasks/:recordId')({...request,params:{id:homeId,recordId:taskId},user:{id:actorId}},res);
+  expect(res.statusCode).toBe(200);expect(rpc.mock.calls.map(call=>call[0])).toEqual(['retire_home_task_media_for_delete','delete_home_task_after_media']);
+});
+test('task cleanup denial never proceeds to deletion',async()=>{
+  const rpc=jest.fn(async()=>({data:{ok:false,code:'HOME_RECORD_DENIED',status:403}}));db.setRpcMock(rpc);const res=response();
+  await handler(home,'delete','/:id/tasks/:recordId')({...request,params:{id:'ddf10001-0000-4000-8000-000000000100',recordId:'ddf10001-0000-4000-8000-000000000200'},user:{id:'ddf10001-0000-4000-8000-000000000001'}},res);
+  expect(res.statusCode).toBe(403);expect(rpc).toHaveBeenCalledTimes(1);
 });

@@ -34,6 +34,7 @@ export interface UseHomeDataReturn extends HomeDataEntities {
   loading: boolean;
   error: string | null;
   currentUserId: string | null;
+  taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
   can: (perm: string) => boolean;
   refresh: () => Promise<void>;
@@ -53,6 +54,7 @@ type State = HomeDataEntities & {
   loading: boolean;
   error: string | null;
   currentUserId: string | null;
+  taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
 };
 
@@ -87,6 +89,7 @@ const initialState: State = {
   loading: true,
   error: null,
   currentUserId: null,
+  taskSession: null,
   myAccess: { permissions: [], role_base: null, isOwner: false },
 };
 
@@ -223,6 +226,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         result.home = dash.home;
         result.members = dash.members || [];
         result.tasks = dash.tasks || [];
+        result.taskSession = dash.task_session?.home_id === homeId ? dash.task_session : null;
         result.issues = dash.issues || [];
         result.bills = dash.bills || [];
         result.packages = dash.packages || [];
@@ -266,7 +270,10 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
           api.homeProfile.getHomeDocuments(homeId),
         ]);
 
-        if (tasksRes.status === 'fulfilled') result.tasks = (tasksRes.value as Record<string, any>).tasks as Record<string, any>[] || [];
+        if (tasksRes.status === 'fulfilled') {
+          result.tasks = tasksRes.value.tasks || [];
+          result.taskSession = tasksRes.value.task_session?.home_id === homeId ? tasksRes.value.task_session : null;
+        }
         if (issuesRes.status === 'fulfilled') result.issues = (issuesRes.value as Record<string, any>).issues as Record<string, any>[] || [];
         if (billsRes.status === 'fulfilled') result.bills = (billsRes.value as Record<string, any>).bills as Record<string, any>[] || [];
         if (pkgRes.status === 'fulfilled') result.packages = (pkgRes.value as Record<string, any>).packages as Record<string, any>[] || [];
@@ -327,6 +334,11 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       const fetcher = ENTITY_FETCHERS[entity];
       if (!fetcher) return;
       try {
+        if (entity === 'tasks') {
+          const result = await api.homeProfile.getHomeTasks(homeId);
+          dispatch({ type: 'LOAD_COMPLETE', data: { tasks: result.tasks, taskSession: result.task_session?.home_id === homeId ? result.task_session : null } });
+          return;
+        }
         const { data } = await fetcher(homeId);
         dispatch({ type: 'SET_ENTITY', entity, data });
       } catch {
@@ -370,6 +382,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     loading: state.loading,
     error: state.error,
     currentUserId: state.currentUserId,
+    taskSession: state.taskSession,
     myAccess: state.myAccess,
     can,
     refresh: loadDashboard,

@@ -17,6 +17,7 @@ const homeResidencyService = require('../services/homeResidencyService');
 const homeInvitationService = require('../services/homeInvitationService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const {
   checkHomePermission,
   mapLegacyRole,
@@ -3237,11 +3238,12 @@ function registerHomeRecordRoutes(path, kind) {
         startBefore: kind === 'event' ? req.query.start_before || null : null });
       const records = kind === 'event'
         ? result.records.sort((a, b) => new Date(a.start_at) - new Date(b.start_at)) : result.records;
-      res.json({ [path]: records });
+      res.json({ [path]: records, ...(kind === 'task' ? { task_session: { ...getRequestSessionScope(req), home_id: req.params.id } } : {}) });
     } catch (error) { homeRecordService.sendError(res, error); }
   });
   router.post(`/:id/${path}`, verifyToken, async (req, res) => {
     try {
+      if (kind === 'task' && !requireExpectedSessionScope(req, res)) return;
       const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
         kind, action: 'create', payload: req.body });
       res.status(result.replayed ? 200 : 201).json({ [kind]: result.record });
@@ -3268,11 +3270,12 @@ function registerHomeRecordRoutes(path, kind) {
     try {
       const result = await homeRecordService.list({ homeId: req.params.id, actorId: req.user.id,
         kind, recordId: req.params.recordId });
-      res.json({ [kind]: result.records[0], ...(kind === 'event' ? { attendees: result.attendees } : {}) });
+      res.json({ [kind]: result.records[0], ...(kind === 'event' ? { attendees: result.attendees } : { task_session: { ...getRequestSessionScope(req), home_id: req.params.id } }) });
     } catch (error) { homeRecordService.sendError(res, error); }
   });
   router.put(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
     try {
+      if (kind === 'task' && !requireExpectedSessionScope(req, res)) return;
       const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
         kind, action: 'update', recordId: req.params.recordId, payload: req.body });
       res.json({ [kind]: result.record });
@@ -3280,6 +3283,7 @@ function registerHomeRecordRoutes(path, kind) {
   });
   router.delete(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
     try {
+      if (kind === 'task' && !requireExpectedSessionScope(req, res)) return;
       await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
         kind, action: 'delete', recordId: req.params.recordId });
       res.json({ message: kind === 'task' ? 'Task deleted' : 'Event deleted' });
@@ -4924,6 +4928,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
 
     res.json({
       home,
+      task_session: { ...getRequestSessionScope(req), home_id: homeId },
       myAccess: {
         permissions: myAccess.permissions,
         role_base: myAccess.role_base,

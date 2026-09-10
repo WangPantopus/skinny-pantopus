@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Private Home evidence and task attachments — September 10
+
+Private uploads now retain exact file identity through interrupted writes,
+current-access checks, reviewer inspection and cleanup. Claim evidence requires
+explicit verification before separate claim approval. Task attachment retries
+retain the saved task and upload identities. Withdrawing an ordinary claim now
+allows its claimant to retire pending evidence without granting household access.
+
+The [evidence report](home-claim-private-evidence-2026-09-10.md) and
+[task attachment report](home-task-private-media-2026-09-10.md) record independent
+review, actual private Storage API journeys, concurrent SQL operations and a
+clean sorted migration replay. The combined backend/browser passes are complete;
+a final metadata cache-header repair passed its affected HTTP suite. These are
+local source and workflow checks, not hosted or native acceptance.
+
+**Next:** native private evidence upload/view/verification and task attachments,
+claimant document retirement, remaining household relationships and ownership
+lifecycles, then full household acceptance. Draft PR #32 remains unfinished;
+complete-current-head CI is still required. Payment recovery backend/browser
+checkpoints are pushed in draft PR #34; iOS/Android parity and the remaining
+provider lifecycle work continue there. No hosted migration or paid dependency
+was activated. All paid services remain together for final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
 ### Android claim review and iOS runtime verification — September 10
 
 Android now submits the exact displayed claim/evidence snapshot and accepts only

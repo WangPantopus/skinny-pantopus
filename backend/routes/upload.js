@@ -9,7 +9,7 @@ const multer = require('multer');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const homeRecordService = require('../services/homeRecordService');
+const registerHomeTaskMediaRoutes = require('./homeTaskMediaRoutes');
 const { S3_BUCKET } = require('../config/aws');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
@@ -1244,25 +1244,7 @@ router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files
 
 // ============ HOME TASK MEDIA ============
 
-/**
- * Legacy task media have permanent public URLs. Until the private storage
- * lifecycle ships, authorize the exact task before returning an explicit
- * unavailable result. No provider upload or metadata write occurs here.
- */
-router.post('/home-task-media/:homeId/:taskId', uploadLimiter, verifyToken, async (req, res) => {
-  try {
-    await homeRecordService.mutate({ homeId: req.params.homeId, actorId: req.user.id, kind: 'task',
-      action: 'authorize_attachment', recordId: req.params.taskId });
-    res.status(409).json({ error: 'Private task attachments are not available yet.', code: 'HOME_TASK_PRIVATE_STORAGE_REQUIRED' });
-  } catch (error) { homeRecordService.sendError(res, error); }
-});
-router.get('/home-task-media/:homeId/:taskId', verifyToken, async (req, res) => {
-  try {
-    const result = await homeRecordService.list({ homeId: req.params.homeId, actorId: req.user.id,
-      kind: 'task', recordId: req.params.taskId });
-    res.json({ media: result.records[0].media || [] });
-  } catch (error) { homeRecordService.sendError(res, error); }
-});
+registerHomeTaskMediaRoutes(router, { verifyToken, uploadLimiter });
 
 
 // ============ OWNERSHIP EVIDENCE ============
@@ -1282,16 +1264,7 @@ const evidenceUploadLimiter = rateLimit({
   message: 'Too many document uploads. Please try again later.',
 });
 
-router.post('/ownership-evidence/:homeId/:claimId', verifyToken, evidenceUploadLimiter, async (req, res) => {
-  // Do not receive/store bytes until private evidence has a durable upload
-  // intent. The exact current claim is checked before this typed 409.
-  const homeClaimReviewService = require('../services/homeClaimReviewService');
-  try {
-    await homeClaimReviewService.mutate({ homeId: req.params.homeId, claimId: req.params.claimId,
-      actorId: req.user.id, action: 'authorize_evidence' });
-    throw new Error('Unexpected evidence authorization receipt');
-  } catch (error) { homeClaimReviewService.sendError(res, error); }
-});
+require('./homeClaimEvidenceRoutes')(router, { verifyToken, evidenceUploadLimiter });
 
 
 // ============ GENERIC DELETE ============

@@ -240,12 +240,12 @@ export interface OwnershipClaimComparison {
 export async function submitOwnershipClaim(homeId: string, data: {
   claim_type?: 'owner' | 'admin' | 'resident';
   method: 'invite' | 'vouch' | 'doc_upload' | 'escrow_agent' | 'landlord_portal' | 'property_data_match';
-}): Promise<OwnershipClaimSubmissionResponse> {
-  return post(`/api/homes/${homeId}/ownership-claims`, data);
+}, sessionScope?: string): Promise<OwnershipClaimSubmissionResponse> {
+  return post(`/api/homes/${homeId}/ownership-claims`, data, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
-export async function getMyOwnershipClaims(): Promise<{ claims: OwnershipClaim[] }> {
-  return get('/api/homes/my-ownership-claims');
+export async function getMyOwnershipClaims(sessionScope?: string): Promise<{ claims: OwnershipClaim[]; upload_session: { actor_id: string; session_scope: string } }> {
+  return get('/api/homes/my-ownership-claims', undefined, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
 /** Claimant withdraws their own in-progress claim; its audit/evidence history is retained. */

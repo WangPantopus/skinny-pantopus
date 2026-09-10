@@ -197,7 +197,8 @@ async function homeRoute(path, method = 'get', params = {}, body = {}) {
   const router = require('../routes/home');
   const handler = router.stack.find(layer => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
   const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-  await handler({ params: { id: HOME, ...params }, user: { id: USER }, query: {}, body }, response);
+  await handler({ params: { id: HOME, ...params }, user: { id: USER },
+    headers: { authorization: 'Bearer synthetic-effective-access-session' }, query: {}, body }, response);
   return response;
 }
 

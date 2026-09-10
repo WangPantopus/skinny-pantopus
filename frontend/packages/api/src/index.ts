@@ -18,6 +18,7 @@ export {
   refreshAuthSession,
   setTokenCache,
   onTokenChange,
+  AUTH_SESSION_CHANGE_KEY,
   configureApiClient,
   apiRequest,
   get,
@@ -130,6 +131,9 @@ export {
   getGigMedia,
   deleteGigMedia,
   uploadHomeTaskMedia,
+  getHomeTaskMedia,
+  downloadHomeTaskMedia,
+  deleteHomeTaskMedia,
   uploadChatMedia,
   uploadOwnershipEvidence,
   uploadPostMedia,
@@ -140,6 +144,7 @@ export {
   uploadMailAttachments,
   uploadPersonaMedia,
 } from './endpoints/upload';  // NEW
+export type { HomeTaskMedia } from './endpoints/upload';
 export { createReview, getUserReviews, getGigReviews, getPendingReviews } from './endpoints/reviews';   // NEW
 export { createBusiness, getMyBusinesses, getBusiness, getBusinessDashboard, updateBusiness, getVerificationStatus, selfAttest, uploadVerificationEvidence, reviewVerificationEvidence, getFoundingOfferStatus, claimFoundingOffer } from './endpoints/businesses';
 export { getMyBusinessAccess, getTeamMembers, addTeamMember } from './endpoints/businessIam';
@@ -483,3 +488,9 @@ export type {
   HomeCalendarUnionEvent,
   DecodedSchedulingError,
 } from '@pantopus/types';
+
+export { assertHomeTaskSession, taskSessionChanged } from './taskSessionScope';
+export type { HomeTaskSessionScope } from './taskSessionScope';
+
+export * as claimEvidence from './endpoints/claimEvidence';
+export type { ClaimEvidenceSession } from './endpoints/claimEvidence';

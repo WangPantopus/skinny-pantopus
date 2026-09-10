@@ -4,6 +4,7 @@
 // ============================================================
 
 import apiClient, { get, del } from '../client';
+import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
 /**
  * P2.12 / audience-profile §6.4 — randomize the multipart filename
@@ -228,35 +229,52 @@ export async function deleteGigMedia(gigId: string, mediaId: string): Promise<{ 
   return del(`/api/upload/gig-media/${gigId}/${mediaId}`);
 }
 
-/**
- * Upload media for a home task (up to 10)
- */
+export interface HomeTaskMedia {
+  id: string;
+  home_id: string;
+  task_id: string;
+  uploaded_by: string;
+  file_name: string;
+  file_type: string;
+  mime_type: string;
+  file_size: number;
+  created_at: string;
+  state: 'reserved' | 'ready' | 'retired' | 'legacy';
+  available: boolean;
+  cleanup_pending?: boolean;
+  availability_code?: string;
+}
+
+/** One durable upload ID per file; callers retain these IDs for partial retries. */
 export async function uploadHomeTaskMedia(
   homeId: string,
   taskId: string,
-  files: File[]
-): Promise<{
-  message: string;
-  media: Array<{
-    id: string;
-    file_url: string;
-    file_key: string;
-    file_name: string;
-    file_type: string;
-    mime_type: string;
-    file_size: number;
-    thumbnail_url: string | null;
-  }>;
-}> {
-  const formData = new FormData();
-  await appendMultipartFiles(formData, files as any[], 'home-task-media');
-
-  const response = await apiClient.post(
-    `/api/upload/home-task-media/${homeId}/${taskId}`,
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
-  );
-  return response.data;
+  files: File[],
+  uploadIds: string[] = files.map(() => crypto.randomUUID()),
+  scope?: HomeTaskSessionScope,
+): Promise<{ media: HomeTaskMedia[] }> {
+  if (files.length !== uploadIds.length || files.length > 10) throw new Error('Choose up to ten attachments.');
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const media: HomeTaskMedia[] = [];
+  for (let index = 0; index < files.length; index++) {
+    const id = uploadIds[index];
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid upload ID.');
+    const formData = new FormData();
+    formData.append('upload_id', id);
+    // Retain filename privacy while keeping the exact name stable on retries.
+    const ext = files[index].name.match(/\.([a-zA-Z0-9]{1,5})$/)?.[1]?.toLowerCase() || 'bin';
+    formData.append('file', files[index], `task-attachment-${id}.${ext}`);
+    const response = await apiClient.post<{ media: HomeTaskMedia[] }>(
+      `/api/upload/home-task-media/${homeId}/${taskId}`, formData,
+      { headers: { 'Content-Type': 'multipart/form-data', ...taskSessionHeaders(scope) } },
+    ).catch(rethrowTaskSessionError);
+    if (scope) await assertHomeTaskSession(scope, taskId);
+    const item = response.data.media?.[0];
+    if (response.data.media?.length !== 1 || item.id !== id || item.home_id !== homeId || item.task_id !== taskId
+      || item.state !== 'ready' || item.available !== true) throw new Error('The attachment was not confirmed. Retry it.');
+    media.push(item);
+  }
+  return { media };
 }
 
 /**
@@ -295,14 +313,18 @@ export async function uploadOwnershipEvidence(
   homeId: string,
   claimId: string,
   file: any, // File on web, { uri, name, type } on mobile
-  evidenceType: string
+  evidenceType: string,
+  uploadId: string = crypto.randomUUID(),
+  sessionScope?: string,
 ): Promise<{
   message: string;
   evidence: {
     id: string;
     evidence_type: string;
     status: string;
-    file_url: string;
+    home_id: string;
+    claim_id: string;
+    available: boolean;
     file_name: string;
   };
 }> {
@@ -312,32 +334,45 @@ export async function uploadOwnershipEvidence(
   await appendMultipartFile(formData, 'file', file, 'evidence');
 
   formData.append('evidence_type', evidenceType);
+  formData.append('upload_id', uploadId);
 
   const response = await apiClient.post(
     `/api/upload/ownership-evidence/${homeId}/${claimId}`,
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    { headers: { 'Content-Type': 'multipart/form-data', ...(sessionScope ? { 'x-pantopus-session-scope': sessionScope } : {}) } }
   );
+  const evidence = response.data?.evidence;
+  if (evidence?.id !== uploadId || evidence.home_id !== homeId || evidence.claim_id !== claimId
+    || evidence.evidence_type !== evidenceType || !['pending', 'verified'].includes(evidence.status) || evidence.available !== true) {
+    throw new Error('Could not confirm the exact document upload. Retry the same file.');
+  }
   return response.data;
 }
 
-/**
- * Get media for a home task
- */
-export async function getHomeTaskMedia(
-  homeId: string,
-  taskId: string
-): Promise<{
-  media: Array<{
-    id: string;
-    file_url: string;
-    file_name: string;
-    file_type: string;
-    mime_type: string;
-    thumbnail_url: string | null;
-  }>;
-}> {
-  return get(`/api/upload/home-task-media/${homeId}/${taskId}`);
+/** Current safe metadata; byte delivery always rechecks exact task access. */
+export async function getHomeTaskMedia(homeId: string, taskId: string, scope?: HomeTaskSessionScope): Promise<{ media: HomeTaskMedia[]; can_upload: boolean }> {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const result = await get<{ media: HomeTaskMedia[]; can_upload: boolean }>(`/api/upload/home-task-media/${homeId}/${taskId}`, undefined, { headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, taskId);
+  if (!Array.isArray(result.media) || typeof result.can_upload !== 'boolean'
+    || result.media.some(item => item.home_id !== homeId || item.task_id !== taskId)) throw new Error('Could not verify the attachments. Retry.');
+  return result;
+}
+
+export async function downloadHomeTaskMedia(homeId: string, taskId: string, mediaId: string, scope?: HomeTaskSessionScope): Promise<Blob> {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const response = await apiClient.get<Blob>(`/api/upload/home-task-media/${homeId}/${taskId}/${mediaId}/download`, { responseType: 'blob', headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, taskId);
+  return response.data;
+}
+
+export async function deleteHomeTaskMedia(homeId: string, taskId: string, mediaId: string, scope?: HomeTaskSessionScope): Promise<{ media: HomeTaskMedia }> {
+  if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
+  const result = await del<{ media: HomeTaskMedia }>(`/api/upload/home-task-media/${homeId}/${taskId}/${mediaId}`, undefined, { headers: taskSessionHeaders(scope) }).catch(rethrowTaskSessionError);
+  if (scope) await assertHomeTaskSession(scope, taskId);
+  if (result.media?.id !== mediaId || result.media.home_id !== homeId || result.media.task_id !== taskId
+    || result.media.state !== 'retired' || result.media.cleanup_pending !== false) throw new Error('Removal was not confirmed. Retry it.');
+  return result;
 }
 
 /**

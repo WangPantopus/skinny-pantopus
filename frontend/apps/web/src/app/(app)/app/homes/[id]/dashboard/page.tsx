@@ -88,7 +88,7 @@ function HomeDashboardContent() {
   const {
     home, members, tasks, issues, bills, packages, documents, events,
     secrets, emergencies, nearbyGigs, homeGigs, pets, polls,
-    loading, error, currentUserId, myAccess, can, refresh,
+    loading, error, currentUserId, taskSession, myAccess, can, refresh,
     setTasks, setIssues, setBills, setPackages, setMembers, setSecrets,
   } = useHomeData(homeId);
 
@@ -156,47 +156,35 @@ function HomeDashboardContent() {
 
   const handleTaskSave = useCallback(
     async (data: Record<string, any>) => {
-      const mediaFiles: File[] | undefined = data._mediaFiles;
-      delete data._mediaFiles;
-
-      if (taskPanel.task) {
-        const result = await api.homeProfile.updateHomeTask(homeId, taskPanel.task.id, data);
-        setTasks((prev) => prev.map((t) => (t.id === taskPanel.task.id ? { ...t, ...result.task } : t)));
-
-        if (mediaFiles && mediaFiles.length > 0) {
-          try {
-            await api.upload.uploadHomeTaskMedia(homeId, taskPanel.task.id, mediaFiles);
-          } catch (err) {
-            console.error('Media upload failed:', err);
-          }
-        }
-      } else {
-        const result = await api.homeProfile.createHomeTask(homeId, data);
-        setTasks((prev) => [result.task, ...prev]);
-
-        if (mediaFiles && mediaFiles.length > 0 && result.task?.id) {
-          try {
-            await api.upload.uploadHomeTaskMedia(homeId, result.task.id, mediaFiles);
-          } catch (err) {
-            console.error('Media upload failed:', err);
-          }
-        }
+      const { _savedTaskId, _sessionScope, ...payload } = data;
+      if (!_sessionScope || _sessionScope.home_id !== homeId) throw api.taskSessionChanged();
+      const taskId = _savedTaskId || taskPanel.task?.id;
+      const result = taskId
+        ? await api.homeProfile.updateHomeTask(homeId, taskId, payload, _sessionScope)
+        : await api.homeProfile.createHomeTask(homeId, payload, _sessionScope);
+      if (!result.task?.id || result.task.home_id !== homeId || (taskId && result.task.id !== taskId)) {
+        throw new Error('The task save was not confirmed. Refresh the task list before retrying.');
       }
+      setTasks((prev) => prev.some((task) => task.id === result.task.id)
+        ? prev.map((task) => task.id === result.task.id ? { ...task, ...result.task } : task)
+        : [result.task, ...prev]);
+      return result.task;
     },
     [homeId, taskPanel.task, setTasks]
   );
 
   const handleTaskStatusChange = useCallback(
     async (taskId: string, newStatus: string) => {
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
       try {
-        await api.homeProfile.updateHomeTask(homeId, taskId, { status: newStatus });
+        if (!taskSession) throw api.taskSessionChanged();
+        await api.homeProfile.updateHomeTask(homeId, taskId, { status: newStatus }, taskSession);
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
       } catch (err: unknown) {
-        console.error('Failed to update task status:', err);
+        toast.error(err instanceof Error ? err.message : 'Task update was not confirmed. Retry.');
         refresh();
       }
     },
-    [homeId, refresh, setTasks]
+    [homeId, refresh, setTasks, taskSession]
   );
 
   const handleTaskDelete = useCallback(
@@ -204,13 +192,14 @@ function HomeDashboardContent() {
       const yes = await confirmStore.open({ title: 'Delete this task?', confirmLabel: 'Delete', variant: 'destructive' });
       if (!yes) return;
       try {
-        await api.homeProfile.deleteHomeTask(homeId, taskId);
+        if (!taskSession) throw api.taskSessionChanged();
+        await api.homeProfile.deleteHomeTask(homeId, taskId, taskSession);
         setTasks((prev) => prev.filter((t) => t.id !== taskId));
       } catch (err: unknown) {
-        console.error('Failed to delete task:', err);
+        toast.error(err instanceof Error ? err.message : 'Task deletion was not confirmed. Retry.');
       }
     },
-    [homeId, setTasks]
+    [homeId, setTasks, taskSession]
   );
 
   // ── Member / Invite handler ──
@@ -382,6 +371,7 @@ function HomeDashboardContent() {
         open={taskPanel.open}
         onClose={closeTaskPanel}
         onSave={handleTaskSave}
+        openingScope={taskSession}
         task={taskPanel.task}
         members={members}
         homeId={homeId}

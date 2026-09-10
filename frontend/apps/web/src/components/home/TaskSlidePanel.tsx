@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import * as api from '@pantopus/api';
+import TaskAttachmentList from './TaskAttachmentList';
 import { Paintbrush, ShoppingCart, Wrench, Hammer, Bell } from 'lucide-react';
 import SlidePanel from './SlidePanel';
-import FileUpload from '@/components/FileUpload';
 
 const TASK_TYPES: { value: string; label: string; icon: ReactNode }[] = [
   { value: 'chore', label: 'Chore', icon: <Paintbrush className="w-4 h-4" /> },
@@ -33,15 +34,19 @@ export default function TaskSlidePanel({
   onSave,
   task,
   members,
+  homeId,
+  openingScope,
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (data: Record<string, any>) => Promise<void>;
+  onSave: (data: Record<string, any>) => Promise<Record<string, any>>;
   task?: Record<string, any> | null; // null = create, object = edit
   members: Record<string, any>[];
   homeId?: string;
+  openingScope: api.HomeTaskSessionScope | null;
 }) {
-  const isEdit = !!task;
+  const [savedTaskId, setSavedTaskId] = useState<string | null>(task?.id || null);
+  const isEdit = !!savedTaskId;
 
   const [taskType, setTaskType] = useState('chore');
   const [title, setTitle] = useState('');
@@ -55,9 +60,24 @@ export default function TaskSlidePanel({
   const [error, setError] = useState('');
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [canUpload, setCanUpload] = useState(!task);
+  const [attachmentRevision, setAttachmentRevision] = useState(0);
+  const uploadIds = useRef(new Map<File, string>());
+  const generation = useRef(0);
+  const activeSave = useRef(false);
+  const scope = useRef<api.HomeTaskSessionScope | null>(null);
+  const [sessionChanged, setSessionChanged] = useState(!openingScope || openingScope.home_id !== homeId);
 
   // Populate form when editing
   useEffect(() => {
+    generation.current++;
+    activeSave.current = false;
+    scope.current = openingScope && openingScope.home_id === homeId ? { ...openingScope } : null;
+    setSessionChanged(!scope.current);
+    setSavedTaskId(task?.id || null);
+    setCanUpload(!task);
+    uploadIds.current.clear();
+    setSaving(false);
     if (task) {
       setTaskType(task.task_type || 'chore');
       setTitle(task.title || '');
@@ -82,45 +102,86 @@ export default function TaskSlidePanel({
     }
     setError('');
     setUploadProgress('');
-  }, [task, open]);
+    return () => { generation.current++; };
+  // A refreshed object for the same task must not discard a failed upload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id, open, homeId]);
+
+  useEffect(() => {
+    if (open && scope.current && (openingScope?.session_scope !== scope.current.session_scope || openingScope?.actor_id !== scope.current.actor_id)) {
+      generation.current++; setSessionChanged(true); setSaving(false);
+    }
+  }, [openingScope?.session_scope, openingScope?.actor_id, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (activeSave.current || sessionChanged || !scope.current) return;
     if (!title.trim()) {
       setError('Title is required');
       return;
     }
 
+    const request = generation.current;
+    const requestScope = scope.current;
+    activeSave.current = true;
     setSaving(true);
     setError('');
     try {
+      await api.assertHomeTaskSession(requestScope, savedTaskId);
+      if (request !== generation.current) return;
       const payload: Record<string, any> = {
         task_type: taskType,
         title: title.trim(),
-        description: description.trim() || undefined,
-        assigned_to: assignedTo || undefined,
+        description: description.trim() || null,
+        assigned_to: assignedTo || null,
         priority,
-        due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
+        due_at: dueAt ? new Date(dueAt).toISOString() : null,
         budget: budget ? parseFloat(budget) : undefined,
-        _mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
+        _savedTaskId: savedTaskId || undefined,
+        _sessionScope: requestScope,
       };
       if (isEdit) {
         payload.status = status;
       }
-      await onSave(payload);
-      onClose();
+      const saved = await onSave(payload);
+      await api.assertHomeTaskSession(requestScope, saved?.id || null);
+      if (request !== generation.current) return;
+      if (!saved?.id || (savedTaskId && saved.id !== savedTaskId) || (homeId && saved.home_id !== homeId)) throw new Error('Task save was not confirmed. Refresh before retrying.');
+      // Commit the saved identity before any attachment request can fail.
+      setSavedTaskId(saved.id);
+      for (const file of mediaFiles) {
+        if (request !== generation.current) return;
+        if (!homeId) throw new Error('The task is saved. Reopen it to upload attachments.');
+        let uploadId = uploadIds.current.get(file);
+        if (!uploadId) { uploadId = crypto.randomUUID(); uploadIds.current.set(file, uploadId); }
+        setUploadProgress(`Uploading ${file.name}…`);
+        try { await api.upload.uploadHomeTaskMedia(homeId, saved.id, [file], [uploadId], requestScope); }
+        catch (error) {
+          if ((error as { code?: string })?.code === 'SESSION_SCOPE_CHANGED') throw error;
+          throw new Error('The task is saved. Some attachments were not confirmed; retry to upload the remaining files.');
+        }
+        await api.assertHomeTaskSession(requestScope, saved.id);
+        if (request !== generation.current) return;
+        setMediaFiles(previous => previous.filter(candidate => candidate !== file));
+        setAttachmentRevision(value => value + 1);
+      }
+      if (request === generation.current) onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save task');
+      if (request === generation.current) {
+        if ((err as { code?: string })?.code === 'SESSION_SCOPE_CHANGED') setSessionChanged(true);
+        setError(err instanceof Error ? err.message : 'Failed to save task');
+      }
     } finally {
-      setSaving(false);
-      setUploadProgress('');
+      if (request === generation.current) { activeSave.current = false; setSaving(false); setUploadProgress(''); }
     }
   };
+
+  if (sessionChanged) return <SlidePanel open={open} onClose={onClose} title="Reopen this task"><p role="alert">Your signed-in session changed or could not be verified. Close this panel and refresh the Home before continuing.</p></SlidePanel>;
 
   return (
     <SlidePanel
       open={open}
-      onClose={onClose}
+      onClose={() => { if (!saving) onClose(); }}
       title={isEdit ? 'Edit Task' : 'New Task'}
       subtitle={isEdit ? task?.title : 'Add a task to your home'}
     >
@@ -242,17 +303,21 @@ export default function TaskSlidePanel({
           </div>
         </div>
 
-        {/* Media (optional) */}
-        <FileUpload
-          label="Attachments (optional)"
-          accept={['image', 'video', 'document']}
-          maxFiles={10}
-          maxSize={100 * 1024 * 1024}
-          files={mediaFiles}
-          onFilesSelected={setMediaFiles}
-          helperText="Upload photos, videos, or documents related to this task."
-          compact
-        />
+        {open && homeId && savedTaskId && <TaskAttachmentList key={`${homeId}:${savedTaskId}`} homeId={homeId} taskId={savedTaskId} revision={attachmentRevision} onAccess={setCanUpload} openingScope={scope.current!} />}
+        {canUpload && <div>
+          <label className="block text-sm font-medium text-app-text-strong mb-1" htmlFor="task-private-attachments">Attachments (optional)</label>
+          <input id="task-private-attachments" type="file" multiple disabled={saving}
+            accept="application/pdf,text/plain,image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={event => {
+              const picked = Array.from(event.target.files || []);
+              if (picked.some(file => file.size === 0 || file.size > 25 * 1024 * 1024) || mediaFiles.length + picked.length > 10) {
+                setError('Choose up to ten nonempty attachments, each 25 MB or less.'); return;
+              }
+              setMediaFiles(previous => [...previous, ...picked]); event.target.value = '';
+            }} />
+          <p className="text-xs text-app-text-secondary mt-1">PDF, text, JPEG, PNG, WebP or HEIC. Attachments follow this task’s access.</p>
+          {mediaFiles.map((file, index) => <p key={`${file.name}-${index}`} className="text-sm mt-1">{file.name} <button type="button" disabled={saving} onClick={() => setMediaFiles(previous => previous.filter((_, i) => i !== index))} className="underline">Remove selected file</button></p>)}
+        </div>}
 
         {/* Upload progress */}
         {uploadProgress && (
@@ -290,6 +355,7 @@ export default function TaskSlidePanel({
           <button
             type="button"
             onClick={onClose}
+            disabled={saving}
             className="flex-1 px-4 py-2.5 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition"
           >
             Cancel

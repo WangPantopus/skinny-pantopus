@@ -34,6 +34,7 @@ export interface AdminClaim {
 }
 
 export interface ClaimEvidence {
+  available?: boolean;
   eligible_for_review?: boolean;
   availability_code?: string;
   id: string;
@@ -53,19 +54,21 @@ export interface ClaimDetail {
   home: any;
   claimant: any;
   evidence: ClaimEvidence[];
+  claim_session: { actor_id: string; session_scope: string; home_id: string; claim_id: string };
 }
 
-export async function getPendingClaims(): Promise<{ claims: AdminClaim[]; total: number }> {
+export async function getPendingClaims(): Promise<{ claims: AdminClaim[]; total: number; review_session: { actor_id: string; session_scope: string } }> {
   return get('/api/admin/pending-claims');
 }
 
-export async function getClaimDetail(claimId: string): Promise<ClaimDetail> {
-  return get(`/api/admin/claims/${claimId}`);
+export async function getClaimDetail(claimId: string, sessionScope?: string): Promise<ClaimDetail> {
+  return get(`/api/admin/claims/${claimId}`, undefined, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
 export async function reviewClaim(
   claimId: string,
-  data: { action: 'approve' | 'reject' | 'request_more_info'; review_token: string; note?: string }
+  data: { action: 'approve' | 'reject' | 'request_more_info'; review_token: string; note?: string },
+  sessionScope?: string,
 ): Promise<{ message: string }> {
-  return post(`/api/admin/claims/${claimId}/review`, data);
+  return post(`/api/admin/claims/${claimId}/review`, data, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }

@@ -25,10 +25,28 @@ test('deletion does not claim success for an eligibility-only result', async () 
   await expect(service.deleteHome('home', 'actor')).rejects.toMatchObject({ statusCode: 503, code: 'HOME_AUTHORITY_UNAVAILABLE' });
 });
 test('deletion binds exact identity and requires confirmed transaction completion', async () => {
-  const rpc = jest.fn(async () => ({ data: { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+  const home = 'ddf10001-0000-4000-8000-000000000100';
+  const rpc = jest.fn(async name => ({ data: name === 'prepare_home_task_media_home_delete'
+    ? { allowed: true, deleted: false, home_id: home, cleanup: [] }
+    : { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
   db.setRpcMock(rpc);
-  await expect(service.deleteHome('home', 'actor')).resolves.toMatchObject({ deleted: true });
-  expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: 'home', p_user_id: 'actor' });
+  await expect(service.deleteHome(home, 'actor')).resolves.toMatchObject({ deleted: true });
+  expect(rpc.mock.calls.map(call => call[0])).toEqual(['prepare_home_task_media_home_delete', 'delete_home_authorized']);
+  expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: home, p_user_id: 'actor' });
+});
+test('Home deletion rejects another Home retirement receipt before deletion', async () => {
+  const rpc = jest.fn(async () => ({ data: { allowed: true, deleted: false, home_id: 'other', cleanup: [] }, error: null }));
+  db.setRpcMock(rpc);
+  await expect(service.deleteHome('home', 'actor')).rejects.toMatchObject({ statusCode: 503 }); expect(rpc).toHaveBeenCalledTimes(1);
+});
+test('new task attachment at final Home deletion gets one bounded retirement retry', async () => {
+  const home = 'ddf10001-0000-4000-8000-000000000100'; let finals = 0;
+  const rpc = jest.fn(async name => ({ data: name === 'prepare_home_task_media_home_delete'
+    ? { allowed: true, deleted: false, home_id: home, cleanup: [] }
+    : ++finals === 1 ? { allowed: false, deleted: false, code: 'HOME_DELETE_TASK_MEDIA_CLEANUP_REQUIRED' }
+      : { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+  db.setRpcMock(rpc); await expect(service.deleteHome(home, 'actor')).resolves.toMatchObject({ deleted: true });
+  expect(rpc).toHaveBeenCalledTimes(4);
 });
 test.each(['HOME_DELETE_RETRY', 'HOME_DELETE_FAILED'])('eligibility %s is not a permanent no-access result', async code => {
   db.setRpcMock(async () => ({ data: { allowed: false, deleted: false, code }, error: null }));

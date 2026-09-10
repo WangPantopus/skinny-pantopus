@@ -14,6 +14,7 @@ const MESSAGES = {
   INVALID_AUTHORITY_REQUEST: 'Check the member change and try again.',
   INVALID_PERMISSION: 'Unknown permission.', INVALID_ROLE: 'Unknown role.', UNKNOWN_PRESET: 'Unknown preset.',
   HOME_DELETE_STORAGE_CLEANUP_REQUIRED: 'This home has stored files that must be retired before it can be deleted.',
+  HOME_DELETE_TASK_MEDIA_CLEANUP_REQUIRED: 'A task attachment changed while deleting this Home. Retry deletion.',
   HOME_DELETE_LINKED_DATA: 'This home has linked records that must be resolved before it can be deleted.',
   HOME_DELETE_ESTABLISHED_HOUSEHOLD: 'This home has household history and cannot be deleted as private setup.',
   HOME_DELETE_ACCESS_DENIED: 'You do not have permission to delete this home.',
@@ -52,12 +53,25 @@ async function deleteEligibility(homeId, actorId) {
 }
 
 async function deleteHome(homeId, actorId) {
-  const result = await rpc('delete_home_authorized', { p_home_id: homeId, p_user_id: actorId });
-  if (result.allowed === true && result.deleted === true) return result;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const args = { p_home_id: homeId, p_user_id: actorId };
+    const prepared = await rpc('prepare_home_task_media_home_delete', args);
+    if (prepared.allowed !== true) throwDeleteResult(prepared);
+    if (prepared.home_id !== homeId || !Array.isArray(prepared.cleanup)) throw fail();
+    await require('./homeTaskMediaService').cleanupForHomeDelete(homeId, prepared.cleanup);
+    const result = await rpc('delete_home_authorized', args);
+    if (result.allowed === true && result.deleted === true) return result;
+    if (attempt === 0 && result.allowed === false && result.code === 'HOME_DELETE_TASK_MEDIA_CLEANUP_REQUIRED') continue;
+    throwDeleteResult(result);
+  }
+  throw fail();
+}
+
+function throwDeleteResult(result) {
   if (result.allowed !== false || typeof result.code !== 'string') throw fail();
   const status = result.code === 'HOME_NOT_FOUND' ? 404
     : ['HOME_DELETE_RETRY', 'HOME_DELETE_FAILED'].includes(result.code) ? 503
-      : ['HOME_DELETE_STORAGE_CLEANUP_REQUIRED', 'HOME_DELETE_LINKED_DATA', 'HOME_DELETE_ESTABLISHED_HOUSEHOLD'].includes(result.code) ? 409 : 403;
+      : ['HOME_DELETE_STORAGE_CLEANUP_REQUIRED', 'HOME_DELETE_TASK_MEDIA_CLEANUP_REQUIRED', 'HOME_DELETE_LINKED_DATA', 'HOME_DELETE_ESTABLISHED_HOUSEHOLD'].includes(result.code) ? 409 : 403;
   throw fail(result.code, status);
 }
 

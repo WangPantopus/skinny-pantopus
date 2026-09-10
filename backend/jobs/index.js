@@ -60,6 +60,8 @@ const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
 const evidenceRetentionSweep = require('./evidenceRetentionSweep');
 const homeDocumentRecovery = require('./homeDocumentRecovery');
+const homeClaimEvidenceRecovery = require('./homeClaimEvidenceRecovery');
+const homeTaskMediaRecovery = require('./homeTaskMediaRecovery');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
@@ -421,6 +423,14 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', homeDocumentRecovery), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('*/5 * * * *', wrapJob('homeClaimEvidenceRecovery', homeClaimEvidenceRecovery), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('*/5 * * * *', wrapJob('homeTaskMediaRecovery', homeTaskMediaRecovery), {
     scheduled: true,
     timezone: 'UTC',
   });

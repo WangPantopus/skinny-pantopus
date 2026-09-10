@@ -10,6 +10,7 @@ const MESSAGES = {
   HOME_TASK_SOURCE_DENIED: 'The original mail is unavailable to this recipient.',
   HOME_TASK_SOURCE_ALREADY_LINKED: 'This mail already has a linked task.',
   HOME_TASK_MEDIA_CLEANUP_REQUIRED: 'This task has attachments that need storage cleanup before deletion.',
+  HOME_TASK_MEDIA_LEGACY_CLEANUP_REQUIRED: 'This task has older public attachments that require verified storage cleanup.',
   HOME_TASK_PRIVATE_STORAGE_REQUIRED: 'Private task attachments are not available yet. Your task is saved; no files were uploaded.',
   HOME_TASK_GIG_FLOW_REQUIRED: 'Use the gig creation flow to publish this task.',
 };
@@ -44,6 +45,10 @@ async function mutate({ homeId, actorId, kind, action, recordId = null, payload 
   // Compatibility for the existing web general/recurring task form. This does
   // not create a permission or a new database task type.
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw failure('HOME_RECORD_INVALID', 400);
+  if (kind === 'task' && action === 'delete') {
+    if (Object.keys(payload).length || sourceMailId !== null) throw failure('HOME_RECORD_INVALID', 400);
+    return require('./homeTaskMediaService').deleteTask({ homeId, actorId, taskId: recordId });
+  }
   const normalized = { ...payload };
   if (kind === 'task' && normalized.task_type === 'general') normalized.task_type = 'chore';
   if (kind === 'task' && normalized.task_type === 'recurring') {
