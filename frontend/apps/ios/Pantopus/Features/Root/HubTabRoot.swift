@@ -861,6 +861,9 @@ public struct HubTabRoot: View {
         case let .homeDetail(id), let .homeDashboard(id):
             path.append(.homeDashboard(homeId: id))
             _ = router.consume()
+        case let .homeTask(homeId, taskId):
+            path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+            _ = router.consume()
         case let .homeMemberRequests(id):
             path.append(.homeMembers(homeId: id))
             _ = router.consume()

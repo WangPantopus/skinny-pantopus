@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS exact task notification routing — September 10
+
+Task notifications now open their exact Home task from validated metadata,
+including an interrupted login/arrival. Current account, recipient and task
+access govern opening; marking a notification read preserves its exact target.
+The [routing report](home-ios-task-notification-routing-2026-09-10.md) records the
+passing actual app build and 132 executed checks, strict source quality and
+independent review. Installed notification acceptance remains separate.
+
+**Next:** private native task attachments and complete installed household
+acceptance. Android retained forms now pass their current behavior/static checks
+and both APK builds; two Compose recovery checks are running on the emulator.
+Browser exact task routes and preference-aware alerts are receiving final
+session/navigation verification. Android paid-task stop recovery is pushed as
+`4dec19088`; earlier payment coordinator identity edges are under repair in #34.
+Both PRs #32/#34 remain unfinished drafts. Automatic recurrence, relationships,
+ownership and remaining payment/release work stay open. All paid services remain
+one final launch-preparation step. Completed physical Beacon and saved-card
+acceptance must not be repeated. No owner-phone installation or hosted data changed.
+
 ### iOS retained task creation and sparse editing — September 10
 
 Both iOS Home task entry points now retain one original create request across

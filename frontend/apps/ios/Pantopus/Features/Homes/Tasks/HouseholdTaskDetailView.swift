@@ -5,11 +5,15 @@ struct HouseholdTaskDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HouseholdTaskDetailViewModel
     @State private var isVisible = false
+    private let homeId: String
+    private let taskId: String
     private let onEdit: @MainActor () -> Void
 
     init(homeId: String, taskId: String, onEdit: @escaping @MainActor () -> Void = {}) {
         _viewModel = State(initialValue: HouseholdTaskDetailViewModel(homeId: homeId, taskId: taskId))
         self.onEdit = onEdit
+        self.homeId = homeId
+        self.taskId = taskId
     }
 
     private func dueLabel(_ value: String) -> String {
@@ -69,8 +73,14 @@ struct HouseholdTaskDetailView: View {
             guard isVisible else { return }
             if phase == .active { resumeCurrentScreen() } else { viewModel.suspend() }
         }
+        .onChange(of: viewModel.loading) { _, loading in
+            if !loading, isVisible, viewModel.isCurrent, viewModel.task != nil || viewModel.error != nil {
+                DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
+            }
+        }
         .onChange(of: viewModel.isCurrent) { _, _ in viewModel.accessChanged() }
-        .onDisappear { isVisible = false
+        .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
+            isVisible = false
             viewModel.suspend()
         }
     }

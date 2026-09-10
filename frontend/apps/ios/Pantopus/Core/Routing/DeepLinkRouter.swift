@@ -39,6 +39,7 @@ final class DeepLinkRouter {
         case listing(id: String)
         case homeDetail(id: String)
         case homeDashboard(id: String)
+        case homeTask(homeId: String, taskId: String)
         case homeMemberRequests(id: String)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
@@ -221,6 +222,10 @@ final class DeepLinkRouter {
         completeArrival(.post(id: id))
     }
 
+    func completeHomeTaskArrival(homeId: String, taskId: String) {
+        completeArrival(.homeTask(homeId: homeId, taskId: taskId))
+    }
+
     func completeConversationArrival(id: String) {
         completeArrival(.conversation(id: id))
     }
@@ -278,7 +283,7 @@ final class DeepLinkRouter {
             // than dropping them. Do NOT treat them as "browse now without login".
             if let userID {
                 switch destination {
-                case .post, .conversation:
+                case .post, .conversation, .homeTask:
                     activeContentArrival = destination
                     PendingDeepLinkStore.stash(persistencePath, expectedUserID: userID)
                 default:
@@ -561,6 +566,11 @@ final class DeepLinkRouter {
     private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {
         guard let id = segments.dropFirst().first else { return .unknown(url) }
         let trailing = Array(segments.dropFirst(2))
+        if trailing.first == "tasks" {
+            guard trailing.count == 2, UUID(uuidString: id) != nil,
+                  let taskId = trailing.last, UUID(uuidString: taskId) != nil else { return .unknown(url) }
+            return .homeTask(homeId: id.lowercased(), taskId: taskId.lowercased())
+        }
         if trailing.first == "dashboard" {
             return .homeDashboard(id: id)
         }

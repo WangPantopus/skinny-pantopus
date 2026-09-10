@@ -26,9 +26,10 @@ public struct NotificationDTO: Decodable, Sendable, Hashable, Identifiable {
     public let isRead: Bool?
     public let createdAt: String?
     public let context: String?
+    public var metadata: HomeTaskNotificationMetadata?
 
     enum CodingKeys: String, CodingKey {
-        case id, type, title, body, icon, link, context
+        case id, type, title, body, icon, link, context, metadata
         case userId = "user_id"
         case isRead = "is_read"
         case createdAt = "created_at"
