@@ -13,6 +13,8 @@ const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
+const homeResidencyService = require('../services/homeResidencyService');
+const homeAccessSecretService = require('../services/homeAccessSecretService');
 const {
   checkHomePermission,
   mapLegacyRole,
@@ -1445,18 +1447,20 @@ router.post('/', verifyToken, (req, res, next) => {
 
     // --- Auto-create WiFi access secret if provided ---
     if (wifi_name || wifi_password) {
-      const { error: wifiError } = await supabaseAdmin
-        .from('HomeAccessSecret')
-        .insert({
-          home_id: home.id,
-          access_type: 'wifi',
-          label: wifi_name || 'Home WiFi',
-          secret_value: wifi_password || '',
-          visibility: 'members',
-          created_by: userId,
+      try {
+        await homeAccessSecretService.mutate({
+          homeId: home.id,
+          actorId: userId,
+          action: 'bootstrap_wifi',
+          payload: {
+            access_type: 'wifi',
+            label: wifi_name || 'Home WiFi',
+            secret_value: wifi_password || '',
+            visibility: 'members',
+          },
         });
-      if (wifiError) {
-        logger.warn('Failed to create wifi secret (non-fatal)', { error: wifiError.message, homeId: home.id });
+      } catch (wifiError) {
+        logger.warn('Failed to create wifi secret (non-fatal)', { code: wifiError.code, homeId: home.id });
       }
     }
 
@@ -3312,73 +3316,16 @@ router.delete('/:id', verifyToken, async (req, res) => {
  */
 router.post('/:id/attach', verifyToken, validate(attachDetachSchema), async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const { userId: userToAttach } = req.body;
-    const requestingUserId = req.user.id;
-
-    // Check home exists and requester is owner
-    const { data: home, error: homeError } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id, address')
-      .eq('id', homeId)
-      .single();
-
-    if (homeError || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    const attachAccess = await checkHomePermission(homeId, requestingUserId, 'members.manage');
-    if (!attachAccess.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to manage members' });
-    }
-
-    // Check user exists
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('User')
-      .select('id, username, name')
-      .eq('id', userToAttach)
-      .single();
-
-    if (userError || !user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Attach via centralized OccupancyAttachService
-    const occupancyAttachService = require('../services/occupancyAttachService');
-    const result = await occupancyAttachService.attach({
-      homeId,
-      userId: userToAttach,
-      method: 'owner_bootstrap',
-      claimType: 'member',
-      actorId: requestingUserId,
-      metadata: { source: 'owner_attach' },
+    const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
+      action: 'attach', targetId: req.body.userId });
+    res.json({
+      message: result.replayed ? 'User is already attached to this home' : `${result.user.name} attached to home successfully`,
+      occupancy: { id: result.occupancy.id, homeId: req.params.id, userId: result.target_id,
+        username: result.user.username, name: result.user.name, attachedAt: result.occupancy.created_at },
     });
-
-    if (!result.success) {
-      if (result.status === 'already_attached') {
-        return res.status(400).json({ error: 'User is already attached to this home' });
-      }
-      logger.error('Error attaching user', { error: result.error, homeId, userToAttach });
-      return res.status(500).json({ error: result.error || 'Failed to attach user' });
-    }
-
-    logger.info('User attached to home', { homeId, userId: userToAttach, by: requestingUserId });
-
-    res.status(200).json({
-      message: `${user.name} attached to home successfully`,
-      occupancy: {
-        id: result.occupancy?.id,
-        homeId,
-        userId: userToAttach,
-        username: user.username,
-        name: user.name,
-        attachedAt: result.occupancy?.created_at
-      }
-    });
-
   } catch (err) {
-    logger.error('Attach user error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to attach user' });
+    logger.error('Attach user error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -5718,39 +5665,10 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
  */
 router.get('/:id/access', verifyToken, async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    // Filter by visibility based on permissions
-    const permissions = new Set(access.permissions || []);
-    const canManageAccess = permissions.has('access.manage');
-    const canViewSensitive = permissions.has('sensitive.view');
-
-    let query = supabaseAdmin
-      .from('HomeAccessSecret')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('label', { ascending: true });
-
-    if (!canViewSensitive && !canManageAccess) {
-      query = query.eq('visibility', 'members');
-    } else if (!canViewSensitive) {
-      query = query.in('visibility', ['members', 'managers']);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      logger.error('Error fetching home access secrets', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch access info' });
-    }
-
-    res.json({ secrets: data || [] });
+    res.json({ secrets: await homeAccessSecretService.list(req.params.id, req.user.id) });
   } catch (err) {
-    logger.error('Access secrets fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch access info' });
+    logger.error('Access secrets fetch error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -5759,57 +5677,12 @@ router.get('/:id/access', verifyToken, async (req, res) => {
  */
 router.post('/:id/access', verifyToken, async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_access');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage access' });
-
-    const { access_type, label, secret_value, notes, visibility } = req.body;
-
-    if (!access_type || !label || !secret_value) {
-      return res.status(400).json({ error: 'access_type, label, and secret_value are required' });
-    }
-
-    // Insert main row with empty secret_value so the BEFORE trigger does not insert into
-    // HomeAccessSecretValue (which would violate FK since the parent row does not exist yet).
-    const { data, error } = await supabaseAdmin
-      .from('HomeAccessSecret')
-      .insert({
-        home_id: homeId,
-        access_type,
-        label,
-        secret_value: '',
-        notes: notes || null,
-        visibility: visibility || 'members',
-        created_by: userId,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating home access secret', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to create access secret' });
-    }
-
-    // Store the actual secret in HomeAccessSecretValue (trigger would do this but runs before parent exists).
-    if (secret_value && data?.id) {
-      const { error: valueErr } = await supabaseAdmin
-        .from('HomeAccessSecretValue')
-        .upsert(
-          { access_secret_id: data.id, secret_value, updated_at: new Date().toISOString() },
-          { onConflict: 'access_secret_id' }
-        );
-      if (valueErr) {
-        logger.error('Error writing access secret value', { error: valueErr.message, secretId: data.id });
-        return res.status(500).json({ error: 'Failed to create access secret' });
-      }
-    }
-
-    res.status(201).json({ secret: data });
+    const secret = await homeAccessSecretService.mutate({ homeId: req.params.id, actorId: req.user.id,
+      action: 'create', payload: req.body });
+    res.status(201).json({ secret });
   } catch (err) {
-    logger.error('Access secret creation error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create access secret' });
+    logger.error('Access secret creation error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -5818,36 +5691,12 @@ router.post('/:id/access', verifyToken, async (req, res) => {
  */
 router.put('/:id/access/:secretId', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, secretId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_access');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage access' });
-
-    const allowed = ['label', 'secret_value', 'access_type', 'notes', 'visibility'];
-    const updates = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
-    }
-    updates.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeAccessSecret')
-      .update(updates)
-      .eq('id', secretId)
-      .eq('home_id', homeId)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating home access secret', { error: error.message, secretId });
-      return res.status(500).json({ error: 'Failed to update access secret' });
-    }
-
-    res.json({ secret: data });
+    const secret = await homeAccessSecretService.mutate({ homeId: req.params.id, actorId: req.user.id,
+      secretId: req.params.secretId, action: 'update', payload: req.body });
+    res.json({ secret });
   } catch (err) {
-    logger.error('Access secret update error', { error: err.message });
-    res.status(500).json({ error: 'Failed to update access secret' });
+    logger.error('Access secret update error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -5856,27 +5705,12 @@ router.put('/:id/access/:secretId', verifyToken, async (req, res) => {
  */
 router.delete('/:id/access/:secretId', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, secretId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_access');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage access' });
-
-    const { error } = await supabaseAdmin
-      .from('HomeAccessSecret')
-      .delete()
-      .eq('id', secretId)
-      .eq('home_id', homeId);
-
-    if (error) {
-      logger.error('Error deleting home access secret', { error: error.message, secretId });
-      return res.status(500).json({ error: 'Failed to delete access secret' });
-    }
-
+    await homeAccessSecretService.mutate({ homeId: req.params.id, actorId: req.user.id,
+      secretId: req.params.secretId, action: 'delete' });
     res.json({ message: 'Access secret deleted' });
   } catch (err) {
-    logger.error('Access secret delete error', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete access secret' });
+    logger.error('Access secret delete error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -6794,92 +6628,24 @@ router.get('/:id/claims', verifyToken, async (req, res) => {
  */
 router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-    const { proposed_role } = req.body;
-
-    const { checkHomePermission } = require('../utils/homePermissions');
-    const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized to approve claims' });
+    const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
+      action: 'approve', claimId: req.params.claimId, role: req.body.proposed_role });
+    if (!result.replayed) {
+      // The transaction is already committed. A notification failure must not
+      // pretend the admission failed or cause the client to apply it again.
+      try {
+        await require('../services/notificationService').createNotification({
+          userId: result.target_id, type: 'residency_approved', title: 'Welcome home!',
+          body: `You've been verified at ${result.home_label || 'your home'}.`, icon: '🏡',
+          link: `/homes/${req.params.id}/dashboard`,
+          metadata: { home_id: req.params.id, claim_id: req.params.claimId },
+        });
+      } catch (err) { logger.error('Residency approval notification failed', { code: err.code }); }
     }
-
-    // Fetch the claim
-    const { data: claim } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select('*')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
-    }
-
-    if (claim.status !== 'pending') {
-      return res.status(400).json({ error: `Cannot approve a ${claim.status} claim` });
-    }
-
-    // Residency approval cannot create ownership or management authority.
-    // Full atomic enrollment and target-state preservation is the next bounded
-    // milestone; close the existing high-role shortcut before that rollout.
-    const grantedRole = proposed_role || claim.claimed_role || 'member';
-    const roleBase = mapLegacyRole(grantedRole);
-    if (['owner', 'admin', 'manager'].includes(roleBase)) {
-      return res.status(403).json({
-        error: 'Residency approval cannot grant ownership or management roles.',
-        code: 'RESIDENCY_ROLE_FORBIDDEN',
-      });
-    }
-
-    // Update claim to verified
-    const { error: claimError } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .update({
-        status: 'verified',
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', claimId);
-
-    if (claimError) {
-      logger.error('Error approving claim', { error: claimError.message });
-      return res.status(500).json({ error: 'Failed to approve claim' });
-    }
-
-    // Create/activate occupancy via applyOccupancyTemplate (upserts, prevents duplicates)
-    let occupancy;
-    try {
-      const result = await applyOccupancyTemplate(homeId, claim.user_id, roleBase, 'verified');
-      occupancy = result.occupancy;
-    } catch (occError) {
-      logger.error('Error creating occupancy from claim', { error: occError.message });
-      return res.status(500).json({ error: 'Claim approved but failed to create membership' });
-    }
-
-    // Notify the claimant
-    const notificationService = require('../services/notificationService');
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('name, address')
-      .eq('id', homeId)
-      .single();
-
-    notificationService.createNotification({
-      userId: claim.user_id,
-      type: 'residency_approved',
-      title: 'Welcome home!',
-      body: `You've been verified at ${home?.name || home?.address || 'your home'}.`,
-      icon: '🏡',
-      link: `/homes/${homeId}/dashboard`,
-      metadata: { home_id: homeId, claim_id: claimId },
-    });
-
-    res.json({ message: 'Claim approved, membership created', occupancy });
+    res.json({ message: 'Claim approved, membership confirmed', occupancy: result.occupancy });
   } catch (err) {
-    logger.error('Approve claim error', { error: err.message });
-    res.status(500).json({ error: 'Failed to approve claim' });
+    logger.error('Approve claim error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -6888,63 +6654,22 @@ router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
  */
 router.post('/:id/claim/:claimId/reject', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-    const { reason } = req.body;
-
-    const { checkHomePermission } = require('../utils/homePermissions');
-    const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized to reject claims' });
+    const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
+      action: 'reject', claimId: req.params.claimId, reason: req.body.reason });
+    if (!result.replayed) {
+      try {
+        await require('../services/notificationService').createNotification({
+          userId: result.target_id, type: 'residency_rejected', title: 'Verification update',
+          body: "We couldn't verify you for this home. You can try again or verify by mail.",
+          icon: '📬', link: `/homes/${req.params.id}/waiting-room`,
+          metadata: { home_id: req.params.id, claim_id: req.params.claimId },
+        });
+      } catch (err) { logger.error('Residency rejection notification failed', { code: err.code }); }
     }
-
-    const { data: claim } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select('*')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
-    }
-
-    if (claim.status !== 'pending') {
-      return res.status(400).json({ error: `Cannot reject a ${claim.status} claim` });
-    }
-
-    const { error } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .update({
-        status: 'rejected',
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-        review_note: reason || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', claimId);
-
-    if (error) {
-      logger.error('Error rejecting claim', { error: error.message });
-      return res.status(500).json({ error: 'Failed to reject claim' });
-    }
-
-    // Notify the claimant (opaque — no reason or admin identity revealed)
-    const notificationService = require('../services/notificationService');
-    notificationService.createNotification({
-      userId: claim.user_id,
-      type: 'residency_rejected',
-      title: 'Verification update',
-      body: 'We couldn\'t verify you for this home. You can try again or verify by mail.',
-      icon: '📬',
-      link: `/homes/${homeId}/waiting-room`,
-      metadata: { home_id: homeId, claim_id: claimId },
-    });
-
     res.json({ message: 'Claim rejected' });
   } catch (err) {
-    logger.error('Reject claim error', { error: err.message });
-    res.status(500).json({ error: 'Failed to reject claim' });
+    logger.error('Reject claim error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 

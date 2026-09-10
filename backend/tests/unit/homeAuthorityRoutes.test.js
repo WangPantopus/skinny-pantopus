@@ -50,10 +50,17 @@ test('legacy transfer-admin directs callers to verified ownership flow without c
 });
 test.each(['owner','admin','manager','property_manager'])('legacy residency claim cannot grant %s', async role => {
   db.seedTable('HomeResidencyClaim', [{ id: 'claim', home_id: 'home', user_id: 'target', status: 'pending', claimed_role: role }]);
+  // Real role policy is exercised in the residency SQL contract; this adapter
+  // asserts the route respects the atomic denial without a legacy write.
+  const rpc = jest.fn(async () => ({ data: { ok: false, code: 'RESIDENCY_ROLE_FORBIDDEN', status: 403 }, error: null }));
+  db.setRpcMock(rpc);
   const res = response();
   await handler(home, 'post', '/:id/claim/:claimId/approve')({ params: { id: 'home', claimId: 'claim' }, user: { id: 'actor' }, body: {} }, res);
   expect(res.statusCode).toBe(403);
   expect(res.body.code).toBe('RESIDENCY_ROLE_FORBIDDEN');
   expect(db.getTable('HomeResidencyClaim')[0].status).toBe('pending');
   expect(db.getTable('HomeOccupancy')).toHaveLength(0);
+  expect(rpc).toHaveBeenCalledWith('review_home_residency', expect.objectContaining({
+    p_home_id: 'home', p_actor_id: 'actor', p_action: 'approve', p_payload: { claim_id: 'claim' },
+  }));
 });

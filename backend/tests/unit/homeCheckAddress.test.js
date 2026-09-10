@@ -253,6 +253,31 @@ describe('POST /api/homes/check-address', () => {
 });
 
 describe('POST /api/homes stored-address fallback', () => {
+  test('WiFi bootstrap uses one actor-bound secret transaction after creating the exact Home', async () => {
+    const service = require('../../services/homeAccessSecretService');
+    const mutate = jest.spyOn(service, 'mutate').mockResolvedValue({ id: 'secret', secret_value: 'synthetic-wifi' });
+    seedTable('HomeAddress', [{
+      id: '44444444-4444-4444-8444-444444444444', address_hash: 'wifi-bootstrap-hash',
+      address_line1_norm: '123 Main St', address_line2_norm: null, city_norm: 'Portland', state: 'OR',
+      postal_code: '97201', country: 'US', place_type: 'single_family', building_type: 'single_family',
+      last_validated_at: new Date().toISOString(), validation_raw_response: { dpv_match_code: 'Y' },
+    }]);
+    try {
+      const res = await request(createApp()).post('/api/homes').send({
+        address: '123 Main St', address_id: '44444444-4444-4444-8444-444444444444',
+        city: 'Portland', state: 'OR', zipcode: '97201', latitude: 45.5, longitude: -122.6,
+        role: 'owner', is_owner: true, wifi_name: 'Synthetic network', wifi_password: 'synthetic-wifi',
+      });
+      expect(res.status).toBe(201);
+      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledWith({ homeId: res.body.home.id, actorId: res.body.home.created_by_user_id, action: 'bootstrap_wifi',
+        payload: { access_type: 'wifi', label: 'Synthetic network', secret_value: 'synthetic-wifi', visibility: 'members' } });
+      expect(getTable('HomeAccessSecret')).toHaveLength(0);
+      expect(getTable('HomeAccessSecretValue')).toHaveLength(0);
+      expect(JSON.stringify(res.body)).not.toContain('synthetic-wifi');
+    } finally { mutate.mockRestore(); }
+  });
+
   test('passes provider-backed stored inputs and enforcement flag into classify, and blocks BUSINESS', async () => {
     addressConfig.rollout.enforcePlaceProviderBusiness = true;
     addressDecisionEngine.classify.mockReturnValue({

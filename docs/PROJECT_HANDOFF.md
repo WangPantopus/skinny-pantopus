@@ -14,6 +14,46 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home access-secret and residency admission checkpoint — September 9
+
+The next bounded source checkpoint is complete in
+`/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`, for draft
+[PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
+The [Wi-Fi/access-secret report](home-access-secret-transactions-2026-09-09.md)
+and [residency-admission report](home-residency-admission-2026-09-09.md) record
+**4,713 backend tests passing (16 skipped), all privacy gates including 15 E2E
+checks, 24 raw SQL contracts plus 24 pgTAP wrappers and 27 concurrency checks**.
+SQL lint has zero errors and five existing warnings. Independent review caught
+and closed a secret-type relabel read-deny bypass before this source freeze.
+
+Wi-Fi/code metadata and values now write atomically, read permissions include
+type and visibility, and private creators retain only exact own-setup access.
+Manager attach and residency approval/rejection now lock and recheck current
+authority and target state; they preserve age, dates and restrictive overrides,
+and cannot silently restore revoked membership. No ordinary role grant,
+verification-age rollout or hosted Home migration ran. This remains a source
+checkpoint, not full Home acceptance or a release.
+
+**Next:** commit this checkpoint, integrate current master safely, then finish
+invite creation/acceptance/decline and household-request conversion. Follow with
+claim submission/challenge and remaining ownership/lease lifecycle paths,
+guest/scoped exact-resource sharing, task/calendar/attachment access and derived
+data filtering, storage retirement and web/native permission controls. Direct
+invitation DML and old alternate admission paths remain release blockers. Review
+ordinary defaults only after those paths are protected, then run integrated Home
+acceptance. Keep updating this handoff after each milestone.
+
+Payment [PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) merged
+after all final-head checks passed (run `34434288893`), producing master
+`d7be416b872a31ceb53094d7d19c3f114185831f` at 04:15:08 UTC September 10.
+The prior Home head `7f6b59ba3` also has all CI checks green; this new head must
+pass again after integration. Native sensitive-auth source is independently
+reviewed and locally validated in [PR #33](https://github.com/WangPantopus/skinny-pantopus/pull/33),
+head `b85febb8c`, with CI pending at this observation. Completed Beacon physical
+device and native payment acceptance must not be repeated. Earlier payment
+pending notes below are historical where they conflict with this entry.
+
 ### Home authority/deletion source checkpoint — September 9
 
 The next bounded Home checkpoint is complete in

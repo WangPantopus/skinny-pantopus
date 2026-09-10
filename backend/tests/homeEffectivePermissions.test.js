@@ -238,15 +238,19 @@ test('an owner denied finance/docs view cannot use management rights or the dash
   expect(from.mock.calls.map(([table]) => table)).not.toContain('HomeDocument');
 });
 
-test.each(['adult_owner_denied', 'child_owner', 'member_flags'])('%s cannot read sensitive access secrets through stale flags or ownership', async scenario => {
+test.each(['adult_owner_denied', 'child_owner', 'member_flags'])('%s cannot bypass the secret transaction with stale flags or ownership', async scenario => {
   seed({ role_base: scenario === 'member_flags' ? 'member' : 'owner',
     age_band: scenario === 'child_owner' ? 'child' : 'adult',
     can_manage_access: true, can_view_sensitive: true });
   override('access.manage', false);
   override('sensitive.view', false);
-  db.seedTable('HomeAccessSecret', ['members', 'managers', 'sensitive'].map(visibility => ({ home_id: HOME, visibility })));
+  const rpc = jest.fn(async () => ({ data: { ok: false, code: 'HOME_SECRET_ACCESS_DENIED', status: 403 }, error: null }));
+  db.setRpcMock(rpc);
+  const from = jest.spyOn(db, 'from');
   const response = await homeRoute('/:id/access');
-  expect(response.json).toHaveBeenCalledWith({ secrets: [{ home_id: HOME, visibility: 'members' }] });
+  expect(response.status).toHaveBeenCalledWith(403);
+  expect(rpc).toHaveBeenCalledWith('get_home_access_secrets', { p_home_id: HOME, p_actor_id: USER });
+  expect(from).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -274,10 +278,11 @@ test('Home detail does not reconstruct owner authority for a minor from HomeOwne
 
 test.each(['/:id/bills', '/:id/access', '/:id/dashboard', '/:id/household-access-requests'])('auth failure in %s aborts as retryable 5xx', async path => {
   seed({ role_base: 'owner' });
+  if (path === '/:id/access') db.setRpcMock(async () => ({ data: null, error: { code: '55P03' } }));
   jest.spyOn(db, 'from').mockImplementation(name => {
     const query = originalFrom(name);
     if (name === 'HomePermissionOverride') query.then = (resolve, reject) => Promise.resolve({ data: null, error: {} }).then(resolve, reject);
     return query;
   });
-  expect((await homeRoute(path)).status).toHaveBeenCalledWith(path === '/:id/dashboard' ? 503 : 500);
+  expect((await homeRoute(path)).status).toHaveBeenCalledWith(['/:id/dashboard', '/:id/access'].includes(path) ? 503 : 500);
 });
