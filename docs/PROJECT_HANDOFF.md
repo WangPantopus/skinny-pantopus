@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android bill permission checkpoint — September 10
+
+Android now preserves bill viewing while enforcing current effective finance
+permissions for changes. Screens and success/navigation callbacks stay bound to
+the opening account/session/API. Split-read failure preserves the verified bill
+with an explicit retry, and mutation responses must match the exact record and
+requested status. The [Android bill report](home-android-finance-access-2026-09-10.md)
+records 62 focused checks, formatting/static checks, zero Android lint errors,
+debug assembly and independent review. Full household acceptance remains open.
+
+The iOS follow-up is committed/pushed as `2f3e6cac4`. Final ordinary claim-review
+SQL verification now passes 24 migrations, 30 contracts/wrappers, 32 races and
+6 SDK checks; its final backend regression is being completed before commit.
+Then integrate native claim snapshot controls, trusted private evidence and task
+attachments, followed by the remaining Home workflows. Native refunds continue
+in PR #34. Paid dependencies remain grouped at final launch preparation.
+
 ### Bill-detail recovery follow-up — September 10
 
 The iOS bill detail now distinguishes unavailable split data from an empty

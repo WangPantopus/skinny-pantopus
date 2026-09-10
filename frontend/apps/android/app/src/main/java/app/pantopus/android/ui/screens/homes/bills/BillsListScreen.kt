@@ -33,6 +33,7 @@ fun BillsListScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+    val financeRights by viewModel.financeRights.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -51,7 +52,7 @@ fun BillsListScreen(
             selectedTab = selectedTab,
             onSelectTab = viewModel::selectTab,
             topBarAction = viewModel.topBarAction,
-            fab = viewModel.fab(),
+            fab = if (financeRights.canManage) viewModel.fab() else null,
             onBack = onBack,
             banner = banner,
         )

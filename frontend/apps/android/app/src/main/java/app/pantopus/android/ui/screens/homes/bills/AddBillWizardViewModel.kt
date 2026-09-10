@@ -21,6 +21,8 @@ import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
 import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,11 +77,15 @@ const val ADD_BILL_BILL_ID_KEY = "billId"
 
 @HiltViewModel
 class AddBillWizardViewModel
-    @Inject
-    constructor(
+    internal constructor(
         private val repo: HomesRepository,
         savedStateHandle: SavedStateHandle,
+        createAccess: (String, CoroutineScope) -> HomeFinanceAccess,
     ) : ViewModel(), WizardModel {
+        @Inject
+        constructor(repo: HomesRepository, savedStateHandle: SavedStateHandle, finance: HomeFinanceAccessFactory) :
+            this(repo, savedStateHandle, finance::create)
+
         private val homeId: String =
             checkNotNull(savedStateHandle[ADD_BILL_HOME_ID_KEY]) {
                 "AddBillWizardViewModel requires a $ADD_BILL_HOME_ID_KEY nav argument"
@@ -88,6 +94,10 @@ class AddBillWizardViewModel
         /** Optional nav arg: when present the wizard opens in edit mode,
          *  hydrates from the parent list, and PUTs on submit. */
         private val billId: String? = savedStateHandle[ADD_BILL_BILL_ID_KEY]
+
+        private val finance = createAccess(homeId, viewModelScope)
+        val financeRights = finance.rights
+        private var generation = 0
 
         val isEditing: Boolean = billId != null
 
@@ -131,32 +141,66 @@ class AddBillWizardViewModel
         private var hydratedSnapshot: Snapshot? = null
 
         init {
-            // Edit mode auto-loads on init — the screen doesn't have to
-            // remember to fire `load()`.
-            if (billId != null) {
-                viewModelScope.launch { load() }
+            viewModelScope.launch {
+                financeRights.collect { rights ->
+                    if (rights.invalidated) {
+                        generation++
+                        clearDraft()
+                        _isLoadingExisting.value = false
+                        _loadError.value = FINANCE_SESSION_CHANGED
+                        _submitError.value = FINANCE_SESSION_CHANGED
+                    }
+                }
+            }
+            viewModelScope.launch { load() }
+        }
+
+        private fun clearDraft() {
+            payee = ""
+            amount = ""
+            dueDate = null
+            schedule = AddBillSchedule.OneTime
+            hydratedSnapshot = null
+            createdBillId = null
+            _events.value = null
+            _isSubmitting.value = false
+            _currentStep.value = AddBillStep.Details
+        }
+
+        /** Check access for create too; an edit hydrates only its exact Home/bill. */
+        suspend fun load() {
+            val revision = ++generation
+            _isLoadingExisting.value = true
+            _loadError.value = null
+            try {
+                finance.refresh(managing = true)
+                billId?.let { loadExisting(it, revision) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: IllegalStateException) {
+                if (revision == generation) {
+                    if (!financeRights.value.canView) clearDraft()
+                    _loadError.value = error.message ?: "Couldn't load this bill."
+                }
+            } finally {
+                if (revision == generation) _isLoadingExisting.value = false
             }
         }
 
-        /** Fetch the parent list and hydrate every step from the matching
-         *  row. No-op in create mode. Exposed for tests. */
-        suspend fun load() {
-            val id = billId ?: return
-            _isLoadingExisting.value = true
-            _loadError.value = null
+        private suspend fun loadExisting(
+            id: String,
+            revision: Int,
+        ) {
             when (val result = repo.getHomeBills(homeId)) {
                 is NetworkResult.Success -> {
-                    val bill = result.data.bills.firstOrNull { it.id == id }
-                    if (bill == null) {
-                        _loadError.value = "This bill is no longer available."
-                    } else {
-                        applyExisting(bill)
-                    }
+                    finance.require(managing = true)
+                    if (revision != generation) return
+                    val bill = result.data.bills.singleOrNull { it.id == id && it.homeId == homeId }
+                    checkNotNull(bill) { "This bill is no longer available." }
+                    applyExisting(bill)
                 }
-                is NetworkResult.Failure ->
-                    _loadError.value = result.error.message
+                is NetworkResult.Failure -> error(result.error.message)
             }
-            _isLoadingExisting.value = false
         }
 
         private fun applyExisting(bill: BillDto) {
@@ -186,7 +230,7 @@ class AddBillWizardViewModel
                             progressFraction = 1f / 3f,
                             leading = WizardLeadingControl.Close,
                             primaryCtaLabel = "Next",
-                            primaryCtaEnabled = detailsValid() && !_isLoadingExisting.value,
+                            primaryCtaEnabled = financeRights.value.canManage && detailsValid() && !_isLoadingExisting.value,
                             isSubmitting = false,
                             dirty = isDirty(),
                             showsProgressBar = true,
@@ -198,7 +242,7 @@ class AddBillWizardViewModel
                             progressFraction = 2f / 3f,
                             leading = WizardLeadingControl.Back,
                             primaryCtaLabel = "Next",
-                            primaryCtaEnabled = true,
+                            primaryCtaEnabled = financeRights.value.canManage,
                             isSubmitting = false,
                             dirty = isDirty(),
                             showsProgressBar = true,
@@ -210,7 +254,7 @@ class AddBillWizardViewModel
                             progressFraction = 1f,
                             leading = WizardLeadingControl.Back,
                             primaryCtaLabel = if (isEditing) "Save changes" else "Add bill",
-                            primaryCtaEnabled = !_isSubmitting.value,
+                            primaryCtaEnabled = financeRights.value.canManage && !_isSubmitting.value,
                             isSubmitting = _isSubmitting.value,
                             dirty = isDirty(),
                             showsProgressBar = true,
@@ -222,7 +266,7 @@ class AddBillWizardViewModel
                             progressFraction = null,
                             leading = WizardLeadingControl.Close,
                             primaryCtaLabel = "Done",
-                            primaryCtaEnabled = true,
+                            primaryCtaEnabled = financeRights.value.canManage,
                             isSubmitting = false,
                             dirty = false,
                             showsProgressBar = false,
@@ -243,6 +287,7 @@ class AddBillWizardViewModel
         }
 
         override fun onPrimary() {
+            if (!financeRights.value.canManage || _isLoadingExisting.value || _isSubmitting.value) return
             when (_currentStep.value) {
                 AddBillStep.Details -> {
                     _currentStep.value = AddBillStep.Schedule
@@ -260,10 +305,29 @@ class AddBillWizardViewModel
                             createdBillId != null -> AddBillEvent.Created(createdBillId!!)
                             else -> AddBillEvent.Dismiss
                         }
-                    _events.value = event
+                    viewModelScope.launch {
+                        try {
+                            finance.require(managing = true)
+                            _events.value = event
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            // No success event for a replaced session.
+                        }
+                    }
                 }
             }
         }
+
+        suspend fun confirmEvent(event: AddBillEvent): Boolean =
+            try {
+                finance.require(managing = true)
+                _events.value == event
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                false
+            }
 
         fun consumeEvent() {
             _events.value = null
@@ -294,30 +358,32 @@ class AddBillWizardViewModel
 
         private fun submit() {
             val amountValue = parsedAmount() ?: return
-            if (_isSubmitting.value) return
+            if (_isSubmitting.value || !financeRights.value.canManage) return
+            val revision = ++generation
+            val details = buildDetails(schedule)
+            val trimmedPayee = payee.trim()
+            val due = dueDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
             _isSubmitting.value = true
             _submitError.value = null
             viewModelScope.launch {
-                val details = buildDetails(schedule)
-                val trimmedPayee = payee.trim()
-                val due = dueDate?.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val result =
-                    if (billId != null) {
-                        repo.updateHomeBill(
-                            homeId = homeId,
-                            billId = billId,
-                            request =
+                try {
+                    finance.refresh(managing = true)
+                    if (revision != generation) return@launch
+                    val result =
+                        if (billId != null) {
+                            repo.updateHomeBill(
+                                homeId,
+                                billId,
                                 UpdateBillRequest(
                                     amount = amountValue,
                                     providerName = trimmedPayee,
                                     dueDate = due,
                                     details = details,
                                 ),
-                        )
-                    } else {
-                        repo.createHomeBill(
-                            homeId = homeId,
-                            request =
+                            )
+                        } else {
+                            repo.createHomeBill(
+                                homeId,
                                 CreateBillRequest(
                                     billType = "other",
                                     providerName = trimmedPayee,
@@ -325,22 +391,37 @@ class AddBillWizardViewModel
                                     dueDate = due,
                                     details = details,
                                 ),
-                        )
+                            )
+                        }
+                    finance.require(managing = true)
+                    if (revision != generation) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            applySaved(result.data.bill)
+                        }
+                        is NetworkResult.Failure -> error(result.error.message)
                     }
-                when (result) {
-                    is NetworkResult.Success -> {
-                        if (billId == null) createdBillId = result.data.bill.id
-                        _isSubmitting.value = false
-                        _currentStep.value = AddBillStep.Success
-                        Analytics.track(AnalyticsEvent.CtaAddBillSubmit(AnalyticsResult.SUCCESS))
-                    }
-                    is NetworkResult.Failure -> {
-                        _isSubmitting.value = false
-                        _submitError.value = result.error.message
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: IllegalStateException) {
+                    if (revision == generation) {
+                        _submitError.value = error.message ?: "Couldn't save this bill."
+                        _loadError.value = _submitError.value
                         Analytics.track(AnalyticsEvent.CtaAddBillSubmit(AnalyticsResult.ERROR))
                     }
+                } finally {
+                    if (revision == generation) _isSubmitting.value = false
                 }
             }
+        }
+
+        private fun applySaved(bill: BillDto) {
+            check(bill.homeId == homeId && bill.id.isNotBlank() && (billId == null || bill.id == billId)) {
+                "Bill change could not be verified."
+            }
+            if (billId == null) createdBillId = bill.id
+            _currentStep.value = AddBillStep.Success
+            Analytics.track(AnalyticsEvent.CtaAddBillSubmit(AnalyticsResult.SUCCESS))
         }
 
         private fun buildDetails(schedule: AddBillSchedule): Map<String, String> =

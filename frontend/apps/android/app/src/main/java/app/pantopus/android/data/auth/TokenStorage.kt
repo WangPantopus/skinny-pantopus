@@ -188,6 +188,15 @@ class TokenStorage
         /** Server session id (JWT `session_id`) — sent on `/refresh` and `/logout`. */
         suspend fun sessionId(): String? = withPrefs { it.getString(Keys.SESSION_ID, null) }
 
+        /** Read one coherent non-secret account/session identity for sensitive continuations. */
+        suspend fun sessionIdentity(): Pair<String, String?>? =
+            withPrefs { prefs ->
+                val snapshot = prefs.all
+                val userId = (snapshot[Keys.USER_ID] as? String)?.takeIf(String::isNotBlank)
+                val sessionId = (snapshot[Keys.SESSION_ID] as? String)?.takeIf(String::isNotBlank)
+                if (userId == null) null else userId to sessionId
+            }
+
         /** `interactive` | `restored` — gates client-side step-up affordances. */
         suspend fun sessionContext(): String? = withPrefs { it.getString(Keys.SESSION_CONTEXT, null) }
 

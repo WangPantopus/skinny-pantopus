@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.bills
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.BillDto
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
@@ -88,6 +89,17 @@ class BillsListViewModelTest {
             repo = repo,
             savedStateHandle = SavedStateHandle(mapOf(BILLS_HOME_ID_KEY to "home-1")),
             clock = { fixedNow },
+            createAccess = { _, scope ->
+                HomeFinanceAccess(
+                    scope,
+                    loadAccess = {
+                        NetworkResult.Success(
+                            HomeAccessDto(hasAccess = true, permissions = listOf("finance.view", "finance.manage")),
+                        )
+                    },
+                    identity = { HomeFinanceIdentity("viewer", "session", "https://test.invalid") },
+                )
+            },
         )
 
     // ─── Four states ───────────────────────────────────────────
@@ -487,8 +499,11 @@ class BillsListViewModelTest {
     // ─── FAB variant + tint ───────────────────────────────────
 
     @Test fun fab_is_canonicalCreate_with_home_tint() {
+        coEvery { repo.getHomeBills(any(), any()) } returns NetworkResult.Success(GetHomeBillsResponse())
         val vm = makeVm()
-        val fab = vm.fab()
+        assertNull(vm.fab())
+        vm.load()
+        val fab = checkNotNull(vm.fab())
         assertTrue(fab.variant is FabVariant.CanonicalCreate)
         assertEquals(FabTint.Home, fab.tint)
         assertEquals(PantopusIcon.Plus, fab.icon)
