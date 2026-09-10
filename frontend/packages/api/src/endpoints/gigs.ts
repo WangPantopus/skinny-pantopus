@@ -330,6 +330,11 @@ export interface AcceptBidResponse {
   bid: GigBid;
   paymentRequired?: boolean;
   requiresPaymentSetup?: boolean;
+  /** Exact provider proof for the same durable acceptance; finalize without another sheet. */
+  authorizationReady?: boolean;
+  paymentStatus?: string;
+  amountCents?: number;
+  currency?: string;
   isSetupIntent?: boolean;
   payment?: {
     clientSecret?: string | null;

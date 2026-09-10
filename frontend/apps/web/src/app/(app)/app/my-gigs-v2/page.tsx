@@ -1,6 +1,8 @@
 // @ts-nocheck
 'use client';
 
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -23,12 +25,7 @@ const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
   quotes: { label: '💼 Quotes', cls: 'bg-purple-50 text-purple-700 border border-purple-200' },
 };
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
-const getBidAmount = (bid?: GigBidWithUser | null): number | null => {
-  const raw = (bid as unknown as Record<string, any> | null)?.amount ?? null;
-  const amount = Number(raw);
-  return Number.isFinite(amount) ? amount : null;
-};
+
 
 export default function MyGigsV2Page() {
   const router = useRouter();
@@ -96,57 +93,8 @@ export default function MyGigsV2Page() {
     loadBidsForGig(gig.id);
   };
 
-  const handleAcceptBid = async (bidId: string) => {
-    if (!selectedGig) return;
-    const selectedBid = bids.find((bid) => String((bid as unknown as Record<string, any>)?.id) === String(bidId));
-    const amount = getBidAmount(selectedBid || null);
-    const yes = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will close the gig to other bidders.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept Bid',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!yes) return;
-
-    try {
-      setBidsError(null);
-      const resp = await api.gigs.acceptBid(selectedGig.id, bidId) as Record<string, any>;
-      const payment = (resp?.payment || {}) as Record<string, any>;
-      const clientSecret = (resp?.clientSecret || payment?.clientSecret || null) as string | null;
-      const setupIntentId = (resp?.setupIntentId || payment?.setupIntentId || null) as string | null;
-      const isSetupIntent = Boolean((resp?.isSetupIntent as boolean | undefined) ?? setupIntentId);
-      const requiresPaymentSetup = Boolean(resp?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret && typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${selectedGig.id}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId: (resp?.roomId as string | null) || null,
-            rollbackOnAbort: true,
-          })
-        );
-        toast.info('Bid accepted. Complete payment authorization to continue.');
-        router.push(`/app/gigs-v2/${selectedGig.id}?action=payment_setup`);
-        return;
-      }
-
-      toast.success('Bid accepted!');
-      loadGigs();
-      loadBidsForGig(selectedGig.id);
-
-      const roomId = (resp?.roomId || null) as string | null;
-      if (roomId) {
-        router.push(`/app/chat/${roomId}`);
-      }
-    } catch (err: unknown) {
-      setBidsError(err instanceof Error ? err.message : 'Failed to accept bid');
-    }
+  const handleAcceptBid = (bidId: string) => {
+    if (selectedGig) router.push(gigBidCheckoutUrl(selectedGig.id, bidId));
   };
 
   const handleRejectBid = async (bidId: string) => {
@@ -475,6 +423,11 @@ function BidsModal({
                       </p>
                     )}
 
+                    {bid.status === 'pending_payment' && (
+                      <button onClick={() => onAccept(bid.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">
+                        Resume payment
+                      </button>
+                    )}
                     {bid.status === 'pending' && (
                       <div className="flex gap-2">
                         <button

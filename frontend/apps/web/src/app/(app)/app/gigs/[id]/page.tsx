@@ -810,6 +810,8 @@ export default function GigDetailsPage() {
             {/* Payment breakdown (owner and worker) */}
             <ErrorBoundary>
               <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleRefresh}
                 gigId={gigId}
                 gigPrice={budget}
                 isOwner={isMyGig}
@@ -821,6 +823,7 @@ export default function GigDetailsPage() {
             {/* Offers panel (owner only) */}
             <ErrorBoundary>
               <OffersPanel
+                actorId={currentUserId}
                 gigId={gigId}
                 gigStatus={gigStatus}
                 gigPrice={budget}

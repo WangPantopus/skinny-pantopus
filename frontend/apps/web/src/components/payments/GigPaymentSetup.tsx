@@ -13,14 +13,16 @@ interface GigPaymentSetupProps {
   isSetupIntent: boolean;
   /** Gig ID for the payment setup flow. */
   gigId: string;
+  /** Exact selected bid, retained across a provider redirect. */
+  bidId?: string;
   /** Amount in cents (for display). */
   amount: number;
   /** Called on success. */
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   /** Called on error. */
   onError?: (error: string) => void;
   /** Called to close the modal/flow. */
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
 }
 
 /**
@@ -35,6 +37,7 @@ interface GigPaymentSetupProps {
 export default function GigPaymentSetup({
   isSetupIntent,
   gigId,
+  bidId,
   amount,
   onSuccess,
   onError,
@@ -63,7 +66,7 @@ export default function GigPaymentSetup({
           const { error: setupError } = await stripe.confirmSetup({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/app/gigs/${gigId}?payment=setup_complete`,
+              return_url: `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=setup_complete${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
             },
             redirect: 'if_required',
           });
@@ -82,13 +85,13 @@ export default function GigPaymentSetup({
             // Non-critical — webhook will handle it
           }
 
-          onSuccess();
+          await onSuccess();
         } else {
           // ─── PaymentIntent flow: authorize payment hold now ───
           const { error: confirmError } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/app/gigs/${gigId}?payment=authorized`,
+              return_url: `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=authorized${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
             },
             redirect: 'if_required',
           });
@@ -100,7 +103,7 @@ export default function GigPaymentSetup({
             return;
           }
 
-          onSuccess();
+          await onSuccess();
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
@@ -110,7 +113,7 @@ export default function GigPaymentSetup({
         setProcessing(false);
       }
     },
-    [stripe, elements, isSetupIntent, gigId, onSuccess, onError]
+    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError]
   );
 
   const amountFormatted = `$${(amount / 100).toFixed(2)}`;

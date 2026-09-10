@@ -1,5 +1,7 @@
 'use client';
 
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -7,7 +9,6 @@ import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
 import { useBadges } from '@/contexts/BadgeContext';
 
 // Import existing web gig-detail components
@@ -69,7 +70,6 @@ const ENGAGEMENT_LABELS: Record<string, { icon: string; label: string }> = {
   quotes: { icon: '💼', label: 'Quotes' },
 };
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
 
 // ─── Trust Capsule ───────────────────────────────────────────────────
 
@@ -542,45 +542,8 @@ function GigDetailV2Content() {
       if (res?.roomId) router.push(`/app/mailbox?roomId=${res.roomId}`);
     } catch { /* ignore */ }
   };
-  const handleAcceptOffer = async (offerId: string) => {
-    if (!gigId) return;
-    const selectedOffer = offersV2.find((offer) => String(offer?.id) === String(offerId));
-    const rawAmount = Number(selectedOffer?.amount ?? selectedOffer?.bid_amount ?? gig?.price ?? NaN);
-    const amount = Number.isFinite(rawAmount) ? rawAmount : null;
-    const confirmed = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will assign the gig to this bidder.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!confirmed) return;
-    try {
-      const resp = await api.gigs.acceptBid(gigId, offerId);
-      const payment = (resp as any)?.payment || {};
-      const clientSecret = (resp as any)?.clientSecret || payment?.clientSecret || null;
-      const setupIntentId = (resp as any)?.setupIntentId || payment?.setupIntentId || null;
-      const isSetupIntent = Boolean((resp as any)?.isSetupIntent ?? setupIntentId);
-      const requiresPaymentSetup = Boolean((resp as any)?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret && typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${gigId}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId: (resp as any)?.roomId || null,
-            rollbackOnAbort: true,
-          })
-        );
-        toast.info('Bid accepted. Complete payment authorization to continue.');
-        router.push(`/app/gigs-v2/${gigId}?action=payment_setup`);
-      }
-      handleStatusChange();
-    } catch (e: any) { toast.error(e?.message || 'Failed to accept offer'); }
+  const handleAcceptOffer = (offerId: string) => {
+    if (gigId) router.push(gigBidCheckoutUrl(gigId, offerId));
   };
   const handleDeclineOffer = async (offerId: string) => {
     if (!gigId) return;
@@ -777,6 +740,8 @@ function GigDetailV2Content() {
           )}
 
           <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleStatusChange}
             gigId={gigId!}
             gigPrice={Number(gig.price || 0)}
             isOwner={isMyGig}
