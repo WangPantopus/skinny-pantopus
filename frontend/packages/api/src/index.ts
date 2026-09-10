@@ -18,6 +18,7 @@ export {
   refreshAuthSession,
   setTokenCache,
   onTokenChange,
+  AUTH_SESSION_CHANGE_KEY,
   configureApiClient,
   apiRequest,
   get,

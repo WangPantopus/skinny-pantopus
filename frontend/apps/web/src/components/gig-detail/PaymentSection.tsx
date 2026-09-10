@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PaymentBreakdown from '@/components/payments/PaymentBreakdown';
+import GigPaymentRefundPanel from '@/components/payments/GigPaymentRefundPanel';
 import GigBidCheckout from './GigBidCheckout';
 import type { Payment } from '@pantopus/types';
 
@@ -46,6 +47,12 @@ function ScopedPaymentSection({ gigId, isOwner, isWorker, paymentStatusFromGig, 
       }} />}
       {actorId && gigPayment && (isOwner || isWorker) && (
         <PaymentBreakdown payment={gigPayment} perspective={isOwner ? 'payer' : 'payee'} />
+      )}
+      {actorId && isOwner && gigPayment?.payer_id === actorId && (
+        <GigPaymentRefundPanel actorId={actorId} payment={gigPayment} onPaymentChanged={(updated) => {
+          setGigPayment((current) => current?.id === updated.id ? { ...current, ...updated } : current);
+          onChanged?.();
+        }} />
       )}
     </>
   );

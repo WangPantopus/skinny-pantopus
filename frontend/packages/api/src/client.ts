@@ -82,10 +82,19 @@ export interface ApiRequestConfig extends AxiosRequestConfig {
 
 type TokenChangeHandler = (token: string | null) => void;
 const _tokenChangeHandlers = new Set<TokenChangeHandler>();
+export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
+let _authChangeSequence = 0;
 
 function _emitTokenChange(token: string | null): void {
   for (const handler of _tokenChangeHandlers) {
     try { handler(token); } catch { /* listener must not break caller */ }
+  }
+  if (_isWeb) {
+    try {
+      // Other tabs cannot observe httpOnly cookie replacement. Broadcast only
+      // a nonsecret change marker, never the token or account identity.
+      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${++_authChangeSequence}`);
+    } catch { /* Session mutation must still complete when storage is disabled. */ }
   }
 }
 

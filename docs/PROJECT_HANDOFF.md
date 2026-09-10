@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Web refund recovery checkpoint — September 9
+
+The existing payer payment section now has explicit refund/hold-release
+confirmation and scoped history recovery. Unknown results keep the original
+request identity and terms across restart; exact receipts determine completion.
+Account, session and API changes fence the old screen. The [web refund report](paid-gig-web-refunds-2026-09-09.md)
+records the full **1,060-test web pass**, **26 focused UI/shared-client checks**,
+lint, zero-error typecheck and independent contract review. This source depends
+on the same PR's durable refund backend/migration, which is still being verified;
+it must not deploy independently.
+
+The refund review found and is closing a dispute-at-provider-lease race. Remaining
+paid-gig work includes native refund controls, historical assigned authorization,
+residual earnings after partial refunds, complete test-mode completion/capture/
+notification/refund/cleanup and applicable release checks. No provider operation
+or hosted paid-gig migration/runtime change has run. Home native navigation is
+committed/pushed separately at `115c238ac` with **53 iOS and 54 Android tests**;
+the next claim invitation transaction is under isolated final replay/regression
+checks, while task/calendar/resource work continues independently.
+
 ### Native paid-bid recovery checkpoint — September 9
 
 The subsequent web summary checkpoint distinguishes authorization holds from

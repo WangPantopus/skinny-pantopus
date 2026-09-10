@@ -169,21 +169,62 @@ export async function getPayment(paymentId: string): Promise<{
   return get<{ payment: Payment }>(`/api/payments/${paymentId}`);
 }
 
-/**
- * Refund a payment
- */
+export type PaymentRefundReason = 'duplicate' | 'fraudulent' | 'requested_by_customer' | 'work_not_completed' | 'other';
+export type PaymentRefundStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'canceled';
+
+export interface PaymentRefundRequest {
+  requestId: string;
+  paymentId: string;
+  operation: 'refund' | 'release';
+  amountCents: number;
+  currency: string;
+  status: PaymentRefundStatus;
+  providerRefundId: string | null;
+  canRetry: boolean;
+  reversalStatus: string | null;
+  requestedAmountCents: number | null;
+  reason: PaymentRefundReason;
+  description: string | null;
+}
+
+export interface PaymentRefundReceipt {
+  stripe_refund_id: string;
+  payment_id: string;
+  amount: number;
+  currency: string;
+  refund_status: PaymentRefundStatus;
+  refund_succeeded_at: string | null;
+}
+
+export type RefundPaymentSummary = Pick<Payment,
+  'id' | 'payment_status' | 'amount_total' | 'refunded_amount' | 'currency' | 'captured_at'>;
+
+export interface PaymentRefundHistory {
+  requests: PaymentRefundRequest[];
+  refunds: PaymentRefundReceipt[];
+  payment: RefundPaymentSummary;
+}
+
+export interface PaymentRefundResult {
+  success: boolean;
+  refundRequest: PaymentRefundRequest;
+  refund: PaymentRefundReceipt | null;
+  payment: RefundPaymentSummary;
+}
+
+/** Read current payer/admin receipts without starting a provider operation. */
+export async function getPaymentRefunds(paymentId: string): Promise<PaymentRefundHistory> {
+  return get<PaymentRefundHistory>(`/api/payments/${paymentId}/refunds`);
+}
+
+/** Keep requestId and original terms unchanged after any uncertain result. */
 export async function refundPayment(
-  paymentId: string, 
+  paymentId: string,
   reason: string,
-  amount?: number
-): Promise<{ 
-  refund: {
-    id: string;
-    amount: number;
-    status: string;
-  };
-}> {
-  return post<{ refund: any }>(`/api/payments/${paymentId}/refund`, { reason, amount });
+  amount?: number,
+  options?: { requestId: string; description?: string },
+): Promise<PaymentRefundResult> {
+  return post<PaymentRefundResult>(`/api/payments/${paymentId}/refund`, { reason, amount, ...options });
 }
 
 /**
