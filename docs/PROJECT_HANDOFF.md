@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Historical assigned-payment recovery — September 10
+
+Historical assigned payments now recover through one protected authorization
+operation. Current actor/session and displayed payment terms are checked before
+mutation; interrupted provider requests retain their original identity. New holds
+respect the 24-hour window. Cancellation blocks worker start until its outcome
+is reconciled, and unchanged status checks no longer reload the gig repeatedly.
+
+The [authorization report](paid-gig-legacy-authorization-2026-09-10.md) records
+independent review, the full backend pass, fresh database replay, actual service/
+SQL interruption and concurrency checks, and populated-upgrade preservation.
+No historical authorization is backfilled automatically. Provider/device
+acceptance remains open; legacy attention notifications still need durable
+recovery. The migration and matching runtime must be deployed together.
+
+**Next:** commit the reviewed browser recovery controls, finish iOS/Android
+parity, then complete new and historical paid-gig sandbox journeys, remaining
+cancellation/dispute/Connect/debt and durable attention flows, capacity/retention
+checks and checked integration. Draft PR #34 remains unfinished. Home Android
+claims are pushed as `188801150`; the earlier dashboard repair passed all three
+affected iOS 18.5 jobs. Private Home attachments/evidence continue in draft PR #32.
+All paid dependencies remain deferred together to final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
 ### Browser alert preferences and account changes — September 10
 
 Browser popups now follow the server's push eligibility stream; in-app updates

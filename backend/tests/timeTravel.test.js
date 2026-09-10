@@ -18,6 +18,8 @@ jest.mock('../stripe/stripeService', () => ({
   cancelAuthorization: jest.fn().mockResolvedValue({ success: true }),
 }));
 
+jest.mock('../services/legacyGigAuthorization', () => ({ recover: jest.fn() }));
+const { recover } = require('../services/legacyGigAuthorization');
 const stripeService = require('../stripe/stripeService');
 const { createNotification } = require('../services/notificationService');
 const authorizeUpcomingGigs = require('../jobs/authorizeUpcomingGigs');
@@ -26,6 +28,7 @@ const expireUncapturedAuthorizations = require('../jobs/expireUncapturedAuthoriz
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  recover.mockResolvedValue({ authorizationReady: true });
 });
 
 // ── Helpers ────────────────────────────────────────────────
@@ -68,15 +71,10 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    expect(stripeService.createPaymentIntentForGig).toHaveBeenCalledTimes(1);
-    expect(stripeService.createPaymentIntentForGig).toHaveBeenCalledWith(
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(recover).toHaveBeenCalledWith(
       expect.objectContaining({
-        payerId: 'user-owner',
-        payeeId: 'user-worker',
-        amount: 10000,
-        paymentMethodId: 'pm_saved_card',
-        offSession: true,
-        existingPaymentId: paymentId,
+        gigId, scheduler: true, mode: 'resume', expectedPaymentId: paymentId,
       })
     );
   });
@@ -103,13 +101,13 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    expect(stripeService.createPaymentIntentForGig).not.toHaveBeenCalled();
+    expect(recover).not.toHaveBeenCalled();
   });
 
   test('Part 1: SCA failure sends notification to requester', async () => {
-    stripeService.createPaymentIntentForGig.mockResolvedValueOnce({
-      success: false,
-      error: 'authentication_required',
+    recover.mockResolvedValueOnce({
+      authorizationReady: false,
+      recoveryState: 'action_required',
     });
 
     seedTable('Gig', [{
@@ -141,7 +139,8 @@ describe('authorizeUpcomingGigs', () => {
     );
   });
 
-  test('Part 2: auto-cancels gig starting within 2h with failed auth', async () => {
+  test('Part 2: announces only the protected cancellation receipt for a due gig', async () => {
+    recover.mockResolvedValueOnce({ cancelled: true });
     seedTable('Gig', [{
       id: 'gig-fail',
       user_id: 'user-owner',
@@ -159,14 +158,11 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    // Should cancel auth
-    expect(stripeService.cancelAuthorization).toHaveBeenCalledWith('pay-fail');
-
-    // Should update gig to cancelled
-    const gig = getTable('Gig').find(g => g.id === 'gig-fail');
-    expect(gig.status).toBe('cancelled');
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CANCELED);
-    expect(gig.cancellation_reason).toBe('payment_authorization_failed');
+    expect(recover).toHaveBeenCalledWith({ gigId: 'gig-fail', scheduler: true, mode: 'cancel', expectedPaymentId: 'pay-fail' });
+    expect(stripeService.cancelAuthorization).not.toHaveBeenCalled();
+    // The job never writes a guessed cancellation. The real SQL contract owns
+    // that atomic change; this fake receipt only tests dispatch/notification.
+    expect(getTable('Gig')[0].status).toBe('assigned');
 
     // Should notify both parties
     expect(createNotification).toHaveBeenCalledTimes(2);

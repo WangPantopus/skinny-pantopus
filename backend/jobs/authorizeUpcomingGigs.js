@@ -7,7 +7,7 @@
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');
-const stripeService = require('../stripe/stripeService');
+const { recover } = require('../services/legacyGigAuthorization');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
 const logger = require('../utils/logger');
@@ -24,7 +24,7 @@ async function authorizeUpcomingGigs() {
       .from('Gig')
       .select('id, user_id, accepted_by, payment_id, title, scheduled_start')
       .eq('status', 'assigned')
-      .eq('payment_status', PAYMENT_STATES.READY_TO_AUTHORIZE)
+      .in('payment_status', [PAYMENT_STATES.READY_TO_AUTHORIZE, PAYMENT_STATES.AUTHORIZE_PENDING])
       .not('payment_id', 'is', null)
       .lte('scheduled_start', twentyFourHoursFromNow.toISOString());
 
@@ -43,35 +43,11 @@ async function authorizeUpcomingGigs() {
 
     for (const gig of gigsToAuthorize) {
       try {
-        // Get the payment record to find saved card
-        const { data: payment } = await supabaseAdmin
-          .from('Payment')
-          .select('*')
-          .eq('id', gig.payment_id)
-          .single();
+        const result = await recover({ gigId: gig.id, scheduler: true, mode: 'resume', expectedPaymentId: gig.payment_id });
 
-        if (!payment || !payment.stripe_payment_method_id) {
-          logger.warn('authorizeUpcomingGigs: no payment method for gig', {
-            gigId: gig.id,
-            paymentId: gig.payment_id,
-          });
-          continue;
-        }
-
-        // Create PaymentIntent off-session with manual capture
-        const result = await stripeService.createPaymentIntentForGig({
-          payerId: payment.payer_id,
-          payeeId: payment.payee_id,
-          gigId: gig.id,
-          amount: payment.amount_total,
-          paymentMethodId: payment.stripe_payment_method_id,
-          offSession: true,
-          existingPaymentId: gig.payment_id,
-        });
-
-        if (result.success) {
+        if (result.authorizationReady) {
           logger.info('authorizeUpcomingGigs: authorized', { gigId: gig.id, paymentId: gig.payment_id });
-        } else if (result.error === 'authentication_required') {
+        } else if (result.recoveryState === 'action_required') {
           // Off-session auth failed — notify the requester
           logger.warn('authorizeUpcomingGigs: auth failed (SCA required)', { gigId: gig.id });
 
@@ -103,7 +79,7 @@ async function authorizeUpcomingGigs() {
       .from('Gig')
       .select('id, user_id, accepted_by, payment_id, title')
       .eq('status', 'assigned')
-      .eq('payment_status', PAYMENT_STATES.AUTHORIZATION_FAILED)
+      .in('payment_status', [PAYMENT_STATES.AUTHORIZATION_FAILED, PAYMENT_STATES.CANCELED])
       .not('payment_id', 'is', null)
       .lte('scheduled_start', twoHoursFromNow.toISOString());
 
@@ -118,20 +94,8 @@ async function authorizeUpcomingGigs() {
 
     for (const gig of failedGigs) {
       try {
-        // Cancel the payment
-        await stripeService.cancelAuthorization(gig.payment_id);
-
-        // Cancel the gig
-        const nowIso = new Date().toISOString();
-        await supabaseAdmin.from('Gig').update({
-          status: 'cancelled',
-          cancelled_at: nowIso,
-          cancellation_reason: 'payment_authorization_failed',
-          cancellation_zone: 1,
-          cancellation_fee: 0,
-          payment_status: PAYMENT_STATES.CANCELED,
-          updated_at: nowIso,
-        }).eq('id', gig.id);
+        const result = await recover({ gigId: gig.id, scheduler: true, mode: 'cancel', expectedPaymentId: gig.payment_id });
+        if (!result.cancelled) continue;
 
         // Notify both parties
         createNotification({

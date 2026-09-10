@@ -141,19 +141,19 @@ router.post('/', async (req, res) => {
         break;
 
       case 'payment_intent.payment_failed':
-        await handlePaymentIntentFailed(event.data.object);
+        await handlePaymentIntentFailed(event.data.object, req);
         break;
 
       case 'payment_intent.canceled':
-        await handlePaymentIntentCanceled(event.data.object);
+        await handlePaymentIntentCanceled(event.data.object, req);
         break;
 
       case 'payment_intent.requires_action':
-        await handlePaymentIntentRequiresAction(event.data.object);
+        await handlePaymentIntentRequiresAction(event.data.object, req);
         break;
 
       case 'payment_intent.amount_capturable_updated':
-        await handleAmountCapturableUpdated(event.data.object);
+        await handleAmountCapturableUpdated(event.data.object, req);
         break;
 
       // ============ CHARGE EVENTS ============
@@ -333,6 +333,38 @@ async function findPaymentByField(field, value) {
 
 async function findPaymentByPI(paymentIntentId) {
   return findPaymentByField('stripe_payment_intent_id', paymentIntentId);
+}
+
+// Legacy assigned authorizations use fresh provider proof and their protected
+// receipt. Late webhook payloads must not downgrade or replace that identity.
+async function reconcileLegacyAuthorization(payment, req) {
+  if (payment.payment_type !== 'gig_payment' || !payment.gig_id || payment.metadata?.acceptance_attempt_id) return false;
+  const { data: gig, error } = await supabaseAdmin.from('Gig').select('id, status, payment_id')
+    .eq('id', payment.gig_id).maybeSingle();
+  if (error) throw new Error('Could not verify assigned authorization');
+  if (!gig || gig.status !== 'assigned' || gig.payment_id !== payment.id) return true;
+  if (!['ready_to_authorize', 'authorize_pending', 'authorization_failed', 'authorized', 'canceled'].includes(payment.payment_status)) return true;
+  const result = await require('../services/legacyGigAuthorization').recover({ gigId: gig.id, actorId: payment.payer_id,
+    expectedPaymentId: payment.id, mode: 'check' });
+  if (result.paymentChanged) {
+    req?.app.get('io')?.to(`gig:${gig.id}`).emit('gig:payment-update', {
+      gigId: gig.id, eventType: 'payment-update', timestamp: Date.now(),
+    });
+    // Attention follows the current verified receipt, never a stale webhook
+    // type. Unchanged checks do not replay the existing legacy notice.
+    if (!result.cancellationPending && result.paymentStatus === 'authorization_failed'
+        && ['requires_action', 'requires_payment_method'].includes(result.providerStatus)) {
+      const currentGig = await getGigInfo(gig.id);
+      const action = result.providerStatus === 'requires_action';
+      await createNotification({ userId: payment.payer_id, type: 'payment_auth_failed',
+        title: action ? 'Payment needs your confirmation' : 'Payment authorization failed',
+        body: `Your payment for "${currentGig?.title || 'a gig'}" needs your attention. Please open payment details to ${action ? 'complete verification' : 'update your payment method'}.`,
+        icon: action ? '🔐' : '⚠️', link: `/gigs/${gig.id}`,
+        metadata: { gig_id: gig.id, payment_id: payment.id },
+      });
+    }
+  }
+  return true;
 }
 
 async function findPaymentByCharge(chargeId) {
@@ -667,7 +699,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 
 }
 
-async function handlePaymentIntentFailed(paymentIntent) {
+async function handlePaymentIntentFailed(paymentIntent, req) {
   logger.warn('Payment intent failed', {
     paymentIntentId: paymentIntent.id,
     error: paymentIntent.last_payment_error?.message,
@@ -675,6 +707,7 @@ async function handlePaymentIntentFailed(paymentIntent) {
 
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
+  if (await reconcileLegacyAuthorization(payment, req)) return;
 
   // Check if this is an off-session auth failure
   const isAuthFailure = [
@@ -752,11 +785,12 @@ async function handlePaymentIntentFailed(paymentIntent) {
   }
 }
 
-async function handlePaymentIntentCanceled(paymentIntent) {
+async function handlePaymentIntentCanceled(paymentIntent, req) {
   logger.info('Payment intent canceled', { paymentIntentId: paymentIntent.id });
 
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
+  if (await reconcileLegacyAuthorization(payment, req)) return;
 
   // If still in a pre-canceled state, transition cleanly
   if (payment.payment_status !== PAYMENT_STATES.CANCELED) {
@@ -775,13 +809,14 @@ async function handlePaymentIntentCanceled(paymentIntent) {
   }
 }
 
-async function handlePaymentIntentRequiresAction(paymentIntent) {
+async function handlePaymentIntentRequiresAction(paymentIntent, req) {
   logger.info('Payment intent requires action', {
     paymentIntentId: paymentIntent.id,
   });
 
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
+  if (await reconcileLegacyAuthorization(payment, req)) return;
 
   // This fires when SCA/3DS is required.
   // Distinguish off-session (autoAuth job) vs on-session (user in browser/app).
@@ -823,7 +858,7 @@ async function handlePaymentIntentRequiresAction(paymentIntent) {
  * Fires when a manual-capture PaymentIntent is authorized (hold placed).
  * This is the confirmation that the bank has approved the hold.
  */
-async function handleAmountCapturableUpdated(paymentIntent) {
+async function handleAmountCapturableUpdated(paymentIntent, req) {
   logger.info('Amount capturable updated (auth hold placed)', {
     paymentIntentId: paymentIntent.id,
     amountCapturable: paymentIntent.amount_capturable,
@@ -834,6 +869,7 @@ async function handleAmountCapturableUpdated(paymentIntent) {
 
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
+  if (await reconcileLegacyAuthorization(payment, req)) return;
 
   // Process if in authorize_pending or authorization_failed (retry after off-session SCA failure)
   const validSourceStates = [PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.AUTHORIZATION_FAILED];

@@ -5,6 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const logger = require('../utils/logger');
 const {
   createNotification,
@@ -5270,6 +5271,9 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
 
     if (updateError || !updatedGig) {
       logger.error('Error starting gig', { error: updateError?.message || 'Payment snapshot changed', gigId, userId });
+      if (updateError?.code === '23514') {
+        return res.status(409).json({ error: 'Payment authorization changed. Please check its status before starting.', code: 'payer_authorization_required' });
+      }
       return res.status(500).json({ error: 'Failed to start gig' });
     }
 
@@ -7925,215 +7929,49 @@ router.post('/:gigId/complete-payment-setup', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * POST /api/gigs/:gigId/retry-authorization
- * Called when off-session authorization failed and user wants to retry on-session.
- * Returns a new clientSecret for frontend SCA completion.
- */
-router.post('/:gigId/retry-authorization', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status, price')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
+/** Recover only the current assigned payment; provider reads never imply success. */
+for (const [action, mode] of [
+  ['retry-authorization', 'resume'],
+  ['continue-authorization', 'resume'],
+  ['refresh-payment-status', 'check'],
+]) {
+  router.post(`/:gigId/${action}`, verifyToken, async (req, res) => {
+    const expectedSchema = Joi.object({
+      expectedActorId: Joi.string().min(1).max(128).required(),
+      expectedSessionScope: Joi.string().pattern(/^[a-f0-9]{64}$/).required(),
+      expectedPaymentId: Joi.string().uuid().required(),
+      expectedPayerId: Joi.string().uuid().required(),
+      expectedAmountCents: Joi.number().integer().min(50).required(),
+      expectedPayeeId: Joi.string().uuid().required(),
+      currency: Joi.string().valid('usd').required(),
+    });
+    const expected = mode === 'resume' ? expectedSchema.validate(req.body, { convert: false }) : { value: {} };
+    if (expected.error) return res.status(400).json({ error: 'Refresh the payment details before retrying authorization.', code: 'authorization_terms_required' });
+    if (mode === 'resume') {
+      if (expected.value.expectedActorId !== req.user.id) return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your signed-in account changed. Reopen payment details.' });
+      if (!requireExpectedSessionScope({ user: req.user, session: req.session, cookies: req.cookies,
+        headers: { ...req.headers, 'x-pantopus-session-scope': expected.value.expectedSessionScope } }, res, { required: true })) return;
     }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can retry authorization' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    if (gig.payment_status !== PAYMENT_STATES.AUTHORIZATION_FAILED) {
-      return res
-        .status(400)
-        .json({
-          error: `Payment is not in authorization_failed state (current: ${gig.payment_status})`,
-        });
-    }
-
-    // Get the existing payment to find payee and amount
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    if (payment.metadata?.acceptance_attempt_id) {
-      return res.status(409).json({
-        error: 'This bid payment must be recovered through its existing checkout.',
-        code: 'use_bid_payment_recovery',
+    try {
+      const scope = getRequestSessionScope(req);
+      const result = await require('../services/legacyGigAuthorization').recover({
+        gigId: req.params.gigId, actorId: req.user.id, mode,
+        ...(mode === 'resume' ? { expectedPaymentId: expected.value.expectedPaymentId, expectedTerms: {
+          payerId: expected.value.expectedPayerId, payeeId: expected.value.expectedPayeeId, amount: expected.value.expectedAmountCents, currency: expected.value.currency,
+        } } : {}),
+      });
+      const { paymentChanged, ...progress } = result;
+      if (paymentChanged) emitGigUpdate(req, req.params.gigId, 'payment-update');
+      return res.json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
+    } catch (error) {
+      logger.warn('Assigned authorization recovery failed', { gigId: req.params.gigId, code: error.code });
+      return res.status(error.statusCode || 503).json({
+        error: error.statusCode ? error.message : 'Authorization could not be checked. Please retry.',
+        code: error.code || 'authorization_unknown',
       });
     }
-
-    // Create a new on-session PaymentIntent (user can complete SCA in browser)
-    const result = await stripeService.createPaymentIntentForGig({
-      payerId: payment.payer_id,
-      payeeId: payment.payee_id,
-      gigId,
-      amount: payment.amount_total,
-      paymentMethodId: payment.stripe_payment_method_id,
-      offSession: false, // on-session — user completes in browser
-      existingPaymentId: gig.payment_id,
-    });
-
-    emitGigUpdate(req, gigId, 'payment-update');
-    res.json({
-      clientSecret: result.clientSecret,
-      paymentIntentId: result.paymentIntentId,
-      paymentId: result.paymentId,
-    });
-  } catch (err) {
-    logger.error('Retry authorization error', { error: err.message });
-    res.status(500).json({ error: 'Failed to retry authorization' });
-  }
-});
-
-/**
- * POST /api/gigs/:gigId/continue-authorization
- * Resume an in-progress on-session authorization (authorize_pending).
- * Returns the existing PaymentIntent clientSecret so frontend can confirm.
- */
-router.post('/:gigId/continue-authorization', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
-    }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can continue authorization' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    if (gig.payment_status !== PAYMENT_STATES.AUTHORIZE_PENDING) {
-      return res
-        .status(400)
-        .json({
-          error: `Payment is not in authorize_pending state (current: ${gig.payment_status})`,
-        });
-    }
-
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('id, stripe_payment_intent_id')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment || !payment.stripe_payment_intent_id) {
-      return res.status(404).json({ error: 'PaymentIntent not found for this gig payment' });
-    }
-
-    // Reconcile with Stripe in case webhook delivery is delayed.
-    const reconciled = await stripeService.syncPaymentAuthorizationStatus(payment.id);
-    if (reconciled?.payment_status === PAYMENT_STATES.AUTHORIZED) {
-      return res.json({
-        alreadyAuthorized: true,
-        paymentId: payment.id,
-      });
-    }
-
-    const clientSecret = await stripeService.getPaymentIntentClientSecret(
-      payment.stripe_payment_intent_id
-    );
-
-    res.json({
-      clientSecret,
-      paymentIntentId: payment.stripe_payment_intent_id,
-      paymentId: payment.id,
-    });
-  } catch (err) {
-    logger.error('Continue authorization error', { error: err.message });
-    res.status(500).json({ error: 'Failed to continue authorization' });
-  }
-});
-
-/**
- * POST /api/gigs/:gigId/refresh-payment-status
- * Owner-triggered status sync for authorize_pending payments.
- * Useful in local/test environments when webhooks are delayed.
- */
-router.post('/:gigId/refresh-payment-status', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
-    }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can refresh payment status' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('id, payment_status')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    let beforeStatus = payment.payment_status;
-    let afterStatus = beforeStatus;
-
-    if (beforeStatus === PAYMENT_STATES.AUTHORIZE_PENDING) {
-      const reconciled = await stripeService.syncPaymentAuthorizationStatus(payment.id);
-      afterStatus = reconciled?.payment_status || beforeStatus;
-    }
-
-    return res.json({
-      paymentStatus: afterStatus,
-      previousPaymentStatus: beforeStatus,
-      changed: beforeStatus !== afterStatus,
-    });
-  } catch (err) {
-    logger.error('Refresh payment status error', { error: err.message });
-    res.status(500).json({ error: 'Failed to refresh payment status' });
-  }
-});
+  });
+}
 
 /**
  * GET /api/gigs/:gigId/payment
@@ -8167,8 +8005,9 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
 
     const isPoster = String(gig.user_id) === String(userId);
     const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
-    if (!isPoster && !isWorker) {
-      return res.status(403).json({ error: 'Only the poster or worker can view payment details' });
+    const isDelegate = !isPoster && !isWorker && (await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage')).allowed;
+    if (!isPoster && !isWorker && !isDelegate) {
+      return res.status(403).json({ error: 'Only the poster, authorized manager, or worker can view payment details' });
     }
 
     if (!gig.payment_id) {
@@ -8201,6 +8040,15 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         const refundedTip = Number(tip?.refunded_amount || 0) || 0;
         return sum + Math.max(0, grossTip - refundedTip);
       }, 0);
+    }
+
+    const { data: currentGig, error: currentGigError } = await supabaseAdmin.from('Gig')
+      .select('id, user_id, accepted_by, payment_id').eq('id', gig.id).maybeSingle();
+    if (currentGigError) return res.status(503).json({ error: 'Payment verification is unavailable' });
+    if (!currentGig || currentGig.user_id !== gig.user_id || currentGig.accepted_by !== gig.accepted_by
+      || currentGig.payment_id !== gig.payment_id) return res.status(409).json({ error: 'Payment ownership changed. Please refresh.' });
+    if (isDelegate && !(await getGigOwnerAccess(currentGig.user_id, userId, 'gigs.manage')).allowed) {
+      return res.status(403).json({ error: 'Your permission to view this payment changed.' });
     }
 
     // Don't expose sensitive fields to the worker

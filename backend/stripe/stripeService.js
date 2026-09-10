@@ -958,6 +958,12 @@ class StripeService {
         if (existing.metadata?.acceptance_attempt_id) {
           throw conflict('Recover the existing bid authorization before changing its payment');
         }
+        const { paymentChanged: _paymentChanged, ...result } = await require('../services/legacyGigAuthorization').recover({
+          gigId, actorId: offSession ? null : payerId, scheduler: offSession, mode: 'resume',
+          expectedPaymentId: existingPaymentId, expectedTerms: { payerId, payeeId, amount, currency },
+        });
+        return { ...result, success: result.authorizationReady,
+          ...(!result.authorizationReady && result.recoveryState === 'action_required' ? { error: 'authentication_required' } : {}) };
       }
       const payeeAccount = await this._getPayeeAccountOptional(payeeId);
       const customerId = await this.getOrCreateCustomer(payerId);
@@ -1008,41 +1014,7 @@ class StripeService {
       const now = new Date().toISOString();
       const authExpires = new Date(Date.now() + AUTH_HOLD_MS).toISOString();
 
-      if (existingPaymentId) {
-        // Update existing Payment record (from SetupIntent → PaymentIntent)
-        await transitionPaymentStatus(existingPaymentId, initialStatus, {
-          stripe_payment_intent_id: paymentIntent.id,
-          stripe_payment_method_id: paymentMethodId || null,
-          authorization_expires_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? authExpires : null,
-          payment_attempted_at: now,
-          payment_succeeded_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? now : null,
-          metadata,
-          ...(description ? { description } : {}),
-        });
-
-        const { data: updated } = await supabaseAdmin
-          .from('Payment')
-          .select('*')
-          .eq('id', existingPaymentId)
-          .single();
-
-        logger.info('PaymentIntent created (existing payment)', {
-          paymentIntentId: paymentIntent.id,
-          paymentId: existingPaymentId,
-          status: initialStatus,
-          amount,
-          gigId,
-        });
-
-        return {
-          success: true,
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-          paymentId: existingPaymentId,
-          payment: updated,
-        };
-
-      } else {
+      {
         // Insert new Payment record
         const { data: payment, error: dbError } = await supabaseAdmin
           .from('Payment')
@@ -1114,22 +1086,6 @@ class StripeService {
       }
 
     } catch (err) {
-      // Handle SCA / authentication_required for off-session
-      if (offSession && err.code === 'authentication_required' && existingPaymentId) {
-        logger.warn('Off-session auth required', { paymentId: existingPaymentId, gigId });
-        await transitionPaymentStatus(existingPaymentId, PAYMENT_STATES.AUTHORIZATION_FAILED, {
-          off_session_auth_required: true,
-          failure_code: err.code,
-          failure_message: err.message,
-        });
-        return {
-          success: false,
-          error: 'authentication_required',
-          paymentId: existingPaymentId,
-          paymentIntentId: err.raw?.payment_intent?.id,
-        };
-      }
-
       logger.error('Error creating PaymentIntent', { error: err.message, gigId });
       throw err;
     }

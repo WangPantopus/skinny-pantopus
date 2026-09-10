@@ -3,7 +3,7 @@ const { resetTables, seedTable, getTable, setRpcMock } = db;
 const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCreate = jest.fn(), mockCancel = jest.fn();
 jest.mock('stripe', () => ({ paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, create: mockCreate, cancel: mockCancel } }));
 jest.mock('../__mocks__/verifyToken', () => {
-  const verify = (req, res, next) => { req.user = { id: req.headers['x-test-user-id'] }; next(); };
+  const verify = (req, res, next) => { req.user = { id: req.headers['x-test-user-id'] }; req.session = { id: 'test-session' }; next(); };
   verify.requireAdmin = (req, res, next) => next(); return verify;
 });
 jest.mock('../../utils/businessPermissions', () => ({ hasPermission: jest.fn().mockResolvedValue(false),
@@ -52,7 +52,10 @@ describe('actual paid-gig owner routes', () => {
   });
   test('legacy authorization retry cannot replace an operation-backed payment intent', async () => {
     assigned(); getTable('Gig')[0].payment_status = 'authorization_failed';
-    const result = await post('gig/retry-authorization');
+    setRpcMock(async () => ({ data: { error: 'BID_RECOVERY' } }));
+    const result = await request(app).post('/api/gigs/gig/retry-authorization').set('x-test-user-id', 'payer')
+      .send({ expectedActorId: 'payer', expectedSessionScope: require('../../utils/requestSessionScope').getRequestSessionScope({ user: { id: 'payer' }, session: { id: 'test-session' } }).session_scope, expectedPaymentId: 'aafd0000-0000-4000-8000-000000000001', expectedPayerId: 'aafd0000-0000-4000-8000-000000000003', expectedAmountCents: 1250,
+        expectedPayeeId: 'aafd0000-0000-4000-8000-000000000002', currency: 'usd' });
     expect(result.status).toBe(409); expect(result.body.code).toBe('use_bid_payment_recovery');
     expect(mockCreate).not.toHaveBeenCalled();
     expect(getTable('Payment')[0].stripe_payment_intent_id).toBe('pi_one');
