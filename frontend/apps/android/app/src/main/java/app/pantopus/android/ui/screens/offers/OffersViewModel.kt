@@ -17,12 +17,11 @@ import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.BidderUserDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
-import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
-import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -211,7 +210,7 @@ class OffersViewModel
         private val repo: OffersRepository,
         // Accept / reject live on the gig bid routes, not the offers ones.
         private val gigsRepo: GigsRepository,
-        private val checkoutTokens: TokenStorage,
+        private val checkoutIdentities: GigPaymentIdentitySource,
     ) : ViewModel() {
         private var received: List<BidDto> = emptyList()
         private var sent: List<BidDto> = emptyList()
@@ -245,7 +244,9 @@ class OffersViewModel
             GigBidCheckoutCoordinator(
                 gigsRepo,
                 viewModelScope,
-                checkoutTokens::gigCheckoutIdentity,
+                checkoutIdentities::checkoutIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities::permitsAnonymousRead,
                 onAccepted = { _, _ -> finishAction(refetch = true) },
                 onCanceled = { finishAction(refetch = true) },
             )

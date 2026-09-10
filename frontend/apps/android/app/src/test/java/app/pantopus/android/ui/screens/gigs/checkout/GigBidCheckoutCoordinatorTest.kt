@@ -14,8 +14,10 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,13 +44,57 @@ class GigBidCheckoutCoordinatorTest {
         clientSecret = if (ready) null else "pi_one_secret_synthetic", paymentIntentId = "pi_one", paymentId = "payment",
     )
 
-    private fun TestScope.coordinator(): GigBidCheckoutCoordinator {
+    private fun TestScope.coordinator(identityReader: suspend () -> GigCheckoutIdentity? = { identity }): GigBidCheckoutCoordinator {
         coEvery { repo.bids("gig") } returns NetworkResult.Success(GigBidsResponse(emptyList()))
         coEvery { repo.acceptBid("gig", "bid") } returns NetworkResult.Success(receipt())
         coEvery { repo.finalizeAcceptBid("gig", "bid") } returns NetworkResult.Success(receipt("accepted"))
         coEvery { repo.abortAcceptBid("gig", "bid") } returns NetworkResult.Success(receipt("pending"))
-        return GigBidCheckoutCoordinator(repo, this, { identity }, { _, _ -> acceptedCount++ }, admission = admission)
+        return GigBidCheckoutCoordinator(
+            repo,
+            this,
+            identityReader,
+            { identity?.toString() },
+            { identity == null },
+            { _, _ -> acceptedCount++ },
+            admission = admission,
+        )
     }
+
+    @Test fun suspendedScopeCheckCannotUndoPermanentRetirement() =
+        runTest {
+            val opening = identity
+            val waiting = CompletableDeferred<GigCheckoutIdentity?>()
+            var reads = 0
+            val c = coordinator { if (++reads == 2) waiting.await() else identity }
+            val inFlight = async { c.isCurrentReadScope() }
+            runCurrent()
+            identity = identity?.copy(sessionId = "replacement")
+            assertFalse(c.isCurrentReadScope())
+            identity = opening
+            waiting.complete(opening)
+            assertFalse(inFlight.await())
+            assertFalse(c.isCurrentReadScope())
+        }
+
+    @Test fun delayed_first_identity_cannot_bind_a_replacement_actor_or_session() =
+        runTest {
+            val opening = checkNotNull(identity)
+            for (replacement in listOf(opening.copy(userId = "other"), opening.copy(sessionId = "new-session"))) {
+                identity = opening
+                val deferred = CompletableDeferred<GigCheckoutIdentity?>()
+                val c = coordinator { deferred.await() }
+                identity = replacement
+                c.start("gig", "bid")
+                deferred.complete(replacement)
+                advanceUntilIdle()
+                assertFalse(c.isCurrentReadScope())
+                assertFalse(c.isCurrentIdentity())
+                assertEquals(GigBidCheckoutPhase.Idle, c.state.value.phase)
+                assertEquals(0, acceptedCount)
+            }
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+            coVerify(exactly = 0) { repo.finalizeAcceptBid(any(), any()) }
+        }
 
     @Test fun anonymous_and_legacy_read_scopes_remain_stable_but_cannot_start_payment() =
         runTest {
@@ -99,6 +145,31 @@ class GigBidCheckoutCoordinatorTest {
             advanceUntilIdle()
             assertEquals(GigBidCheckoutPhase.Idle, coordinator.state.value.phase)
             coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
+
+    @Test fun retired_identity_keeps_existing_sdk_admission_until_original_callback() =
+        runTest {
+            val opening = identity
+            val first = coordinator()
+            first.start("gig", "bid")
+            advanceUntilIdle()
+            val oldToken = checkNotNull(first.state.value.presentation).token
+            assertTrue(first.claimPresentation(oldToken))
+            identity = identity?.copy(sessionId = "replacement")
+            assertFalse(first.isCurrentReadScope())
+            identity = opening
+            assertFalse(first.isCurrentReadScope())
+            val second = coordinator()
+            second.start("gig", "bid")
+            advanceUntilIdle()
+            assertFalse(second.claimPresentation(checkNotNull(second.state.value.presentation).token))
+            first.onSheetResult(oldToken, CheckoutOutcome.Paid)
+            advanceUntilIdle()
+            second.retry()
+            advanceUntilIdle()
+            assertTrue(second.claimPresentation(checkNotNull(second.state.value.presentation).token))
+            assertEquals(0, acceptedCount)
+            coVerify(exactly = 0) { repo.finalizeAcceptBid(any(), any()) }
         }
 
     @Test fun another_screen_cannot_launch_the_same_gig_sheet_until_old_sdk_callback_returns() =

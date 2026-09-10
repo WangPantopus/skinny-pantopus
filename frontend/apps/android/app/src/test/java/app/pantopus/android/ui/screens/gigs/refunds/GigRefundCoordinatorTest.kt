@@ -20,6 +20,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -89,7 +90,7 @@ class GigRefundCoordinatorTest {
         "usd", status, canRetry, attempt.requestedAmountCents, attempt.reason, attempt.description,
     )
 
-    private fun TestScope.coordinator(): GigRefundCoordinator {
+    private fun TestScope.coordinator(identityReader: suspend () -> GigRefundIdentity? = { identity }): GigRefundCoordinator {
         coEvery { repo.refunds(paymentId) } returns NetworkResult.Success(PaymentRefundHistoryDto(emptyList(), summary()))
         coEvery { repo.refund(paymentId, any()) } coAnswers {
             val attempt = secondArg<PaymentRefundAttempt>()
@@ -97,8 +98,51 @@ class GigRefundCoordinatorTest {
             posts += attempt
             NetworkResult.Failure(NetworkError.Server(503, null))
         }
-        return GigRefundCoordinator(repo, store, this, { identity }, moshi, onChanged = { changed++ })
+        return GigRefundCoordinator(repo, store, this, identityReader, moshi, { identity?.toString() }, onChanged = { changed++ })
     }
+
+    @Test fun suspendedScopeCheckCannotUndoPermanentRetirement() =
+        runTest {
+            val opening = identity
+            val waiting = CompletableDeferred<GigRefundIdentity?>()
+            var reads = 0
+            val c = coordinator { if (++reads == 2) waiting.await() else identity }
+            val inFlight = async { c.isCurrentIdentity() }
+            runCurrent()
+            identity = identity?.copy(session = "replacement")
+            assertFalse(c.isCurrentIdentity())
+            identity = opening
+            waiting.complete(opening)
+            assertFalse(inFlight.await())
+            assertFalse(c.isCurrentIdentity())
+        }
+
+    @Test fun delayedOpeningIdentityCannotAdoptReplacementActorOrSession() =
+        runTest {
+            val opening = checkNotNull(identity)
+            val saved = PaymentRefundAttempt(requestId, null, "requested_by_customer")
+            store.values["${opening.apiOrigin}|${opening.actorId}|$paymentId"] = saved
+            for (replacement in listOf(opening.copy(actorId = "other"), opening.copy(session = "new-session"))) {
+                identity = opening
+                val deferred = CompletableDeferred<GigRefundIdentity?>()
+                val c = coordinator { deferred.await() }
+                c.open("gig", payment)
+                identity = replacement
+                deferred.complete(replacement)
+                advanceUntilIdle()
+                c.retry()
+                c.checkStatus()
+                advanceUntilIdle()
+                assertTrue(c.state.value.invalidated)
+                assertFalse(c.state.value.mayRequest)
+                assertFalse(c.state.value.mayRetry)
+                assertNull(c.state.value.summary)
+                assertEquals(saved, store.values.values.single())
+                assertEquals(0, changed)
+            }
+            coVerify(exactly = 0) { repo.refunds(any()) }
+            coVerify(exactly = 0) { repo.refund(any(), any()) }
+        }
 
     @Test fun unknownResultSurvivesRestartAndRetriesOriginalTerms() =
         runTest {

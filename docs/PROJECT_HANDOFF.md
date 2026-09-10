@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android payment opening identity — September 10
+
+Bid checkout, refunds and assigned-task authorization now bind their opening
+account, stored credentials and actual API origin before asynchronous work.
+Missing or inconsistent signed-in credentials cannot become anonymous access;
+retired actions stay retired, and an old payment sheet keeps its admission until
+its original callback. The [identity report](paid-gig-android-payment-identity-2026-09-10.md)
+records passing final checks/build, source quality and independent review.
+
+**Next:** durable tip creation/recovery and exact provider completion proof before
+repairing tip client success states, then complete provider/installed journeys and
+remaining fee, started-work, dispute/Connect/debt and capacity work. Tip migration
+version `20260910190000` is reserved; Home already owns `170000` and `180000`.
+Combined migration versions/dependencies must be audited before integration.
+Home iOS private attachments are pushed as `502de726f`, Android task routing as
+`f5ca4acfd`, with installed household acceptance, Android attachments and browser
+retained forms underway. PRs #32/#34 remain unfinished drafts. All paid services
+remain one final launch-preparation step. Completed physical Beacon and saved-card
+acceptance must not be repeated. No hosted data or paid service changed.
+
 ### Android task stop recovery checkpoint — September 10
 
 All four Android task-stop actions now retain the original command, verify exact

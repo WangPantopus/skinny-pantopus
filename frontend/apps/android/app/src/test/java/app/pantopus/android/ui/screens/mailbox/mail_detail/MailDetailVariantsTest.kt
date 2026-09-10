@@ -14,6 +14,7 @@ import app.pantopus.android.data.mailbox.MailboxDocumentRepository
 import app.pantopus.android.data.mailbox.MailboxPackageRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.mailbox.MailboxVaultRepository
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import io.mockk.coEvery
@@ -66,7 +67,7 @@ class MailDetailVariantsTest {
             packageRepo = packageRepo,
             documentRepo = documentRepo,
             savedStateHandle = SavedStateHandle(mapOf(MAIL_DETAIL_MAIL_ID_KEY to "m1")),
-            checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+            checkoutIdentities = gigIdentityFixture(),
         )
 
     private fun makeDetail(

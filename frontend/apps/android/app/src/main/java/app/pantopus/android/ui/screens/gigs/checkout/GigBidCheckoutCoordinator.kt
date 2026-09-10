@@ -2,12 +2,10 @@
 
 package app.pantopus.android.ui.screens.gigs.checkout
 
-import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.models.gigs.GigBidAcceptResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import kotlinx.coroutines.CancellationException
@@ -20,9 +18,6 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 data class GigCheckoutIdentity(val userId: String, val sessionId: String?, val apiOrigin: String)
-
-suspend fun TokenStorage.gigCheckoutIdentity(): GigCheckoutIdentity? =
-    sessionIdentity()?.let { (userId, sessionId) -> GigCheckoutIdentity(userId, sessionId, BuildConfig.PANTOPUS_API_BASE_URL) }
 
 enum class GigBidCheckoutPhase {
     Idle,
@@ -60,6 +55,8 @@ class GigBidCheckoutCoordinator(
     private val repository: GigsRepository,
     private val scope: CoroutineScope,
     private val identity: suspend () -> GigCheckoutIdentity?,
+    private val scopeMarker: () -> String?,
+    private val anonymousRead: suspend () -> Boolean,
     private val onAccepted: (String, String) -> Unit,
     private val onCanceled: () -> Unit = {},
     private val admission: GigBidCheckoutAdmission = GigBidCheckoutAdmission.shared,
@@ -69,7 +66,9 @@ class GigBidCheckoutCoordinator(
 
     // Start resolving on construction; every screen awaits this before loading
     // its data. Dismissal never adopts a later account or login session.
+    private val initialScopeMarker = scopeMarker()
     private val initialIdentity = scope.async(start = CoroutineStart.UNDISPATCHED) { readIdentity() }
+    private var identityInvalidated = false
     private var generation = 0
     private var claimedPresentation: String? = null
 
@@ -210,12 +209,37 @@ class GigBidCheckoutCoordinator(
         }
 
     /** Anonymous and legacy sessions may read; they cannot authorize a payment. */
-    suspend fun isCurrentReadScope(): Boolean = initialIdentity.await() == readIdentity()
+    suspend fun isCurrentReadScope(): Boolean {
+        if (identityInvalidated) return false
+        if (initialScopeMarker != scopeMarker()) return invalidateIdentity()
+        val opening = initialIdentity.await()
+        val current = readIdentity()
+        val readable = opening != null || readAnonymousProof()
+        val matchesOpening = opening == current && readable && initialScopeMarker == scopeMarker()
+        if (identityInvalidated || !matchesOpening) return invalidateIdentity()
+        return true
+    }
+
+    private suspend fun readAnonymousProof(): Boolean =
+        try {
+            anonymousRead()
+        } catch (canceled: CancellationException) {
+            throw canceled
+        } catch (_: Exception) {
+            false
+        }
 
     /** Payment admission requires the same complete initial authenticated session. */
     suspend fun isCurrentIdentity(): Boolean {
+        if (!isCurrentReadScope()) return false
         val owner = initialIdentity.await()
-        return !owner?.sessionId.isNullOrBlank() && readIdentity() == owner
+        return !owner?.sessionId.isNullOrBlank()
+    }
+
+    private fun invalidateIdentity(): Boolean {
+        identityInvalidated = true
+        dismiss()
+        return false
     }
 
     private suspend fun owns(ticket: Int): Boolean {

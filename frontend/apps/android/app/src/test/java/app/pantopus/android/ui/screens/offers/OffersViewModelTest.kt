@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
@@ -142,7 +143,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             vm.load()
             val state = vm.state.value
@@ -163,7 +164,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             vm.load()
             val state = vm.state.value
@@ -182,7 +183,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             vm.load()
             vm.selectTab(OffersTab.SENT)
@@ -204,7 +205,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             vm.load()
             val state = vm.state.value
@@ -411,7 +412,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             assertNotNull(vm.topBarAction.value)
             assertEquals(PantopusIcon.Filter, vm.topBarAction.value?.icon)
@@ -424,7 +425,7 @@ class OffersViewModelTest {
             OffersViewModel(
                 repo,
                 gigsRepo,
-                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                checkoutIdentities = gigIdentityFixture(),
             )
         assertEquals(2, vm.tabs.value.size)
         assertEquals(OffersTab.RECEIVED, vm.tabs.value[0].id)
@@ -442,7 +443,7 @@ class OffersViewModelTest {
                 OffersViewModel(
                     repo,
                     gigsRepo,
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                 )
             vm.load()
             vm.selectTab(OffersTab.SENT)

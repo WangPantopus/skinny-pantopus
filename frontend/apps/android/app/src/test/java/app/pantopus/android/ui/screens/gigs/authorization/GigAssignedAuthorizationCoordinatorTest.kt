@@ -70,11 +70,59 @@ class GigAssignedAuthorizationCoordinatorTest {
             clientSecret = null,
         )
 
-    private fun TestScope.coordinator(): GigAssignedAuthorizationCoordinator {
+    private fun TestScope.coordinator(
+        identityReader: suspend () -> GigCheckoutIdentity? = { identity },
+    ): GigAssignedAuthorizationCoordinator {
         coEvery { repo.assignedAuthorizationStatus(gigId) } returns NetworkResult.Success(receipt())
         coEvery { repo.continueAssignedAuthorization(gigId, any()) } returns NetworkResult.Success(receipt())
-        return GigAssignedAuthorizationCoordinator(repo, this, { identity }, onReady = { readyCalls++ }, admission = admission)
+        return GigAssignedAuthorizationCoordinator(
+            repo,
+            this,
+            identityReader,
+            { identity?.toString() },
+            onReady = { readyCalls++ },
+            admission = admission,
+        )
     }
+
+    @Test fun suspendedScopeCheckCannotUndoPermanentRetirement() =
+        runTest {
+            val opening = identity
+            val waiting = CompletableDeferred<GigCheckoutIdentity?>()
+            var reads = 0
+            val c = coordinator { if (++reads == 2) waiting.await() else identity }
+            val inFlight = async { c.isCurrentReadScope() }
+            runCurrent()
+            identity = identity?.copy(sessionId = "replacement")
+            assertFalse(c.isCurrentReadScope())
+            identity = opening
+            waiting.complete(opening)
+            assertFalse(inFlight.await())
+            assertFalse(c.isCurrentReadScope())
+        }
+
+    @Test fun `delayed opening identity cannot adopt replacement actor or session`() =
+        runTest {
+            val opening = checkNotNull(identity)
+            for (replacement in listOf(opening.copy(userId = "other"), opening.copy(sessionId = "new-session"))) {
+                identity = opening
+                val deferred = CompletableDeferred<GigCheckoutIdentity?>()
+                val c = coordinator { deferred.await() }
+                c.open(gig, payment)
+                identity = replacement
+                deferred.complete(replacement)
+                advanceUntilIdle()
+                c.continueAuthorization()
+                c.checkStatus()
+                advanceUntilIdle()
+                assertTrue(c.state.value.invalidated)
+                assertNull(c.state.value.progress)
+                assertNull(c.state.value.presentation)
+                assertEquals(0, readyCalls)
+            }
+            coVerify(exactly = 0) { repo.assignedAuthorizationStatus(any()) }
+            coVerify(exactly = 0) { repo.continueAssignedAuthorization(any(), any()) }
+        }
 
     @Test fun `cold opening only checks exact status and retains no secret in visible receipt`() =
         runTest {

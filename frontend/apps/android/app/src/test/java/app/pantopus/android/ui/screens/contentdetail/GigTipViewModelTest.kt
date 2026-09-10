@@ -29,6 +29,7 @@ import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -130,7 +131,7 @@ class GigTipViewModelTest {
             activeNotifier,
             gigsV2Repo,
             SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-            checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+            checkoutIdentities = gigIdentityFixture(),
             refundFactory = mockk(relaxed = true),
             authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
             stopFactory = mockk(relaxed = true),

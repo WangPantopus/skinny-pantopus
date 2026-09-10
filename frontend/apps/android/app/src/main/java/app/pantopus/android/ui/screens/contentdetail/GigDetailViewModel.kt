@@ -27,7 +27,6 @@ import app.pantopus.android.data.api.models.reviews.CreateReviewBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
-import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigOwnerActionsRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
@@ -39,7 +38,7 @@ import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
-import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
@@ -121,7 +120,7 @@ class GigDetailViewModel
         // "share live status" link.
         private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository,
         savedStateHandle: SavedStateHandle,
-        private val checkoutTokens: TokenStorage,
+        private val checkoutIdentities: GigPaymentIdentitySource,
         refundFactory: GigRefundFactory,
         authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
         stopFactory: app.pantopus.android.ui.screens.gigs.stop.GigStopFactory,
@@ -503,7 +502,9 @@ class GigDetailViewModel
             GigBidCheckoutCoordinator(
                 repo,
                 viewModelScope,
-                checkoutTokens::gigCheckoutIdentity,
+                checkoutIdentities::checkoutIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities::permitsAnonymousRead,
                 onAccepted = { _, _ -> silentRefetch() },
                 onCanceled = { silentRefetch() },
             )

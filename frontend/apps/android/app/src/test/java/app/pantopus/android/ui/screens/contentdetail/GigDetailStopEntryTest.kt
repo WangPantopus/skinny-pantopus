@@ -22,6 +22,7 @@ import app.pantopus.android.data.gigs.GigStopRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.gigs.PendingGigStopStore
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.gigs.stop.GigStopCoordinator
 import app.pantopus.android.ui.screens.gigs.stop.GigStopIdentity
 import com.squareup.moshi.Moshi
@@ -90,7 +91,7 @@ class GigDetailStopEntryTest {
             filesRepo = mockk(relaxed = true), paymentsRepo = mockk(relaxed = true), reviewsRepo = mockk(relaxed = true),
             socket = mockk(relaxed = true), activeNotifier = mockk(relaxed = true), gigsV2Repo = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to gig)),
-            checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns (actor to "session") },
+            checkoutIdentities = gigIdentityFixture { actor to "session" },
             refundFactory = mockk(relaxed = true),
             authorizationFactory =
                 mockk {

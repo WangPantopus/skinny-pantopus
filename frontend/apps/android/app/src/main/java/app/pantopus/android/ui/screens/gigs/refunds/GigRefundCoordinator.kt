@@ -49,11 +49,13 @@ class GigRefundCoordinator(
     private val scope: CoroutineScope,
     private val identity: suspend () -> GigRefundIdentity?,
     moshi: Moshi,
+    private val scopeMarker: () -> String?,
     identityChanges: Flow<Unit> = emptyFlow(),
     private val onChanged: () -> Unit = {},
 ) {
     private data class Target(val paymentId: String, val total: Int, val key: String)
 
+    private val initialScopeMarker = scopeMarker()
     private val initialIdentity = scope.async(start = CoroutineStart.UNDISPATCHED) { readIdentity() }
     private val _state = MutableStateFlow(GigRefundState())
     val state = _state.asStateFlow()
@@ -67,14 +69,21 @@ class GigRefundCoordinator(
 
     suspend fun isCurrentIdentity(): Boolean {
         if (_state.value.invalidated) return false
+        if (initialScopeMarker != scopeMarker()) return invalidateIdentity()
         val first = initialIdentity.await()
-        if (first == null || readIdentity() != first) {
-            generation++
-            target = null
-            _state.value = GigRefundState(visible = _state.value.visible, invalidated = true)
-            return false
+        val current = readIdentity()
+        val matchingIdentity = first != null && current == first
+        if (_state.value.invalidated || !matchingIdentity || initialScopeMarker != scopeMarker()) {
+            return invalidateIdentity()
         }
         return true
+    }
+
+    private fun invalidateIdentity(): Boolean {
+        generation++
+        target = null
+        _state.value = GigRefundState(visible = _state.value.visible, invalidated = true)
+        return false
     }
 
     fun open(

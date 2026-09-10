@@ -49,10 +49,12 @@ class GigAssignedAuthorizationCoordinator(
     private val repository: GigsRepository,
     private val scope: CoroutineScope,
     private val identity: suspend () -> GigCheckoutIdentity?,
+    private val scopeMarker: () -> String?,
     identityChanges: Flow<Unit> = emptyFlow(),
     private val onReady: () -> Unit = {},
     private val admission: GigBidCheckoutAdmission = GigBidCheckoutAdmission.shared,
 ) {
+    private val initialScopeMarker = scopeMarker()
     private val initialIdentity = scope.async(start = CoroutineStart.UNDISPATCHED) { readIdentity() }
     private val _state = MutableStateFlow(GigAssignedAuthorizationState())
     val state = _state.asStateFlow()
@@ -69,8 +71,14 @@ class GigAssignedAuthorizationCoordinator(
     /** The existing screen cannot bind replacement account/session data after construction. */
     suspend fun isCurrentReadScope(): Boolean {
         if (_state.value.invalidated) return false
+        if (initialScopeMarker != scopeMarker()) {
+            invalidate()
+            return false
+        }
         val opening = initialIdentity.await()
-        if (opening == null || opening != readIdentity()) {
+        val current = readIdentity()
+        val matchingIdentity = opening != null && opening == current
+        if (_state.value.invalidated || !matchingIdentity || initialScopeMarker != scopeMarker()) {
             invalidate()
             return false
         }

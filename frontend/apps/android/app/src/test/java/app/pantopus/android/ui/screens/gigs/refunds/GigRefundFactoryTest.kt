@@ -5,10 +5,13 @@ package app.pantopus.android.ui.screens.gigs.refunds
 import app.pantopus.android.data.api.models.gigs.GigPaymentDto
 import app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto
 import app.pantopus.android.data.api.models.payments.RefundPaymentSummary
+import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.payments.PersistentPendingRefundStore
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,6 +27,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Retrofit
+import java.security.MessageDigest
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GigRefundFactoryTest {
@@ -33,8 +37,18 @@ class GigRefundFactoryTest {
             val repository = mockk<PaymentsRepository>()
             val store = mockk<PersistentPendingRefundStore>()
             val tokenFlow = MutableStateFlow<String?>("legacy-one")
-            coEvery { tokens.sessionIdentity() } returns ("payer" to null)
-            coEvery { tokens.accessToken() } coAnswers { tokenFlow.value }
+            coEvery { tokens.sessionCredentials() } coAnswers {
+                tokenFlow.value?.let { TokenStorage.SessionCredentials("payer", null, it) }
+            }
+            every { tokens.accessTokenMarker() } answers {
+                tokenFlow.value?.let { token ->
+                    MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
+                }
+            }
+            val authState =
+                MutableStateFlow<AuthRepository.State>(
+                    AuthRepository.State.SignedIn(UserDto("payer", "test@example.invalid", "Test", null)),
+                )
             every { tokens.accessTokenFlow } returns tokenFlow
             val id = "11111111-1111-4111-8111-111111111111"
             val summary = RefundPaymentSummary(id, "captured_hold", 1000, currency = "usd", payeeReleaseStatus = "held")
@@ -44,8 +58,11 @@ class GigRefundFactoryTest {
                 GigRefundFactory(
                     repository,
                     store,
-                    tokens,
-                    Retrofit.Builder().baseUrl("https://injected.example.invalid/").build(),
+                    GigPaymentIdentitySource(
+                        tokens,
+                        mockk { every { state } returns authState },
+                        Retrofit.Builder().baseUrl("https://injected.example.invalid/").build(),
+                    ),
                     Moshi.Builder().build(),
                 )
             val flow = factory.create(backgroundScope) {}

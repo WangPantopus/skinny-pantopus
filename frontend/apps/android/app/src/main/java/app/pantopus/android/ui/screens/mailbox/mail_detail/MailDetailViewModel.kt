@@ -19,14 +19,13 @@ import app.pantopus.android.data.api.models.mailbox.v2.RecordsDetailDto
 import app.pantopus.android.data.api.models.mailbox.vault.VaultFolderDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
-import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.mailbox.MailboxDocumentRepository
 import app.pantopus.android.data.mailbox.MailboxPackageRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.mailbox.MailboxVaultRepository
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
-import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailTrust
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageBodyContent
@@ -155,7 +154,7 @@ class MailDetailViewModel
         private val packageRepo: MailboxPackageRepository,
         private val documentRepo: MailboxDocumentRepository,
         savedStateHandle: SavedStateHandle,
-        private val checkoutTokens: TokenStorage,
+        private val checkoutIdentities: GigPaymentIdentitySource,
     ) : ViewModel() {
         private val mailId: String =
             checkNotNull(savedStateHandle.get<String>(MAIL_DETAIL_MAIL_ID_KEY)) {
@@ -238,7 +237,9 @@ class MailDetailViewModel
             GigBidCheckoutCoordinator(
                 gigsRepo,
                 viewModelScope,
-                checkoutTokens::gigCheckoutIdentity,
+                checkoutIdentities::checkoutIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities::permitsAnonymousRead,
                 onAccepted = { gigId, bidId ->
                     val current = _state.value as? MailDetailUiState.Loaded
                     val gig = current?.content?.gigDetail

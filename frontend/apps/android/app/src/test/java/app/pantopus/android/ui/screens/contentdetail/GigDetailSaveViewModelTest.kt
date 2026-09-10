@@ -37,6 +37,7 @@ import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -144,7 +145,7 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                checkoutIdentities = gigIdentityFixture(),
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
@@ -272,7 +273,7 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                checkoutIdentities = gigIdentityFixture(),
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
@@ -361,7 +362,7 @@ class GigDetailSaveViewModelTest {
                     activeNotifier,
                     gigsV2Repo,
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    checkoutIdentities = gigIdentityFixture(),
                     refundFactory = mockk(relaxed = true),
                     authorizationFactory = authorizationFactory(),
                     stopFactory = mockk(relaxed = true),
@@ -441,7 +442,7 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } coAnswers { checkoutIdentity() } },
+                checkoutIdentities = gigIdentityFixture(checkoutIdentity),
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
