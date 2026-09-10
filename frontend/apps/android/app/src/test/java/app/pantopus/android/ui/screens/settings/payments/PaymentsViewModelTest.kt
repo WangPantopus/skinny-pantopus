@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.settings.payments
 
 import app.cash.turbine.test
 import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
+import app.pantopus.android.data.api.models.payments.ConfirmAddCardResponse
 import app.pantopus.android.data.api.models.payments.EarningsSummaryDto
 import app.pantopus.android.data.api.models.payments.PaymentHistoryEntryDto
 import app.pantopus.android.data.api.models.payments.PaymentHistoryGigDto
@@ -18,8 +19,11 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
 import app.pantopus.android.data.payments.PaymentHistoryRepository
 import app.pantopus.android.data.payments.PaymentsRepository
+import app.pantopus.android.data.payments.PendingCardSetupStore
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -45,10 +49,12 @@ class PaymentsViewModelTest {
     private lateinit var repository: PaymentsRepository
     private lateinit var historyRepository: PaymentHistoryRepository
     private lateinit var connectRepository: ConnectRepository
+    private lateinit var pendingSetups: MemoryPendingCardSetupStore
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        pendingSetups = MemoryPendingCardSetupStore()
         repository = mockk(relaxed = true)
         historyRepository = mockk(relaxed = true)
         connectRepository = mockk(relaxed = true)
@@ -69,7 +75,7 @@ class PaymentsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = PaymentsViewModel(repository, historyRepository, connectRepository)
+    private fun vm() = PaymentsViewModel(repository, historyRepository, connectRepository, pendingSetups)
 
     private fun cardDto(
         id: String,
@@ -410,6 +416,8 @@ class PaymentsViewModelTest {
                 NetworkResult.Success(
                     AddCardSheetParamsDto(
                         setupIntent = "seti_secret",
+                        setupIntentId = "seti_saved",
+                        setupStatus = "requires_payment_method",
                         ephemeralKey = "ek_test",
                         customer = "cus_1",
                         publishableKey = "pk_test",
@@ -437,9 +445,172 @@ class PaymentsViewModelTest {
             val vm = vm()
             vm.load()
             assertTrue((vm.state.value as PaymentsUiState.Loaded).content.methods.isEmpty())
-
-            vm.onAddCardOutcome(AddCardOutcome.Completed)
+            coEvery { repository.addCardSheetParams() } returns NetworkResult.Success(sheetParams())
+            coEvery {
+                repository.confirmAddCard("seti_saved")
+            } returns NetworkResult.Success(ConfirmAddCardResponse(true, cardDto("pm_1", "visa", "4242", isDefault = true)))
+            vm.events.test {
+                vm.tapAddMethod()
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+            }
 
             assertEquals(1, (vm.state.value as PaymentsUiState.Loaded).content.methods.size)
         }
+
+    private fun sheetParams() =
+        AddCardSheetParamsDto(
+            "seti_saved_secret_test",
+            "seti_saved",
+            "requires_payment_method",
+            "ek_test",
+            "cus_test",
+        )
+
+    private fun savedReceipt() = ConfirmAddCardResponse(true, cardDto("pm_saved", "visa", "4242", isDefault = true))
+
+    @Test
+    fun failed_confirmation_retries_same_intent_without_another_sheet() =
+        runTest {
+            coEvery { repository.paymentMethods() } returns NetworkResult.Success(PaymentMethodsResponse(emptyList()))
+            coEvery { repository.addCardSheetParams() } returns NetworkResult.Success(sheetParams())
+            coEvery { repository.confirmAddCard("seti_saved") } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, "retry")), NetworkResult.Success(savedReceipt()),
+                )
+            val vm = vm()
+            vm.load()
+            vm.events.test {
+                vm.tapAddMethod()
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+                assertTrue(awaitItem() is PaymentsEvent.ShowMessage)
+                assertEquals(AddCardPhase.Retry, vm.addCardPhase.value)
+                assertTrue((vm.state.value as PaymentsUiState.Loaded).content.methods.isEmpty())
+                vm.tapAddMethod()
+                expectNoEvents()
+                assertEquals(AddCardPhase.Idle, vm.addCardPhase.value)
+                assertTrue((vm.state.value as PaymentsUiState.Loaded).content.methods.isEmpty())
+            }
+            coVerify(exactly = 1) { repository.addCardSheetParams() }
+            coVerify(exactly = 2) { repository.confirmAddCard("seti_saved") }
+        }
+
+    @Test
+    fun durable_receipt_survives_failed_list_refresh() =
+        runTest {
+            coEvery { repository.paymentMethods() } returnsMany
+                listOf(
+                    NetworkResult.Success(PaymentMethodsResponse(emptyList())), NetworkResult.Failure(NetworkError.Server(503, "retry")),
+                )
+            coEvery { repository.addCardSheetParams() } returns NetworkResult.Success(sheetParams())
+            coEvery { repository.confirmAddCard(any()) } returns NetworkResult.Success(savedReceipt())
+            val vm = vm()
+            vm.load()
+            vm.events.test {
+                vm.tapAddMethod()
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+                assertTrue((awaitItem() as PaymentsEvent.ShowMessage).text.startsWith("Your card was saved."))
+                assertEquals(AddCardPhase.Idle, vm.addCardPhase.value)
+                assertEquals("4242", (vm.state.value as PaymentsUiState.Loaded).content.methods.single().last4)
+            }
+        }
+
+    @Test
+    fun cancellation_preserves_existing_list_and_does_not_confirm() =
+        runTest {
+            val card = cardDto("pm_existing", "visa", "4242", isDefault = true)
+            coEvery { repository.paymentMethods() } returns NetworkResult.Success(PaymentMethodsResponse(listOf(card)))
+            coEvery { repository.addCardSheetParams() } returns NetworkResult.Success(sheetParams())
+            val vm = vm()
+            vm.load()
+            val initial = vm.state.value
+            vm.events.test {
+                vm.tapAddMethod()
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.onAddCardOutcome(AddCardOutcome.Canceled)
+                expectNoEvents()
+            }
+            assertEquals(initial, vm.state.value)
+            assertEquals(AddCardPhase.Retry, vm.addCardPhase.value)
+            assertEquals("seti_saved", pendingSetups.read("account_a"))
+            coVerify(exactly = 1) { repository.paymentMethods() }
+            coVerify(exactly = 0) { repository.confirmAddCard(any()) }
+        }
+
+    @Test
+    fun duplicate_preparation_presentation_and_completion_are_ignored() =
+        runTest {
+            val preparation = CompletableDeferred<NetworkResult<AddCardSheetParamsDto>>()
+            val confirmation = CompletableDeferred<NetworkResult<ConfirmAddCardResponse>>()
+            coEvery { repository.addCardSheetParams() } coAnswers { preparation.await() }
+            coEvery { repository.confirmAddCard("seti_saved") } coAnswers { confirmation.await() }
+            coEvery { repository.paymentMethods() } returns NetworkResult.Success(PaymentMethodsResponse(emptyList()))
+            val vm = vm()
+            vm.events.test {
+                vm.tapAddMethod()
+                vm.tapAddMethod()
+                assertEquals(AddCardPhase.Preparing, vm.addCardPhase.value)
+                preparation.complete(NetworkResult.Success(sheetParams()))
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.tapAddMethod()
+                expectNoEvents()
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+                vm.tapAddMethod()
+                assertEquals(AddCardPhase.Confirming, vm.addCardPhase.value)
+                coVerify(exactly = 1) { repository.addCardSheetParams() }
+                coVerify(exactly = 1) { repository.confirmAddCard("seti_saved") }
+                confirmation.complete(NetworkResult.Success(savedReceipt()))
+                expectNoEvents()
+            }
+            assertEquals(AddCardPhase.Idle, vm.addCardPhase.value)
+        }
+
+    @Test
+    fun false_confirmation_is_not_a_saved_card() =
+        runTest {
+            coEvery { repository.addCardSheetParams() } returns NetworkResult.Success(sheetParams())
+            coEvery { repository.confirmAddCard(any()) } returns NetworkResult.Success(savedReceipt().copy(confirmed = false))
+            val vm = vm()
+            vm.events.test {
+                vm.tapAddMethod()
+                assertTrue(awaitItem() is PaymentsEvent.PresentAddCardSheet)
+                vm.onAddCardOutcome(AddCardOutcome.Completed)
+                assertTrue(awaitItem() is PaymentsEvent.ShowMessage)
+            }
+            assertEquals(AddCardPhase.Retry, vm.addCardPhase.value)
+            assertTrue(vm.state.value is PaymentsUiState.Loading)
+            coVerify(exactly = 0) { repository.paymentMethods() }
+        }
+}
+
+internal class MemoryPendingCardSetupStore : PendingCardSetupStore {
+    var accountId: String? = "account_a"
+    var acceptsWrites = true
+    var acceptsClears = true
+    val entries = mutableMapOf<String, String>()
+
+    override suspend fun currentAccountId(): String? = accountId
+
+    override suspend fun read(accountId: String): String? = entries[accountId]
+
+    override suspend fun save(
+        accountId: String,
+        setupIntentId: String,
+    ): Boolean {
+        if (!acceptsWrites) return false
+        entries[accountId] = setupIntentId
+        return true
+    }
+
+    override suspend fun clear(
+        accountId: String,
+        setupIntentId: String,
+    ): Boolean {
+        if (!acceptsClears) return false
+        if (entries[accountId] == setupIntentId) entries.remove(accountId)
+        return true
+    }
 }

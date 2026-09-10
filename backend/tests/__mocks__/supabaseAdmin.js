@@ -193,6 +193,9 @@ const AUTH_UNIQUE_KEYS = {
   AuthResumeGrant: [['id'], ['grant_hash']],
   AuthSession: [['id']],
   AuthDevice: [['id'], ['user_id', 'device_id']],
+  // Financial retries depend on the canonical baseline's provider ID keys.
+  PaymentMethod: [['id'], ['stripe_payment_method_id']],
+  StripeWebhookEvent: [['id'], ['stripe_event_id']],
 };
 
 const PERSONA_FOLLOW_VIEW = 'PersonaFollow';
@@ -737,6 +740,9 @@ const supabaseAdmin = {
     if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
     if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {
       return require('./mailMetadata')(args[0], args[1], getTable);
+    }
+    if (['bind_payment_customer', 'save_payment_method', 'set_default_payment_method', 'begin_payment_method_removal', 'complete_payment_method_removal'].includes(args[0])) {
+      return require('./paymentMethods')(args[0], args[1], getTable);
     }
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
