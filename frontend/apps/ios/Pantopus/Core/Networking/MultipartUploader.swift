@@ -41,6 +41,10 @@ public final class MultipartUploader: @unchecked Sendable {
     private let environment: AppEnvironment
     private let logger = Logger(label: "app.pantopus.ios.MultipartUploader")
 
+    var apiBaseURL: URL {
+        environment.apiBaseURL
+    }
+
     /// Mirrors `APIClient.authProvider`: injectable in tests, resolves to
     /// `AuthManager.shared` in the app.
     weak var authProvider: AuthManager?
@@ -74,13 +78,17 @@ public final class MultipartUploader: @unchecked Sendable {
     private func performUpload(
         to url: URL,
         boundary: String,
-        body: Data
+        body: Data,
+        headers: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         func makeRequest(token: String?, deviceId: String?) -> URLRequest {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
             if let token {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
@@ -166,6 +174,38 @@ public final class MultipartUploader: @unchecked Sendable {
             throw APIError.clientError(status: http.statusCode, message: message)
         default:
             throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Private claim evidence uses a stable identity and the opening server
+    /// session on every upload attempt, including a token-refresh replay.
+    func uploadClaimEvidence(
+        scope: PrivateClaimEvidenceSession,
+        uploadId: String,
+        evidenceType: String,
+        file: MultipartFile
+    ) async throws -> PrivateClaimEvidenceEnvelope {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/ownership-evidence/\(scope.homeId)/\(scope.claimId)")
+        let filename = file.filename.replacingOccurrences(of: "[\\\"\\\\\\r\\n]", with: "_", options: .regularExpression)
+        let part = MultipartFile(fieldName: "file", filename: filename, mimeType: file.mimeType, data: file.data)
+        let body = Self.buildBody(
+            boundary: boundary,
+            file: part,
+            fields: ["upload_id": uploadId, "evidence_type": evidenceType],
+            extendedFilenames: true
+        )
+        let (data, http) = try await performUpload(
+            to: url,
+            boundary: boundary,
+            body: body,
+            headers: ["X-Pantopus-Session-Scope": scope.sessionScope]
+        )
+        switch http.statusCode {
+        case 200..<300: return try JSONDecoder().decode(PrivateClaimEvidenceEnvelope.self, from: data)
+        case 401: throw APIError.unauthorized
+        case 400..<500: throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default: throw APIError.server(status: http.statusCode, body: "The upload is unconfirmed. Retry the same file.")
         }
     }
 
@@ -561,15 +601,17 @@ public final class MultipartUploader: @unchecked Sendable {
     static func buildBody(
         boundary: String,
         file: MultipartFile,
-        fields: [String: String] = [:]
+        fields: [String: String] = [:],
+        extendedFilenames: Bool = false
     ) -> Data {
-        buildBody(boundary: boundary, files: [file], fields: fields)
+        buildBody(boundary: boundary, files: [file], fields: fields, extendedFilenames: extendedFilenames)
     }
 
     static func buildBody(
         boundary: String,
         files: [MultipartFile],
-        fields: [String: String] = [:]
+        fields: [String: String] = [:],
+        extendedFilenames: Bool = false
     ) -> Data {
         var body = Data()
         for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
@@ -579,8 +621,12 @@ public final class MultipartUploader: @unchecked Sendable {
         }
         for file in files {
             body.append(Data("--\(boundary)\r\n".utf8))
+            let name = file.filename.addingPercentEncoding(withAllowedCharacters: CharacterSet(
+                charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_`|~"
+            )) ?? "document"
+            let extended = extendedFilenames ? "; filename*=UTF-8''\(name)" : ""
             body.append(
-                Data("Content-Disposition: form-data; name=\"\(file.fieldName)\"; filename=\"\(file.filename)\"\r\n".utf8)
+                Data("Content-Disposition: form-data; name=\"\(file.fieldName)\"; filename=\"\(file.filename)\"\(extended)\r\n".utf8)
             )
             body.append(Data("Content-Type: \(file.mimeType)\r\n\r\n".utf8))
             body.append(file.data)

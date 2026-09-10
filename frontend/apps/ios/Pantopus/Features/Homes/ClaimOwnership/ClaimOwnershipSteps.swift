@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UniformTypeIdentifiers
 
 /// Steps the claim-ownership wizard can be on. Order is meaningful —
 /// the wizard advances `start → upload → success` and back-navigates
@@ -62,7 +63,7 @@ public enum ClaimVerificationType: String, CaseIterable, Sendable {
     /// Upload tiles required before submit is enabled.
     public var slots: [ClaimEvidenceSlot] {
         switch self {
-        case .owner: [.identity, .ownership]
+        case .owner: [.ownership]
         case .residency: [.residency]
         }
     }
@@ -139,18 +140,6 @@ public enum ClaimEvidenceSlot: String, CaseIterable, Sendable {
                     label: "Property Tax Statement",
                     detail: "Tax bill showing property owner",
                     icon: .receipt
-                ),
-                ClaimDocumentOption(
-                    id: "escrow_attestation",
-                    label: "Title/Escrow Attestation",
-                    detail: "Letter from title or escrow company",
-                    icon: .shieldCheck
-                ),
-                ClaimDocumentOption(
-                    id: "title_match",
-                    label: "Title Record Match",
-                    detail: "Public record title match",
-                    icon: .checkCircle
                 )
             ]
         case .residency:
@@ -186,14 +175,14 @@ public enum ClaimEvidenceSlot: String, CaseIterable, Sendable {
     }
 
     public var acceptHint: String {
-        "JPG or PNG up to 10 MB"
+        "PDF, text or image up to 25 MB"
     }
 }
 
 /// Maximum file size accepted by the wizard's client-side picker.
 /// Mirrors the backend's `/api/files/upload` cap so the user sees an
 /// inline error instead of a 413 round-trip.
-public let CLAIM_FILE_MAX_BYTES: Int = 10 * 1024 * 1024
+public let CLAIM_FILE_MAX_BYTES: Int = 25 * 1024 * 1024
 
 /// One picked file held in the VM until submit time.
 public struct ClaimPickedFile: Sendable, Equatable {
@@ -209,6 +198,26 @@ public struct ClaimPickedFile: Sendable, Equatable {
 
     public var sizeBytes: Int {
         data.count
+    }
+
+    var safeFilename: String {
+        filename.precomposedStringWithCanonicalMapping
+            .replacingOccurrences(of: "[\\x00-\\x1f\\x7f/\\\\\"]", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func read(_ url: URL) throws -> ClaimPickedFile {
+        let permitted = url.startAccessingSecurityScopedResource()
+        defer { if permitted { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        guard let size = values.fileSize, size > 0, size <= CLAIM_FILE_MAX_BYTES,
+              let mime = (values.contentType ?? UTType(filenameExtension: url.pathExtension))?.preferredMIMEType,
+              PrivateClaimEvidenceClient.allowedMIMEs.contains(mime) else {
+            throw APIError.clientError(status: 400, message: "Choose a PDF, text file or supported image of 25 MB or less.")
+        }
+        let data = try Data(contentsOf: url)
+        guard data.count == size else { throw APIError.invalidResponse }
+        return ClaimPickedFile(filename: url.lastPathComponent, mimeType: mime, data: data)
     }
 }
 

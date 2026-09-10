@@ -2,22 +2,18 @@
 //  ClaimUploadStep.swift
 //  Pantopus
 //
-//  A12.4 — Claim ownership · Evidence (wizard step 2). Home chip + headline,
-//  two evidence `UploadSlot`s with per-file address-match confirmations, an
-//  optional `ClaimStatement`, and the encryption footer. PDF support is
-//  TODO(picker); the system Photos picker is wired and the accept hint
-//  advertises JPG/PNG only.
+//  Private manual document selection with an immutable upload retry identity.
 //
 
-import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Copy shared with the Android screen — keep both platforms word-for-word.
 enum ClaimUploadCopy {
     static let statementPlaceholder =
         "Add a short statement to help the reviewer (e.g. how long you've owned, anyone else on title)…"
     static let encryptionFooter =
-        "Encrypted in transit. Visible only to the reviewer assigned to your claim."
+        "Private documents are visible to you and currently authorized claim reviewers."
 }
 
 /// One slot's display descriptor, assembled from the view model (or from
@@ -94,7 +90,8 @@ struct ClaimUploadStepContent: View {
                 }
             }
 
-            ClaimStatement(text: $statement, placeholder: ClaimUploadCopy.statementPlaceholder)
+            Text("Documents stay pending until a reviewer inspects them. Claim approval is a separate decision.")
+                .font(.footnote)
 
             if let submitError {
                 ClaimUploadErrorBanner(message: submitError)
@@ -114,8 +111,7 @@ struct ClaimUploadStepContent: View {
             return "Upload a document that proves you live at \(homeLabel). " +
                 "Your access will be limited until verified."
         }
-        return "Two documents help us verify you own \(homeLabel). " +
-            "We auto-check the address against your account."
+        return "Upload a property document for \(homeLabel). A reviewer must inspect it before deciding your claim."
     }
 
     /// Copy lifted from RN's info banner (`evidence.tsx:283-289`).
@@ -164,39 +160,39 @@ private struct InfoBanner: View {
 
 struct ClaimUploadStep: View {
     @Bindable var viewModel: ClaimOwnershipWizardViewModel
-    @State private var photosPickerSlot: ClaimEvidenceSlot?
-    @State private var photosPickerSelection: PhotosPickerItem?
+    @State private var pickerSlot: ClaimEvidenceSlot?
+    @State private var showPicker = false
 
     var body: some View {
-        ClaimUploadStepContent(
-            homeLabel: viewModel.startContent.homeLabel,
-            slots: viewModel.activeSlots.map(slotModel(for:)),
-            statement: $viewModel.note,
-            verificationType: viewModel.verificationType,
-            documentOptions: viewModel.documentOptions,
-            selectedDocumentType: viewModel.selectedDocumentType,
-            submitError: viewModel.submitError,
-            onPick: { id in
-                if let slot = ClaimEvidenceSlot(rawValue: id) { photosPickerSlot = slot }
-            },
-            onRemove: { id in
-                if let slot = ClaimEvidenceSlot(rawValue: id) { viewModel.remove(slot) }
-            },
-            onSelectDocumentType: { viewModel.selectDocumentType($0) }
-        )
-        // Driving the sheet directly off `photosPickerSlot` (rather than an
-        // intermediate onAppear hop) keeps the picker reachable after a
-        // remove + re-tap of the same slot.
-        .photosPicker(
-            isPresented: Binding(
-                get: { photosPickerSlot != nil },
-                set: { if !$0 { photosPickerSlot = nil } }
-            ),
-            selection: $photosPickerSelection,
-            matching: .images
-        )
-        .onChange(of: photosPickerSelection) { _, newItem in
-            handlePicked(newItem)
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            if viewModel.needsUploadRecovery {
+                Text("This file may already be saved. Retry the same upload, or open My claims to inspect and remove its private record.")
+                Button("Manage saved documents") { viewModel.manageSavedDocuments() }
+            }
+            ClaimUploadStepContent(
+                homeLabel: viewModel.startContent.homeLabel,
+                slots: viewModel.activeSlots.map(slotModel(for:)),
+                statement: $viewModel.note,
+                verificationType: viewModel.verificationType,
+                documentOptions: viewModel.documentOptions,
+                selectedDocumentType: viewModel.selectedDocumentType,
+                submitError: viewModel.submitError,
+                onPick: { id in
+                    if viewModel.canPick, let slot = ClaimEvidenceSlot(rawValue: id) { pickerSlot = slot
+                        showPicker = true
+                    }
+                },
+                onRemove: { id in
+                    if let slot = ClaimEvidenceSlot(rawValue: id) { viewModel.remove(slot) }
+                },
+                onSelectDocumentType: { viewModel.selectDocumentType($0) }
+            )
+            .disabled(!viewModel.canPick)
+        }
+        .fileImporter(isPresented: $showPicker, allowedContentTypes: [.pdf, .plainText, .image]) { result in
+            guard let slot = pickerSlot, viewModel.canPick else { return }
+            defer { pickerSlot = nil }
+            do { try viewModel.picked(slot, file: ClaimPickedFile.read(result.get())) } catch { viewModel.filePickFailed(error) }
         }
     }
 
@@ -224,17 +220,7 @@ struct ClaimUploadStep: View {
             return .uploading(file: displayFile(file), progress: fraction)
         case .picked, .uploaded, .failed:
             guard let file = viewModel.slots[slot]?.pickedFile else { return .empty }
-            let verdict = viewModel.addressMatches[slot]
-                ?? ClaimOwnershipSampleData.addressMatch(
-                    forFilename: file.filename,
-                    homeLabel: viewModel.startContent.homeLabel
-                )
-            switch verdict {
-            case let .matches(detail):
-                return .done(file: displayFile(file), detail: detail)
-            case let .differs(detail):
-                return .warn(file: displayFile(file), detail: detail)
-            }
+            return .done(file: displayFile(file), detail: "Selected for private upload. Not verified.")
         }
     }
 
@@ -247,28 +233,6 @@ struct ClaimUploadStep: View {
             pageCount: nil,
             kind: isPDF ? .pdf : .image
         )
-    }
-
-    private func handlePicked(_ newItem: PhotosPickerItem?) {
-        guard let newItem, let slot = photosPickerSlot else { return }
-        Task {
-            if let data = try? await newItem.loadTransferable(type: Data.self) {
-                if data.count > CLAIM_FILE_MAX_BYTES {
-                    // Client-side guard so the user sees an inline error
-                    // instead of a 413 round-trip.
-                    viewModel.fileTooLarge(for: slot)
-                } else {
-                    let filename = "\(slot.rawValue)-\(UUID().uuidString.prefix(6)).jpg"
-                    viewModel.picked(slot, file: ClaimPickedFile(
-                        filename: filename,
-                        mimeType: "image/jpeg",
-                        data: data
-                    ))
-                }
-            }
-            photosPickerSelection = nil
-            photosPickerSlot = nil
-        }
     }
 }
 

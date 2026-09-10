@@ -1145,20 +1145,7 @@ public struct YouTabRoot: View {
                 )
             )
         case let .claimStatus(claimId):
-            StatusWaitingView(
-                content: .underReview(homeName: nil),
-                onAction: { card in
-                    if card.id == "addEvidence", !path.isEmpty {
-                        path.removeLast()
-                    }
-                },
-                onPrimary: { _ in
-                    if !path.isEmpty { path.removeLast() }
-                },
-                onSecondary: { _ in
-                    if !claimId.isEmpty, !path.isEmpty { path.removeLast() }
-                }
-            )
+            ClaimEvidenceDestinationView(claimId: claimId)
         case let .claimOwnership(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,

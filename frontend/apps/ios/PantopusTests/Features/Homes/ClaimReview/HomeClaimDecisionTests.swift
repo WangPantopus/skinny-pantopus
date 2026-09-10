@@ -304,3 +304,50 @@ final class HomeClaimDecisionTests: XCTestCase {
         )
     }
 }
+
+extension HomeClaimDecisionTests {
+    func testHomeUnknownDecisionSurvivesTimeoutAndRateLimitWithoutChangingSnapshot() async throws {
+        for transientStatus in [408, 429] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.routeResponses = [
+                homePath: [.status(200, body: "{\"claim\":\(claim())}")],
+                homePath + "/review": [
+                    .status(503, body: "{}"), .status(transientStatus, body: "{}"),
+                    .status(200, body: receipt(replayed: true))
+                ]
+            ]
+            let vm = HomeClaimReviewViewModel(homeId: "home-1", api: api()) { "session" }
+            let snapshot = try await unwrap(vm.prepareReview(claimId: "claim-1", action: .approve))
+            await vm.review(snapshot, action: .approve)
+            await vm.review(snapshot, action: .approve)
+            await assertNil(vm.prepareReview(claimId: "claim-1", action: .reject))
+            let retry = try await unwrap(vm.prepareReview(claimId: "claim-1", action: .approve))
+            XCTAssertEqual(retry, snapshot)
+            await vm.review(retry, action: .approve)
+            XCTAssertEqual(posts().count, 3)
+            XCTAssertTrue(posts().allSatisfy { $0.authTestJSONBody()?["review_token"] as? String == token })
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == homePath }.count, 1)
+        }
+    }
+
+    func testPlatformUnknownDecisionSurvivesTimeoutAndRateLimitWithoutChangingNote() async {
+        for transientStatus in [408, 429] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.routeResponses = [
+                adminPath: [.status(200, body: detail()), .status(200, body: detail(state: "rejected"))],
+                adminPath + "/review": [
+                    .status(503, body: "{}"), .status(transientStatus, body: "{}"),
+                    .status(200, body: receipt(action: "reject", replayed: true))
+                ]
+            ]
+            let vm = ReviewClaimDetailViewModel(claimId: "claim-1", api: api()) { "session" }
+            await vm.load()
+            await assertFalse(vm.review(.reject, note: "Evidence mismatch"))
+            await assertFalse(vm.review(.reject, note: "Evidence mismatch"))
+            await assertFalse(vm.review(.reject, note: "A different reason"))
+            await assertTrue(vm.review(.reject, note: "Evidence mismatch"))
+            XCTAssertEqual(posts().count, 3)
+            XCTAssertTrue(posts().allSatisfy { $0.authTestJSONBody()?["note"] as? String == "Evidence mismatch" })
+        }
+    }
+}

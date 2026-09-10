@@ -115,6 +115,19 @@ public final class ReviewClaimDetailViewModel {
     /// Submit the reviewer decision. Surfaces a toast on success + sets
     /// the toast text on failure so the host can show the in-screen
     /// error without spawning a separate state.
+    func makeEvidenceViewModel() -> PrivateClaimEvidenceViewModel? {
+        guard scope.isCurrent, reviewingAction == nil, pendingDecision == nil,
+              case let .loaded(detail) = state, !detail.claim.requiresDisputeReview,
+              let token = detail.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token) else { return nil }
+        return PrivateClaimEvidenceViewModel(
+            homeId: detail.claim.homeId,
+            claimId: claimId,
+            platform: true,
+            expectedReviewToken: token,
+            client: PrivateClaimEvidenceClient(api: api)
+        )
+    }
+
     public func review(_ action: AdminClaimReviewAction, note: String? = nil) async -> Bool {
         guard reviewingAction == nil else { return false }
         reviewingAction = action

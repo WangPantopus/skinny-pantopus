@@ -1243,20 +1243,7 @@ public struct HubTabRoot: View {
                 )
             )
         case let .claimStatus(claimId):
-            StatusWaitingView(
-                content: .underReview(homeName: nil),
-                onAction: { card in
-                    if card.id == "addEvidence", !path.isEmpty {
-                        path.removeLast()
-                    }
-                },
-                onPrimary: { _ in pop() },
-                onSecondary: { _ in
-                    if !claimId.isEmpty {
-                        pop()
-                    }
-                }
-            )
+            ClaimEvidenceDestinationView(claimId: claimId)
         case let .homeDashboard(homeId):
             HomeDashboardView(
                 homeId: homeId,

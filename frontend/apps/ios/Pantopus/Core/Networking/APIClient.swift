@@ -134,7 +134,7 @@ final class APIClient: @unchecked Sendable {
         _ endpoint: Endpoint,
         as _: Response.Type = Response.self
     ) async throws -> Response {
-        let data = try await executeWithRetry(endpoint)
+        let data = try await executeWithRetry(endpoint).data
         if Response.self == EmptyResponse.self, data.isEmpty {
             // swiftlint:disable:next force_cast
             return EmptyResponse() as! Response
@@ -160,7 +160,18 @@ final class APIClient: @unchecked Sendable {
     /// Perform a request and return the raw response body — for binary
     /// artifacts (e.g. the residency-letter PDF), not JSON.
     func requestData(_ endpoint: Endpoint) async throws -> Data {
+        try await executeWithRetry(endpoint).data
+    }
+
+    /// Binary artifacts may carry a receipt in their response headers. Keep
+    /// the same authentication, refresh and cache handling as typed requests.
+    func requestDataResponse(_ endpoint: Endpoint) async throws -> DataResponse {
         try await executeWithRetry(endpoint)
+    }
+
+    struct DataResponse {
+        let data: Data
+        let response: HTTPURLResponse
     }
 
     /// `Result`-returning variant for call sites that prefer explicit
@@ -246,7 +257,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Retry loop
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func executeWithRetry(_ endpoint: Endpoint) async throws -> Data {
+    private func executeWithRetry(_ endpoint: Endpoint) async throws -> DataResponse {
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
         // One silent token refresh per request. On a 401 for an authenticated
@@ -341,7 +352,7 @@ final class APIClient: @unchecked Sendable {
         let methods: [String]
     }
 
-    private func executeOnce(_ request: URLRequest, endpoint: Endpoint) async throws -> Data {
+    private func executeOnce(_ request: URLRequest, endpoint: Endpoint) async throws -> DataResponse {
         let data: Data
         let response: URLResponse
         do {
@@ -368,7 +379,7 @@ final class APIClient: @unchecked Sendable {
 
         switch http.statusCode {
         case 200..<300, 304:
-            return data
+            return DataResponse(data: data, response: http)
         case 401:
             // Refresh + sign-out decisions are made in executeWithRetry.
             throw APIError.unauthorized

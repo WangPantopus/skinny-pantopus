@@ -53,8 +53,8 @@ enum HomeClaimReviewError: LocalizedError {
         guard let error = error as? APIError else { return false }
         switch error {
         case .unauthorized, .forbidden, .notFound: return true
-        case .clientError: return true
-        case let .server(status, _): return (400...499).contains(status)
+        case let .clientError(status, _), let .server(status, _):
+            return (400...499).contains(status) && status != 408 && status != 429
         default: return false
         }
     }

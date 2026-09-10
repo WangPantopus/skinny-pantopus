@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS private claim evidence checkpoint — September 10
+
+The iOS claim wizard, Home/platform reviewers and My claims now use exact
+private upload, inspection, verification and retirement records. Interrupted
+uploads keep their original file identity; interrupted decisions keep only the
+same receipt until retry. Access or session changes hide document content.
+The [iOS evidence report](home-ios-private-evidence-2026-09-10.md) records the
+final passing app build, independent review, bounded native rendering and
+transport checks. Installed-app visual acceptance remains separate.
+
+**Next:** finish Android evidence quality/assembly, then native task detail,
+server-derived action capabilities and private attachments. Android behavior
+checks pass; final lint and assembly are running. A task collection capability
+contract is being added under the existing locked permissions, with stable
+task-create recovery to follow. Household relationships, ownership lifecycles
+and full Home acceptance remain open. Draft PR #32 remains unfinished. PR #34
+has expiry protection pushed as `05676d6a5` and the iOS tip CI fixture correction
+as `0037a3115`; durable cancellation/reopening/worker release is in progress.
+All paid dependencies stay together for final launch preparation. Completed
+physical Beacon and saved-card acceptance must not be repeated. No hosted
+migration, provider setting or paid service changed.
+
 ### Browser private document preview repair — September 10
 
 The sandboxed claim-evidence PDF viewer failed in an actual Chrome check. Its

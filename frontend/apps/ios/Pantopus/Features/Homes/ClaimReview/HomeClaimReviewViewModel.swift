@@ -197,6 +197,37 @@ public final class HomeClaimReviewViewModel {
 
     // MARK: - Mutations
 
+    func makeEvidenceViewModel(claimId: String) async -> PrivateClaimEvidenceViewModel? {
+        guard scope.isCurrent, actionLoading == nil, pendingDecision == nil,
+              case let .loaded(data) = state, data.ownership.contains(where: { $0.id == claimId }) else { return nil }
+        readGeneration += 1
+        let revision = readGeneration
+        actionLoading = "\(claimId):evidence"
+        defer { actionLoading = nil }
+        do {
+            try scope.requireCurrent()
+            let response: HomeOwnershipClaimDetailResponse = try await api.request(
+                HomeClaimReviewEndpoints.ownershipClaimDetail(homeId: homeId, claimId: claimId)
+            )
+            try scope.requireCurrent()
+            guard revision == readGeneration, response.claim.id == claimId, response.claim.homeId == homeId,
+                  let token = response.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token) else {
+                throw HomeClaimReviewError.snapshotChanged
+            }
+            guard response.claim.claimPhaseV2 != "challenged", response.claim.challengeState != "challenged",
+                  response.claim.routingClassification != "challenge_claim" else { throw HomeClaimReviewError.disputeReview }
+            return PrivateClaimEvidenceViewModel(
+                homeId: homeId,
+                claimId: claimId,
+                expectedReviewToken: token,
+                client: PrivateClaimEvidenceClient(api: api)
+            )
+        } catch {
+            toast = ToastMessage(text: HomeClaimReviewError.message(for: error), kind: .error)
+            return nil
+        }
+    }
+
     /// `POST /api/homes/:id/ownership-claims/:claimId/review`
     /// (`backend/routes/homeOwnership.js:665`).
     func prepareReview(claimId: String, action: HomeClaimReviewVerdict) async -> HomeClaimReviewSnapshot? {

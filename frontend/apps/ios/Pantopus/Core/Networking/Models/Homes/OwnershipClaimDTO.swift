@@ -34,4 +34,6 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
 /// Envelope for `GET /api/homes/my-ownership-claims`.
 public struct MyOwnershipClaimsResponse: Decodable, Sendable, Hashable {
     public let claims: [OwnershipClaimDTO]
+    let uploadSession: ClaimUploadSession?
+    enum CodingKeys: String, CodingKey { case claims, uploadSession = "upload_session" }
 }

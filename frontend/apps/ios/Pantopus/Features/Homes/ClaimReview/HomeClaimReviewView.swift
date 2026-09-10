@@ -24,6 +24,7 @@ public struct HomeClaimReviewView: View {
     @State private var verdictConfirm: VerdictConfirm?
     @State private var relationshipConfirm: RelationshipConfirm?
     @State private var residencyConfirm: ResidencyConfirm?
+    @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
 
     private let onBack: @MainActor () -> Void
 
@@ -45,6 +46,9 @@ public struct HomeClaimReviewView: View {
         .accessibilityIdentifier("homeClaimReview")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            PrivateClaimEvidenceView(model: target)
+        })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -246,6 +250,9 @@ public struct HomeClaimReviewView: View {
                                 )
                             }
                         )
+                        Button("Review private documents") {
+                            Task { evidenceTarget = await viewModel.makeEvidenceViewModel(claimId: item.id) }
+                        }.disabled(viewModel.actionLoading != nil)
                     }
                 }
                 .padding(Spacing.s4)

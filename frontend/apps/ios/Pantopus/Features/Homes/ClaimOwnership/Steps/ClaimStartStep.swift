@@ -55,56 +55,20 @@ struct ClaimStartStep: View {
     }
 
     private var canonicalSubcopy: String {
-        "Claiming ownership lets you invite residents, receive mail, post packages, " +
-            "and run the household's command center. Verification is a one-time step."
+        "Submit a private document for review. Documents and claim decisions are checked separately."
     }
 
     private var contestedSubcopy: String {
-        "Same process, but the reviewer compares both submissions side-by-side. Bring your strongest documents."
+        "An existing household dispute requires its dedicated review flow. This upload does not open a challenge."
     }
 
     private var requirementsRows: [RequirementsRow] {
-        if content.isContested {
-            return [
-                RequirementsRow(
-                    id: "strongest-doc",
-                    icon: .zap,
-                    title: "Strongest property record or deed",
-                    subcopy: "A deed or county property record gets prioritized in contested reviews.",
-                    emphasized: true
-                ),
-                RequirementsRow(
-                    id: "id",
-                    icon: .check,
-                    title: "Government-issued ID",
-                    subcopy: "Driver's license, state ID, or passport."
-                ),
-                RequirementsRow(
-                    id: "utility-bill",
-                    icon: .check,
-                    title: "Utility bill for this address",
-                    subcopy: "A recent bill helps match your name to 412 Elm St."
-                )
-            ]
-        }
-        return [
-            RequirementsRow(
-                id: "id",
-                icon: .check,
-                title: "Government-issued ID",
-                subcopy: "Driver's license, state ID, or passport."
-            ),
-            RequirementsRow(
-                id: "utility-bill",
-                icon: .check,
-                title: "Utility bill",
-                subcopy: "A recent bill showing your name and this address."
-            ),
+        [
             RequirementsRow(
                 id: "property-record",
-                icon: .check,
-                title: "Property record or deed",
-                subcopy: "Deed, tax record, or mortgage statement."
+                icon: .fileText,
+                title: "Ownership document",
+                subcopy: "Deed, closing disclosure or property tax statement."
             )
         ]
     }

@@ -17,6 +17,7 @@ public struct ReviewClaimDetailView: View {
     @State private var showRejectSheet = false
     @State private var rejectNote: String = ""
     @State private var showChallengeSheet = false
+    @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
     private let onClose: @MainActor () -> Void
 
     public init(
@@ -41,6 +42,9 @@ public struct ReviewClaimDetailView: View {
         .accessibilityIdentifier("reviewClaimDetail")
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.load() }
+        .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.load() } }, content: { target in
+            PrivateClaimEvidenceView(model: target)
+        })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -171,6 +175,8 @@ public struct ReviewClaimDetailView: View {
                     OverlineSection(title: evidenceOverline(detail.evidence.count)) {
                         evidenceContent(detail.evidence)
                             .accessibilityIdentifier("reviewClaimDetail_evidence")
+                        Button("Review private documents") { evidenceTarget = viewModel.makeEvidenceViewModel() }
+                            .disabled(viewModel.reviewingAction != nil || detail.claim.requiresDisputeReview)
                     }
                     if let statement = ReviewClaimMap.statement(for: detail.claim) {
                         OverlineSection(title: "Review note") {
