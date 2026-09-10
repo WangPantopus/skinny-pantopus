@@ -131,7 +131,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     checkNoShowEligibility();
   }, [gigId, gigStatus, currentUserId]);
 
-  const openCancelModal = () => setStopAction('cancel');
+  const openCancelModal = () => setStopAction(isOwner && gigStatus === 'open' ? 'close' : 'cancel');
 
   const handleReportNoShow = async () => {
     setReportingNoShow(true);

@@ -20,6 +20,7 @@ import GigTimeline from '@/components/gig-detail/GigTimeline';
 import BidPanel from '@/components/gig-detail/BidPanel';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
+import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
 import QASection from '@/components/gig-detail/QASection';
 import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
@@ -572,8 +573,9 @@ function GigDetailV2Content() {
 
   if (!gig) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <p className="text-gray-500 text-lg">Task not found</p>
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       </div>
     );
   }
@@ -582,6 +584,7 @@ function GigDetailV2Content() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
+      <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Left column (2/3) ── */}
         <div className="lg:col-span-2 space-y-6">

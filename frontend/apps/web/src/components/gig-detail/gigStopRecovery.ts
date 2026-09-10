@@ -96,12 +96,23 @@ export function stopRecoveryKey(origin: string, actorId: string, gigId: string):
   return `pantopus:gig-stop:v1:${encodeURIComponent(origin)}:${actorId}:${gigId}`;
 }
 
+export const GIG_STOP_RECOVERY_CHANGE = 'pantopus:gig-stop-recovery-change';
+function notifyRecoveryChange(key: string): void {
+  window.dispatchEvent(new CustomEvent(GIG_STOP_RECOVERY_CHANGE, { detail: key }));
+}
+
+export function clearStopRequest(key: string): void {
+  localStorage.removeItem(key);
+  notifyRecoveryChange(key);
+}
+
 /** Explicit projection keeps server extras, provider secrets and session proof out of storage. */
 export function retainStopRequest(key: string, request: GigStopRequest): void {
   const terms = Object.fromEntries(termsKeys.map((field) => [field, request.terms[field]]));
   localStorage.setItem(key, JSON.stringify({ requestId: request.requestId, gigId: request.gigId,
     actorId: request.actorId, action: request.action, terms, reason: request.reason,
     rollbackMode: request.rollbackMode, financialAction: request.financialAction }));
+  notifyRecoveryChange(key);
 }
 
 export function readStopRequest(key: string, actorId: string, gigId: string): GigStopRequest | null {

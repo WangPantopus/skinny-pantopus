@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser saved task-action recovery checkpoint — September 10
+
+Both browser gig layouts now expose the original saved action after cancellation,
+worker release or unavailable detail. Recovery stays bound to the current account,
+origin and opening session, and cannot silently start another action if storage
+changes. Failed replacement writes preserve the original command. The
+[browser entry report](paid-gig-web-saved-stop-entry-2026-09-10.md) records checks
+through both actual page components, the passing full browser regression, clean
+type checking and independent review. These synthetic HTTP checks do not claim
+new hosted/provider acceptance.
+
+**Next:** finish Android stop recovery and complete provider/emulator acceptance,
+then the remaining started-work, fee, tip, dispute/Connect/debt and capacity work.
+iOS recovery is pushed as `687d07cf8`; its backend, browser, database and privacy
+CI passes, with native CI still running at the last observation. Home retained
+native creation and sparse editing are underway after both browsing checkpoints;
+private attachments and durable assignment notices remain next. PRs #32/#34
+remain unfinished drafts. All paid services stay together for final launch
+preparation. Completed physical Beacon and saved-card acceptance must not be
+repeated. No hosted data or paid service changed.
+
 ### iOS task stop recovery checkpoint — September 10
 
 All four native task-stop actions now share current terms, one retained request
