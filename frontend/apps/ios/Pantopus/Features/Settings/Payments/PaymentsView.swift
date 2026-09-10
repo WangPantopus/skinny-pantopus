@@ -213,13 +213,13 @@ private extension PaymentsView {
                                 chip: method.chip,
                                 trailing: .chevron,
                                 rowIdentifier: method.id,
-                                rowAccessibilityIdentifier: "payments.method.\(method.id)",
                                 chipIdentifier: method.chip != nil
                                     ? "paymentsRow_\(method.id)_defaultBadge"
                                     : nil
                             )
                         })
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("payments.method.\(method.id)")
                         if index < methods.count - 1 {
                             divider
                         }

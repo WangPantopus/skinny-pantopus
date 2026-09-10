@@ -36,21 +36,25 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         app.launch()
         signIn()
         openPayments()
-        XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 20))
+        let resumeAfterVisa = ProcessInfo.processInfo.environment["PAYMENT_SHEET_RESUME_AFTER_VISA"] == "1"
+        if !resumeAfterVisa {
+            XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 20))
+            openSheet()
+            closeSheet()
+            XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 10))
+            assertAddLabel("Retry saving card")
+            restartAndOpenPayments()
+            assertAddLabel("Retry saving card")
 
-        openSheet()
-        closeSheet()
-        XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 10))
-        assertAddLabel("Retry saving card")
-        restartAndOpenPayments()
-        assertAddLabel("Retry saving card")
-
-        // Official Stripe test cards are entered only into Stripe's UI, never
-        // posted directly to our API: https://docs.stripe.com/testing#cards.
-        openSheet()
-        saveTestCard("4242424242424242")
+            // Official Stripe test cards are entered only into Stripe's UI,
+            // never posted directly to our API: https://docs.stripe.com/testing#cards.
+            openSheet()
+            saveTestCard("4242424242424242")
+        }
+        // A private operator may resume only after reconciling the exact first
+        // successful setup and single default Visa against the provider/API.
         let cardA = try waitForCard(last4: "4242")
-        assertDefault(cardA)
+        assertDefault(cardA, allowPendingSetup: resumeAfterVisa)
         openSheet()
         saveTestCard("5555555555554444")
         let cardB = try waitForCard(last4: "4444")
@@ -58,7 +62,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         tap("payments.method.\(cardB)")
         tap("paymentsRow_\(cardB)_setDefault")
         assertDefault(cardB)
-        XCTAssertFalse(element("paymentsRow_\(cardA)_defaultBadge").exists)
+        XCTAssertFalse(element("payments.method.\(cardA)").label.localizedCaseInsensitiveContains("default"))
 
         restartAndOpenPayments()
         XCTAssertTrue(element("payments.method.\(cardA)").waitForExistence(timeout: 20))
@@ -80,11 +84,11 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     private func openPayments() {
-        if element("payments.screen").exists { return }
+        if element("payments.addMethodBtn").exists { return }
         tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
         tap("navDrawer.item.settings")
         tap("groupedListRow_paymentsPayouts")
-        XCTAssertTrue(element("payments.screen").waitForExistence(timeout: 20))
+        print("PAYMENT_IDENTITY_GATE")
         XCTAssertTrue(element("payments.addMethodBtn").waitForExistence(timeout: 20))
     }
 
@@ -109,7 +113,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     private func saveTestCard(_ number: String) {
         // These identifiers come from the pinned Stripe SDK's own UI tests.
         // A customer with a saved card starts at the SDK's selection screen.
-        if !app.textFields["Card number"].exists { tapButton("+ Add") }
+        if !app.textFields["Card number"].exists { tap("+ Add") }
         fillStripeField("Card number", text: number)
         fillStripeField("expiration date", text: "1234")
         fillStripeField("CVC", text: "123")
@@ -139,12 +143,15 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         return id
     }
 
-    private func assertDefault(_ id: String) {
+    private func assertDefault(_ id: String, allowPendingSetup: Bool = false) {
         // The default badge is optimistic; wait for the API/reload operation
         // to settle before treating it as durable or restarting the app.
-        assertAddLabel("Add payment method")
+        let labels = allowPendingSetup ? ["Add payment method", "Retry saving card"] : ["Add payment method"]
+        expectation(for: NSPredicate(format: "label IN %@ AND enabled == true", labels), evaluatedWith: element("payments.addMethodBtn"))
+        waitForExpectations(timeout: 30)
         XCTAssertFalse(app.alerts["Something went wrong"].exists)
-        XCTAssertTrue(element("paymentsRow_\(id)_defaultBadge").waitForExistence(timeout: 20))
+        expectation(for: NSPredicate(format: "label CONTAINS[c] %@", "default"), evaluatedWith: element("payments.method.\(id)"))
+        waitForExpectations(timeout: 20)
     }
 
     private func assertAddLabel(_ label: String) {
@@ -201,7 +208,9 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     private func tapBack() {
-        let back = app.buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", "Back", "BackButton")).firstMatch
+        // The enclosing navigation button returns to Hub. Use the Payments
+        // bar's Back control to return to Settings before normal logout.
+        let back = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier == %@", "Back", "paymentsTopBar")).firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
     }
