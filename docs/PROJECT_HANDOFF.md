@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser alert preferences and account changes — September 10
+
+Browser popups now follow the server's push eligibility stream; in-app updates
+remain available with alerts off. Restoring preferences does not replay old
+alerts. Socket connections and retained popups retire on same-tab or cross-tab
+session changes, including replacement cookie sessions with the same marker.
+The [browser report](browser-notification-preferences-2026-09-10.md) records
+1,089 web checks, zero type/lint errors, 4,833 backend checks (16 existing skips),
+all privacy gates and independent review. Actual combined browser acceptance
+and current-head CI remain open; no provider/device update occurred.
+
+**Next:** complete historical assigned-payment recovery and its web/native
+controls, including the existing continue-authorization button that currently
+sets state without displaying a payment form. Then finish cancellation/dispute/
+Connect/debt workflows, fresh full sandbox paid-gig acceptance, capacity/retention
+checks and checked integration. Draft PR #32 has iOS claim review `9035329a1` and
+a further dashboard runtime fix `a68bbc5a8` pushed; the affected iOS 18.5 CI proof
+is pending, while Android claims and private evidence/attachments continue.
+All paid dependencies remain deferred together until final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
 ### Android refund recovery checkpoint — September 10
 
 Both native clients now have source implementations for exact payer refund and
