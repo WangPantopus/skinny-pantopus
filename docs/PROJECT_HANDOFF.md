@@ -36,8 +36,17 @@ verification-age rollout or hosted Home migration ran. This remains a source
 checkpoint, not full Home acceptance or a release.
 
 Source checkpoint `0362ba8f2` is committed and pushed. Current master has been
-integrated, retaining the completed payment changes and both handoff records.
-Repeat the combined backend/schema checks before the next source checkpoint.
+integrated as `4e0ecaa3e`, retaining the completed payment changes and both
+handoff records. The combined backend suite passes **4,766 tests (16 skipped),
+295 suites**. A fresh disposable Supabase 2.116.0 replay passes all **19 committed
+migrations**, **25 raw SQL contracts and 25 pgTAP wrappers**, all **6 real
+SDK/PostgREST baseline checks**, and payment concurrency assertions across 32
+connections. Application lint covers **142 functions and 75 trigger bindings**
+with zero errors and five existing warnings. Existing databases were untouched;
+all exact test fixtures are removed. The payment concurrency harness now removes
+its independent public.User fixture as well as auth.users and asserts that the
+exact user/card/removal records are gone. Pending invitation/sharing sources
+were not included in this combined checkpoint's replay.
 
 **Next:** finish
 invite creation/acceptance/decline and household-request conversion. Follow with
