@@ -59,3 +59,28 @@ pre-release partial refund, and the complete synthetic paid-gig provider journey
 Historical Connect reversal/debt and broader dispute accounting remain separate
 release checks. The existing successful saved-card fixtures are already cleaned
 and must not be reused for this acceptance.
+
+## Worker release projection follow-up
+
+The payer now starts a new refund only after the server explicitly reports
+worker earnings as held. A partially refunded payment already credited to the
+worker, an external transfer, missing release state or unknown reconciliation
+shows a support/status path. Reading status closes an already-open creation
+form when the worker release has completed. Recovery of a previously sent
+request keeps its existing identity and caller-specific retry availability.
+
+Shared types carry the separate release status and optional exact wallet
+settlement receipt. The UI checks receipt identity, currency, amount, refund
+basis and status before showing a credit. A fully refunded payment can report
+zero remaining earnings without claiming a credit receipt. Worker summaries
+separate original expected earnings from the amount historically credited;
+they do not present the payer's gross net as worker income, add separate tips
+to that receipt, or claim a current wallet balance after later adjustments.
+
+The complete expanded web suite passes **81 suites / 1,082 tests**. Final
+focused refund/summary/session checks pass **58 tests**, changed-file lint
+passes and the TypeScript gate has zero errors. Independent final contract
+review passes. These responses are controlled fixtures; the corresponding
+`20260910070000` settlement backend is still being verified in the same draft
+PR and no real provider or hosted acceptance is claimed. Native refund controls
+and the complete paid-gig sandbox lifecycle remain unfinished.

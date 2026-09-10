@@ -14,6 +14,24 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Worker release display checkpoint — September 9
+
+Web refunds now require an explicit held-worker state before starting a new
+request. Worker summaries distinguish original expected earnings from the exact
+historical wallet credit after refunds, including zero earnings and subsequent
+adjustments. The [web report](paid-gig-web-refunds-2026-09-09.md) records **1,082
+web tests**, **58 final focused checks**, zero TypeScript/lint errors and
+independent review. Durable refund checkpoint `80d155b30` is committed/pushed;
+the matching residual-settlement backend (`20260910070000`) is still under
+local database/recovery verification in draft PR #34. Do not deploy the new
+projection independently or treat source tests as provider acceptance.
+
+Next finish and review that settlement transaction, then native refund controls,
+historical assigned authorization and the complete fresh sandbox paid-gig
+journey. Home claim invitation checkpoint `d35f7b844` is committed/pushed
+separately in draft PR #32; task/calendar regression, legacy claim review and
+iOS finance permission controls continue there. No owner device input is pending.
+
 ### Durable refund checkpoint — September 9
 
 Payer/admin refunds and authorization-hold releases now retain one protected

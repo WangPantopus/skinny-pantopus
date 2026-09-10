@@ -1,4 +1,5 @@
 import type * as api from '@pantopus/api';
+import { validRelease } from './payeeRelease';
 
 export type RefundHistory = Awaited<ReturnType<typeof api.payments.getPaymentRefunds>>;
 export type RefundRequest = RefundHistory['requests'][number];
@@ -31,7 +32,7 @@ export function validSummary(value: unknown, paymentId: string, total: number): 
   const p = value as RefundSummary;
   return p.id === paymentId && p.amount_total === total && p.currency?.toLowerCase() === 'usd'
     && Number.isSafeInteger(p.refunded_amount ?? 0) && (p.refunded_amount ?? 0) >= 0
-    && (p.refunded_amount ?? 0) <= total && typeof p.payment_status === 'string';
+    && (p.refunded_amount ?? 0) <= total && typeof p.payment_status === 'string' && validRelease(p);
 }
 
 export function isPending(r: RefundRequest): boolean {

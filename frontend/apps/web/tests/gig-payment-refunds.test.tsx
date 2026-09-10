@@ -18,6 +18,7 @@ const payment: Payment = {
   amount_total: 3100, amount_subtotal: 3100, amount_platform_fee: 310, amount_to_payee: 2790,
   refunded_amount: 0, currency: 'usd', payment_type: 'gig_payment', payment_status: 'captured_hold',
   captured_at: '2026-09-09T12:00:00Z', created_at: '', updated_at: '',
+  payee_release_status: 'held', wallet_settlement: null,
 };
 const request = (changes: Partial<RefundRequest> = {}): RefundRequest => ({
   requestId, paymentId: payment.id, operation: 'refund', amountCents: 3100, currency: 'usd',
@@ -253,5 +254,70 @@ test('historical small policy refunds remain readable without offering an unavai
   render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
   expect(await screen.findByText('$0.25 refund is pending.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Retry this request' })).not.toBeInTheDocument();
+  expect(refund).not.toHaveBeenCalled();
+});
+
+test.each<Payment['payee_release_status']>(['wallet_credited', 'external_transfer', 'unknown', undefined])(
+  'release status %s blocks a new payer refund even when payment remains partially refunded', async (release) => {
+    getHistory.mockResolvedValue(history([], { payment_status: 'refunded_partial', refunded_amount: 1000, payee_release_status: release }));
+    render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+    expect(await screen.findByText(/Contact support/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request a refund' })).not.toBeInTheDocument();
+    expect(refund).not.toHaveBeenCalled();
+  },
+);
+
+test('an explicit held partial refund still permits a new request for only the remaining amount', async () => {
+  getHistory.mockResolvedValue(history([], { payment_status: 'refunded_partial', refunded_amount: 1000 }));
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  await openForm();
+  expect(screen.getByText(/Up to \$21.00 is available/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '21.01' } });
+  await confirm();
+  expect(refund).not.toHaveBeenCalled();
+});
+
+test('a foreign settlement receipt never enables refund creation or successful history', async () => {
+  getHistory.mockResolvedValue(history([], {
+    payee_release_status: 'wallet_credited', refunded_amount: 1000,
+    wallet_settlement: { id: secondId, paymentId: 'other-payment', status: 'credited', amountCents: 1890,
+      currency: 'usd', refundBasisCents: 1000, createdAt: '2026-09-10T00:00:00Z' },
+  }));
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not confirm');
+  expect(screen.queryByRole('button', { name: 'Request a refund' })).not.toBeInTheDocument();
+});
+
+test('an existing pending operation retains its identity while release state is unknown', async () => {
+  getHistory.mockResolvedValue(history([request()], { payee_release_status: 'unknown' }));
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry this request' }));
+  await waitFor(() => expect(refund).toHaveBeenCalledWith(payment.id, 'requested_by_customer', undefined, { requestId }));
+});
+
+test('a newly recorded wallet credit closes an already-open refund form on status refresh', async () => {
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  await openForm();
+  getHistory.mockResolvedValue(history([], { payee_release_status: 'wallet_credited' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
+  expect(await screen.findByText(/Earnings have been credited/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Confirm refund request' })).not.toBeInTheDocument();
+  expect(refund).not.toHaveBeenCalled();
+});
+
+test('a fully refunded payment can report no earnings without claiming a wallet credit receipt', async () => {
+  getHistory.mockResolvedValue(history([], { payment_status: 'refunded_full', refunded_amount: 3100,
+    payee_release_status: 'no_earnings', wallet_settlement: null }));
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  expect(await screen.findByText('No worker earnings remain after refunds.')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(refund).not.toHaveBeenCalled();
+});
+
+test('an unproven partial zero-earnings state cannot enable a new refund', async () => {
+  getHistory.mockResolvedValue(history([], { payment_status: 'refunded_partial', refunded_amount: 1000,
+    payee_release_status: 'no_earnings', wallet_settlement: null }));
+  render(<GigPaymentRefundPanel actorId="payer" payment={payment} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not confirm');
   expect(refund).not.toHaveBeenCalled();
 });

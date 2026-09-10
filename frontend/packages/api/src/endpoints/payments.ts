@@ -197,7 +197,8 @@ export interface PaymentRefundReceipt {
 }
 
 export type RefundPaymentSummary = Pick<Payment,
-  'id' | 'payment_status' | 'amount_total' | 'refunded_amount' | 'currency' | 'captured_at'>;
+  'id' | 'payment_status' | 'amount_total' | 'refunded_amount' | 'currency' | 'captured_at'
+  | 'payee_release_status' | 'wallet_settlement'>;
 
 export interface PaymentRefundHistory {
   requests: PaymentRefundRequest[];

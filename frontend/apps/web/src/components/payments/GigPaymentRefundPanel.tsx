@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import type { Payment } from '@pantopus/types';
+import { releaseMessage } from './payeeRelease';
 import {
   centsInput, isPending, money, readAttempt, receiptText, recoveryKey, saveAttempt, sameTerms,
   validRequest, validSummary,
@@ -115,7 +116,8 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
   const remaining = summary.amount_total - (summary.refunded_amount || 0);
   const releasing = summary.payment_status === 'authorized' && !summary.captured_at;
   const mayRequest = ['authorized', 'captured_hold', 'transfer_scheduled', 'refunded_partial'].includes(summary.payment_status)
-    && remaining > 0 && summary.currency.toLowerCase() === 'usd';
+    && summary.payee_release_status === 'held' && remaining > 0 && summary.currency.toLowerCase() === 'usd';
+  const releaseNotice = releaseMessage(summary);
   const activeReceipt = attempt && requests.find((r) => r.requestId === attempt.requestId);
 
   async function submit(existing?: RefundAttempt) {
@@ -194,15 +196,16 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
   }
 
   if (invalidated) return <p role="alert" className="text-sm">Your session or connection changed. Reopen this payment to continue safely.</p>;
-  if (ready && !requests.length && !attempt && !mayRequest) return null;
+  if (ready && !requests.length && !attempt && !mayRequest && !releaseNotice) return null;
 
   return (
     <section className="rounded-xl border border-app-border bg-app-surface p-4 space-y-3" aria-label="Refunds and hold releases">
       <h4 className="font-semibold text-app-text">Refunds and hold releases</h4>
+      {ready && releaseNotice && <p className="text-sm text-app-text-secondary">{releaseNotice}</p>}
       {requests.map((r) => <p key={r.requestId} className="text-sm text-app-text-secondary">{receiptText(r)}</p>)}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {attempt && !activeReceipt && <p className="text-sm">This request has not been confirmed yet.</p>}
-      {(!ready || attempt || requests.length > 0) && <button type="button" onClick={() => void loadHistory()} disabled={busy}
+      {<button type="button" onClick={() => void loadHistory()} disabled={busy}
         className="text-sm font-medium text-app-primary disabled:opacity-50">{busy ? 'Checking…' : 'Check status'}</button>}
       {ready && attempt && (!activeReceipt || (isPending(activeReceipt) && activeReceipt.canRetry)) && (
         <button type="button" onClick={() => void submit(attempt)} disabled={busy}
