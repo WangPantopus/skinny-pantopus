@@ -38,8 +38,53 @@ the earlier source checkpoint below is historical where it conflicts.
 
 ### Earlier source integration checkpoint — September 9
 
-**Next active work:** `/private/tmp/pantopus-staging-native-mail`, branch
-`codex/staging-native-mail`, starting from merged master `3ce4018f5`.
+**Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
+`codex/staging-mail-unit-binding`. The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
+records exact apartment/destination binding plus atomic confirmation, current
+membership retry/status and legacy partial-proof recovery. Independent review
+also repaired Home-only address changes, pending-owner/resident transitions,
+rejected-claim status, and webhook/dispatch metadata races. All 4,554 backend
+tests and privacy gates pass. The database has 17 passing SQL contracts and
+124 application functions/73 trigger bindings. Real competing transactions
+prove one membership, bounded guesses, concurrent-freeze/authority denial and
+preservation of confirmation metadata during vendor updates.
+
+Hosted multi-unit acceptance and exact cleanup now pass. Both additive functions
+were applied only to Free staging; existing records and the absent ledger were
+preserved. The private candidate runs committed `694a213e2`
+(`68e3e052a578`), with `26102bfb2`/`312b5a382fd6` retained stopped for rollback.
+One real Lob test card targets Unit 4 while Unit 5 has another resident. Three
+concurrent HTTP confirmations produce one exact membership; wrong/foreign proof,
+changed Home, frozen access, rejected claim and revoked member are denied.
+Concurrent signed synthetic webhook processing preserves completion metadata;
+same-code retries after expiry preserve the original member and proof count.
+The exact postcard, temporary Homes/proofs/claims and callback are removed;
+all fixture sessions are revoked, zero push tokens remain, and original Home
+document IDs are unchanged. Public/browser/production runtimes are unchanged.
+
+Next ready and integrate [PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29)
+after fresh current-head CI, then finish the isolated PaymentSheet milestone.
+[Full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34424933888)
+passed at `694a213e2`, including the repaired migration safeguard and complete
+database replay. No checks are waived. The modern printed web link, physical
+mail and externally delivered Lob callbacks remain outside this acceptance;
+the separate native postcard simulator journey is already complete.
+
+[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) merged as
+`2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after
+[full current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34401283503)
+passed at `95842b119`, including all three iOS simulator jobs and Android
+quality/build/snapshots/instrumented tests. Its [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34404747901) also passed.
+The prior native worktree and branch are preserved. All native simulator mail
+fixtures are cleaned; no owner device check is pending.
+
+The next native PaymentSheet repair is isolated in
+`/private/tmp/pantopus-staging-payment-sheet`, branch `codex/staging-payment-sheet`,
+from master `2259b8ee9`. Backend and native changes are in progress there:
+reconcile the exact owned successful SetupIntent before claiming a saved card,
+retain retry state and prevent duplicate presentation. This is separate from
+PR #29; no payment provider calls or live fixtures have run for that milestone.
+
 [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
 19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)
 passed at `d24632cda`. Backend, web, database replay/contracts and image checks
@@ -89,10 +134,9 @@ Both exact Lob test postcards and temporary Home/proof/claim/occupancy records
 are removed; all fixture sessions are revoked, no push tokens remain, and the
 original document IDs are preserved. Do not rerun these completed publishers.
 
-[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) awaits full
-current-head CI and integration. Its earlier auxiliary Docker Hub pull returned
-HTTP 500; the latest source must pass that check as well. Next continue modern
-multi-unit attachment and remaining payment/OAuth acceptance while CI runs.
+[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) is integrated
+after full CI, including the successful replacement for the earlier Docker Hub
+HTTP 500. Continue modern mail acceptance, then the remaining payment/OAuth work.
 No owner device observation is pending. Simulator proof is not physical mail or
 an externally delivered Lob callback.
 
