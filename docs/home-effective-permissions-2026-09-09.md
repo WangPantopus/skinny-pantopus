@@ -54,3 +54,21 @@ regressions, then review defaults and perform ordinary household acceptance.
 
 PaymentSheet work remains separate in draft PR #31. Its current source checks
 pass; actual native SDK acceptance and provider cleanup are still in progress.
+
+## Separate finance RLS checkpoint
+
+The follow-up migration replaces 18 overlapping policies with 12 distinct read,
+insert, update and delete policies across HomeBill, HomeSubscription and
+HomeBillSplit. Finance reads require finance.view; writes require finance.manage.
+Home editing, legacy ownership and split assignment cannot restore denied access.
+A narrowly scoped parent-bill helper resolves the exact split without exposing
+bill data. Unknown hosted policies abort migration for review. Client TRUNCATE,
+REFERENCES and TRIGGER grants are removed because RLS does not cover them.
+
+The new contract reproduced the former owner-read bypass before the repair.
+All **20 SQL contracts** now pass, including ten actors across the three tables,
+explicit owner denies, child/ended membership, view-only/manage-only separation,
+foreign writes and positive controls. INSERT RETURNING cannot bypass a read deny.
+A populated migration rehearsal preserves all financial rows and role grants.
+Fixtures roll back. No hosted Home migration or default grant ran. Authority,
+deletion, record visibility and client navigation remain active release blockers.

@@ -14,6 +14,22 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home finance RLS source checkpoint — September 9
+
+Draft [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32) now adds a
+separate finance RLS repair after the effective-permission checkpoint. All 20
+local SQL contracts pass; a ten-actor/three-table matrix and populated migration
+rehearsal prove explicit denies and row preservation. Ownership, home.edit and
+split assignment no longer bypass finance permissions through legacy policies.
+The first checkpoint `2fabe0c94` passed full CI; this new head must pass again.
+No hosted Home changes or ordinary role grants ran. Continue transactional
+IAM/deletion, task/calendar record and attachment access, then client navigation
+and reviewed defaults. Details remain in the linked effective-permission report.
+
+Android real PaymentSheet acceptance/provider checks pass; iOS acceptance and
+exact payment cleanup continue independently in PR #31. Do not rerun completed
+Android card setup, mail or physical iPhone Beacon journeys.
+
 ### Current Home authorization checkpoint — September 9
 
 The first bounded Home repair is in `/private/tmp/pantopus-home-permission-boundaries`,
