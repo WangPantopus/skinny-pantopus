@@ -7,8 +7,6 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomePrivateEvidenceApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -75,8 +73,8 @@ open class HomePrivateEvidenceRepository
                 throw HttpException(response)
             }
             val body = requireNotNull(response.body())
-            withContext(Dispatchers.IO) {
-                body.use {
+            body.use {
+                readPrivateHomeMedia(erase = { content: HomeEvidenceBytes -> content.bytes.fill(0) }) {
                     require(it.contentLength() <= HOME_EVIDENCE_MAX_BYTES)
                     val bytes = readHomeEvidenceBytes(it.byteStream())
                     require(bytes.isNotEmpty() && bytes.size <= HOME_EVIDENCE_MAX_BYTES)

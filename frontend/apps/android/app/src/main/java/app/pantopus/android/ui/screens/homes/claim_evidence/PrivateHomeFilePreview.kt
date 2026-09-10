@@ -24,15 +24,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import app.pantopus.android.data.homes.readPrivateHomeMedia
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.max
 
 private data class PrivateFilePage(val bitmap: Bitmap?, val text: String?, val pageCount: Int)
+
 private const val TEXT_PAGE_LENGTH = 15_000
 private const val PREVIEW_IMAGE_EDGE = 1600
 
@@ -51,7 +51,10 @@ fun PrivateHomeFilePreview(
         rendered = null
         error = null
         try {
-            rendered = withContext(Dispatchers.IO) { renderEvidence(context, bytes, mimeType, page) }
+            rendered =
+                readPrivateHomeMedia(erase = { result: PrivateFilePage -> result.bitmap?.recycle() }) {
+                    renderEvidence(context, bytes, mimeType, page)
+                }
             onDisplayed()
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -109,8 +112,13 @@ private fun renderPdfEvidence(
 ): PrivateFilePage {
     val temporary = File.createTempFile("private-claim-", ".pdf", context.cacheDir)
     try {
-        temporary.writeBytes(bytes)
-        ParcelFileDescriptor.open(temporary, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+        ParcelFileDescriptor.open(temporary, ParcelFileDescriptor.MODE_READ_WRITE).use { descriptor ->
+            // Unlink the empty file before writing private data. The descriptor
+            // remains seekable for PdfRenderer and is reclaimed on process death.
+            check(temporary.delete()) { "Could not protect the temporary document preview." }
+            ParcelFileDescriptor.AutoCloseOutputStream(ParcelFileDescriptor.dup(descriptor.fileDescriptor)).use {
+                it.write(bytes)
+            }
             return renderPdfDescriptor(descriptor, index)
         }
     } finally {

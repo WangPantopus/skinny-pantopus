@@ -14,13 +14,18 @@ import javax.inject.Inject
 private const val MEDIA_CHANGED = "The attachment changed. Reload its current details."
 internal val TASK_MEDIA_UUID = Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
 
-class HomeTaskMediaAccessFactory @Inject constructor(
-    private val tasks: HomeTaskAccessFactory,
-    private val repository: HomeTaskMediaRepository,
-) {
-    fun create(homeId: String, taskId: String, scope: CoroutineScope) =
-        HomeTaskMediaAccess(homeId, taskId, tasks.create(homeId, scope), repository)
-}
+class HomeTaskMediaAccessFactory
+    @Inject
+    constructor(
+        private val tasks: HomeTaskAccessFactory,
+        private val repository: HomeTaskMediaRepository,
+    ) {
+        fun create(
+            homeId: String,
+            taskId: String,
+            scope: CoroutineScope,
+        ) = HomeTaskMediaAccess(homeId, taskId, tasks.create(homeId, scope), repository)
+    }
 
 /** Created with task detail's opening identity, before any suspended media read. */
 class HomeTaskMediaAccess(
@@ -51,14 +56,15 @@ class HomeTaskMediaAccess(
         try {
             check(list().canUpload) { TASK_ACCESS_CHANGED }
             val bytes = pending.copyBytes()
-            val response = try {
-                repository.upload(tasks.currentSession(), taskId, pending.id, pending.serverFilename, pending.mimeType, bytes)
-                    .mediaValue()
-            } catch (error: NetworkError) {
-                throw HomeTaskMediaUploadFailure(error)
-            } finally {
-                bytes.fill(0)
-            }
+            val response =
+                try {
+                    repository.upload(tasks.currentSession(), taskId, pending.id, pending.serverFilename, pending.mimeType, bytes)
+                        .mediaValue()
+                } catch (error: NetworkError) {
+                    throw HomeTaskMediaUploadFailure(error)
+                } finally {
+                    bytes.fill(0)
+                }
             tasks.requireCurrent()
             val record = response.media.singleOrNull()
             check(record != null) { MEDIA_CHANGED }
@@ -109,12 +115,18 @@ class HomeTaskMediaAccess(
         }
     }
 
-    private fun requireRemoved(current: HomeTaskMediaDto, original: HomeTaskMediaDto) {
+    private fun requireRemoved(
+        current: HomeTaskMediaDto,
+        original: HomeTaskMediaDto,
+    ) {
         check(current.sameFile(original) && current.state == "retired") { MEDIA_CHANGED }
         check(!current.available && current.cleanupPending == false) { "Attachment cleanup is unconfirmed. Retry removal." }
     }
 
-    private fun requireDownload(record: HomeTaskMediaDto, list: HomeTaskMediaList) {
+    private fun requireDownload(
+        record: HomeTaskMediaDto,
+        list: HomeTaskMediaList,
+    ) {
         check(record.available && record.state == "ready" && list.media.contains(record)) { MEDIA_CHANGED }
     }
 
@@ -129,7 +141,8 @@ class HomeTaskMediaAccess(
     }
 }
 
-private fun <T> NetworkResult<T>.mediaValue(): T = when (this) {
-    is NetworkResult.Success -> data
-    is NetworkResult.Failure -> throw error
-}
+private fun <T> NetworkResult<T>.mediaValue(): T =
+    when (this) {
+        is NetworkResult.Success -> data
+        is NetworkResult.Failure -> throw error
+    }

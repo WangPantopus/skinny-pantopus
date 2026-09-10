@@ -78,7 +78,12 @@ class HomeTaskMediaController(
         return pickerRevision
     }
 
-    fun picked(name: String, mime: String, bytes: ByteArray, expectedRevision: Int) {
+    fun picked(
+        name: String,
+        mime: String,
+        bytes: ByteArray,
+        expectedRevision: Int,
+    ) {
         if (!state.value.mayChoose || expectedRevision != pickerRevision || !access.isCurrent) return
         val copy = bytes.copyOf()
         run { ticket ->
@@ -88,10 +93,11 @@ class HomeTaskMediaController(
                     val selected = PendingTaskMediaUpload(UUID.randomUUID().toString(), name, mime, copy)
                     pickerRevision++
                     pending = selected
-                    mutable.value = mutable.value.withProgress(
-                        pending = TaskMediaSelection(selected.id, selected.localName, selected.size),
-                        attempted = false, removedUploadId = null,
-                    )
+                    mutable.value =
+                        mutable.value.withProgress(
+                            pending = TaskMediaSelection(selected.id, selected.localName, selected.size),
+                            attempted = false, removedUploadId = null,
+                        )
                 }
             } finally {
                 copy.fill(0)
@@ -185,31 +191,39 @@ class HomeTaskMediaController(
         inFlight = true
         val ticket = generation
         mutable.value = mutable.value.hidden().copy(busy = true, error = null, notice = null)
-        work = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                access.requireCurrent()
-                if (owns(ticket)) action(ticket)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: NetworkError) {
-                fail(ticket, error.displayMessage("Could not confirm attachment access. Retry the same action."))
-            } catch (error: IllegalStateException) {
-                fail(ticket, error.message ?: TASK_ACCESS_CHANGED)
-            } catch (error: IllegalArgumentException) {
-                fail(ticket, error.message ?: "Choose a supported private file of 25 MB or less.")
-            } finally {
-                finish()
+        work =
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    access.requireCurrent()
+                    if (owns(ticket)) action(ticket)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: NetworkError) {
+                    fail(ticket, error.displayMessage("Could not confirm attachment access. Retry the same action."))
+                } catch (error: IllegalStateException) {
+                    fail(ticket, error.message ?: TASK_ACCESS_CHANGED)
+                } catch (error: IllegalArgumentException) {
+                    fail(ticket, error.message ?: "Choose a supported private file of 25 MB or less.")
+                } finally {
+                    finish()
+                }
             }
-        }
     }
 
-    private fun accept(result: HomeTaskMediaList, ticket: Int, notice: String? = null) {
+    private fun accept(
+        result: HomeTaskMediaList,
+        ticket: Int,
+        notice: String? = null,
+    ) {
         if (owns(ticket)) {
             mutable.value = mutable.value.copy(media = result.media, canUpload = result.canUpload, confirmed = true, notice = notice)
         }
     }
 
-    private fun fail(ticket: Int, message: String) {
+    private fun fail(
+        ticket: Int,
+        message: String,
+    ) {
         if (owns(ticket)) mutable.value = mutable.value.hidden().copy(error = message)
     }
 

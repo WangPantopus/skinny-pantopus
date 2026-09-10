@@ -52,9 +52,13 @@ internal class HomeTaskMediaFixture {
         }
     }
 
-    fun access(scope: CoroutineScope): HomeTaskMediaAccess = HomeTaskMediaAccess(
-        home, task, HomeTaskAccessFactory(tasks, claimScopeFactory(identity)).create(home, scope), repository,
-    )
+    fun access(scope: CoroutineScope): HomeTaskMediaAccess =
+        HomeTaskMediaAccess(
+            home,
+            task,
+            HomeTaskAccessFactory(tasks, claimScopeFactory(identity)).create(home, scope),
+            repository,
+        )
 }
 
 internal suspend fun mediaDenied(action: suspend () -> Unit) {

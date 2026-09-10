@@ -18,6 +18,11 @@ All four browser findings below are now historical; remaining Home scope is open
 The resumed [installed iOS journey](home-ios-task-installed-journey-2026-09-10.md)
 now passes end to end after repairing the blank attachment sheet and the test
 workflow. Its newer evidence supersedes the original failed execution below.
+The resumed [Android attachment report](home-android-task-private-media-2026-09-10.md)
+closes the draft compiler/formatting, cancellation/temporary-file and stale image
+findings. Local full gates, emulator controls/PDF and the installed complete
+attachment journey pass. Remote required CI on the final head remains a separate
+gate. Older failed/unbuilt observations below are retained only as history.
 Read this document and the top of `PROJECT_HANDOFF.md` first; consult older
 reports only for the next concrete task. Refresh Git and CI before relying on
 the observations below.

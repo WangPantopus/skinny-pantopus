@@ -14,6 +14,25 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android attachment cleanup and installed acceptance — September 10
+
+The known Android compiler/formatting, cancellation cleanup and stale snapshot
+findings are resolved. Full local quality/build gates pass (4,486 JVM checks;
+80 existing snapshot skips), plus both installed controls and real PDF preview.
+The full installed task/attachment journey passed exact create and upload replay,
+OS routing, system picker, private preview, revocation hiding and four original
+removal attempts. The [Android attachment report](home-android-task-private-media-2026-09-10.md)
+records evidence and precise persistence/provider limits.
+
+**Next:** let required CI validate the final Home head, then continue the ordered
+Home scope: actual recurrence, task-to-Gig, relationships/residency, ownership,
+lease/resource cleanup and reachable workflow inventory. All four browser
+checkpoint findings and both installed native attachment journeys are now closed
+within the linked limits. Payment tip/recovery work on PR #34 remains unfinished.
+Reconcile the final combined migration stream, fresh/populated replay and current
+required checks before any merge. Both PRs stay draft. Paid services remain one
+final launch-preparation bundle. Owner-checkout files remain preserved.
+
 ### Browser attachment reselection — September 10
 
 All four checkpoint browser findings are addressed. Unknown uploads now retain

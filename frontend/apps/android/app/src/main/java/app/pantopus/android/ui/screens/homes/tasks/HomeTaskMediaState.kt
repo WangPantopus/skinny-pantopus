@@ -4,7 +4,9 @@ import app.pantopus.android.data.api.models.homes.HomeTaskMediaDto
 import app.pantopus.android.data.homes.HomeTaskMediaBytes
 
 data class TaskMediaSelection(val id: String, val localName: String, val size: Int)
+
 data class TaskMediaPreview(val record: HomeTaskMediaDto, val content: HomeTaskMediaBytes)
+
 data class TaskMediaProgress(
     val selection: TaskMediaSelection? = null,
     val attempted: Boolean = false,
@@ -37,6 +39,7 @@ data class HomeTaskMediaState(
     val mayDiscard get() = idle && pending != null && !attempted
     val mayAcknowledge get() = idle && removedUploadId != null && pending?.id == removedUploadId
     val mayRetryRemoval get() = idle && removing != null
+
     fun mayRemove(record: HomeTaskMediaDto) = mayChoose && record in media && record.removable
 
     internal fun withProgress(

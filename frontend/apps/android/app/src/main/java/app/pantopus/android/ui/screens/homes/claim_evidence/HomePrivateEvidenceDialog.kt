@@ -76,7 +76,8 @@ fun HomePrivateEvidenceDialog(
                 state.preview?.let { preview ->
                     Text(preview.document.fileName, color = PantopusColors.appText)
                     PrivateHomeFilePreview(
-                        preview.content.bytes, preview.document.mimeType,
+                        preview.content.bytes,
+                        preview.document.mimeType,
                         onDisplayed = { controller.previewDisplayed(preview) },
                     )
                     if (state.canVerify && preview.reviewToken != null) {

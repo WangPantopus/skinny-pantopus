@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.homes.tasks
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -18,7 +19,9 @@ class HomeTaskMediaControlsTest {
         compose.setContent {
             TaskMediaPendingControls(
                 HomeTaskMediaState(visible = true, active = true, progress = TaskMediaProgress(selection, attempted = true)),
-                { retried = it }, {}, {},
+                { retried = it },
+                {},
+                {},
             )
         }
         compose.onNodeWithTag("homeTaskMedia.retry").assertIsEnabled().performClick()
@@ -28,17 +31,29 @@ class HomeTaskMediaControlsTest {
     @Test fun retired_upload_acknowledgement_is_explicit_and_busy_retry_is_disabled() {
         var cleared: String? = null
         compose.setContent {
-            TaskMediaPendingControls(
-                HomeTaskMediaState(
-                    visible = true, active = true,
-                    progress = TaskMediaProgress(selection, attempted = true, removedUploadId = selection.id),
-                ),
-                {}, {}, { cleared = it },
-            )
-            TaskMediaPendingControls(
-                HomeTaskMediaState(visible = true, active = true, busy = true, progress = TaskMediaProgress(selection, attempted = true)),
-                {}, {}, {},
-            )
+            Column {
+                TaskMediaPendingControls(
+                    HomeTaskMediaState(
+                        visible = true,
+                        active = true,
+                        progress = TaskMediaProgress(selection, attempted = true, removedUploadId = selection.id),
+                    ),
+                    {},
+                    {},
+                    { cleared = it },
+                )
+                TaskMediaPendingControls(
+                    HomeTaskMediaState(
+                        visible = true,
+                        active = true,
+                        busy = true,
+                        progress = TaskMediaProgress(selection, attempted = true),
+                    ),
+                    {},
+                    {},
+                    {},
+                )
+            }
         }
         compose.onNodeWithTag("homeTaskMedia.clearRemoved").assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(selection.id, cleared) }

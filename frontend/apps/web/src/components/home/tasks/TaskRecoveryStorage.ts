@@ -50,4 +50,3 @@ export async function taskRecoveryEncryptionKey(db: IDBDatabase, keyId: string):
     transaction.onabort = transaction.onerror = () => reject(new Error('Protected task recovery could not be initialized.'));
   });
 }
-

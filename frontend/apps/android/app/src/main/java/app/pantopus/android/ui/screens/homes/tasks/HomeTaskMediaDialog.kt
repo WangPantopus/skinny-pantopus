@@ -48,9 +48,14 @@ fun HomeTaskMediaDialog(controller: HomeTaskMediaController) {
     val choose = rememberTaskMediaPicker(controller)
     HomeTaskResumeEffect(controller::resume, controller::pause)
     DisposableEffect(controller) { onDispose { controller.close() } }
-    Dialog(onDismissRequest = controller::close, properties = DialogProperties(
-        usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn,
-    )) {
+    Dialog(
+        onDismissRequest = controller::close,
+        properties =
+            DialogProperties(
+                usePlatformDefaultWidth = false,
+                securePolicy = SecureFlagPolicy.SecureOn,
+            ),
+    ) {
         Surface(Modifier.fillMaxWidth().fillMaxHeight(MEDIA_DIALOG_FRACTION).testTag("homeTaskMedia"), color = PantopusColors.appSurface) {
             Column(
                 Modifier.padding(Spacing.s4).verticalScroll(rememberScrollState()),
@@ -74,7 +79,12 @@ fun HomeTaskMediaDialog(controller: HomeTaskMediaController) {
             onDismissRequest = { removing = null },
             title = { Text("Remove attachment?") },
             text = { Text("The private file will be removed. Its history remains.") },
-            confirmButton = { TextButton(onClick = { removing = null; controller.remove(record) }) { Text("Remove") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    controller.remove(record)
+                }) { Text("Remove") }
+            },
             dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
         )
     }
@@ -101,8 +111,10 @@ private fun TaskMediaContent(
         Text(record.fileName)
         Text(mediaStatus(record))
         if (record.available) TextButton(onClick = { controller.open(record) }, enabled = !state.busy) { Text("Open attachment") }
-        if (state.mayRemove(record)) TextButton(onClick = { remove(record) }) {
-            Text(if (record.cleanupPending == true) "Retry file cleanup" else "Remove attachment")
+        if (state.mayRemove(record)) {
+            TextButton(onClick = { remove(record) }) {
+                Text(if (record.cleanupPending == true) "Retry file cleanup" else "Remove attachment")
+            }
         }
     }
     state.preview?.let { preview ->
@@ -130,7 +142,9 @@ internal fun TaskMediaPendingControls(
         } else {
             Text("Retry the same file until its upload is confirmed. Reopening attachments checks current server status.")
             TextButton(
-                onClick = { upload(pending.id) }, enabled = state.mayRetryUpload, modifier = Modifier.testTag("homeTaskMedia.retry"),
+                onClick = { upload(pending.id) },
+                enabled = state.mayRetryUpload,
+                modifier = Modifier.testTag("homeTaskMedia.retry"),
             ) {
                 Text("Save or retry this attachment")
             }
@@ -139,12 +153,13 @@ internal fun TaskMediaPendingControls(
     }
 }
 
-private fun mediaStatus(record: HomeTaskMediaDto): String = when (record.state) {
-    "legacy" -> "Older attachment unavailable. Verified reupload is required."
-    "reserved" -> "Upload incomplete. Retry the original file or remove this reservation before choosing it again."
-    "retired" -> if (record.cleanupPending == true) "Hidden; cleanup needs a retry" else "Removed; history retained"
-    else -> "Private file · ${record.fileSize} bytes"
-}
+private fun mediaStatus(record: HomeTaskMediaDto): String =
+    when (record.state) {
+        "legacy" -> "Older attachment unavailable. Verified reupload is required."
+        "reserved" -> "Upload incomplete. Retry the original file or remove this reservation before choosing it again."
+        "retired" -> if (record.cleanupPending == true) "Hidden; cleanup needs a retry" else "Removed; history retained"
+        else -> "Private file · ${record.fileSize} bytes"
+    }
 
 @Composable
 private fun rememberTaskMediaPicker(controller: HomeTaskMediaController): TaskMediaPicker {
@@ -152,35 +167,38 @@ private fun rememberTaskMediaPicker(controller: HomeTaskMediaController): TaskMe
     val scope = rememberCoroutineScope()
     var revision by remember { mutableStateOf<Int?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        val ticket = revision
-        revision = null
-        if (uri != null && ticket != null) scope.launch {
-            try {
-                val file = readTaskMediaSelection(context, uri)
-                try {
-                    // The system picker pauses the activity. Wait for the same panel's current access check.
-                    controller.state.first {
-                        val ready = it.active && !it.busy
-                        !it.visible || it.error != null || ready
+    val picker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val ticket = revision
+            revision = null
+            if (uri != null && ticket != null) {
+                scope.launch {
+                    try {
+                        val file = readTaskMediaSelection(context, uri)
+                        try {
+                            // The system picker pauses the activity. Wait for the same panel's current access check.
+                            controller.state.first {
+                                val ready = it.active && !it.busy
+                                !it.visible || it.error != null || ready
+                            }
+                            controller.picked(file.name, file.mimeType, file.bytes, ticket)
+                        } finally {
+                            file.bytes.fill(0)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: IOException) {
+                        error = failure.message ?: "Could not read this file. Choose it again."
+                    } catch (failure: IllegalArgumentException) {
+                        error = failure.message ?: "Choose a supported file of 25 MB or less."
+                    } catch (failure: SecurityException) {
+                        error = failure.message ?: "The selected file is no longer available. Choose it again."
+                    } catch (failure: IllegalStateException) {
+                        error = failure.message ?: "Choose a supported file of 25 MB or less."
                     }
-                    controller.picked(file.name, file.mimeType, file.bytes, ticket)
-                } finally {
-                    file.bytes.fill(0)
                 }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: IOException) {
-                error = failure.message ?: "Could not read this file. Choose it again."
-            } catch (failure: IllegalArgumentException) {
-                error = failure.message ?: "Choose a supported file of 25 MB or less."
-            } catch (failure: SecurityException) {
-                error = failure.message ?: "The selected file is no longer available. Choose it again."
-            } catch (failure: IllegalStateException) {
-                error = failure.message ?: "Choose a supported file of 25 MB or less."
             }
         }
-    }
     return TaskMediaPicker({
         controller.beginPick()?.let { ticket ->
             error = null
