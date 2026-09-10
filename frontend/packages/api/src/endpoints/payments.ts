@@ -297,53 +297,55 @@ export async function completePaymentSetup(gigId: string): Promise<{
   );
 }
 
-/**
- * Retry authorization after off-session auth failure.
- * Returns a new clientSecret for on-session SCA completion.
- */
-export async function retryAuthorization(gigId: string): Promise<{
-  clientSecret: string;
-  paymentIntentId: string;
-  paymentId: string;
-}> {
-  return post<{
-    clientSecret: string;
-    paymentIntentId: string;
-    paymentId: string;
-  }>(`/api/gigs/${gigId}/retry-authorization`);
+/** Exact displayed terms required before resuming an assigned payment. */
+export interface AssignedAuthorizationTerms {
+  expectedActorId: string;
+  expectedSessionScope: string;
+  expectedPaymentId: string;
+  expectedPayerId: string;
+  expectedAmountCents: number;
+  expectedPayeeId: string;
+  currency: 'usd';
 }
 
-/**
- * Continue an in-progress on-session authorization (authorize_pending).
- * Returns the existing PaymentIntent clientSecret.
- */
-export async function continueAuthorization(gigId: string): Promise<{
-  clientSecret?: string;
-  paymentIntentId?: string;
+export interface AssignedAuthorizationProgress {
+  gigId: string;
+  actorId: string;
+  sessionScope: string;
   paymentId: string;
-  alreadyAuthorized?: boolean;
-}> {
-  return post<{
-    clientSecret?: string;
-    paymentIntentId?: string;
-    paymentId: string;
-    alreadyAuthorized?: boolean;
-  }>(`/api/gigs/${gigId}/continue-authorization`);
-}
-
-/**
- * Refresh/reconcile payment status with Stripe (owner action).
- */
-export async function refreshPaymentStatus(gigId: string): Promise<{
+  payerId: string;
+  payeeId: string;
+  authorizationAttemptId: string;
+  paymentIntentId: string | null;
+  amountCents: number;
+  currency: 'usd';
   paymentStatus: string;
-  previousPaymentStatus: string;
-  changed: boolean;
-}> {
-  return post<{
-    paymentStatus: string;
-    previousPaymentStatus: string;
-    changed: boolean;
-  }>(`/api/gigs/${gigId}/refresh-payment-status`);
+  providerStatus: string | null;
+  authorizationReady: boolean;
+  alreadyAuthorized: boolean;
+  cancellationPending: boolean;
+  authorizationAvailableAt: string | null;
+  recoveryState: 'ready' | 'action_required' | 'pending' | 'needs_review';
+  canRetry: boolean;
+  clientSecret?: string;
+}
+
+/** Resume the exact assigned authorization without replacing an active intent. */
+export async function retryAuthorization(
+  gigId: string, terms: AssignedAuthorizationTerms,
+): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/retry-authorization`, terms);
+}
+
+export async function continueAuthorization(
+  gigId: string, terms: AssignedAuthorizationTerms,
+): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/continue-authorization`, terms);
+}
+
+/** Read provider state and reconcile its exact receipt; never creates an intent. */
+export async function refreshPaymentStatus(gigId: string): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/refresh-payment-status`);
 }
 
 /**

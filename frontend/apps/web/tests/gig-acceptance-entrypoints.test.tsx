@@ -11,7 +11,6 @@ jest.mock('@pantopus/api', () => ({ gigs: { getGigBids: (...args: unknown[]) => 
 jest.mock('@/components/gig-detail/GigBidCheckout', () => ({ gigBidCheckoutUrl: (gig: string, bid: string) => `/app/gigs/${gig}?action=payment_setup&bid=${bid}#payment-checkout` }));
 jest.mock('@/components/payments/StripeProvider', () => () => null);
 jest.mock('@/components/payments/GigPaymentSetup', () => () => null);
-jest.mock('@/components/payments/AuthorizationRetryBanner', () => () => null);
 jest.mock('@/components/user/UserIdentityLink', () => () => null);
 jest.mock('@/components/ui/confirm-store', () => ({ confirmStore: { open: jest.fn() } }));
 

@@ -7,9 +7,6 @@ import { Star, Medal, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import AuthorizationRetryBanner from '@/components/payments/AuthorizationRetryBanner';
-import StripeProvider from '@/components/payments/StripeProvider';
-import GigPaymentSetup from '@/components/payments/GigPaymentSetup';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 type AnyObj = Record<string, any>;
@@ -44,9 +41,6 @@ function ScopedOffersPanel({
   gigId,
   gigStatus,
   isOwner,
-  paymentStatus,
-  onStatusChange,
-  onOpenChat,
   refreshKey,
 }: OffersPanelProps) {
   const router = useRouter();
@@ -58,12 +52,6 @@ function ScopedOffersPanel({
   const [offers, setOffers] = useState<AnyObj[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [offersError, setOffersError] = useState<string | null>(null);
-
-  // Existing assigned-gig authorization retry; bid acceptance uses GigBidCheckout.
-  const [showPaymentSetup, setShowPaymentSetup] = useState(false);
-  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
-  const [paymentIsSetupIntent, setPaymentIsSetupIntent] = useState(false);
-  const [retryAmountCents, setRetryAmountCents] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOwner) return;
@@ -155,33 +143,6 @@ function ScopedOffersPanel({
 
   return (
     <>
-      {/* Authorization Retry Banner (owner only) */}
-      {paymentStatus === 'authorization_failed' && (
-        <AuthorizationRetryBanner
-          gigId={gigId}
-          onRetryClientSecret={async (cs) => {
-            if (!mounted.current) return;
-            try {
-              const { payment } = await api.payments.getPaymentForGig(gigId);
-              if (!mounted.current) return;
-              if (!payment || !Number.isSafeInteger(payment.amount_total) || payment.amount_total < 50 || payment.currency?.toLowerCase() !== 'usd') {
-                throw new Error('Could not verify the agreed payment amount.');
-              }
-              setRetryAmountCents(payment.amount_total);
-              setPaymentClientSecret(cs);
-              setPaymentIsSetupIntent(false);
-              setShowPaymentSetup(true);
-            } catch {
-              setOffersError('Could not verify payment progress. Refresh to retry.');
-            }
-          }}
-          onRetrySuccess={() => {
-            if (!mounted.current) return;
-            onStatusChange?.();
-          }}
-        />
-      )}
-
       {/* Offers list */}
       <div id="gig-offers" className="bg-app-surface rounded-xl p-6 border border-app-border">
         <div className="flex items-center justify-between mb-3">
@@ -387,22 +348,6 @@ function ScopedOffersPanel({
         )}
       </div>
 
-      {/* Existing assigned-gig retry; its backend reconciliation is a separate milestone. */}
-      {showPaymentSetup && paymentClientSecret && retryAmountCents !== null && (
-        <StripeProvider clientSecret={paymentClientSecret}>
-          <GigPaymentSetup clientSecret={paymentClientSecret} isSetupIntent={paymentIsSetupIntent}
-            gigId={gigId} amount={retryAmountCents}
-            onSuccess={() => {
-              if (!mounted.current) return;
-              setShowPaymentSetup(false);
-              setPaymentClientSecret(null);
-              onStatusChange?.();
-              void loadOffers();
-            }}
-            onError={() => setOffersError('Payment authorization is unconfirmed. Refresh to check its progress.')}
-            onClose={() => { setShowPaymentSetup(false); setPaymentClientSecret(null); }} />
-        </StripeProvider>
-      )}
     </>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
 import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -427,9 +430,13 @@ function GigDetailV2Content() {
 
   // Derived
   const currentUserId = currentUser?.id;
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
   const isMyGig = Boolean(
     currentUserId &&
-    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId)
+    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId || canManageGigAsBusinessMember)
   );
   const acceptedBy = gig?.accepted_by || gig?.acceptedBy?.id || gig?.accepted_bid?.bidder_id || gig?.worker_id;
   const iAmWorker = Boolean(currentUserId && String(acceptedBy) === String(currentUserId));
@@ -757,6 +764,7 @@ function GigDetailV2Content() {
 // ─── Page Export ──────────────────────────────────────────────────────
 
 export default function GigDetailV2Page() {
+  usePaymentRedirectCleanup();
   return (
     <Suspense>
       <GigDetailV2Content />

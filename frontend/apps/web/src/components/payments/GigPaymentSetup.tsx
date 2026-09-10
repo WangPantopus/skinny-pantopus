@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Lock } from 'lucide-react';
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { payments } from '@pantopus/api';
@@ -23,6 +23,10 @@ interface GigPaymentSetupProps {
   onError?: (error: string) => void;
   /** Called to close the modal/flow. */
   onClose: () => void | Promise<void>;
+  /** Retained SDK callbacks must still belong to the opening payment session. */
+  isCurrent?: () => boolean;
+  /** Verify the opening server session and operation immediately before SDK submission. */
+  beforeConfirm?: () => Promise<boolean>;
 }
 
 /**
@@ -42,25 +46,32 @@ export default function GigPaymentSetup({
   onSuccess,
   onError,
   onClose,
+  isCurrent,
+  beforeConfirm,
 }: GigPaymentSetupProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (submitting.current || (isCurrent && !isCurrent())) return;
 
       if (!stripe || !elements) {
         setErrorMessage('Payment system is loading. Please wait...');
         return;
       }
 
+      submitting.current = true;
       setProcessing(true);
       setErrorMessage(null);
 
       try {
+        if (beforeConfirm && !await beforeConfirm()) return;
+        if (isCurrent && !isCurrent()) return;
         if (isSetupIntent) {
           // ─── SetupIntent flow: save card for future authorization ───
           const { error: setupError } = await stripe.confirmSetup({
@@ -70,6 +81,8 @@ export default function GigPaymentSetup({
             },
             redirect: 'if_required',
           });
+
+          if (isCurrent && !isCurrent()) return;
 
           if (setupError) {
             setErrorMessage(setupError.message || 'Failed to save your card.');
@@ -96,6 +109,8 @@ export default function GigPaymentSetup({
             redirect: 'if_required',
           });
 
+          if (isCurrent && !isCurrent()) return;
+
           if (confirmError) {
             setErrorMessage(confirmError.message || 'Payment authorization failed.');
             onError?.(confirmError.message || 'Authorization failed');
@@ -106,14 +121,16 @@ export default function GigPaymentSetup({
           await onSuccess();
         }
       } catch (err: unknown) {
+        if (isCurrent && !isCurrent()) return;
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
         setErrorMessage(message);
         onError?.(message);
       } finally {
+        submitting.current = false;
         setProcessing(false);
       }
     },
-    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError]
+    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError, isCurrent, beforeConfirm]
   );
 
   const amountFormatted = `$${(amount / 100).toFixed(2)}`;

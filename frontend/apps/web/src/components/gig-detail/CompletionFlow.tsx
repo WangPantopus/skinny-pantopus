@@ -14,6 +14,7 @@ import * as api from '@pantopus/api';
 import FileUpload from '@/components/FileUpload';
 import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboarding';
 import TipModal from '@/components/payments/TipModal';
+import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import CancellationModal from './CancellationModal';
@@ -149,14 +150,6 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     }
   };
 
-  // Authorization pending
-  const [continuingAuthorization, setContinuingAuthorization] = useState(false);
-  const [refreshingAuthorization, setRefreshingAuthorization] = useState(false);
-  const [continueAuthorizationError, setContinueAuthorizationError] = useState<string | null>(null);
-  const [, setPaymentClientSecret] = useState<string | null>(null);
-  const [, setPaymentIsSetupIntent] = useState(false);
-  const [, setShowPaymentSetup] = useState(false);
-
   // Check no-show eligibility
   useEffect(() => {
     const checkNoShowEligibility = async () => {
@@ -288,41 +281,6 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     }
   };
 
-  const handleContinueAuthorization = async () => {
-    setContinuingAuthorization(true);
-    setContinueAuthorizationError(null);
-    try {
-      const result = await api.payments.continueAuthorization(gigId);
-      if (result?.alreadyAuthorized) {
-        onStatusChange?.();
-        return;
-      }
-      if (result?.clientSecret) {
-        setPaymentClientSecret(result.clientSecret);
-        setPaymentIsSetupIntent(false);
-        setShowPaymentSetup(true);
-      } else {
-        setContinueAuthorizationError('No authorization flow available right now. Please refresh and try again.');
-      }
-    } catch (err: unknown) {
-      setContinueAuthorizationError(err instanceof Error ? err.message : 'Failed to continue authorization');
-    } finally {
-      setContinuingAuthorization(false);
-    }
-  };
-
-  const handleRefreshAuthorizationStatus = async () => {
-    setRefreshingAuthorization(true);
-    setContinueAuthorizationError(null);
-    try {
-      await api.payments.refreshPaymentStatus(gigId);
-      onStatusChange?.();
-    } catch (err: unknown) {
-      setContinueAuthorizationError(err instanceof Error ? err.message : 'Failed to refresh payment status');
-    } finally {
-      setRefreshingAuthorization(false);
-    }
-  };
 
   useImperativeHandle(ref, () => ({
     openCancelModal,
@@ -374,35 +332,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {/* Authorization Pending Banner (owner only) */}
-      {isOwner && gig?.payment_status === 'authorize_pending' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <h4 className="font-semibold text-amber-900 text-sm">Payment Authorization In Progress</h4>
-          <p className="text-sm text-amber-800 mt-1">
-            The worker cannot start until you finish card authorization.
-          </p>
-          {continueAuthorizationError && (
-            <p className="text-sm text-amber-900 mt-2 bg-amber-100 rounded p-2">
-              {continueAuthorizationError}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              onClick={handleContinueAuthorization}
-              disabled={continuingAuthorization || refreshingAuthorization}
-              className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {continuingAuthorization ? 'Opening…' : 'Complete Authorization'}
-            </button>
-            <button
-              onClick={handleRefreshAuthorizationStatus}
-              disabled={refreshingAuthorization || continuingAuthorization}
-              className="px-4 py-2 bg-app-surface text-amber-700 text-sm font-medium rounded-lg border border-amber-300 hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {refreshingAuthorization ? 'Refreshing…' : 'Refresh Status'}
-            </button>
-          </div>
-        </div>
+      {isOwner && currentUserId && gigStatus === 'assigned'
+        && ['authorization_failed', 'authorize_pending', 'ready_to_authorize', 'canceled'].includes(gig?.payment_status ?? '') && (
+        <AssignedGigAuthorization key={`${currentUserId}:${gigId}`} actorId={currentUserId}
+          gigId={gigId} payeeId={acceptedBy} onAuthorized={onStatusChange} />
       )}
 
       {/* Owner confirm completion panel */}

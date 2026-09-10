@@ -1,6 +1,9 @@
 // @ts-nocheck
 'use client';
 
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -132,6 +135,7 @@ interface GigMediaItem {
 }
 
 export default function GigDetailsPage() {
+  usePaymentRedirectCleanup();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -140,7 +144,6 @@ export default function GigDetailsPage() {
 
   const [gig, setGig] = useState<GigFullRecord | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [canManageGigAsBusinessMember, setCanManageGigAsBusinessMember] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Media gallery state
@@ -208,34 +211,10 @@ export default function GigDetailsPage() {
   // ---------- Derived ----------
   const currentUserId = user?.id;
 
-  useEffect(() => {
-    const resolveBusinessManageAccess = async () => {
-      if (!gig || !currentUserId) {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      const ownerId = gig.user_id || gig.poster_user_id || gig.poster_id;
-      const ownerAccountType = gig.creator?.account_type;
-      if (!ownerId || String(ownerId) === String(currentUserId) || ownerAccountType !== 'business') {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      try {
-        const access = await api.businessIam.getMyBusinessAccess(String(ownerId));
-        const canManage = Boolean(
-          access?.hasAccess &&
-          (access?.isOwner ||
-            (Array.isArray(access?.permissions) &&
-              (access.permissions.includes('gigs.manage') || access.permissions.includes('gigs.post')))
-          )
-        );
-        setCanManageGigAsBusinessMember(canManage);
-      } catch {
-        setCanManageGigAsBusinessMember(false);
-      }
-    };
-    void resolveBusinessManageAccess();
-  }, [gig, currentUserId]);
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
 
   const gigStatus = String(gig?.status ?? '');
   const isAssigned = gigStatus === 'assigned';

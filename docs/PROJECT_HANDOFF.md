@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser assigned-payment controls — September 10
+
+Both browser gig layouts now display the actual authorization form, resume exact
+displayed terms, check the opening server session before mutation and SDK
+submission, and confirm the server receipt before reporting readiness. Scheduled
+and cancelling payments remain explicit pending states; payment return secrets
+are removed even when authorization completes before page load. The
+[web report](paid-gig-web-assigned-authorization-2026-09-10.md) records the full
+web pass, type/lint results, independent review and provider-acceptance limits.
+The matching backend is committed/pushed as `e6f478891`.
+
+**Next:** finish iOS/Android assigned-payment recovery, then complete fresh
+provider/browser/emulator journeys and remaining payment lifecycle, durable
+attention and capacity checks. iOS source is under app-build verification;
+Android parity is in progress. Draft PR #34 remains unfinished. Home private
+attachments/evidence continue in draft PR #32; its regression found fixture
+updates and a real withdrawn-claim upload-retirement gap being repaired before
+that checkpoint. No paid dependencies, hosted migration or owner-device step
+ran. All paid services remain together for final launch preparation.
+
 ### Historical assigned-payment recovery — September 10
 
 Historical assigned payments now recover through one protected authorization
