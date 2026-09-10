@@ -53,6 +53,7 @@ public struct PaymentsView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("payments.screen")
         .sensitiveScreen()
         .confirmationDialog(
@@ -170,6 +171,7 @@ private extension PaymentsView {
             .padding(.bottom, Spacing.s5)
         }
         .refreshable { await viewModel.refresh() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paymentsContent")
     }
 
@@ -543,6 +545,7 @@ private extension PaymentsView {
         .padding(.horizontal, Spacing.s5)
         .padding(.top, 28)
         .padding(.bottom, 22)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("payments.empty")
     }
 
@@ -559,6 +562,7 @@ private extension PaymentsView {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .padding(.horizontal, Spacing.s3)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paymentsCard_\(id)")
     }
 

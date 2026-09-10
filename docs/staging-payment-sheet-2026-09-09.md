@@ -109,11 +109,58 @@ unused extra Stripe customer. The CAS prevents returning an uncommitted customer
 or binding a setup to the losing candidate; it does not atomically delete provider
 history. Free staging's read-only preflight found zero duplicate customer bindings
 and zero duplicate card defaults. No hosted migration or provider call has run
-for this milestone yet.
+for that local checkpoint.
 
-After source integration and checks: refresh the private staging candidate, run
-actual Stripe SDK/test-mode add/cancel/default/remove and cold-start journeys on
+## Free staging candidate checkpoint
+
+[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) is draft at
+`2e7b04293db851b60414983246503e914bbf95d2`, including PR #30's checked master
+merge. Its full CI runs separately from local verification. Backend milestone
+`034148e6b` and both native milestones are committed and pushed.
+
+The payment migration was applied only to Free staging `ptudkfqdhqpkbkzqlabu`:
+SHA-256 `a078f13d374c4e648385c95596b103de7f6093d44a7a14ff06e888cc1fb85380`.
+Before/after fingerprints preserve existing User, PaymentMethod, Payment, mail,
+Home, file, document and quota records, plus the absent hosted migration ledger.
+No duplicate defaults required normalization on this hosted application.
+
+The loopback-only private candidate is healthy at source `2e7b04293`, image
+`sha256:2e0a32e8b0e2caa849a28b3e401d0a37c0d9b6b8a50fd63a8608f994ce486d08`.
+The prior `68e3e052a578` candidate is retained stopped as
+`pantopus-home-documents-candidate-before-payment-sheet`. Public API/worker,
+browser API/web and production container identities remain unchanged.
+
+Two fresh synthetic actors have push disabled, no device tokens and initially
+empty saved cards. Stripe test mode is verified; actor setup created no setup
+intent or charge. Real iOS/Android simulator UI acceptance is now active through
+the localhost tunnel. Do not rerun the applied migration or actor initializer.
+Private operator runners retain progress and exact fixture identities.
+
+Next finish actual Stripe SDK/test-mode add/cancel/default/remove and cold-start journeys on
 both simulators, test recovery and foreign proof denial, verify no charge was
 created, and clean exact test cards/customers/sessions. Source tests do not certify
 PaymentSheet delivery or externally delivered callbacks. Production finance,
 Connect/payouts, charges/refunds and release rollout remain separate gates.
+
+## Android native acceptance and iOS accessibility checkpoint
+
+The Android localhost build from committed recovery source passes the real Stripe
+SDK journey: normal login, cancel, cold restart with the same pending setup,
+Visa and Mastercard save, second-card default, cold persisted default, cancelled
+removal, default fallback, both removals and normal logout. The private driver
+was reconciled at observed UI boundaries when SDK labels differed; no completed
+card setup was blindly replayed.
+
+Provider/API verification confirms exactly two successful owned test-mode setups,
+zero attached cards, two completed removal proofs, rejection of foreign and
+removed setup proofs, zero charges/PaymentIntents/payment rows, zero push tokens
+and preserved original document IDs. Authenticated client customer-binding
+changes are rejected and removal proofs remain service-only. Exact customer and
+session cleanup waits for both platforms; do not rerun Android UI acceptance.
+
+The iOS simulator's native identity check now succeeds after simulated Face ID
+enrollment and matching authentication. It exposed accessibility identifiers
+inherited from the Settings/payment card containers, hiding their child controls
+from XCTest. Explicit accessibility containment preserves those controls and
+screen grouping. Strict SwiftLint/SwiftFormat and the test build pass. The actual
+iOS SDK card journey is still pending, and final current-head CI is required.

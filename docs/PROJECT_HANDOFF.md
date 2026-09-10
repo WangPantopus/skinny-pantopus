@@ -14,48 +14,64 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Current payment recovery checkpoint — September 9
+### Android payment and Home source checkpoint — September 9
 
-Active work is `/private/tmp/pantopus-staging-payment-sheet`, branch
-`codex/staging-payment-sheet`. The [payment report](staging-payment-sheet-2026-09-09.md)
-records owned SetupIntent preparation/resume and durable confirmation, with
-57 focused tests, 4,548 backend tests and privacy gates passing before the mail
-integration. The frozen iOS lifecycle implementation passes all 36 focused tests
-and strict formatting/lint checks; Android passes all 49 focused tests, formatting,
-ktlintCheck, Detekt and compilation. The native/API contract review passes.
-The iOS/Android source milestones are pushed as `3afbf043d`/`6d322b1df`.
-The explicit opt-in iOS SDK journey compiles and passes strict lint; no live payment
-fixtures or candidate changes ran.
-The atomic default/removal and customer-binding repair now passes 73 focused
-tests, all 4,607 backend tests (16 skipped), privacy checks, 18 SQL contracts and
-32 concurrent PostgreSQL connections. Function lint has zero errors across
-130 functions/74 trigger bindings. Populated migration/rollback preserves original
-fields apart from the reviewed duplicate-default normalization; real-role tests
-deny forged customer bindings while retaining profile/signup behavior. Next apply
-the committed checked migration only to Free staging, refresh the private
-candidate, then exercise actual Stripe SDK/test-mode journeys on both simulators
-and clean exact fixtures. An unknown provider create response may leave an unused
-customer object; returned setups always use the durable winner.
+Android real SDK acceptance now passes cancellation/restart of the same setup,
+two-card default/cold persistence, removal cancellation, fallback, empty state
+and logout. Provider/API checks prove two successful setups, detached cards,
+foreign/removed-proof denial and no charges. Customer/session cleanup waits for
+both platforms. Do not repeat the completed Android actions. iOS identity check
+passes with simulated Face ID; accessibility containment is repaired and the test
+build/lint pass, with real iOS card acceptance next. The private API candidate
+remains committed `2e7b04293`/`2e0a32e8b0e2`; see the payment report below.
 
-PR #29 is merged as `3009eb0be78efc900c234cc8588a7206526f9626` after full final
-CI at `76ada1aa1` (run `34425328329`). Its modern mail staging journey and exact
-cleanup pass. Private candidate source `694a213e2`/image `68e3e052a578` is healthy;
-the previous `312b5a382fd6` is retained stopped. Both mail additive migrations
-are applied only to Free staging, preserving records and the absent ledger.
-Public/browser/production runtimes are unchanged. Do not rerun completed mail
-publishers, cleanup or appliers. The separate rollback binding fix, PR #30,
-merged as `c262b84afe96b160e4c45b454ff985c0acbcc4b8` at 02:06 UTC September 10
-after all final-head CI passed (run `34425834432`, head `8f7a6121a`), including
-all native simulators. All 47 local deployment tests also passed.
-Master `3009eb0be` is integrated into this payment branch by `98dbc77d0`;
-PR #29's merged-master CI also passes (run `34425657480`). Integrate PR #30's
-master merge before final payment checks. The independent staging
-inventory branch `codex/staging-adoption-plan` is pushed at `a6b1b5748`;
-its report records remaining schema/ACL differences and matching reference
-values, with no hosted adoption or production write. Continue atomic card
-preference/removal and first-customer binding verification, including authenticated
-write denial, then native acceptance before payment integration.
-The earlier source checkpoint below is historical where it conflicts.
+The first Home authorization checkpoint is pushed at `2fabe0c94` in draft
+[PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32), and its full CI
+passes. It records 4,620 backend tests, privacy gates, 29 web hook tests and 19
+SQL contracts. Direct IAM/deletion, finance RLS and task/calendar record boundaries
+remain active before ordinary role grants. Adoption documentation is pushed at
+`71473ed5a`. No hosted Home policy or production runtime changed.
+
+### Current payment staging checkpoint — September 9
+
+Active `/private/tmp/pantopus-staging-payment-sheet`, branch
+`codex/staging-payment-sheet`, has draft [PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31)
+at `2e7b04293db851b60414983246503e914bbf95d2`, including the checked PR #30
+master merge. The [payment report](staging-payment-sheet-2026-09-09.md) records
+85 native focused tests (36 iOS/49 Android), 73 focused backend cases, all 4,607
+backend tests (16 skipped), privacy checks, 18 SQL contracts and 32 concurrent
+PostgreSQL connections passing. Function lint has zero errors across 130 functions
+and 74 trigger bindings. Populated migration/rollback and real-role binding denial
+pass. Backend `034148e6b` and native `3afbf043d`/`6d322b1df` are pushed.
+
+The committed payment migration is now applied only to Free staging, preserving
+existing records and the absent ledger; no duplicate default needed normalization.
+The private candidate is healthy at source `2e7b04293`, image `2e0a32e8b0e2`;
+previous `694a213e2`/`68e3e052a578` is retained stopped as before-payment-sheet.
+Public API/worker, browser API/web and production runtimes are unchanged.
+Two fresh synthetic actors have push off, zero tokens and initially empty cards;
+actual iOS/Android SDK UI acceptance is active through localhost8000. Next finish
+same-setup cancellation/restart, two-card default/removal, foreign/removed-proof
+denial, provider-state/no-charge checks and exact cleanup, then integrate only
+after final current-head CI. Do not rerun the migration or actor initializer.
+An unknown provider customer-create response can leave an unused customer;
+returned setups always use the durable winner.
+
+PR #29 merged as `3009eb0be` after final-head and merged-master CI passed;
+modern and native mail acceptance/cleanup are complete. Never rerun their
+publishers, cleanup or appliers. PR #30 merged as
+`c262b84afe96b160e4c45b454ff985c0acbcc4b8` at 02:06 UTC September 10 after all
+final-head checks passed (run `34425834432`, head `8f7a6121a`), plus 47 local
+deployment tests. Source merges do not enable deployment.
+
+The independent adoption inventory branch `codex/staging-adoption-plan` is
+pushed at `a6b1b5748`. Its schema/ACL/reference review found missing ordinary
+Home permission defaults and prerequisite authorization gaps. The bounded
+Home effective-permission repair is isolated in
+`/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`; no new role grants or hosted Home changes ran.
+Ledger adoption, external-object recovery and final release acceptance remain
+unfinished. The older checkpoint below is historical where it conflicts.
 
 ### Earlier source integration checkpoint — September 9
 
