@@ -57,7 +57,7 @@ final class ClaimUploadStepSnapshotTests: XCTestCase {
     func test_encryption_footer_copy_is_pinned() {
         XCTAssertEqual(
             ClaimUploadCopy.encryptionFooter,
-            "Encrypted in transit. Visible only to the reviewer assigned to your claim."
+            "Private documents are visible to you and currently authorized claim reviewers."
         )
     }
 

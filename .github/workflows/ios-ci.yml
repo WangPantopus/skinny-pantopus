@@ -121,8 +121,14 @@ jobs:
             -skipPackagePluginValidation -skipMacroValidation \
             -enableCodeCoverage YES \
             ARCHS="$(uname -m)" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" \
             build-for-testing 2>&1 | tee xcodebuild-build.log | xcbeautify
+      - name: Verify simulator host Keychain entitlement
+        # Protected recovery uses the real Keychain in the hosted unit tests.
+        # Ad-hoc simulator signing needs no certificate or provisioning profile.
+        run: |
+          python3 ../../../scripts/ios/verify-simulator-keychain-host.py \
+            "$IOS_DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/Pantopus.app"
       - name: Package test products (preserve symlinks)
         run: tar -czf ios-test-products.tar.gz -C "$IOS_DERIVED_DATA_PATH" Build/Products
       - uses: actions/upload-artifact@v4

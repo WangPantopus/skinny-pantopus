@@ -3,6 +3,10 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The [resumed native recovery report](home-native-ci-recovery-2026-09-10.md)
+records the subsequent origin/PR refresh, iOS simulator-signing repair and
+passing protected-store checks. Its newer observations supersede those specific
+CI findings below; Android/browser/installed-journey gates remain open.
 Read this document and the top of `PROJECT_HANDOFF.md` first; consult older
 reports only for the next concrete task. Refresh Git and CI before relying on
 the observations below.

@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Resumed native verification — September 10
+
+Origin and both draft PRs were refreshed: Home was clean at `5441da1b8`, paid
+gigs at `e9ef2decb`; unrelated owner-checkout edits remain preserved. The shared
+iOS test build now retains entitlements with ad-hoc simulator signing, checks
+the actual binary, and uses the current claim-review footer assertion. The
+[native recovery report](home-native-ci-recovery-2026-09-10.md) records the actual
+successful build and 13 passing simulator checks, including real Keychain
+storage. Required iOS 18.5 CI remains pending; local iOS 26.5 is separate evidence.
+
+**Next:** finish Android draft cleanup/quality/snapshots, browser recovery/access
+findings and installed Home journeys. The prior installed iOS login failure has
+not yet been rerun. PRs #32/#34 remain unfinished drafts and must not merge;
+reconcile their migration stream before integration. Paid dependencies remain
+one final launch-preparation bundle. Completed physical Beacon/saved-card checks
+stay complete. No hosted migration, paid service or owner phone changed.
+
 ### Fresh-session checkpoint — September 10
 
 The owner requested detailed continuity and commit/push of all agent-owned work
