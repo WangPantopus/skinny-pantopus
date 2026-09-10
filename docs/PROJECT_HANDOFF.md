@@ -16,8 +16,15 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Source integration checkpoint — September 9
 
-**Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
-`codex/staging-mail-unit-binding`. The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
+**Next active work:** `/private/tmp/pantopus-staging-payment-sheet`, branch
+`codex/staging-payment-sheet`. Complete account-scoped recovery of the same
+owned Stripe SetupIntent through native navigation/restart, then actual
+PaymentSheet acceptance on both simulators with exact sandbox cleanup. Backend
+reconciliation tests and privacy gates pass; lifecycle expansion and native
+checks are in progress. No provider calls or live payment fixtures have run for
+this milestone. It remains separate from the completed mail integration.
+
+The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
 records exact apartment/destination binding plus atomic confirmation, current
 membership retry/status and legacy partial-proof recovery. Independent review
 also repaired Home-only address changes, pending-owner/resident transitions,
@@ -40,13 +47,22 @@ The exact postcard, temporary Homes/proofs/claims and callback are removed;
 all fixture sessions are revoked, zero push tokens remain, and original Home
 document IDs are unchanged. Public/browser/production runtimes are unchanged.
 
-Next ready and integrate [PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29)
-after fresh current-head CI, then finish the isolated PaymentSheet milestone.
-[Full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34424933888)
-passed at `694a213e2`, including the repaired migration safeguard and complete
-database replay. No checks are waived. The modern printed web link, physical
+[PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29) merged as
+`3009eb0be78efc900c234cc8588a7206526f9626` at 01:29 UTC September 10 after
+[full final-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34425328329)
+passed at `76ada1aa1`, including the repaired migration safeguard and complete
+database replay. Its merged-master CI is pending. No checks were waived.
+The modern printed web link, physical
 mail and externally delivered Lob callbacks remain outside this acceptance;
 the separate native postcard simulator journey is already complete.
+
+The isolated [rollback binding repair](release-rollback-binding-2026-09-09.md)
+is in `/private/tmp/pantopus-release-rollback-binding`, branch
+`codex/release-rollback-binding`. The rollback workflow now forwards the same
+environment-specific API binding as deployment; all 47 deployment-script tests
+pass. It must pass current-head CI before integration. No hosted rollback or
+configuration change ran; a real staging deploy/rollback rehearsal remains in
+release preparation.
 
 [PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) merged as
 `2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after
