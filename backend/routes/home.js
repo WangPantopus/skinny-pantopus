@@ -1837,7 +1837,7 @@ async function acceptHomeInvitation(req, res, selector) {
       // invitation transaction never creates ownership or falls back to it.
       const invite = result.invitation;
       const claimId = invite.proposed_preset_key.slice('claim_merge:'.length);
-      const merge = await homeClaimMergeService.acceptClaimMerge({ homeId: invite.home_id, claimId, userId: req.user.id, invite });
+      const merge = await homeClaimMergeService.acceptClaimMerge({ homeId: invite.home_id, claimId, userId: req.user.id, invitationId: invite.id });
       return res.json({ occupancy: merge.occupancy, homeId: invite.home_id, merged: true,
         accepted_role_base: merge.acceptedRoleBase, accepted_as_owner: merge.acceptedAsOwner,
         claim: { id: claimId, state: 'approved', claim_phase_v2: merge.claimPhaseV2,

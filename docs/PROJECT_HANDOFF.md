@@ -14,6 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Claim invitation transaction checkpoint — September 9
+
+Claim-bound invitation issuance and acceptance now commit the exact claim,
+identity evidence, membership, ownership proof, invitation receipt and audit in
+one guarded transaction. Resident/admin claims retain their roles; co-owner
+acceptance preserves the existing primary owner, age, dates and restrictive
+overrides. Revoked access cannot be restored by replaying a completed invitation.
+The [claim invitation report](home-claim-invitation-transactions-2026-09-09.md)
+records **4,861 backend tests passing (16 skipped)**, all privacy gates including
+**15 E2E checks**, **28 SQL contracts and wrappers**, **20 observed lock-wait
+races** and **6 SDK/PostgREST checks**. Final function lint has zero errors and
+five unchanged warnings; all exact fixtures are removed. The final migration's
+six function bodies match the checked runtime byte for byte.
+
+This milestone and native navigation `115c238ac` are in draft
+[PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32). Final-head CI
+and full household acceptance remain required. **Next: guard the ordinary claim
+review, withdrawal and evidence lifecycle atomically.** That legacy review can
+still promote a resident/admin claim to ownership, and stale withdrawal can
+delete evidence after a competing acceptance. Task/calendar/resource work
+continues independently in `20260910060000`; private attachment delivery,
+remaining native/web finance controls, derived data, ownership/lease flows and
+ordinary-default review remain unfinished. No hosted Home policy, ordinary role
+grant or production runtime changed. Paid-gig web/backend refund checkpoints
+are separately committed/pushed in draft PR #34; residual worker settlement is
+its next active source milestone. Completed Beacon and saved-card acceptance
+are not repeated.
+
 ### Native Home navigation checkpoint — September 9
 
 Both native clients now require the effective permission list for Home tab and
