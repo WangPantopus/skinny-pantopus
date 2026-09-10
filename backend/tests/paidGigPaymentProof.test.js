@@ -1,7 +1,7 @@
 const db = require('./__mocks__/supabaseAdmin');
 const { resetTables, seedTable, getTable, setRpcMock } = db;
-const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCancel = jest.fn(), mockCreate = jest.fn();
-jest.mock('stripe', () => ({ paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, cancel: mockCancel, create: mockCreate } }));
+const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCancel = jest.fn(), mockCreate = jest.fn(), mockList = jest.fn();
+jest.mock('stripe', () => ({ paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, cancel: mockCancel, create: mockCreate, list: mockList } }));
 const service = require('../stripe/stripeService');
 const acceptance = require('../services/gigPaymentAcceptance');
 const terms = { gigId: 'gig', payerId: 'payer', payeeId: 'worker', amount: 1250 };
@@ -19,6 +19,8 @@ const attempt = { id: 'attempt', gig_id: 'gig', bid_id: 'bid', payer_id: 'payer'
 beforeEach(() => {
   jest.restoreAllMocks(); jest.clearAllMocks(); resetTables();
   seedTable('Payment', [payment()]);
+  seedTable('User', [{ id: 'payer', stripe_customer_id: 'cus_payer' }]);
+  mockList.mockReset(); mockList.mockResolvedValue({ data: [], has_more: false });
   mockRetrieve.mockResolvedValue(intent()); mockCapture.mockResolvedValue(captured());
 });
 function captureRpc({ failReceipt = false } = {}) {
@@ -82,10 +84,10 @@ describe('durable acceptance orchestration', () => {
   });
   test('provider unknown outcome retries the same durable operation', async () => {
     seedTable('Payment', []);
-    setRpcMock(async (name) => ({ data: { attempt: { ...attempt } } }));
+    setRpcMock(async (name) => ({ data: name === 'verify_paid_gig_actor' ? { allowed: true } : { attempt: { ...attempt } } }));
     const create = jest.spyOn(service, 'createPaymentIntentForGig')
       .mockRejectedValueOnce(new Error('response lost'))
-      .mockResolvedValue({ paymentId: 'pay', payment: payment(), clientSecret: 'secret' });
+      .mockImplementation(async () => { seedTable('Payment', [payment()]); return { paymentId: 'pay', payment: payment(), clientSecret: 'secret' }; });
     await expect(acceptance.begin(gig, bid)).rejects.toThrow('response lost');
     await acceptance.begin(gig, bid);
     expect(create).toHaveBeenCalledTimes(2);
@@ -93,7 +95,7 @@ describe('durable acceptance orchestration', () => {
     expect(create.mock.calls[1][0].idempotencyKey).toBe('gig-accept:attempt');
   });
   test('known payment resumes its same intent and never recreates it', async () => {
-    setRpcMock(async () => ({ data: { attempt: { ...attempt, payment_id: 'pay' } } }));
+    setRpcMock(async (name) => ({ data: name === 'verify_paid_gig_actor' ? { allowed: true } : { attempt: { ...attempt, payment_id: 'pay' } } }));
     mockRetrieve.mockResolvedValue(intent({ client_secret: 'secret' }));
     expect((await acceptance.begin(gig, bid)).paymentId).toBe('pay');
     expect(mockCreate).not.toHaveBeenCalled();
@@ -109,7 +111,7 @@ describe('durable acceptance orchestration', () => {
     setRpcMock(rpc); mockRetrieve.mockResolvedValue(intent({ client_secret: 'secret' }));
     expect((await acceptance.begin(gig, bid)).paymentId).toBe('pay');
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenLastCalledWith('bind_paid_gig_acceptance', { p_attempt_id: 'attempt', p_payment_id: 'pay' });
+    expect(rpc).toHaveBeenLastCalledWith('bind_paid_gig_acceptance_as_actor', { p_attempt_id: 'attempt', p_payment_id: 'pay', p_actor_id: 'payer' });
   });
   test('finalize RPC runs only after exact authorization is durable', async () => {
     const rpc = jest.fn(async () => {
@@ -127,6 +129,125 @@ describe('durable acceptance orchestration', () => {
   });
   test('missing pending payment cannot assign the gig', async () => {
     await expect(acceptance.finalize(gig, { ...bid, pending_payment_intent_id: null })).rejects.toThrow('no pending payment');
+  });
+});
+
+describe('provider discovery and checkout readiness', () => {
+  const recoverable = (patch = {}) => intent({ created: 1770000000,
+    metadata: { ...intent().metadata, platform_fee: '188' }, ...patch });
+  beforeEach(() => {
+    seedTable('Payment', []);
+    mockList.mockResolvedValue({ data: [recoverable()], has_more: false });
+    mockRetrieve.mockResolvedValue(recoverable());
+  });
+  test('lost provider response discovers and saves the exact old intent without creation', async () => {
+    const recovered = await service.recoverGigPayment({ ...attempt, created_at: '2020-01-01T00:00:00Z' });
+    expect(recovered).toMatchObject({ stripe_payment_intent_id: 'pi_one', payer_id: 'payer', amount_total: 1250,
+      payment_status: 'authorized', amount_platform_fee: 188, amount_to_payee: 1062 });
+    expect(mockList).toHaveBeenCalledWith(expect.objectContaining({ customer: 'cus_payer', limit: 100 }));
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('all customer pages are checked before choosing a sole exact candidate', async () => {
+    mockList.mockResolvedValueOnce({ data: [{ id: 'unrelated', metadata: {} }], has_more: true })
+      .mockResolvedValueOnce({ data: [recoverable()], has_more: false });
+    await service.recoverGigPayment(attempt);
+    expect(mockList.mock.calls[1][0].starting_after).toBe('unrelated');
+    expect(mockRetrieve).toHaveBeenCalledWith('pi_one');
+  });
+  test('multiple matching intents block recovery before persisting a winner', async () => {
+    mockList.mockResolvedValue({ data: [recoverable(), recoverable({ id: 'pi_two' })], has_more: false });
+    await expect(service.recoverGigPayment(attempt)).rejects.toThrow('Multiple');
+    expect(getTable('Payment')).toEqual([]); expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('incomplete pagination cannot authorize an absence-based retry', async () => {
+    mockList.mockResolvedValue({ data: [], has_more: true });
+    await expect(service.recoverGigPayment(attempt)).rejects.toThrow('incomplete');
+    expect(getTable('Payment')).toEqual([]);
+  });
+  test.each([
+    { amount: 1300 }, { customer: 'cus_other' }, { capture_method: 'automatic' }, { currency: 'eur' },
+    { status: 'succeeded' }, { amount_capturable: 500 },
+    { metadata: { ...intent().metadata, payee_id: 'other', platform_fee: '188' } },
+    { metadata: { ...intent().metadata, platform_fee: '1500' } },
+    { metadata: { ...intent().metadata, platform_fee: 'NaN' } },
+  ])('mismatched or unproven candidate is never persisted: %j', async (patch) => {
+    mockRetrieve.mockResolvedValue(recoverable(patch));
+    await expect(service.recoverGigPayment(attempt)).rejects.toMatchObject({ statusCode: 409 });
+    expect(getTable('Payment')).toEqual([]); expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('provider lookup failure never falls through to another creation', async () => {
+    setRpcMock(async () => ({ data: { attempt, reused: true } }));
+    mockList.mockRejectedValue(new Error('unavailable'));
+    await expect(acceptance.begin(gig, bid)).rejects.toThrow('unavailable');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('complete list absence still cannot create after the conservative retry window', async () => {
+    setRpcMock(async () => ({ data: { attempt: { ...attempt, created_at: '2020-01-01T00:00:00Z' }, reused: true } }));
+    mockList.mockResolvedValue({ data: [], has_more: false });
+    await expect(acceptance.begin(gig, bid)).rejects.toThrow('reconciliation');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('requires_capture returns durable ready terms without a client secret', async () => {
+    seedTable('Payment', [payment()]);
+    const result = await service.resumeGigPayment('pay', terms);
+    expect(result).toMatchObject({ authorizationReady: true, paymentStatus: 'authorized',
+      providerStatus: 'requires_capture', amountCents: 1250, currency: 'usd', clientSecret: null });
+  });
+  test('unconfirmed intent returns the same sheet and exact amount', async () => {
+    seedTable('Payment', [payment()]);
+    mockRetrieve.mockResolvedValue(recoverable({ status: 'requires_payment_method', client_secret: 'synthetic_secret' }));
+    expect(await service.resumeGigPayment('pay', terms)).toMatchObject({ authorizationReady: false,
+      amountCents: 1250, currency: 'usd', clientSecret: 'synthetic_secret', paymentStatus: 'authorize_pending' });
+  });
+  test('revocation during provider read prevents returning a saved-card secret', async () => {
+    seedTable('Payment', [payment()]);
+    setRpcMock(async (name) => ({ data: name === 'verify_paid_gig_actor' ? { error: 'FORBIDDEN' }
+      : { attempt: { ...attempt, payment_id: 'pay' } } }));
+    mockRetrieve.mockResolvedValue(recoverable({ status: 'requires_payment_method', client_secret: 'synthetic_secret' }));
+    await expect(acceptance.begin(gig, bid, 'delegate')).rejects.toMatchObject({ statusCode: 403 });
+  });
+  test('a legacy service retry cannot replace a durable acceptance payment', async () => {
+    seedTable('Payment', [payment()]);
+    await expect(service.createPaymentIntentForGig({ payerId: 'payer', payeeId: 'worker', gigId: 'gig',
+      amount: 1250, existingPaymentId: 'pay' })).rejects.toThrow('Recover the existing');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('aborting a lost create response discovers and binds before cancellation', async () => {
+    seedTable('GigPaymentAcceptance', [{ ...attempt, payment_id: null }]);
+    const cancel = jest.spyOn(service, 'cancelAuthorization').mockResolvedValue({ success: true });
+    const rpc = jest.fn(async (name, args) => {
+      if (name === 'verify_paid_gig_actor') return { data: { allowed: true } };
+      if (name === 'bind_paid_gig_acceptance_as_actor') {
+        getTable('GigPaymentAcceptance')[0].payment_id = args.p_payment_id;
+        return { data: { attempt: getTable('GigPaymentAcceptance')[0] } };
+      }
+      if (name === 'cancel_paid_gig_acceptance_as_actor') return { data: args.p_complete ? { bid: { ...bid, status: 'pending' } }
+        : { attempt: getTable('GigPaymentAcceptance')[0] } };
+      throw new Error('Unexpected RPC');
+    });
+    setRpcMock(rpc);
+    await acceptance.abort(gig, bid);
+    expect(cancel).toHaveBeenCalledWith(getTable('Payment')[0].id);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('an unbound unknown abort retains the operation when no provider proof exists', async () => {
+    seedTable('GigPaymentAcceptance', [{ ...attempt, payment_id: null }]);
+    mockList.mockResolvedValue({ data: [], has_more: false });
+    setRpcMock(async () => ({ data: { allowed: true } }));
+    await expect(acceptance.abort(gig, bid)).rejects.toThrow('still unknown');
+    expect(mockCancel).not.toHaveBeenCalled(); expect(mockCreate).not.toHaveBeenCalled();
+    expect(getTable('GigPaymentAcceptance')[0].state).toBe('initializing');
+  });
+  test.each([true, false])('background recovery only binds discovered objects; found=%s', async (found) => {
+    seedTable('GigPaymentAcceptance', [{ ...attempt, payment_id: null,
+      created_at: '2020-01-01T00:00:00Z', recovery_after: '2020-01-01T00:00:00Z' }]);
+    mockList.mockResolvedValue({ data: found ? [recoverable()] : [], has_more: false });
+    setRpcMock(async () => ({ data: { attempt: { ...attempt, payment_id: 'recovered' } } }));
+    const job = require('../jobs/reconcileGigAcceptance');
+    expect(await job()).toEqual({ recovered: found ? 1 : 0 });
+    expect(mockCreate).not.toHaveBeenCalled(); expect(mockCancel).not.toHaveBeenCalled();
+    expect(getTable('GigPaymentAcceptance')[0].state).toBe('initializing'); // job RPC stub never assigns
+    if (!found) expect(getTable('GigPaymentAcceptance')[0].recovery_error).toBe('provider_outcome_unresolved');
   });
 });
 

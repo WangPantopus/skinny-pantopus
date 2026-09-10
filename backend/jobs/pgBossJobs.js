@@ -6,6 +6,8 @@ const recomputeUtilityScores = require('./recomputeUtilityScores');
 const organicMatch = require('./organicMatch');
 const refreshDiscoveryCache = require('./refreshDiscoveryCache');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
+const deliverGigAcceptance = require('./deliverGigAcceptance');
+const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const computeReputation = require('./computeReputation');
 const earnRiskReview = require('./earnRiskReview');
 const processClaimWindows = require('./processClaimWindows');
@@ -27,6 +29,8 @@ const QUEUE_OPTIONS = {
 };
 
 const JOBS = [
+  { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
+  { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },
   { name: 'recompute-utility-scores',     cron: '10,25,40,55 * * * *', fn: recomputeUtilityScores },
   { name: 'organic-match',                cron: '*/2 * * * *',  fn: organicMatch },
   { name: 'refresh-discovery-cache',      cron: '*/2 * * * *',  fn: refreshDiscoveryCache },

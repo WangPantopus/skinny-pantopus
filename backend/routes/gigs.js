@@ -4260,7 +4260,7 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
     if (agreedPrice > 0) {
       let paymentResult;
       try {
-        paymentResult = await paidGigAcceptance.begin(gig, bid);
+        paymentResult = await paidGigAcceptance.begin(gig, bid, actorUserId);
       } catch (error) {
         return res.status(error.statusCode || 503).json({
           error: error.statusCode ? error.message : 'Payment setup could not be confirmed. Please retry.',
@@ -4281,16 +4281,23 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       let ephemeralKey = null;
       let customerId = null;
       try {
-        customerId = await stripeService.getOrCreateCustomer(gig.user_id);
-        const ek = await stripeService.createEphemeralKey(customerId);
-        ephemeralKey = ek?.secret || null;
+        if (!paymentResult.authorizationReady) {
+          customerId = await stripeService.getOrCreateCustomer(gig.user_id);
+          const ek = await stripeService.createEphemeralKey(customerId);
+          ephemeralKey = ek?.secret || null;
+        }
       } catch (ekErr) {
         logger.error('Accept bid: failed to create ephemeral key', { error: ekErr?.message });
       }
 
       return res.json({
-        bid: { ...bid, status: 'pending_payment' },
-        requiresPaymentSetup: true,
+        bid: { ...bid, bid_amount: paymentResult.amountCents / 100, status: 'pending_payment' },
+        requiresPaymentSetup: !paymentResult.authorizationReady,
+        authorizationReady: paymentResult.authorizationReady === true,
+        paymentStatus: paymentResult.paymentStatus,
+        providerStatus: paymentResult.providerStatus,
+        amountCents: paymentResult.amountCents,
+        currency: paymentResult.currency,
         isSetupIntent: false,
         payment: paymentPayload,
         publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
@@ -4492,126 +4499,19 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
 
     let finalized;
     try {
-      finalized = await paidGigAcceptance.finalize(gig, bid);
+      finalized = await paidGigAcceptance.finalize(gig, bid, actorUserId);
     } catch (error) {
       return res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'Payment authorization could not be confirmed. Please retry.', code: error.code || 'payment_authorization_retry' });
     }
     const updatedGig = finalized.gig;
-    const agreedPrice = Number(updatedGig.price);
+    // Chat, participants and in-app notifications share the SQL assignment
+    // receipt. The leased job delivers external notifications after commit.
+    const roomId = finalized.room_id || null;
     if (!finalized.reused) {
       try {
         await stripeService.syncPaymentMethodToLocal(updatedGig.payment_id, gig.user_id);
       } catch (error) {
         logger.warn('Finalize accept: saved-card sync deferred', { paymentId: updatedGig.payment_id, error: error.message });
-      }
-    }
-
-    const gigTitle = gig.title || 'a gig';
-
-    // 5) Create (or get) gig chat room
-    let roomId = null;
-    try {
-      const { data: rpcRoomId, error: rpcErr } = await supabaseAdmin.rpc('get_or_create_gig_chat', {
-        p_gig_id: gigId,
-      });
-
-      if (rpcErr) {
-        const { data: existingRoom } = await supabaseAdmin
-          .from('ChatRoom')
-          .select('id')
-          .eq('gig_id', gigId)
-          .eq('type', 'gig')
-          .single();
-
-        roomId = existingRoom ? existingRoom.id : null;
-        if (!existingRoom) {
-          const { data: newRoom } = await supabaseAdmin
-            .from('ChatRoom')
-            .insert({ type: 'gig', gig_id: gigId, name: `Gig: ${updatedGig?.title || 'Chat'}` })
-            .select('id')
-            .single();
-          roomId = newRoom?.id || null;
-        }
-      } else {
-        roomId = rpcRoomId;
-      }
-
-      if (roomId) {
-        const participants = [
-          { room_id: roomId, user_id: gig.user_id, role: 'owner', is_active: true },
-          { room_id: roomId, user_id: bid.user_id, role: 'member', is_active: true },
-          ...(String(actorUserId) !== String(gig.user_id)
-            ? [{ room_id: roomId, user_id: actorUserId, role: 'member', is_active: true }]
-            : []),
-        ];
-        await supabaseAdmin
-          .from('ChatParticipant')
-          .upsert(participants, { onConflict: 'room_id,user_id' });
-
-        if (!finalized.reused) {
-          await supabaseAdmin.from('ChatMessage').insert({
-            room_id: roomId,
-            user_id: gig.user_id,
-            type: 'gig_offer',
-            message: `Offer accepted for "${gigTitle}" • Budget: $${updatedGig?.price ?? 'N/A'} • Open gig: /gigs/${gigId}`,
-            metadata: {
-              gigId, gig_id: gigId, title: gigTitle, category: gig?.category || null,
-              status: 'assigned', price: updatedGig?.price ?? gig?.price ?? null, auto_generated: true,
-            },
-          });
-
-          const gigAddress = gig.exact_address || [gig.exact_city, gig.exact_state].filter(Boolean).join(', ') || null;
-          if (gigAddress) {
-            await supabaseAdmin.from('ChatMessage').insert({
-              room_id: roomId, user_id: gig.user_id, type: 'system',
-              message: `📍 Address unlocked: ${gigAddress}`,
-            });
-        }
-        }
-      }
-    } catch (e) {
-      logger.error('Finalize accept: chat room error', { error: e?.message, gigId });
-    }
-
-    if (finalized.reused) return res.json({ bid: finalized.bid, gig: updatedGig, roomId, message: 'Bid acceptance already confirmed', reused: true });
-
-    // 6) Notifications
-    const acceptedAddress = gig.exact_address || [gig.exact_city, gig.exact_state].filter(Boolean).join(', ') || null;
-    notifyBidAccepted({ bidderId: bid.user_id, gigTitle, gigId, gigOwnerId: gig.user_id, address: acceptedAddress });
-
-    // Notify other bidders they are on standby (bids stay pending)
-    const { data: standbyBids } = await supabaseAdmin
-      .from('GigBid')
-      .select('user_id')
-      .eq('gig_id', gigId)
-      .in('status', ['pending', 'countered'])
-      .neq('user_id', bid.user_id);
-
-    if (standbyBids && standbyBids.length > 0) {
-      const standbyUserIds = [...new Set(standbyBids.map((sb) => sb.user_id))];
-      createBulkNotifications(standbyUserIds.map((uid) => ({
-        userId: uid, type: 'bid_on_standby',
-        title: `Another bid was selected first for "${gigTitle}"`,
-        body: "Don't be discouraged — your bid is still active. If things don't work out, you may still be selected. You can also withdraw your bid if you prefer.",
-        icon: '⏳', link: `/gigs/${gigId}`, metadata: { gig_id: gigId },
-      })));
-    }
-
-    // Payout onboarding nudge
-    if (agreedPrice > 0) {
-      const { data: payeeAccount } = await supabaseAdmin
-        .from('StripeAccount')
-        .select('stripe_account_id')
-        .eq('user_id', bid.user_id)
-        .maybeSingle();
-
-      if (!payeeAccount || !payeeAccount.stripe_account_id) {
-        createNotification({
-          userId: bid.user_id, type: 'payout_onboarding_nudge',
-          title: 'Set up your payout account',
-          body: `You've been assigned a paid gig! Set up your payout account to withdraw your earnings.`,
-          icon: '💳', link: '/app/settings/payments', metadata: { gig_id: gigId },
-        });
       }
     }
 
@@ -4622,7 +4522,8 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
       gig: updatedGig || null,
       bid: { ...bid, status: 'accepted', pending_payment_expires_at: null, pending_payment_intent_id: null },
       roomId,
-      message: 'Bid accepted and gig assigned.',
+      message: finalized.reused ? 'Bid acceptance already confirmed' : 'Bid accepted and gig assigned.',
+      reused: finalized.reused === true,
     });
   } catch (err) {
     logger.error('Finalize accept: unexpected error', { error: err?.message, stack: err?.stack });
@@ -4656,7 +4557,7 @@ router.post('/:gigId/bids/:bidId/abort-accept', verifyToken, async (req, res) =>
       .select('id, gig_id, status, pending_payment_intent_id').eq('id', bidId).eq('gig_id', gigId).single();
     if (bidErr || !bid) return res.status(404).json({ error: 'Bid not found' });
     try {
-      const result = await paidGigAcceptance.abort(gig, bid);
+      const result = await paidGigAcceptance.abort(gig, bid, actorUserId);
       return res.json({ bid: result.bid, reused: result.reused, message: 'Payment aborted. Bid restored to pending.' });
     } catch (error) {
       return res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'Cancellation is awaiting confirmation. Please retry.', code: error.code || 'payment_cancellation_retry' });
@@ -8071,6 +7972,13 @@ router.post('/:gigId/retry-authorization', verifyToken, async (req, res) => {
 
     if (!payment) {
       return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    if (payment.metadata?.acceptance_attempt_id) {
+      return res.status(409).json({
+        error: 'This bid payment must be recovered through its existing checkout.',
+        code: 'use_bid_payment_recovery',
+      });
     }
 
     // Create a new on-session PaymentIntent (user can complete SCA in browser)

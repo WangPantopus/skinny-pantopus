@@ -138,6 +138,23 @@ async function sendToUser(userId, { title, body, data }) {
   await deliver(rows, { title, body, data });
 }
 
+/** Durable relay variant: no tokens is settled; DB/unknown provider results retry. */
+async function sendToUserWithReceipt(userId, message) {
+  const { data: rows, error } = await supabaseAdmin.from('PushToken')
+    .select('token, platform, provider').eq('user_id', userId);
+  if (error || !Array.isArray(rows)) throw new Error('Push registration read unavailable');
+  if (rows.length === 0) return { acceptedCount: 0, unresolvedCount: 0 };
+  const result = await dispatchToTokens(rows, senders, message, { receipt: true });
+  if (result.invalidTokens.length > 0) {
+    // Bind cleanup to the current recipient: a shared device can change owners
+    // while the provider is processing this request.
+    const { error: pruneError } = await supabaseAdmin.from('PushToken').delete()
+      .eq('user_id', userId).in('token', result.invalidTokens);
+    if (pruneError) logger.warn('Deferred invalid push token cleanup', { count: result.invalidTokens.length });
+  }
+  return { acceptedCount: result.acceptedCount, unresolvedCount: result.unresolvedCount };
+}
+
 /**
  * Send to every device of a user EXCEPT one (security notices about a device
  * go to the user's other devices). `exceptDeviceId` = AuthDevice.device_id.
@@ -192,6 +209,7 @@ module.exports = {
   removeAllTokens,
   removeTokensForDevice,
   sendToUser,
+  sendToUserWithReceipt,
   sendToUserExcludingDevice,
   sendToDevice,
   sendToUsers,

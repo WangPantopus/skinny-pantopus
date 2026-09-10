@@ -1265,9 +1265,36 @@ async function notifyHouseholdAccessRequest({
 }
 
 
+/** Deliver an already-committed paid-gig notification without inserting again. */
+async function deliverStoredGigNotification(notification) {
+  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge'].includes(notification.type)) {
+    throw new Error('Unsupported stored gig notification');
+  }
+  const userId = notification.user_id;
+  const [global, granular] = await Promise.all([
+    supabaseAdmin.from('MailPreferences').select('push_notifications').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('UserNotificationPreferences').select('gig_updates_enabled').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (global.error || granular.error) throw new Error('Notification preferences unavailable');
+  // A suppressed event stays in-app and is never replayed when push is enabled.
+  const suppressed = global.data?.push_notifications !== true || granular.data?.gig_updates_enabled === false;
+  const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
+    : await pushService.sendToUserWithReceipt(userId, {
+      title: notification.title, body: notification.body || '',
+      data: { ...(notification.metadata || {}), notificationId: notification.id,
+        type: notification.type, link: notification.link || null },
+    });
+  badgeService.emitBadgeUpdate(userId);
+  if (_io && _connectedUsers) {
+    for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
+  }
+  return { ...result, suppressed };
+}
+
 module.exports = {
   init,
   createNotification,
+  deliverStoredGigNotification,
   createBulkNotifications,
   notifyHomeInvite,
   notifyHomeInviteAccepted,

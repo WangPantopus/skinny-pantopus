@@ -86,6 +86,17 @@ const json = async (sql) => JSON.parse(await query(sql).done);
       VALUES('${payment}','${gig}','${payer}','${worker}',1250,1250,188,1062,'cus_concurrency1','pi_concurrency1','authorized',now()+interval '1 day',
       jsonb_build_object('acceptance_attempt_id','${attempt.id}'));
       SELECT public.bind_paid_gig_acceptance('${attempt.id}','${payment}');`).done;
+    // A revocation committed while finalization is waiting must win the fresh
+    // actor decision. Absent override inserts are fenced by the same table lock.
+    await query(`UPDATE public."User" SET account_type='business' WHERE id='${payer}';
+      INSERT INTO public."BusinessTeam"(business_user_id,user_id,role_base) VALUES('${payer}','${other}','staff');
+      INSERT INTO public."BusinessPermissionOverride"(business_user_id,user_id,permission,allowed) VALUES
+        ('${payer}','${other}','gigs.manage',true),('${payer}','${other}','gigs.post',false);`).done;
+    const actorFinalize = `SELECT public.finalize_paid_gig_acceptance_as_actor('${gig}','${bid}','${payer}','${payment}','${other}');`;
+    const revoked = await overlap(`UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id='${payer}' AND user_id='${other}';`, [actorFinalize]);
+    assert.equal(JSON.parse(revoked[1]).error, 'FORBIDDEN');
+    assert.equal(await query(`SELECT status FROM public."Gig" WHERE id='${gig}';`).done, 'open');
+    await query(`UPDATE public."BusinessTeam" SET is_active=true WHERE business_user_id='${payer}' AND user_id='${other}';`).done;
     const cancel = `SELECT public.cancel_paid_gig_acceptance('${gig}','${bid}','${payer}');`;
     const cancelWins = await overlap(cancel, [finalize, begin(otherBid)]);
     assert.equal(JSON.parse(cancelWins[1]).error, 'PAYMENT_NOT_AUTHORIZED');
@@ -94,10 +105,30 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     // Restore only this synthetic cancellation fence, to exercise finalization
     // separately; provider cancellation is covered by the service/SQL contracts.
     await query(`UPDATE public."GigPaymentAcceptance" SET state='pending' WHERE id='${attempt.id}';`).done;
-    const assigned = await overlap(finalize, [finalize, finalize, free]);
+    const assigned = await overlap(actorFinalize, [finalize, finalize, free]);
     assert.equal(JSON.parse(assigned[1]).reused, true); assert.equal(JSON.parse(assigned[2]).reused, true);
     assert.equal(JSON.parse(assigned[3]).error, 'CONFLICT');
     assert.equal(await query(`SELECT count(*) FROM public."GigBid" WHERE gig_id='${gig}' AND status='accepted';`).done, '1');
+    const eventCount = await query(`SELECT count(*) FROM public."GigAcceptanceDelivery" WHERE acceptance_id='${attempt.id}';`).done;
+    assert.equal(eventCount, '3');
+    const claims = (await Promise.all(Array.from({ length: 6 }, () => query('SELECT public.claim_gig_acceptance_delivery();').done)))
+      .filter(Boolean).map(JSON.parse);
+    assert.equal(claims.length, 3); assert.equal(new Set(claims.map((e) => e.id)).size, 3);
+    const first = claims[0];
+    await query(`UPDATE public."GigAcceptanceDelivery" SET lease_until=now()-interval '1 minute' WHERE id='${first.id}';`).done;
+    const reclaimed = await json('SELECT public.claim_gig_acceptance_delivery();');
+    assert.equal(reclaimed.id, first.id); assert.notEqual(reclaimed.lease_id, first.lease_id);
+    assert.equal(await query(`SELECT public.finish_gig_acceptance_delivery('${first.id}','${first.lease_id}','done');`).done, 'f');
+    // Deleted notifications and departed chat participation are never recreated
+    // by a lost-HTTP-response retry of the same accepted receipt.
+    await query(`DELETE FROM public."Notification" WHERE id='${first.notification_id}';
+      UPDATE public."ChatParticipant" SET is_active=false WHERE room_id=(SELECT room_id FROM public."GigPaymentAcceptance" WHERE id='${attempt.id}') AND user_id='${worker}';`).done;
+    await query(finalize).done;
+    assert.equal(await query(`SELECT count(*) FROM public."Notification" WHERE id='${first.notification_id}';`).done, '0');
+    assert.equal(await query(`SELECT is_active FROM public."ChatParticipant" WHERE room_id=(SELECT room_id FROM public."GigPaymentAcceptance" WHERE id='${attempt.id}') AND user_id='${worker}';`).done, 'f');
+    const eligibility = await json(`SELECT public.read_gig_acceptance_delivery('${first.id}','${reclaimed.lease_id}');`);
+    assert.equal(eligibility.eligible, false);
+    assert.equal(await query(`SELECT public.finish_gig_acceptance_delivery('${first.id}','${reclaimed.lease_id}','suppressed');`).done, 't');
     await query(`UPDATE public."Gig" SET status='completed',worker_completed_at=now() WHERE id='${gig}';`).done;
     const prepare = `SELECT public.prepare_paid_gig_capture('${payment}');`;
     await overlap(prepare, [prepare, prepare, prepare]);
@@ -113,6 +144,9 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     console.log(`Paid-gig acceptance/capture concurrency passed (${connections} local PostgreSQL connections).`);
   } finally {
     if (created) await query(`BEGIN;
+      DELETE FROM public."Notification" WHERE metadata->>'gig_id'='${gig}';
+      DELETE FROM public."GigAcceptanceDelivery" WHERE acceptance_id IN (SELECT id FROM public."GigPaymentAcceptance" WHERE gig_id='${gig}');
+      DELETE FROM public."ChatRoom" WHERE gig_id='${gig}';
       DELETE FROM public."GigPaymentAcceptance" WHERE gig_id='${gig}';
       UPDATE public."Gig" SET payment_id=NULL WHERE id='${gig}';
       DELETE FROM public."Payment" WHERE id='${payment}';

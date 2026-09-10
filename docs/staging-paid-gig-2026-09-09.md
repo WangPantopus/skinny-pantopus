@@ -1,5 +1,9 @@
 # Paid-gig authorization and capture checkpoint — September 9, 2026
 
+The first checkpoint below is committed as `fa3a70a43`, with fixture follow-up
+`15754b439`. The [recovery and delivery checkpoint](paid-gig-recovery-delivery-2026-09-09.md)
+supersedes its unknown-provider and acceptance-side-effect limits.
+
 The existing paid-gig backend now reserves one durable acceptance before creating
 its provider intent, requires exact authorization before assigning or starting
 work, and confirms capture only from matching provider success plus a saved

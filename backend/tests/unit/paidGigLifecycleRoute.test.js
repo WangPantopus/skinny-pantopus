@@ -35,6 +35,28 @@ function assigned(status = 'assigned') {
 }
 
 describe('actual paid-gig owner routes', () => {
+  test('known authorized checkout returns exact frozen amount without another sheet setup', async () => {
+    const rpc = jest.fn(async (name) => ({ data: name === 'verify_paid_gig_actor' ? { allowed: true } : { attempt: {
+      id: 'attempt', payment_id: 'pay', payee_id: 'worker', amount: 1250,
+    } } }));
+    setRpcMock(rpc);
+    const customer = jest.spyOn(service, 'getOrCreateCustomer');
+    // A stale pre-reservation bid amount must never become checkout display terms.
+    getTable('GigBid')[0].bid_amount = 15;
+    const result = await post('gig/bids/bid/accept');
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ authorizationReady: true, requiresPaymentSetup: false,
+      amountCents: 1250, currency: 'usd', clientSecret: null, bid: { bid_amount: 12.5 } });
+    expect(customer).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith('begin_paid_gig_acceptance_as_actor', expect.objectContaining({ p_actor_id: 'payer' }));
+  });
+  test('legacy authorization retry cannot replace an operation-backed payment intent', async () => {
+    assigned(); getTable('Gig')[0].payment_status = 'authorization_failed';
+    const result = await post('gig/retry-authorization');
+    expect(result.status).toBe(409); expect(result.body.code).toBe('use_bid_payment_recovery');
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(getTable('Payment')[0].stripe_payment_intent_id).toBe('pi_one');
+  });
   test.each(['accept', 'finalize-accept', 'abort-accept'])('foreign actor cannot %s a bid', async (action) => {
     expect((await post(`gig/bids/bid/${action}`, 'foreign')).status).toBe(403);
     expect(mockRetrieve).not.toHaveBeenCalled(); expect(mockCreate).not.toHaveBeenCalled();
@@ -57,7 +79,7 @@ describe('actual paid-gig owner routes', () => {
   });
   test('agreed bid amount rather than gig budget binds authorization', async () => {
     const finalize = jest.fn(async (name) => {
-      if (name === 'finalize_paid_gig_acceptance') {
+      if (name === 'finalize_paid_gig_acceptance_as_actor') {
         expect(getTable('Payment')[0].payment_status).toBe('authorized');
         return { data: { error: 'CONFLICT' } };
       }
@@ -75,12 +97,11 @@ describe('actual paid-gig owner routes', () => {
   });
   test('accepted receipt retries without a second provider call or mutation', async () => {
     assigned(); getTable('GigBid')[0].status = 'accepted';
-    setRpcMock(async (name) => name === 'get_or_create_gig_chat' ? { data: 'repaired-chat' }
-      : { data: { gig: getTable('Gig')[0], bid: getTable('GigBid')[0], reused: true } });
+    setRpcMock(async () => ({ data: { gig: getTable('Gig')[0], bid: getTable('GigBid')[0], reused: true, room_id: 'durable-chat' } }));
     const result = await post('gig/bids/bid/finalize-accept');
     expect(result.status).toBe(200); expect(result.body.reused).toBe(true); expect(mockRetrieve).not.toHaveBeenCalled();
-    expect(result.body.roomId).toBe('repaired-chat');
-    expect(getTable('ChatParticipant').map((row) => row.user_id).sort()).toEqual(['payer', 'worker']);
+    expect(result.body.roomId).toBe('durable-chat');
+    expect(getTable('ChatMessage')).toEqual([]); expect(getTable('Notification')).toEqual([]);
   });
   test('unknown cancel outcome keeps the pending bid reference', async () => {
     setRpcMock(async () => ({ data: { attempt: { payment_id: 'pay', state: 'canceling' } } }));

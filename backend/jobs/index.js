@@ -85,6 +85,8 @@ const neighborhoodPreviewRefresh = require('./neighborhoodPreviewRefresh');
 const autoRemindWorker = require('./autoRemindWorker');
 // Payment bid expiry
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
+const deliverGigAcceptance = require('./deliverGigAcceptance');
+const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 // Persistent login registry housekeeping
 const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
@@ -111,6 +113,8 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'organicMatch',
   'refreshDiscoveryCache',
   'expirePendingPaymentBids',
+  'deliverGigAcceptance',
+  'reconcileGigAcceptance',
   'computeReputation',
   'earnRiskReview',
   'processClaimWindows',
@@ -577,6 +581,14 @@ function startJobs(options = {}) {
   scheduleCron('12,27,42,57 * * * *', wrapJob('checkAndAlertStuckPayments', checkAndAlertStuckPayments), {
     scheduled: true,
     timezone: 'UTC',
+  });
+
+  scheduleCron('*/2 * * * *', wrapJob('reconcileGigAcceptance', reconcileGigAcceptance), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigAcceptance', deliverGigAcceptance), {
+    scheduled: true, timezone: 'UTC',
   });
 
   // ─── Expire Stale pending_payment Bids ───

@@ -540,13 +540,96 @@ class StripeService {
     return data;
   }
 
+  async recoverGigPayment(attempt) {
+    // Provider recovery is scoped to the payer's durable customer, never a
+    // global search or a caller-supplied intent. Absence is not creation proof.
+    const { data: payer, error } = await supabaseAdmin.from('User').select('stripe_customer_id')
+      .eq('id', attempt.payer_id).single();
+    if (error || !payer) throw conflict('The payment customer could not be verified');
+    if (!payer.stripe_customer_id) return null;
+    const createdAt = Date.parse(attempt.created_at);
+    if (!Number.isFinite(createdAt)) throw conflict('The payment operation time could not be verified');
+    const matches = [];
+    let after;
+    for (let page = 0; page < 10; page += 1) {
+      const batch = await stripe.paymentIntents.list({
+        customer: payer.stripe_customer_id, limit: 100,
+        created: { gte: Math.max(0, Math.floor(createdAt / 1000) - 300) },
+        ...(after ? { starting_after: after } : {}),
+      });
+      if (!Array.isArray(batch?.data)) throw conflict('Provider reconciliation is incomplete');
+      for (const candidate of batch.data) {
+        if (candidate.metadata?.acceptance_attempt_id === attempt.id) matches.push(candidate);
+      }
+      if (matches.length > 1) throw conflict('Multiple provider intents need reconciliation for this operation');
+      if (!batch.has_more) break;
+      after = batch.data.at(-1)?.id;
+      if (!after || page === 9) throw conflict('Provider reconciliation is incomplete');
+    }
+    if (matches.length === 0) return null;
+    // Retrieve again: list contents are candidates, not current provider proof.
+    const intent = await stripe.paymentIntents.retrieve(matches[0].id);
+    const platformFeeText = intent?.metadata?.platform_fee;
+    if (!/^\d+$/.test(platformFeeText || '')) throw conflict('Provider fee terms could not be verified');
+    const platformFee = Number(platformFeeText);
+    if (!Number.isSafeInteger(platformFee) || platformFee > attempt.amount) throw conflict('Provider fee terms do not match the operation');
+    const expected = {
+      gig_id: attempt.gig_id, payer_id: attempt.payer_id, payee_id: attempt.payee_id,
+      amount_total: attempt.amount, currency: attempt.currency.toUpperCase(), payment_type: 'gig_payment',
+      stripe_customer_id: payer.stripe_customer_id, stripe_payment_intent_id: intent.id,
+      metadata: { acceptance_attempt_id: attempt.id },
+    };
+    assertPaymentTerms(expected, { gigId: attempt.gig_id, payerId: attempt.payer_id, payeeId: attempt.payee_id, amount: attempt.amount });
+    assertIntentBinding(expected, intent);
+    if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture', 'canceled'].includes(intent.status)) {
+      throw conflict('The provider intent requires explicit reconciliation');
+    }
+    if (intent.status === 'requires_capture') assertAuthorizedIntent(expected, intent);
+    const status = intent.status === 'canceled' ? PAYMENT_STATES.CANCELED
+      : intent.status === 'requires_capture' ? PAYMENT_STATES.AUTHORIZED : PAYMENT_STATES.AUTHORIZE_PENDING;
+    const { data: recovered, error: insertError } = await supabaseAdmin.from('Payment').insert({
+      ...expected, amount_subtotal: attempt.amount, amount_platform_fee: platformFee,
+      amount_to_payee: attempt.amount - platformFee,
+      amount_processing_fee: this.calculateFees(attempt.amount).estimatedStripeFee,
+      payment_status: status, is_escrowed: true,
+      stripe_charge_id: providerId(intent.latest_charge) || null,
+      authorization_expires_at: status === PAYMENT_STATES.AUTHORIZED ? new Date(Date.now() + AUTH_HOLD_MS).toISOString() : null,
+      payment_attempted_at: new Date(intent.created * 1000 || createdAt).toISOString(),
+    }).select('*').single();
+    if (insertError) {
+      if (insertError.code !== '23505') throw Object.assign(new Error('Could not save recovered payment. Please retry.'), { statusCode: 503 });
+      const { data: winner, error: winnerError } = await supabaseAdmin.from('Payment').select('*')
+        .eq('stripe_payment_intent_id', intent.id).single();
+      if (winnerError || !winner || winner.metadata?.acceptance_attempt_id !== attempt.id) throw conflict('Recovered payment binding changed');
+      assertPaymentTerms(winner, { gigId: attempt.gig_id, payerId: attempt.payer_id, payeeId: attempt.payee_id, amount: attempt.amount });
+      assertIntentBinding(winner, intent);
+      if (winner.amount_platform_fee !== platformFee || winner.amount_to_payee !== attempt.amount - platformFee) {
+        throw conflict('Recovered payment fee terms changed');
+      }
+      return winner;
+    }
+    if (!recovered) throw conflict('Recovered payment receipt is missing');
+    return recovered;
+  }
+
   async resumeGigPayment(paymentId, terms) {
-    const payment = assertPaymentTerms(await this._readPayment(paymentId), terms);
+    let payment = assertPaymentTerms(await this._readPayment(paymentId), terms);
     if (!['authorize_pending', 'authorized'].includes(payment.payment_status)) throw conflict('Payment is no longer available for authorization');
     const intent = assertIntentBinding(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id));
-    if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'].includes(intent.status)
-        || !intent.client_secret) throw conflict('Payment is no longer available for authorization');
-    return { success: true, paymentId: payment.id, paymentIntentId: intent.id, clientSecret: intent.client_secret, payment, reused: true };
+    if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'].includes(intent.status)) {
+      throw conflict('Payment is no longer available for authorization');
+    }
+    const authorizationReady = intent.status === 'requires_capture';
+    if (authorizationReady) {
+      // Return ready only after fresh exact proof and a saved authorized state.
+      payment = (await this.verifyGigAuthorization(payment.id, terms)).payment;
+    } else if (!intent.client_secret) {
+      throw conflict('The payment sheet could not be prepared');
+    }
+    return { success: true, paymentId: payment.id, paymentIntentId: intent.id,
+      clientSecret: authorizationReady ? null : intent.client_secret, payment, reused: true,
+      authorizationReady, paymentStatus: payment.payment_status, providerStatus: intent.status,
+      amountCents: payment.amount_total, currency: payment.currency.toLowerCase() };
   }
 
   async verifyGigAuthorization(paymentId, terms) {
@@ -870,6 +953,12 @@ class StripeService {
     idempotencyKey,
   }) {
     try {
+      if (existingPaymentId) {
+        const existing = await this._readPayment(existingPaymentId);
+        if (existing.metadata?.acceptance_attempt_id) {
+          throw conflict('Recover the existing bid authorization before changing its payment');
+        }
+      }
       const payeeAccount = await this._getPayeeAccountOptional(payeeId);
       const customerId = await this.getOrCreateCustomer(payerId);
       const feeRate = await this.getEffectiveFeeRate(payeeId);
