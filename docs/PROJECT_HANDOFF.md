@@ -14,6 +14,22 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS assigned-payment recovery — September 10
+
+The native payment card now supports current poster/business-manager recovery
+with exact displayed terms, server session and provider operation checks. Late
+results after leaving the screen cannot reopen payment or claim success. The
+[iOS report](paid-gig-ios-assigned-authorization-2026-09-10.md) records a passing
+simulator app build, formatting/lint and independent review; fresh provider
+acceptance remains separate.
+
+**Next:** finish Android parity, then fresh full sandbox paid-gig journeys and
+remaining cancellation/dispute/Connect/debt, durable attention and capacity
+work before checked integration. Home private evidence/task storage is pushed
+as `fad41cd3d`; native private file controls continue in draft PR #32. Draft
+PR #34 remains unfinished. All paid subscriptions remain together for final
+launch preparation. Completed physical Beacon and saved-card checks stay complete.
+
 ### Browser assigned-payment controls — September 10
 
 Both browser gig layouts now display the actual authorization form, resume exact

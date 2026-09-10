@@ -107,6 +107,24 @@ public final class GigDetailViewModel {
 
     /// Status chip metadata riding the payment envelope.
     public private(set) var paymentStateInfo: GigPaymentStateInfo?
+    private var mayManagePayment = false
+
+    var canOpenAssignedAuthorization: Bool {
+        guard mayManagePayment, bidAcceptance.isCurrentAccount, let gig = rawGig,
+              gig.status == "assigned", let payment, let worker = gig.acceptedBy,
+              payment.id == gig.paymentId, let price = gig.price, price.isFinite,
+              let amount = payment.amountTotal, abs(price * 100 - amount) < 0.001,
+              ["authorization_failed", "authorize_pending", "ready_to_authorize", "canceled"].contains(payment.paymentStatus ?? ""),
+              GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) != nil else { return false }
+        return true
+    }
+
+    func makeAssignedAuthorizationViewModel() -> GigAssignedAuthorizationViewModel? {
+        guard canOpenAssignedAuthorization, let actor = currentUserId, let payment,
+              let worker = rawGig?.acceptedBy,
+              let terms = GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) else { return nil }
+        return GigAssignedAuthorizationViewModel(gigId: gigId, actor: actor, terms: terms, api: api, checkout: checkout)
+    }
 
     var canOpenRefunds: Bool {
         guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
@@ -542,14 +560,23 @@ public final class GigDetailViewModel {
     private func loadPayment(gig: GigDTO, status: String) async {
         let assignedPlus = ["assigned", "in_progress", "completed"].contains(status)
             || !(gig.acceptedBy ?? "").isEmpty
-        guard viewerIsOwner, assignedPlus else {
+        mayManagePayment = false
+        // The endpoint verifies current poster/business-manager access. A
+        // worker's redacted response never grants authorization controls.
+        guard currentUserId != nil, !viewerIsWorker, assignedPlus, bidAcceptance.isCurrentAccount else {
             payment = nil
             paymentStateInfo = nil
             return
         }
         let response: GigPaymentResponse? = try? await api.request(GigsEndpoints.payment(gigId: gigId))
+        guard bidAcceptance.isCurrentAccount else { payment = nil
+            paymentStateInfo = nil
+            return
+        }
         payment = response?.payment
         paymentStateInfo = response?.stateInfo
+        mayManagePayment = payment?.gigId == gigId && payment?.payerId == gig.userId
+            && payment?.payeeId != currentUserId && payment != nil
     }
 
     /// Change orders — both roles, while the gig is assigned /
@@ -770,7 +797,7 @@ public final class GigDetailViewModel {
     /// Payment card gate — owner only (the worker's payout view lives in
     /// the wallet); data presence implies the assigned+ fetch succeeded.
     public var showPaymentCard: Bool {
-        viewerIsOwner && payment != nil
+        (viewerIsOwner || mayManagePayment) && payment != nil && bidAcceptance.isCurrentAccount
     }
 
     /// Changes card gate — either party on an assigned / in-progress

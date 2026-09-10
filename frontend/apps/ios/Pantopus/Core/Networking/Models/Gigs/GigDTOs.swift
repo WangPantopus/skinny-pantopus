@@ -29,6 +29,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
     /// affordance (the `/tip` route requires a completed + confirmed gig).
     public let ownerConfirmedAt: String?
     public let scheduledStart: String?
+    public let paymentId: String?
     public let paymentStatus: String?
     public let engagementMode: String?
     public let scheduleType: String?
@@ -96,6 +97,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         case acceptedAt = "accepted_at"
         case ownerConfirmedAt = "owner_confirmed_at"
         case scheduledStart = "scheduled_start"
+        case paymentId = "payment_id"
         case paymentStatus = "payment_status"
         case engagementMode = "engagement_mode"
         case scheduleType = "schedule_type"
@@ -145,6 +147,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         acceptedAt = try c.decodeIfPresent(String.self, forKey: .acceptedAt)
         ownerConfirmedAt = try c.decodeIfPresent(String.self, forKey: .ownerConfirmedAt)
         scheduledStart = try c.decodeIfPresent(String.self, forKey: .scheduledStart)
+        paymentId = try c.decodeIfPresent(String.self, forKey: .paymentId)
         paymentStatus = try c.decodeIfPresent(String.self, forKey: .paymentStatus)
         engagementMode = try c.decodeIfPresent(String.self, forKey: .engagementMode)
         scheduleType = try c.decodeIfPresent(String.self, forKey: .scheduleType)
@@ -225,7 +228,8 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         cancellationPolicy: String? = nil,
         estimatedDuration: Double? = nil,
         items: [GigItemDTO]? = nil,
-        startsAsap: Bool? = nil
+        startsAsap: Bool? = nil,
+        paymentId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -242,6 +246,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         self.acceptedAt = acceptedAt
         self.ownerConfirmedAt = ownerConfirmedAt
         self.scheduledStart = scheduledStart
+        self.paymentId = paymentId
         self.paymentStatus = paymentStatus
         self.engagementMode = engagementMode
         self.scheduleType = scheduleType
@@ -966,6 +971,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let id: String?
     public let gigId: String?
     public let payerId: String?
+    public let payeeId: String?
     public let currency: String?
     public let capturedAt: String?
     public let paymentStatus: String?
@@ -980,7 +986,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, currency
-        case gigId = "gig_id", payerId = "payer_id", capturedAt = "captured_at"
+        case gigId = "gig_id", payerId = "payer_id", payeeId = "payee_id", capturedAt = "captured_at"
         case paymentStatus = "payment_status"
         case paymentType = "payment_type"
         case amountTotal = "amount_total"
@@ -996,6 +1002,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         id: String? = nil,
         gigId: String? = nil,
         payerId: String? = nil,
+        payeeId: String? = nil,
         currency: String? = nil,
         capturedAt: String? = nil,
         paymentStatus: String? = nil,
@@ -1011,6 +1018,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         self.id = id
         self.gigId = gigId
         self.payerId = payerId
+        self.payeeId = payeeId
         self.currency = currency
         self.capturedAt = capturedAt
         self.paymentStatus = paymentStatus

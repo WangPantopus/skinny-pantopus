@@ -22,6 +22,8 @@ public struct GigDetailView: View {
     @State private var deliveryTarget: DeliveryProofTarget?
     @State private var showTipSheet = false
     @State private var refundTarget: GigRefundViewModel?
+    @State private var authorizationTarget: GigAssignedAuthorizationViewModel?
+    @State private var authorizationLifetime: GigAssignedAuthorizationViewModel?
     @State private var tipCustomAmountText = ""
     @State private var toast: ToastMessage?
     // Phase 5 — lifecycle sheets
@@ -79,7 +81,9 @@ public struct GigDetailView: View {
             await viewModel.load()
             viewModel.startRealtime()
         }
-        .onDisappear { viewModel.stopRealtime() }
+        .onDisappear { viewModel.stopRealtime()
+            authorizationLifetime?.retire()
+        }
         .sheet(item: $bidSheetTarget) { target in
             EditBidSheetView(
                 target: target,
@@ -123,6 +127,17 @@ public struct GigDetailView: View {
         .sheet(item: $refundTarget, onDismiss: { Task { await viewModel.refreshAfterRefund() } }, content: { target in
             GigRefundView(model: target)
         })
+        .sheet(
+            item: $authorizationTarget,
+            onDismiss: {
+                authorizationLifetime?.retire()
+                authorizationLifetime = nil
+                Task { await viewModel.refreshAfterRefund() }
+            },
+            content: { target in
+                GigAssignedAuthorizationView(model: target)
+            }
+        )
         .modifier(GigLifecycleSheets(
             viewModel: viewModel,
             counterTarget: $counterTarget,
@@ -347,6 +362,13 @@ public struct GigDetailView: View {
             }
             if viewModel.showPaymentCard, let payment = viewModel.payment {
                 GigPaymentCard(payment: payment, stateInfo: viewModel.paymentStateInfo)
+                if viewModel.canOpenAssignedAuthorization {
+                    Button("Payment authorization") {
+                        authorizationLifetime = viewModel.makeAssignedAuthorizationViewModel()
+                        authorizationTarget = authorizationLifetime
+                    }
+                    .accessibilityIdentifier("gigDetail.authorization")
+                }
                 if viewModel.canOpenRefunds {
                     Button("Refunds and hold releases") { refundTarget = viewModel.makeRefundViewModel() }
                         .accessibilityIdentifier("gigDetail.refunds")
