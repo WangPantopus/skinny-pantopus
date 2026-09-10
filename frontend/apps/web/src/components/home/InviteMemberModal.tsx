@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { RelationshipUser } from '@pantopus/types';
+import type * as api from '@pantopus/api';
+import { homeInviteDates } from '@/lib/homeInviteDates';
 
 // ============================================================
 // Preset-based roles (loaded from API, with hardcoded fallbacks)
@@ -33,7 +35,7 @@ export default function InviteMemberModal({
     message?: string;
     start_at?: string;
     end_at?: string;
-  }) => Promise<void>;
+  }) => Promise<api.homes.HomeInvitationCreated>;
   homeId?: string;
 }) {
   const [mode, setMode] = useState<'email' | 'username'>('email');
@@ -47,6 +49,7 @@ export default function InviteMemberModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [inviteUrl, setInviteUrl] = useState('');
   const [presets, setPresets] = useState(DEFAULT_PRESETS);
   const [showDates, setShowDates] = useState(false);
   const [startAt, setStartAt] = useState('');
@@ -85,6 +88,7 @@ export default function InviteMemberModal({
       setMessage('');
       setError('');
       setSuccess('');
+      setInviteUrl('');
       setShowDates(false);
       setStartAt('');
       setEndAt('');
@@ -139,19 +143,19 @@ export default function InviteMemberModal({
 	    try {
 	      const preset = presets.find(p => p.key === selectedPreset);
 	      const inviteUser = mode === 'username' ? selectedUser : null;
-	      await onInvite({
+	      const result = await onInvite({
 	        email: mode === 'email' ? email.trim() : undefined,
 	        user_id: inviteUser?.id,
 	        username: inviteUser?.username,
         relationship: preset?.role_base || 'member',
         preset_key: selectedPreset,
         message: message.trim() || undefined,
-        start_at: startAt || undefined,
-        end_at: endAt || undefined,
+        ...homeInviteDates(startAt, endAt),
       });
+      setInviteUrl(`${window.location.origin}/invite/${encodeURIComponent(result.invitation.token)}`);
 	      setSuccess(
 	        mode === 'email'
-	          ? `Invitation sent to ${email}`
+	          ? result.emailSent ? `Invitation sent to ${email}` : 'Invitation created. Email delivery was not confirmed; share the link below.'
 	          : `Invitation sent to @${inviteUser?.username || usernameQuery}`
 	      );
       setEmail('');
@@ -226,6 +230,7 @@ export default function InviteMemberModal({
                 <span>✅</span> {success}
               </div>
             )}
+            {success && inviteUrl && <a href={inviteUrl} className="block text-xs text-blue-600 break-all">{inviteUrl}</a>}
 
             {/* Email input */}
             {mode === 'email' && (
@@ -343,8 +348,9 @@ export default function InviteMemberModal({
             {(needsDates || showDates) && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-app-text-secondary mb-1">Start date</label>
+                  <label htmlFor="modal-invite-start" className="block text-xs font-medium text-app-text-secondary mb-1">Start date</label>
                   <input
+                    id="modal-invite-start"
                     type="date"
                     value={startAt}
                     onChange={(e) => setStartAt(e.target.value)}
@@ -352,14 +358,16 @@ export default function InviteMemberModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-app-text-secondary mb-1">End date</label>
+                  <label htmlFor="modal-invite-end" className="block text-xs font-medium text-app-text-secondary mb-1">End date (inclusive)</label>
                   <input
+                    id="modal-invite-end"
                     type="date"
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
                     className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+                <p className="col-span-2 text-xs text-app-text-secondary">Dates use this device&apos;s time zone.</p>
               </div>
             )}
             {!needsDates && !showDates && (

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import * as api from '@pantopus/api';
+import QRCode from '../../ui/QRCode';
 import type { GuestPass } from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
 
@@ -83,9 +84,6 @@ export default function CreateGuestPass({
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // QR canvas ref
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-
   // Reset on open
   useEffect(() => {
     if (open) {
@@ -148,8 +146,6 @@ export default function CreateGuestPass({
       setResultToken(res.token);
       setStep('result');
 
-      // Draw QR code on canvas
-      setTimeout(() => drawQR(getShareUrl(res.token)), 100);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create guest pass');
     }
@@ -158,61 +154,9 @@ export default function CreateGuestPass({
 
   const getShareUrl = (token: string) => {
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/guest/${homeId}?token=${token}`;
+      return `${window.location.origin}/guest/${encodeURIComponent(token)}`;
     }
-    return `/guest/${homeId}?token=${token}`;
-  };
-
-  // Simple QR code drawing using canvas (no external library)
-  const drawQR = (url: string) => {
-    const canvas = qrCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // We'll render a placeholder QR pattern with the URL encoded
-    // In production this would use a library like qrcode
-    const size = 200;
-    canvas.width = size;
-    canvas.height = size;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-
-    // Generate a simple visual pattern based on URL hash
-    ctx.fillStyle = '#000000';
-    const cellSize = 8;
-    const gridSize = Math.floor(size / cellSize);
-
-    // Simple hash-based pattern for visual representation
-    let hash = 0;
-    for (let i = 0; i < url.length; i++) {
-      hash = ((hash << 5) - hash + url.charCodeAt(i)) | 0;
-    }
-
-    // Draw finder patterns (corners)
-    const drawFinder = (x: number, y: number) => {
-      const s = cellSize;
-      ctx.fillRect(x, y, 7 * s, 7 * s);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(x + s, y + s, 5 * s, 5 * s);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(x + 2 * s, y + 2 * s, 3 * s, 3 * s);
-    };
-
-    drawFinder(0, 0);
-    drawFinder((gridSize - 7) * cellSize, 0);
-    drawFinder(0, (gridSize - 7) * cellSize);
-
-    // Fill middle with hash-derived pattern
-    for (let row = 8; row < gridSize - 8; row++) {
-      for (let col = 8; col < gridSize - 8; col++) {
-        const v = ((hash * (row + 1) * (col + 1)) >>> 0) % 3;
-        if (v === 0) {
-          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        }
-      }
-    }
+    return `/guest/${encodeURIComponent(token)}`;
   };
 
   const handleCopyLink = async () => {
@@ -502,11 +446,7 @@ export default function CreateGuestPass({
             {/* QR Code */}
             <div className="flex justify-center">
               <div className="bg-app-surface rounded-xl border border-app-border p-4">
-                <canvas
-                  ref={qrCanvasRef}
-                  className="w-[200px] h-[200px]"
-                  style={{ imageRendering: 'pixelated' }}
-                />
+                <QRCode value={getShareUrl(resultToken)} size={200} label="Guest pass QR code" />
                 <p className="text-[10px] text-app-text-muted text-center mt-2">Scan to open guest pass</p>
               </div>
             </div>

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import SlidePanel from '../SlidePanel';
+import QRCode from '@/components/ui/QRCode';
+import { homeInviteDates } from '@/lib/homeInviteDates';
 
 // ---- Preset roles ----
 
@@ -36,7 +38,7 @@ export default function InviteFlow({
     message?: string;
     start_at?: string;
     end_at?: string;
-  }) => Promise<void>;
+  }) => Promise<api.homes.HomeInvitationCreated>;
   homeId: string;
 }) {
   const [step, setStep] = useState<Step>('method');
@@ -138,12 +140,6 @@ export default function InviteFlow({
   };
 
   const handleGoToRole = () => {
-    if (method === 'qr') {
-      // Generate QR invite URL
-      if (typeof window !== 'undefined') {
-        setQrInviteUrl(`${window.location.origin}/invite/${homeId}`);
-      }
-    }
     setStep('role');
   };
 
@@ -157,19 +153,19 @@ export default function InviteFlow({
 	    try {
 	      const preset = presets.find((p) => p.key === selectedPreset);
 	      const inviteUser = method === 'username' ? selectedUser : null;
-	      await onInvite({
+	      const result = await onInvite({
 	        email: method === 'email' ? email.trim() : undefined,
 	        user_id: inviteUser?.id,
 	        username: inviteUser?.username,
         relationship: preset?.role_base || 'member',
         preset_key: selectedPreset,
         message: message.trim() || undefined,
-        start_at: startAt || undefined,
-        end_at: endAt || undefined,
+        ...homeInviteDates(startAt, endAt),
       });
+      setQrInviteUrl(`${window.location.origin}/invite/${encodeURIComponent(result.invitation.token)}`);
       setSuccess(
         method === 'email'
-	          ? `Invitation sent to ${email}`
+	          ? result.emailSent ? `Invitation sent to ${email}` : 'Invitation created. Email delivery was not confirmed; share the link below.'
 	          : method === 'username'
 	          ? `Invitation sent to @${inviteUser?.username || usernameQuery}`
 	          : 'Invite link generated'
@@ -186,7 +182,7 @@ export default function InviteFlow({
     <SlidePanel
       open={open}
       onClose={onClose}
-      title={success ? 'Invitation Sent!' : 'Invite Member'}
+      title={success ? 'Invitation Created' : 'Invite Member'}
       subtitle={!success ? `Step ${step === 'method' ? '1' : step === 'role' ? '2' : '3'} of 3` : undefined}
     >
       <div className="space-y-5">
@@ -200,8 +196,12 @@ export default function InviteFlow({
             </div>
             <div>
               <h3 className="text-base font-semibold text-app-text">{success}</h3>
-              <p className="text-xs text-app-text-secondary mt-1">They&apos;ll see the invitation in their dashboard.</p>
+              <p className="text-xs text-app-text-secondary mt-1">Share this invitation with the intended recipient.</p>
             </div>
+            {qrInviteUrl && <div className="flex flex-col items-center gap-3">
+              <QRCode value={qrInviteUrl} size={180} label="Invitation QR code" />
+              <a href={qrInviteUrl} className="text-xs text-blue-600 break-all">{qrInviteUrl}</a>
+            </div>}
             <button
               onClick={onClose}
               className="w-full py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition"
@@ -370,8 +370,9 @@ export default function InviteFlow({
                 {needsDates && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-app-text-secondary mb-1">Start date</label>
+                      <label htmlFor="invite-start" className="block text-xs font-medium text-app-text-secondary mb-1">Start date</label>
                       <input
+                        id="invite-start"
                         type="date"
                         value={startAt}
                         onChange={(e) => setStartAt(e.target.value)}
@@ -379,14 +380,16 @@ export default function InviteFlow({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-app-text-secondary mb-1">End date</label>
+                      <label htmlFor="invite-end" className="block text-xs font-medium text-app-text-secondary mb-1">End date (inclusive)</label>
                       <input
+                        id="invite-end"
                         type="date"
                         value={endAt}
                         onChange={(e) => setEndAt(e.target.value)}
                         className="w-full px-3 py-2 border border-app-border rounded-lg text-sm"
                       />
                     </div>
+                    <p className="col-span-2 text-xs text-app-text-secondary">Dates use this device&apos;s time zone.</p>
                   </div>
                 )}
 
@@ -460,18 +463,6 @@ export default function InviteFlow({
                     )}
                   </div>
                 </div>
-
-                {/* QR Code display for QR method */}
-                {method === 'qr' && qrInviteUrl && (
-                  <div className="bg-app-surface rounded-xl border border-app-border p-4 text-center">
-                    <div className="bg-app-surface-raised rounded-lg p-4 inline-block">
-                      <div className="w-[160px] h-[160px] bg-app-surface-sunken rounded flex items-center justify-center text-4xl">
-                        📱
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-app-text-muted mt-2">QR code will be generated when invite is sent</p>
-                  </div>
-                )}
 
                 <div className="flex gap-3">
                   <button

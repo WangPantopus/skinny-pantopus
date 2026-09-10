@@ -14,6 +14,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeResidencyService = require('../services/homeResidencyService');
+const homeInvitationService = require('../services/homeInvitationService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const {
   checkHomePermission,
@@ -218,22 +219,6 @@ const parsePostGISPoint = (point) => {
   }
   return null;
 };
-
-/** Current effective members.manage is required, including for verified owners. */
-async function canReviewHouseholdAccessRequests(homeId, userId) {
-  const perm = await checkHomePermission(homeId, userId, 'members.manage');
-  return perm.hasAccess;
-}
-
-function mapAccessRequestToInviteRelationship(requestedIdentity) {
-  switch (requestedIdentity) {
-    case 'owner': return 'owner';
-    case 'resident': return 'renter';
-    case 'household_member': return 'member';
-    case 'guest': return 'guest';
-    default: return 'member';
-  }
-}
 
 const ALLOWED_HOME_VERDICT_STATUSES = new Set([
   AddressVerdictStatus.OK,
@@ -1823,47 +1808,8 @@ router.get('/primary', verifyToken, async (req, res) => {
  * NOTE: Must be defined BEFORE /:id to avoid Express matching "invitations" as an :id param
  */
 router.get('/invitations', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // Get user email for email-based invites
-    const { data: user } = await supabaseAdmin
-      .from('User')
-      .select('email')
-      .eq('id', userId)
-      .single();
-
-    let query = supabaseAdmin
-      .from('HomeInvite')
-      .select(`
-        *,
-        home:home_id (
-          id, address, city, state, zip_code
-        ),
-        inviter:invited_by (
-          id, username, name
-        )
-      `)
-      .eq('status', 'pending');
-
-    // Match by user_id OR email
-    if (user?.email) {
-      query = query.or(`invitee_user_id.eq.${userId},invitee_email.eq.${user.email}`);
-    } else {
-      query = query.eq('invitee_user_id', userId);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      logger.error('Error fetching home invitations', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch invitations' });
-    }
-
-    res.json({ invitations: data || [] });
-  } catch (err) {
-    logger.error('Invitations fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch invitations' });
-  }
+  try { res.json({ invitations: await homeInvitationService.list(req.user.id) }); }
+  catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -1874,219 +1820,42 @@ router.get('/invitations', verifyToken, async (req, res) => {
  */
 router.get('/invitations/token/:token', async (req, res) => {
   try {
-    const { token } = req.params;
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Look up by hash first, fall back to plaintext for un-migrated rows (AUTH-3.1)
-    let { data: invite, error } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('*')
-      .eq('token_hash', tokenHash)
-      .single();
-
-    if (!invite) {
-      ({ data: invite, error } = await supabaseAdmin
-        .from('HomeInvite')
-        .select('*')
-        .eq('token', token)
-        .single());
-    }
-
-    if (error || !invite) {
-      return res.status(404).json({ error: 'Invitation not found' });
-    }
-
-    // Check status
-    if (invite.status !== 'pending') {
-      return res.json({
-        invitation: { id: invite.id, status: invite.status },
-        expired: invite.status === 'expired',
-        alreadyUsed: invite.status === 'accepted',
-      });
-    }
-
-    // Check expiry
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      await supabaseAdmin.from('HomeInvite').update({ status: 'expired' }).eq('id', invite.id);
-      return res.json({
-        invitation: { id: invite.id, status: 'expired' },
-        expired: true,
-      });
-    }
-
-    // Get home info
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id, name, address, city, state, home_type')
-      .eq('id', invite.home_id)
-      .single();
-
-    // Get inviter info
-    const { data: inviter } = await supabaseAdmin
-      .from('User')
-      .select('username, name, first_name, profile_picture_url')
-      .eq('id', invite.invited_by)
-      .single();
-
-    res.json({
-      invitation: {
-        id: invite.id,
-        status: invite.status,
-        proposed_role: invite.proposed_role,
-        invitee_email: invite.invitee_email,
-        invitee_user_id: invite.invitee_user_id,
-        expires_at: invite.expires_at,
-        created_at: invite.created_at,
-      },
-      home: home ? {
-        id: home.id,
-        name: home.name || home.address || 'A Home',
-        city: [home.city, home.state].filter(Boolean).join(', '),
-        home_type: home.home_type,
-      } : null,
-      inviter: inviter ? {
-        name: inviter.name || inviter.first_name || inviter.username || 'Someone',
-        username: inviter.username,
-        profilePicture: inviter.profile_picture_url,
-      } : null,
-    });
-  } catch (err) {
-    logger.error('Token invite lookup error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch invitation' });
-  }
+    const { ok, ...preview } = await homeInvitationService.act({ token: req.params.token, action: 'preview' });
+    res.set('Cache-Control', 'no-store');
+    res.json(preview);
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
+
+async function acceptHomeInvitation(req, res, selector) {
+  try {
+    const result = await homeInvitationService.act({ ...selector, actorId: req.user.id, action: 'accept' });
+    if (result.kind === 'claim_merge') {
+      if (!householdClaimConfig.flags.inviteMerge) {
+        return res.status(409).json({ error: 'Use the ownership flow to complete this invitation.', code: 'OWNERSHIP_FLOW_REQUIRED' });
+      }
+      // Ownership keeps its distinct evidence/lifecycle gateway. The ordinary
+      // invitation transaction never creates ownership or falls back to it.
+      const invite = result.invitation;
+      const claimId = invite.proposed_preset_key.slice('claim_merge:'.length);
+      const merge = await homeClaimMergeService.acceptClaimMerge({ homeId: invite.home_id, claimId, userId: req.user.id, invite });
+      return res.json({ occupancy: merge.occupancy, homeId: invite.home_id, merged: true,
+        accepted_role_base: merge.acceptedRoleBase, accepted_as_owner: merge.acceptedAsOwner,
+        claim: { id: claimId, state: 'approved', claim_phase_v2: merge.claimPhaseV2,
+          terminal_reason: merge.terminalReason, merged_into_claim_id: merge.mergedIntoClaimId } });
+    }
+    await homeInvitationService.notifyAccepted(result, req.user.id);
+    return res.json({ occupancy: result.occupancy, homeId: result.homeId });
+  } catch (err) {
+    logger.error('Home invitation acceptance failed', { code: err.code });
+    return res.status(err.statusCode || err.status || 503).json({ error: err.message, code: err.code });
+  }
+}
 
 /**
  * POST /api/homes/invitations/:invitationId/accept
  */
 router.post('/invitations/:invitationId/accept', verifyToken, async (req, res) => {
-  try {
-    const { invitationId } = req.params;
-    const userId = req.user.id;
-
-    // Fetch the invite
-    const { data: invite, error: fetchErr } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('*')
-      .eq('id', invitationId)
-      .eq('status', 'pending')
-      .single();
-
-    if (fetchErr || !invite) {
-      return res.status(404).json({ error: 'Invitation not found or already used' });
-    }
-
-    // Check expiry
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      await supabaseAdmin.from('HomeInvite').update({ status: 'expired' }).eq('id', invitationId);
-      return res.status(410).json({ error: 'Invitation has expired' });
-    }
-
-    // Verify this invite is for this user
-    const { data: user } = await supabaseAdmin
-      .from('User')
-      .select('email')
-      .eq('id', userId)
-      .single();
-
-    const isForUser = invite.invitee_user_id === userId ||
-      (invite.invitee_email && user?.email && invite.invitee_email.toLowerCase() === user.email.toLowerCase());
-
-    if (!isForUser) {
-      return res.status(403).json({ error: 'This invitation is not for you' });
-    }
-
-    if (
-      householdClaimConfig.flags.inviteMerge
-      && typeof invite.proposed_preset_key === 'string'
-      && invite.proposed_preset_key.startsWith('claim_merge:')
-    ) {
-      const claimId = invite.proposed_preset_key.slice('claim_merge:'.length);
-      try {
-        const mergeResult = await homeClaimMergeService.acceptClaimMerge({
-          homeId: invite.home_id,
-          claimId,
-          userId,
-          invite,
-        });
-
-        return res.json({
-          occupancy: mergeResult.occupancy,
-          homeId: invite.home_id,
-          claim: {
-            id: claimId,
-            state: 'approved',
-            claim_phase_v2: mergeResult.claimPhaseV2,
-            terminal_reason: mergeResult.terminalReason,
-            merged_into_claim_id: mergeResult.mergedIntoClaimId,
-          },
-          merged: true,
-          accepted_role_base: mergeResult.acceptedRoleBase,
-          accepted_as_owner: mergeResult.acceptedAsOwner,
-        });
-      } catch (mergeError) {
-        if (mergeError.status) {
-          return res.status(mergeError.status).json({
-            error: mergeError.message,
-            ...(mergeError.code ? { code: mergeError.code } : {}),
-          });
-        }
-        throw mergeError;
-      }
-    }
-
-    // Create HomeOccupancy via centralized gateway
-    const roleBase = invite.proposed_role_base ||
-      mapLegacyRole(invite.proposed_role || 'member');
-
-    const occupancyAttachService = require('../services/occupancyAttachService');
-    const attachResult = await occupancyAttachService.attach({
-      homeId: invite.home_id,
-      userId,
-      method: 'owner_bootstrap',
-      claimType: 'member',
-      roleOverride: roleBase,
-      actorId: userId,
-      metadata: { source: 'home_invite_accept', invite_id: invitationId },
-    });
-
-    if (!attachResult.success && attachResult.status !== 'already_attached') {
-      logger.error('Error creating occupancy from invite', { error: attachResult.error });
-      return res.status(500).json({ error: 'Failed to accept invitation' });
-    }
-    const occupancy = attachResult.occupancy;
-
-    // Mark invite as accepted
-    await supabaseAdmin.from('HomeInvite').update({ status: 'accepted' }).eq('id', invitationId);
-
-    logger.info('Home invitation accepted', { inviteId: invitationId, homeId: invite.home_id, userId });
-
-    // Notify the inviter (non-blocking)
-    const { notifyHomeInviteAccepted } = require('../services/notificationService');
-    (async () => {
-      try {
-        const [accepterRes, hmRes] = await Promise.allSettled([
-          supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single(),
-          supabaseAdmin.from('Home').select('name, address').eq('id', invite.home_id).single(),
-        ]);
-        const accepter = accepterRes.status === 'fulfilled' ? accepterRes.value.data : null;
-        const hm = hmRes.status === 'fulfilled' ? hmRes.value.data : null;
-        await notifyHomeInviteAccepted({
-          inviterUserId: invite.invited_by,
-          accepterName: accepter?.name || accepter?.first_name || accepter?.username || 'Someone',
-          homeName: hm?.name || hm?.address || 'A home',
-          homeId: invite.home_id,
-        });
-      } catch (e) {
-        logger.error('Failed to create accept notification', { error: e.message });
-      }
-    })();
-
-    res.json({ occupancy });
-  } catch (err) {
-    logger.error('Accept invitation error', { error: err.message });
-    res.status(500).json({ error: 'Failed to accept invitation' });
-  }
+  await acceptHomeInvitation(req, res, { invitationId: req.params.invitationId });
 });
 
 /**
@@ -2094,66 +1863,9 @@ router.post('/invitations/:invitationId/accept', verifyToken, async (req, res) =
  */
 router.post('/invitations/:invitationId/reject', verifyToken, async (req, res) => {
   try {
-    const { invitationId } = req.params;
-    const userId = req.user.id;
-
-    // SEC-09: this route read userId and never used it, so any authenticated
-    // account could revoke any invitation by id — enough to block every
-    // household on the platform from adding members. Only the person the
-    // invitation is addressed to, or someone who can manage members on that
-    // home, may reject it.
-    const { data: invite, error: lookupErr } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('id, home_id, invitee_user_id, invitee_email, status')
-      .eq('id', invitationId)
-      .maybeSingle();
-
-    if (lookupErr) {
-      logger.error('Error loading invitation', { error: lookupErr.message });
-      return res.status(500).json({ error: 'Failed to reject invitation' });
-    }
-
-    if (!invite) {
-      return res.status(404).json({ error: 'Invitation not found' });
-    }
-
-    let permitted = invite.invitee_user_id === userId;
-
-    if (!permitted && invite.invitee_email) {
-      const { data: me } = await supabaseAdmin
-        .from('User')
-        .select('email')
-        .eq('id', userId)
-        .maybeSingle();
-      permitted = !!me?.email
-        && me.email.toLowerCase() === invite.invitee_email.toLowerCase();
-    }
-
-    if (!permitted) {
-      const access = await checkHomePermission(invite.home_id, userId, 'members.manage');
-      permitted = access.hasAccess;
-    }
-
-    if (!permitted) {
-      return res.status(403).json({ error: 'Not authorized to reject this invitation' });
-    }
-
-    const { error } = await supabaseAdmin
-      .from('HomeInvite')
-      .update({ status: 'revoked' })
-      .eq('id', invitationId)
-      .eq('status', 'pending');
-
-    if (error) {
-      logger.error('Error rejecting invitation', { error: error.message });
-      return res.status(500).json({ error: 'Failed to reject invitation' });
-    }
-
+    await homeInvitationService.act({ invitationId: req.params.invitationId, actorId: req.user.id, action: 'decline' });
     res.json({ message: 'Invitation rejected' });
-  } catch (err) {
-    logger.error('Reject invitation error', { error: err.message });
-    res.status(500).json({ error: 'Failed to reject invitation' });
-  }
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -2162,150 +1874,7 @@ router.post('/invitations/:invitationId/reject', verifyToken, async (req, res) =
  * Requires auth — user must be logged in.
  */
 router.post('/invitations/token/:token/accept', verifyToken, async (req, res) => {
-  try {
-    const { token } = req.params;
-    const userId = req.user.id;
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Fetch the invite by hash, fall back to plaintext for un-migrated rows (AUTH-3.1)
-    let { data: invite, error: fetchErr } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('*')
-      .eq('token_hash', tokenHash)
-      .eq('status', 'pending')
-      .single();
-
-    if (!invite) {
-      ({ data: invite, error: fetchErr } = await supabaseAdmin
-        .from('HomeInvite')
-        .select('*')
-        .eq('token', token)
-        .eq('status', 'pending')
-        .single());
-    }
-
-    if (fetchErr || !invite) {
-      return res.status(404).json({ error: 'Invitation not found or already used' });
-    }
-
-    // Check expiry
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      await supabaseAdmin.from('HomeInvite').update({ status: 'expired' }).eq('id', invite.id);
-      return res.status(410).json({ error: 'Invitation has expired' });
-    }
-
-    // Verify this invite is for this user (by user_id or email)
-    const { data: user } = await supabaseAdmin
-      .from('User')
-      .select('email')
-      .eq('id', userId)
-      .single();
-
-    // Targeted invite: strict identity check (BUG 1A fix)
-    const isTargetedInvite = !!(invite.invitee_user_id || invite.invitee_email);
-
-    if (isTargetedInvite) {
-      const isForUser =
-        invite.invitee_user_id === userId ||
-        (invite.invitee_email && user?.email && invite.invitee_email.toLowerCase() === user.email.toLowerCase());
-
-      if (!isForUser) {
-        // Mask the email for the error hint (show first 2 chars + domain)
-        let emailHint = null;
-        if (invite.invitee_email) {
-          const [local, domain] = invite.invitee_email.split('@');
-          emailHint = local.slice(0, 2) + '***@' + domain;
-        }
-        return res.status(403).json({
-          error: 'This invitation was sent to a different email address',
-          code: 'INVITE_EMAIL_MISMATCH',
-          hint: emailHint,
-        });
-      }
-    }
-    // Open invite (no invitee_email, no invitee_user_id): any authenticated user can accept
-
-    if (
-      householdClaimConfig.flags.inviteMerge
-      && typeof invite.proposed_preset_key === 'string'
-      && invite.proposed_preset_key.startsWith('claim_merge:')
-    ) {
-      const claimId = invite.proposed_preset_key.slice('claim_merge:'.length);
-      try {
-        const mergeResult = await homeClaimMergeService.acceptClaimMerge({
-          homeId: invite.home_id,
-          claimId,
-          userId,
-          invite,
-        });
-
-        return res.json({
-          occupancy: mergeResult.occupancy,
-          homeId: invite.home_id,
-          claim: {
-            id: claimId,
-            state: 'approved',
-            claim_phase_v2: mergeResult.claimPhaseV2,
-            terminal_reason: mergeResult.terminalReason,
-            merged_into_claim_id: mergeResult.mergedIntoClaimId,
-          },
-          merged: true,
-          accepted_role_base: mergeResult.acceptedRoleBase,
-          accepted_as_owner: mergeResult.acceptedAsOwner,
-        });
-      } catch (mergeError) {
-        if (mergeError.status) {
-          return res.status(mergeError.status).json({
-            error: mergeError.message,
-            ...(mergeError.code ? { code: mergeError.code } : {}),
-          });
-        }
-        throw mergeError;
-      }
-    }
-
-    // Create HomeOccupancy via applyOccupancyTemplate (single write path)
-    const roleBase = invite.proposed_role_base || mapLegacyRole(invite.proposed_role || 'member');
-    let occupancy;
-    try {
-      const result = await applyOccupancyTemplate(invite.home_id, userId, roleBase, 'verified');
-      occupancy = result.occupancy;
-    } catch (templateErr) {
-      logger.error('Error creating occupancy from token invite', { error: templateErr.message });
-      return res.status(500).json({ error: 'Failed to accept invitation' });
-    }
-
-    // Mark invite as accepted
-    await supabaseAdmin.from('HomeInvite').update({ status: 'accepted' }).eq('id', invite.id);
-
-    logger.info('Home invitation accepted via token', { inviteId: invite.id, homeId: invite.home_id, userId });
-
-    // Notify the inviter (non-blocking)
-    const { notifyHomeInviteAccepted } = require('../services/notificationService');
-    (async () => {
-      try {
-        const [accepterRes, hmRes] = await Promise.allSettled([
-          supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single(),
-          supabaseAdmin.from('Home').select('name, address').eq('id', invite.home_id).single(),
-        ]);
-        const accepter = accepterRes.status === 'fulfilled' ? accepterRes.value.data : null;
-        const hm = hmRes.status === 'fulfilled' ? hmRes.value.data : null;
-        await notifyHomeInviteAccepted({
-          inviterUserId: invite.invited_by,
-          accepterName: accepter?.name || accepter?.first_name || accepter?.username || 'Someone',
-          homeName: hm?.name || hm?.address || 'A home',
-          homeId: invite.home_id,
-        });
-      } catch (e) {
-        logger.error('Failed to create accept notification', { error: e.message });
-      }
-    })();
-
-    res.json({ occupancy, homeId: invite.home_id });
-  } catch (err) {
-    logger.error('Token accept error', { error: err.message });
-    res.status(500).json({ error: 'Failed to accept invitation' });
-  }
+  await acceptHomeInvitation(req, res, { token: req.params.token });
 });
 
 /**
@@ -2314,42 +1883,9 @@ router.post('/invitations/token/:token/accept', verifyToken, async (req, res) =>
  */
 router.post('/invitations/token/:token/decline', verifyToken, async (req, res) => {
   try {
-    const { token } = req.params;
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Try hash first, fall back to plaintext for un-migrated rows (AUTH-3.1)
-    let { error } = await supabaseAdmin
-      .from('HomeInvite')
-      .update({ status: 'revoked' })
-      .eq('token_hash', tokenHash)
-      .eq('status', 'pending');
-
-    // If no rows matched by hash, try plaintext fallback
-    const { data: check } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('id')
-      .eq('token', token)
-      .eq('status', 'pending')
-      .maybeSingle();
-
-    if (check) {
-      ({ error } = await supabaseAdmin
-        .from('HomeInvite')
-        .update({ status: 'revoked' })
-        .eq('token', token)
-        .eq('status', 'pending'));
-    }
-
-    if (error) {
-      logger.error('Error declining invitation by token', { error: error.message });
-      return res.status(500).json({ error: 'Failed to decline invitation' });
-    }
-
+    await homeInvitationService.act({ token: req.params.token, actorId: req.user.id, action: 'decline' });
     res.json({ message: 'Invitation declined' });
-  } catch (err) {
-    logger.error('Token decline error', { error: err.message });
-    res.status(500).json({ error: 'Failed to decline invitation' });
-  }
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -2661,108 +2197,16 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
  */
 router.post('/:id/request-household-from-owner', verifyToken, validate(requestHouseholdFromOwnerSchema), async (req, res) => {
   try {
-    const homeId = req.params.id;
-    const userId = req.user.id;
-    const { requested_identity: requestedIdentity } = req.body;
-
-    const { data: occ } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (occ) {
-      return res.status(400).json({ error: 'You already belong to this home.' });
-    }
-
-    const { data: verifiedRows, error: voErr } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('subject_id')
-      .eq('home_id', homeId)
-      .eq('subject_type', 'user')
-      .eq('owner_status', 'verified');
-
-    if (voErr) throw voErr;
-    let ownerUserIds = [...new Set((verifiedRows || []).map((r) => r.subject_id).filter(Boolean))];
-    ownerUserIds = ownerUserIds.filter((id) => id !== userId);
-    if (!ownerUserIds.length) {
-      return res.status(400).json({
-        error: 'This home does not have a verified owner yet. Use ownership verification instead.',
+    const result = await homeInvitationService.write({ homeId: req.params.id, actorId: req.user.id,
+      action: 'request', payload: { requested_identity: req.body.requested_identity } });
+    try {
+      await require('../services/notificationService').notifyHouseholdAccessRequest({
+        ownerUserIds: result.notify_user_ids, requesterName: result.actor_name, homeLabel: result.home_label,
+        homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
       });
-    }
-
-    const { data: homeRow } = await supabaseAdmin
-      .from('Home')
-      .select('address, city, state, zipcode')
-      .eq('id', homeId)
-      .single();
-
-    const { data: requester } = await supabaseAdmin
-      .from('User')
-      .select('username, name, first_name, last_name')
-      .eq('id', userId)
-      .single();
-
-    const requesterName = requester
-      ? (requester.name || [requester.first_name, requester.last_name].filter(Boolean).join(' ') || requester.username || 'Someone')
-      : 'Someone';
-    const homeLabel = homeRow
-      ? [homeRow.address, homeRow.city, homeRow.state].filter(Boolean).join(', ')
-      : 'your home';
-
-    const nowIso = new Date().toISOString();
-    const { data: existingPending } = await supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('requester_user_id', userId)
-      .eq('status', 'pending')
-      .maybeSingle();
-
-    if (existingPending) {
-      await supabaseAdmin
-        .from('HomeHouseholdAccessRequest')
-        .update({ requested_identity: requestedIdentity, updated_at: nowIso })
-        .eq('id', existingPending.id);
-    } else {
-      const { error: insReqErr } = await supabaseAdmin
-        .from('HomeHouseholdAccessRequest')
-        .insert({
-          home_id: homeId,
-          requester_user_id: userId,
-          requested_identity: requestedIdentity,
-          status: 'pending',
-        });
-      if (insReqErr) {
-        logger.error('HomeHouseholdAccessRequest insert failed', { error: insReqErr.message, homeId });
-        return res.status(500).json({ error: 'Failed to save access request' });
-      }
-    }
-
-    const { notifyHouseholdAccessRequest } = require('../services/notificationService');
-    await notifyHouseholdAccessRequest({
-      ownerUserIds,
-      requesterName,
-      homeLabel,
-      homeId,
-      requesterUserId: userId,
-      requestedIdentity,
-    });
-
-    await writeAuditLog(homeId, userId, 'HOUSEHOLD_ACCESS_REQUESTED', 'Home', homeId, {
-      requested_identity: requestedIdentity,
-      notified_owner_count: ownerUserIds.length,
-    });
-
-    res.json({
-      ok: true,
-      notified_owners: ownerUserIds.length,
-    });
-  } catch (err) {
-    logger.error('request-household-from-owner error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to send request' });
-  }
+    } catch (err) { logger.error('Household request notification failed after commit', { code: err.code }); }
+    res.json({ ok: true, notified_owners: result.notify_user_ids.length });
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -2771,41 +2215,11 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
  */
 router.get('/:id/household-access-requests', verifyToken, async (req, res) => {
   try {
-    const homeId = req.params.id;
-    const userId = req.user.id;
-    if (!(await canReviewHouseholdAccessRequests(homeId, userId))) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    const statusFilter = (req.query.status || 'pending').toLowerCase();
-    let q = supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (statusFilter && statusFilter !== 'all') {
-      q = q.eq('status', statusFilter);
-    }
-    const { data: rows, error } = await q;
-    if (error) throw error;
-    const ids = [...new Set((rows || []).map((r) => r.requester_user_id))];
-    let userMap = {};
-    if (ids.length) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', ids);
-      userMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
-    }
-    res.json({
-      requests: (rows || []).map((r) => ({
-        ...r,
-        requester: userMap[r.requester_user_id] || null,
-      })),
-    });
+    const status = typeof req.query.status === 'string' ? req.query.status.toLowerCase() : 'pending';
+    res.json({ requests: await homeInvitationService.listRequests(req.params.id, req.user.id, status) });
   } catch (err) {
-    logger.error('household-access-requests list error', { error: err.message });
-    res.status(500).json({ error: 'Failed to load requests' });
+    logger.error('household-access-requests list error', { code: err.code });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -2814,116 +2228,11 @@ router.get('/:id/household-access-requests', verifyToken, async (req, res) => {
  */
 router.post('/:id/household-access-requests/:requestId/approve', verifyToken, async (req, res) => {
   try {
-    const homeId = req.params.id;
-    const requestId = req.params.requestId;
-    const userId = req.user.id;
-    if (!(await canReviewHouseholdAccessRequests(homeId, userId))) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    const { data: request, error: reqErr } = await supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .select('*')
-      .eq('id', requestId)
-      .eq('home_id', homeId)
-      .single();
-    if (reqErr || !request) return res.status(404).json({ error: 'Request not found' });
-    if (request.status !== 'pending') {
-      return res.status(400).json({ error: 'This request is no longer pending' });
-    }
-    const { data: requester } = await supabaseAdmin
-      .from('User')
-      .select('id, email, username')
-      .eq('id', request.requester_user_id)
-      .single();
-    if (!requester) return res.status(400).json({ error: 'Requester not found' });
-
-    const { data: existingOcc } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('user_id', request.requester_user_id)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (existingOcc) {
-      const resolvedAt = new Date().toISOString();
-      await supabaseAdmin
-        .from('HomeHouseholdAccessRequest')
-        .update({
-          status: 'cancelled',
-          resolved_by: userId,
-          resolved_at: resolvedAt,
-          updated_at: resolvedAt,
-        })
-        .eq('id', requestId);
-      return res.status(409).json({ error: 'This person is already a member' });
-    }
-
-    const relationship = mapAccessRequestToInviteRelationship(request.requested_identity);
-    const proposedRoleBase = mapLegacyRole(relationship);
-
-    const { data: dupInv } = await supabaseAdmin
-      .from('HomeInvite')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('invitee_user_id', request.requester_user_id)
-      .eq('status', 'pending')
-      .maybeSingle();
-    if (dupInv) {
-      return res.status(409).json({ error: 'A pending invitation already exists for this person' });
-    }
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    const { error: invErr } = await supabaseAdmin.from('HomeInvite').insert({
-      home_id: homeId,
-      invited_by: userId,
-      invitee_email: requester.email || null,
-      invitee_user_id: request.requester_user_id,
-      proposed_role: relationship,
-      token,
-      token_hash: tokenHash,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      proposed_role_base: proposedRoleBase,
-      proposed_preset_key: `access_request:${requestId}`,
-      is_open_invite: false,
-    });
-    if (invErr) {
-      logger.error('approve access request invite failed', { error: invErr.message });
-      return res.status(500).json({ error: 'Failed to create invitation' });
-    }
-
-    const resolvedAt = new Date().toISOString();
-    await supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .update({
-        status: 'approved',
-        resolved_by: userId,
-        resolved_at: resolvedAt,
-        updated_at: resolvedAt,
-      })
-      .eq('id', requestId);
-
-    await writeAuditLog(homeId, userId, 'HOUSEHOLD_ACCESS_APPROVED', 'HomeHouseholdAccessRequest', requestId, {
-      requester_user_id: request.requester_user_id,
-    });
-
-    const { notifyHomeInvite } = require('../services/notificationService');
-    const { data: hm } = await supabaseAdmin.from('Home').select('name, address').eq('id', homeId).single();
-    const { data: inv } = await supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single();
-    await notifyHomeInvite({
-      inviteeUserId: request.requester_user_id,
-      inviterName: inv?.name || inv?.first_name || inv?.username || 'Someone',
-      homeName: hm?.name || hm?.address || 'A home',
-      homeId,
-      inviteToken: token,
-    });
-
-    res.json({ ok: true, message: 'Invitation sent' });
-  } catch (err) {
-    logger.error('approve household access request', { error: err.message });
-    res.status(500).json({ error: 'Failed to approve request' });
-  }
+    const result = await homeInvitationService.write({ homeId: req.params.id, actorId: req.user.id,
+      action: 'approve_request', payload: { request_id: req.params.requestId } });
+    await homeInvitationService.notifyCreated(result);
+    res.json({ ok: true, message: 'Invitation created' });
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -2931,62 +2240,17 @@ router.post('/:id/household-access-requests/:requestId/approve', verifyToken, as
  */
 router.post('/:id/household-access-requests/:requestId/reject', verifyToken, async (req, res) => {
   try {
-    const homeId = req.params.id;
-    const requestId = req.params.requestId;
-    const userId = req.user.id;
-    if (!(await canReviewHouseholdAccessRequests(homeId, userId))) {
-      return res.status(403).json({ error: 'Not authorized' });
+    const result = await homeInvitationService.write({ homeId: req.params.id, actorId: req.user.id,
+      action: 'reject_request', payload: { request_id: req.params.requestId } });
+    if (!result.replayed) {
+      try {
+        await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
+          requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: result.actor_name,
+        });
+      } catch (err) { logger.error('Household rejection notification failed after commit', { code: err.code }); }
     }
-    const { data: request, error: reqErr } = await supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .select('*')
-      .eq('id', requestId)
-      .eq('home_id', homeId)
-      .single();
-    if (reqErr || !request) return res.status(404).json({ error: 'Request not found' });
-    if (request.status !== 'pending') {
-      return res.status(400).json({ error: 'This request is no longer pending' });
-    }
-    const resolvedAt = new Date().toISOString();
-    await supabaseAdmin
-      .from('HomeHouseholdAccessRequest')
-      .update({
-        status: 'rejected',
-        resolved_by: userId,
-        resolved_at: resolvedAt,
-        updated_at: resolvedAt,
-      })
-      .eq('id', requestId);
-
-    const { data: hm } = await supabaseAdmin
-      .from('Home')
-      .select('address, city, state')
-      .eq('id', homeId)
-      .single();
-    const homeLabel = hm ? [hm.address, hm.city, hm.state].filter(Boolean).join(', ') : 'the home';
-    const { data: resolver } = await supabaseAdmin
-      .from('User')
-      .select('name, username, first_name')
-      .eq('id', userId)
-      .single();
-    const resolverName = resolver?.name || resolver?.first_name || resolver?.username || 'A home owner';
-
-    const { notifyHouseholdAccessRequestRejected } = require('../services/notificationService');
-    await notifyHouseholdAccessRequestRejected({
-      requesterUserId: request.requester_user_id,
-      homeLabel,
-      resolverName,
-    });
-
-    await writeAuditLog(homeId, userId, 'HOUSEHOLD_ACCESS_REJECTED', 'HomeHouseholdAccessRequest', requestId, {
-      requester_user_id: request.requester_user_id,
-    });
-
     res.json({ ok: true });
-  } catch (err) {
-    logger.error('reject household access request', { error: err.message });
-    res.status(500).json({ error: 'Failed to reject request' });
-  }
+  } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
 });
 
 /**
@@ -3562,24 +2826,14 @@ router.get('/:id/occupants', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch occupants' });
     }
 
-    // Also fetch pending invites for this home
-    const { data: pendingInvites } = await supabaseAdmin
-      .from('HomeInvite')
-      .select(`
-        id,
-        invitee_email,
-        invitee_user_id,
-        proposed_role,
-        status,
-        created_at,
-        inviter:invited_by (
-          username,
-          name
-        )
-      `)
-      .eq('home_id', homeId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    // Invitations reveal recipient identity only to current member managers.
+    // Ordinary members keep the occupants view without invitation metadata.
+    let pendingInvites;
+    try { pendingInvites = await homeInvitationService.list(userId, homeId); }
+    catch (err) {
+      if (err.code !== 'MEMBERS_MANAGE_REQUIRED') throw err;
+      pendingInvites = [];
+    }
 
     // Map pending invites to a member-like shape for the UI
     const pendingMembers = (pendingInvites || []).map(inv => ({
@@ -3614,7 +2868,7 @@ router.get('/:id/occupants', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Occupants fetch error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch occupants' });
+    res.status(err.statusCode || 500).json({ error: 'Failed to fetch occupants', ...(err.code ? { code: err.code } : {}) });
   }
 });
 
@@ -5728,213 +4982,13 @@ router.delete('/:id/access/:secretId', verifyToken, async (req, res) => {
  */
 router.post('/:id/invite', verifyToken, homeOutboundLimiter, async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_access');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to invite members' });
-
-    const { email, user_id, relationship, message } = req.body;
-    const requestedPresetKey = typeof req.body.preset_key === 'string' ? req.body.preset_key : null;
-    if (requestedPresetKey?.startsWith('claim_merge:')) {
-      return res.status(400).json({
-        error: 'Claim merge invitations must be created from ownership claim review',
-        code: 'CLAIM_MERGE_PRESET_FORBIDDEN',
-      });
-    }
-
-    // Compute is_open_invite server-side: true when no specific invitee is provided
-    const isOpenInvite = !email && !user_id;
-
-    // Validate: manager and service_provider roles require a targeted invite
-    const proposedRoleBase = mapLegacyRole(relationship || 'member');
-
-    // SEC-07: an invite could propose `owner`, which mapLegacyRole turns into a
-    // full IAM owner. Combined with the absence of a rank check, an admin
-    // holding can_manage_access could mint an owner ranked above themselves,
-    // taking over the household — and it bypassed the address-claim gate that
-    // ownership is supposed to require. Ownership is transferred through the
-    // claim and transfer flows, never through an invitation.
-    if (proposedRoleBase === 'owner') {
-      return res.status(400).json({
-        error: 'Ownership cannot be granted by invitation. Use the ownership transfer flow.',
-        code: 'OWNER_INVITE_FORBIDDEN',
-      });
-    }
-
-    // The inviter may not propose a role at or above their own rank.
-    const inviterOccupancy = await getActiveOccupancy(homeId, userId);
-    const inviterRoleBase = access.isOwner
-      ? 'owner'
-      : (inviterOccupancy?.role_base || mapLegacyRole(inviterOccupancy?.role) || 'member');
-
-    const rankCheck = assertCanMutateTarget(inviterRoleBase, proposedRoleBase);
-    if (!rankCheck.allowed) {
-      return res.status(403).json({ error: rankCheck.reason });
-    }
-    if (isOpenInvite && (proposedRoleBase === 'manager' || proposedRoleBase === 'service_provider')) {
-      return res.status(400).json({
-        error: 'Property managers and service providers must be invited by email or user ID',
-      });
-    }
-
-    // Resolve invitee — figure out both email and user_id when possible
-    let inviteeEmail = email ? email.toLowerCase().trim() : null;
-    let inviteeUserId = user_id || null;
-    let isExistingUser = false;
-
-    if (!isOpenInvite && inviteeEmail && !inviteeUserId) {
-      // Email provided — check if this person already has an account
-      const { data: existingUser } = await supabaseAdmin
-        .from('User')
-        .select('id, username, email')
-        .eq('email', inviteeEmail)
-        .single();
-
-      if (existingUser) {
-        inviteeUserId = existingUser.id;
-        isExistingUser = true;
-      }
-    }
-
-    if (!isOpenInvite) {
-      if (inviteeUserId && !inviteeEmail) {
-        // User ID provided (username search) — fetch their email for notification
-        const { data: targetUser } = await supabaseAdmin
-          .from('User')
-          .select('id, email, username')
-          .eq('id', inviteeUserId)
-          .single();
-
-        if (targetUser?.email) {
-          inviteeEmail = targetUser.email;
-        }
-        isExistingUser = true;
-      }
-
-      // Check if this user is already a member
-      if (inviteeUserId) {
-        const { data: existingOcc } = await supabaseAdmin
-          .from('HomeOccupancy')
-          .select('id')
-          .eq('home_id', homeId)
-          .eq('user_id', inviteeUserId)
-          .eq('is_active', true)
-          .single();
-
-        if (existingOcc) {
-          return res.status(409).json({ error: 'This person is already a member of this home' });
-        }
-      }
-
-      // Check for duplicate pending invite
-      let dupQuery = supabaseAdmin
-        .from('HomeInvite')
-        .select('id')
-        .eq('home_id', homeId)
-        .eq('status', 'pending');
-
-      if (inviteeUserId) {
-        dupQuery = dupQuery.eq('invitee_user_id', inviteeUserId);
-      } else if (inviteeEmail) {
-        dupQuery = dupQuery.eq('invitee_email', inviteeEmail);
-      }
-
-      const { data: existingInvite } = await dupQuery.single();
-      if (existingInvite) {
-        return res.status(409).json({ error: 'A pending invitation already exists for this person' });
-      }
-    }
-
-    // Generate a unique invite token + hash (AUTH-3.1)
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeInvite')
-      .insert({
-        home_id: homeId,
-        invited_by: userId,
-        invitee_email: inviteeEmail,
-        invitee_user_id: inviteeUserId,
-        proposed_role: relationship || 'member',
-        token,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-        proposed_role_base: proposedRoleBase,
-        proposed_preset_key: requestedPresetKey,
-        is_open_invite: isOpenInvite,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating home invite', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to create invitation' });
-    }
-
-    logger.info('Home invite created', { homeId, inviteId: data.id, inviteeEmail, inviteeUserId, userId, isOpenInvite });
-
-    // Send invite email (non-blocking — don't fail the request if email fails)
-    if (inviteeEmail) {
-      // Get inviter info and home info for the email
-      const [inviterRes, homeRes] = await Promise.allSettled([
-        supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single(),
-        supabaseAdmin.from('Home').select('name, address, city, state').eq('id', homeId).single(),
-      ]);
-
-      const inviter = inviterRes.status === 'fulfilled' ? inviterRes.value.data : null;
-      const homeData = homeRes.status === 'fulfilled' ? homeRes.value.data : null;
-
-      const inviterName = inviter?.name || inviter?.first_name || inviter?.username || 'Someone';
-      const homeName = homeData?.name || homeData?.address || 'A home';
-      const homeCity = [homeData?.city, homeData?.state].filter(Boolean).join(', ');
-
-      const { sendHomeInviteEmail } = require('../services/emailService');
-      sendHomeInviteEmail({
-        toEmail: inviteeEmail,
-        inviterName,
-        homeName,
-        homeCity,
-        role: relationship || 'member',
-        token,
-        message: message || null,
-        isExistingUser,
-      }).catch(err => {
-        logger.error('Failed to send invite email (non-blocking)', { error: err.message });
-      });
-    }
-
-    // Send in-app notification (if invitee is an existing user)
-    if (inviteeUserId) {
-      const inviterName = inviteeEmail ? 'Someone' : 'Someone'; // will be overwritten below
-      // Re-use inviter/home info if we already fetched it for email, otherwise fetch
-      const { notifyHomeInvite } = require('../services/notificationService');
-      (async () => {
-        try {
-          const [invRes, hmRes] = await Promise.allSettled([
-            supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single(),
-            supabaseAdmin.from('Home').select('name, address').eq('id', homeId).single(),
-          ]);
-          const inv = invRes.status === 'fulfilled' ? invRes.value.data : null;
-          const hm = hmRes.status === 'fulfilled' ? hmRes.value.data : null;
-          await notifyHomeInvite({
-            inviteeUserId,
-            inviterName: inv?.name || inv?.first_name || inv?.username || 'Someone',
-            homeName: hm?.name || hm?.address || 'A home',
-            homeId,
-            inviteToken: token,
-          });
-        } catch (e) {
-          logger.error('Failed to create invite notification (non-blocking)', { error: e.message });
-        }
-      })();
-    }
-
-    res.status(201).json({ invitation: data, emailSent: !!inviteeEmail });
+    const result = await homeInvitationService.write({ homeId: req.params.id, actorId: req.user.id,
+      action: 'create', payload: req.body });
+    const emailSent = await homeInvitationService.notifyCreated(result, req.body.message);
+    res.status(201).json({ invitation: result.invitation, emailSent });
   } catch (err) {
-    logger.error('Home invite error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create invitation' });
+    logger.error('Create home invitation failed', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 

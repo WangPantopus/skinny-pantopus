@@ -239,6 +239,12 @@ export default function SharedResourcePage() {
 // ============================================================
 
 const RESOURCE_ICON: Record<string, string> = {
+  HomeDocument: '📄',
+  HomeTask: '📋',
+  HomeCalendarEvent: '📅',
+  HomeIssue: '🔧',
+  HomeAsset: '🏷️',
+  HomePackage: '📦',
   document: '📄',
   task: '📋',
   bill: '💰',
@@ -252,6 +258,12 @@ const RESOURCE_ICON: Record<string, string> = {
 };
 
 const RESOURCE_LABEL: Record<string, string> = {
+  HomeDocument: 'Document',
+  HomeTask: 'Task',
+  HomeCalendarEvent: 'Event',
+  HomeIssue: 'Issue',
+  HomeAsset: 'Asset',
+  HomePackage: 'Package',
   document: 'Document',
   task: 'Task',
   bill: 'Bill',
@@ -319,16 +331,21 @@ function ExpiryBadge({ expiresAt }: { expiresAt: string }) {
 
 function SharedResourceContent({ type, resource }: { type: string; resource: Record<string, any> }) {
   switch (type) {
+    case 'HomeDocument':
     case 'document':
       return <DocumentView resource={resource} />;
+    case 'HomeTask':
     case 'task':
       return <TaskView resource={resource} />;
     case 'bill':
       return <BillView resource={resource} />;
+    case 'HomeCalendarEvent':
     case 'event':
       return <EventView resource={resource} />;
+    case 'HomeIssue':
     case 'issue':
       return <IssueView resource={resource} />;
+    case 'HomePackage':
     case 'package':
       return <PackageView resource={resource} />;
     default:

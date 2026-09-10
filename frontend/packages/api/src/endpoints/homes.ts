@@ -309,6 +309,11 @@ export async function getNearbyHomes(params: {
 /**
  * Invite someone to a home
  */
+export interface HomeInvitationCreated {
+  invitation: { id: string; token: string; home_id: string; proposed_role: string };
+  emailSent: boolean;
+}
+
 export async function inviteToHome(homeId: string, data: {
   email?: string;
   user_id?: string;
@@ -318,8 +323,8 @@ export async function inviteToHome(homeId: string, data: {
   message?: string;
   start_at?: string;
   end_at?: string;
-}): Promise<ApiResponse> {
-  return post<ApiResponse>(`/api/homes/${homeId}/invite`, data);
+}): Promise<HomeInvitationCreated> {
+  return post<HomeInvitationCreated>(`/api/homes/${homeId}/invite`, data);
 }
 
 /**

@@ -260,6 +260,10 @@ test.each([
   seed({ role_base: 'owner', ...restrictions }, { owner_id: USER });
   db.seedTable('HomeOwner', [{ home_id: HOME, subject_id: USER, subject_type: 'user', owner_status: 'verified' }]);
   override('members.manage', false);
+  // The SQL contract verifies the same owner/age/status policy in the real
+  // transaction. Keep route coverage across this new actor-bound RPC boundary.
+  const rpc=jest.fn(async()=>({data:{ok:false,code:'MEMBERS_MANAGE_REQUIRED',status:403}}));
+  db.setRpcMock(rpc);
   const from = jest.spyOn(db, 'from');
   for (const [path, method] of [
     ['/:id/household-access-requests', 'get'],
@@ -267,6 +271,7 @@ test.each([
     ['/:id/household-access-requests/:requestId/reject', 'post'],
   ]) expect((await homeRoute(path, method, { requestId: 'request' })).status).toHaveBeenCalledWith(403);
   expect(from.mock.calls.map(([table]) => table)).not.toContain('HomeHouseholdAccessRequest');
+  expect(rpc.mock.calls.every(([,args])=>args.p_home_id===HOME && args.p_actor_id===USER)).toBe(true);
 });
 
 test('Home detail does not reconstruct owner authority for a minor from HomeOwner', async () => {
@@ -278,11 +283,11 @@ test('Home detail does not reconstruct owner authority for a minor from HomeOwne
 
 test.each(['/:id/bills', '/:id/access', '/:id/dashboard', '/:id/household-access-requests'])('auth failure in %s aborts as retryable 5xx', async path => {
   seed({ role_base: 'owner' });
-  if (path === '/:id/access') db.setRpcMock(async () => ({ data: null, error: { code: '55P03' } }));
+  if (['/:id/access','/:id/household-access-requests'].includes(path)) db.setRpcMock(async () => ({ data: null, error: { code: '55P03' } }));
   jest.spyOn(db, 'from').mockImplementation(name => {
     const query = originalFrom(name);
     if (name === 'HomePermissionOverride') query.then = (resolve, reject) => Promise.resolve({ data: null, error: {} }).then(resolve, reject);
     return query;
   });
-  expect((await homeRoute(path)).status).toHaveBeenCalledWith(['/:id/dashboard', '/:id/access'].includes(path) ? 503 : 500);
+  expect((await homeRoute(path)).status).toHaveBeenCalledWith(['/:id/dashboard', '/:id/access','/:id/household-access-requests'].includes(path) ? 503 : 500);
 });

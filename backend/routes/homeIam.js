@@ -31,6 +31,7 @@ const { invalidateRoleCache } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { OLD_TO_NEW_PERM } = require('../utils/homeAccessPolicy');
 const homeAuthorityService = require('../services/homeAuthorityService');
+const homeExternalShareService = require('../services/homeExternalShareService');
 const {
   checkHomePermission,
   getUserAccess,
@@ -334,349 +335,38 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
 });
 
 
-// ============================================================
-// Guest Pass Template Defaults
-// ============================================================
-
-const GUEST_PASS_TEMPLATES = {
-  wifi_only: {
-    default_hours: 2,
-    sections: ['wifi', 'parking'],
-  },
-  guest: {
-    default_hours: 48,
-    sections: ['wifi', 'parking', 'house_rules', 'entry_instructions', 'emergency'],
-  },
-  airbnb: {
-    default_hours: null, // must be explicitly set
-    sections: ['wifi', 'parking', 'house_rules', 'entry_instructions', 'trash_day', 'local_tips', 'emergency'],
-  },
-  vendor: {
-    default_hours: 8,
-    sections: ['entry_instructions', 'parking'],
-  },
-};
-
-
-// ============================================================
-// POST /:id/guest-passes — Create guest pass (V2)
-// ============================================================
-
-router.post('/:id/guest-passes', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const actorId = req.user.id;
-
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to create guest passes' });
-    }
-
-    const {
-      label,
-      kind = 'guest',
-      included_sections,
-      custom_title,
-      duration_hours,
-      start_at,
-      end_at,
-      passcode,
-      max_views,
-      permissions: passPermissions,
-    } = req.body;
-
-    if (!label) {
-      return res.status(400).json({ error: 'label is required' });
-    }
-
-    const validKinds = ['wifi_only', 'guest', 'airbnb', 'vendor'];
-    if (!validKinds.includes(kind)) {
-      return res.status(400).json({ error: `Invalid kind. Must be one of: ${validKinds.join(', ')}` });
-    }
-
-    // Resolve included_sections: user override or template defaults
-    const template = GUEST_PASS_TEMPLATES[kind];
-    const resolvedSections = Array.isArray(included_sections) && included_sections.length > 0
-      ? included_sections
-      : template.sections;
-
-    // Resolve timing
-    const resolvedStart = start_at ? new Date(start_at) : new Date();
-    let resolvedEnd = null;
-    if (end_at) {
-      resolvedEnd = new Date(end_at);
-    } else if (duration_hours) {
-      resolvedEnd = new Date(resolvedStart.getTime() + duration_hours * 60 * 60 * 1000);
-    } else if (template.default_hours) {
-      resolvedEnd = new Date(resolvedStart.getTime() + template.default_hours * 60 * 60 * 1000);
-    }
-    // If still null (e.g. airbnb with no duration), fall back to home default
-    if (!resolvedEnd) {
-      const { data: home } = await supabaseAdmin
-        .from('Home')
-        .select('default_guest_pass_hours')
-        .eq('id', homeId)
-        .single();
-      const fallbackHours = home?.default_guest_pass_hours || 48;
-      resolvedEnd = new Date(resolvedStart.getTime() + fallbackHours * 60 * 60 * 1000);
-    }
-
-    // Generate token
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Hash passcode if provided
-    let passcodeHash = null;
-    if (passcode && passcode.length > 0) {
-      passcodeHash = crypto.createHash('sha256').update(passcode).digest('hex');
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeGuestPass')
-      .insert({
-        home_id: homeId,
-        label,
-        kind,
-        token_hash: tokenHash,
-        role_base: 'guest',
-        permissions: passPermissions || {},
-        start_at: resolvedStart.toISOString(),
-        end_at: resolvedEnd.toISOString(),
-        created_by: actorId,
-        included_sections: resolvedSections,
-        custom_title: custom_title || null,
-        passcode_hash: passcodeHash,
-        max_views: max_views ?? null,
-        view_count: 0,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating guest pass', { error: error.message });
-      return res.status(500).json({ error: 'Failed to create guest pass' });
-    }
-
-    await writeAuditLog(homeId, actorId, 'guest_pass_created', 'HomeGuestPass', data.id, {
-      label, kind, included_sections: resolvedSections,
-    });
-
-    // Return the raw token ONCE (it's not stored, only the hash is)
-    res.status(201).json({
-      pass: data,
-      token, // only returned on creation
-    });
-  } catch (err) {
-    logger.error('Create guest pass error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create guest pass' });
-  }
-});
-
-
-// ============================================================
-// GET /:id/guest-passes — List guest passes (V2)
-// ============================================================
-
+// Guest and scoped links are issued and revoked with their audit in one
+// actor-bound transaction; responses omit credential hashes and private bindings.
+function shareFailure(res, error) {
+  return res.status(error.statusCode || 503).json({
+    error: error.code ? error.message : 'Could not complete the share request. Please retry.',
+    code: error.code || 'SHARE_UNAVAILABLE',
+  });
+}
+for (const [kind, path, envelope] of [
+  ['guest', '/:id/guest-passes', 'pass'], ['scoped', '/:id/scoped-grants', 'grant'],
+]) {
+  router.post(path, verifyToken, async (req, res) => {
+    try {
+      const result = await homeExternalShareService.mutate({ homeId: req.params.id,
+        actorId: req.user.id, kind, action: 'create', payload: req.body });
+      return res.status(201).json({ [envelope]: result.record, token: result.token });
+    } catch (error) { return shareFailure(res, error); }
+  });
+  router.delete(`${path}/:shareId`, verifyToken, async (req, res) => {
+    try {
+      const result = await homeExternalShareService.mutate({ homeId: req.params.id,
+        actorId: req.user.id, kind, action: 'revoke', shareId: req.params.shareId });
+      return res.json({ message: kind === 'guest' ? 'Guest pass revoked' : 'Share link revoked', [envelope]: result.record });
+    } catch (error) { return shareFailure(res, error); }
+  });
+}
 router.get('/:id/guest-passes', verifyToken, async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const actorId = req.user.id;
-
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to view guest passes' });
-    }
-
-    const includeRevoked = req.query.include_revoked === 'true';
-
-    let query = supabaseAdmin
-      .from('HomeGuestPass')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false });
-
-    if (!includeRevoked) {
-      query = query.is('revoked_at', null);
-    }
-
-    const { data: passes, error } = await query;
-
-    if (error) {
-      logger.error('Error fetching guest passes', { error: error.message });
-      return res.status(500).json({ error: 'Failed to fetch guest passes' });
-    }
-
-    // Enrich with last_viewed_at from HomeGuestPassView
-    const passIds = (passes || []).map(p => p.id);
-    let lastViewedMap = {};
-
-    if (passIds.length > 0) {
-      // Get last view per pass using a raw approach (supabase doesn't support GROUP BY natively)
-      const { data: views } = await supabaseAdmin
-        .from('HomeGuestPassView')
-        .select('guest_pass_id, viewed_at')
-        .in('guest_pass_id', passIds)
-        .order('viewed_at', { ascending: false });
-
-      for (const v of (views || [])) {
-        if (!lastViewedMap[v.guest_pass_id]) {
-          lastViewedMap[v.guest_pass_id] = v.viewed_at;
-        }
-      }
-    }
-
-    const now = new Date();
-    const enriched = (passes || []).map(p => {
-      let status = 'active';
-      if (p.revoked_at) {
-        status = 'revoked';
-      } else if (p.end_at && new Date(p.end_at) <= now) {
-        status = 'expired';
-      } else if (p.max_views && p.view_count >= p.max_views) {
-        status = 'expired';
-      }
-      return {
-        ...p,
-        status,
-        last_viewed_at: lastViewedMap[p.id] || null,
-      };
-    });
-
-    res.json({ passes: enriched });
-  } catch (err) {
-    logger.error('Guest passes error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch guest passes' });
-  }
-});
-
-
-// ============================================================
-// DELETE /:id/guest-passes/:passId — Revoke guest pass (V2)
-// ============================================================
-
-router.delete('/:id/guest-passes/:passId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, passId } = req.params;
-    const actorId = req.user.id;
-
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to revoke guest passes' });
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeGuestPass')
-      .update({
-        revoked_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', passId)
-      .eq('home_id', homeId)
-      .is('revoked_at', null)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error revoking guest pass', { error: error.message });
-      return res.status(500).json({ error: 'Failed to revoke guest pass' });
-    }
-
-    if (!data) {
-      return res.status(404).json({ error: 'Guest pass not found or already revoked' });
-    }
-
-    await writeAuditLog(homeId, actorId, 'guest_pass_revoked', 'HomeGuestPass', passId, {});
-
-    res.json({ message: 'Guest pass revoked', pass: data });
-  } catch (err) {
-    logger.error('Revoke guest pass error', { error: err.message });
-    res.status(500).json({ error: 'Failed to revoke guest pass' });
-  }
-});
-
-
-// ============================================================
-// POST /:id/scoped-grants — Create a share link for a single resource
-// ============================================================
-
-router.post('/:id/scoped-grants', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const actorId = req.user.id;
-
-    const access = await checkHomePermission(homeId, actorId, 'home.edit');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to create share links' });
-    }
-
-    const {
-      resource_type,
-      resource_id,
-      duration_hours = 24,
-      passcode,
-      can_edit = false,
-    } = req.body;
-
-    if (!resource_type || !resource_id) {
-      return res.status(400).json({ error: 'resource_type and resource_id are required' });
-    }
-
-    const validTypes = ['HomeIssue', 'HomeTask', 'HomeDocument', 'HomeCalendarEvent', 'HomeAsset', 'HomePackage'];
-    if (!validTypes.includes(resource_type)) {
-      return res.status(400).json({ error: `Invalid resource_type. Must be one of: ${validTypes.join(', ')}` });
-    }
-
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    let passcodeHash = null;
-    if (passcode && passcode.length > 0) {
-      passcodeHash = crypto.createHash('sha256').update(passcode).digest('hex');
-    }
-
-    const startAt = new Date();
-    const endAt = new Date(startAt.getTime() + duration_hours * 60 * 60 * 1000);
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeScopedGrant')
-      .insert({
-        home_id: homeId,
-        resource_type,
-        resource_id,
-        can_view: true,
-        can_edit,
-        start_at: startAt.toISOString(),
-        end_at: endAt.toISOString(),
-        token_hash: tokenHash,
-        passcode_hash: passcodeHash,
-        max_views: null,
-        view_count: 0,
-        created_by: actorId,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating scoped grant', { error: error.message });
-      return res.status(500).json({ error: 'Failed to create share link' });
-    }
-
-    await writeAuditLog(homeId, actorId, 'scoped_grant_created', 'HomeScopedGrant', data.id, {
-      resource_type,
-      resource_id,
-      duration_hours,
-    });
-
-    res.status(201).json({
-      grant: data,
-      token, // only returned on creation
-    });
-  } catch (err) {
-    logger.error('Create scoped grant error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create share link' });
-  }
+    const result = await homeExternalShareService.mutate({ homeId: req.params.id,
+      actorId: req.user.id, kind: 'guest', action: 'list', payload: { include_revoked: req.query.include_revoked === 'true' } });
+    return res.json({ passes: result.records });
+  } catch (error) { return shareFailure(res, error); }
 });
 
 

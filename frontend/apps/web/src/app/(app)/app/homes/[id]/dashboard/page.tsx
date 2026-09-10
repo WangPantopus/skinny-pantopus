@@ -217,7 +217,7 @@ function HomeDashboardContent() {
 
   const handleInvite = useCallback(
     async (data: { email?: string; user_id?: string; username?: string; relationship: string; preset_key?: string; message?: string; start_at?: string; end_at?: string }) => {
-      await api.homes.inviteToHome(homeId, data);
+      const result = await api.homes.inviteToHome(homeId, data);
       try {
         const membersData = await api.homes.getHomeOccupants(homeId);
         const activeMembers = (membersData as Record<string, any>).occupants as Record<string, any>[] || [];
@@ -226,6 +226,7 @@ function HomeDashboardContent() {
       } catch {
         // occupants may not reflect invite immediately
       }
+      return result;
     },
     [homeId, setMembers]
   );

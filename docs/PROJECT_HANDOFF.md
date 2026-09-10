@@ -14,6 +14,57 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home invitation and exact-resource sharing checkpoint — September 9
+
+The next bounded Home source checkpoint is complete and frozen in
+`/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`, draft
+[PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
+The [invitation/sharing report](home-invitation-sharing-2026-09-09.md) records
+transactional invitation creation/acceptance/decline, household requests and
+current-permission lists, plus exact guest/scoped resource sharing. Targeted
+invites bind to the verified Auth identity; open links require their token.
+Policy, age, status, access windows and restrictive overrides are rechecked
+atomically. One-time document receipts preserve single-view quotas and recheck
+access after storage fetch. Invalid supplied credentials cannot become anonymous
+access. Web forms now show real QR codes for the exact created token URLs and
+send unambiguous access dates.
+
+The final combined Node 22 suite passes **4,827 backend tests (16 skipped), 299
+suites**, with all privacy gates including **15 E2E checks**. Final sharing review
+repairs have **85 focused backend checks passing**, invitation routes/evaluator
+checks **128**, and combined web invitation/date/sharing/QR checks **15**. The web
+type gate reports zero errors. All **27 raw SQL contracts and 27 pgTAP wrappers**
+pass; **36 real PostgreSQL lock-wait races** pass (15 invitation, 21 sharing), with
+exact fixture cleanup. A further fresh disposable replay passes all **21 migrations**, with **158
+application functions/75 trigger bindings**, zero lint errors and five existing
+warnings. Its 321-table/499-policy schema has no leftover user/Home/receipt
+fixtures. All **6 real SDK/PostgREST checks** pass on the fresh replay and leave
+those counts at zero. The new receipt history is included in the conservative
+private Home deletion guard. The final complete backend rerun passes; earlier
+intermittent HTTP socket/timeout observations and their passing 75 focused
+rechecks are recorded without claiming a cause. Source is ready to commit. No hosted Home migration,
+ordinary role grant, verification-age rollout or release ran.
+
+**Next:** checkpoint/commit/push this source and safely integrate current master;
+then finish distinct claim submission/challenge and ownership/lease lifecycle
+transactions (reserved Home migration `20260910045000`; paid-gig refund work owns
+`20260910050000`). Follow with task/calendar/attachment/derived data access and
+mutations, remaining web/native permission and finance read-only controls,
+storage retirement/deletion, and ordinary-default review only once every
+alternate path is protected. The resource slice may reserve `20260910060000`.
+Invitation delivery remains best effort; lost-create-response revoke/reissue UI
+acceptance is still required. Hosted storage-provider and native Home sharing
+acceptance remain untested in this bounded checkpoint. The dedicated claim-merge service remains a known
+ownership release blocker, including its unsupported `HomeInvite.updated_at`
+write. This checkpoint is not full Home acceptance.
+
+Native sensitive-auth [PR #33](https://github.com/WangPantopus/skinny-pantopus/pull/33)
+merged after all final-head CI checks passed (run `34437250525`) at 05:01:17 UTC
+September 10, producing master `390091cdbfb12c3f2a2b7ce331453433d6344e80`.
+That master has not been merged into the uncommitted Home worktree. Completed
+physical Beacon and native saved-card acceptance are not repeated here.
+
 ### Home access-secret and residency admission checkpoint — September 9
 
 The next bounded source checkpoint is complete in
