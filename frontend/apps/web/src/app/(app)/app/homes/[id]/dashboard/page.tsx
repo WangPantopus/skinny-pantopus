@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { ChevronLeft, Wallet, Package, Users, AlertCircle, Home, ClipboardList, AlertTriangle, Hammer, Clock, Building2 } from 'lucide-react';
@@ -13,6 +13,7 @@ import { MembersSecurityTab as MembersSecurityTabComponent } from '@/components/
 import { HomeSettingsTab } from '@/components/home/settings';
 
 import TaskSlidePanel from '@/components/home/TaskSlidePanel';
+import { useHomeTaskActions } from '@/components/home/tasks/useHomeTaskActions';
 import IssueSlidePanel from '@/components/home/IssueSlidePanel';
 import BillSlidePanel from '@/components/home/BillSlidePanel';
 import PackageSlidePanel from '@/components/home/PackageSlidePanel';
@@ -152,55 +153,45 @@ function HomeDashboardContent() {
     }
   }, [tab, intelligence.ensureTimeline]);
 
+  const currentTaskAction = useHomeTaskActions(homeId, taskSession);
+  const taskActionBusy = useRef(false);
+
   // ── Task handlers ──
 
-  const handleTaskSave = useCallback(
-    async (data: Record<string, any>) => {
-      const { _savedTaskId, _sessionScope, ...payload } = data;
-      if (!_sessionScope || _sessionScope.home_id !== homeId) throw api.taskSessionChanged();
-      const taskId = _savedTaskId || taskPanel.task?.id;
-      const result = taskId
-        ? await api.homeProfile.updateHomeTask(homeId, taskId, payload, _sessionScope)
-        : await api.homeProfile.createHomeTask(homeId, payload, _sessionScope);
-      if (!result.task?.id || result.task.home_id !== homeId || (taskId && result.task.id !== taskId)) {
-        throw new Error('The task save was not confirmed. Refresh the task list before retrying.');
-      }
-      setTasks((prev) => prev.some((task) => task.id === result.task.id)
-        ? prev.map((task) => task.id === result.task.id ? { ...task, ...result.task } : task)
-        : [result.task, ...prev]);
-      return result.task;
-    },
-    [homeId, taskPanel.task, setTasks]
-  );
+  const handleTaskSaved = useCallback((saved: import('@/components/home/tasks/homeTaskModel').HomeTask) => {
+    setTasks(previous => previous.some(task => task.id === saved.id)
+      ? previous.map(task => task.id === saved.id ? { ...task, ...saved } : task) : [saved, ...previous]);
+  }, [setTasks]);
 
-  const handleTaskStatusChange = useCallback(
-    async (taskId: string, newStatus: string) => {
-      try {
-        if (!taskSession) throw api.taskSessionChanged();
-        await api.homeProfile.updateHomeTask(homeId, taskId, { status: newStatus }, taskSession);
-        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Task update was not confirmed. Retry.');
-        refresh();
-      }
-    },
-    [homeId, refresh, setTasks, taskSession]
-  );
+  const handleTaskStatusChange = useCallback(async (taskId: string, newStatus: string) => {
+    if (taskActionBusy.current) return;
+    taskActionBusy.current = true;
+    try {
+      const client = currentTaskAction(); const revision = client.revision;
+      const saved = await client.edit(taskId, { status: newStatus });
+      client.requireCurrent(revision);
+      if (currentTaskAction() === client) handleTaskSaved(saved);
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : 'Task update was not confirmed. Reload before retrying.');
+    } finally { taskActionBusy.current = false; }
+  }, [currentTaskAction, handleTaskSaved]);
 
-  const handleTaskDelete = useCallback(
-    async (taskId: string) => {
+  const handleTaskDelete = useCallback(async (taskId: string) => {
+    if (taskActionBusy.current) return;
+    taskActionBusy.current = true;
+    try {
+      const client = currentTaskAction(); const revision = client.revision;
       const yes = await confirmStore.open({ title: 'Delete this task?', confirmLabel: 'Delete', variant: 'destructive' });
       if (!yes) return;
-      try {
-        if (!taskSession) throw api.taskSessionChanged();
-        await api.homeProfile.deleteHomeTask(homeId, taskId, taskSession);
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Task deletion was not confirmed. Retry.');
-      }
-    },
-    [homeId, setTasks, taskSession]
-  );
+      client.requireCurrent(revision);
+      if (currentTaskAction() !== client) return;
+      await client.delete(taskId);
+      client.requireCurrent(revision);
+      if (currentTaskAction() === client) setTasks(previous => previous.filter(task => task.id !== taskId));
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : 'Task deletion was not confirmed. Reload before retrying.');
+    } finally { taskActionBusy.current = false; }
+  }, [currentTaskAction, setTasks]);
 
   // ── Member / Invite handler ──
 
@@ -370,7 +361,7 @@ function HomeDashboardContent() {
       <TaskSlidePanel
         open={taskPanel.open}
         onClose={closeTaskPanel}
-        onSave={handleTaskSave}
+        onSaved={handleTaskSaved}
         openingScope={taskSession}
         task={taskPanel.task}
         members={members}

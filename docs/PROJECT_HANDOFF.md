@@ -14,6 +14,25 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Fresh-session checkpoint — September 10
+
+The owner requested detailed continuity and commit/push of all agent-owned work
+before starting a fresh session. Read [the current continuation checkpoint](SESSION_RESUME_2026-09-10.md)
+first. It distinguishes completed milestones from the unfinished browser forms,
+Android task attachments, failed first installed iOS journey and draft tip work.
+It records exact review findings, native CI failures, worktrees, evidence limits
+and the remaining sequence through launch. Older “Next” paragraphs below are
+historical where they conflict with that checkpoint.
+
+**First action:** fetch origin and inspect PR #32/#34 at their actual heads.
+Resolve the documented native CI failures and browser recovery/access findings,
+then verify the preserved drafts. Do not merge either unfinished PR. PR #34's
+previous milestone `48afcc68f` passed all CI; PR #32 at `502de726f` failed stale
+native expectations/images and a simulator Keychain entitlement check. Neither
+observation certifies the newly pushed checkpoint. Paid dependencies, including
+Smarty, remain one final owner launch-preparation bundle. No owner phone check is
+pending, and completed physical Beacon/saved-card acceptance must not be repeated.
+
 ### iOS private task attachments — September 10
 
 The exact saved task now opens private attachments with current access checks,

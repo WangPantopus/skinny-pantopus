@@ -52,6 +52,7 @@ import app.pantopus.android.data.api.services.HomePrivacyApi
 import app.pantopus.android.data.api.services.HomePrivateEvidenceApi
 import app.pantopus.android.data.api.services.HomeSettingsApi
 import app.pantopus.android.data.api.services.HomeTasksApi
+import app.pantopus.android.data.api.services.HomeTaskMediaApi
 import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.api.services.HubApi
@@ -437,6 +438,10 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideHomeTasksApi(retrofit: Retrofit): HomeTasksApi = retrofit.create(HomeTasksApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideHomeTaskMediaApi(retrofit: Retrofit): HomeTaskMediaApi = retrofit.create(HomeTaskMediaApi::class.java)
 
     @Provides @Singleton
     fun provideHomeIssuesApi(retrofit: Retrofit): HomeIssuesApi = retrofit.create(HomeIssuesApi::class.java)

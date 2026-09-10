@@ -45,6 +45,7 @@ data class HomeTaskCapabilitiesDto(
     @Json(name = "can_edit") val canEdit: Boolean = false,
     @Json(name = "can_complete") val canComplete: Boolean = false,
     @Json(name = "can_delete") val canDelete: Boolean = false,
+    @Json(name = "can_upload") val canUpload: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)

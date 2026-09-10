@@ -41,8 +41,10 @@ fun HouseholdTaskDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     viewModel: HouseholdTaskDetailViewModel = hiltViewModel(),
+    mediaViewModel: HomeTaskMediaViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mediaState by mediaViewModel.controller.state.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     HomeTaskResumeEffect(viewModel::resume, viewModel::pause)
     DisposableEffect(viewModel) { onDispose { viewModel.finishArrival() } }
@@ -64,10 +66,12 @@ fun HouseholdTaskDetailScreen(
             }
             state.task?.let { task ->
                 HouseholdTaskReadOnlyContent(task)
+                TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
                 TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }
             }
         }
     }
+    if (mediaState.visible) HomeTaskMediaDialog(mediaViewModel.controller)
     if (confirmDelete && state.task?.capabilities?.canDelete == true) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

@@ -127,6 +127,11 @@ class HomeTaskAccess(
         currentCoroutineContext().ensureActive()
     }
 
+    suspend fun currentSession(): HomeTaskSessionDto {
+        requireCurrent()
+        return checkNotNull(serverSession) { TASK_SESSION_CHANGED }
+    }
+
     private fun bind(received: HomeTaskSessionDto?) {
         check(received != null && received.homeId == homeId && received.actorId == session.actorId) { TASK_SESSION_CHANGED }
         check(received.sessionScope.matches(Regex("^[a-f0-9]{64}$"))) { TASK_SESSION_CHANGED }
