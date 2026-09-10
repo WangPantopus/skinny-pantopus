@@ -27,15 +27,26 @@ tests and privacy gates pass. The database has 17 passing SQL contracts and
 prove one membership, bounded guesses, concurrent-freeze/authority denial and
 preservation of confirmation metadata during vendor updates.
 
-Next apply the checked additive confirmation function only to Free staging,
-refresh the private candidate from a committed source, and run scoped live
-multi-unit/rollback/retry acceptance with exact cleanup before PR integration.
-Both additive migrations must precede the candidate. [Draft PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29)
-is open. Its first backend/image checks passed, but the migration prerequisite
-rejected a missing literal `yes` in the compatibility comment; that is repaired.
-Require fresh full current-head CI before integration. No checks are waived.
-Nothing from this modern-mail branch is hosted yet. The private candidate remains
-`26102bfb2` (`312b5a382fd6`); public/browser/production runtimes are unchanged.
+Hosted multi-unit acceptance and exact cleanup now pass. Both additive functions
+were applied only to Free staging; existing records and the absent ledger were
+preserved. The private candidate runs committed `694a213e2`
+(`68e3e052a578`), with `26102bfb2`/`312b5a382fd6` retained stopped for rollback.
+One real Lob test card targets Unit 4 while Unit 5 has another resident. Three
+concurrent HTTP confirmations produce one exact membership; wrong/foreign proof,
+changed Home, frozen access, rejected claim and revoked member are denied.
+Concurrent signed synthetic webhook processing preserves completion metadata;
+same-code retries after expiry preserve the original member and proof count.
+The exact postcard, temporary Homes/proofs/claims and callback are removed;
+all fixture sessions are revoked, zero push tokens remain, and original Home
+document IDs are unchanged. Public/browser/production runtimes are unchanged.
+
+Next ready and integrate [PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29)
+after fresh current-head CI, then finish the isolated PaymentSheet milestone.
+[Full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34424933888)
+passed at `694a213e2`, including the repaired migration safeguard and complete
+database replay. No checks are waived. The modern printed web link, physical
+mail and externally delivered Lob callbacks remain outside this acceptance;
+the separate native postcard simulator journey is already complete.
 
 [PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) merged as
 `2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after

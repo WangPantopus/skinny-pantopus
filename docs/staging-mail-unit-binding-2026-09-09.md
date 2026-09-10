@@ -3,8 +3,9 @@
 Worktree `/private/tmp/pantopus-staging-mail-unit-binding`, branch
 `codex/staging-mail-unit-binding`, starts from PR #28 source `95842b119`.
 PR #28 contains completed native postcard simulator acceptance and merged as
-`2259b8ee9` after full current-head CI `34401283503` passed. No new hosted changes or hosted mail fixtures
-have been created for this next milestone.
+`2259b8ee9` after full current-head CI `34401283503` passed. Hosted acceptance and
+exact cleanup are now complete; the earlier checkpoints below retain their
+historical state. See the final milestone for current source/runtime evidence.
 
 ## Destination and apartment milestone
 
@@ -143,3 +144,45 @@ Delivery-status ordering when a webhook beats a provider response is an existing
 separate display-state concern; these changes protect proof/membership metadata.
 Source tests do not certify the modern printed web link or provider eligibility;
 Smarty activation and its real retest remain a launch prerequisite.
+
+## Hosted multi-unit acceptance and cleanup
+
+Committed/pushed source `694a213e2ba58945b35e7c088803e65e489bc42f` runs in the
+private loopback candidate as image
+`sha256:68e3e052a578f7dd5a3a52d3dd1afbf2906b382044496c8f31e22ab015b02ae8`.
+Previous image `312b5a382fd6` is retained stopped. The two additive migrations
+were applied only to Free staging `ptudkfqdhqpkbkzqlabu`, with full before/after
+record fingerprints unchanged and the hosted migration ledger still absent:
+
+- `20260909204500`: SHA-256 `7835ba9390667605e553bed618fe95efaa4ce9ed9e558b0280f14be68821b77c`.
+- `20260909213000`: SHA-256 `4a57866dd4c63aafc9f2f8fd18eb9457046eaaec891b6ed49e6a4fdff35f54fb`.
+
+One real operational Lob **test-mode** postcard preserved Unit 4 and its exact
+code while another resident occupied Unit 5 of the same canonical building.
+Repeated HTTP start returned the same attempt. Anonymous/foreign reads and
+foreign confirmation were denied; one wrong code reduced remaining attempts.
+Home-only street changes, frozen Home and rejected Unit 4 claim denied correct
+proof without consuming it or creating membership.
+
+Three simultaneous correct HTTP confirmations plus a locally signed synthetic
+Lob callback produced one Unit 4 member and preserved both completion IDs and
+callback metadata. Only the Unit 4 claim became verified. Management permissions
+remained false. Same-code retry preserved the whole membership row; status
+denied later Home city edits, rejected claims and inactive membership. A completed
+retry after proof expiry still returned the original active member without
+extending verification or increasing the two attempts (one wrong, one correct).
+
+Cleanup deleted the exact Lob test card, both temporary Homes, claims,
+attempt/token/job, audit and synthetic callback. Normal supported logout revoked
+both actor sessions; no push tokens or memberships remain. Original HomeDocument
+IDs are unchanged. The first cleanup reached logout with an unsupported operator
+scope; the supported local scope completed the remaining cleanup and all final
+assertions passed. Never rerun these completed publishers or migration appliers.
+
+[Full current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34424933888)
+passes at `694a213e2`: backend/privacy, image, safeguards and full database replay.
+Only this private candidate changed; public API/worker, browser API/web and
+production containers were verified unchanged. Physical delivery, an external
+Lob callback and the modern browser printed-link journey remain unverified by
+this API acceptance. The separately completed native printed-link simulator
+journey remains recorded in the native mail report.
