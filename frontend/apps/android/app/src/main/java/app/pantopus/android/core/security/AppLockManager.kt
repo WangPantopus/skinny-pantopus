@@ -2,6 +2,7 @@
 
 package app.pantopus.android.core.security
 
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -108,6 +109,10 @@ class AppLockManager
         @androidx.annotation.VisibleForTesting
         internal var prefsOverride: SharedPreferences? = null
 
+        /** Injectable OS prompt for deterministic delayed-result tests. */
+        @androidx.annotation.VisibleForTesting
+        internal var promptOverride: (suspend () -> Boolean)? = null
+
         /**
          * Encrypted preference file (falls back to the legacy plain file when
          * the Keystore-backed master key cannot be created). Opened lazily on
@@ -182,6 +187,7 @@ class AppLockManager
         val setupPromptState: StateFlow<SetupPromptState?> = _setupPromptState.asStateFlow()
 
         private var userId: String? = null
+        private var identityGeneration: Long = 0
         private var isPrompting = false
         private var attemptedCurrentLock = false
 
@@ -219,6 +225,10 @@ class AppLockManager
 
         fun configure(userId: String?) {
             if (this.userId == userId) return
+            identityGeneration += 1
+            lastSensitiveAuthAtMs = null
+            isPrompting = false
+            backgroundedWhilePrompting = false
             this.userId = userId
             attemptedCurrentLock = false
             _lastError.value = null
@@ -354,7 +364,9 @@ class AppLockManager
                 }
                 return false
             }
+            val generation = identityGeneration
             val succeeded = authenticate(activity, reason = "Turn on app lock for Pantopus")
+            if (generation != identityGeneration) return false
             if (!succeeded) {
                 if (source == EnableSource.PostLoginPrompt) {
                     persistSetupPromptState(SetupPromptState.Declined)
@@ -425,21 +437,34 @@ class AppLockManager
          * branch.
          */
         suspend fun verifySensitiveAction(
+            activity: FragmentActivity?,
+            reason: String,
+        ): SensitiveActionOutcome {
+            if (activity == null) return SensitiveActionOutcome.Failed(DEFAULT_VERIFY_FAILURE)
+            refreshCapability()
+            return when (_capability.value) {
+                Capability.PasscodeNotSet,
+                -> SensitiveActionOutcome.Verified
+                Capability.NotAvailable,
+                Capability.NotEnrolled,
+                Capability.InvalidContext,
+                ->
+                    SensitiveActionOutcome.Failed(_capability.value.statusText)
+                Capability.Available -> authenticateSensitiveAction(activity, reason)
+            }
+        }
+
+        private suspend fun authenticateSensitiveAction(
             activity: FragmentActivity,
             reason: String,
         ): SensitiveActionOutcome {
-            refreshCapability()
-            when (_capability.value) {
-                Capability.NotAvailable,
-                Capability.NotEnrolled,
-                Capability.PasscodeNotSet,
-                -> return SensitiveActionOutcome.Verified
-                Capability.InvalidContext ->
-                    return SensitiveActionOutcome.Failed(_capability.value.statusText)
-                Capability.Available -> Unit
-            }
             _lastError.value = null
-            if (authenticate(activity, reason)) {
+            val generation = identityGeneration
+            val verified = authenticate(activity, reason)
+            if (generation != identityGeneration) {
+                return SensitiveActionOutcome.Failed("Your account changed. Please verify again.")
+            }
+            if (verified) {
                 lastSensitiveAuthAtMs = System.currentTimeMillis()
                 return SensitiveActionOutcome.Verified
             }
@@ -449,6 +474,20 @@ class AppLockManager
             } else {
                 SensitiveActionOutcome.Failed(message)
             }
+        }
+
+        /** Capability errors and a missing host must keep money surfaces covered. */
+        suspend fun verifySensitiveScreen(
+            activity: FragmentActivity?,
+            reason: String,
+            graceMs: Long = SENSITIVE_AUTH_GRACE_MS,
+        ): SensitiveActionOutcome {
+            if (activity == null) return SensitiveActionOutcome.Failed(DEFAULT_VERIFY_FAILURE)
+            refreshCapability()
+            if (_capability.value == Capability.Available && isWithinSensitiveGracePeriod(graceMs)) {
+                return SensitiveActionOutcome.Verified
+            }
+            return verifySensitiveAction(activity, reason)
         }
 
         /**
@@ -524,12 +563,14 @@ class AppLockManager
             }
             isPrompting = true
             backgroundedWhilePrompting = false
+            val generation = identityGeneration
             val result =
                 try {
                     withContext(Dispatchers.Main.immediate) { cryptoPrompt(activity, cryptoObject, reason, subtitle) }
                 } finally {
-                    isPrompting = false
+                    if (generation == identityGeneration) isPrompting = false
                 }
+            if (generation != identityGeneration) return null
             if (backgroundedWhilePrompting) {
                 backgroundedWhilePrompting = false
                 if (result == null) armBackground()
@@ -545,6 +586,7 @@ class AppLockManager
             subtitle: String?,
         ): BiometricPrompt.CryptoObject? =
             suspendCancellableCoroutine { cont ->
+                val generation = identityGeneration
                 val executor = ContextCompat.getMainExecutor(activity)
                 val biometricPrompt =
                     BiometricPrompt(
@@ -555,11 +597,16 @@ class AppLockManager
                                 errorCode: Int,
                                 errString: CharSequence,
                             ) {
+                                if (generation != identityGeneration) {
+                                    if (cont.isActive) cont.resume(null)
+                                    return
+                                }
                                 _lastError.value = messageFor(errorCode, errString.toString())
                                 if (cont.isActive) cont.resume(null)
                             }
 
                             override fun onAuthenticationFailed() {
+                                if (generation != identityGeneration) return
                                 _lastError.value = "Authentication failed. Try again."
                             }
 
@@ -593,6 +640,7 @@ class AppLockManager
         }
 
         fun clearTransientState() {
+            identityGeneration += 1
             _isLocked.value = false
             isPrompting = false
             attemptedCurrentLock = false
@@ -608,50 +656,23 @@ class AppLockManager
         fun refreshCapability() {
             _biometricLabel.value = resolveBiometricLabel()
             val manager = BiometricManager.from(context)
-            when (
-                manager.canAuthenticate(
-                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                        BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-                )
-            ) {
-                BiometricManager.BIOMETRIC_SUCCESS -> {
-                    _capability.value = Capability.Available
-                }
-                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-                    _capability.value =
-                        if (hasDeviceCredential()) {
-                            Capability.NotEnrolled
-                        } else {
-                            Capability.PasscodeNotSet
-                        }
-                }
-                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
-                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE,
-                BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED,
-                -> {
-                    _capability.value = Capability.NotAvailable
-                }
-                BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> {
-                    _capability.value = Capability.InvalidContext
-                }
-                else -> {
-                    _capability.value = Capability.NotAvailable
-                }
-            }
+            _capability.value = capabilityFor(manager.canAuthenticate(presenceAuthenticators()))
         }
 
         private suspend fun authenticate(
             activity: FragmentActivity,
             reason: String,
         ): Boolean {
+            val generation = identityGeneration
             isPrompting = true
             backgroundedWhilePrompting = false
             val succeeded =
                 try {
-                    evaluate(activity, reason)
+                    promptOverride?.invoke() ?: evaluate(activity, reason)
                 } finally {
-                    isPrompting = false
+                    if (generation == identityGeneration) isPrompting = false
                 }
+            if (generation != identityGeneration) return false
             // A background arrived mid-prompt. If the prompt then *succeeded*,
             // the cover was the OS auth sheet itself and the unlock stands. Any
             // other outcome means the OS cancelled the prompt because the user
@@ -670,10 +691,7 @@ class AppLockManager
         ): Boolean {
             val manager = BiometricManager.from(context)
             val canAuth =
-                manager.canAuthenticate(
-                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                        BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-                )
+                manager.canAuthenticate(presenceAuthenticators())
             if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
                 _capability.value = capabilityFor(canAuth)
                 autoDisableForUnavailableCapability()
@@ -688,6 +706,7 @@ class AppLockManager
             reason: String,
         ): Boolean =
             suspendCancellableCoroutine { cont ->
+                val generation = identityGeneration
                 val executor = ContextCompat.getMainExecutor(activity)
                 val biometricPrompt =
                     BiometricPrompt(
@@ -698,6 +717,10 @@ class AppLockManager
                                 errorCode: Int,
                                 errString: CharSequence,
                             ) {
+                                if (generation != identityGeneration) {
+                                    if (cont.isActive) cont.resume(false)
+                                    return
+                                }
                                 when (errorCode) {
                                     BiometricPrompt.ERROR_NO_BIOMETRICS,
                                     BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL,
@@ -714,6 +737,7 @@ class AppLockManager
                             }
 
                             override fun onAuthenticationFailed() {
+                                if (generation != identityGeneration) return
                                 _lastError.value = "Authentication failed. Try again."
                                 // Keep waiting for another attempt / cancel; do not resume yet.
                             }
@@ -729,17 +753,14 @@ class AppLockManager
                 val info =
                     BiometricPrompt.PromptInfo.Builder()
                         .setTitle(reason)
-                        .setAllowedAuthenticators(
-                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-                        )
+                        .setAllowedAuthenticators(presenceAuthenticators())
                         .build()
                 biometricPrompt.authenticate(info)
             }
 
         private fun autoDisableForUnavailableCapability() {
             val id = userId ?: return
-            if (_capability.value == Capability.Available) return
+            if (_capability.value != Capability.PasscodeNotSet) return
             prefs.edit().putBoolean(key("enabled", id), false).apply()
             _preferenceEnabled.value = false
             _isLocked.value = false
@@ -771,23 +792,29 @@ class AppLockManager
             }
         }
 
-        private fun hasDeviceCredential(): Boolean {
-            val manager = BiometricManager.from(context)
-            return manager.canAuthenticate(BiometricManager.Authenticators.DEVICE_CREDENTIAL) ==
-                BiometricManager.BIOMETRIC_SUCCESS
-        }
+        private fun hasDeviceCredential(): Boolean? =
+            runCatching { context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure }.getOrNull()
 
         private fun capabilityFor(code: Int): Capability =
             when (code) {
-                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
-                    if (hasDeviceCredential()) Capability.NotEnrolled else Capability.PasscodeNotSet
-                BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> Capability.InvalidContext
+                BiometricManager.BIOMETRIC_SUCCESS -> Capability.Available
+                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED,
                 BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
-                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE,
-                BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED,
-                -> Capability.NotAvailable
-                else -> Capability.NotAvailable
+                -> if (hasDeviceCredential() == false) Capability.PasscodeNotSet else Capability.InvalidContext
+                else -> Capability.InvalidContext
             }
+
+        // STRONG | DEVICE_CREDENTIAL is unsupported on API 29 and below.
+        // This non-cryptographic presence prompt keeps device-credential fallback;
+        // the separate CryptoObject step-up still requires strong biometrics.
+        private fun presenceAuthenticators(): Int =
+            (
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG
+                } else {
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+                }
+            ) or BiometricManager.Authenticators.DEVICE_CREDENTIAL
 
         private fun messageFor(
             errorCode: Int,
