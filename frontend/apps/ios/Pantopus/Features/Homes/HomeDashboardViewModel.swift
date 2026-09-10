@@ -219,8 +219,8 @@ final class HomeDashboardViewModel {
     private var dashboardData: HomeDashboardResponse?
     /// The viewer's own per-home access record. Gates the quick-action
     /// tiles + tab strip exactly as RN gates its dashboard cards.
-    /// Best-effort: a 403 / offline read leaves this nil and the surface
-    /// renders ungated rather than blank.
+    /// Best-effort: a 403 / offline read leaves this nil and private
+    /// navigation stays unavailable while the public overview can render.
     private(set) var access: HomeAccessDTO?
 
     init(homeId: String, api: APIClient = .shared) {
@@ -260,16 +260,15 @@ final class HomeDashboardViewModel {
     // MARK: - Fetch
 
     private func fetchAll() async {
-        async let core: Void = fetchCore()
-        async let health: Void = loadHealthScore()
-        async let seasonal: Void = loadChecklist()
-        async let property: Void = loadPropertyValue()
-        async let trends: Void = loadBillTrends()
-        await core
-        await health
-        await seasonal
-        await property
-        await trends
+        // Keep independent reads concurrent without nested async-let cleanup,
+        // implicated by the iOS 18.5 runtime crash during core loading.
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [self] in await fetchCore() }
+            group.addTask { [self] in await loadHealthScore() }
+            group.addTask { [self] in await loadChecklist() }
+            group.addTask { [self] in await loadPropertyValue() }
+            group.addTask { [self] in await loadBillTrends() }
+        }
     }
 
     /// Home detail (identity / ownership) + the dashboard aggregate +
@@ -278,9 +277,9 @@ final class HomeDashboardViewModel {
         async let detailOutcome = loadDetail()
         async let dashboard = loadDashboard()
         async let myAccess = loadAccess()
-        let outcome = await detailOutcome
-        dashboardData = await dashboard
-        access = await myAccess
+        let (outcome, currentDashboard, currentAccess) = await (detailOutcome, dashboard, myAccess)
+        dashboardData = currentDashboard
+        access = currentAccess
         if !HomeDashboardProjection.gatedTabs(access: access).contains(where: { $0.id == selectedTab }) {
             selectedTab = "overview"
         }

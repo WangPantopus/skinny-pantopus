@@ -14,6 +14,22 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS dashboard runtime repair — September 10
+
+The previous Home CI failure is traced to ten dashboard-loading crashes on iOS
+18.5, with Swift async-let cleanup in the captured crash stack. The dashboard
+now retains concurrent reads in a structured task group and gathers core results
+before publishing observed state. The [runtime report](home-ios-dashboard-concurrency-2026-09-10.md)
+records the evidence, independent review and 13 passing final local dashboard
+checks. The required iOS 18.5 CI proof is still pending; do not merge or mark the
+crash resolved based only on the newer local simulator.
+
+iOS bill controls are separately committed/pushed as `ca2a602c1`. Continue
+Android parity, current claim-review/withdrawal recovery and protected evidence,
+then private task attachments and complete Home workflows. The task/calendar
+source's local socket-failure limit remains recorded below. Paid dependencies
+remain deferred together until final launch preparation.
+
 ### iOS bill permission checkpoint — September 10
 
 Read-only Home members can view bills without mutation controls. Direct bill
