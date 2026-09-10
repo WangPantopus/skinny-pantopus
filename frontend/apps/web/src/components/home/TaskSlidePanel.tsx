@@ -145,6 +145,17 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
       if (request === generation.current) { activeSave.current = false; setSaving(false); }
     }
   };
+  const startAnother = async () => {
+    if (activeSave.current || completed.current) return;
+    const request = generation.current;
+    activeSave.current = true; setSaving(true); setError('');
+    try { await form.startAnother(); }
+    catch (failure) {
+      if (request === generation.current) setError(failure instanceof Error ? failure.message : 'The saved task request changed. Reopen the form.');
+    } finally {
+      if (request === generation.current) { activeSave.current = false; setSaving(false); }
+    }
+  };
   const canChangeFields = form.canEdit && !form.pending && !saving;
   const scope = form.ready ? form.scope : null;
   if (form.retired) return <SlidePanel open={open} onClose={close} title="Reopen this task"><p role="alert">Your signed-in session changed or could not be verified. Close this panel and refresh the Home before continuing.</p></SlidePanel>;
@@ -162,6 +173,10 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
       subtitle={isEdit ? form.task?.title : 'Add a task to your home'}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {form.pending?.confirmed && <div className="space-y-2 text-sm">
+          <p>Your previous task was saved. Open that exact task, or explicitly start another task.</p>
+          <button type="button" disabled={saving || !form.canEdit} onClick={() => void startAnother()} className="underline">Start another task</button>
+        </div>}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">
             {error}
@@ -354,7 +369,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
             disabled={saving || !!retiredUpload || !title.trim() || (!form.pending && !form.canEdit && !form.canComplete && !mediaFiles.length)}
             className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? 'Saving...' : form.pending ? 'Retry original request' : isEdit ? 'Save Task' : 'Create Task'}
+            {saving ? 'Saving...' : form.pending?.confirmed ? 'Open saved task' : form.pending ? 'Retry original request' : isEdit ? 'Save Task' : 'Create Task'}
           </button>
         </div>
       </form>

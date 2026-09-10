@@ -14,6 +14,22 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser confirmed-create recovery — September 10
+
+A confirmed creation now remains in encrypted recovery through close/background
+and is consumed only by explicit **Start another task**. Actual Chrome passed
+reload, close during final detail, competing-tab and corrupt-storage recovery;
+the original UUID/payload remained exact. Full web checks pass (1,159 / 91
+suites), types and focused lint are clean. The [confirmed recovery report](home-web-task-confirmed-recovery-2026-09-10.md)
+records evidence and limits.
+
+**Next:** close browser attachment identity finding 3, then complete native
+attachment acceptance. Android focused checks and both APK builds now pass;
+reviewed recurrence snapshots and emulator acceptance are in progress. Installed
+iOS has reached task creation/replay and exposed a blank attachment sheet being
+repaired. Both PRs remain unfinished drafts. Migration dependencies/replay and
+remaining Home/payment scope are still gates; paid services stay one final bundle.
+
 ### Browser access and upload lifetime — September 10
 
 Current 403/404 reads during task save now remove private form fields and

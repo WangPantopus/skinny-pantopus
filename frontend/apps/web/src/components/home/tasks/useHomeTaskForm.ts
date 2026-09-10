@@ -83,7 +83,7 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
       setReady(false); setLoading(true); setError(''); setTask(null);
       try {
         let fresh: TaskFormValues;
-        const exactId = ctx.targetId || ctx.creation?.pending?.confirmed?.task_id;
+        const exactId = ctx.targetId;
         if (exactId) {
           const result = await client.detail(exactId, revision);
           if (!current(revision)) return;
@@ -198,8 +198,15 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
     await ctx.creation.acknowledge();
     ctx.client.requireCurrent(revision);
   }, [requireReady]);
+  const startAnother = useCallback(async () => {
+    const ctx = requireReady(); const revision = ctx.client.revision;
+    if (ctx.task || !ctx.creation?.pending?.confirmed) throw new Error('Reopen the confirmed task request first.');
+    await ctx.creation.startAnother(); ctx.client.requireCurrent(revision);
+    if (context.current !== ctx || !ctx.active) throw new Error('This task form is no longer open.');
+    initial.current = empty; fieldRef.current = empty; setFields(empty); setPending(null);
+  }, [requireReady]);
 
-  return { fields, change, task, pending, ready, loading, error, retired, save, acknowledge,
+  return { fields, change, task, pending, ready, loading, error, retired, save, acknowledge, startAnother,
     canAcknowledge: context.current?.creation?.canAcknowledge === true,
     canEdit: ready && (task ? task.capabilities?.can_edit === true : context.current?.client.canCreate === true),
     canComplete: ready && task?.capabilities?.can_complete === true,

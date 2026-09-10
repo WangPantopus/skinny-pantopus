@@ -160,7 +160,7 @@ test('closing and reopening an interrupted create replays the encrypted original
  expect(screen.getByPlaceholderText('e.g., Fix leaky faucet')).toHaveValue('Exact task');
  expect(screen.getByPlaceholderText('e.g., Fix leaky faucet')).toBeDisabled();
  fireEvent.click(retry); await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
- expect((api.post as jest.Mock).mock.calls[1][1]).toEqual(original); expect(mockDraftStore.value).toBeNull();
+ expect((api.post as jest.Mock).mock.calls[1][1]).toEqual(original); expect(mockDraftStore.value?.draft.confirmed?.task_id).toBe(taskId);
 });
 
 test('unverified creation receipt retains the original request without success or acknowledgment', async () => {
@@ -170,6 +170,31 @@ test('unverified creation receipt retains the original request without success o
  await select([]); await screen.findByRole('button', { name: 'Retry original request' });
  expect(onSaved).not.toHaveBeenCalled(); expect(mockDraftStore.value).not.toBeNull();
  expect(screen.queryByRole('button', { name: 'Acknowledge unavailable request' })).not.toBeInTheDocument();
+});
+
+test('closing after confirmation keeps the exact request durable until an explicit new task', async () => {
+ let detail!: (value: unknown) => void;
+ (api.get as jest.Mock).mockImplementation(async (path: string) => path.endsWith(taskId)
+  ? new Promise(resolve => { detail = resolve; }) : { tasks: [], task_session: openingScope, collection_capabilities: { can_create: true } });
+ const props = { onClose: jest.fn(), onSaved: jest.fn(), homeId, openingScope, members: [] };
+ const view = render(<TaskSlidePanel open {...props} />);
+ await select([]);
+ await waitFor(() => expect(mockDraftStore.value?.draft.confirmed?.task_id).toBe(taskId));
+ const original = mockDraftStore.value!.draft.request_id;
+ view.unmount();
+ detail({ task: saved, task_session: openingScope });
+ (api.get as jest.Mock).mockImplementation(async (path: string) => path.endsWith(taskId) ? { task: saved, task_session: openingScope }
+  : { tasks: [], task_session: openingScope, collection_capabilities: { can_create: true } });
+ render(<TaskSlidePanel open {...props} />);
+ await screen.findByRole('button', { name: 'Open saved task' });
+ expect(props.onSaved).not.toHaveBeenCalled();
+ expect(mockDraftStore.value?.draft.request_id).toBe(original);
+ expect(api.post).toHaveBeenCalledTimes(1);
+ fireEvent.click(screen.getByRole('button', { name: 'Start another task' }));
+ await screen.findByRole('button', { name: 'Create Task' });
+ expect(screen.getByPlaceholderText('e.g., Fix leaky faucet')).toHaveValue('');
+ expect(api.post).toHaveBeenCalledTimes(1);
+ expect(mockDraftStore.value).toBeNull();
 });
 
 test('explicit retired create can be acknowledged without any replacement POST', async () => {

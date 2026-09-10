@@ -30,7 +30,7 @@ export class HomeTaskCreationController {
     return controller;
   }
 
-  get pending() { return this.snapshot ? structuredClone(this.snapshot.draft) : null; }
+  get pending() { return !this.finished && this.snapshot ? structuredClone(this.snapshot.draft) : null; }
   get completed() { return this.finished; }
   get canAcknowledge() { return this.terminal && !!this.snapshot && !this.finished && !this.busy; }
 
@@ -105,12 +105,24 @@ export class HomeTaskCreationController {
     this.snapshot = await this.store.save(this.observed, original, () => this.current(revision));
     this.client.requireCurrent(revision);
     const task = await this.client.detail(confirmed.task_id, revision);
-    await this.store.clear(this.snapshot, () => this.current(revision));
     this.client.requireCurrent(revision);
+    // Keep the confirmed command durable through UI completion, close and
+    // background. Only an explicit later request to start another task consumes
+    // it; IndexedDB deletion cannot be atomic with React navigation.
     this.finished = true;
-    this.snapshot = null;
-    this.observed = null;
     return task;
+  }
+
+  async startAnother(): Promise<void> {
+    return this.action(async revision => {
+      const original = this.snapshot;
+      if (!original?.draft.confirmed) throw new Error('Confirm the original task before starting another.');
+      const collection = await this.client.list(revision);
+      if (!collection.collection_capabilities.can_create) throw new Error('You no longer have permission to create a task.');
+      await this.store.clear(original, () => this.current(revision));
+      this.client.requireCurrent(revision);
+      this.snapshot = null; this.observed = null; this.sawRequest = false; this.terminal = false;
+    });
   }
 
   async acknowledge(): Promise<void> {
