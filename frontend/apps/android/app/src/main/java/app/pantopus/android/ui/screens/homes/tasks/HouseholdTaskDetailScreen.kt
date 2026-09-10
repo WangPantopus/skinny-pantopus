@@ -45,6 +45,7 @@ fun HouseholdTaskDetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     HomeTaskResumeEffect(viewModel::resume, viewModel::pause)
+    DisposableEffect(viewModel) { onDispose { viewModel.finishArrival() } }
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
     LaunchedEffect(state.task) { if (state.task == null) confirmDelete = false }
     Scaffold(

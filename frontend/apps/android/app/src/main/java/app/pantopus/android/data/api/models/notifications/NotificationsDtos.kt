@@ -20,6 +20,8 @@ data class NotificationDto(
     @Json(name = "is_read") val isRead: Boolean?,
     @Json(name = "created_at") val createdAt: String?,
     val context: String? = null,
+    /** Heterogeneous JSON; unrelated legacy metadata must not break the list. */
+    val metadata: Any? = null,
 )
 
 /** `GET /api/notifications` envelope — route `backend/routes/notifications.js:84`. */

@@ -15,11 +15,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.data.api.models.notifications.NotificationDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowChip
@@ -34,6 +36,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -229,10 +233,11 @@ class NotificationsViewModel
     @Inject
     constructor(
         private val repo: NotificationsRepository,
-        // Default keeps the JVM unit tests constructing the VM with just the
-        // repository; Hilt always supplies the real handle.
+        // Targeted tests may omit navigation arguments; Hilt supplies the real handle.
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        sessions: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
+        private val taskScope = sessions.create(viewModelScope)
         private val pageSize = 20
         private var hasMore = false
         private var loading = false
@@ -358,6 +363,18 @@ class NotificationsViewModel
          */
         fun markRead(id: String) {
             val target = notifications.firstOrNull { it.id == id } ?: return
+            if (HomeTaskNotificationRoute.isTask(target.type)) {
+                viewModelScope.launch {
+                    if (confirmTaskScope(target)) markReadCurrent(id)
+                }
+            } else {
+                markReadCurrent(id)
+            }
+        }
+
+        private fun markReadCurrent(id: String) {
+            val target = notifications.firstOrNull { it.id == id } ?: return
+            if (!mayOpenTask(target)) return
             if (target.isRead == true) return
             val previous = notifications.toList()
             val previousCount = _unreadCount.value
@@ -366,9 +383,11 @@ class NotificationsViewModel
             _unreadCount.value = (previousCount - 1).coerceAtLeast(0)
             applyState()
             viewModelScope.launch {
+                if (!confirmTaskScope(target)) return@launch
                 when (repo.markRead(id)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
+                        if (!confirmTaskScope(target)) return@launch
                         notifications = previous.toMutableList()
                         _unreadCount.value = previousCount
                         applyState()
@@ -648,9 +667,35 @@ class NotificationsViewModel
                 onClick = { markAllRead() },
             )
 
+        private fun mayOpenTask(dto: NotificationDto): Boolean =
+            !HomeTaskNotificationRoute.isTask(dto.type) || (
+                taskScope.isCurrent && taskScope.actorId != null &&
+                    taskScope.actorId == dto.userId && (dto.context == null || dto.context == NotificationContext.PERSONAL)
+            )
+
         private fun handleTap(dto: NotificationDto) {
+            if (!mayOpenTask(dto)) return
+            if (HomeTaskNotificationRoute.isTask(dto.type)) {
+                viewModelScope.launch {
+                    if (confirmTaskScope(dto)) openNotification(dto)
+                }
+            } else {
+                openNotification(dto)
+            }
+        }
+
+        private suspend fun confirmTaskScope(dto: NotificationDto): Boolean {
+            if (!HomeTaskNotificationRoute.isTask(dto.type)) return true
+            currentCoroutineContext().ensureActive()
+            val confirmed = mayOpenTask(dto) && taskScope.confirmCurrent()
+            currentCoroutineContext().ensureActive()
+            return confirmed && mayOpenTask(dto)
+        }
+
+        private fun openNotification(dto: NotificationDto) {
             if (dto.isRead != true) markRead(dto.id)
-            val link = dto.link
+            if (!mayOpenTask(dto)) return
+            val link = HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata) ?: dto.link
             if (!link.isNullOrEmpty()) {
                 DeepLinkRouter.handle(link)
             }

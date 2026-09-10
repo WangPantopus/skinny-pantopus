@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.tasks
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
@@ -66,7 +67,13 @@ class HouseholdTaskDetailViewModel
             _state.value = HouseholdTaskDetailState()
             runAction({ access.read(taskId) }) { task ->
                 _state.value = HouseholdTaskDetailState(task = task, loading = false)
+                finishArrival()
             }
+        }
+
+        /** Only this exact current account's task arrival can be completed. */
+        fun finishArrival() {
+            if (access.isCurrent) DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.HomeTask(homeId, taskId))
         }
 
         fun complete() {
@@ -140,6 +147,7 @@ class HouseholdTaskDetailViewModel
         private fun current(revision: Int): Boolean = active && revision == generation && access.isCurrent
 
         private fun deny(message: String) {
+            if (active) finishArrival()
             generation++
             inFlight = false
             _state.value = HouseholdTaskDetailState(loading = false, error = message)

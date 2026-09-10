@@ -77,6 +77,76 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun exact_home_task_paths_keep_both_canonical_ids() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        for (path in listOf("pantopus://homes/$home/tasks/$task", "https://pantopus.app/app/homes/$home/tasks/$task")) {
+            assertEquals(DeepLinkRouter.Destination.HomeTask(home, task), DeepLinkRouter.resolveString(path))
+        }
+        assertEquals(
+            DeepLinkRouter.Destination.HomeTask(home, task),
+            DeepLinkRouter.resolveString("/app/homes/${home.uppercase()}/tasks/${task.uppercase()}"),
+        )
+    }
+
+    @Test
+    fun malformed_task_paths_never_open_an_unrelated_home_or_form() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        val paths =
+            listOf(
+                "/homes/$home/tasks",
+                "/homes/$home/tasks/no-id",
+                "/homes/$home/tasks/$task/edit",
+                "/homes/invalid/tasks/$task",
+            )
+        for (path in paths) {
+            assertTrue(DeepLinkRouter.resolveString(path) is DeepLinkRouter.Destination.Unknown)
+        }
+    }
+
+    @Test
+    fun task_arrival_survives_navigation_until_exact_task_completion() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        val target = DeepLinkRouter.Destination.HomeTask(home, task)
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        assertEquals(target, DeepLinkRouter.consume())
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        DeepLinkRouter.completeArrival(target.copy(taskId = home))
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        DeepLinkRouter.completeArrival(target)
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun signed_out_task_waits_for_login_and_keeps_exact_pending_arrival() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        signedIn = false
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        assertNull(DeepLinkRouter.pending.value)
+        assertTrue(DeepLinkRouter.prefersLoginPresentation.value)
+        val path = requireNotNull(PendingDeepLinkStore.take(userId))
+        signedIn = true
+        DeepLinkRouter.handle(path)
+        assertEquals(DeepLinkRouter.Destination.HomeTask(home, task), DeepLinkRouter.consume())
+        assertTrue(PendingDeepLinkStore.peek() != null)
+    }
+
+    @Test
+    fun task_arrival_reauthentication_rejects_a_replacement_account_and_late_completion() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.HomeTask(home, task))
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        assertNull(PendingDeepLinkStore.take("replacement-account"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
     fun home_https_host() {
         assertEquals(DeepLinkRouter.Destination.Home, DeepLinkRouter.resolveString("https://pantopus.app/home"))
     }

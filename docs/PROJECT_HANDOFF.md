@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android exact task notification routing — September 10
+
+Android task notifications now preserve the exact Home/task destination through
+push taps, in-app taps and sign-in. Current account, stored credentials and
+recipient checks also guard queued mark-read/navigation. The
+[Android routing report](home-android-task-notification-2026-09-10.md) records the
+passing final app checks and build, source quality and independent review. It
+distinguishes these checks from installed provider notification acceptance.
+
+**Next:** Android private task attachments and installed Home journeys, alongside
+browser retained creation/sparse editing. Browser notification parity is pushed
+as `9df1e4934`; iOS private attachments passed their first app verification and
+are receiving a final explicit retired-upload recovery control. Android payment
+identity repairs are in final build verification before durable tip recovery.
+Automatic recurrence, relationships/ownership, remaining payments and release
+preparation remain open. Both PRs #32/#34 remain unfinished drafts. All paid
+subscriptions remain one final launch-preparation step. Completed physical
+Beacon and saved-card acceptance must not be repeated. No owner-phone install,
+hosted migration or paid service changed.
+
 ### Browser exact task notification journey — September 10
 
 Browser notification entry points now open an exact Home task through a current

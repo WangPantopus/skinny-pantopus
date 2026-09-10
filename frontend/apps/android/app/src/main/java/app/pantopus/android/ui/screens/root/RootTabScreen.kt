@@ -2066,6 +2066,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.homeDashboard(pending.id))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.HomeTask -> {
+                navController.navigate(ChildRoutes.householdTaskDetail(pending.homeId, pending.taskId))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.HomeMemberRequests -> {
                 navController.navigate(ChildRoutes.homeMembers(pending.id))
                 DeepLinkRouter.consume()
