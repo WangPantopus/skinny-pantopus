@@ -3233,12 +3233,20 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
 function registerHomeRecordRoutes(path, kind) {
   router.get(`/:id/${path}`, verifyToken, async (req, res) => {
     try {
-      const result = await homeRecordService.list({ homeId: req.params.id, actorId: req.user.id, kind,
+      if (kind === 'task') {
+        res.set('Cache-Control', 'private, no-store');
+        if (!requireExpectedSessionScope(req, res)) return;
+      }
+      const readCollection = kind === 'task' ? homeRecordService.listCollection : homeRecordService.list;
+      const result = await readCollection({ homeId: req.params.id, actorId: req.user.id, kind,
         startAfter: kind === 'event' ? req.query.start_after || null : null,
         startBefore: kind === 'event' ? req.query.start_before || null : null });
       const records = kind === 'event'
         ? result.records.sort((a, b) => new Date(a.start_at) - new Date(b.start_at)) : result.records;
-      res.json({ [path]: records, ...(kind === 'task' ? { task_session: { ...getRequestSessionScope(req), home_id: req.params.id } } : {}) });
+      res.json({ [path]: records, ...(kind === 'task' ? {
+        collection_capabilities: { can_create: result.can_create },
+        task_session: { ...getRequestSessionScope(req), home_id: req.params.id },
+      } : {}) });
     } catch (error) { homeRecordService.sendError(res, error); }
   });
   router.post(`/:id/${path}`, verifyToken, async (req, res) => {
@@ -3268,6 +3276,10 @@ function registerHomeRecordRoutes(path, kind) {
   });
   router.get(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
     try {
+      if (kind === 'task') {
+        res.set('Cache-Control', 'private, no-store');
+        if (!requireExpectedSessionScope(req, res)) return;
+      }
       const result = await homeRecordService.list({ homeId: req.params.id, actorId: req.user.id,
         kind, recordId: req.params.recordId });
       res.json({ [kind]: result.records[0], ...(kind === 'event' ? { attendees: result.attendees } : { task_session: { ...getRequestSessionScope(req), home_id: req.params.id } }) });

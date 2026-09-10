@@ -6,13 +6,13 @@ const mail = require('../../routes/mailboxV2Phase3');
 function handler(router, method, path) {
   return router.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
-function response() { return { statusCode: 200, status(n) { this.statusCode=n; return this; }, json(v) { this.body=v; return this; } }; }
+function response() { return { statusCode: 200, headers: {}, set(k,v) { this.headers[k]=v; return this; }, status(n) { this.statusCode=n; return this; }, json(v) { this.body=v; return this; } }; }
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 const record = { id: 'record', home_id: 'home', title: 'Exact record', media: [] };
 const request = { params: { id: 'home', recordId: 'record', eventId: 'record', homeId: 'home', taskId: 'record' },
   headers: { authorization: 'Bearer synthetic-unit' }, user: { id: 'actor' }, query: {}, body: { description: null, actorId: 'forged' } };
 test.each(['tasks','events'])('%s list and detail use the exact actor and current projection', async path => {
-  const rpc = jest.fn(async () => ({ data: { ok: true, records: [record], attendees: [] } })); db.setRpcMock(rpc);
+  const rpc = jest.fn(async () => ({ data: { ok: true, records: [record], attendees: [], can_create: false } })); db.setRpcMock(rpc);
   for (const suffix of ['', '/:recordId']) {
     const res = response(); await handler(home, 'get', '/:id/'+path+suffix)(request,res);
     expect(res.statusCode).toBe(200);
@@ -88,4 +88,24 @@ test('task cleanup denial never proceeds to deletion',async()=>{
   const rpc=jest.fn(async()=>({data:{ok:false,code:'HOME_RECORD_DENIED',status:403}}));db.setRpcMock(rpc);const res=response();
   await handler(home,'delete','/:id/tasks/:recordId')({...request,params:{id:'ddf10001-0000-4000-8000-000000000100',recordId:'ddf10001-0000-4000-8000-000000000200'},user:{id:'ddf10001-0000-4000-8000-000000000001'}},res);
   expect(res.statusCode).toBe(403);expect(rpc).toHaveBeenCalledTimes(1);
+});
+
+test.each([false,true])('empty task collection exposes exact server creation capability %s and current session',async canCreate=>{
+  db.setRpcMock(async()=>({data:{ok:true,records:[],attendees:[],can_create:canCreate}}));
+  const res=response();await handler(home,'get','/:id/tasks')(request,res);
+  expect(res.statusCode).toBe(200);expect(res.body.tasks).toEqual([]);
+  expect(res.body.collection_capabilities).toEqual({can_create:canCreate});
+  expect(res.body.task_session).toEqual({actor_id:'actor',home_id:'home',session_scope:expect.stringMatching(/^[0-9a-f]{64}$/)});
+  expect(res.headers['Cache-Control']).toBe('private, no-store');
+  expect(JSON.stringify(res.body)).not.toContain('synthetic-unit');
+});
+test.each(['','/:recordId'])('stale task read scope blocks %s before database access',async suffix=>{
+  const rpc=jest.fn();db.setRpcMock(rpc);const res=response();
+  await handler(home,'get','/:id/tasks'+suffix)({...request,headers:{...request.headers,'x-pantopus-session-scope':'a'.repeat(64)}},res);
+  expect(res.statusCode).toBe(409);expect(res.body.code).toBe('SESSION_SCOPE_CHANGED');expect(rpc).not.toHaveBeenCalled();
+});
+test('missing task collection creation capability is a retryable contract failure',async()=>{
+  db.setRpcMock(async()=>({data:{ok:true,records:[],attendees:[]}}));const res=response();
+  await handler(home,'get','/:id/tasks')(request,res);
+  expect(res.statusCode).toBe(503);expect(res.body.code).toBe('HOME_RECORD_UNAVAILABLE');
 });

@@ -41,6 +41,12 @@ async function list({ homeId, actorId, kind, recordId = null, startAfter = null,
     || (recordId !== null && (result.records.length !== 1 || result.records[0].id !== recordId))) throw failure();
   return result;
 }
+async function listCollection(args) {
+  const result = await list(args);
+  if (typeof result.can_create !== 'boolean') throw failure();
+  return result;
+}
+
 async function mutate({ homeId, actorId, kind, action, recordId = null, payload = {}, sourceMailId = null }) {
   // Compatibility for the existing web general/recurring task form. This does
   // not create a permission or a new database task type.
@@ -79,4 +85,4 @@ function sendError(res, error) {
     ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { list, mutate, mutateTaskById, visibleRecords, sendError };
+module.exports = { list, listCollection, mutate, mutateTaskById, visibleRecords, sendError };

@@ -68,3 +68,12 @@ test('derived projections omit denied records but propagate retryable failures',
   db.setRpcMock(async () => { throw new Error('transport detail'); });
   await expect(service.visibleRecords({ homeId: 'home', actorId: 'actor', kind: 'task' })).rejects.toMatchObject({ statusCode: 503 });
 });
+
+test.each([false,true])('collection preserves authoritative creation capability %s',async canCreate=>{
+  db.setRpcMock(async()=>({data:{ok:true,records:[],attendees:[],can_create:canCreate}}));
+  await expect(service.listCollection({homeId:'home',actorId:'actor',kind:'task'})).resolves.toMatchObject({can_create:canCreate});
+});
+test.each([undefined,null,'true',1,{}])('unknown collection capability %p is retryable, never inferred from records',async canCreate=>{
+  db.setRpcMock(async()=>({data:{ok:true,records:[record],attendees:[],can_create:canCreate}}));
+  await expect(service.listCollection({homeId:'home',actorId:'actor',kind:'task'})).rejects.toMatchObject({code:'HOME_RECORD_UNAVAILABLE',statusCode:503});
+});

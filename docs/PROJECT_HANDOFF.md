@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Current task collection permissions — September 10
+
+Task lists now return an explicit creation capability from the same locked
+authorization that governs task writes, including empty lists and the existing
+private first-use path. Supplied stale sessions are rejected before reads, and
+task list/detail responses are non-cacheable. The
+[collection report](home-task-collection-capabilities-2026-09-10.md) records
+independent review, passing HTTP checks, all local SQL contracts and application
+function checks, unchanged role defaults and zero remaining synthetic fixtures.
+
+**Next:** stable task-create recovery and native task detail/attachments using
+these server capabilities. Native iOS evidence is pushed as `cec7bb9a2`;
+Android now passes its final behavior, static, lint and APK assembly checks and
+is being documented for commit. Installed-app visual evidence and full household
+acceptance remain open, as do relationships and ownership lifecycles. Draft PRs
+#32/#34 remain unfinished. Payment cancellation/reopening/worker-release receipts
+and their browser controls continue in #34. All paid dependencies remain together
+for final launch preparation; completed physical Beacon and saved-card checks
+must not be repeated. This was a disposable local database check, with no hosted
+migration or paid service activation.
+
 ### iOS private claim evidence checkpoint — September 10
 
 The iOS claim wizard, Home/platform reviewers and My claims now use exact
