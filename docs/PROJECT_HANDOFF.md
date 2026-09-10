@@ -25,9 +25,13 @@ UI; lost responses resume the same bid without persisting payment secrets.
 See the [iOS report](paid-gig-ios-recovery-2026-09-09.md) and
 [Android report](paid-gig-android-recovery-2026-09-09.md).
 
-Commit/push this frozen native milestone in draft PR #34, integrate current
-master `390091cdb`, then finish durable payer/admin refund receipts and historical
-assigned authorization before a fresh test-mode paid-gig lifecycle. No paid-gig
+Native milestone `59b9cff7b` is committed and pushed in draft PR #34. Current
+master `390091cdb` is now integrated, including the completed
+[sensitive-auth repair](native-sensitive-auth-2026-09-09.md) (19 iOS and 12
+Android focused tests plus full PR #33 CI). Only this handoff conflicted; both
+source milestones and their reports are preserved. Check final-head CI while
+finishing durable payer/admin refund receipts and historical assigned
+authorization before a fresh test-mode paid-gig lifecycle. No paid-gig
 provider call, hosted migration or runtime change has run. The current private
 saved-card acceptance remains completed and cleaned; do not reuse its fixtures.
 
@@ -504,11 +508,12 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Complete application mail-code dispatch/confirmation and uncertain-send
-   recovery, then reachable sandbox payment UI/transactions and real OAuth
-   callbacks. Browser signup/recovery and staging hostname/TLS now pass.
-   Smarty needs an existing active subscription; Google/Apple staging OAuth
-   remains disabled. Use existing/free capacity.
+1. Mail-code dispatch/confirmation and saved-card native acceptance are complete.
+   Continue PR #34 durable paid-gig refunds, assigned authorization and actual
+   sandbox lifecycle acceptance. In parallel, finish PR #32 Home ownership,
+   resource and derived-data boundaries before household acceptance. Real OAuth
+   callbacks and activated Smarty provider coverage remain vendor prerequisites;
+   Google/Apple staging OAuth remains disabled. Use existing/free capacity.
 2. PRs #23, #25 and #26 are merged after their required checks passed. Continue
    monitoring merged-master CI. Home replacement, saved-card API retry and Lob
    mail-purpose acceptance are recorded in their reports; public runtime
