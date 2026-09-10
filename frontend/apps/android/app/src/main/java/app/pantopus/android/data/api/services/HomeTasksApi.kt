@@ -2,9 +2,11 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDeleteResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -42,6 +44,21 @@ interface HomeTasksApi {
     suspend fun createHomeTask(
         @Path("id") homeId: String,
         @Body body: CreateHomeTaskRequest,
+    ): HomeTaskResponse
+
+    @POST("api/homes/{id}/tasks")
+    suspend fun createHomeTaskWithReceipt(
+        @Path("id") homeId: String,
+        @Body body: CreateHomeTaskRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskCreationResponse
+
+    @PUT("api/homes/{id}/tasks/{taskId}")
+    suspend fun patchHomeTask(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Body body: RequestBody,
+        @Header("x-pantopus-session-scope") expectedSession: String,
     ): HomeTaskResponse
 
     /** `PUT /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4308`. */

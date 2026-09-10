@@ -14,6 +14,25 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android retained task creation and sparse editing — September 10
+
+Android task forms now preserve one protected original create request and exact
+receipt across interruptions. Sparse edits preserve untouched fields and explicit
+clears. Current access and view lifetime govern completion. The
+[Android form report](home-android-task-create-edit-2026-09-10.md) records the
+passing app/build checks, two actual emulator recovery-control checks and
+independent review, with precise process-recovery and acceptance limits.
+
+**Next:** Android exact task notification routing, native private task attachments
+and complete installed household journeys. iOS exact notification routing is
+pushed as `c1cac2a30`; browser parity is under final regression and browser
+acceptance. Android payment identity repairs continue after stop recovery
+`4dec19088`. Both PRs #32/#34 remain unfinished drafts. Automatic recurrence,
+relationships, ownership, remaining payments and release preparation stay open.
+All paid services or subscriptions remain one final launch-preparation step.
+Completed physical Beacon and saved-card acceptance must not be repeated. No
+owner-phone installation, hosted data or paid service changed.
+
 ### iOS exact task notification routing — September 10
 
 Task notifications now open their exact Home task from validated metadata,

@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
@@ -185,5 +186,72 @@ class HomeTaskAccessTest {
                 caught = failure
             }
             assertEquals(error, caught)
+        }
+
+    @Test fun completion_permission_never_substitutes_for_edit_permission() =
+        runTest {
+            coEvery { repository.getHomeTask(any(), any(), any()) } returns
+                NetworkResult.Success(
+                    HomeTaskResponse(task.copy(capabilities = HomeTaskCapabilitiesDto(canComplete = true)), server),
+                )
+            denied { access.edit("task", HomeTaskEditPatch(mapOf("title" to "Changed"))) }
+            coVerify(exactly = 0) { repository.patchHomeTask(any(), any(), any(), any()) }
+        }
+
+    @Test fun edit_rechecks_current_permission_and_returns_post_save_projection() =
+        runTest {
+            val patch = HomeTaskEditPatch(mapOf("description" to null))
+            val updated = task.copy(description = null, capabilities = HomeTaskCapabilitiesDto())
+            coEvery { repository.patchHomeTask(any(), any(), any(), any()) } answers {
+                coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(updated, server))
+                NetworkResult.Success(HomeTaskResponse(updated.copy(capabilities = null)))
+            }
+            assertEquals(updated, access.edit("task", patch))
+            coVerify { repository.patchHomeTask("home", "task", patch, server.sessionScope) }
+        }
+
+    @Test fun edit_rejects_foreign_receipt_and_replaced_local_session() =
+        runTest {
+            val patch = HomeTaskEditPatch(mapOf("title" to "Changed"))
+            coEvery { repository.patchHomeTask(any(), any(), any(), any()) } returns
+                NetworkResult.Success(HomeTaskResponse(task.copy(id = "foreign")))
+            denied { access.edit("task", patch) }
+            coEvery { repository.patchHomeTask(any(), any(), any(), any()) } answers {
+                identity.storedToken = "replacement"
+                NetworkResult.Success(HomeTaskResponse(task))
+            }
+            denied { access.edit("task", patch) }
+        }
+
+    @Test fun unchanged_response_cannot_confirm_requested_title_or_null_clears() =
+        runTest {
+            val existing =
+                task.copy(
+                    description = "Keep",
+                    assignedTo = "member",
+                    dueAt = "2026-09-10T12:00:00Z",
+                    recurrenceRule = "FREQ=WEEKLY",
+                )
+            coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(existing, server))
+            coEvery { repository.patchHomeTask(any(), any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(existing))
+            for (patch in listOf(
+                mapOf("title" to "Changed"),
+                mapOf("description" to null),
+                mapOf("assigned_to" to null),
+                mapOf("due_at" to null),
+                mapOf("recurrence_rule" to null),
+            )) {
+                denied { access.edit("task", HomeTaskEditPatch(patch)) }
+            }
+        }
+
+    @Test fun equivalent_due_date_normalization_confirms_an_actual_edit() =
+        runTest {
+            val updated = task.copy(dueAt = "2026-09-11T01:32:00Z")
+            coEvery { repository.patchHomeTask(any(), any(), any(), any()) } answers {
+                coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(updated, server))
+                NetworkResult.Success(HomeTaskResponse(updated))
+            }
+            assertEquals(updated, access.edit("task", HomeTaskEditPatch(mapOf("due_at" to "2026-09-10T18:32:00-07:00"))))
         }
 }

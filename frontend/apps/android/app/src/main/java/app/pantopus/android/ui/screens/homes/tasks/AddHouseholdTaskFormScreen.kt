@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,7 +87,11 @@ fun AddHouseholdTaskFormScreen(
     val members by viewModel.assignableMembers.collectAsStateWithLifecycle()
     val createdId by viewModel.createdTaskId.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeTaskResumeEffect(onResume = viewModel::resume, onPause = viewModel::pause)
+    val close = {
+        viewModel.pause()
+        onClose()
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -96,10 +101,8 @@ fun AddHouseholdTaskFormScreen(
     }
 
     LaunchedEffect(shouldDismiss) {
-        if (shouldDismiss) {
-            viewModel.acknowledgeDismiss()
-            // Hold the success toast on screen briefly before popping.
-            delay(700)
+        if (shouldDismiss && viewModel.consumeCompletion()) {
+            viewModel.pause()
             if (createdId != null && onCreated != null) {
                 onCreated(createdId!!)
             } else {
@@ -134,7 +137,7 @@ fun AddHouseholdTaskFormScreen(
                             selectedAssigneeId = viewModel.selectedAssigneeId,
                             showsCustomRecurrenceSubForm = viewModel.showsCustomRecurrenceSubForm,
                         ),
-                    onClose = onClose,
+                    onClose = close,
                     onCommit = viewModel::save,
                     onUpdate = viewModel::update,
                     onSelectCategory = viewModel::selectCategory,
@@ -143,14 +146,38 @@ fun AddHouseholdTaskFormScreen(
                     onSelectAssignee = viewModel::selectAssignee,
                     onSetDueDate = viewModel::setDueDate,
                 )
-            is AddHouseholdTaskFormUiState.Error ->
-                EmptyState(
-                    icon = PantopusIcon.AlertCircle,
-                    headline = "Couldn't load the task",
-                    subcopy = current.message,
-                    ctaTitle = "Try again",
-                    onCta = viewModel::refresh,
+            is AddHouseholdTaskFormUiState.Recovery ->
+                HomeTaskRecoveryPanel(
+                    title = "Saved task request",
+                    message =
+                        current.message ?: "A task request is saved. Retry that same request to confirm its result. " +
+                            "Closing keeps it; reopen Add task in this Home to recover it.",
+                    busy = isSaving,
+                    onRetry = viewModel::retryCreation,
+                    onClose = close,
+                    onClear = if (current.canClear) viewModel::clearRejectedCreation else null,
                 )
+            is AddHouseholdTaskFormUiState.EditRecovery ->
+                HomeTaskRecoveryPanel(
+                    title = "Saved task edit",
+                    message =
+                        current.message ?: "This edit is not confirmed. Retry its original changes after a current access check. " +
+                            "Closing the app discards this local edit; reopen the task to check its current values.",
+                    busy = isSaving,
+                    onRetry = viewModel::retryEdit,
+                    onClose = close,
+                )
+            is AddHouseholdTaskFormUiState.Error ->
+                Column {
+                    TextButton(onClick = close) { Text("Close") }
+                    EmptyState(
+                        icon = PantopusIcon.AlertCircle,
+                        headline = "Couldn't load the task",
+                        subcopy = current.message,
+                        ctaTitle = "Try again",
+                        onCta = viewModel::refresh,
+                    )
+                }
         }
 
         toast?.let { payload ->
@@ -442,7 +469,12 @@ private fun RecurrencePicker(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Text(
-            text = "Repeats",
+            text = "Saved recurrence",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+        Text(
+            text = "This records the schedule. It does not automatically create tasks or notifications.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )

@@ -91,19 +91,14 @@ data class CreateHomeTaskRequest(
     @Json(name = "due_at") val dueAt: String? = null,
     @Json(name = "recurrence_rule") val recurrenceRule: String? = null,
     val priority: String? = null,
+    @Json(name = "request_id") val requestId: String? = null,
 )
 
 /**
  * Body for `PUT /api/homes/:id/tasks/:taskId`. All fields optional.
  *
- * Backend `allowed` list at `home.js:4316` accepts `title /
- * description / status / assigned_to / priority / due_at / budget /
- * details / completed_at / visibility / viewer_user_ids` —
- * `recurrence_rule` is **not** in that allowlist today. We carry
- * `recurrenceRule` on the client side so the Add/Edit Task form has
- * a single source of truth; when the backend extends its allowlist,
- * no client change is needed. Until then the field is silently
- * dropped by the server.
+ * Used for status-only completion. The form uses HomeTaskEditPatch
+ * so omitted fields and explicit nullable clears remain distinct.
  */
 @JsonClass(generateAdapter = true)
 data class UpdateHomeTaskRequest(

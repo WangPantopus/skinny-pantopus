@@ -2,11 +2,15 @@
 
 package app.pantopus.android.ui.screens.homes.tasks
 
+import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -38,6 +42,7 @@ class HomeTaskAccess(
 ) {
     val invalidated get() = session.invalidated
     val isCurrent get() = session.isCurrent
+    val actorId get() = session.actorId
     private var serverSession: HomeTaskSessionDto? = null
 
     suspend fun list(): GetHomeTasksResponse {
@@ -81,6 +86,39 @@ class HomeTaskAccess(
         requireCurrent()
         repository.deleteHomeTask(homeId, taskId, checkNotNull(serverSession).sessionScope).taskValue()
         requireCurrent()
+    }
+
+    suspend fun requireCreation() {
+        check(list().collectionCapabilities?.canCreate == true) { TASK_ACCESS_CHANGED }
+    }
+
+    suspend fun create(request: CreateHomeTaskRequest): HomeTaskCreationResponse {
+        requireCreation()
+        requireCurrent()
+        val response =
+            try {
+                repository.createHomeTaskWithReceipt(homeId, request, checkNotNull(serverSession).sessionScope).taskValue()
+            } catch (error: NetworkError) {
+                throw HomeTaskCreationFailure(error)
+            }
+        requireCurrent()
+        bind(response.taskSession)
+        exact(response.task, response.creationReceipt.taskId)
+        return response
+    }
+
+    suspend fun edit(
+        taskId: String,
+        patch: HomeTaskEditPatch,
+    ): HomeTaskDto {
+        check(read(taskId).capabilities?.canEdit == true) { TASK_ACCESS_CHANGED }
+        requireCurrent()
+        if (patch.fields.isEmpty()) return read(taskId)
+        val response = repository.patchHomeTask(homeId, taskId, patch, checkNotNull(serverSession).sessionScope).taskValue()
+        requireCurrent()
+        exact(response.task, taskId)
+        check(patch.matches(response.task)) { "The task update was not confirmed. Reload before continuing." }
+        return read(taskId)
     }
 
     suspend fun requireCurrent() {

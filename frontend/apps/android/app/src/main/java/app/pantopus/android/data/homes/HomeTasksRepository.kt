@@ -2,6 +2,7 @@ package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -39,6 +40,19 @@ open class HomeTasksRepository
             homeId: String,
             request: CreateHomeTaskRequest,
         ): NetworkResult<HomeTaskResponse> = safeApiCall { api.createHomeTask(homeId, request) }
+
+        open suspend fun createHomeTaskWithReceipt(
+            homeId: String,
+            request: CreateHomeTaskRequest,
+            expectedSession: String,
+        ): NetworkResult<HomeTaskCreationResponse> = safeApiCall { api.createHomeTaskWithReceipt(homeId, request, expectedSession) }
+
+        open suspend fun patchHomeTask(
+            homeId: String,
+            taskId: String,
+            patch: HomeTaskEditPatch,
+            expectedSession: String,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.patchHomeTask(homeId, taskId, patch.body(), expectedSession) }
 
         /** `PUT /api/homes/:id/tasks/:taskId`. */
         open suspend fun updateHomeTask(
