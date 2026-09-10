@@ -69,6 +69,7 @@ public enum HubRoute: Hashable {
     /// (T6.3c / P11). Distinct from `.myBids` / `.myTasks` (the gig
     /// surfaces in the You tab).
     case homeTasks(homeId: String)
+    case householdTaskDetail(homeId: String, taskId: String)
     /// P2.4 — Add a new household task. Reached from the household
     /// tasks list FAB.
     case addHouseholdTask(homeId: String)
@@ -1668,21 +1669,14 @@ public struct HubTabRoot: View {
             HouseholdTasksListView(
                 viewModel: HouseholdTasksListViewModel(
                     homeId: homeId,
-                    onOpenTask: { taskId in
-                        Task { @MainActor in
-                            push(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    },
-                    onAddTask: {
-                        Task { @MainActor in push(.addHouseholdTask(homeId: homeId)) }
-                    },
-                    onEditRecurring: { taskId in
-                        Task { @MainActor in
-                            push(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    }
+                    onOpenTask: { taskId in push(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
+                    onAddTask: { push(.addHouseholdTask(homeId: homeId)) }
                 )
             )
+        case let .householdTaskDetail(homeId, taskId):
+            HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
+                push(.editHouseholdTask(homeId: homeId, taskId: taskId))
+            }
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,

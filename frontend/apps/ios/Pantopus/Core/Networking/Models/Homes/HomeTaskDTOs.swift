@@ -3,10 +3,10 @@
 //  Pantopus
 //
 //  DTOs for the Home Tasks endpoints under `backend/routes/home.js`:
-//   - GET    /api/homes/:id/tasks              (line 4170)
-//   - POST   /api/homes/:id/tasks              (line 4238)
-//   - PUT    /api/homes/:id/tasks/:taskId      (line 4308)
-//   - DELETE /api/homes/:id/tasks/:taskId      (line 4354)
+//   - GET    /api/homes/:id/tasks
+//   - POST   /api/homes/:id/tasks
+//   - PUT    /api/homes/:id/tasks/:taskId
+//   - DELETE /api/homes/:id/tasks/:taskId
 //
 //  These are HOUSEHOLD chores — internal "who's vacuuming, taking out
 //  the trash, walking the dog" — NOT to be confused with `MyTaskDTO`
@@ -36,6 +36,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdBy: String?
     public let createdAt: String?
     public let updatedAt: String?
+    public let capabilities: HomeTaskCapabilities?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -52,6 +53,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdBy = "created_by"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case capabilities
     }
 
     public init(
@@ -68,7 +70,8 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         completedAt: String? = nil,
         createdBy: String? = nil,
         createdAt: String? = nil,
-        updatedAt: String? = nil
+        updatedAt: String? = nil,
+        capabilities: HomeTaskCapabilities? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -84,22 +87,37 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.createdBy = createdBy
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.capabilities = capabilities
     }
 }
 
 /// Envelope for `GET /api/homes/:id/tasks`.
 public struct GetHomeTasksResponse: Decodable, Sendable {
     public let tasks: [HomeTaskDTO]
+    public let collectionCapabilities: HomeTaskCollectionCapabilities?
+    public let taskSession: HomeTaskSession?
+
+    private enum CodingKeys: String, CodingKey {
+        case tasks
+        case collectionCapabilities = "collection_capabilities"
+        case taskSession = "task_session"
+    }
 }
 
 /// Envelope for `POST /api/homes/:id/tasks` and `PUT …/:taskId`.
 public struct HomeTaskResponse: Decodable, Sendable {
     public let task: HomeTaskDTO
+    public let taskSession: HomeTaskSession?
+
+    private enum CodingKeys: String, CodingKey {
+        case task
+        case taskSession = "task_session"
+    }
 }
 
 /// Body for `POST /api/homes/:id/tasks`. `task_type` and `title` are
 /// required; everything else is optional (see backend validation at
-/// `home.js:4252`).
+/// the current task route).
 public struct CreateHomeTaskRequest: Encodable, Sendable {
     public let taskType: String
     public let title: String

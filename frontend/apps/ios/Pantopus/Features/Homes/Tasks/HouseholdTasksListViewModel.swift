@@ -2,41 +2,9 @@
 //  HouseholdTasksListViewModel.swift
 //  Pantopus
 //
-//  T6.3c — Backs `HouseholdTasksListView` (P11). Fetches
-//  `GET /api/homes/:id/tasks` (route `backend/routes/home.js:4170`) and
-//  projects each task into the shared `ListOfRowsView` archetype with
-//  three tabs (Active / Done / Recurring) tinted in the home pillar.
-//
-//  Distinct from `MyTasksViewModel` (T5.3.2) which lists the user's
-//  posted-to-neighbours gigs reached via `me.gigs`. This is the
-//  PER-HOME chore list — internal "who's vacuuming, taking out the
-//  trash, walking the dog" — reached via `me.tasks` and the Home
-//  Dashboard "Tasks" quick-action tile.
-//
-//  Design contract (see `householdtasks-frames.jsx`):
-//    • Three tabs with live counts:
-//        - Active    = status in {open, in_progress}
-//        - Done      = status == 'done' (rolling 30-day window)
-//        - Recurring = recurrence_rule != nil
-//    • Active rows render a home-tinted summary banner (`N due today`
-//      + overdue count) above the list when there's anything to say.
-//    • 56pt `secondaryCreate` FAB tinted `.home` per the design brief.
-//    • Category-tinted leading tile (`HouseholdTaskCategory` palette)
-//      shown when the task is unassigned; `RowLeading.avatar` shown
-//      with the home identity ring when an assignee is set.
-//    • Active trailing = round-checkbox `circularAction` that
-//      optimistically toggles to Done.
-//    • Done trailing = success status chip; "Done by … · …" surfaces
-//      in the subtitle.
-//    • Recurring trailing = kebab; recurrence cadence surfaces in the
-//      inline chip.
-//
-//  Backend deviation from prompt: the prompt specifies
-//  `template_id != null` for the Recurring filter, but the live
-//  `HomeTask` schema (`backend/database/schema.sql:6833`) has no
-//  `template_id` column — recurrence is captured in the
-//  `recurrence_rule` RRULE text field. The Recurring filter therefore
-//  uses `recurrence_rule != nil`, which is the canonical signal today.
+//  Projects the current Home task collection into Active, Done and Recurring
+//  tabs. Row actions use exact server capabilities and recheck current access
+//  before writes. A row opens task detail independently of the editing form.
 //
 
 import Foundation
@@ -127,11 +95,7 @@ private struct HouseholdTaskDueProjection {
     )
 }
 
-/// ViewModel for the Household tasks list. Builds `RowModel`s from
-/// `HomeTaskDTO`s and re-renders the tab filter client-side — backend
-/// supports `?status=` queries (line 4178 of `home.js` doesn't actually
-/// filter today) but the design wants three buckets the server doesn't
-/// speak, so the VM owns the projection.
+/// Builds task rows and projects the current authorized collection into tabs.
 @Observable
 @MainActor
 final class HouseholdTasksListViewModel: ListOfRowsDataSource {
@@ -167,12 +131,13 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// explicitly requests `secondaryCreate` so the chore-list visual
     /// weight stays a notch below the bill-money FAB.
     var fab: FABAction? {
-        FABAction(
+        guard visible, canCreate, isCurrent else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Add a task",
             variant: .secondaryCreate,
             tint: .home
-        ) { [onAddTask] in onAddTask() }
+        ) { [weak self] in Task { @MainActor in await self?.requestCreate() } }
     }
 
     /// Optional summary banner above the rows. Nil on Done / Recurring;
@@ -206,36 +171,62 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// without re-fetching.
     private var tasks: [HomeTaskDTO]?
 
-    private let homeId: String
-    private let api: APIClient
-    private let onOpenTask: @Sendable (String) -> Void
-    private let onAddTask: @Sendable () -> Void
-    private let onEditRecurring: @Sendable (String) -> Void
+    private let access: HomeTaskAccess
+    private var canCreate = false
+    private var generation = 0
+    private var isActing = false
+    private var visible = false
+    private var pendingReload = false
+
+    var isCurrent: Bool {
+        access.isCurrent
+    }
+
+    var hasLoadedContent: Bool {
+        if case .loaded = state { return true }
+        return false
+    }
+
+    private let onOpenTask: @MainActor @Sendable (String) -> Void
+    private let onAddTask: @MainActor @Sendable () -> Void
     /// Inject a stable "now" for tests; production uses `Date()`.
     private let now: @Sendable () -> Date
 
     init(
         homeId: String,
         api: APIClient = .shared,
-        onOpenTask: @escaping @Sendable (String) -> Void = { _ in },
-        onAddTask: @escaping @Sendable () -> Void = {},
-        onEditRecurring: @escaping @Sendable (String) -> Void = { _ in },
+        onOpenTask: @escaping @MainActor @Sendable (String) -> Void = { _ in },
+        onAddTask: @escaping @MainActor @Sendable () -> Void = {},
+        access: HomeTaskAccess? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.homeId = homeId
-        self.api = api
+        self.access = access ?? HomeTaskAccess(homeId: homeId, api: api)
         self.onOpenTask = onOpenTask
         self.onAddTask = onAddTask
-        self.onEditRecurring = onEditRecurring
         self.now = now
     }
 
+    var activationRevision: Int {
+        generation
+    }
+
+    func resume(ifCurrent revision: Int) async {
+        guard revision == generation else { return }
+        await load()
+    }
+
     func load() async {
+        guard !Task.isCancelled else { return }
+        visible = true
+        if isActing { pendingReload = true
+            return
+        }
         if case .loading = state {} else { state = .loading }
         await fetch()
     }
 
     func refresh() async {
+        guard visible else { return }
         await fetch()
     }
 
@@ -243,105 +234,122 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     func loadMoreIfNeeded() async {}
 
     private func fetch() async {
+        guard visible, !isActing else { return }
+        generation += 1
+        let revision = generation
+        tasks = nil
+        canCreate = false
+        pendingEvent = nil
+        actionError = nil
+        state = .loading
         do {
-            let response: GetHomeTasksResponse = try await api.request(
-                HomesEndpoints.tasks(homeId: homeId)
-            )
+            let response = try await access.list()
+            guard revision == generation else { return }
             tasks = response.tasks
+            canCreate = response.collectionCapabilities?.canCreate == true
             rebuildState()
         } catch {
-            tasks = nil
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load your tasks."
-            )
+            guard revision == generation else { return }
+            clearRecords(error)
         }
     }
 
-    /// Optimistic Active-tab "toggle done" — flips the row locally,
-    /// fires the PUT, rolls back on failure. Called from the row's
-    /// circular checkbox action.
-    func toggleDone(taskId: String) async {
-        guard var loaded = tasks, let idx = loaded.firstIndex(where: { $0.id == taskId }) else {
-            return
+    func suspend() {
+        visible = false
+        generation += 1
+        access.invalidatePending()
+        tasks = nil
+        canCreate = false
+        pendingEvent = nil
+        actionError = nil
+        state = .loading
+    }
+
+    private func finishAction() {
+        isActing = false
+        if pendingReload, visible {
+            pendingReload = false
+            Task { await fetch() }
         }
-        let original = loaded[idx]
-        let newStatus = original.status == "done" ? "open" : "done"
-        let completedAt = newStatus == "done"
-            ? ISO8601DateFormatter().string(from: now())
-            : nil
-        // Build optimistic snapshot.
-        loaded[idx] = HomeTaskDTO(
-            id: original.id,
-            homeId: original.homeId,
-            taskType: original.taskType,
-            title: original.title,
-            description: original.description,
-            assignedTo: original.assignedTo,
-            dueAt: original.dueAt,
-            recurrenceRule: original.recurrenceRule,
-            status: newStatus,
-            priority: original.priority,
-            completedAt: completedAt,
-            createdBy: original.createdBy,
-            createdAt: original.createdAt,
-            updatedAt: original.updatedAt
-        )
-        tasks = loaded
-        rebuildState()
+    }
+
+    func accessChanged() {
+        guard !isCurrent else { return }
+        generation += 1
+        access.retire()
+        clearRecords(HomeTaskAccess.AccessError.changed)
+    }
+
+    func requestCreate() async {
+        guard visible, canCreate, isCurrent, !isActing else { return }
+        isActing = true
+        generation += 1
+        let revision = generation
+        defer { finishAction() }
         do {
-            let _: HomeTaskResponse = try await api.request(
-                HomesEndpoints.updateTask(
-                    homeId: homeId,
-                    taskId: taskId,
-                    request: UpdateHomeTaskRequest(
-                        status: newStatus,
-                        completedAt: completedAt
-                    )
-                )
-            )
+            let response = try await access.list()
+            guard visible, revision == generation, isCurrent else { return }
+            tasks = response.tasks
+            canCreate = response.collectionCapabilities?.canCreate == true
+            rebuildState()
+            if canCreate { onAddTask() }
         } catch {
-            // Roll back.
-            if var rolled = tasks, let i = rolled.firstIndex(where: { $0.id == taskId }) {
-                rolled[i] = original
-                tasks = rolled
-                rebuildState()
-            }
+            guard revision == generation else { return }
+            clearRecords(error)
+            actionError = error.localizedDescription
         }
     }
 
-    /// Row trash tapped — hand the confirm to the view. RN raises the
-    /// same confirm from the row's trash glyph
-    /// (`src/app/homes/[id]/tasks.tsx:76-84`).
+    private func clearRecords(_ error: any Error) {
+        tasks = nil
+        canCreate = false
+        pendingEvent = nil
+        state = .error(message: error.localizedDescription)
+    }
+
+    /// Confirm current exact-record rights before mutation; an unknown result
+    /// clears the old snapshot rather than restoring stale task data.
+    func toggleDone(taskId: String) async {
+        guard visible, !isActing, isCurrent, let task = tasks?.first(where: { $0.id == taskId }),
+              task.capabilities?.canComplete == true else { return }
+        isActing = true
+        generation += 1
+        let revision = generation
+        defer { finishAction() }
+        do {
+            let updated = try await access.complete(taskId: taskId, status: task.status == "done" ? "open" : "done")
+            guard revision == generation else { return }
+            if let index = tasks?.firstIndex(where: { $0.id == taskId }) { tasks?[index] = updated }
+            rebuildState()
+        } catch {
+            guard revision == generation else { return }
+            clearRecords(error)
+            actionError = error.localizedDescription
+        }
+    }
+
     func requestDelete(taskId: String) {
-        guard let task = tasks?.first(where: { $0.id == taskId }) else { return }
+        guard visible, isCurrent, !isActing, let task = tasks?.first(where: { $0.id == taskId }),
+              task.capabilities?.canDelete == true else { return }
         pendingEvent = .confirmDelete(taskId: taskId, title: task.title)
     }
 
-    /// `DELETE /api/homes/:id/tasks/:taskId` — route
-    /// `backend/routes/home.js:4354`. Optimistically drops the row, then
-    /// restores it (and surfaces `actionError`) if the server refuses.
     func deleteTask(taskId: String) async {
-        guard let loaded = tasks, let idx = loaded.firstIndex(where: { $0.id == taskId }) else {
-            return
-        }
-        let original = loaded[idx]
-        var pruned = loaded
-        pruned.remove(at: idx)
-        tasks = pruned
-        rebuildState()
+        guard visible, isCurrent, !isActing, let task = tasks?.first(where: { $0.id == taskId }),
+              task.capabilities?.canDelete == true else { return }
+        isActing = true
+        generation += 1
+        let revision = generation
+        defer { finishAction() }
         do {
-            let _: EmptyResponse = try await api.request(
-                HomesEndpoints.deleteTask(homeId: homeId, taskId: taskId)
-            )
-        } catch {
-            // Roll back — put the row back where it was.
-            var rolled = tasks ?? []
-            rolled.insert(original, at: min(idx, rolled.count))
-            tasks = rolled
+            try await access.delete(taskId: taskId)
+            guard revision == generation else { return }
+            tasks?.removeAll { $0.id == taskId }
             rebuildState()
-            actionError = (error as? APIError)?.errorDescription
-                ?? "Couldn't delete that task. Try again."
+        } catch {
+            guard revision == generation else { return }
+            clearRecords(error)
+            actionError = error.localizedDescription
         }
     }
 
@@ -359,30 +367,25 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     }
 
     private func emptyContent(for tab: HouseholdTasksTab) -> ListOfRowsState.EmptyContent {
-        switch tab {
-        case .active:
-            ListOfRowsState.EmptyContent(
-                icon: .listChecks,
-                headline: "No tasks yet",
-                subcopy: "Track who's doing what. Add a one-off chore, or set up the recurring stuff " +
-                    "(trash, dog walks, plants) once and let it spawn itself.",
-                ctaTitle: "Add a task"
-            ) { [onAddTask] in onAddTask() }
-        case .done:
-            ListOfRowsState.EmptyContent(
-                icon: .checkCircle,
-                headline: "Nothing done yet",
-                subcopy: "Finished chores from the last 30 days will show up here.",
-                ctaTitle: "Add a task"
-            ) { [onAddTask] in onAddTask() }
-        case .recurring:
-            ListOfRowsState.EmptyContent(
-                icon: .arrowsRepeat,
-                headline: "No recurring chores",
-                subcopy: "Set up the weekly trash run, daily dog walks, or plant watering once and they'll spawn themselves.",
-                ctaTitle: "Add a recurring task"
-            ) { [onAddTask] in onAddTask() }
+        let headline: String = switch tab {
+        case .active: "No tasks yet"
+        case .done: "Nothing done yet"
+        case .recurring: "No recurring chores"
         }
+        let onCreate: (@Sendable () -> Void)? = if visible, canCreate, isCurrent {
+            { [weak self] in
+                Task { @MainActor in await self?.requestCreate() }
+            }
+        } else {
+            nil
+        }
+        return ListOfRowsState.EmptyContent(
+            icon: .listChecks,
+            headline: headline,
+            subcopy: "Tasks shared with you will appear here.",
+            ctaTitle: visible && canCreate && isCurrent ? "Add a task" : nil,
+            onCTA: onCreate
+        )
     }
 
     // MARK: - Row + chip mapping
@@ -397,7 +400,12 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
             template: .statusChip,
             leading: leading(for: task, projection: projection),
             trailing: trailing(for: task, tab: tab, projection: projection, taskId: taskId),
-            onTap: { [onOpenTask] in onOpenTask(taskId) },
+            onTap: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.visible, self.isCurrent, !self.isActing else { return }
+                    self.onOpenTask(taskId)
+                }
+            },
             inlineChip: tab == .recurring && projection.recurrenceChip != nil
                 ? RowChip(
                     text: projection.recurrenceChip ?? "",
@@ -443,38 +451,38 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// where the same row also appears.
     private func trailing(
         for task: HomeTaskDTO,
-        tab: HouseholdTasksTab,
+        tab _: HouseholdTasksTab,
         projection _: HouseholdTaskRowProjection,
         taskId: String
     ) -> RowTrailing {
-        switch tab {
-        case .active, .done:
-            let isDone = task.status == "done"
-            return .iconActions(
-                primary: RowIconAction(
-                    icon: isDone ? .check : .circle,
-                    accessibilityLabel: isDone ? "Mark not done" : "Mark done",
-                    background: isDone ? Theme.Color.homeBg : Theme.Color.appSurface,
-                    foreground: isDone ? Theme.Color.home : Theme.Color.appTextMuted
-                ) { [weak self] in
-                    Task { @MainActor [weak self] in
-                        await self?.toggleDone(taskId: taskId)
-                    }
-                },
-                secondary: RowIconAction(
-                    icon: .trash,
-                    accessibilityLabel: "Delete task",
-                    background: Theme.Color.appSurfaceSunken,
-                    foreground: Theme.Color.error
-                ) { [weak self] in
-                    Task { @MainActor [weak self] in
-                        self?.requestDelete(taskId: taskId)
-                    }
-                }
+        guard isCurrent, !isActing else { return .chevron }
+        let canComplete = task.capabilities?.canComplete == true
+        let canDelete = task.capabilities?.canDelete == true
+        let isDone = task.status == "done"
+        let complete = RowIconAction(
+            icon: isDone ? .check : .circle,
+            accessibilityLabel: isDone ? "Mark not done" : "Mark done",
+            background: isDone ? Theme.Color.homeBg : Theme.Color.appSurface,
+            foreground: isDone ? Theme.Color.home : Theme.Color.appTextMuted
+        ) { [weak self] in Task { @MainActor in await self?.toggleDone(taskId: taskId) } }
+        let delete = RowIconAction(
+            icon: .trash,
+            accessibilityLabel: "Delete task",
+            background: Theme.Color.appSurfaceSunken,
+            foreground: Theme.Color.error
+        ) { [weak self] in Task { @MainActor in self?.requestDelete(taskId: taskId) } }
+        if canComplete, canDelete { return .iconActions(primary: complete, secondary: delete) }
+        if canComplete || canDelete {
+            let action = canComplete ? complete : delete
+            return .circularAction(
+                icon: action.icon,
+                accessibilityLabel: action.accessibilityLabel,
+                background: action.background,
+                foreground: action.foreground,
+                handler: action.handler
             )
-        case .recurring:
-            return .kebab
         }
+        return .chevron
     }
 
     private func chipsLine(

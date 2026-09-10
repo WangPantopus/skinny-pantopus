@@ -14,7 +14,9 @@ import SwiftUI
 
 struct HouseholdTasksListView: View {
     @State private var viewModel: HouseholdTasksListViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var deleteTarget: DeleteTarget?
+    @State private var isVisible = false
 
     init(viewModel: HouseholdTasksListViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -24,7 +26,27 @@ struct HouseholdTasksListView: View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier("householdTasksList")
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            .onAppear { Analytics.track(.screenHouseholdTasksViewed) }
+            .onAppear { isVisible = true
+                Analytics.track(.screenHouseholdTasksViewed)
+            }
+            .onDisappear { isVisible = false
+                viewModel.suspend()
+                deleteTarget = nil
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard isVisible else { return }
+                if phase == .active {
+                    let revision = viewModel.activationRevision
+                    Task {
+                        guard isVisible, scenePhase == .active else { return }
+                        await viewModel.resume(ifCurrent: revision)
+                    }
+                } else { viewModel.suspend()
+                    deleteTarget = nil
+                }
+            }
+            .onChange(of: viewModel.isCurrent) { _, _ in viewModel.accessChanged() }
+            .onChange(of: viewModel.hasLoadedContent) { _, loaded in if !loaded { deleteTarget = nil } }
             .onChange(of: viewModel.pendingEvent) { _, event in
                 handle(event)
             }
@@ -47,7 +69,7 @@ struct HouseholdTasksListView: View {
                 Text("Delete “\(target.title)”? This can’t be undone.")
             }
             .alert(
-                "Couldn’t delete task",
+                "Task action unavailable",
                 isPresented: Binding(
                     get: { viewModel.actionError != nil },
                     set: { if !$0 { viewModel.actionError = nil } }

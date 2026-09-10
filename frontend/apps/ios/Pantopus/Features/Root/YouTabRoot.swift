@@ -245,6 +245,7 @@ public enum YouRoute: Hashable {
     /// home id resolved by the Me VM. Distinct from `.myTasks` which is
     /// the posted-to-neighbours gig list.
     case homeTasks(homeId: String)
+    case householdTaskDetail(homeId: String, taskId: String)
     /// P2.4 — Add a new household task. Reached from the household
     /// tasks list FAB.
     case addHouseholdTask(homeId: String)
@@ -2261,21 +2262,14 @@ public struct YouTabRoot: View {
             HouseholdTasksListView(
                 viewModel: HouseholdTasksListViewModel(
                     homeId: homeId,
-                    onOpenTask: { taskId in
-                        Task { @MainActor in
-                            path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    },
-                    onAddTask: {
-                        Task { @MainActor in path.append(.addHouseholdTask(homeId: homeId)) }
-                    },
-                    onEditRecurring: { taskId in
-                        Task { @MainActor in
-                            path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    }
+                    onOpenTask: { taskId in path.append(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
+                    onAddTask: { path.append(.addHouseholdTask(homeId: homeId)) }
                 )
             )
+        case let .householdTaskDetail(homeId, taskId):
+            HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
+                path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
+            }
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
