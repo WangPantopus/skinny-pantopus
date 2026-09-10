@@ -41,6 +41,8 @@ import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
+import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -122,6 +124,7 @@ class GigDetailViewModel
         private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository,
         savedStateHandle: SavedStateHandle,
         private val checkoutTokens: TokenStorage,
+        refundFactory: GigRefundFactory,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -434,6 +437,18 @@ class GigDetailViewModel
         /** Payment card (owner, assigned+) from `GET /payment`; null hides it. */
         private val _payment = MutableStateFlow<GigPaymentResponse?>(null)
         val payment: StateFlow<GigPaymentResponse?> = _payment.asStateFlow()
+        val refunds = refundFactory.create(viewModelScope) { silentRefetch() }
+        private var paymentGeneration = 0
+
+        fun canOpenRefunds(): Boolean =
+            viewerIsOwner &&
+                _payment.value?.payment?.let { GigRefundCoordinator.validTarget(gigId, it, currentUserId()) } == true
+
+        fun openRefunds() {
+            if (!canOpenRefunds()) return
+            val payment = _payment.value?.payment ?: return
+            refunds.open(gigId, payment)
+        }
 
         /** Change orders for the active task (both roles, assigned/in_progress). */
         private val _changeOrders = MutableStateFlow<List<GigChangeOrderDto>>(emptyList())
@@ -1247,6 +1262,7 @@ class GigDetailViewModel
             gig: GigDto,
             uid: String?,
         ) {
+            val revision = ++paymentGeneration
             val isOwner = uid != null && uid == gig.userId
             val assignedPlus = gig.status?.lowercase() in listOf("assigned", "in_progress", "completed")
             if (!isOwner || !assignedPlus) {
@@ -1254,7 +1270,10 @@ class GigDetailViewModel
                 return
             }
             viewModelScope.launch {
-                when (val result = repo.gigPayment(gigId)) {
+                if (!bidCheckout.isCurrentReadScope() || uid != currentUserId()) return@launch
+                val result = repo.gigPayment(gigId)
+                if (revision != paymentGeneration || !bidCheckout.isCurrentReadScope() || uid != currentUserId()) return@launch
+                when (result) {
                     is NetworkResult.Success -> _payment.value = result.data.takeIf { it.payment != null }
                     is NetworkResult.Failure -> _payment.value = null
                 }

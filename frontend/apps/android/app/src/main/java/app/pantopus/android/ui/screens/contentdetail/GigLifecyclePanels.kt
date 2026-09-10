@@ -87,6 +87,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val activeTask by viewModel.activeTask.collectAsStateWithLifecycle()
     val reviewState by viewModel.reviewState.collectAsStateWithLifecycle()
     val payment by viewModel.payment.collectAsStateWithLifecycle()
+    val refundState by viewModel.refunds.state.collectAsStateWithLifecycle()
     val changeOrders by viewModel.changeOrders.collectAsStateWithLifecycle()
     val changeOrderActionInFlight by viewModel.changeOrderActionInFlight.collectAsStateWithLifecycle()
     val fulfillment by viewModel.fulfillment.collectAsStateWithLifecycle()
@@ -234,7 +235,14 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     }
 
     // 5b work item 1 — compact payment card (owner, assigned+).
-    payment?.let { GigPaymentCard(payment = it) }
+    if (!refundState.invalidated) {
+        payment?.let { GigPaymentCard(payment = it) }
+        if (viewModel.canOpenRefunds()) {
+            TextButton(onClick = viewModel::openRefunds, modifier = Modifier.testTag("gigDetail.refunds")) {
+                Text("Refunds and hold releases")
+            }
+        }
+    }
 
     GigReviewSection(
         state = reviewState,
@@ -1479,8 +1487,6 @@ private fun normalizedAmountChange(
 @Composable
 private fun GigPaymentCard(payment: GigPaymentResponse) {
     val row = payment.payment ?: return
-    val totalCents = (row.amountTotal ?: 0) + (row.tipAmount ?: 0)
-    val feesCents = (row.amountPlatformFee ?: 0) + (row.amountProcessingFee ?: 0)
     Column(
         modifier =
             Modifier
@@ -1511,14 +1517,13 @@ private fun GigPaymentCard(payment: GigPaymentResponse) {
                     .padding(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            PaymentLine(label = "Subtotal", amount = formatCents(row.amountSubtotal ?: 0))
-            PaymentLine(label = "Fees", amount = formatCents(feesCents))
+            PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
             if ((row.tipAmount ?: 0) > 0) {
                 PaymentLine(label = "Tip", amount = formatCents(row.tipAmount ?: 0))
             }
             PaymentLine(
-                label = "Total",
-                amount = formatCents(totalCents),
+                label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
+                amount = formatCents(row.amountTotal ?: 0),
                 emphasized = true,
                 modifier = Modifier.testTag("gigDetail.payment.total"),
             )

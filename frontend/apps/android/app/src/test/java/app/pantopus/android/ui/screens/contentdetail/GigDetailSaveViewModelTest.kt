@@ -40,6 +40,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,6 +146,7 @@ class GigDetailSaveViewModelTest {
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                refundFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -271,6 +273,7 @@ class GigDetailSaveViewModelTest {
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                refundFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -358,6 +361,7 @@ class GigDetailSaveViewModelTest {
                     gigsV2Repo,
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                     checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                    refundFactory = mockk(relaxed = true),
                 )
             vm.load()
             assertTrue(vm.canInstantAccept())
@@ -416,6 +420,7 @@ class GigDetailSaveViewModelTest {
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } coAnswers { checkoutIdentity() } },
+                refundFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -512,6 +517,30 @@ class GigDetailSaveViewModelTest {
             val vm = lifecycleVm(assignedGig(acceptedBy = "viewer-1"))
             assertNull(vm.payment.value)
             coVerify(exactly = 0) { repo.gigPayment(any()) }
+        }
+
+    @Test
+    fun payer_refund_entry_opens_only_the_exact_owned_payment() =
+        runTest {
+            val gig = assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
+            val payment =
+                GigPaymentDto(
+                    id = "11111111-1111-4111-8111-111111111111",
+                    gigId = "g1",
+                    payerId = "viewer-1",
+                    amountTotal = 1000,
+                    currency = "usd",
+                )
+            val vm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(payment)))
+            assertTrue(vm.canOpenRefunds())
+            vm.openRefunds()
+            verify(exactly = 1) { vm.refunds.open("g1", payment) }
+            for (invalid in listOf(payment.copy(payerId = "other"), payment.copy(gigId = "other"), payment.copy(id = null))) {
+                val invalidVm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(invalid)))
+                assertFalse(invalidVm.canOpenRefunds())
+                invalidVm.openRefunds()
+                verify(exactly = 0) { invalidVm.refunds.open(any(), any()) }
+            }
         }
 
     @Test
