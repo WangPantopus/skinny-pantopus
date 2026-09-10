@@ -5,6 +5,9 @@
 
 import { get, post, put, patch, del } from '../client';
 import type { ApiRequestConfig } from '../client';
+export * from './gigStop';
+import { submitGigStopRequest } from './gigStop';
+import type { GigStopCommand, GigStopProgress } from './gigStop';
 import type {
   Gig,
   GigBid,
@@ -423,21 +426,11 @@ export async function rejectBid(gigId: string, bidId: string): Promise<ApiRespon
  * Reopen bidding for an assigned gig (poster only).
  * Moves gig back to open and restores previously rejected bids to pending.
  */
-export async function reopenBidding(
+export function reopenBidding(
   gigId: string,
-  options?: { rollbackMode?: 'payment_setup_aborted' }
-): Promise<{
-  gig: Gig;
-  reopened_count: number;
-  accepted_bid_restored?: boolean;
-  message: string;
-}> {
-  return post<{
-    gig: Gig;
-    reopened_count: number;
-    accepted_bid_restored?: boolean;
-    message: string;
-  }>(`/api/gigs/${gigId}/reopen-bidding`, options || {});
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'reopen_bidding' });
 }
 
 /**
@@ -524,20 +517,11 @@ export async function completeGig(
 /**
  * Cancel a gig (poster or worker)
  */
-export async function cancelGig(
+export function cancelGig(
   gigId: string,
-  reason?: string
-): Promise<{
-  gig: Gig;
-  cancellation: {
-    zone: number;
-    zone_label: string;
-    fee: number;
-    in_grace: boolean;
-    cancelled_by: 'poster' | 'worker';
-  };
-}> {
-  return post(`/api/gigs/${gigId}/cancel`, { reason });
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'cancel' });
 }
 
 /**
@@ -879,11 +863,11 @@ export async function workerAck(
 /**
  * Worker self-releases from the assignment ("can't make it").
  */
-export async function workerRelease(
+export function workerRelease(
   gigId: string,
-  data?: { note?: string },
-): Promise<{ success: boolean; message: string }> {
-  return post<{ success: boolean; message: string }>(`/api/gigs/${gigId}/worker-release`, data || {});
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'worker_release' });
 }
 
 // ─── Reliability ───

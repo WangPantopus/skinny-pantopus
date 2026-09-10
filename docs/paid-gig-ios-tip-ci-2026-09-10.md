@@ -18,7 +18,8 @@ SwiftLint passed. An initial local build caught two optional-chaining typos in
 the new request assertions; those were corrected before the final passing run.
 The private operator log retains the build and simulator evidence.
 
-The three remote iOS 18.5 jobs must pass on the new pushed head before treating
-the CI failure as resolved. This fixture repair does not certify the complete
+All three remote iOS 18.5 jobs now pass on pushed head `0037a3115` in
+[CI run 34467842363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34467842363).
+This confirms the fixture repair on the affected runtime. It does not certify the complete
 provider tip journey: server-confirmed tip success, session retirement and fresh
 provider acceptance remain in the paid-gig lifecycle backlog. PR #34 stays draft.

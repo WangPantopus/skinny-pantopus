@@ -16,8 +16,8 @@ import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboardi
 import TipModal from '@/components/payments/TipModal';
 import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
-import CancellationModal from './CancellationModal';
+import GigStopDialog from './GigStopDialog';
+import type { GigStopAction } from '@pantopus/api';
 
 /** Shape of gig data used by CompletionFlow */
 interface CompletionGigData {
@@ -41,7 +41,6 @@ interface CompletionGigData {
 
 /** Extended gig API methods not in base type definitions */
 interface GigsCompletionApiExt {
-  reopenBidding: (gigId: string) => Promise<Record<string, any>>;
   startGig: (gigId: string) => Promise<unknown>;
   markGigCompleted: (gigId: string, data: Record<string, any>) => Promise<unknown>;
   confirmGigCompletion?: (gigId: string, data: Record<string, any>) => Promise<unknown>;
@@ -65,16 +64,6 @@ interface CompletionFlowProps {
   paymentLifecycleStatus: string;
   onStatusChange?: () => void;
   onOpenChat: () => void;
-}
-
-interface CancellationPreview {
-  policy_label?: string;
-  fee: number;
-  fee_pct?: number;
-  zone_label: string;
-  zone?: number;
-  in_grace?: boolean;
-  policy_description?: string;
 }
 
 export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function CompletionFlow({
@@ -102,11 +91,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const iAmWorkerCompleted = isWorker && isCompleted;
   const workerBlockedByPaymentAuth = iAmWorkerAssigned && isPaidGig && paymentLifecycleStatus !== 'authorized';
 
-  // Cancellation
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelPreview, setCancelPreview] = useState<CancellationPreview | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelling, setCancelling] = useState(false);
+  const [stopAction, setStopAction] = useState<GigStopAction | null>(null);
 
   // No-show
   const [noShowCheck, setNoShowCheck] = useState<Record<string, any> | null>(null);
@@ -129,26 +114,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   // Tip
   const [showTipModal, setShowTipModal] = useState(false);
 
-  // Reopen bidding
-  const handleReopenBidding = async () => {
-    const confirmed = await confirmStore.open({
-      title: 'Reopen bidding?',
-      description: 'This will unassign the current worker and reactivate prior rejected offers.',
-      confirmLabel: 'Reopen',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-
-    try {
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      const result = await gigsExt.reopenBidding(gigId);
-      onStatusChange?.();
-      toast.success(String(result?.message || 'Bidding reopened.'));
-    } catch (err: unknown) {
-      console.error('Reopen bidding failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to reopen bidding');
-    }
-  };
+  const handleReopenBidding = () => setStopAction('reopen_bidding');
 
   // Check no-show eligibility
   useEffect(() => {
@@ -165,30 +131,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     checkNoShowEligibility();
   }, [gigId, gigStatus, currentUserId]);
 
-  const openCancelModal = async () => {
-    setShowCancelModal(true);
-    setCancelReason('');
-    setCancelPreview(null);
-    try {
-      const preview = await api.gigs.getCancellationPreview(gigId);
-      setCancelPreview(preview as CancellationPreview);
-    } catch {
-      setCancelPreview({ zone: -1, zone_label: 'Unknown', fee: 0, in_grace: true, policy_label: 'Standard' });
-    }
-  };
-
-  const handleCancelGig = async () => {
-    setCancelling(true);
-    try {
-      await api.gigs.cancelGig(gigId, cancelReason || undefined);
-      setShowCancelModal(false);
-      onStatusChange?.();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel gig');
-    } finally {
-      setCancelling(false);
-    }
-  };
+  const openCancelModal = () => setStopAction('cancel');
 
   const handleReportNoShow = async () => {
     setReportingNoShow(true);
@@ -428,6 +371,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               Waiting for requester payment authorization before you can start.
             </p>
           )}
+          {iAmWorkerAssigned && <button type="button" onClick={() => setStopAction('worker_release')}
+            className="w-full mt-3 text-sm text-amber-700 hover:underline">Can’t make it? Leave assignment</button>}
           {/* Worker cancel option */}
           {(iAmWorkerAssigned || iAmWorkerInProgress) && (
             <button
@@ -733,17 +678,11 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {/* ─── Cancellation Modal ─── */}
-      <CancellationModal
-        show={showCancelModal}
-        onClose={() => setShowCancelModal(false)}
-        cancelPreview={cancelPreview}
-        cancelReason={cancelReason}
-        setCancelReason={setCancelReason}
-        cancelling={cancelling}
-        onConfirm={handleCancelGig}
-        isOwner={isOwner}
-      />
+      {stopAction && currentUserId && <GigStopDialog
+        key={`${currentUserId}:${gigId}:${stopAction}`} actorId={currentUserId}
+        gigId={gigId} action={stopAction} isOwner={isOwner}
+        onClose={() => setStopAction(null)} onCompleted={onStatusChange}
+      />}
 
       {/* ─── Tip Modal ─── */}
       {showTipModal && acceptedBy && (

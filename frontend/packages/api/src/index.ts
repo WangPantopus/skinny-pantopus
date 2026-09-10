@@ -484,3 +484,7 @@ export type {
   HomeCalendarUnionEvent,
   DecodedSchedulingError,
 } from '@pantopus/types';
+
+// Durable task stop requests and their exact receipts.
+export type { GigStopAction, GigStopFinancialAction, GigStopReason, GigStopTerms, GigStopPreview,
+  GigStopRequest, GigStopReceipt, GigStopProgress, GigStopCommand } from './endpoints/gigStop';

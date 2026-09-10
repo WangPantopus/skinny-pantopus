@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser task stop recovery checkpoint — September 10
+
+Both live browser gig layouts now share current-term task cancellation,
+reopening and worker-release controls. Unknown responses preserve their exact
+request through close/reload; only a matching completed task/financial receipt
+reports success. The [browser recovery report](paid-gig-web-stop-recovery-2026-09-10.md)
+records independent review, the complete web regression, final focused checks,
+clean type checking and an actual Chrome rehearsal against synthetic HTTP replies.
+
+**Next:** finish the matching durable stop backend/migration verification and
+native parity, then started/no-show/fee execution, disputes/Connect/debt, durable
+attention and full provider acceptance. Backend verification found old worker
+release fixtures that lacked the newly required proof; their updated checks pass,
+and final release-indicator protections are being verified before commit. All
+three remote iOS 18.5 jobs now pass `0037a3115` in
+[run 34467842363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34467842363).
+Home native evidence and task-creation recovery milestones are committed in
+draft PR #32, with native task detail/attachments continuing. Both PRs remain
+unfinished. All paid dependencies remain together for final launch preparation;
+completed physical Beacon and saved-card checks must not be repeated. No hosted
+migration or paid service changed.
+
 ### iOS tip CI fixture correction — September 10
 
 The tip fixture now supplies the current actor/session and binds responses to
