@@ -23,7 +23,8 @@ records owned SetupIntent preparation/resume and durable confirmation, with
 integration. The frozen iOS lifecycle implementation passes all 36 focused tests
 and strict formatting/lint checks; Android passes all 49 focused tests, formatting,
 ktlintCheck, Detekt and compilation. The native/API contract review passes.
-The iOS source milestone is pushed as `3afbf043d`. No live payment
+The iOS/Android source milestones are pushed as `3afbf043d`/`6d322b1df`.
+The explicit opt-in iOS SDK journey compiles and passes strict lint; no live payment
 fixtures or candidate changes ran.
 Before acceptance, finish the reproduced default/removal race with atomic
 app-owned preference and durable removal guards, then exercise actual Stripe
@@ -35,15 +36,18 @@ cleanup pass. Private candidate source `694a213e2`/image `68e3e052a578` is healt
 the previous `312b5a382fd6` is retained stopped. Both mail additive migrations
 are applied only to Free staging, preserving records and the absent ledger.
 Public/browser/production runtimes are unchanged. Do not rerun completed mail
-publishers, cleanup or appliers. The separate rollback binding fix is ready
-PR #30 (`8f7a6121a`), with 47 local deployment tests passing and full CI pending.
+publishers, cleanup or appliers. The separate rollback binding fix, PR #30,
+merged as `c262b84afe96b160e4c45b454ff985c0acbcc4b8` at 02:06 UTC September 10
+after all final-head CI passed (run `34425834432`, head `8f7a6121a`), including
+all native simulators. All 47 local deployment tests also passed.
 Master `3009eb0be` is integrated into this payment branch by `98dbc77d0`;
-PR #29's merged-master CI also passes (run `34425657480`). PR #30 has only
-one iOS simulator CI job pending at this checkpoint. The independent staging
+PR #29's merged-master CI also passes (run `34425657480`). Integrate PR #30's
+master merge before final payment checks. The independent staging
 inventory branch `codex/staging-adoption-plan` is pushed at `a6b1b5748`;
 its report records remaining schema/ACL differences and matching reference
 values, with no hosted adoption or production write. Continue atomic card
-preference/removal verification and native acceptance before payment integration.
+preference/removal and first-customer binding verification, including authenticated
+write denial, then native acceptance before payment integration.
 The earlier source checkpoint below is historical where it conflicts.
 
 ### Earlier source integration checkpoint — September 9

@@ -60,9 +60,12 @@ ktlintFormat, ktlintCheck, Detekt and main/test compilation passing. Combined
 native coverage is 85 passing focused tests. A read-only review found no
 request/response mismatch between either client and the current backend.
 
-Both native source milestones are ready. The explicit opt-in iOS live-test
-harness is being prepared; actual provider calls and simulator UI acceptance
-have not run yet. Ordinary CI must skip these disposable staging actions.
+Both native source milestones are pushed (`3afbf043d` iOS, `6d322b1df` Android).
+The explicit opt-in iOS live-test harness now compiles and passes strict lint
+and formatting. It covers SDK cancellation, same-setup recovery after restart,
+two saved cards, default selection, cold restart, removal cancellation, fallback
+default and empty state through the real UI. Actual provider calls and simulator
+UI acceptance have not run yet. Ordinary CI skips these disposable staging actions.
 
 ## Required default/removal repair before acceptance
 
@@ -80,6 +83,13 @@ remain authoritative. Stripe invoice-default mirroring is to be removed because
 the current payment workflows do not use it as their charge source. This is a
 design decision whose implementation is now under local SQL/API verification,
 not a completed staging guarantee.
+
+Local verification also exposed a first-customer race and a direct authenticated
+write to the Stripe customer binding. The database milestone now includes a
+compare-and-set customer binding and a narrow guard against client changes to
+that binding. These must pass real-role/concurrency tests before any staging
+application; initial customer correctness cannot be inferred from tests that
+already had a customer.
 
 After source integration and checks: refresh the private staging candidate, run
 actual Stripe SDK/test-mode add/cancel/default/remove and cold-start journeys on
