@@ -37,6 +37,8 @@ public struct HomeOwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable
     public let riskScore: Double?
     public let createdAt: String?
     public let updatedAt: String?
+    public let claimantUserId: String?
+    public let reviewToken: String?
     public let claimant: HomeOwnershipClaimMaskedClaimantDTO?
     public let evidence: [HomeClaimEvidenceDTO]?
 
@@ -54,6 +56,8 @@ public struct HomeOwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable
         case riskScore = "risk_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case claimantUserId = "claimant_user_id"
+        case reviewToken = "review_token"
         case claimant, evidence
     }
 }
@@ -73,6 +77,10 @@ public struct HomeOwnershipClaimMaskedClaimantDTO: Decodable, Sendable, Hashable
     }
 }
 
+public struct HomeOwnershipClaimDetailResponse: Decodable, Sendable, Hashable {
+    public let claim: HomeOwnershipClaimDTO
+}
+
 /// Envelope for `GET /api/homes/:id/ownership-claims`.
 public struct HomeOwnershipClaimsResponse: Decodable, Sendable, Hashable {
     public let claims: [HomeOwnershipClaimDTO]
@@ -88,6 +96,8 @@ public struct HomeClaimEvidenceDTO: Decodable, Sendable, Hashable, Identifiable 
     public let provider: String?
     public let status: String?
     public let confidenceLevel: String?
+    public let eligibleForReview: Bool?
+    public let availabilityCode: String?
     public let createdAt: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -96,6 +106,8 @@ public struct HomeClaimEvidenceDTO: Decodable, Sendable, Hashable, Identifiable 
         case evidenceType = "evidence_type"
         case provider, status
         case confidenceLevel = "confidence_level"
+        case eligibleForReview = "eligible_for_review"
+        case availabilityCode = "availability_code"
         case createdAt = "created_at"
     }
 }
@@ -251,10 +263,17 @@ public struct HomeClaimUserDTO: Decodable, Sendable, Hashable, Identifiable {
 public struct HomeOwnershipClaimReviewRequest: Encodable, Sendable, Hashable {
     public let action: String
     public let note: String?
+    public let reviewToken: String
 
-    public init(action: String, note: String? = nil) {
+    public init(action: String, reviewToken: String, note: String? = nil) {
         self.action = action
         self.note = note
+        self.reviewToken = reviewToken
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case action, note
+        case reviewToken = "review_token"
     }
 }
 

@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS claim review and withdrawal checkpoint — September 10
+
+The native Home/platform review screens now submit the exact displayed evidence
+snapshot and verify the returned claim, actor, Home, action and resulting access.
+Interrupted decisions preserve their original token for retry. Withdrawal requires
+an exact receipt and retains history. The [iOS claim report](home-ios-claim-review-2026-09-10.md)
+records 47 final simulator checks, strict formatting/lint, no new warnings and
+independent review. Android parity is closing a same-account session-replacement
+race; private task attachments and trusted evidence remain in progress.
+
+Current remote CI on `c315267a6` passes backend, database, web and Android, but
+all three iOS 18.5 test jobs failed again in [run 34451266542](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34451266542).
+The dashboard runtime repair is not yet confirmed; root is investigating the
+new failure evidence. Local iOS 26.5 passes do not replace that required check.
+**Next:** finish Android claims, repair the iOS runtime failure, then private
+claim evidence and task attachments, remaining Home journeys and household
+acceptance. Draft PR #32 stays unmerged. Refund controls and durable wallet notices
+are committed in PR #34; historical assigned-payment recovery continues there.
+All paid services remain deferred together until final launch preparation.
+
 ### Ordinary claim review transaction checkpoint — September 10
 
 Ordinary Home/platform claim review and withdrawal now bind the displayed

@@ -65,13 +65,13 @@ public struct HomeClaimReviewView: View {
                 target.verdict.title,
                 role: target.verdict.isDestructive ? ButtonRole.destructive : nil
             ) {
-                Task { await viewModel.review(claimId: target.claimId, action: target.verdict) }
+                Task { await viewModel.review(target.snapshot, action: target.verdict) }
                 verdictConfirm = nil
             }
             .accessibilityIdentifier("homeClaimReview_verdictConfirm")
             Button("Cancel", role: .cancel) { verdictConfirm = nil }
         } message: { target in
-            Text(target.verdict.confirmBody)
+            Text(target.verdict.confirmBody + "\n\n" + target.snapshot.summary)
         }
         .confirmationDialog(
             relationshipConfirm?.title ?? "",
@@ -232,7 +232,11 @@ public struct HomeClaimReviewView: View {
                             item: item,
                             isBusy: viewModel.actionLoading?.hasPrefix("\(item.id):") ?? false,
                             onVerdict: { verdict in
-                                verdictConfirm = VerdictConfirm(claimId: item.id, verdict: verdict)
+                                Task {
+                                    if let snapshot = await viewModel.prepareReview(claimId: item.id, action: verdict) {
+                                        verdictConfirm = VerdictConfirm(snapshot: snapshot, verdict: verdict)
+                                    }
+                                }
                             },
                             onRelationship: { action in
                                 relationshipConfirm = RelationshipConfirm(
@@ -316,7 +320,11 @@ public struct HomeClaimReviewView: View {
     // MARK: - Confirm payloads
 
     private struct VerdictConfirm: Identifiable, Equatable {
-        let claimId: String
+        let snapshot: HomeClaimReviewSnapshot
+        var claimId: String {
+            snapshot.claimId
+        }
+
         let verdict: HomeClaimReviewVerdict
         var id: String {
             "\(claimId):\(verdict.rawValue)"

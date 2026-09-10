@@ -15,7 +15,7 @@ struct StatementBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("\u{201C}\(statement)\u{201D}")
+            Text(statement)
                 .font(.system(size: 13.5).italic())
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -72,14 +72,14 @@ struct VerdictBar: View {
             HStack(spacing: Spacing.s2) {
                 VerdictButton(
                     style: .challenge,
-                    label: "Challenge",
+                    label: "Request info",
                     icon: .messageCircle,
                     isLoading: reviewingAction == .challenge,
                     disabled: reviewingAction != nil,
                     action: onChallenge
                 )
                 .accessibilityIdentifier("reviewClaimDetail_challenge")
-                .accessibilityLabel("Challenge claim")
+                .accessibilityLabel("Request more information")
 
                 VerdictButton(
                     style: .reject,

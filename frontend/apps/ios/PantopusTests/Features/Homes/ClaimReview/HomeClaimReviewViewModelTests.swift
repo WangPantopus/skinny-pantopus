@@ -46,7 +46,7 @@ final class HomeClaimReviewViewModelTests: XCTestCase {
                 Self.comparePath: [comparison],
                 Self.residencyPath: [residency]
             ])
-        )
+        ) { "claim-review-test-session" }
     }
 
     // MARK: - Fixtures
