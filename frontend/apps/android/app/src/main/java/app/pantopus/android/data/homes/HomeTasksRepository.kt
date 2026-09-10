@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeTasksApi
+import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +23,16 @@ open class HomeTasksRepository
         private val api: HomeTasksApi,
     ) {
         /** `GET /api/homes/:id/tasks`. */
-        open suspend fun getHomeTasks(homeId: String): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId) }
+        open suspend fun getHomeTasks(
+            homeId: String,
+            expectedSession: String? = null,
+        ): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId, expectedSession) }
+
+        open suspend fun getHomeTask(
+            homeId: String,
+            taskId: String,
+            expectedSession: String? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.getHomeTask(homeId, taskId, expectedSession) }
 
         /** `POST /api/homes/:id/tasks`. */
         open suspend fun createHomeTask(
@@ -35,11 +45,17 @@ open class HomeTasksRepository
             homeId: String,
             taskId: String,
             request: UpdateHomeTaskRequest,
-        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request) }
+            expectedSession: String? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request, expectedSession) }
 
         /** `DELETE /api/homes/:id/tasks/:taskId`. */
         open suspend fun deleteHomeTask(
             homeId: String,
             taskId: String,
-        ): NetworkResult<Unit> = safeApiCall { api.deleteHomeTask(homeId, taskId) }
+            expectedSession: String? = null,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                val response = api.deleteHomeTask(homeId, taskId, expectedSession)
+                if (response.message != "Task deleted") throw JsonDataException("The task deletion was not confirmed.")
+            }
     }

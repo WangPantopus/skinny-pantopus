@@ -221,6 +221,7 @@ import app.pantopus.android.ui.screens.homes.tasks.ADD_HOUSEHOLD_TASK_HOME_ID_KE
 import app.pantopus.android.ui.screens.homes.tasks.ADD_HOUSEHOLD_TASK_TASK_ID_KEY
 import app.pantopus.android.ui.screens.homes.tasks.AddHouseholdTaskFormScreen
 import app.pantopus.android.ui.screens.homes.tasks.HOUSEHOLD_TASKS_HOME_ID_KEY
+import app.pantopus.android.ui.screens.homes.tasks.HouseholdTaskDetailScreen
 import app.pantopus.android.ui.screens.homes.tasks.HouseholdTasksListScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.VERIFY_LANDLORD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.verify_landlord.VerifyLandlordWizardScreen
@@ -757,6 +758,14 @@ private object ChildRoutes {
 
     /** Household tasks list per home (T6.3c / P11). */
     const val HOME_TASKS = "homes/{$HOUSEHOLD_TASKS_HOME_ID_KEY}/tasks"
+
+    const val HOUSEHOLD_TASK_DETAIL =
+        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/detail"
+
+    fun householdTaskDetail(
+        homeId: String,
+        taskId: String,
+    ): String = "homes/$homeId/tasks/$taskId/detail"
 
     /** Build the concrete path for a home household tasks list. */
     fun homeTasks(homeId: String): String = "homes/$homeId/tasks"
@@ -3700,8 +3709,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) { entry ->
                     val homeId = entry.arguments?.getString(HOUSEHOLD_TASKS_HOME_ID_KEY).orEmpty()
                     HouseholdTasksListScreen(
-                        onOpenTask = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Task detail"))
+                        onOpenTask = { taskId ->
+                            navController.navigate(ChildRoutes.householdTaskDetail(homeId, taskId))
                         },
                         onAddTask = {
                             navController.navigate(ChildRoutes.addHouseholdTask(homeId))
@@ -3710,6 +3719,21 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.editHouseholdTask(homeId, taskId))
                         },
                         onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.HOUSEHOLD_TASK_DETAIL,
+                    arguments =
+                        listOf(
+                            navArgument(ADD_HOUSEHOLD_TASK_HOME_ID_KEY) { type = NavType.StringType },
+                            navArgument(ADD_HOUSEHOLD_TASK_TASK_ID_KEY) { type = NavType.StringType },
+                        ),
+                ) { entry ->
+                    val homeId = entry.arguments?.getString(ADD_HOUSEHOLD_TASK_HOME_ID_KEY).orEmpty()
+                    val taskId = entry.arguments?.getString(ADD_HOUSEHOLD_TASK_TASK_ID_KEY).orEmpty()
+                    HouseholdTaskDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onEdit = { navController.navigate(ChildRoutes.editHouseholdTask(homeId, taskId)) },
                     )
                 }
                 composable(

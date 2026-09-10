@@ -2,11 +2,13 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskDeleteResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -25,7 +27,15 @@ interface HomeTasksApi {
     @GET("api/homes/{id}/tasks")
     suspend fun getHomeTasks(
         @Path("id") homeId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): GetHomeTasksResponse
+
+    @GET("api/homes/{id}/tasks/{taskId}")
+    suspend fun getHomeTask(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
+    ): HomeTaskResponse
 
     /** `POST /api/homes/:id/tasks` — route `backend/routes/home.js:4238`. */
     @POST("api/homes/{id}/tasks")
@@ -40,6 +50,7 @@ interface HomeTasksApi {
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
         @Body body: UpdateHomeTaskRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): HomeTaskResponse
 
     /** `DELETE /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4354`. */
@@ -47,5 +58,6 @@ interface HomeTasksApi {
     suspend fun deleteHomeTask(
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
-    )
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
+    ): HomeTaskDeleteResponse
 }

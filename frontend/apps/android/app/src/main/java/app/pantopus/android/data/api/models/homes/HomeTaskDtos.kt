@@ -35,19 +35,47 @@ data class HomeTaskDto(
     @Json(name = "created_by") val createdBy: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    val visibility: String? = null,
+    val capabilities: HomeTaskCapabilitiesDto? = null,
+)
+
+/** Missing capabilities never enable an action. */
+@JsonClass(generateAdapter = true)
+data class HomeTaskCapabilitiesDto(
+    @Json(name = "can_edit") val canEdit: Boolean = false,
+    @Json(name = "can_complete") val canComplete: Boolean = false,
+    @Json(name = "can_delete") val canDelete: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskCollectionCapabilitiesDto(
+    @Json(name = "can_create") val canCreate: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskSessionDto(
+    @Json(name = "actor_id") val actorId: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "session_scope") val sessionScope: String,
 )
 
 /** Envelope for `GET /api/homes/:id/tasks`. */
 @JsonClass(generateAdapter = true)
 data class GetHomeTasksResponse(
     val tasks: List<HomeTaskDto> = emptyList(),
+    @Json(name = "collection_capabilities") val collectionCapabilities: HomeTaskCollectionCapabilitiesDto? = null,
+    @Json(name = "task_session") val taskSession: HomeTaskSessionDto? = null,
 )
 
 /** Envelope for `POST /api/homes/:id/tasks` and `PUT …/:taskId`. */
 @JsonClass(generateAdapter = true)
 data class HomeTaskResponse(
     val task: HomeTaskDto,
+    @Json(name = "task_session") val taskSession: HomeTaskSessionDto? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskDeleteResponse(val message: String)
 
 /**
  * Body for `POST /api/homes/:id/tasks`. `task_type` and `title` are

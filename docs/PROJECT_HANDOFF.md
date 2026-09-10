@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android task detail and permission checkpoint — September 10
+
+Android task rows now open actual read-only detail. Create, edit, completion and
+deletion controls use current collection/record capabilities, exact task/Home
+identity and the opening session. Screen disposal clears metadata and prevents
+late permission reads from navigating. Deletion requires its exact response.
+The [Android task report](home-android-task-detail-2026-09-10.md) records passing
+behavior, formatting, static analysis, lint and APK assembly with independent
+review. This verifies the built app; emulator journey acceptance remains separate.
+
+**Next:** finish retained native creation, sparse editing with explicit field
+clears, private task attachments and the durable assignment-notification outbox.
+The matching iOS browsing candidate passed its final app verification and is being
+committed separately. Existing recurring-task data is displayed; automatic task
+recurrence is not implemented or certified by this checkpoint. Paid-gig stop
+backend/browser milestones are pushed in draft PR #34, with native recovery
+continuing. Both PRs remain unfinished. All paid dependencies remain together
+for final launch preparation. Completed physical Beacon and saved-card acceptance
+must not be repeated. No hosted migration or paid service changed.
+
 ### Recoverable task creation checkpoint — September 10
 
 Task creation can now retain one exact request and recover its saved task after
