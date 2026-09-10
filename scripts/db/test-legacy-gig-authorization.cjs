@@ -29,14 +29,19 @@ const db={rpc:async(name,args)=>{
 }};
 let createCount=0,unknownCreate=false,onCancel=null;
 const intents=new Map();
-const stripe={paymentIntents:{
+const stripe={charges:{retrieve:async id=>{
+ const intent=[...intents.values()].find(x=>x.latest_charge===id);assert.ok(intent);
+ return {id,payment_intent:intent.id,customer:intent.customer,amount:intent.amount,currency:intent.currency,
+  paid:true,captured:false,refunded:false,amount_refunded:0,
+  payment_method_details:{type:'card',card:{capture_before:intent.capture_before}}};
+}},paymentIntents:{
  retrieve:async id=>{assert.ok(intents.has(id));return structuredClone(intents.get(id));},
  list:async args=>{assert.equal(args.customer,'cus_legacy_race');return {data:[...intents.values()].map(x=>structuredClone(x)),has_more:false};},
  create:async(args,options)=>{
   assert.match(options.idempotencyKey,/^legacy-gig-create:/);
   const prior=[...intents.values()].find(x=>x.metadata.legacy_authorization_id===args.metadata.legacy_authorization_id);
   if(prior)return structuredClone(prior);
-  createCount++;const intent={...args,id:`pi_legacy_race_${createCount}`,status:'requires_action',amount_capturable:0,client_secret:'synthetic-transient-secret'};
+  createCount++;const intent={...args,capture_before:Math.floor(Date.now()/1000)+3600,latest_charge:`ch_legacy${createCount}`,id:`pi_legacy_race_${createCount}`,status:'requires_action',amount_capturable:0,client_secret:'synthetic-transient-secret'};
   intents.set(intent.id,intent);
   if(unknownCreate){unknownCreate=false;throw new Error('Synthetic lost provider response');}
   return structuredClone(intent);

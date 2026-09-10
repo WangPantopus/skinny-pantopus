@@ -1,7 +1,8 @@
 const db = require('../__mocks__/supabaseAdmin');
 const { resetTables, seedTable, getTable, setRpcMock } = db;
+const mockCharge = jest.fn();
 const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCreate = jest.fn(), mockCancel = jest.fn();
-jest.mock('stripe', () => ({ paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, create: mockCreate, cancel: mockCancel } }));
+jest.mock('stripe', () => ({ charges: { retrieve: mockCharge }, paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, create: mockCreate, cancel: mockCancel } }));
 jest.mock('../__mocks__/verifyToken', () => {
   const verify = (req, res, next) => { req.user = { id: req.headers['x-test-user-id'] }; req.session = { id: 'test-session' }; next(); };
   verify.requireAdmin = (req, res, next) => next(); return verify;
@@ -27,6 +28,9 @@ beforeEach(() => {
     accepted_by: null, payment_id: null, owner_confirmed_at: null }]);
   seedTable('GigBid', [{ id: 'bid', gig_id: 'gig', user_id: 'worker', bid_amount: 12.5, status: 'pending_payment', pending_payment_intent_id: 'pay' }]);
   seedTable('Payment', [{ ...p }]); mockRetrieve.mockResolvedValue({ ...pi });
+  mockCharge.mockResolvedValue({ id: 'ch_one', payment_intent: 'pi_one', customer: 'cus_payer', amount: 1250,
+    currency: 'usd', paid: true, captured: false, refunded: false, amount_refunded: 0,
+    payment_method_details: { type: 'card', card: { capture_before: Math.floor(Date.now()/1000)+3600 } } });
 });
 function assigned(status = 'assigned') {
   Object.assign(getTable('Gig')[0], { status, accepted_by: 'worker', payment_id: 'pay', price: 12.5,

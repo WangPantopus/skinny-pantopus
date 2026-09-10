@@ -1,7 +1,8 @@
 const db = require('./__mocks__/supabaseAdmin');
 const { resetTables, seedTable, getTable, setRpcMock } = db;
+const mockCharge = jest.fn();
 const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCancel = jest.fn(), mockCreate = jest.fn(), mockList = jest.fn();
-jest.mock('stripe', () => ({ paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, cancel: mockCancel, create: mockCreate, list: mockList } }));
+jest.mock('stripe', () => ({ charges: { retrieve: mockCharge }, paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, cancel: mockCancel, create: mockCreate, list: mockList } }));
 const service = require('../stripe/stripeService');
 const acceptance = require('../services/gigPaymentAcceptance');
 const terms = { gigId: 'gig', payerId: 'payer', payeeId: 'worker', amount: 1250 };
@@ -22,6 +23,9 @@ beforeEach(() => {
   seedTable('User', [{ id: 'payer', stripe_customer_id: 'cus_payer' }]);
   mockList.mockReset(); mockList.mockResolvedValue({ data: [], has_more: false });
   mockRetrieve.mockResolvedValue(intent()); mockCapture.mockResolvedValue(captured());
+  mockCharge.mockResolvedValue({ id: 'ch_one', payment_intent: 'pi_one', customer: 'cus_payer', amount: 1250,
+    currency: 'usd', paid: true, captured: false, refunded: false, amount_refunded: 0,
+    payment_method_details: { type: 'card', card: { capture_before: Math.floor(Date.now()/1000)+3600 } } });
 });
 function captureRpc({ failReceipt = false } = {}) {
   setRpcMock(async (name) => {
@@ -41,7 +45,8 @@ describe('actual provider authorization proof', () => {
   test('exact manual hold is persisted before returning authorized', async () => {
     const result = await service.verifyGigAuthorization('pay', terms);
     expect(result.payment_status).toBe('authorized');
-    expect(getTable('Payment')[0].authorization_expires_at).toBeTruthy();
+    const charge = await mockCharge.mock.results[0].value;
+    expect(getTable('Payment')[0].authorization_expires_at).toBe(new Date(charge.payment_method_details.card.capture_before*1000).toISOString());
   });
   test.each([
     { payer_id: 'foreign' }, { payee_id: 'foreign' }, { gig_id: 'foreign' }, { amount_total: 1000 },

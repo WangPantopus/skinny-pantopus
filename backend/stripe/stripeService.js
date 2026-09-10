@@ -11,6 +11,7 @@ const logger = require('../utils/logger');
 const { PAYMENT_STATES, transitionPaymentStatus } = require('./paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
 const { conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent } = require('./gigPaymentProof');
+const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('./gigAuthorizationDeadline');
 
 // Default platform fee: 15%
 const DEFAULT_PLATFORM_FEE_PCT = 15;
@@ -584,7 +585,8 @@ class StripeService {
     if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture', 'canceled'].includes(intent.status)) {
       throw conflict('The provider intent requires explicit reconciliation');
     }
-    if (intent.status === 'requires_capture') assertAuthorizedIntent(expected, intent);
+    const deadline = intent.status === 'requires_capture'
+      ? requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, expected, intent)) : null;
     const status = intent.status === 'canceled' ? PAYMENT_STATES.CANCELED
       : intent.status === 'requires_capture' ? PAYMENT_STATES.AUTHORIZED : PAYMENT_STATES.AUTHORIZE_PENDING;
     const { data: recovered, error: insertError } = await supabaseAdmin.from('Payment').insert({
@@ -593,7 +595,7 @@ class StripeService {
       amount_processing_fee: this.calculateFees(attempt.amount).estimatedStripeFee,
       payment_status: status, is_escrowed: true,
       stripe_charge_id: providerId(intent.latest_charge) || null,
-      authorization_expires_at: status === PAYMENT_STATES.AUTHORIZED ? new Date(Date.now() + AUTH_HOLD_MS).toISOString() : null,
+      authorization_expires_at: deadline?.expiresAt || null,
       payment_attempted_at: new Date(intent.created * 1000 || createdAt).toISOString(),
     }).select('*').single();
     if (insertError) {
@@ -634,20 +636,26 @@ class StripeService {
 
   async verifyGigAuthorization(paymentId, terms) {
     let payment = assertPaymentTerms(await this._readPayment(paymentId), terms);
-    if (!['authorize_pending', 'authorized'].includes(payment.payment_status)) throw conflict('Payment is not available for authorization');
+    if (!['authorize_pending', 'authorization_failed', 'authorized'].includes(payment.payment_status)) throw conflict('Payment is not available for authorization');
     const intent = assertAuthorizedIntent(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id));
-    if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-      const { data, error } = await supabaseAdmin.from('Payment').update({
-        payment_status: PAYMENT_STATES.AUTHORIZED,
-        authorization_expires_at: new Date(Date.now() + AUTH_HOLD_MS).toISOString(),
-        stripe_charge_id: providerId(intent.latest_charge) || null,
-        updated_at: new Date().toISOString(),
-      }).eq('id', payment.id).eq('payment_status', PAYMENT_STATES.AUTHORIZE_PENDING)
-        .eq('stripe_payment_intent_id', intent.id).select('*').maybeSingle();
-      if (error) throw Object.assign(new Error('Could not save authorization. Please retry.'), { statusCode: 503 });
-      payment = data || assertPaymentTerms(await this._readPayment(payment.id), terms);
-    }
-    if (payment.payment_status !== PAYMENT_STATES.AUTHORIZED) throw conflict('Authorization changed while it was being verified');
+    const deadline = requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, payment, intent));
+    // A current read also repairs an old estimated expiry. It never starts a new
+    // seven-day window, and a concurrent payment/identity transition cannot win this write.
+    const { data, error } = await supabaseAdmin.from('Payment').update({
+      payment_status: PAYMENT_STATES.AUTHORIZED,
+      authorization_expires_at: deadline.expiresAt,
+      stripe_charge_id: deadline.chargeId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', payment.id).eq('payment_status', payment.payment_status)
+      .eq('stripe_payment_intent_id', intent.id).eq('stripe_customer_id', payment.stripe_customer_id)
+      .eq('payer_id', payment.payer_id).eq('payee_id', payment.payee_id).eq('amount_total', payment.amount_total)
+      .select('*').maybeSingle();
+    if (error) throw Object.assign(new Error('Could not save authorization. Please retry.'), { statusCode: 503 });
+    payment = assertPaymentTerms(data || await this._readPayment(payment.id), terms);
+    if (payment.payment_status !== PAYMENT_STATES.AUTHORIZED || payment.stripe_payment_intent_id !== intent.id
+        || Date.parse(payment.authorization_expires_at) !== deadline.captureBefore * 1000
+        || payment.stripe_charge_id !== deadline.chargeId) throw conflict('Authorization changed while it was being verified');
+    requireLiveAuthorization(deadline);
     return { payment_status: payment.payment_status, payment };
   }
 
@@ -1012,7 +1020,12 @@ class StripeService {
       }
 
       const now = new Date().toISOString();
-      const authExpires = new Date(Date.now() + AUTH_HOLD_MS).toISOString();
+      const authorizedDeadline = initialStatus === PAYMENT_STATES.AUTHORIZED
+        ? requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, {
+          stripe_payment_intent_id: paymentIntent.id, stripe_customer_id: customerId,
+          amount_total: amount, currency: String(currency).toLowerCase(),
+          payer_id: payerId, payee_id: payeeId, gig_id: gigId, metadata,
+        }, paymentIntent)) : null;
 
       {
         // Insert new Payment record
@@ -1035,7 +1048,8 @@ class StripeService {
             payment_status: initialStatus,
             payment_type: 'gig_payment',
             is_escrowed: true,
-            authorization_expires_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? authExpires : null,
+            authorization_expires_at: authorizedDeadline?.expiresAt || null,
+            stripe_charge_id: authorizedDeadline?.chargeId || null,
             payment_attempted_at: now,
             payment_succeeded_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? now : null,
             description: description || null,

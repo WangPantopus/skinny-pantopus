@@ -2,7 +2,8 @@
 // Provider reads may reconcile an outcome; only a durable lease permits mutation.
 const db = require('../config/supabaseAdmin');
 const { getStripeClient } = require('../stripe/getStripeClient');
-const { conflict, providerId, assertIntentBinding, assertAuthorizedIntent } = require('../stripe/gigPaymentProof');
+const { conflict, providerId, assertIntentBinding } = require('../stripe/gigPaymentProof');
+const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('../stripe/gigAuthorizationDeadline');
 const stripe = getStripeClient();
 const RETRY_WINDOW_MS = 10 * 60 * 1000;
 const SDK_STATES = new Set(['requires_payment_method', 'requires_confirmation', 'requires_action']);
@@ -17,18 +18,20 @@ async function rpc(name, args) {
     { code: `legacy_authorization_${data.error.toLowerCase()}` });
   return data;
 }
-function proof(payment, attempt, intent) {
+async function proof(payment, attempt, intent) {
   assertIntentBinding({ ...payment, stripe_payment_intent_id: attempt.intent_id || intent?.id }, intent);
   if (!intent?.id || (!attempt.adopted && !attempt.discovered_legacy && intent.metadata?.legacy_authorization_id !== attempt.id)
       || ![...SDK_STATES, 'requires_capture', 'processing', 'canceled'].includes(intent.status)) {
     throw conflict('The provider authorization needs reconciliation.');
   }
-  if (intent.status === 'requires_capture') assertAuthorizedIntent({ ...payment, stripe_payment_intent_id: intent.id }, intent);
+  const deadline = intent.status === 'requires_capture'
+    ? requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, { ...payment, stripe_payment_intent_id: intent.id }, intent)) : null;
   return {
     id: intent.id, customer: providerId(intent.customer), capture_method: intent.capture_method,
     currency: intent.currency, amount: intent.amount, payer_id: intent.metadata.payer_id,
     payee_id: intent.metadata.payee_id, gig_id: intent.metadata.gig_id,
     attempt_id: intent.metadata.legacy_authorization_id || null, status: intent.status,
+    capture_before: deadline?.captureBefore || null, charge_id: deadline?.chargeId || null,
     amount_capturable: intent.amount_capturable, discovered_legacy: attempt.discovered_legacy === true,
   };
 }
@@ -107,7 +110,7 @@ async function recover({ gigId, actorId, mode = 'check', scheduler = false, expe
   const record = async () => {
     const previousStatus = data.payment.payment_status;
     const previousIntent = data.payment.stripe_payment_intent_id;
-    const receipt = proof(data.payment, data.attempt, intent);
+    const receipt = await proof(data.payment, data.attempt, intent);
     data = await rpc('record_legacy_gig_authorization', { ...args, p_attempt_id: data.attempt.id,
       p_expected_verified_at: data.attempt.verified_at, p_proof: receipt, p_lease_id: ownedLease });
     checkExpected();

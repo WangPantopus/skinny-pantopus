@@ -6,6 +6,9 @@ let payment, attempt, calls;
 const pi = (status = 'requires_action', extra = {}) => ({ id: 'pi_legacy', status, amount: 1200,
   currency: 'usd', customer: 'cus_payer', capture_method: 'manual', confirmation_method: 'automatic',
   amount_capturable: status === 'requires_capture' ? 1200 : 0, client_secret: 'ephemeral-provider-secret',
+  latest_charge: { id: 'ch_legacy', payment_intent: 'pi_legacy', customer: 'cus_payer', amount: 1200,
+    currency: 'usd', paid: true, captured: false, refunded: false, amount_refunded: 0,
+    payment_method_details: { type: 'card', card: { capture_before: Math.floor(Date.now()/1000)+3600 } } },
   metadata: { payer_id: 'payer', payee_id: 'worker', gig_id: 'gig', legacy_authorization_id: 'attempt' }, ...extra });
 function setupRpc(handler) {
   setRpcMock(async (name, args) => {

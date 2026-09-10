@@ -29,7 +29,7 @@ CREATE FUNCTION pg_temp.legacy_record(i integer,d jsonb,status text,intent text)
  SELECT public.record_legacy_gig_authorization(('aafb0000-0000-4000-8000-0000000001'||lpad(i::text,2,'0'))::uuid,
  'aafb0000-0000-4000-8000-000000000001',(d->'attempt'->>'id')::uuid,(d->'attempt'->>'verified_at')::timestamptz,
  jsonb_build_object('id',intent,'attempt_id',d->'attempt'->>'id','customer','cus_legacy','amount',1000,'currency','usd',
- 'capture_method','manual','amount_capturable',CASE WHEN status='requires_capture' THEN 1000 ELSE 0 END,
+ 'capture_before',floor(extract(epoch FROM clock_timestamp()+interval '1 day'))::bigint,'charge_id','ch_legacy','capture_method','manual','amount_capturable',CASE WHEN status='requires_capture' THEN 1000 ELSE 0 END,
  'payer_id','aafb0000-0000-4000-8000-000000000001','payee_id','aafb0000-0000-4000-8000-000000000002',
  'gig_id','aafb0000-0000-4000-8000-0000000001'||lpad(i::text,2,'0'),'status',status))
 $$;

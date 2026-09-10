@@ -870,6 +870,16 @@ async function handleAmountCapturableUpdated(paymentIntent, req) {
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
   if (await reconcileLegacyAuthorization(payment, req)) return;
+  if (payment.payment_type === 'gig_payment' && payment.gig_id) {
+    if (!['authorize_pending', 'authorization_failed', 'authorized'].includes(payment.payment_status)) return;
+    // The webhook object may be old. Read exact current intent/charge proof and
+    // its real capture deadline before assigning any paid-gig ready state.
+    await stripeService.verifyGigAuthorization(payment.id, {
+      gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, amount: payment.amount_total,
+    });
+    return;
+  }
+
 
   // Process if in authorize_pending or authorization_failed (retry after off-session SCA failure)
   const validSourceStates = [PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.AUTHORIZATION_FAILED];

@@ -32,6 +32,9 @@ beforeEach(() => {
   hasPermission.mockResolvedValue(false);
   mockRetrieve.mockResolvedValue({ id: 'pi_legacy', status: 'requires_capture', amount: 1200, currency: 'usd',
     customer: 'cus_payer', capture_method: 'manual', amount_capturable: 1200,
+    latest_charge: { id: 'ch_legacy', payment_intent: 'pi_legacy', customer: 'cus_payer', amount: 1200,
+      currency: 'usd', paid: true, captured: false, refunded: false, amount_refunded: 0,
+      payment_method_details: { type: 'card', card: { capture_before: Math.floor(Date.now()/1000)+3600 } } },
     metadata: { payer_id: payer, payee_id: worker, gig_id: 'gig' } });
   rpc = jest.fn(async (name,args) => {
     if (name === 'record_legacy_gig_authorization') getTable('Payment')[0].payment_status = args.p_proof.status === 'requires_capture'

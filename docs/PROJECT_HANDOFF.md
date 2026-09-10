@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Exact provider hold deadlines — September 10
+
+Paid-gig authorization now uses the exact Stripe Charge capture deadline.
+Reopening or recovering an existing payment cannot invent a fresh seven-day
+window. Current intent/Charge binding and the locked legacy receipt protect
+readiness; missing or expired proof remains unresolved. The
+[deadline report](paid-gig-authorization-deadlines-2026-09-10.md) records the full
+backend pass, fresh replay, actual service/SQL recovery, populated-upgrade
+preservation and independent review. Existing historical dates are not bulk
+backfilled; matching runtime/migration deployment is required.
+
+**Next:** durable authorization-expiry cancellation is in progress. Its provider
+outcome must be confirmed before cancelling the exact current task, and pending
+work must block conflicting start/capture actions. Then continue manual
+cancellation/dispute/Connect/debt, durable attention, fresh full provider
+journeys and capacity/integration. iOS/Android recovery is pushed as
+`1d0953b82`/`5a2d5695f`. Home native evidence controls continue after `fad41cd3d`.
+Draft PRs #32/#34 remain unfinished. Paid subscriptions remain together for
+final launch preparation; completed physical Beacon/saved-card acceptance stays
+complete. No hosted migration or paid dependency ran at this checkpoint.
+
 ### Android assigned-payment recovery — September 10
 
 Both native clients now provide the assigned task's exact payment-recovery
