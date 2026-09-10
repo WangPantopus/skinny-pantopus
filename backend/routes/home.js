@@ -3299,6 +3299,26 @@ function registerHomeRecordRoutes(path, kind) {
 }
 registerHomeRecordRoutes('tasks', 'task');
 
+const homeTaskRecurrence = require('../services/homeTaskRecurrenceService');
+router.get('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!requireExpectedSessionScope(req, res)) return;
+  try {
+    const result = await homeTaskRecurrence.read({ homeId: req.params.id, actorId: req.user.id, taskId: req.params.taskId });
+    res.json({ ...result, task_session: { ...getRequestSessionScope(req), home_id: req.params.id } });
+  } catch (error) { homeTaskRecurrence.sendError(res, error); }
+});
+router.post('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!requireExpectedSessionScope(req, res, { required: true })) return;
+  try {
+    const { request_id: requestId, ...command } = req.body || {};
+    const result = await homeTaskRecurrence.change({ homeId: req.params.id, actorId: req.user.id,
+      taskId: req.params.taskId, requestId, command });
+    res.json({ ...result, task_session: { ...getRequestSessionScope(req), home_id: req.params.id } });
+  } catch (error) { homeTaskRecurrence.sendError(res, error); }
+});
+
 
 // ============ HOME ISSUES ============
 

@@ -3,6 +3,10 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The latest [recurrence engine report](home-task-recurrence-engine-2026-09-10.md)
+records completed backend/API/worker generation and recovery. Explicit browser
+and native controls are next; old saved rules stay inactive. Predecessor
+`e4069f244` now passes all required CI. Refresh the next head's CI separately.
 The [resumed native recovery report](home-native-ci-recovery-2026-09-10.md)
 records the subsequent origin/PR refresh, iOS simulator-signing repair and
 passing protected-store checks. Its newer observations supersede those specific
@@ -248,7 +252,8 @@ Preserve balances, receipts and historical financial records; no live charges.
 1. Resolve the concrete CI and draft review findings above, verify and commit
    each meaningful milestone. Keep PRs #32/#34 draft until their final combined
    scope, migration ordering and current checks are ready for integration.
-2. Complete Home task recurrence (a stored rule is not automatic scheduling),
+2. Complete Home task recurrence client controls and actual acceptance (the new
+   backend engine is verified; old stored rules remain inactive),
    task-to-Gig, relationships/residency exact receipts, ownership challenge/
    transfer, lease and resource/derived-data cleanup. Inventory reachable Home,
    Pulse, mailbox and marketplace workflows and finish their remaining gates.

@@ -14,7 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Latest continuation checkpoint — September 10
+### Explicit task recurrence engine — September 10
+
+The [recurrence engine checkpoint](home-task-recurrence-engine-2026-09-10.md)
+implements explicit start/pause receipts, timezone-aware occurrence generation,
+atomic task/assignment delivery and current source/authority checks. Saved legacy
+rules remain inactive. Full backend (5,164 checks), privacy gates, 30-migration
+fresh replay, 36 SQL/pgTAP contracts and real service/concurrency checks pass.
+Populated upgrade preserves 14,972 rows across 327 tables. The local CLI pgTAP
+image download stalled; the same wrappers passed through direct PostgreSQL
+execution. Final-head remote CI is still required; predecessor `e4069f244` is green.
+
+**Next:** explicit browser/iOS/Android recurrence activation, pause and retained
+command recovery, then actual client acceptance. The complete recurrence feature
+is not finished by this backend checkpoint. Continue task-to-Gig, relationships/
+residency, ownership and lease/resource cleanup afterward. Migration `20260910200000`
+is now Home recurrence; the paid-gig tip reservation `20260910190000` stays separate.
+Current filename/body inventory has no collision, but final combined replay is
+still required. Both feature PRs remain drafts; paid-gig head `e9ef2decb`, owner
+files, hosted runtimes and all paid services remain unchanged.
+
+### Earlier continuation checkpoint — September 10
 
 Six verified milestones were committed/pushed on `codex/home-permission-boundaries`:
 `811380722` entitled iOS host, `eb125472c` browser access/lifetime, `d33789aca`

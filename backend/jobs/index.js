@@ -63,6 +63,7 @@ const homeDocumentRecovery = require('./homeDocumentRecovery');
 const homeClaimEvidenceRecovery = require('./homeClaimEvidenceRecovery');
 const homeTaskMediaRecovery = require('./homeTaskMediaRecovery');
 const deliverHomeTaskAssignments = require('./deliverHomeTaskAssignments');
+const generateHomeTaskRecurrences = require('./generateHomeTaskRecurrences');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
@@ -122,6 +123,7 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'mailInterruptNotification',
   'communityModeration',
   'deliverHomeTaskAssignments',
+  'generateHomeTaskRecurrences',
 ]);
 
 function envFlagEnabled(name, defaultValue = true) {
@@ -433,6 +435,10 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
   scheduleCron('* * * * *', wrapJob('deliverHomeTaskAssignments', deliverHomeTaskAssignments), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('* * * * *', wrapJob('generateHomeTaskRecurrences', generateHomeTaskRecurrences), {
     scheduled: true,
     timezone: 'UTC',
   });

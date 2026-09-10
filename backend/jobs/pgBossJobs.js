@@ -14,6 +14,7 @@ const validateHomeCoordinates = require('./validateHomeCoordinates');
 const mailInterruptNotification = require('./mailInterruptNotification');
 const communityModeration = require('./communityModeration');
 const deliverHomeTaskAssignments = require('./deliverHomeTaskAssignments');
+const generateHomeTaskRecurrences = require('./generateHomeTaskRecurrences');
 
 const householdClaimJobsDryRun = householdClaimConfig.jobs.dryRun;
 
@@ -28,6 +29,7 @@ const QUEUE_OPTIONS = {
 };
 
 const JOBS = [
+  { name: 'generate-home-task-recurrences', cron: '* * * * *', fn: generateHomeTaskRecurrences },
   { name: 'deliver-home-task-assignments', cron: '* * * * *', fn: deliverHomeTaskAssignments },
   { name: 'recompute-utility-scores',     cron: '10,25,40,55 * * * *', fn: recomputeUtilityScores },
   { name: 'organic-match',                cron: '*/2 * * * *',  fn: organicMatch },
