@@ -16,7 +16,7 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Home invitation and exact-resource sharing checkpoint — September 9
 
-The next bounded Home source checkpoint is complete and frozen in
+Home source milestone `0c973b8df` is committed and pushed from
 `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, draft
 [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
@@ -43,11 +43,12 @@ fixtures. All **6 real SDK/PostgREST checks** pass on the fresh replay and leave
 those counts at zero. The new receipt history is included in the conservative
 private Home deletion guard. The final complete backend rerun passes; earlier
 intermittent HTTP socket/timeout observations and their passing 75 focused
-rechecks are recorded without claiming a cause. Source is ready to commit. No hosted Home migration,
+rechecks are recorded without claiming a cause. Current master `390091cdb` is now integrated; only the handoff conflicted,
+and both source milestones/reports are preserved. No hosted Home migration,
 ordinary role grant, verification-age rollout or release ran.
 
-**Next:** checkpoint/commit/push this source and safely integrate current master;
-then finish distinct claim submission/challenge and ownership/lease lifecycle
+**Next:** verify current-head CI while finishing distinct claim
+submission/challenge and ownership/lease lifecycle
 transactions (reserved Home migration `20260910045000`; paid-gig refund work owns
 `20260910050000`). Follow with task/calendar/attachment/derived data access and
 mutations, remaining web/native permission and finance read-only controls,
@@ -602,11 +603,13 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Complete application mail-code dispatch/confirmation and uncertain-send
-   recovery, then reachable sandbox payment UI/transactions and real OAuth
-   callbacks. Browser signup/recovery and staging hostname/TLS now pass.
-   Smarty needs an existing active subscription; Google/Apple staging OAuth
-   remains disabled. Use existing/free capacity.
+1. Mail-code and native saved-card acceptance are complete. Continue Home
+   ownership/lease and task/calendar/resource/derived-data boundaries in PR #32.
+   In parallel, PR #34 native paid-bid recovery is committed at `59b9cff7b`,
+   integrated with master at `6b3559d42`, and passes 101 iOS/148 Android tests;
+   final-head CI is running. Durable refunds, assigned authorization and actual
+   paid-gig sandbox acceptance remain next. Real OAuth callbacks and activated
+   Smarty coverage remain vendor prerequisites. Use existing/free capacity.
 2. PRs #23, #25 and #26 are merged after their required checks passed. Continue
    monitoring merged-master CI. Home replacement, saved-card API retry and Lob
    mail-purpose acceptance are recorded in their reports; public runtime

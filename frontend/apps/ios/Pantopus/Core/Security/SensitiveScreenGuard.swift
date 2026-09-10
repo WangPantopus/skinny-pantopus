@@ -65,19 +65,8 @@ public struct SensitiveScreenGuard<Content: View>: View {
 
     private func authenticateIfNeeded() async {
         guard phase == .pending else { return }
-        manager.refreshCapability()
-        // RN's first branch: no biometric *and* no device credential to check
-        // against — never make the screen unreachable.
-        guard manager.capability == .available else {
-            phase = .authenticated
-            return
-        }
-        if manager.isWithinSensitiveGracePeriod(gracePeriod) {
-            phase = .authenticated
-            return
-        }
         phase = .authenticating
-        switch await manager.verifySensitiveAction(reason: reason) {
+        switch await manager.verifySensitiveScreen(reason: reason, gracePeriod: gracePeriod) {
         case .verified:
             phase = .authenticated
         case .cancelled:
