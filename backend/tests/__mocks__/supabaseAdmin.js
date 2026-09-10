@@ -193,6 +193,9 @@ const AUTH_UNIQUE_KEYS = {
   AuthResumeGrant: [['id'], ['grant_hash']],
   AuthSession: [['id']],
   AuthDevice: [['id'], ['user_id', 'device_id']],
+  // Financial retries depend on the canonical baseline's provider ID keys.
+  PaymentMethod: [['id'], ['stripe_payment_method_id']],
+  StripeWebhookEvent: [['id'], ['stripe_event_id']],
 };
 
 const PERSONA_FOLLOW_VIEW = 'PersonaFollow';

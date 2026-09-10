@@ -1714,9 +1714,16 @@ class StripeService {
    * Attach payment method to customer
    */
   async attachPaymentMethod(userId, paymentMethodId) {
-    try {
-      const customerId = await this.getOrCreateCustomer(userId);
+    const customerId = await this.getOrCreateCustomer(userId);
+    return this._savePaymentMethod(userId, customerId, paymentMethodId, () =>
+      stripe.paymentMethods.attach(paymentMethodId, { customer: customerId }));
+  }
 
+  // Shared durable save for explicit attachment, a completed mobile SetupIntent,
+  // and attachment webhooks. A unique-insert winner must have the exact owner,
+  // customer and provider method binding before it can satisfy a retry.
+  async _savePaymentMethod(userId, customerId, paymentMethodId, loadAttachedMethod) {
+    try {
       const { data: existingMethods, error: readError } = await supabaseAdmin
         .from('PaymentMethod')
         .select('*')
@@ -1746,9 +1753,13 @@ class StripeService {
       );
       if (existing) return await finishSavedMethod(existing);
 
-      const paymentMethod = await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId
-      });
+      const paymentMethod = await loadAttachedMethod();
+      if (!paymentMethod || paymentMethod.id !== paymentMethodId ||
+          this._stripeId(paymentMethod.customer) !== customerId ||
+          !['card', 'us_bank_account'].includes(paymentMethod.type) ||
+          !paymentMethod[paymentMethod.type]) {
+        throw new Error('Could not confirm attached payment method');
+      }
 
       const details = {
         stripe_customer_id: customerId,
@@ -1807,6 +1818,86 @@ class StripeService {
       logger.error('Error attaching payment method', { error: err.message, userId });
       throw err;
     }
+  }
+
+  _stripeId(value) {
+    return typeof value === 'string' ? value : value?.id;
+  }
+
+  _addCardError(statusCode, message) {
+    return Object.assign(new Error(message), { statusCode, isAddCardError: true });
+  }
+
+  // Preparation resume and post-sheet confirmation must share proof ownership.
+  // A missing saved identifier never falls back to making a new setup/customer.
+  async _getOwnedMobileCardSetup(userId, setupIntentId) {
+    if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId || '')) {
+      throw this._addCardError(404, 'Card setup not found');
+    }
+    const { data: user, error } = await supabaseAdmin.from('User')
+      .select('id, stripe_customer_id').eq('id', userId).maybeSingle();
+    if (error) throw new Error('Could not load card setup owner');
+    if (!user?.stripe_customer_id) throw this._addCardError(404, 'Card setup not found');
+
+    let setup;
+    try {
+      setup = await stripe.setupIntents.retrieve(setupIntentId);
+    } catch (err) {
+      if (err.code === 'resource_missing') throw this._addCardError(404, 'Card setup not found');
+      throw err;
+    }
+    if (setup?.id !== setupIntentId || this._stripeId(setup.customer) !== user.stripe_customer_id ||
+        setup.metadata?.source !== 'mobile_add_card' || setup.metadata?.user_id !== userId) {
+      throw this._addCardError(404, 'Card setup not found');
+    }
+    if (setup.status === 'canceled') throw this._addCardError(404, 'Card setup is no longer available');
+    return { setup, customerId: user.stripe_customer_id };
+  }
+
+  /** Verify the provider's owned completed setup before saving its attached card.
+   * This path never creates a customer, confirms a setup, charges, or reattaches.
+   */
+  async confirmAddCardSetup(userId, setupIntentId) {
+    const { setup, customerId } = await this._getOwnedMobileCardSetup(userId, setupIntentId);
+    if (setup.status !== 'succeeded') {
+      throw this._addCardError(409, 'Card setup has not completed. Please try again.');
+    }
+    const methodId = this._stripeId(setup.payment_method);
+    if (!methodId) throw this._addCardError(409, 'Card setup has not completed. Please try again.');
+    let method;
+    try {
+      method = await stripe.paymentMethods.retrieve(methodId);
+    } catch (err) {
+      if (err.code === 'resource_missing') throw this._addCardError(404, 'Saved card is no longer available');
+      throw err;
+    }
+    // A stale setup must not re-add a card the user has since removed.
+    if (method?.id !== methodId || this._stripeId(method.customer) !== customerId ||
+        method.type !== 'card' || !method.card) {
+      throw this._addCardError(404, 'Saved card is no longer available');
+    }
+    return this._savePaymentMethod(userId, customerId, methodId, async () => method);
+  }
+
+  /** Attachment events may race the post-sheet request or arrive after removal.
+   * Read current provider ownership and share the same retryable durable save.
+   */
+  async reconcileAttachedPaymentMethod(eventMethod) {
+    const customerId = this._stripeId(eventMethod.customer);
+    if (!customerId) return;
+    const { data: user, error } = await supabaseAdmin.from('User')
+      .select('id').eq('stripe_customer_id', customerId).maybeSingle();
+    if (error) throw new Error('Could not load payment method owner');
+    if (!user) return; // This Stripe customer does not belong to the application.
+    let method;
+    try {
+      method = await stripe.paymentMethods.retrieve(eventMethod.id);
+    } catch (err) {
+      if (err.code === 'resource_missing') return;
+      throw err;
+    }
+    if (method?.id !== eventMethod.id || this._stripeId(method.customer) !== customerId) return;
+    return this._savePaymentMethod(user.id, customerId, method.id, async () => method);
   }
 
   /**
@@ -1989,30 +2080,45 @@ class StripeService {
    * Get Stripe mobile PaymentSheet params for adding/saving a card only.
    * This creates a standalone SetupIntent tied to the user Stripe customer.
    */
-  async getAddCardSheetParams(userId) {
-    try {
-      const customerId = await this.getOrCreateCustomer(userId);
-      const ephemeralKey = await this.createEphemeralKey(customerId);
-      const setupIntent = await stripe.setupIntents.create({
+  async getAddCardSheetParams(userId, setupIntentId = null) {
+    let customerId;
+    let setupIntent;
+    let ephemeralKey;
+    if (setupIntentId != null) {
+      const owned = await this._getOwnedMobileCardSetup(userId, setupIntentId);
+      customerId = owned.customerId;
+      setupIntent = owned.setup;
+    } else {
+      customerId = await this.getOrCreateCustomer(userId);
+      // Mint the key before creating the first setup, so a key outage cannot
+      // leave an unreturned new setup behind. Resumes mint only when needed.
+      ephemeralKey = await this.createEphemeralKey(customerId);
+      setupIntent = await stripe.setupIntents.create({
         customer: customerId,
         payment_method_types: ['card'],
         usage: 'off_session',
-        metadata: {
-          source: 'mobile_add_card',
-          user_id: userId,
-        },
+        metadata: { source: 'mobile_add_card', user_id: userId },
       });
-
-      return {
-        setupIntent: setupIntent.client_secret,
-        ephemeralKey: ephemeralKey.secret,
-        customer: customerId,
-        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      };
-    } catch (err) {
-      logger.error('Error getting add-card payment sheet params', { error: err.message, userId });
-      throw err;
     }
+    const resumable = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+    if (!setupIntent?.id || ![...resumable, 'processing', 'succeeded'].includes(setupIntent.status)) {
+      throw new Error('Could not prepare card setup');
+    }
+    if (resumable.includes(setupIntent.status)) {
+      if (!setupIntent.client_secret) throw new Error('Could not resume card setup');
+      ephemeralKey ||= await this.createEphemeralKey(customerId);
+      if (!ephemeralKey?.secret) throw new Error('Could not prepare card setup');
+    }
+    // A succeeded setup needs durable reconciliation, not another PaymentSheet.
+    // Processing must be rechecked later. Neither needs a new ephemeral key.
+    return {
+      setupIntent: setupIntent.client_secret || '',
+      setupIntentId: setupIntent.id,
+      setupStatus: setupIntent.status,
+      ephemeralKey: resumable.includes(setupIntent.status) ? ephemeralKey.secret : '',
+      customer: customerId,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    };
   }
 }
 

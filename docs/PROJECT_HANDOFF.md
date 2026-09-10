@@ -14,7 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Source integration checkpoint — September 9
+### Current payment recovery checkpoint — September 9
+
+Active work is `/private/tmp/pantopus-staging-payment-sheet`, branch
+`codex/staging-payment-sheet`. The [payment report](staging-payment-sheet-2026-09-09.md)
+records owned SetupIntent preparation/resume and durable confirmation, with
+57 focused tests, 4,548 backend tests and privacy gates passing. Native lifecycle
+checks are still running; no live payment fixtures or candidate changes ran.
+Before acceptance, finish the reproduced default/removal race with atomic
+app-owned preference and durable removal guards, then exercise actual Stripe
+SDK/test-mode journeys on both simulators and clean their exact fixtures.
+
+PR #29 is merged as `3009eb0be78efc900c234cc8588a7206526f9626` after full final
+CI at `76ada1aa1` (run `34425328329`). Its modern mail staging journey and exact
+cleanup pass. Private candidate source `694a213e2`/image `68e3e052a578` is healthy;
+the previous `312b5a382fd6` is retained stopped. Both mail additive migrations
+are applied only to Free staging, preserving records and the absent ledger.
+Public/browser/production runtimes are unchanged. Do not rerun completed mail
+publishers, cleanup or appliers. The separate rollback binding fix is ready
+PR #30 (`8f7a6121a`), with 47 local deployment tests passing and full CI pending.
+Merge current master into this payment branch before final checks/integration;
+the earlier source checkpoint below is historical where it conflicts.
+
+### Earlier source integration checkpoint — September 9
 
 **Next active work:** `/private/tmp/pantopus-staging-native-mail`, branch
 `codex/staging-native-mail`, starting from merged master `3ce4018f5`.

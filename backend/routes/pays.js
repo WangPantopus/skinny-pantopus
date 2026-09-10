@@ -1409,13 +1409,37 @@ router.post('/payment-sheet-params', verifyToken, async (req, res) => {
  * POST /api/payments/payment-sheet-add-card
  * Returns params needed for Stripe mobile PaymentSheet (setup mode) to add a card.
  */
-router.post('/payment-sheet-add-card', verifyToken, async (req, res) => {
+router.post('/payment-sheet-add-card', verifyToken, validate(Joi.object({
+  setupIntentId: Joi.string().pattern(/^seti_[A-Za-z0-9]+$/).max(255).optional(),
+}).default({})), async (req, res) => {
   try {
-    const params = await stripeService.getAddCardSheetParams(req.user.id);
+    const params = await stripeService.getAddCardSheetParams(req.user.id, req.body.setupIntentId);
     res.json(params);
   } catch (err) {
-    logger.error('Payment sheet add-card params error', { error: err.message, userId: req.user?.id });
-    res.status(500).json({ error: sanitizeStripeErrorMessage(err, 'Failed to prepare add-card flow') });
+    const status = err.isAddCardError && err.statusCode === 404 ? 404 : 503;
+    logger.warn('Payment sheet add-card preparation failed', { status });
+    res.status(status).json({ error: status === 404 ? err.message : 'Could not prepare your saved card. Please try again.' });
+  }
+});
+
+
+/**
+ * POST /api/payments/payment-sheet-add-card/confirm
+ * Reconcile one owned successful mobile SetupIntent; safe to repeat after a
+ * lost response. Only the provider-confirmed card can become a saved method.
+ */
+router.post('/payment-sheet-add-card/confirm', verifyToken, validate(Joi.object({
+  setupIntentId: Joi.string().pattern(/^seti_[A-Za-z0-9]+$/).max(255).required(),
+})), async (req, res) => {
+  try {
+    const result = await stripeService.confirmAddCardSetup(req.user.id, req.body.setupIntentId);
+    res.json({ confirmed: true, paymentMethod: result.paymentMethod });
+  } catch (err) {
+    const status = err.isAddCardError && [404, 409].includes(err.statusCode) ? err.statusCode : 503;
+    logger.warn('Card setup reconciliation failed', { status });
+    res.status(status).json({
+      error: status === 503 ? 'Could not finish saving your card. Please try again.' : err.message,
+    });
   }
 });
 

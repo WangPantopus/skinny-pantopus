@@ -83,12 +83,20 @@ router.post('/', async (req, res) => {
     });
 
   if (insertError) {
+    if (insertError.code !== '23505') {
+      logger.error('Could not record Stripe webhook', { code: insertError.code });
+      return res.status(500).json({ error: 'Webhook handler failed' });
+    }
     // Duplicate stripe_event_id — look up existing row
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readError } = await supabaseAdmin
       .from('StripeWebhookEvent')
       .select('*')
       .eq('stripe_event_id', event.id)
       .single();
+
+    if (readError || !existing) {
+      return res.status(500).json({ error: 'Webhook handler failed' });
+    }
 
     if (existing && existing.processed) {
       logger.info('Webhook event already processed, skipping', { eventId: event.id });
@@ -275,13 +283,14 @@ router.post('/', async (req, res) => {
     }
 
     // Mark event as processed
-    await supabaseAdmin
+    const { error: processedError } = await supabaseAdmin
       .from('StripeWebhookEvent')
       .update({
         processed: true,
         processed_at: new Date().toISOString(),
       })
       .eq('stripe_event_id', event.id);
+    if (processedError) throw new Error('Could not finish recording Stripe webhook');
 
     return res.json({ received: true, eventId: event.id });
   } catch (err) {
@@ -1560,79 +1569,9 @@ async function handleRefundUpdated(refund) {
 }
 
 async function handlePaymentMethodAttached(paymentMethod) {
-  logger.info('Payment method attached', {
-    paymentMethodId: paymentMethod.id,
-    customer: paymentMethod.customer,
-  });
-
-  if (!paymentMethod.customer) return;
-
-  // Find the user for this Stripe customer
-  const { data: user } = await supabaseAdmin
-    .from('User')
-    .select('id')
-    .eq('stripe_customer_id', paymentMethod.customer)
-    .maybeSingle();
-
-  if (!user) {
-    logger.info('payment_method.attached: no user found for customer', {
-      customer: paymentMethod.customer,
-    });
-    return;
-  }
-
-  // Check if already saved
-  const { data: existing } = await supabaseAdmin
-    .from('PaymentMethod')
-    .select('id')
-    .eq('stripe_payment_method_id', paymentMethod.id)
-    .maybeSingle();
-
-  if (existing) return; // Already tracked
-
-  // Build details
-  const details = {
-    user_id: user.id,
-    stripe_customer_id: paymentMethod.customer,
-    stripe_payment_method_id: paymentMethod.id,
-    payment_method_type: paymentMethod.type,
-  };
-
-  if (paymentMethod.type === 'card' && paymentMethod.card) {
-    details.card_brand = paymentMethod.card.brand;
-    details.card_last4 = paymentMethod.card.last4;
-    details.card_exp_month = paymentMethod.card.exp_month;
-    details.card_exp_year = paymentMethod.card.exp_year;
-    details.card_funding = paymentMethod.card.funding;
-  }
-
-  // Check if this is the user's first method (make it default)
-  const { data: existingMethods } = await supabaseAdmin
-    .from('PaymentMethod')
-    .select('id')
-    .eq('user_id', user.id);
-
-  const isFirstMethod = !existingMethods || existingMethods.length === 0;
-
-  const { error: insertErr } = await supabaseAdmin
-    .from('PaymentMethod')
-    .insert({
-      ...details,
-      is_default: isFirstMethod,
-    });
-
-  if (insertErr) {
-    logger.error('payment_method.attached: failed to save', {
-      paymentMethodId: paymentMethod.id,
-      error: insertErr.message,
-    });
-  } else {
-    logger.info('payment_method.attached: saved to PaymentMethod table', {
-      paymentMethodId: paymentMethod.id,
-      userId: user.id,
-      isDefault: isFirstMethod,
-    });
-  }
+  // Do not acknowledge a failed durable save. The shared service also handles
+  // duplicate/post-sheet races and ignores an old event after card removal.
+  await stripeService.reconcileAttachedPaymentMethod(paymentMethod);
 }
 
 async function handlePaymentMethodDetached(paymentMethod) {
