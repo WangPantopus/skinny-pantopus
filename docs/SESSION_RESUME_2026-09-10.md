@@ -3,6 +3,13 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The latest [browser recurrence report](home-web-task-recurrence-2026-09-10.md)
+records completed browser activation/pause and protected original recovery,
+actual Chrome with production service/local SQL, and the additive task status
+projection. iOS/Android controls, native filters/copy and installed recurrence
+acceptance are next. Engine `2a6f0b3ba` now has green required CI; check the new
+browser milestone's exact head separately. Final combined migrations, remaining
+Home/payment scope and all paid launch dependencies remain open.
 The latest [recurrence engine report](home-task-recurrence-engine-2026-09-10.md)
 records completed backend/API/worker generation and recovery. Explicit browser
 and native controls are next; old saved rules stay inactive. Predecessor

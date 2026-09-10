@@ -9,6 +9,7 @@ import { useHomeTaskForm } from './tasks/useHomeTaskForm';
 import type { HomeTask } from './tasks/homeTaskModel';
 import type { HomeTaskClient } from './tasks/HomeTaskClient';
 import { PendingHomeTaskUploadStore, type TaskUploadSnapshot } from './tasks/PendingHomeTaskUploadStore';
+import { HomeTaskRecurrenceCard } from './tasks/HomeTaskRecurrenceCard';
 
 function uploadStore(client: HomeTaskClient, taskId: string) {
   client.requireCurrent();
@@ -323,7 +324,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
 
           <div>
             <label className="block text-sm font-medium text-app-text-strong mb-1">Priority</label>
-            <div className="flex gap-1">
+            <div className="grid grid-cols-2 gap-1">
               {PRIORITIES.map((p) => (
                 <button
                   key={p.value}
@@ -448,6 +449,8 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
           </button>
         </div>
       </form>
+      {form.task?.updated_at && scope && <HomeTaskRecurrenceCard task={form.task} scope={scope} busy={saving}
+        hasUnsavedChanges={form.hasUnsavedChanges} onTaskReload={form.reload} onTaskUpdated={onSaved} />}
     </SlidePanel>
   );
 }

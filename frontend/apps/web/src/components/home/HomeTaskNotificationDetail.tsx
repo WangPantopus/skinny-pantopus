@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
 import TaskAttachmentList from './TaskAttachmentList';
+import { recurrenceStatusText, validAutomaticTaskRecurrence, type AutomaticTaskRecurrence } from './tasks/homeTaskModel';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const statuses: Record<string, string> = { open: 'Open', in_progress: 'In progress', done: 'Done', canceled: 'Canceled' };
 type Task = { id: string; home_id: string; title: string; status: string; description?: string | null;
-  due_at?: string | null; task_type?: string; recurrence_rule?: string | null };
+  due_at?: string | null; task_type?: string; recurrence_rule?: string | null; automatic_recurrence?: AutomaticTaskRecurrence | null };
 type Response = { task: Task; task_session: api.HomeTaskSessionScope };
 const ignoreAttachmentAccess = (_allowed: boolean) => {};
 
@@ -73,6 +74,7 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
         if (!proof || proof.actor_id !== actorId || proof.home_id !== homeId || !/^[a-f0-9]{64}$/.test(proof.session_scope)
           || (bound && proof.session_scope !== bound.session_scope)) { retire(); return; }
         if (!result.task || result.task.id !== taskId || result.task.home_id !== homeId
+          || !validAutomaticTaskRecurrence(result.task.automatic_recurrence)
           || typeof result.task.title !== 'string' || !result.task.title.trim()
           || ['description', 'due_at', 'recurrence_rule'].some(key => {
             const value = result.task[key as keyof Task];
@@ -141,7 +143,7 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
           </div>
           {task.description && <p className="whitespace-pre-wrap break-words">{task.description}</p>}
           {dueDate && Number.isFinite(dueDate.getTime()) && <p className="text-sm text-app-text-secondary">Due {dueDate.toLocaleString()}</p>}
-          {task.recurrence_rule && <p className="text-sm text-app-text-secondary">A repeat preference is saved. New tasks are not created automatically.</p>}
+          {recurrenceStatusText(task.automatic_recurrence, task.recurrence_rule) && <p className="text-sm text-app-text-secondary">{recurrenceStatusText(task.automatic_recurrence, task.recurrence_rule)}</p>}
         </section>
         <TaskAttachmentList key={`${homeId}:${taskId}:${scope.session_scope}`} homeId={homeId} taskId={taskId}
           openingScope={scope} onAccess={ignoreAttachmentAccess} />

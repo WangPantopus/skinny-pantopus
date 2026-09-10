@@ -5,11 +5,33 @@ export const TASK_TYPES = ['chore', 'shopping', 'repair', 'project', 'reminder']
 export const TASK_STATUSES = ['open', 'in_progress', 'done', 'canceled'] as const;
 export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 
+export interface AutomaticTaskRecurrence {
+  state: 'active' | 'paused' | 'needs_review'; frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  interval: number; timezone: string; next_due_at: string | null;
+}
+export function validAutomaticTaskRecurrence(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const c = value as AutomaticTaskRecurrence;
+  if (!['active', 'paused', 'needs_review'].includes(c.state) || !['DAILY', 'WEEKLY', 'MONTHLY'].includes(c.frequency)
+    || !Number.isInteger(c.interval) || c.interval < 1 || c.interval > 365 || typeof c.timezone !== 'string' || !c.timezone) return false;
+  try { new Intl.DateTimeFormat('en', { timeZone: c.timezone }); } catch { return false; }
+  return c.state === 'active' ? typeof c.next_due_at === 'string' && Number.isFinite(Date.parse(c.next_due_at)) : c.next_due_at === null;
+}
+export function recurrenceStatusText(value?: AutomaticTaskRecurrence | null, savedRule?: string | null): string | null {
+  if (value?.state === 'active') return `Automatic repeats are on: every ${value.interval} ${
+    value.frequency === 'DAILY' ? 'day' : value.frequency === 'WEEKLY' ? 'week' : 'month'}${value.interval === 1 ? '' : 's'}.`;
+  if (value?.state === 'paused') return 'Automatic repeats are paused.';
+  if (value?.state === 'needs_review') return 'Automatic repeats need review because the task or access changed.';
+  return savedRule ? 'A repeat preference is saved. Automatic repeats are off.' : null;
+}
+
 export interface HomeTask {
-  id: string; home_id: string; created_by?: string;
+  id: string; home_id: string; created_by?: string; updated_at?: string;
   task_type: typeof TASK_TYPES[number]; title: string;
   description?: string | null; assigned_to?: string | null; due_at?: string | null;
   recurrence_rule?: string | null; budget?: number | null;
+  automatic_recurrence?: AutomaticTaskRecurrence | null;
   status: typeof TASK_STATUSES[number]; priority: typeof TASK_PRIORITIES[number];
   capabilities?: { can_edit: boolean; can_complete: boolean; can_delete: boolean };
 }
@@ -36,6 +58,8 @@ export interface RetainedTaskCreate {
 
 export function validTask(task: HomeTask, homeId: string, taskId?: string): boolean {
   return !!task && typeof task.id === 'string' && TASK_UUID.test(task.id)
+    && validAutomaticTaskRecurrence(task.automatic_recurrence)
+    && (task.updated_at === undefined || (typeof task.updated_at === 'string' && Number.isFinite(Date.parse(task.updated_at))))
     && task.home_id === homeId && (!taskId || task.id === taskId)
     && typeof task.title === 'string' && !!task.title.trim()
     && TASK_TYPES.includes(task.task_type) && TASK_STATUSES.includes(task.status)

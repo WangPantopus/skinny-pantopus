@@ -1,4 +1,6 @@
 import * as api from '@pantopus/api';
+import { validPendingRecurrence, validRecurrenceState, validRecurrenceReceipt,
+  type PendingRecurrence, type RecurrenceState, type RecurrenceResponse } from './homeTaskRecurrenceModel';
 import { TASK_UUID, validTask, validTaskFields, taskPatchMatches, validRetainedTaskCreate,
   type HomeTask, type HomeTaskPatch, type RetainedTaskCreate, type TaskCollection,
   type TaskResponse, type TaskCreationResponse } from './homeTaskModel';
@@ -115,6 +117,37 @@ export class HomeTaskClient {
     if (this.mutating) throw new Error('Wait for the current task action to finish.');
     this.mutating = true;
     try { return await run(this.generation); } finally { this.mutating = false; }
+  }
+
+  async recurrence(taskId: string, revision = this.generation): Promise<RecurrenceState> {
+    await this.identify(revision);
+    const result = await this.request(() => api.get<RecurrenceState>(`${this.endpoint(taskId)}/recurrence`, undefined, this.options()), revision);
+    this.bind(result.task_session);
+    if (!validRecurrenceState(result, this.homeId, taskId)) throw new Error('The current repeat schedule could not be verified. Reload.');
+    return result;
+  }
+
+  async changeRecurrence(pending: PendingRecurrence, requireSaved: () => Promise<void>): Promise<RecurrenceResponse> {
+    return this.mutation(async revision => {
+      const current = await this.recurrence(pending.task_id, revision);
+      if (!this.actor || !validPendingRecurrence(pending, this.origin, this.actor, this.homeId, pending.task_id)) {
+        throw new Error('The saved schedule change could not be verified.');
+      }
+      if (!current.can_manage) throw Object.assign(new Error('You no longer have permission to change this repeat schedule.'),
+        { statusCode: 403, code: 'HOME_RECORD_DENIED' });
+      await requireSaved();
+      this.requireCurrent(revision);
+      const result = await this.request(() => api.post<RecurrenceResponse>(`${this.endpoint(pending.task_id)}/recurrence`,
+        { request_id: pending.request_id, ...pending.command }, this.options()), revision);
+      this.bind(result.task_session);
+      if (!validRecurrenceState(result, this.homeId, pending.task_id) || typeof result.replayed !== 'boolean'
+        || !validRecurrenceReceipt(result.receipt, pending) || result.revision < result.receipt.revision
+        || (pending.confirmed && (pending.confirmed.request_hash !== result.receipt.request_hash
+          || pending.confirmed.created_at !== result.receipt.created_at))) {
+        throw new Error('This schedule change was not confirmed. Retry the original saved change.');
+      }
+      return result;
+    });
   }
 
   async create(draft: RetainedTaskCreate): Promise<TaskCreationResponse> {

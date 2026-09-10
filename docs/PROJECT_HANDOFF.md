@@ -14,6 +14,31 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser automatic task recurrence — September 10
+
+The [browser recurrence checkpoint](home-web-task-recurrence-2026-09-10.md)
+adds explicit start/change/pause controls, encrypted original-command recovery,
+current source/access checks and real schedule status in task lists and task
+notifications. Actual Chrome passes against the production recurrence service
+and isolated local SQL, including lost committed replies, later-pause preservation,
+one real generated task, competing tabs, denied access and account changes.
+All 1,178 web checks, types, focused workflow lint, 31-migration fresh replay,
+37 SQL/pgTAP contracts, SDK checks and populated projection preservation pass.
+The shared timezone component retains one pre-existing lint warning. Detailed
+proof and synthetic identity/provider limits are in the linked report.
+
+**Next:** iOS/Android recurrence controls and retained command recovery, including
+actual schedule projections/Recurring filters and installed acceptance. Browser
+recurrence is complete within its local acceptance limits; native recurrence is
+not. Continue task-to-Gig and the ordered Home/payment scope afterward. Engine
+head `2a6f0b3ba` now passes all required CI; refresh the new browser head's checks.
+Both PRs remain drafts; paid-gig head `e9ef2decb` is unchanged and green but
+unfinished. Migration `210000` adds the Home schedule projection after `200000`;
+the final combined migration rehearsal is still required. No hosted runtime,
+owner data or paid service changed. Paid dependencies remain one final bundle.
+The owned web listener on 3108 and dedicated recurrence replay project are stopped;
+exact synthetic fixtures were cleaned. Other existing runtimes remain untouched.
+
 ### Explicit task recurrence engine — September 10
 
 The [recurrence engine checkpoint](home-task-recurrence-engine-2026-09-10.md)

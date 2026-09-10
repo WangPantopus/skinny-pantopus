@@ -207,6 +207,7 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
   }, [requireReady]);
 
   return { fields, change, task, pending, ready, loading, error, retired, save, acknowledge, startAnother,
+    hasUnsavedChanges: Object.keys(fields).some(key => fields[key as keyof TaskFormValues] !== initial.current[key as keyof TaskFormValues]),
     canAcknowledge: context.current?.creation?.canAcknowledge === true,
     canEdit: ready && (task ? task.capabilities?.can_edit === true : context.current?.client.canCreate === true),
     canComplete: ready && task?.capabilities?.can_complete === true,
