@@ -3251,10 +3251,20 @@ function registerHomeRecordRoutes(path, kind) {
   });
   router.post(`/:id/${path}`, verifyToken, async (req, res) => {
     try {
-      if (kind === 'task' && !requireExpectedSessionScope(req, res)) return;
+      const hasRequestId = kind === 'task' && req.body && Object.hasOwn(req.body, 'request_id');
+      if (kind === 'task') {
+        res.set('Cache-Control', 'private, no-store');
+        if (!requireExpectedSessionScope(req, res, { required: !!hasRequestId })) return;
+      }
+      const payload = hasRequestId ? { ...req.body } : req.body;
+      const requestId = hasRequestId ? payload.request_id : undefined;
+      if (hasRequestId) delete payload.request_id;
       const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
-        kind, action: 'create', payload: req.body });
-      res.status(result.replayed ? 200 : 201).json({ [kind]: result.record });
+        kind, action: 'create', payload, requestId });
+      res.status(result.replayed ? 200 : 201).json({ [kind]: result.record, ...(hasRequestId ? {
+        creation_receipt: result.creation_receipt, replayed: result.replayed,
+        task_session: { ...getRequestSessionScope(req), home_id: req.params.id },
+      } : {}) });
       if (kind === 'task' && result.notify_user_id && !result.replayed) {
         // Recheck the recipient immediately before producing an assignment
         // notification; the mutation already validates the exact recipient.

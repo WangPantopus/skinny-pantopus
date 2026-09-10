@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Recoverable task creation checkpoint — September 10
+
+Task creation can now retain one exact request and recover its saved task after
+an interrupted response. Changed input is rejected; deleted or inaccessible
+tasks cannot be recreated by retry. The receipt shares the task transaction,
+current permission checks and explicit Home deletion policy. The
+[creation report](home-task-create-recovery-2026-09-10.md) records observed
+concurrency races, full local SQL checks, exact function-body verification,
+independent review and synthetic fixture cleanup. Assignment notification
+enqueue remains best-effort and needs its own durable delivery checkpoint.
+
+**Next:** native task detail, current capability controls, retained creation and
+private attachments, then durable task assignment notifications and the remaining
+household relationships/ownership lifecycles. Android task detail is compiling;
+iOS task integration is in progress. Native private evidence is pushed on both
+platforms (`cec7bb9a2`/`f6ebd1050`), with installed-app visuals and full household
+acceptance still open. In draft PR #34, all three remote iOS jobs now pass the
+tip fixture correction; stop receipts and browser recovery continue there.
+Both PRs remain unfinished. All paid dependencies stay together for final launch
+preparation. Completed physical Beacon and saved-card acceptance must not be
+repeated. No hosted migration or paid service changed.
+
 ### Android private claim evidence checkpoint — September 10
 
 Android now connects the claim wizard, My Claims and Home/platform reviewers to

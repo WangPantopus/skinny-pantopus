@@ -9,6 +9,8 @@ const MESSAGES = {
   HOME_RECORD_RECIPIENT_DENIED: 'An assignee or viewer cannot access this record.',
   HOME_TASK_SOURCE_DENIED: 'The original mail is unavailable to this recipient.',
   HOME_TASK_SOURCE_ALREADY_LINKED: 'This mail already has a linked task.',
+  HOME_TASK_CREATE_CONFLICT: 'This task request was already used with different details. Retry the original request.',
+  HOME_TASK_CREATE_RETIRED: 'The previously created task is no longer available. Open Tasks to review current records.',
   HOME_TASK_MEDIA_CLEANUP_REQUIRED: 'This task has attachments that need storage cleanup before deletion.',
   HOME_TASK_MEDIA_LEGACY_CLEANUP_REQUIRED: 'This task has older public attachments that require verified storage cleanup.',
   HOME_TASK_PRIVATE_STORAGE_REQUIRED: 'Private task attachments are not available yet. Your task is saved; no files were uploaded.',
@@ -47,10 +49,14 @@ async function listCollection(args) {
   return result;
 }
 
-async function mutate({ homeId, actorId, kind, action, recordId = null, payload = {}, sourceMailId = null }) {
+async function mutate({ homeId, actorId, kind, action, recordId = null, payload = {}, sourceMailId = null, requestId }) {
   // Compatibility for the existing web general/recurring task form. This does
   // not create a permission or a new database task type.
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw failure('HOME_RECORD_INVALID', 400);
+  if (requestId !== undefined && (kind !== 'task' || action !== 'create' || recordId !== null || sourceMailId !== null
+    || typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(requestId))) {
+    throw failure('HOME_RECORD_INVALID', 400);
+  }
   if (kind === 'task' && action === 'delete') {
     if (Object.keys(payload).length || sourceMailId !== null) throw failure('HOME_RECORD_INVALID', 400);
     return require('./homeTaskMediaService').deleteTask({ homeId, actorId, taskId: recordId });
@@ -60,12 +66,23 @@ async function mutate({ homeId, actorId, kind, action, recordId = null, payload 
   if (kind === 'task' && normalized.task_type === 'recurring') {
     normalized.task_type = 'reminder'; normalized.is_recurring = true;
   }
-  const result = await rpc('mutate_home_record', { p_home_id: homeId, p_actor_id: actorId, p_kind: kind,
-    p_action: action, p_record_id: recordId, p_payload: normalized, p_source_mail_id: sourceMailId });
+  const result = requestId === undefined
+    ? await rpc('mutate_home_record', { p_home_id: homeId, p_actor_id: actorId, p_kind: kind,
+      p_action: action, p_record_id: recordId, p_payload: normalized, p_source_mail_id: sourceMailId })
+    : await rpc('create_home_task_with_receipt', { p_home_id: homeId, p_actor_id: actorId,
+      p_request_id: requestId, p_payload: normalized });
   if (action === 'rsvp') {
     if (!result.attendee || result.attendee.user_id !== actorId) throw failure();
   } else if (!result.record || typeof result.record.id !== 'string' || result.record.home_id !== homeId
     || (recordId !== null && result.record.id !== recordId)) throw failure();
+  if (requestId !== undefined) {
+    const receipt = result.creation_receipt;
+    if (!receipt || receipt.home_id !== homeId || receipt.actor_id !== actorId || receipt.request_id !== requestId
+      || receipt.task_id !== result.record.id || result.record.created_by !== actorId
+      || typeof result.replayed !== 'boolean' || typeof receipt.payload_hash !== 'string'
+      || !/^[0-9a-f]{64}$/.test(receipt.payload_hash) || typeof receipt.created_at !== 'string'
+      || !Number.isFinite(Date.parse(receipt.created_at))) throw failure();
+  }
   return result;
 }
 async function mutateTaskById({ actorId, taskId, action, payload = {} }) {
