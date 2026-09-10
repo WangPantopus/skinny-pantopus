@@ -6,6 +6,14 @@ const recomputeUtilityScores = require('./recomputeUtilityScores');
 const organicMatch = require('./organicMatch');
 const refreshDiscoveryCache = require('./refreshDiscoveryCache');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
+const deliverGigAcceptance = require('./deliverGigAcceptance');
+const deliverWalletSettlement = require('./deliverWalletSettlement');
+const reconcileGigAuthorizationExpiry = require('./reconcileGigAuthorizationExpiry');
+const deliverGigAuthorizationExpiry = require('./deliverGigAuthorizationExpiry');
+const deliverGigStop = require('./deliverGigStop');
+const reconcileGigStop = require('./reconcileGigStop');
+const reconcileGigAcceptance = require('./reconcileGigAcceptance');
+const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 const computeReputation = require('./computeReputation');
 const earnRiskReview = require('./earnRiskReview');
 const processClaimWindows = require('./processClaimWindows');
@@ -27,6 +35,14 @@ const QUEUE_OPTIONS = {
 };
 
 const JOBS = [
+  { name: 'reconcile-gig-authorization-expiry', cron: '*/15 * * * *', fn: reconcileGigAuthorizationExpiry },
+  { name: 'deliver-gig-authorization-expiry', cron: '* * * * *', fn: deliverGigAuthorizationExpiry },
+  { name: 'deliver-gig-stop', cron: '* * * * *', fn: deliverGigStop },
+  { name: 'reconcile-gig-stop', cron: '*/5 * * * *', fn: reconcileGigStop },
+  { name: 'reconcile-payment-refunds', cron: '*/5 * * * *', fn: reconcilePaymentRefunds },
+  { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
+  { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },
+  { name: 'deliver-wallet-settlement', cron: '* * * * *', fn: deliverWalletSettlement },
   { name: 'recompute-utility-scores',     cron: '10,25,40,55 * * * *', fn: recomputeUtilityScores },
   { name: 'organic-match',                cron: '*/2 * * * *',  fn: organicMatch },
   { name: 'refresh-discovery-cache',      cron: '*/2 * * * *',  fn: refreshDiscoveryCache },

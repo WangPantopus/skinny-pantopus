@@ -3,16 +3,14 @@
 // Runs every 15 minutes. Finds gigs where the owner confirmed
 // completion (owner_confirmed_at IS SET) but the associated
 // Payment is still in 'authorized' state, meaning a previous
-// capture attempt failed. Retries capturePayment up to 3 times.
+// capture attempt failed. Reconciles provider proof before capped capture retries.
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
-const { createNotification } = require('../services/notificationService');
 const logger = require('../utils/logger');
 
-const MAX_CAPTURE_ATTEMPTS = 3;
 // Cap work per run so a capture backlog can't push the job past the Lambda
 // HTTP timeout. Remaining gigs are retried on the next run (every 15 min),
 // oldest confirmation first (FIFO).
@@ -25,7 +23,7 @@ async function retryCaptureFailures() {
     .select('id, title, user_id, payment_id')
     .not('owner_confirmed_at', 'is', null)
     .not('payment_id', 'is', null)
-    .eq('payment_status', PAYMENT_STATES.AUTHORIZED)
+    .in('payment_status', [PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.CAPTURE_PENDING])
     .order('owner_confirmed_at', { ascending: true })
     .limit(BATCH_SIZE);
 
@@ -60,41 +58,14 @@ async function retryCaptureFailures() {
       }
 
       // Only retry if still in authorized state
-      if (payment.payment_status !== PAYMENT_STATES.AUTHORIZED) {
+      if (![PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.CAPTURE_PENDING].includes(payment.payment_status)) {
         continue;
       }
 
-      const attempts = payment.capture_attempts || 0;
-
-      if (attempts >= MAX_CAPTURE_ATTEMPTS) {
-        // Stop retrying — notify payer to contact support
-        logger.warn('retryCaptureFailures: max attempts reached', {
-          paymentId: payment.id,
-          gigId: gig.id,
-          attempts,
-        });
-
-        createNotification({
-          userId: payment.payer_id,
-          type: 'payment_capture_failed',
-          title: 'Payment capture failed',
-          body: `We were unable to capture payment for "${gig.title || 'a gig'}". Please contact support for assistance.`,
-          icon: '⚠️',
-          link: `/gigs/${gig.id}`,
-          metadata: { gig_id: gig.id, payment_id: payment.id },
-        });
-
-        continue;
-      }
-
+      // capturePayment first reconciles exact provider success, even when new
+      // capture attempts reached their cap. The transactional service owns caps.
       // Attempt capture
       const result = await stripeService.capturePayment(payment.id);
-
-      // Update gig payment_status on success
-      await supabaseAdmin
-        .from('Gig')
-        .update({ payment_status: PAYMENT_STATES.CAPTURED_HOLD })
-        .eq('id', gig.id);
 
       logger.info('retryCaptureFailures: capture succeeded', {
         paymentId: payment.id,

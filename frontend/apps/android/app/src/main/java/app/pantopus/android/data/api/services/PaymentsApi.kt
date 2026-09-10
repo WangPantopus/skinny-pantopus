@@ -25,7 +25,19 @@ import retrofit2.http.Path
  * `/api/payments`). Phase 3 (3A) wires the Settings → Payments methods
  * card. Connect onboarding, payouts, checkout and tips are 3B/3C/3D.
  */
+@Suppress("TooManyFunctions") // Keep the payment gateway's paired refund/recovery routes on its existing API.
 interface PaymentsApi {
+    @GET("api/payments/{paymentId}/refunds")
+    suspend fun refunds(
+        @Path("paymentId") paymentId: String,
+    ): app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto
+
+    @POST("api/payments/{paymentId}/refund")
+    suspend fun refund(
+        @Path("paymentId") paymentId: String,
+        @Body request: app.pantopus.android.data.api.models.payments.PaymentRefundBody,
+    ): app.pantopus.android.data.api.models.payments.PaymentRefundResultDto
+
     /** `GET /api/payments/methods` — route `backend/routes/pays.js:701`. */
     @GET("api/payments/methods")
     suspend fun methods(): PaymentMethodsResponse

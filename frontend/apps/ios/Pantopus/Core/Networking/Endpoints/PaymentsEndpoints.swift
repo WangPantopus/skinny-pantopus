@@ -11,6 +11,19 @@
 import Foundation
 
 public enum PaymentsEndpoints {
+    static func refunds(paymentId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/payments/\(paymentId)/refunds")
+    }
+
+    static func refund(paymentId: String, attempt: PaymentRefundAttempt) -> Endpoint {
+        Endpoint(method: .post, path: "/api/payments/\(paymentId)/refund", body: PaymentRefundBody(
+            requestId: attempt.requestId,
+            amount: attempt.requestedAmountCents,
+            reason: attempt.reason,
+            description: attempt.description
+        ))
+    }
+
     /// `GET /api/payments/methods` — route `backend/routes/pays.js:701`.
     /// Saved cards / bank accounts, default-first.
     public static func methods() -> Endpoint {

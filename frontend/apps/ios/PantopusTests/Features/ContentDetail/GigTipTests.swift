@@ -72,9 +72,8 @@ final class GigTipTests: XCTestCase {
     private static let questionsJSON = #"{"questions":[]}"#
     /// Phase 5 — completed gigs also fetch `/api/reviews/my-pending`.
     private static let pendingJSON = #"{"pending":[]}"#
-    /// Phase 5b — the owner's payment summary (`GET /:gigId/payment`) fires on
-    /// every load for an assigned+ gig; `loadPayment` swallows the body via
-    /// `try?`, so a benign null envelope keeps the FIFO aligned.
+    /// The current owner's optional payment summary can be absent. Bind this
+    /// response to its route so conditional reads cannot consume tip receipts.
     private static let paymentJSON = #"{"payment":null}"#
     private static let tipJSON =
         #"{"success":true,"clientSecret":"pi_tip","paymentId":"pay-tip-1","customer":"cus","ephemeralKey":"ek","publishableKey":"pk"}"#
@@ -83,26 +82,39 @@ final class GigTipTests: XCTestCase {
 
     private func makeVM(presenter: StubTipPresenter) -> GigDetailViewModel {
         let api = makeAPI()
+        let checkout = CheckoutCoordinator(api: api, presenter: presenter)
         return GigDetailViewModel(
             gigId: "g1",
             api: api,
-            checkout: CheckoutCoordinator(api: api, presenter: presenter),
+            checkout: checkout,
+            bidAcceptance: GigBidAcceptanceCoordinator(api: api, checkout: checkout) { "origin|owner-1|tip-session" },
             currentUserId: "owner-1"
         )
     }
 
+    private func stubTipJourney() {
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/g1": [.status(200, body: Self.gigEnvelope), .status(200, body: Self.gigEnvelope)],
+            "/api/gigs/g1/bids": [.status(200, body: Self.bidsJSON), .status(200, body: Self.bidsJSON)],
+            "/api/gigs/g1/questions": [.status(200, body: Self.questionsJSON), .status(200, body: Self.questionsJSON)],
+            "/api/gigs/g1/payment": [.status(200, body: Self.paymentJSON), .status(200, body: Self.paymentJSON)],
+            "/api/reviews/my-pending": [.status(200, body: Self.pendingJSON)],
+            "/api/payments/tip": [.status(200, body: Self.tipJSON)],
+            "/api/payments/tip/pay-tip-1/refresh-status": [.status(200, body: Self.refreshJSON)]
+        ]
+    }
+
+    private func assertTipRequest() {
+        let requests = SequencedURLProtocol.capturedRequests
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/gigs/g1/payment" }.count, 1)
+        let tips = requests.filter { $0.url?.path == "/api/payments/tip" }
+        XCTAssertEqual(tips.count, 1)
+        XCTAssertEqual(tips.first?.httpMethod, "POST")
+    }
+
     /// tip.success
     func testSendTipSucceedsAndReconciles() async {
-        SequencedURLProtocol.sequence = [
-            .status(200, body: Self.gigEnvelope), .status(200, body: Self.bidsJSON),
-            .status(200, body: Self.questionsJSON), .status(200, body: Self.paymentJSON),
-            .status(200, body: Self.pendingJSON), // load
-            .status(200, body: Self.tipJSON), // POST /tip
-            .status(200, body: Self.refreshJSON), // refresh-status
-            .status(200, body: Self.gigEnvelope), .status(200, body: Self.bidsJSON),
-            .status(200, body: Self.questionsJSON), .status(200, body: Self.paymentJSON)
-            // reload (my-pending settled on load)
-        ]
+        stubTipJourney()
         let presenter = StubTipPresenter()
         presenter.outcome = .completed
         let vm = makeVM(presenter: presenter)
@@ -112,38 +124,38 @@ final class GigTipTests: XCTestCase {
         XCTAssertEqual(presenter.presentPaymentCallCount, 1)
         XCTAssertEqual(presenter.lastPublishableKey, "pk")
         XCTAssertEqual(vm.tipStatus, .succeeded)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/payments/tip" }.count, 1)
+        XCTAssertEqual(
+            SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/payments/tip/pay-tip-1/refresh-status" }.count,
+            1
+        )
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1/payment" }.count, 2)
     }
 
     /// tip declined (card / SCA fail)
     func testSendTipDeclined() async {
-        SequencedURLProtocol.sequence = [
-            .status(200, body: Self.gigEnvelope), .status(200, body: Self.bidsJSON),
-            .status(200, body: Self.questionsJSON), .status(200, body: Self.paymentJSON),
-            .status(200, body: Self.pendingJSON), // load
-            .status(200, body: Self.tipJSON) // POST /tip
-        ]
+        stubTipJourney()
         let presenter = StubTipPresenter()
         presenter.outcome = .failed(message: "Your card was declined.")
         let vm = makeVM(presenter: presenter)
         await vm.load()
         await vm.sendTip(amountCents: 1000)
         XCTAssertEqual(vm.tipStatus, .failed(message: "Your card was declined."))
+        assertTipRequest()
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.url?.path.contains("refresh-status") == true })
     }
 
     /// tip canceled (buyer dismissed the sheet)
     func testSendTipCanceled() async {
-        SequencedURLProtocol.sequence = [
-            .status(200, body: Self.gigEnvelope), .status(200, body: Self.bidsJSON),
-            .status(200, body: Self.questionsJSON), .status(200, body: Self.paymentJSON),
-            .status(200, body: Self.pendingJSON), // load
-            .status(200, body: Self.tipJSON) // POST /tip
-        ]
+        stubTipJourney()
         let presenter = StubTipPresenter()
         presenter.outcome = .canceled
         let vm = makeVM(presenter: presenter)
         await vm.load()
         await vm.sendTip(amountCents: 1000)
         XCTAssertEqual(vm.tipStatus, .canceled)
+        assertTipRequest()
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.url?.path.contains("refresh-status") == true })
     }
 }
 

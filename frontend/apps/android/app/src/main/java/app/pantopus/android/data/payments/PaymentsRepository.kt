@@ -26,6 +26,25 @@ class PaymentsRepository
     constructor(
         private val api: PaymentsApi,
     ) {
+        suspend fun refunds(paymentId: String): NetworkResult<app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto> =
+            safeApiCall { api.refunds(paymentId) }
+
+        suspend fun refund(
+            paymentId: String,
+            attempt: app.pantopus.android.data.api.models.payments.PaymentRefundAttempt,
+        ): NetworkResult<app.pantopus.android.data.api.models.payments.PaymentRefundResultDto> =
+            safeApiCall {
+                api.refund(
+                    paymentId,
+                    app.pantopus.android.data.api.models.payments.PaymentRefundBody(
+                        attempt.requestId,
+                        attempt.requestedAmountCents,
+                        attempt.reason,
+                        attempt.description,
+                    ),
+                )
+            }
+
         /** `GET /api/payments/methods`. */
         suspend fun paymentMethods(): NetworkResult<PaymentMethodsResponse> = safeApiCall { api.methods() }
 

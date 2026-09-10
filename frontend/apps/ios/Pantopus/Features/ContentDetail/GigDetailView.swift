@@ -21,6 +21,11 @@ public struct GigDetailView: View {
     @State private var bidSheetTarget: EditBidSheetTarget?
     @State private var deliveryTarget: DeliveryProofTarget?
     @State private var showTipSheet = false
+    @State private var refundTarget: GigRefundViewModel?
+    @State private var stopTarget: GigStopViewModel?
+    @State private var stopLifetime: GigStopViewModel?
+    @State private var authorizationTarget: GigAssignedAuthorizationViewModel?
+    @State private var authorizationLifetime: GigAssignedAuthorizationViewModel?
     @State private var tipCustomAmountText = ""
     @State private var toast: ToastMessage?
     // Phase 5 — lifecycle sheets
@@ -28,11 +33,7 @@ public struct GigDetailView: View {
     @State private var rejectCandidate: GigBidDTO?
     /// Bid whose pending counter-offer the poster is about to withdraw.
     @State private var withdrawCounterCandidate: GigBidDTO?
-    /// Poster's "Close Gig" confirm on a still-open task.
-    @State private var showCloseTaskConfirm = false
     @State private var showReportSheet = false
-    @State private var showCancelSheet = false
-    @State private var cancelPreview: GigCancellationPreview?
     @State private var showNoShowSheet = false
     @State private var reviewTarget: LeaveReviewSheetTarget?
     // Phase 5b — lifecycle completers
@@ -40,10 +41,6 @@ public struct GigDetailView: View {
     @State private var showChangeOrderSheet = false
     /// Phase 6b — reschedule (cancel sheet's "Reschedule instead" path)
     @State private var showRescheduleSheet = false
-    // Pre-start release confirms — poster "Replace worker"
-    // (`/reopen-bidding`) and worker "Can't make it" (`/worker-release`).
-    @State private var showReplaceWorkerConfirm = false
-    @State private var showCantMakeItConfirm = false
     /// Non-nil while the "Share to feed" composer is presented.
     @State private var shareToFeedTarget: PulseTaskShare?
     private let onBack: @MainActor () -> Void
@@ -74,11 +71,25 @@ public struct GigDetailView: View {
             onMessageCounterparty: { openChat() },
             scrollFooter: { lifecycleFooter }
         )
+        .safeAreaInset(edge: .bottom) {
+            if viewModel.stopRecovery.available {
+                Button("Task action status") { presentSavedStop() }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal)
+                    .padding(.vertical, Spacing.s2)
+                    .frame(maxWidth: .infinity)
+                    .background(Theme.Color.appSurface)
+                    .accessibilityIdentifier("gigDetail.stopRecovery")
+            }
+        }
         .task {
             await viewModel.load()
             viewModel.startRealtime()
         }
-        .onDisappear { viewModel.stopRealtime() }
+        .onDisappear { viewModel.stopRealtime()
+            authorizationLifetime?.retire()
+            stopLifetime?.retire()
+        }
         .sheet(item: $bidSheetTarget) { target in
             EditBidSheetView(
                 target: target,
@@ -119,12 +130,34 @@ public struct GigDetailView: View {
             )
         }
         .sheet(isPresented: $showTipSheet) { tipSheet }
+        .sheet(item: $refundTarget, onDismiss: { Task { await viewModel.refreshAfterRefund() } }, content: { target in
+            GigRefundView(model: target)
+        })
+        .sheet(
+            item: $authorizationTarget,
+            onDismiss: {
+                authorizationLifetime?.retire()
+                authorizationLifetime = nil
+                Task { await viewModel.refreshAfterRefund() }
+            },
+            content: { target in
+                GigAssignedAuthorizationView(model: target)
+            }
+        )
+        .sheet(
+            item: $stopTarget,
+            onDismiss: {
+                stopLifetime?.retire()
+                stopLifetime = nil
+                viewModel.stopRecovery.refresh()
+                Task { await viewModel.refreshAfterRefund() }
+            },
+            content: { target in GigStopView(model: target) }
+        )
         .modifier(GigLifecycleSheets(
             viewModel: viewModel,
             counterTarget: $counterTarget,
             showReportSheet: $showReportSheet,
-            showCancelSheet: $showCancelSheet,
-            cancelPreview: $cancelPreview,
             showNoShowSheet: $showNoShowSheet,
             reviewTarget: $reviewTarget,
             showRunningLateSheet: $showRunningLateSheet,
@@ -158,47 +191,6 @@ public struct GigDetailView: View {
             Button("Keep counter", role: .cancel) { withdrawCounterCandidate = nil }
         } message: {
             Text("The bid will revert to its original amount.")
-        }
-        // RN copy verbatim (`gig/[id].tsx:414`).
-        .confirmationDialog(
-            "Close Gig",
-            isPresented: $showCloseTaskConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Close Gig", role: .destructive) { confirmCloseTask() }
-            Button("Keep Open", role: .cancel) { showCloseTaskConfirm = false }
-        } message: {
-            Text("Are you sure you want to close this gig? It will be removed and this cannot be undone.")
-        }
-        .confirmationDialog(
-            "Replace Worker",
-            isPresented: $showReplaceWorkerConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Replace Worker", role: .destructive) {
-                Task { await runRelease { await viewModel.replaceWorker() } }
-            }
-            Button("Keep worker", role: .cancel) { showReplaceWorkerConfirm = false }
-        } message: {
-            Text(
-                "This will unassign the current worker, release any payment hold, "
-                    + "and reopen the task for bids. Use this only before work starts."
-            )
-        }
-        .confirmationDialog(
-            "Can't Make It",
-            isPresented: $showCantMakeItConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("I Can't Make It", role: .destructive) {
-                Task { await runRelease { await viewModel.releaseAssignment() } }
-            }
-            Button("Stay on the task", role: .cancel) { showCantMakeItConfirm = false }
-        } message: {
-            Text(
-                "This will unassign you from the task and reopen it for new bids. "
-                    + "Any payment hold will be released."
-            )
         }
         .overlay(alignment: .bottom) { toastOverlay }
         .overlay(alignment: .top) { tipMarkers }
@@ -267,6 +259,7 @@ public struct GigDetailView: View {
                     onCounter: { bid in counterTarget = GigCounterSheetTarget(id: bid.id, bid: bid) },
                     onReject: { bid in rejectCandidate = bid },
                     onWithdrawCounter: { bid in withdrawCounterCandidate = bid },
+                    onCancelPayment: { bid in Task { await cancelBidPayment(bid) } },
                     rankings: viewModel.offerRankings
                 )
             }
@@ -319,7 +312,7 @@ public struct GigDetailView: View {
                     },
                     onReportNoShow: { showNoShowSheet = true },
                     onRunningLate: { showRunningLateSheet = true },
-                    onCantMakeIt: { showCantMakeItConfirm = true },
+                    onCantMakeIt: { presentStop(.workerRelease) },
                     onRemindWorker: { Task { await remindWorker() } }
                 )
             }
@@ -342,6 +335,17 @@ public struct GigDetailView: View {
             }
             if viewModel.showPaymentCard, let payment = viewModel.payment {
                 GigPaymentCard(payment: payment, stateInfo: viewModel.paymentStateInfo)
+                if viewModel.canOpenAssignedAuthorization {
+                    Button("Payment authorization") {
+                        authorizationLifetime = viewModel.makeAssignedAuthorizationViewModel()
+                        authorizationTarget = authorizationLifetime
+                    }
+                    .accessibilityIdentifier("gigDetail.authorization")
+                }
+                if viewModel.canOpenRefunds {
+                    Button("Refunds and hold releases") { refundTarget = viewModel.makeRefundViewModel() }
+                        .accessibilityIdentifier("gigDetail.refunds")
+                }
             }
             if viewModel.showReviewSection {
                 GigReviewSection(
@@ -356,17 +360,16 @@ public struct GigDetailView: View {
         }
     }
 
-    /// Run a pre-start release action (`/reopen-bidding`,
-    /// `/worker-release`), toasting the server's own confirmation copy.
-    /// The VM refreshes on success, so the lifecycle footer re-renders in
-    /// the reopened state without extra work here.
-    private func runRelease(_ action: () async -> GigDetailViewModel.ReleaseOutcome) async {
-        switch await action() {
-        case let .succeeded(message):
-            toast = ToastMessage(text: message, kind: .success)
-        case let .failed(message):
-            toast = ToastMessage(text: message, kind: .error)
-        }
+    private func presentSavedStop() {
+        stopLifetime = viewModel.stopRecovery.makeRecoveryModel()
+        stopTarget = stopLifetime
+        if stopTarget == nil { viewModel.stopRecovery.refresh() }
+    }
+
+    private func presentStop(_ action: GigStopAction) {
+        stopLifetime = viewModel.makeStopViewModel(action: action)
+        stopTarget = stopLifetime
+        if stopTarget == nil { toast = ToastMessage(text: "Reopen this task in your current session to continue.", kind: .error) }
     }
 
     /// Run a `String?`-error VM action, toasting either way.
@@ -386,6 +389,14 @@ public struct GigDetailView: View {
             toast = ToastMessage(text: "Payment canceled.", kind: .error)
         case let .failed(message):
             toast = ToastMessage(text: message, kind: .error)
+        }
+    }
+
+    private func cancelBidPayment(_ bid: GigBidDTO) async {
+        switch await viewModel.cancelBidAcceptance(bidId: bid.id) {
+        case .canceled: toast = ToastMessage(text: "Payment setup canceled.", kind: .success)
+        case .accepted: toast = ToastMessage(text: "Bid acceptance already confirmed.", kind: .success)
+        case let .failed(message): toast = ToastMessage(text: message, kind: .error)
         }
     }
 
@@ -412,19 +423,6 @@ public struct GigDetailView: View {
         Task {
             await runToasting(success: "Counter-offer withdrawn.") {
                 await viewModel.withdrawCounter(bidId: bid.id)
-            }
-        }
-    }
-
-    /// RN pops back to the tasks tab once the gig row is gone
-    /// (`gig/[id].tsx:430`).
-    private func confirmCloseTask() {
-        showCloseTaskConfirm = false
-        Task {
-            if let error = await viewModel.closeGig() {
-                toast = ToastMessage(text: error, kind: .error)
-            } else {
-                onBack()
             }
         }
     }
@@ -514,12 +512,11 @@ public struct GigDetailView: View {
                     identifier: "gigDetail.replaceWorker",
                     role: .destructive
                 ) {
-                    showReplaceWorkerConfirm = true
+                    presentStop(.reopenBidding)
                 }
             )
         }
-        // RN branches on status: an open gig is *closed* (deleted, no
-        // fee), anything live is *cancelled* (`gig/[id].tsx:412`).
+        // All terminal task actions enter the same current-term recovery sheet.
         if viewModel.canCloseTask {
             items.append(
                 ContentDetailOverflowItem(
@@ -528,9 +525,14 @@ public struct GigDetailView: View {
                     identifier: "gigDetail.close",
                     role: .destructive
                 ) {
-                    showCloseTaskConfirm = true
+                    presentStop(.close)
                 }
             )
+        }
+        if viewModel.canRescheduleTask {
+            items.append(ContentDetailOverflowItem(label: "Reschedule task", icon: .calendar, identifier: "gigDetail.reschedule") {
+                showRescheduleSheet = true
+            })
         }
         if viewModel.canCancelTask {
             items.append(
@@ -540,10 +542,7 @@ public struct GigDetailView: View {
                     identifier: "gigDetail.cancel",
                     role: .destructive
                 ) {
-                    Task {
-                        cancelPreview = await viewModel.loadCancellationPreview()
-                        showCancelSheet = true
-                    }
+                    presentStop(.cancel)
                 }
             )
         }
@@ -754,8 +753,6 @@ private struct GigLifecycleSheets: ViewModifier {
     let viewModel: GigDetailViewModel
     @Binding var counterTarget: GigCounterSheetTarget?
     @Binding var showReportSheet: Bool
-    @Binding var showCancelSheet: Bool
-    @Binding var cancelPreview: GigCancellationPreview?
     @Binding var showNoShowSheet: Bool
     @Binding var reviewTarget: LeaveReviewSheetTarget?
     @Binding var showRunningLateSheet: Bool
@@ -765,18 +762,6 @@ private struct GigLifecycleSheets: ViewModifier {
 
     func body(content: Content) -> some View {
         phase5bSheets(phase5Sheets(content))
-    }
-
-    /// Phase 6b — the cancel sheet's "Reschedule instead" hand-off.
-    /// Poster-only by construction (the overflow's "Cancel task" is
-    /// owner-gated); the sheet additionally checks the preview's
-    /// `can_reschedule` before rendering the button.
-    private var rescheduleAction: (@MainActor () -> Void)? {
-        guard viewModel.canRescheduleTask else { return nil }
-        return {
-            showCancelSheet = false
-            showRescheduleSheet = true
-        }
     }
 
     /// Phase 5 — counter / report / cancel / no-show / review.
@@ -807,21 +792,6 @@ private struct GigLifecycleSheets: ViewModifier {
                         showReportSheet = false
                     },
                     onDismiss: { showReportSheet = false }
-                )
-            }
-            .sheet(isPresented: $showCancelSheet) {
-                GigCancelSheet(
-                    preview: cancelPreview,
-                    onReschedule: rescheduleAction,
-                    onConfirm: { reason in
-                        if let error = await viewModel.cancelTask(reason: reason) {
-                            toast = ToastMessage(text: error, kind: .error)
-                        } else {
-                            toast = ToastMessage(text: "Task cancelled.", kind: .success)
-                        }
-                        showCancelSheet = false
-                    },
-                    onDismiss: { showCancelSheet = false }
                 )
             }
             .sheet(isPresented: $showNoShowSheet) {

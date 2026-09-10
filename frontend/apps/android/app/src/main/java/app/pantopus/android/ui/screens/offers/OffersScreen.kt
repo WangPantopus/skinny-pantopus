@@ -13,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,12 +20,11 @@ import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
-import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
-import com.stripe.android.paymentsheet.rememberPaymentSheet
 
 /** Test tag on the offers root container. */
 const val OFFERS_TAG = "offers"
@@ -60,11 +58,7 @@ fun OffersScreen(
     val rejectCandidate by viewModel.rejectCandidate.collectAsStateWithLifecycle()
     val withdrawCandidate by viewModel.withdrawCandidate.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val paymentSheet =
-        rememberPaymentSheet { result ->
-            viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result))
-        }
+    GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) {
         viewModel.bindCallbacks(
@@ -73,23 +67,6 @@ fun OffersScreen(
             onPostTask = onPostTask,
         )
         viewModel.load()
-    }
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is OffersEvent.PresentCheckout ->
-                    paymentSheet.presentWithPaymentIntent(
-                        paymentIntentClientSecret = event.params.clientSecret.orEmpty(),
-                        configuration =
-                            StripePaymentSheets.paymentConfiguration(
-                                context = context,
-                                customerId = event.params.customer,
-                                ephemeralKey = event.params.ephemeralKey,
-                                publishableKey = event.params.publishableKey,
-                            ),
-                    )
-            }
-        }
     }
     LaunchedEffect(toast) {
         if (toast != null) {

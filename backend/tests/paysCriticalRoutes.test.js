@@ -15,6 +15,8 @@ jest.mock('../stripe/stripeService', () => ({
   createSmartRefund: jest.fn(),
 }));
 const stripeService = require('../stripe/stripeService');
+jest.mock('../services/paymentRefundService', () => ({ create: jest.fn(), history: jest.fn() }));
+const refundService = require('../services/paymentRefundService');
 const { createNotification } = require('../services/notificationService');
 
 // Override verifyToken mock to support x-test-role header for admin tests
@@ -333,18 +335,17 @@ describe('POST /api/payments/:paymentId/admin-refund', () => {
     const app = buildApp();
     seedTable('Payment', [makePayment({ id: 'pay-refund-1', payment_status: 'captured_hold', amount_total: 5000 })]);
 
-    stripeService.createSmartRefund.mockResolvedValue({
-      refund: { id: 'refund-001', amount: 5000, status: 'succeeded' },
+    refundService.create.mockResolvedValue({
+      success: true, refund: { id: 'refund-001', amount: 5000, status: 'succeeded' },
     });
 
     const res = await adminRequest(app, '/api/payments/pay-refund-1/admin-refund')
       .send({ reason: 'requested_by_customer' });
 
-    expect(res.status).toBe(201);
-    expect(res.body.message).toMatch(/admin refund created/i);
+    expect(res.status).toBe(200);
     expect(res.body.refund.id).toBe('refund-001');
-    expect(stripeService.createSmartRefund).toHaveBeenCalledWith(
-      'pay-refund-1', 5000, 'requested_by_customer', DEFAULT_USER
+    expect(refundService.create).toHaveBeenCalledWith(
+      { paymentId: 'pay-refund-1', reason: 'requested_by_customer', actorId: DEFAULT_USER, actorMode: 'admin' }
     );
   });
 
@@ -352,16 +353,16 @@ describe('POST /api/payments/:paymentId/admin-refund', () => {
     const app = buildApp();
     seedTable('Payment', [makePayment({ id: 'pay-refund-2', payment_status: 'transferred', amount_total: 10000 })]);
 
-    stripeService.createSmartRefund.mockResolvedValue({
-      refund: { id: 'refund-002', amount: 3000, status: 'succeeded' },
+    refundService.create.mockResolvedValue({
+      success: true, refund: { id: 'refund-002', amount: 3000, status: 'succeeded' },
     });
 
     const res = await adminRequest(app, '/api/payments/pay-refund-2/admin-refund')
       .send({ reason: 'work_not_completed', amount: 3000, description: 'Partial work done' });
 
-    expect(res.status).toBe(201);
-    expect(stripeService.createSmartRefund).toHaveBeenCalledWith(
-      'pay-refund-2', 3000, 'work_not_completed', DEFAULT_USER
+    expect(res.status).toBe(200);
+    expect(refundService.create).toHaveBeenCalledWith(
+      { paymentId: 'pay-refund-2', amount: 3000, reason: 'work_not_completed', description: 'Partial work done', actorId: DEFAULT_USER, actorMode: 'admin' }
     );
   });
 
@@ -375,12 +376,13 @@ describe('POST /api/payments/:paymentId/admin-refund', () => {
       .send({ reason: 'other' });
 
     expect(res.status).toBe(403);
-    expect(stripeService.createSmartRefund).not.toHaveBeenCalled();
+    expect(refundService.create).not.toHaveBeenCalled();
   });
 
   test('rejects refund on non-existent payment', async () => {
     const app = buildApp();
     seedTable('Payment', []);
+    refundService.create.mockRejectedValueOnce(Object.assign(new Error('Payment not found'), { statusCode: 404 }));
 
     const res = await adminRequest(app, '/api/payments/pay-nonexistent/admin-refund')
       .send({ reason: 'other' });
@@ -393,36 +395,38 @@ describe('POST /api/payments/:paymentId/admin-refund', () => {
     const app = buildApp();
     seedTable('Payment', [makePayment({ id: 'pay-terminal', payment_status: 'refunded_full' })]);
 
+    refundService.create.mockRejectedValueOnce(Object.assign(new Error('Payment state changed'), { statusCode: 409 }));
     const res = await adminRequest(app, '/api/payments/pay-terminal/admin-refund')
       .send({ reason: 'duplicate' });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/terminal state/i);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/state changed/i);
   });
 
   test('rejects refund on canceled payment', async () => {
     const app = buildApp();
     seedTable('Payment', [makePayment({ id: 'pay-canceled', payment_status: 'canceled' })]);
 
+    refundService.create.mockRejectedValueOnce(Object.assign(new Error('Payment state changed'), { statusCode: 409 }));
     const res = await adminRequest(app, '/api/payments/pay-canceled/admin-refund')
       .send({ reason: 'other' });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/terminal state/i);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/state changed/i);
   });
 
-  test('returns 500 when createSmartRefund throws', async () => {
+  test('returns pending error when refund confirmation is unavailable', async () => {
     const app = buildApp();
     seedTable('Payment', [makePayment({ id: 'pay-err', payment_status: 'captured_hold', amount_total: 5000 })]);
 
-    stripeService.createSmartRefund.mockRejectedValue(new Error('Stripe API error'));
+    refundService.create.mockRejectedValueOnce(Object.assign(new Error('Refund confirmation unavailable'), { statusCode: 503, refundRequest: { requestId: 'retained' } }));
 
     const res = await adminRequest(app, '/api/payments/pay-err/admin-refund')
       .send({ reason: 'fraudulent' });
 
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/failed to create admin refund/i);
-    expect(res.body.message).toMatch(/stripe api error/i);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/confirmation unavailable/i);
+    expect(res.body.refundRequest.requestId).toBe('retained');
   });
 
   test('rejects invalid reason', async () => {

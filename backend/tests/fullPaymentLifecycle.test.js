@@ -42,7 +42,10 @@ beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
   stripeService.capturePayment.mockResolvedValue({ success: true, chargeId: 'ch_lifecycle_001' });
-  walletService.creditGigIncome.mockResolvedValue({ id: 'wtx_lifecycle_001' });
+  walletService.creditGigIncome.mockImplementation(async (user, amount, gig, payment) => {
+    const tx = { id: `wtx_${payment}`, payment_id: payment, user_id: user, amount, type: 'gig_income', direction: 'credit' };
+    getTable('WalletTransaction').push(tx); return tx;
+  });
 });
 
 // ── Constants ──
@@ -91,6 +94,7 @@ function seedFullScenario(overrides = {}) {
     currency: 'usd',
     dispute_id: null,
     dispute_status: null,
+    transfer_completed_at: null,
     cooling_off_ends_at: overrides.coolingOffEndsAt || null,
     updated_at: overrides.updatedAt || new Date().toISOString(),
     ...overrides.payment,
@@ -370,10 +374,11 @@ describe('Capture failure blocks gig confirmation (B1 fix)', () => {
     const payment = getTable('Payment').find(p => p.id === PAYMENT_ID);
     expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
     const gig = getTable('Gig').find(g => g.id === GIG_ID);
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
+    // Mocked capture changed only Payment; the job must not fabricate a second Gig write.
+    expect(gig.payment_status).toBe(PAYMENT_STATES.AUTHORIZED);
   });
 
-  test('retryCaptureFailures stops after MAX_CAPTURE_ATTEMPTS', async () => {
+  test('retryCaptureFailures delegates exhausted attempts for provider reconciliation', async () => {
     seedFullScenario({
       paymentStatus: PAYMENT_STATES.AUTHORIZED,
       gigPaymentStatus: PAYMENT_STATES.AUTHORIZED,
@@ -387,8 +392,8 @@ describe('Capture failure blocks gig confirmation (B1 fix)', () => {
 
     await retryCaptureFailures();
 
-    // Should NOT attempt capture (already exhausted retries)
-    expect(stripeService.capturePayment).not.toHaveBeenCalled();
+    // The service reconciles provider proof before enforcing new-capture caps.
+    expect(stripeService.capturePayment).toHaveBeenCalledWith(PAYMENT_ID);
   });
 });
 

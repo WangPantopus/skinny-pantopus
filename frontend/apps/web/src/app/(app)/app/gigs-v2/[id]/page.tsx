@@ -1,5 +1,10 @@
 'use client';
 
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -7,7 +12,6 @@ import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
 import { useBadges } from '@/contexts/BadgeContext';
 
 // Import existing web gig-detail components
@@ -16,6 +20,7 @@ import GigTimeline from '@/components/gig-detail/GigTimeline';
 import BidPanel from '@/components/gig-detail/BidPanel';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
+import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
 import QASection from '@/components/gig-detail/QASection';
 import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
@@ -69,7 +74,6 @@ const ENGAGEMENT_LABELS: Record<string, { icon: string; label: string }> = {
   quotes: { icon: '💼', label: 'Quotes' },
 };
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
 
 // ─── Trust Capsule ───────────────────────────────────────────────────
 
@@ -427,9 +431,13 @@ function GigDetailV2Content() {
 
   // Derived
   const currentUserId = currentUser?.id;
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
   const isMyGig = Boolean(
     currentUserId &&
-    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId)
+    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId || canManageGigAsBusinessMember)
   );
   const acceptedBy = gig?.accepted_by || gig?.acceptedBy?.id || gig?.accepted_bid?.bidder_id || gig?.worker_id;
   const iAmWorker = Boolean(currentUserId && String(acceptedBy) === String(currentUserId));
@@ -542,45 +550,8 @@ function GigDetailV2Content() {
       if (res?.roomId) router.push(`/app/mailbox?roomId=${res.roomId}`);
     } catch { /* ignore */ }
   };
-  const handleAcceptOffer = async (offerId: string) => {
-    if (!gigId) return;
-    const selectedOffer = offersV2.find((offer) => String(offer?.id) === String(offerId));
-    const rawAmount = Number(selectedOffer?.amount ?? selectedOffer?.bid_amount ?? gig?.price ?? NaN);
-    const amount = Number.isFinite(rawAmount) ? rawAmount : null;
-    const confirmed = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will assign the gig to this bidder.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!confirmed) return;
-    try {
-      const resp = await api.gigs.acceptBid(gigId, offerId);
-      const payment = (resp as any)?.payment || {};
-      const clientSecret = (resp as any)?.clientSecret || payment?.clientSecret || null;
-      const setupIntentId = (resp as any)?.setupIntentId || payment?.setupIntentId || null;
-      const isSetupIntent = Boolean((resp as any)?.isSetupIntent ?? setupIntentId);
-      const requiresPaymentSetup = Boolean((resp as any)?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret && typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${gigId}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId: (resp as any)?.roomId || null,
-            rollbackOnAbort: true,
-          })
-        );
-        toast.info('Bid accepted. Complete payment authorization to continue.');
-        router.push(`/app/gigs-v2/${gigId}?action=payment_setup`);
-      }
-      handleStatusChange();
-    } catch (e: any) { toast.error(e?.message || 'Failed to accept offer'); }
+  const handleAcceptOffer = (offerId: string) => {
+    if (gigId) router.push(gigBidCheckoutUrl(gigId, offerId));
   };
   const handleDeclineOffer = async (offerId: string) => {
     if (!gigId) return;
@@ -602,8 +573,9 @@ function GigDetailV2Content() {
 
   if (!gig) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <p className="text-gray-500 text-lg">Task not found</p>
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       </div>
     );
   }
@@ -612,6 +584,7 @@ function GigDetailV2Content() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
+      <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Left column (2/3) ── */}
         <div className="lg:col-span-2 space-y-6">
@@ -777,6 +750,8 @@ function GigDetailV2Content() {
           )}
 
           <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleStatusChange}
             gigId={gigId!}
             gigPrice={Number(gig.price || 0)}
             isOwner={isMyGig}
@@ -792,6 +767,7 @@ function GigDetailV2Content() {
 // ─── Page Export ──────────────────────────────────────────────────────
 
 export default function GigDetailV2Page() {
+  usePaymentRedirectCleanup();
   return (
     <Suspense>
       <GigDetailV2Content />

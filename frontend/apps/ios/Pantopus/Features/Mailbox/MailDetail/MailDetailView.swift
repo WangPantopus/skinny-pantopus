@@ -257,7 +257,9 @@ public struct MailDetailView: View {
                 onBack: { onBack() },
                 onAccept: { Task { await viewModel.acceptGigBid() } },
                 onOpenSenderProfile: onOpenSenderProfile,
-                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
+                onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
+                paymentPending: viewModel.gigPaymentPending,
+                onCancelPayment: { Task { await viewModel.cancelGigPayment() } }
             )
         } else {
             generic(content)

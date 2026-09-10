@@ -85,18 +85,20 @@ public final class MailDetailViewModel {
 
     private let mailId: String
     private let api: APIClient
-    private let checkout: CheckoutCoordinator
+    public private(set) var gigPaymentPending = false
+    private let bidAcceptance: GigBidAcceptanceCoordinator
     private let now: @Sendable () -> Date
 
     init(
         mailId: String,
         api: APIClient = .shared,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
+        bidAcceptance: GigBidAcceptanceCoordinator? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.mailId = mailId
         self.api = api
-        self.checkout = checkout
+        self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.now = now
     }
 
@@ -131,6 +133,7 @@ public final class MailDetailViewModel {
                 return
             }
             state = .loaded(Self.project(detail: response.mail, now: now()))
+            await refreshGigPaymentProgress()
         } catch {
             state = .error(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't load this item."
@@ -233,45 +236,49 @@ public final class MailDetailViewModel {
             return
         }
         gigBidInFlight = true
+        gigPaymentPending = true
         defer { gigBidInFlight = false }
-        do {
-            let response: GigBidAcceptResponse = try await api.request(
-                GigsEndpoints.acceptBid(gigId: gigId, bidId: bidId)
-            )
-            let requiresPayment = response.requiresPaymentSetup == true || response.sheetParams.clientSecret != nil
-            guard requiresPayment else {
-                state = .loaded(MailDetailContent.replacingGigAccepted(content, with: gig.accepted()))
-                toast = "Bid accepted"
-                return
-            }
-
-            let outcome = await checkout.present(response.sheetParams)
-            switch outcome {
-            case .paid:
-                let _: GigBidAcceptResponse = try await api.request(
-                    GigsEndpoints.finalizeAcceptBid(gigId: gigId, bidId: bidId)
-                )
-                state = .loaded(MailDetailContent.replacingGigAccepted(content, with: gig.accepted()))
-                toast = "Bid accepted"
-            case .canceled:
-                _ = try? await api.request(
-                    GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                    as: GigBidAcceptResponse.self
-                )
-                state = .loaded(content)
-                toast = "Payment canceled"
-            case let .declined(message), let .failed(message):
-                _ = try? await api.request(
-                    GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                    as: GigBidAcceptResponse.self
-                )
-                state = .loaded(content)
-                toast = message
-            }
-        } catch {
-            state = .loaded(content)
-            toast = (error as? APIError)?.errorDescription ?? "Couldn't accept this bid."
+        let result = await bidAcceptance.accept(gigId: gigId, bidId: bidId)
+        guard bidAcceptance.isCurrentAccount else { return }
+        switch result {
+        case .accepted:
+            gigPaymentPending = false
+            state = .loaded(MailDetailContent.replacingGigAccepted(content, with: gig.accepted()))
+            toast = "Bid accepted"
+        case .canceled:
+            gigPaymentPending = false
+            toast = "Payment setup canceled"
+        case let .failed(message):
+            toast = message
         }
+    }
+
+    public func cancelGigPayment() async {
+        guard case let .loaded(content) = state, let gig = content.gigDetail,
+              let gigId = gig.gigId, let bidId = gig.bidId, !gigBidInFlight else { return }
+        gigBidInFlight = true
+        defer { gigBidInFlight = false }
+        let result = await bidAcceptance.cancel(gigId: gigId, bidId: bidId)
+        guard bidAcceptance.isCurrentAccount else { return }
+        switch result {
+        case .canceled:
+            gigPaymentPending = false
+            toast = "Payment setup canceled"
+        case .accepted:
+            gigPaymentPending = false
+            state = .loaded(MailDetailContent.replacingGigAccepted(content, with: gig.accepted()))
+            toast = "Bid acceptance already confirmed"
+        case let .failed(message): toast = message
+        }
+    }
+
+    private func refreshGigPaymentProgress() async {
+        guard bidAcceptance.isCurrentAccount, case let .loaded(content) = state,
+              let gig = content.gigDetail, let gigId = gig.gigId, let bidId = gig.bidId else { return }
+        guard let response = try? await api.request(GigsEndpoints.bids(gigId: gigId), as: GigBidsResponse.self),
+              bidAcceptance.isCurrentAccount, let bid = response.bids.first(where: { $0.id == bidId }) else { return }
+        gigPaymentPending = bid.status == "pending_payment"
+        state = .loaded(MailDetailContent.replacingGigAccepted(content, with: gig.accepted(bid.status == "accepted")))
     }
 
     /// A17.9 — Set the user's RSVP on a Party mail item. Backend wiring

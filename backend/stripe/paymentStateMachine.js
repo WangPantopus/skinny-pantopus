@@ -150,17 +150,18 @@ async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}) 
     .from('Payment')
     .update(updateData)
     .eq('id', paymentId)
+    .eq('payment_status', currentStatus)
     .select()
     .single();
 
-  if (updateErr) {
+  if (updateErr || !updated) {
     logger.error('Failed to transition payment status', {
       paymentId,
       from: currentStatus,
       to: newStatus,
-      error: updateErr.message,
+      error: updateErr?.message || 'Concurrent payment transition',
     });
-    throw new Error(`Failed to update payment: ${updateErr.message}`);
+    throw new Error(`Failed to update payment: ${updateErr?.message || 'Concurrent payment transition'}`);
   }
 
   // Sync denormalized status on Gig
@@ -171,7 +172,8 @@ async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}) 
         payment_status: newStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', payment.gig_id);
+      .eq('id', payment.gig_id)
+      .eq('payment_id', paymentId);
   }
 
   logger.info('Payment status transitioned', {

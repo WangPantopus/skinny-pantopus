@@ -736,6 +736,7 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (args[0] === 'reconcile_payment_wallet_release') return require('./walletRelease')(args[1], getTable);
     if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
     if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
     if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {

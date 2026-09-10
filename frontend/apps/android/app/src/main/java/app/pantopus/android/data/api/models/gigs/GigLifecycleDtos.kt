@@ -157,6 +157,10 @@ data class GigPaymentResponse(
 @JsonClass(generateAdapter = true)
 data class GigPaymentDto(
     val id: String? = null,
+    @Json(name = "gig_id") val gigId: String? = null,
+    @Json(name = "payer_id") val payerId: String? = null,
+    @Json(name = "payee_id") val payeeId: String? = null,
+    @Json(name = "captured_at") val capturedAt: String? = null,
     @Json(name = "payment_status") val paymentStatus: String? = null,
     @Json(name = "amount_total") val amountTotal: Int? = null,
     @Json(name = "amount_subtotal") val amountSubtotal: Int? = null,

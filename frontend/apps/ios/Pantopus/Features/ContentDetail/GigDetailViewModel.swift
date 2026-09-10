@@ -107,6 +107,49 @@ public final class GigDetailViewModel {
 
     /// Status chip metadata riding the payment envelope.
     public private(set) var paymentStateInfo: GigPaymentStateInfo?
+    private var mayManagePayment = false
+
+    var canOpenAssignedAuthorization: Bool {
+        guard mayManagePayment, bidAcceptance.isCurrentAccount, let gig = rawGig,
+              gig.status == "assigned", let payment, let worker = gig.acceptedBy,
+              payment.id == gig.paymentId, let price = gig.price, price.isFinite,
+              let amount = payment.amountTotal, abs(price * 100 - amount) < 0.001,
+              ["authorization_failed", "authorize_pending", "ready_to_authorize", "canceled"].contains(payment.paymentStatus ?? ""),
+              GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) != nil else { return false }
+        return true
+    }
+
+    func makeAssignedAuthorizationViewModel() -> GigAssignedAuthorizationViewModel? {
+        guard canOpenAssignedAuthorization, let actor = currentUserId, let payment,
+              let worker = rawGig?.acceptedBy,
+              let terms = GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) else { return nil }
+        return GigAssignedAuthorizationViewModel(gigId: gigId, actor: actor, terms: terms, api: api, checkout: checkout)
+    }
+
+    var canOpenRefunds: Bool {
+        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
+              payment.gigId == gigId, payment.payerId == currentUserId,
+              payment.currency?.lowercased() == "usd", let id = payment.id, UUID(uuidString: id) != nil,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount), cents >= 50 else { return false }
+        return true
+    }
+
+    func makeRefundViewModel() -> GigRefundViewModel? {
+        guard canOpenRefunds, let payment, let id = payment.id,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount) else { return nil }
+        return GigRefundViewModel(paymentId: id, total: cents, api: api)
+    }
+
+    /// The server checks current action authority and terms before any command.
+    /// A fresh sheet can recover an earlier request without repeating its mutation.
+    func makeStopViewModel(action: GigStopAction) -> GigStopViewModel? {
+        stopRecovery.makeModel(action: action)
+    }
+
+    func refreshAfterRefund() async {
+        guard bidAcceptance.isCurrentAccount else { return }
+        await refreshSilently()
+    }
 
     /// Change orders on an assigned / in-progress gig (newest first).
     public private(set) var changeOrders: [GigChangeOrderDTO] = []
@@ -193,6 +236,8 @@ public final class GigDetailViewModel {
     private let api: APIClient
     private let uploader: MultipartUploader
     private let checkout: CheckoutCoordinator
+    let stopRecovery: GigStopRecoveryEntry
+    private let bidAcceptance: GigBidAcceptanceCoordinator
     private let currentUserId: String?
     /// Phase 6b — lock-screen Live Activity driver. The default real
     /// controller no-ops in tests / previews; tests inject a recorder.
@@ -203,7 +248,10 @@ public final class GigDetailViewModel {
         api: APIClient = .shared,
         uploader: MultipartUploader = .shared,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
+        bidAcceptance: GigBidAcceptanceCoordinator? = nil,
         currentUserId: String? = GigDetailViewModel.currentSignedInUserId(),
+        stopStore: any PendingGigStopStoring = PendingGigStopStore(),
+        stopIdentity: (() -> GigStopViewModel.Identity?)? = nil,
         liveActivity: any GigLiveActivityControlling = GigLiveActivityController.shared,
         roomEvents: @escaping @MainActor (String) -> AsyncStream<GigRoomEvent> = { name in
             SocketClient.shared.events(named: name, as: GigRoomEvent.self)
@@ -216,7 +264,9 @@ public final class GigDetailViewModel {
         self.api = api
         self.uploader = uploader
         self.checkout = checkout
+        self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.currentUserId = currentUserId
+        stopRecovery = GigStopRecoveryEntry(gig: gigId, actor: currentUserId, api: api, store: stopStore, identity: stopIdentity)
         self.liveActivity = liveActivity
         self.roomEvents = roomEvents
         self.emitRoom = emitRoom
@@ -232,6 +282,7 @@ public final class GigDetailViewModel {
     }
 
     public func load() async {
+        stopRecovery.refresh()
         state = .loading
         await fetch(silently: false)
     }
@@ -239,6 +290,7 @@ public final class GigDetailViewModel {
     /// Realtime / post-mutation refetch — keeps the current frame on
     /// screen (no skeleton) and swallows errors.
     public func refreshSilently() async {
+        stopRecovery.refresh()
         await fetch(silently: true)
     }
 
@@ -520,14 +572,23 @@ public final class GigDetailViewModel {
     private func loadPayment(gig: GigDTO, status: String) async {
         let assignedPlus = ["assigned", "in_progress", "completed"].contains(status)
             || !(gig.acceptedBy ?? "").isEmpty
-        guard viewerIsOwner, assignedPlus else {
+        mayManagePayment = false
+        // The endpoint verifies current poster/business-manager access. A
+        // worker's redacted response never grants authorization controls.
+        guard currentUserId != nil, !viewerIsWorker, assignedPlus, bidAcceptance.isCurrentAccount else {
             payment = nil
             paymentStateInfo = nil
             return
         }
         let response: GigPaymentResponse? = try? await api.request(GigsEndpoints.payment(gigId: gigId))
+        guard bidAcceptance.isCurrentAccount else { payment = nil
+            paymentStateInfo = nil
+            return
+        }
         payment = response?.payment
         paymentStateInfo = response?.stateInfo
+        mayManagePayment = payment?.gigId == gigId && payment?.payerId == gig.userId
+            && payment?.payeeId != currentUserId && payment != nil
     }
 
     /// Change orders — both roles, while the gig is assigned /
@@ -748,7 +809,7 @@ public final class GigDetailViewModel {
     /// Payment card gate — owner only (the worker's payout view lives in
     /// the wallet); data presence implies the assigned+ fetch succeeded.
     public var showPaymentCard: Bool {
-        viewerIsOwner && payment != nil
+        (viewerIsOwner || mayManagePayment) && payment != nil && bidAcceptance.isCurrentAccount
     }
 
     /// Changes card gate — either party on an assigned / in-progress
@@ -782,18 +843,15 @@ public final class GigDetailViewModel {
 
     /// "Cancel task" overflow gate — the poster on a live gig.
     ///
-    /// RN branches here (`gig/[id].tsx:412`): an **open** gig is *closed*
-    /// (`DELETE /api/gigs/:id`, the row disappears) while an assigned /
-    /// in-progress one is *cancelled* (`POST /cancel`, fees may apply).
-    /// `canCloseTask` covers the first branch, this one the second.
+    /// The shared task-action sheet verifies current policy and retains any
+    /// pending operation before cancellation can complete.
     public var canCancelTask: Bool {
         guard viewerIsOwner, let gig = rawGig else { return false }
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
-    /// "Close task" overflow gate — the poster on a still-open gig. The
-    /// backend's `DELETE /api/gigs/:id` rejects any other status
-    /// ("Can only delete open gigs", `gigs.js:3755`).
+    /// Closing an open task uses the same recoverable stop command. Server
+    /// admission requires no assignment, payment or unresolved checkout.
     public var canCloseTask: Bool {
         guard viewerIsOwner, let gig = rawGig else { return false }
         return (gig.status ?? "").lowercased() == "open"
@@ -1262,42 +1320,32 @@ public extension GigDetailViewModel {
 
     /// Poster accepts a bid: `POST .../bids/:bidId/accept`; paid gigs
     /// return PaymentSheet params → present → `finalize-accept` (or
-    /// `abort-accept` on cancel/decline). Refreshes the gig on success.
+    /// `abort-accept` on explicit cancellation). Unknown outcomes retain recovery.
     func acceptBid(bidId: String) async -> BidAcceptOutcome {
-        guard bidActionInFlight == nil else { return .canceled }
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
         bidActionInFlight = bidId
         defer { bidActionInFlight = nil }
-        do {
-            let response: GigBidAcceptResponse = try await api.request(
-                GigsEndpoints.acceptBid(gigId: gigId, bidId: bidId)
-            )
-            let requiresPayment = response.requiresPaymentSetup == true
-                || response.sheetParams.clientSecret != nil
-            if requiresPayment {
-                let outcome = await checkout.present(response.sheetParams)
-                switch outcome {
-                case .paid:
-                    let _: GigBidAcceptResponse = try await api.request(
-                        GigsEndpoints.finalizeAcceptBid(gigId: gigId, bidId: bidId)
-                    )
-                case .canceled:
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .canceled
-                case let .declined(message), let .failed(message):
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .failed(message: message)
-                }
-            }
-            await refreshSilently()
-            return .accepted
-        } catch {
-            return .failed(message: (error as? APIError)?.errorDescription ?? "Couldn't accept this bid.")
+        let result = await bidAcceptance.accept(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
+        }
+    }
+
+    func cancelBidAcceptance(bidId: String) async -> BidAcceptOutcome {
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
+        bidActionInFlight = bidId
+        defer { bidActionInFlight = nil }
+        let result = await bidAcceptance.cancel(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
         }
     }
 
@@ -1390,24 +1438,6 @@ public extension GigDetailViewModel {
             return nil
         } catch {
             return (error as? APIError)?.errorDescription ?? "Failed to withdraw counter"
-        }
-    }
-
-    /// Poster closes a **still-open** task: `DELETE /api/gigs/:id`
-    /// removes the row outright (the backend 400s any other status).
-    /// Mirrors RN's `handleCloseGig` open branch (`gig/[id].tsx:427`).
-    /// Returns `nil` on success, an error string otherwise.
-    @discardableResult
-    func closeGig() async -> String? {
-        guard canCloseTask else { return "This task can no longer be closed." }
-        do {
-            _ = try await api.request(
-                GigOwnerActionsEndpoints.deleteGig(id: gigId),
-                as: GigDeleteResponse.self
-            )
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Failed to close gig."
         }
     }
 
@@ -1607,59 +1637,6 @@ public extension GigDetailViewModel {
         }
     }
 
-    // MARK: - Pre-start release (reopen bidding / worker self-release)
-
-    /// Outcome of a release action, carrying the server's own
-    /// confirmation copy so the toast matches what actually happened.
-    enum ReleaseOutcome: Sendable, Equatable {
-        case succeeded(message: String)
-        case failed(message: String)
-    }
-
-    /// Poster's "Replace worker" — `POST /reopen-bidding`. Unassigns the
-    /// current worker, cancels the pre-capture payment hold, rejects
-    /// their accepted bid, and moves the gig back to `open`
-    /// (`backend/routes/gigs.js:4874`). Refreshes on success so the
-    /// lifecycle footer re-renders in the open/bidding state.
-    @discardableResult
-    func replaceWorker() async -> ReleaseOutcome {
-        guard canReplaceWorker else {
-            return .failed(message: "This task can't be reopened for bids right now.")
-        }
-        do {
-            let response: ReopenBiddingResponse = try await api.request(
-                GigReassignmentEndpoints.reopenBidding(gigId: gigId)
-            )
-            await refreshSilently()
-            return .succeeded(message: response.message ?? "Worker removed and bidding reopened")
-        } catch {
-            return .failed(
-                message: (error as? APIError)?.errorDescription ?? "Failed to replace worker"
-            )
-        }
-    }
-
-    /// Assigned worker's "Can't make it" — `POST /worker-release`.
-    /// Unassigns the viewer, releases the payment hold, reopens the task
-    /// for bids, and notifies the poster (`backend/routes/gigs.js:5954`).
-    @discardableResult
-    func releaseAssignment(note: String? = nil) async -> ReleaseOutcome {
-        guard canReleaseAssignment else {
-            return .failed(message: "You can't release this task right now.")
-        }
-        do {
-            let response: WorkerReleaseResponse = try await api.request(
-                GigReassignmentEndpoints.workerRelease(gigId: gigId, note: note)
-            )
-            await refreshSilently()
-            return .succeeded(message: response.message ?? "You have been released from this task")
-        } catch {
-            return .failed(
-                message: (error as? APIError)?.errorDescription ?? "Failed to release from task"
-            )
-        }
-    }
-
     /// Either party reports the other as a no-show (owner → worker,
     /// worker → unresponsive poster) — cancels the gig server-side.
     @discardableResult
@@ -1723,23 +1700,6 @@ public extension GigDetailViewModel {
             return (true, response.message ?? "Reported. We'll take a look.")
         } catch {
             return (false, (error as? APIError)?.errorDescription ?? "Couldn't report this task.")
-        }
-    }
-
-    /// Fetch the zone / fee preview shown in the cancel sheet.
-    func loadCancellationPreview() async -> GigCancellationPreview? {
-        try? await api.request(GigsEndpoints.cancellationPreview(gigId: gigId))
-    }
-
-    /// Cancel the gig with a structured reason.
-    @discardableResult
-    func cancelTask(reason: CancelGigReason?) async -> String? {
-        do {
-            _ = try await api.request(GigsEndpoints.cancelGig(gigId: gigId, reason: reason), as: EmptyResponse.self)
-            await refreshSilently()
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Couldn't cancel the task."
         }
     }
 
@@ -1841,7 +1801,8 @@ public extension GigDetailViewModel {
             createdAt: bid.createdAt,
             bidder: bid.bidder,
             counterAmount: clearCounter ? nil : (counterAmount ?? bid.counterAmount),
-            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus)
+            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus),
+            gigId: bid.gigId
         )
     }
 }

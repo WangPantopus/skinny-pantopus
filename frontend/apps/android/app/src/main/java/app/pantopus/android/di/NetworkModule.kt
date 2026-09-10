@@ -170,6 +170,7 @@ object NetworkModule {
             .add(app.pantopus.android.data.api.models.businesses.BusinessCatalogItemRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.BillDecimalAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
+            .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // Payments earnings/spending: the summary arrives both nested and
             // spread at the envelope root, in snake_case and camelCase.
             .add(app.pantopus.android.data.api.models.payments.PaymentsEarningsJsonAdapter())
@@ -640,6 +641,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGigReassignmentApi(retrofit: Retrofit): GigReassignmentApi = retrofit.create(GigReassignmentApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideGigStopApi(retrofit: Retrofit): app.pantopus.android.data.api.services.GigStopApi =
+        retrofit.create(app.pantopus.android.data.api.services.GigStopApi::class.java)
 
     @Provides
     @Singleton

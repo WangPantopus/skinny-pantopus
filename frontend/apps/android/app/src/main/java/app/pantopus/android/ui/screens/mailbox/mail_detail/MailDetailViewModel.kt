@@ -17,7 +17,6 @@ import app.pantopus.android.data.api.models.mailbox.v2.PartyDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.RecordsDetailDto
 import app.pantopus.android.data.api.models.mailbox.vault.VaultFolderDto
-import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
@@ -25,20 +24,18 @@ import app.pantopus.android.data.mailbox.MailboxDocumentRepository
 import app.pantopus.android.data.mailbox.MailboxPackageRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.mailbox.MailboxVaultRepository
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailTrust
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageBodyContent
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.decodePackageDetail
-import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -58,17 +55,6 @@ sealed interface MailDetailUiState {
 
     data class Error(val message: String) : MailDetailUiState
 }
-
-/** One-shot effects emitted by [MailDetailViewModel]. */
-sealed interface MailDetailEvent {
-    data class PresentGigBidCheckout(val params: PaymentIntentSheetParamsDto) : MailDetailEvent
-}
-
-private data class PendingGigBidAcceptance(
-    val content: MailDetailContent,
-    val gigId: String,
-    val bidId: String,
-)
 
 /**
  * Pure projection of the backend mail item into the A17 shell slots.
@@ -168,6 +154,7 @@ class MailDetailViewModel
         private val packageRepo: MailboxPackageRepository,
         private val documentRepo: MailboxDocumentRepository,
         savedStateHandle: SavedStateHandle,
+        private val checkoutIdentities: GigPaymentIdentitySource,
     ) : ViewModel() {
         private val mailId: String =
             checkNotNull(savedStateHandle.get<String>(MAIL_DETAIL_MAIL_ID_KEY)) {
@@ -180,9 +167,6 @@ class MailDetailViewModel
         private val _toast = MutableStateFlow<String?>(null)
         val toast: StateFlow<String?> = _toast.asStateFlow()
 
-        private val _events = MutableSharedFlow<MailDetailEvent>(extraBufferCapacity = 4)
-        val events: SharedFlow<MailDetailEvent> = _events.asSharedFlow()
-
         private val _ackInFlight = MutableStateFlow(false)
         val ackInFlight: StateFlow<Boolean> = _ackInFlight.asStateFlow()
 
@@ -192,10 +176,6 @@ class MailDetailViewModel
         /** Coupon redeem mutation in-flight; disables the redeem CTA. */
         private val _couponRedeemInFlight = MutableStateFlow(false)
         val couponRedeemInFlight: StateFlow<Boolean> = _couponRedeemInFlight.asStateFlow()
-
-        /** Gig accept-bid mutation in-flight; disables the action row. */
-        private val _gigBidInFlight = MutableStateFlow(false)
-        val gigBidInFlight: StateFlow<Boolean> = _gigBidInFlight.asStateFlow()
 
         /** Party RSVP mutation in-flight; disables the three-way cluster. */
         private val _partyRsvpInFlight = MutableStateFlow(false)
@@ -253,7 +233,21 @@ class MailDetailViewModel
         private val _pendingDestructiveAction = MutableStateFlow<MailCategoryAction?>(null)
         val pendingDestructiveAction: StateFlow<MailCategoryAction?> = _pendingDestructiveAction.asStateFlow()
 
-        private var pendingGigBidAcceptance: PendingGigBidAcceptance? = null
+        val bidCheckout =
+            GigBidCheckoutCoordinator(
+                gigsRepo,
+                viewModelScope,
+                checkoutIdentities::checkoutIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities::permitsAnonymousRead,
+                onAccepted = { gigId, bidId ->
+                    val current = _state.value as? MailDetailUiState.Loaded
+                    val gig = current?.content?.gigDetail
+                    if (current != null && gig?.gigId == gigId && gig.bidId == bidId) {
+                        _state.value = MailDetailUiState.Loaded(current.content.copy(gigDetail = gig.accepted()))
+                    }
+                },
+            )
 
         /**
          * Set to this mail's id when the loaded item carries a stationery
@@ -280,7 +274,16 @@ class MailDetailViewModel
         fun refresh() {
             _state.value = MailDetailUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.detail(mailId)) {
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
+                    return@launch
+                }
+                val result = repo.detail(mailId)
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success ->
                         // Ceremonial mail never lands on the generic detail —
                         // hand it straight to the open experience and hold the
@@ -608,89 +611,11 @@ class MailDetailViewModel
          * accept → PaymentSheet → finalize/abort flow.
          */
         fun acceptGigBid() {
-            val current = _state.value as? MailDetailUiState.Loaded
-            val gig = current?.content?.gigDetail
-            if (current == null || gig == null) return
-            if (!canAcceptGigBid(current)) return
-            val gigId = gig.gigId
-            val bidId = gig.bidId
-            if (gigId.isNullOrBlank() || bidId.isNullOrBlank()) {
-                _toast.value = "Couldn't accept this bid from mail."
-                return
-            }
-            _gigBidInFlight.value = true
-            viewModelScope.launch {
-                when (val result = gigsRepo.acceptBid(gigId, bidId)) {
-                    is NetworkResult.Success -> {
-                        val params = result.data.sheetParams()
-                        val requiresPayment = result.data.requiresPaymentSetup == true || !params.clientSecret.isNullOrBlank()
-                        if (requiresPayment) {
-                            pendingGigBidAcceptance =
-                                PendingGigBidAcceptance(
-                                    content = current.content,
-                                    gigId = gigId,
-                                    bidId = bidId,
-                                )
-                            _events.emit(MailDetailEvent.PresentGigBidCheckout(params))
-                        } else {
-                            _state.value =
-                                MailDetailUiState.Loaded(current.content.copy(gigDetail = gig.accepted()))
-                            _toast.value = "Bid accepted"
-                            _gigBidInFlight.value = false
-                        }
-                    }
-                    is NetworkResult.Failure -> {
-                        _toast.value = result.error.message
-                        _gigBidInFlight.value = false
-                    }
-                }
-            }
-        }
-
-        private fun canAcceptGigBid(current: MailDetailUiState.Loaded): Boolean =
-            current.content.category == MailItemCategory.Gig && !_gigBidInFlight.value
-
-        fun onGigBidCheckoutOutcome(outcome: CheckoutOutcome) {
-            val pending = pendingGigBidAcceptance ?: return
-            pendingGigBidAcceptance = null
-            when (outcome) {
-                CheckoutOutcome.Paid -> finalizePendingGigBid(pending)
-                CheckoutOutcome.Canceled -> abortPendingGigBid(pending, "Payment canceled")
-                is CheckoutOutcome.Declined ->
-                    abortPendingGigBid(pending, outcome.message ?: "Your card was declined.")
-            }
-        }
-
-        private fun finalizePendingGigBid(pending: PendingGigBidAcceptance) {
-            viewModelScope.launch {
-                when (val result = gigsRepo.finalizeAcceptBid(pending.gigId, pending.bidId)) {
-                    is NetworkResult.Success -> {
-                        val gig = pending.content.gigDetail
-                        _state.value =
-                            MailDetailUiState.Loaded(
-                                pending.content.copy(gigDetail = gig?.accepted()),
-                            )
-                        _toast.value = "Bid accepted"
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value = MailDetailUiState.Loaded(pending.content)
-                        _toast.value = result.error.message
-                    }
-                }
-                _gigBidInFlight.value = false
-            }
-        }
-
-        private fun abortPendingGigBid(
-            pending: PendingGigBidAcceptance,
-            message: String,
-        ) {
-            viewModelScope.launch {
-                gigsRepo.abortAcceptBid(pending.gigId, pending.bidId)
-                _state.value = MailDetailUiState.Loaded(pending.content)
-                _toast.value = message
-                _gigBidInFlight.value = false
-            }
+            val current = _state.value as? MailDetailUiState.Loaded ?: return
+            val gig = current.content.takeIf { it.category == MailItemCategory.Gig }?.gigDetail ?: return
+            val gigId = gig.gigId?.takeIf(String::isNotBlank) ?: return
+            val bidId = gig.bidId?.takeIf(String::isNotBlank) ?: return
+            bidCheckout.start(gigId, bidId)
         }
 
         /**

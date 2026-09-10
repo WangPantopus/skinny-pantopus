@@ -5,6 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const logger = require('../utils/logger');
 const {
   createNotification,
@@ -26,6 +27,8 @@ const {
   eventDetailsSchema,
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
+const paidGigAcceptance = require('../services/gigPaymentAcceptance');
+const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
 const browseCache = require('../services/gig/browseCacheService');
 const affinityService = require('../services/gig/affinityService');
@@ -42,6 +45,47 @@ const {
 } = require('../serializers/identitySerializers');
 
 // ============ HELPERS ============
+
+const stopActions = ['cancel', 'reopen_bidding', 'worker_release', 'close'];
+const stopCommandSchema = Joi.object({
+  requestId: Joi.string().uuid().required(),
+  action: Joi.string().valid(...stopActions).required(),
+  expectedActorId: Joi.string().uuid().required(),
+  expectedSessionScope: Joi.string().pattern(/^[a-f0-9]{64}$/).required(),
+  expectedTerms: Joi.object().min(1).required(),
+  reason: Joi.string().valid('changed_plans', 'found_someone_else', 'too_expensive', 'emergency', 'other',
+    'schedule_conflict', 'unable_to_complete', 'safety_concern').allow(null).default(null),
+  rollbackMode: Joi.string().valid('payment_setup_aborted').allow(null).default(null),
+});
+function stopError(res, error) {
+  return res.status(error.statusCode || 503).json({ code: error.code || 'STOP_UNKNOWN',
+    error: error.statusCode ? error.message : 'The stop request could not be checked. Keep its request ID and retry.',
+    ...(error.code === 'STOP_ACTIVE' ? { activeRequestId: error.activeRequestId } : {}) });
+}
+function stopCommand(routeAction = null) {
+  return async (req, res) => {
+    const parsed = stopCommandSchema.validate(routeAction ? { ...req.body, action: routeAction } : req.body, { convert: false });
+    if (parsed.error || (routeAction && req.body?.action && req.body.action !== routeAction)) {
+      return res.status(409).json({ code: 'STOP_TERMS_REQUIRED', error: 'Refresh the stop preview before continuing.' });
+    }
+    if (parsed.value.expectedActorId !== req.user.id) return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your account changed. Reopen the task.' });
+    if (!requireExpectedSessionScope({ user: req.user, session: req.session, cookies: req.cookies,
+      headers: { ...req.headers, 'x-pantopus-session-scope': parsed.value.expectedSessionScope } }, res, { required: true })) return;
+    try {
+      const scope = getRequestSessionScope(req);
+      const progress = await gigStop.execute({ gigId: req.params.gigId || req.params.id,
+        actorId: scope.actor_id, sessionScope: scope.session_scope, ...parsed.value });
+      if (progress.status === 'completed') emitGigUpdate(req, req.params.gigId || req.params.id, 'status-change');
+      return res.status(progress.status === 'completed' ? 200 : 202).json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
+    } catch (error) { return stopError(res, error); }
+  };
+}
+
+function bindGigPaymentSnapshot(query, gig) {
+  let scoped = query.eq('user_id', gig.user_id).eq('price', gig.price);
+  scoped = gig.payment_id ? scoped.eq('payment_id', gig.payment_id) : scoped.is('payment_id', null);
+  return gig.accepted_by ? scoped.eq('accepted_by', gig.accepted_by) : scoped.is('accepted_by', null);
+}
 
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif)(\?.*)?$/i;
 const unavailableGigFeatureTables = new Set();
@@ -819,6 +863,24 @@ async function getGigOwnerNotificationRecipients(ownerUserId, excludeUserId = nu
 }
 
 // ============ ROUTES ============
+
+router.get('/:gigId/stop-preview', verifyToken, async (req, res) => {
+  if (!stopActions.includes(req.query.action)) return res.status(400).json({ code: 'STOP_ACTION_REQUIRED', error: 'Choose the stop action to preview.' });
+  try {
+    const scope = getRequestSessionScope(req);
+    const result = await gigStop.preview({ gigId: req.params.gigId, actorId: scope.actor_id, action: req.query.action });
+    return res.json({ ...result, actorId: scope.actor_id, sessionScope: scope.session_scope });
+  } catch (error) { return stopError(res, error); }
+});
+router.get('/:gigId/stop-requests/:requestId', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().validate(req.params.requestId).error) return res.status(400).json({ code: 'STOP_REQUEST_REQUIRED', error: 'A valid stop request is required.' });
+  try {
+    const scope = getRequestSessionScope(req);
+    const result = await gigStop.readRequest({ gigId: req.params.gigId, actorId: scope.actor_id, requestId: req.params.requestId });
+    return res.json({ ...result, actorId: scope.actor_id, sessionScope: scope.session_scope });
+  } catch (error) { return stopError(res, error); }
+});
+router.post('/:gigId/stop-requests', verifyToken, stopCommand());
 // IMPORTANT: Static routes MUST come before param routes like "/:id"
 
 // -------------------- CANCELLATION POLICIES (static) --------------------
@@ -3677,6 +3739,11 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
  * Update gig status
  */
 router.patch('/:id/status', verifyToken, validate(updateStatusSchema), async (req, res) => {
+  // Availability changes must retain their stop receipt and financial outcome.
+  // Other existing lifecycle routes keep their own authorization contracts.
+  if (['open', 'cancelled'].includes(req.body.status)) {
+    return res.status(409).json({ code: 'STOP_TERMS_REQUIRED', error: 'Refresh the stop preview and submit a stop request to close or reopen this task.' });
+  }
   try {
     const { id } = req.params;
     const userId = req.user.id;
@@ -3726,51 +3793,9 @@ router.patch('/:id/status', verifyToken, validate(updateStatusSchema), async (re
 
 /**
  * DELETE /api/gigs/:id
- * Delete a gig
+ * Compatibility alias for closing an unpaid, unassigned gig. Retain its receipt.
  */
-router.delete('/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    logger.info('Deleting gig', { gigId: id, userId });
-
-    // Verify ownership
-    // Use admin client for existence lookup so RLS visibility does not cause false 404s.
-    const { data: existingGig, error: fetchError } = await supabaseAdmin
-      .from('Gig')
-      .select('user_id, status')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existingGig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    const ownerAccess = await getGigOwnerAccess(existingGig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'You can only delete your own gigs' });
-    }
-
-    if (existingGig.status !== 'open') {
-      return res.status(400).json({ error: 'Can only delete open gigs' });
-    }
-
-    const { error } = await supabaseAdmin.from('Gig').delete().eq('id', id);
-
-    if (error) {
-      logger.error('Error deleting gig', { error: error.message, gigId: id });
-      return res.status(500).json({ error: 'Failed to delete gig' });
-    }
-
-    logger.info('Gig deleted', { gigId: id, userId });
-
-    res.json({ message: 'Gig deleted successfully' });
-  } catch (err) {
-    logger.error('Gig delete error', { error: err.message, gigId: req.params.id });
-    res.status(500).json({ error: 'Failed to delete gig' });
-  }
-});
+router.delete('/:id', verifyToken, stopCommand('close'));
 
 // -------------------- BIDS (PARAM+STATIC MIX) --------------------
 
@@ -4246,71 +4271,19 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
     }
 
-    // 2.5) For paid gigs, set up payment BEFORE mutating bids/gig.
-    // If payment setup fails, the poster must fix their payment method first.
-    const agreedPrice = Number.isFinite(Number(bid?.bid_amount))
-      ? Number(bid?.bid_amount)
-      : (parseFloat(gig?.price || 0) || 0);
-    let paymentResult = null;
-    if (agreedPrice > 0) {
-      try {
-        const amountCents = Math.round(agreedPrice * 100);
-        // Always create PaymentIntent with manual capture (authorization hold).
-        // This places the hold during the payment sheet — no separate "Authorize Card" step.
-        // For far-future tasks, if the hold expires, authorizeUpcomingGigs re-authorizes.
-        paymentResult = await stripeService.createPaymentIntentForGig({
-          payerId: gig.user_id,
-          payeeId: bid.user_id,
-          gigId,
-          amount: amountCents,
-          homeId: gig?.origin_home_id || null,
-        });
-      } catch (paymentErr) {
-        logger.error('Accept bid: payment setup failed (blocking)', {
-          error: paymentErr?.message,
-          gigId,
-        });
-        return res.status(400).json({
-          error: 'Payment setup failed. Please add a payment method before accepting this bid.',
-          code: 'payer_payment_required',
-        });
-      }
+    const agreedPrice = Number(bid.bid_amount);
+    if (!Number.isFinite(agreedPrice) || agreedPrice < 0) {
+      return res.status(400).json({ error: 'Invalid agreed bid amount' });
     }
-
-    // ── PAID GIG: soft accept with pending_payment ──
     if (agreedPrice > 0) {
-      // Concurrency guard: only one bid can be in pending_payment at a time
-      const { data: existingPending } = await supabaseAdmin
-        .from('GigBid')
-        .select('id')
-        .eq('gig_id', gigId)
-        .eq('status', 'pending_payment')
-        .maybeSingle();
-
-      if (existingPending) {
-        return res.status(409).json({
-          error: 'Another bid is already being processed for payment. Please wait.',
-          code: 'pending_payment_conflict',
+      let paymentResult;
+      try {
+        paymentResult = await paidGigAcceptance.begin(gig, bid, actorUserId);
+      } catch (error) {
+        return res.status(error.statusCode || 503).json({
+          error: error.statusCode ? error.message : 'Payment setup could not be confirmed. Please retry.',
+          code: error.code || 'payment_setup_retry',
         });
-      }
-
-      // Mark bid as pending_payment (soft hold)
-      const pendingExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
-      const intentId = paymentResult?.paymentId || paymentResult?.paymentIntentId || paymentResult?.setupIntentId || null;
-
-      const { error: pendingErr } = await supabaseAdmin
-        .from('GigBid')
-        .update({
-          status: 'pending_payment',
-          pending_payment_expires_at: pendingExpiry,
-          pending_payment_intent_id: intentId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', bidId);
-
-      if (pendingErr) {
-        logger.error('Accept bid: failed to set pending_payment', { error: pendingErr.message });
-        return res.status(500).json({ error: 'Failed to process bid acceptance' });
       }
 
       const paymentPayload = paymentResult
@@ -4326,16 +4299,23 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       let ephemeralKey = null;
       let customerId = null;
       try {
-        customerId = await stripeService.getOrCreateCustomer(gig.user_id);
-        const ek = await stripeService.createEphemeralKey(customerId);
-        ephemeralKey = ek?.secret || null;
+        if (!paymentResult.authorizationReady) {
+          customerId = await stripeService.getOrCreateCustomer(gig.user_id);
+          const ek = await stripeService.createEphemeralKey(customerId);
+          ephemeralKey = ek?.secret || null;
+        }
       } catch (ekErr) {
         logger.error('Accept bid: failed to create ephemeral key', { error: ekErr?.message });
       }
 
       return res.json({
-        bid: { ...bid, status: 'pending_payment' },
-        requiresPaymentSetup: true,
+        bid: { ...bid, bid_amount: paymentResult.amountCents / 100, status: 'pending_payment' },
+        requiresPaymentSetup: !paymentResult.authorizationReady,
+        authorizationReady: paymentResult.authorizationReady === true,
+        paymentStatus: paymentResult.paymentStatus,
+        providerStatus: paymentResult.providerStatus,
+        amountCents: paymentResult.amountCents,
+        currency: paymentResult.currency,
         isSetupIntent: false,
         payment: paymentPayload,
         publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
@@ -4348,48 +4328,15 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       });
     }
 
-    // ── FREE GIG: immediate full acceptance (no payment step) ──
-    // 3) Mark this bid accepted
-    const { error: acceptErr } = await supabaseAdmin
-      .from('GigBid')
-      .update({ status: 'accepted', updated_at: new Date().toISOString() })
-      .eq('id', bidId);
-
-    if (acceptErr) {
-      logger.error('Accept bid: failed to update bid', {
-        message: acceptErr.message,
-        details: acceptErr.details,
-        code: acceptErr.code,
-      });
-      return res.status(500).json({ error: 'Failed to accept bid' });
+    let freeAcceptance;
+    try {
+      freeAcceptance = await paidGigAcceptance.rpc('accept_free_gig_bid', {
+        p_gig_id: gigId, p_bid_id: bidId, p_payer_id: gig.user_id,
+      }, 'gig');
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: 'Bid acceptance could not be confirmed. Please retry.' });
     }
-
-    // 4) Other pending bids stay alive as standby — they are NOT rejected here.
-    //    They will only be rejected when the gig is confirmed complete or cancelled.
-
-    // 5) Update gig to accepted + accepted_by
-    const nowIso = new Date().toISOString();
-    const { data: updatedGig, error: gigUpdateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'assigned',
-        accepted_by: bid.user_id,
-        accepted_at: nowIso,
-        price: gig.price,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .select('*')
-      .single();
-
-    if (gigUpdateErr) {
-      logger.error('Accept bid: failed to update gig', {
-        message: gigUpdateErr.message,
-        details: gigUpdateErr.details,
-        code: gigUpdateErr.code,
-      });
-      return res.status(500).json({ error: 'Failed to update gig after accepting bid' });
-    }
+    const updatedGig = freeAcceptance.gig;
 
     const gigTitle = gig.title || 'a gig';
 
@@ -4545,7 +4492,7 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
   try {
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, title, price, scheduled_start, origin_home_id, exact_address, exact_city, exact_state, category')
+      .select('id, user_id, status, title, price, scheduled_start, origin_home_id, exact_address, exact_city, exact_state, category, payment_id, accepted_by')
       .eq('id', gigId)
       .single();
 
@@ -4554,10 +4501,6 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
     const ownerAccess = await getGigOwnerAccess(gig.user_id, actorUserId, 'gigs.manage');
     if (!ownerAccess.allowed) {
       return res.status(403).json({ error: 'Only the gig owner can finalize acceptance' });
-    }
-
-    if (gig.status !== 'open') {
-      return res.status(400).json({ error: `Gig is not open (status=${gig.status})` });
     }
 
     const { data: bid, error: bidErr } = await supabaseAdmin
@@ -4572,210 +4515,21 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
     }
 
-    if (bid.status !== 'pending_payment') {
-      return res.status(400).json({ error: `Bid is not in pending_payment state (status=${bid.status})` });
-    }
-
-    // Check expiry
-    if (bid.pending_payment_expires_at && new Date(bid.pending_payment_expires_at) < new Date()) {
-      // Revert the expired bid
-      await supabaseAdmin
-        .from('GigBid')
-        .update({ status: 'pending', pending_payment_expires_at: null, pending_payment_intent_id: null, updated_at: new Date().toISOString() })
-        .eq('id', bidId);
-      return res.status(410).json({ error: 'Payment window expired. Please try accepting the bid again.' });
-    }
-
-    const agreedPrice = Number.isFinite(Number(bid.bid_amount)) ? Number(bid.bid_amount) : (parseFloat(gig.price || 0) || 0);
-    const nowIso = new Date().toISOString();
-
-    // 1) Mark bid accepted, clear pending_payment fields
-    const { error: acceptErr } = await supabaseAdmin
-      .from('GigBid')
-      .update({
-        status: 'accepted',
-        pending_payment_expires_at: null,
-        pending_payment_intent_id: null,
-        updated_at: nowIso,
-      })
-      .eq('id', bidId)
-      .eq('status', 'pending_payment'); // optimistic lock
-
-    if (acceptErr) {
-      logger.error('Finalize accept: failed to update bid', { error: acceptErr.message });
-      return res.status(500).json({ error: 'Failed to finalize acceptance' });
-    }
-
-    // 2) Other pending bids stay alive as standby — NOT rejected here.
-    //    They will only be rejected when the gig is confirmed complete or cancelled.
-
-    // 3) Assign gig
-    const { data: updatedGig, error: gigUpdateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'assigned',
-        accepted_by: bid.user_id,
-        accepted_at: nowIso,
-        price: agreedPrice > 0 ? agreedPrice : gig.price,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .select('*')
-      .single();
-
-    if (gigUpdateErr) {
-      logger.error('Finalize accept: failed to update gig', { error: gigUpdateErr.message });
-      return res.status(500).json({ error: 'Failed to assign gig' });
-    }
-
-    // 4) Link payment to gig and sync authorization status from Stripe
-    if (bid.pending_payment_intent_id) {
-      // Link payment first
-      await supabaseAdmin
-        .from('Gig')
-        .update({
-          payment_id: bid.pending_payment_intent_id,
-          payment_status: PAYMENT_STATES.AUTHORIZE_PENDING,
-          updated_at: nowIso,
-        })
-        .eq('id', gigId);
-
-      // Sync actual status from Stripe — if the user completed the payment sheet,
-      // the PaymentIntent should be in requires_capture (AUTHORIZED).
-      try {
-        const syncResult = await stripeService.syncPaymentAuthorizationStatus(bid.pending_payment_intent_id);
-        if (syncResult.payment_status && syncResult.payment_status !== PAYMENT_STATES.AUTHORIZE_PENDING) {
-          await supabaseAdmin
-            .from('Gig')
-            .update({ payment_status: syncResult.payment_status, updated_at: nowIso })
-            .eq('id', gigId);
-        }
-      } catch (syncErr) {
-        logger.error('Finalize accept: payment sync failed, webhook will update later', {
-          gigId,
-          paymentId: bid.pending_payment_intent_id,
-          error: syncErr.message,
-        });
-      }
-
-      // Save the payment method to the user's PaymentMethod table so it
-      // appears in Payments & Payouts > Methods.
-      try {
-        logger.info('Finalize accept: syncing payment method', {
-          paymentId: bid.pending_payment_intent_id,
-          userId: gig.user_id,
-        });
-        await stripeService.syncPaymentMethodToLocal(bid.pending_payment_intent_id, gig.user_id);
-      } catch (pmErr) {
-        logger.error('Finalize accept: failed to save payment method', {
-          error: pmErr?.message,
-          stack: pmErr?.stack,
-        });
-      }
-    }
-
-    const gigTitle = gig.title || 'a gig';
-
-    // 5) Create (or get) gig chat room
-    let roomId = null;
+    let finalized;
     try {
-      const { data: rpcRoomId, error: rpcErr } = await supabaseAdmin.rpc('get_or_create_gig_chat', {
-        p_gig_id: gigId,
-      });
-
-      if (rpcErr) {
-        const { data: existingRoom } = await supabaseAdmin
-          .from('ChatRoom')
-          .select('id')
-          .eq('gig_id', gigId)
-          .eq('type', 'gig')
-          .single();
-
-        roomId = existingRoom ? existingRoom.id : null;
-        if (!existingRoom) {
-          const { data: newRoom } = await supabaseAdmin
-            .from('ChatRoom')
-            .insert({ type: 'gig', gig_id: gigId, name: `Gig: ${updatedGig?.title || 'Chat'}` })
-            .select('id')
-            .single();
-          roomId = newRoom?.id || null;
-        }
-      } else {
-        roomId = rpcRoomId;
-      }
-
-      if (roomId) {
-        const participants = [
-          { room_id: roomId, user_id: gig.user_id, role: 'owner', is_active: true },
-          { room_id: roomId, user_id: bid.user_id, role: 'member', is_active: true },
-          ...(String(actorUserId) !== String(gig.user_id)
-            ? [{ room_id: roomId, user_id: actorUserId, role: 'member', is_active: true }]
-            : []),
-        ];
-        await supabaseAdmin
-          .from('ChatParticipant')
-          .upsert(participants, { onConflict: 'room_id,user_id' });
-
-        await supabaseAdmin.from('ChatMessage').insert({
-          room_id: roomId,
-          user_id: gig.user_id,
-          type: 'gig_offer',
-          message: `Offer accepted for "${gigTitle}" • Budget: $${updatedGig?.price ?? 'N/A'} • Open gig: /gigs/${gigId}`,
-          metadata: {
-            gigId, gig_id: gigId, title: gigTitle, category: gig?.category || null,
-            status: 'assigned', price: updatedGig?.price ?? gig?.price ?? null, auto_generated: true,
-          },
-        });
-
-        const gigAddress = gig.exact_address || [gig.exact_city, gig.exact_state].filter(Boolean).join(', ') || null;
-        if (gigAddress) {
-          await supabaseAdmin.from('ChatMessage').insert({
-            room_id: roomId, user_id: gig.user_id, type: 'system',
-            message: `📍 Address unlocked: ${gigAddress}`,
-          });
-        }
-      }
-    } catch (e) {
-      logger.error('Finalize accept: chat room error', { error: e?.message, gigId });
+      finalized = await paidGigAcceptance.finalize(gig, bid, actorUserId);
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'Payment authorization could not be confirmed. Please retry.', code: error.code || 'payment_authorization_retry' });
     }
-
-    // 6) Notifications
-    const acceptedAddress = gig.exact_address || [gig.exact_city, gig.exact_state].filter(Boolean).join(', ') || null;
-    notifyBidAccepted({ bidderId: bid.user_id, gigTitle, gigId, gigOwnerId: gig.user_id, address: acceptedAddress });
-
-    // Notify other bidders they are on standby (bids stay pending)
-    const { data: standbyBids } = await supabaseAdmin
-      .from('GigBid')
-      .select('user_id')
-      .eq('gig_id', gigId)
-      .in('status', ['pending', 'countered'])
-      .neq('user_id', bid.user_id);
-
-    if (standbyBids && standbyBids.length > 0) {
-      const standbyUserIds = [...new Set(standbyBids.map((sb) => sb.user_id))];
-      createBulkNotifications(standbyUserIds.map((uid) => ({
-        userId: uid, type: 'bid_on_standby',
-        title: `Another bid was selected first for "${gigTitle}"`,
-        body: "Don't be discouraged — your bid is still active. If things don't work out, you may still be selected. You can also withdraw your bid if you prefer.",
-        icon: '⏳', link: `/gigs/${gigId}`, metadata: { gig_id: gigId },
-      })));
-    }
-
-    // Payout onboarding nudge
-    if (agreedPrice > 0) {
-      const { data: payeeAccount } = await supabaseAdmin
-        .from('StripeAccount')
-        .select('stripe_account_id')
-        .eq('user_id', bid.user_id)
-        .maybeSingle();
-
-      if (!payeeAccount || !payeeAccount.stripe_account_id) {
-        createNotification({
-          userId: bid.user_id, type: 'payout_onboarding_nudge',
-          title: 'Set up your payout account',
-          body: `You've been assigned a paid gig! Set up your payout account to withdraw your earnings.`,
-          icon: '💳', link: '/app/settings/payments', metadata: { gig_id: gigId },
-        });
+    const updatedGig = finalized.gig;
+    // Chat, participants and in-app notifications share the SQL assignment
+    // receipt. The leased job delivers external notifications after commit.
+    const roomId = finalized.room_id || null;
+    if (!finalized.reused) {
+      try {
+        await stripeService.syncPaymentMethodToLocal(updatedGig.payment_id, gig.user_id);
+      } catch (error) {
+        logger.warn('Finalize accept: saved-card sync deferred', { paymentId: updatedGig.payment_id, error: error.message });
       }
     }
 
@@ -4786,7 +4540,8 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
       gig: updatedGig || null,
       bid: { ...bid, status: 'accepted', pending_payment_expires_at: null, pending_payment_intent_id: null },
       roomId,
-      message: 'Bid accepted and gig assigned.',
+      message: finalized.reused ? 'Bid acceptance already confirmed' : 'Bid accepted and gig assigned.',
+      reused: finalized.reused === true,
     });
   } catch (err) {
     logger.error('Finalize accept: unexpected error', { error: err?.message, stack: err?.stack });
@@ -4816,47 +4571,15 @@ router.post('/:gigId/bids/:bidId/abort-accept', verifyToken, async (req, res) =>
       return res.status(403).json({ error: 'Only the gig owner can abort acceptance' });
     }
 
-    const { data: bid, error: bidErr } = await supabaseAdmin
-      .from('GigBid')
-      .select('id, status, pending_payment_intent_id')
-      .eq('id', bidId)
-      .single();
-
+    const { data: bid, error: bidErr } = await supabaseAdmin.from('GigBid')
+      .select('id, gig_id, status, pending_payment_intent_id').eq('id', bidId).eq('gig_id', gigId).single();
     if (bidErr || !bid) return res.status(404).json({ error: 'Bid not found' });
-
-    // Idempotent: if bid is already not pending_payment, nothing to do
-    if (bid.status !== 'pending_payment') {
-      return res.json({ bid, message: 'Bid already processed' });
+    try {
+      const result = await paidGigAcceptance.abort(gig, bid, actorUserId);
+      return res.json({ bid: result.bid, reused: result.reused, message: 'Payment aborted. Bid restored to pending.' });
+    } catch (error) {
+      return res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'Cancellation is awaiting confirmation. Please retry.', code: error.code || 'payment_cancellation_retry' });
     }
-
-    // Cancel the Stripe intent if one was created
-    if (bid.pending_payment_intent_id) {
-      try {
-        await stripeService.cancelAuthorization(bid.pending_payment_intent_id);
-      } catch (cancelErr) {
-        logger.error('Abort accept: failed to cancel Stripe intent', {
-          error: cancelErr.message,
-          intentId: bid.pending_payment_intent_id,
-        });
-        // Continue — reverting the bid is more important than cancelling the intent
-      }
-    }
-
-    // Revert bid to pending
-    await supabaseAdmin
-      .from('GigBid')
-      .update({
-        status: 'pending',
-        pending_payment_expires_at: null,
-        pending_payment_intent_id: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', bidId);
-
-    return res.json({
-      bid: { ...bid, status: 'pending', pending_payment_expires_at: null, pending_payment_intent_id: null },
-      message: 'Payment aborted. Bid restored to pending.',
-    });
   } catch (err) {
     logger.error('Abort accept: unexpected error', { error: err?.message });
     return res.status(500).json({ error: 'Failed to abort acceptance' });
@@ -4872,159 +4595,7 @@ router.post('/:gigId/bids/:bidId/abort-accept', verifyToken, async (req, res) =>
  *   reopens bids likely rejected during the just-attempted accept flow
  * - Moves gig back to open
  */
-router.post('/:gigId/reopen-bidding', verifyToken, async (req, res) => {
-  const { gigId } = req.params;
-  const actorUserId = req.user.id;
-  const rollbackMode =
-    typeof req.body?.rollbackMode === 'string'
-      ? req.body.rollbackMode
-      : typeof req.body?.rollback_mode === 'string'
-        ? req.body.rollback_mode
-        : typeof req.body?.reason === 'string'
-          ? req.body.reason
-          : null;
-  const isPaymentAbortRollback = rollbackMode === 'payment_setup_aborted';
-
-  try {
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select(
-        'id, user_id, status, accepted_by, accepted_at, started_at, payment_id, payment_status, title'
-      )
-      .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, actorUserId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can reopen bidding' });
-    }
-
-    if (gig.status !== 'assigned') {
-      return res
-        .status(400)
-        .json({
-          error: `Bidding can only be reopened from assigned status (current: ${gig.status})`,
-        });
-    }
-    if (gig.started_at) {
-      return res.status(400).json({ error: 'Cannot reopen bidding after work has started' });
-    }
-
-    // If a payment is linked, it must still be in a pre-capture state.
-    if (gig.payment_id) {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('id, payment_status')
-        .eq('id', gig.payment_id)
-        .single();
-
-      if (payment) {
-        const preCaptureStates = [
-          PAYMENT_STATES.AUTHORIZED,
-          PAYMENT_STATES.AUTHORIZE_PENDING,
-          PAYMENT_STATES.AUTHORIZATION_FAILED,
-          PAYMENT_STATES.SETUP_PENDING,
-          PAYMENT_STATES.READY_TO_AUTHORIZE,
-          PAYMENT_STATES.CANCELED,
-          PAYMENT_STATES.NONE,
-        ];
-
-        if (!preCaptureStates.includes(payment.payment_status)) {
-          return res.status(400).json({
-            error: `Cannot reopen bidding because payment is already in ${payment.payment_status} state`,
-          });
-        }
-
-        if (![PAYMENT_STATES.CANCELED, PAYMENT_STATES.NONE].includes(payment.payment_status)) {
-          await stripeService.cancelAuthorization(gig.payment_id);
-        }
-      }
-    }
-
-    // Find currently accepted bid (if any) and roll it back.
-    const { data: acceptedBid } = await supabaseAdmin
-      .from('GigBid')
-      .select('id, user_id')
-      .eq('gig_id', gigId)
-      .eq('status', 'accepted')
-      .maybeSingle();
-
-    if (acceptedBid?.id) {
-      const acceptedRollbackStatus = isPaymentAbortRollback ? 'pending' : 'rejected';
-      await supabaseAdmin
-        .from('GigBid')
-        .update({ status: acceptedRollbackStatus, updated_at: new Date().toISOString() })
-        .eq('id', acceptedBid.id);
-    }
-
-    // Other bids are already pending (no longer auto-rejected on accept),
-    // so no need to reopen them. Just reset the gig to open.
-
-    const nowIso = new Date().toISOString();
-    const { data: updatedGig, error: gigUpdateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'open',
-        accepted_by: null,
-        accepted_at: null,
-        payment_id: null,
-        payment_status: PAYMENT_STATES.NONE,
-        worker_ack_status: null,
-        worker_ack_eta_minutes: null,
-        worker_ack_note: null,
-        worker_ack_updated_at: null,
-        last_worker_reminder_at: null,
-        auto_reminder_count: 0,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .select('*')
-      .single();
-
-    if (gigUpdateErr) {
-      logger.error('Reopen bidding: failed to update gig', { error: gigUpdateErr.message, gigId });
-      return res.status(500).json({ error: 'Failed to reopen bidding' });
-    }
-
-    // Notify the formerly accepted worker.
-    if (acceptedBid?.user_id && !isPaymentAbortRollback) {
-      createNotification({
-        userId: acceptedBid.user_id,
-        type: 'bid_rejected',
-        title: 'Gig was reopened',
-        body: `The poster reopened bidding for "${gig.title || 'a gig'}".`,
-        icon: 'ℹ️',
-        link: `/gigs/${gigId}`,
-        metadata: { gig_id: gigId, reason: 'reopened_bidding' },
-      });
-    }
-    if (acceptedBid?.user_id && isPaymentAbortRollback) {
-      createNotification({
-        userId: acceptedBid.user_id,
-        type: 'bid_reopened',
-        title: `Bid active again for "${gig.title || 'a gig'}"`,
-        body: 'Payment setup was not completed. Your bid is back to pending.',
-        icon: '🔄',
-        link: `/gigs/${gigId}`,
-        metadata: { gig_id: gigId, reason: 'payment_setup_aborted' },
-      });
-    }
-
-    return res.json({
-      gig: updatedGig,
-      reopened_count: 0,
-      accepted_bid_restored: Boolean(isPaymentAbortRollback && acceptedBid?.id),
-      message: 'Bidding reopened successfully.',
-    });
-  } catch (err) {
-    logger.error('Reopen bidding error', { error: err?.message, gigId, actorUserId });
-    return res.status(500).json({ error: 'Failed to reopen bidding' });
-  }
-});
+router.post('/:gigId/reopen-bidding', verifyToken, stopCommand('reopen_bidding'));
 
 /**
  * POST /api/gigs/:gigId/bids/:bidId/reject
@@ -5064,14 +4635,16 @@ router.post('/:gigId/bids/:bidId/reject', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Bid not found' });
     }
 
-    const { error: bidError } = await supabaseAdmin
+    const { data: rejectedBid, error: bidError } = await supabaseAdmin
       .from('GigBid')
       .update({ status: 'rejected', updated_at: new Date().toISOString() })
       .eq('id', bidId)
-      .eq('gig_id', gigId);
+      .eq('gig_id', gigId)
+      .in('status', ['pending', 'countered'])
+      .select('id').single();
 
-    if (bidError) {
-      logger.error('Error rejecting bid', { error: bidError.message });
+    if (bidError || !rejectedBid) {
+      logger.error('Error rejecting bid', { error: bidError?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to reject bid' });
     }
 
@@ -5158,11 +4731,13 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
         updated_at: nowIso,
       })
       .eq('id', bidId)
+      .in('status', ['pending', 'countered'])
+      .eq('status', bid.status)
       .select()
       .single();
 
-    if (updateErr) {
-      logger.error('Counter-offer failed', { error: updateErr.message });
+    if (updateErr || !updatedBid) {
+      logger.error('Counter-offer failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to send counter-offer' });
     }
 
@@ -5219,11 +4794,13 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
         updated_at: nowIso,
       })
       .eq('id', bidId)
+      .in('status', ['pending', 'countered'])
+      .eq('status', bid.status)
       .select()
       .single();
 
-    if (updateErr) {
-      logger.error('Accept counter failed', { error: updateErr.message });
+    if (updateErr || !updatedBid) {
+      logger.error('Accept counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to accept counter-offer' });
     }
 
@@ -5294,11 +4871,13 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
         updated_at: nowIso,
       })
       .eq('id', bidId)
+      .in('status', ['pending', 'countered'])
+      .eq('status', bid.status)
       .select()
       .single();
 
-    if (updateErr) {
-      logger.error('Decline counter failed', { error: updateErr.message });
+    if (updateErr || !updatedBid) {
+      logger.error('Decline counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to decline counter-offer' });
     }
 
@@ -5383,11 +4962,13 @@ router.post('/:gigId/bids/:bidId/counter/withdraw', verifyToken, async (req, res
         updated_at: nowIso,
       })
       .eq('id', bidId)
+      .in('status', ['pending', 'countered'])
+      .eq('status', bid.status)
       .select()
       .single();
 
-    if (updateErr) {
-      logger.error('Withdraw counter failed', { error: updateErr.message });
+    if (updateErr || !updatedBid) {
+      logger.error('Withdraw counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to withdraw counter-offer' });
     }
 
@@ -5447,7 +5028,7 @@ router.delete('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
     const safeReason = validReasons.includes(reason) ? reason : null;
 
     // Soft-delete: update status to 'withdrawn' instead of deleting
-    const { error: updateError } = await supabaseAdmin
+    const { data: withdrawnBid, error: updateError } = await supabaseAdmin
       .from('GigBid')
       .update({
         status: 'withdrawn',
@@ -5455,10 +5036,14 @@ router.delete('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
         withdrawn_at: nowIso,
         updated_at: nowIso,
       })
-      .eq('id', bidId);
+      .eq('id', bidId)
+      .in('status', ['pending', 'countered'])
+      .eq('status', bid.status)
+      .select('id')
+      .single();
 
-    if (updateError) {
-      logger.error('Error withdrawing bid', { error: updateError.message });
+    if (updateError || !withdrawnBid) {
+      logger.error('Error withdrawing bid', { error: updateError?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to withdraw bid' });
     }
 
@@ -5528,172 +5113,32 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
         .json({ error: `Gig must be assigned to start (current: ${gig.status})` });
     }
 
-    // ─── Payment Guard: worker cannot start unless payment is authorized ───
-    const gigPrice = parseFloat(gig?.price || 0);
-    if (gigPrice > 0 && !gig.payment_id) {
-      let createdPaymentStatus = PAYMENT_STATES.NONE;
-      let selfHealSucceeded = false;
-
-      // Self-heal legacy assignments that were created without payment initialization.
-      // This prevents workers from being permanently blocked on older records.
-      // TODO: Remove after migration 094 reconciliation confirms no more legacy rows
+    const gigPrice = Number(gig.price);
+    if (!Number.isFinite(gigPrice) || gigPrice < 0) return res.status(409).json({ error: 'Gig price could not be verified' });
+    if (gigPrice > 0 || gig.payment_id) {
+      if (!gig.payment_id) return res.status(402).json({ error: 'The payer must authorize payment before work starts', code: 'payer_authorization_required' });
       try {
-        const amountCents = Math.round(gigPrice * 100);
-        const scheduledStart = gig?.scheduled_start ? new Date(gig.scheduled_start) : null;
-        const now = new Date();
-        const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-        const startsWithinFiveDays = !scheduledStart || scheduledStart <= fiveDaysFromNow;
-
-        const paymentInit = startsWithinFiveDays
-          ? await stripeService.createPaymentIntentForGig({
-              payerId: gig.user_id,
-              payeeId: gig.accepted_by,
-              gigId,
-              amount: amountCents,
-              homeId: gig?.origin_home_id || null,
-            })
-          : await stripeService.createSetupIntent({
-              payerId: gig.user_id,
-              payeeId: gig.accepted_by,
-              gigId,
-              amount: amountCents,
-              homeId: gig?.origin_home_id || null,
-            });
-
-        createdPaymentStatus = paymentInit?.payment?.payment_status
-          || (paymentInit?.setupIntentId ? PAYMENT_STATES.SETUP_PENDING : PAYMENT_STATES.AUTHORIZE_PENDING);
-
-        if (paymentInit?.paymentId) {
-          // Idempotency guard: only link payment if no other request beat us to it
-          const { data: updatedRows, error: linkErr } = await supabaseAdmin
-            .from('Gig')
-            .update({
-              payment_id: paymentInit.paymentId,
-              payment_status: createdPaymentStatus,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', gigId)
-            .is('payment_id', null)
-            .select('id');
-
-          if (linkErr || !updatedRows || updatedRows.length === 0) {
-            // Another request already linked a payment, or the update failed.
-            // Cancel the orphaned payment to avoid a dangling Stripe PI/SI.
-            logger.warn('Self-heal gig update failed or lost race, canceling orphaned payment', {
-              gigId,
-              paymentId: paymentInit.paymentId,
-              linkErr: linkErr?.message,
-            });
-            try {
-              await stripeService.cancelAuthorization(paymentInit.paymentId);
-            } catch (cancelErr) {
-              logger.error('Failed to cancel orphaned self-heal payment', {
-                gigId,
-                paymentId: paymentInit.paymentId,
-                error: cancelErr?.message,
-              });
-            }
-          } else {
-            selfHealSucceeded = true;
-            gig.payment_id = paymentInit.paymentId;
-            gig.payment_status = createdPaymentStatus;
-          }
-        }
-      } catch (initErr) {
-        logger.error('Start work payment self-heal failed', {
-          gigId,
-          gigPrice,
-          error: initErr?.message,
-        });
-      }
-
-      // Notify payer that the worker is blocked on payment
-      if (String(gig.user_id) !== String(userId)) {
-        createNotification({
-          userId: gig.user_id,
-          type: 'payment_action_required',
-          title: 'Worker is waiting for payment setup',
-          body: `Your worker tried to start "${gig.title || 'a gig'}", but payment setup is incomplete.`,
-          icon: '💳',
-          link: `/gigs/${gigId}`,
-          metadata: { gig_id: gigId, required_status: PAYMENT_STATES.AUTHORIZED },
-        });
-      }
-
-      // If self-heal created a payment successfully, tell the client so the
-      // payer can complete authorization — don't return a bare 400 after
-      // having successfully mutated state.
-      if (selfHealSucceeded) {
-        return res.status(402).json({
-          error: 'Payment was initialized but requires payer authorization',
-          payment_status: createdPaymentStatus,
-          payment_id: gig.payment_id,
-          code: 'payer_authorization_required',
-        });
-      }
-
-      return res.status(400).json({
-        error: 'Payment setup is required before starting work',
-        payment_status: createdPaymentStatus,
-        code: 'payer_authorization_required',
-      });
-    }
-
-    if (gig.payment_id) {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('id, payment_status')
-        .eq('id', gig.payment_id)
-        .single();
-
-      let effectivePaymentStatus = payment?.payment_status;
-      if (payment?.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-        try {
-          const reconciled = await stripeService.syncPaymentAuthorizationStatus(payment.id);
-          effectivePaymentStatus = reconciled?.payment_status || effectivePaymentStatus;
-        } catch (syncErr) {
-          logger.warn('Start work payment status reconcile failed', {
-            gigId,
-            paymentId: payment.id,
-            error: syncErr.message,
-          });
-        }
-      }
-
-      if (payment && effectivePaymentStatus !== PAYMENT_STATES.AUTHORIZED) {
-        if (String(gig.user_id) !== String(userId)) {
-          createNotification({
-            userId: gig.user_id,
-            type: 'payment_action_required',
-            title: 'Worker is waiting for payment authorization',
-            body: `Your worker tried to start "${gig.title || 'a gig'}". Please authorize payment first.`,
-            icon: '💳',
-            link: `/gigs/${gigId}`,
-            metadata: {
-              gig_id: gigId,
-              payment_status: effectivePaymentStatus,
-              required_status: PAYMENT_STATES.AUTHORIZED,
-            },
-          });
-        }
-        return res.status(400).json({
-          error: 'Payment must be authorized before starting work',
-          payment_status: effectivePaymentStatus,
-          code: 'payer_authorization_required',
-        });
+        await stripeService.verifyGigAuthorization(gig.payment_id,
+          paidGigAcceptance.terms(gig, gig.accepted_by, Math.round(gigPrice * 100)));
+      } catch (error) {
+        return res.status(error.statusCode || 503).json({ error: 'The agreed payment could not be verified. Please ask the payer to retry.', code: 'payer_authorization_required' });
       }
     }
 
     const nowIso = new Date().toISOString();
-    const { data: updatedGig, error: updateError } = await supabaseAdmin
+    const startUpdate = supabaseAdmin
       .from('Gig')
       .update({ status: 'in_progress', started_at: nowIso, updated_at: nowIso })
       .eq('id', gigId)
-      .select('*')
-      .single();
+      .eq('status', 'assigned')
+      .eq('accepted_by', userId);
+    const { data: updatedGig, error: updateError } = await bindGigPaymentSnapshot(startUpdate, gig).select('*').single();
 
-    if (updateError) {
-      logger.error('Error starting gig', { error: updateError.message, gigId, userId });
+    if (updateError || !updatedGig) {
+      logger.error('Error starting gig', { error: updateError?.message || 'Payment snapshot changed', gigId, userId });
+      if (updateError?.code === '23514') {
+        return res.status(409).json({ error: 'Payment authorization changed. Please check its status before starting.', code: 'payer_authorization_required' });
+      }
       return res.status(500).json({ error: 'Failed to start gig' });
     }
 
@@ -5952,144 +5397,7 @@ router.post('/:gigId/worker-ack', verifyToken, async (req, res) => {
  * Unassigns the worker, releases payment hold, and reopens bidding.
  * Body: { note?: string }
  */
-router.post('/:gigId/worker-release', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const workerId = req.user.id;
-    const { note } = req.body || {};
-
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select(
-        'id, user_id, status, accepted_by, accepted_at, started_at, payment_id, payment_status, title'
-      )
-      .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    if (String(gig.accepted_by) !== String(workerId)) {
-      return res.status(403).json({ error: 'Only the assigned worker can release themselves' });
-    }
-
-    if (gig.status !== 'assigned') {
-      return res.status(400).json({
-        error: `Self-release is only available while the gig is assigned (current: ${gig.status})`,
-      });
-    }
-
-    if (gig.started_at) {
-      return res.status(400).json({ error: 'Cannot release after work has started' });
-    }
-
-    const nowIso = new Date().toISOString();
-    const releaseNote = note ? String(note).slice(0, 1000) : null;
-
-    // Cancel payment authorization if present
-    if (gig.payment_id) {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('id, payment_status')
-        .eq('id', gig.payment_id)
-        .single();
-
-      if (payment) {
-        const preCaptureStates = [
-          PAYMENT_STATES.AUTHORIZED,
-          PAYMENT_STATES.AUTHORIZE_PENDING,
-          PAYMENT_STATES.AUTHORIZATION_FAILED,
-          PAYMENT_STATES.SETUP_PENDING,
-          PAYMENT_STATES.READY_TO_AUTHORIZE,
-        ];
-        if (preCaptureStates.includes(payment.payment_status)) {
-          try {
-            await stripeService.cancelAuthorization(gig.payment_id);
-          } catch (cancelErr) {
-            logger.error('Worker release: failed to cancel authorization', {
-              error: cancelErr.message,
-              gigId,
-              paymentId: gig.payment_id,
-            });
-            return res.status(502).json({
-              error: 'Could not release the payment hold right now. Please try again or contact support.',
-            });
-          }
-        }
-      }
-    }
-
-    // Roll back the accepted bid to rejected
-    const { data: acceptedBid } = await supabaseAdmin
-      .from('GigBid')
-      .select('id, user_id')
-      .eq('gig_id', gigId)
-      .eq('status', 'accepted')
-      .maybeSingle();
-
-    if (acceptedBid?.id) {
-      await supabaseAdmin
-        .from('GigBid')
-        .update({ status: 'rejected', updated_at: nowIso })
-        .eq('id', acceptedBid.id);
-    }
-
-    // Other bids are already pending (no longer auto-rejected on accept),
-    // so no need to reopen them.
-
-    // Reopen the gig
-    const { error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'open',
-        accepted_by: null,
-        accepted_at: null,
-        payment_id: null,
-        payment_status: PAYMENT_STATES.NONE,
-        worker_ack_status: null,
-        worker_ack_eta_minutes: null,
-        worker_ack_note: null,
-        worker_ack_updated_at: null,
-        last_worker_reminder_at: null,
-        auto_reminder_count: 0,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId);
-
-    if (updateErr) {
-      logger.error('Worker release: failed to update gig', { error: updateErr.message, gigId });
-      return res.status(500).json({ error: 'Failed to release from assignment' });
-    }
-
-    // Notify the owner
-    const ownerRecipients = await getGigOwnerNotificationRecipients(gig.user_id, workerId);
-    if (ownerRecipients.length > 0) {
-      createBulkNotifications(
-        ownerRecipients.map((recipientId) => ({
-          userId: recipientId,
-          type: 'worker_cant_make_it',
-          title: `Worker can't make it for "${gig.title || 'your task'}"`,
-          body: 'The worker released themselves from the assignment. The task is now open for new bids.',
-          icon: '⚠️',
-          link: `/gigs/${gigId}`,
-          metadata: { gig_id: gigId, released_by: workerId, ...(releaseNote ? { note: releaseNote } : {}) },
-        }))
-      );
-    }
-
-    emitGigUpdate(req, gigId, 'status-change');
-    emitGigUpdate(req, gigId, 'bid-update');
-
-    return res.json({
-      success: true,
-      message: 'You have been released from this assignment. The task is now open for bids.',
-    });
-  } catch (err) {
-    logger.error('Worker release error', { error: err.message });
-    return res.status(500).json({ error: 'Failed to release from assignment' });
-  }
-});
+router.post('/:gigId/worker-release', verifyToken, stopCommand('worker_release'));
 
 /**
  * POST /api/gigs/:gigId/mark-completed
@@ -6228,19 +5536,20 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
     throw err;
   }
 
-  // ─── Capture Payment BEFORE confirming ───
+  if (gig.owner_confirmed_at) return gig;
+  const price = Number(gig.price);
+  if (!Number.isFinite(price) || price < 0 || (price > 0 && !gig.payment_id)) {
+    throw Object.assign(new Error('The agreed payment must be verified before confirmation'), { statusCode: 409 });
+  }
   if (gig.payment_id) {
-    await stripeService.capturePayment(gig.payment_id);
-    await supabaseAdmin
-      .from('Gig')
-      .update({ payment_status: PAYMENT_STATES.CAPTURED_HOLD })
-      .eq('id', gigId);
+    await stripeService.capturePayment(gig.payment_id,
+      paidGigAcceptance.terms(gig, gig.accepted_by, Math.round(price * 100)));
   }
 
   const nowIso = new Date().toISOString();
   const safeSatisfaction = satisfaction ? Math.min(5, Math.max(1, parseInt(satisfaction))) : null;
 
-  const { data: updatedGig, error: updateError } = await supabaseAdmin
+  const confirmationUpdate = supabaseAdmin
     .from('Gig')
     .update({
       owner_confirmed_at: nowIso,
@@ -6249,8 +5558,16 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
       owner_satisfaction: safeSatisfaction,
     })
     .eq('id', gigId)
-    .select('*')
-    .single();
+    .eq('status', 'completed')
+    .is('owner_confirmed_at', null);
+  const { data: updatedGig, error: updateError } = await bindGigPaymentSnapshot(confirmationUpdate, gig).select('*').maybeSingle();
+
+  if (!updateError && !updatedGig) {
+    const { data: receipt, error } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).single();
+    if (!error && receipt?.owner_confirmed_at && receipt.payment_id === gig.payment_id && receipt.user_id === gig.user_id
+        && receipt.accepted_by === gig.accepted_by && Number(receipt.price) === Number(gig.price)) return receipt;
+    throw Object.assign(new Error('Completion changed while it was being confirmed'), { statusCode: 409 });
+  }
 
   if (updateError) {
     logger.error('Error confirming completion', { error: updateError.message, gigId, userId });
@@ -6507,236 +5824,7 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
  *   Poster reasons:  'changed_plans', 'found_someone_else', 'too_expensive', 'emergency', 'other'
  *   Worker reasons:  'schedule_conflict', 'unable_to_complete', 'emergency', 'safety_concern', 'other'
  */
-router.post('/:gigId/cancel', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-    const { reason } = req.body;
-
-    logger.info('Cancelling gig', { gigId, userId, reason });
-
-    const { data: gig, error: gigError } = await supabaseAdmin
-      .from('Gig')
-      .select('*')
-      .eq('id', gigId)
-      .single();
-
-    if (gigError || !gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const isPoster = String(gig.user_id) === String(userId);
-    const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
-
-    if (!isPoster && !isWorker) {
-      return res.status(403).json({ error: 'Only the poster or assigned worker can cancel' });
-    }
-
-    if (gig.status === 'cancelled') {
-      return res.status(400).json({ error: 'Gig is already cancelled' });
-    }
-    if (gig.status === 'completed') {
-      return res.status(400).json({ error: 'Cannot cancel a completed gig' });
-    }
-
-    // Compute cancellation zone and fee
-    const info = computeCancellationInfo(gig, userId);
-    const nowIso = new Date().toISOString();
-
-    // ─── Payment handling on cancellation ───
-    if (gig.payment_id) {
-      try {
-        const { data: payment } = await supabaseAdmin
-          .from('Payment')
-          .select('*')
-          .eq('id', gig.payment_id)
-          .single();
-
-        if (payment) {
-          const preCaptureStates = [
-            PAYMENT_STATES.AUTHORIZED,
-            PAYMENT_STATES.AUTHORIZE_PENDING,
-            PAYMENT_STATES.AUTHORIZATION_FAILED,
-            PAYMENT_STATES.SETUP_PENDING,
-            PAYMENT_STATES.READY_TO_AUTHORIZE,
-          ];
-
-          if (preCaptureStates.includes(payment.payment_status)) {
-            // Before capture: cancel authorization (release hold)
-            await stripeService.cancelAuthorization(gig.payment_id);
-          } else if (
-            [PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED].includes(
-              payment.payment_status
-            )
-          ) {
-            // After capture, before transfer: refund minus cancellation fee
-            const cancellationFeeCents = Math.round((info.fee || 0) * 100);
-            const refundAmount = payment.amount_total - cancellationFeeCents;
-            if (refundAmount > 0) {
-              await stripeService.createSmartRefund(
-                gig.payment_id,
-                refundAmount,
-                'requested_by_customer',
-                userId
-              );
-            }
-          } else if (
-            [PAYMENT_STATES.TRANSFER_PENDING, PAYMENT_STATES.TRANSFERRED].includes(
-              payment.payment_status
-            )
-          ) {
-            // After transfer: refund + transfer reversal
-            const cancellationFeeCents = Math.round((info.fee || 0) * 100);
-            const refundAmount = payment.amount_total - cancellationFeeCents;
-            if (refundAmount > 0) {
-              await stripeService.createSmartRefund(
-                gig.payment_id,
-                refundAmount,
-                'requested_by_customer',
-                userId
-              );
-            }
-          }
-        }
-      } catch (paymentErr) {
-        logger.error('Cancel gig: payment handling failed (non-blocking)', {
-          error: paymentErr?.message,
-          gigId,
-          paymentId: gig.payment_id,
-        });
-      }
-    }
-
-    const { data: updatedGig, error: updateError } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'cancelled',
-        cancelled_at: nowIso,
-        cancelled_by: userId,
-        cancellation_reason: reason || null,
-        cancellation_zone: info.zone,
-        cancellation_fee: info.fee,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .select()
-      .single();
-
-    if (updateError) {
-      logger.error('Error cancelling gig', { error: updateError.message });
-      return res.status(500).json({ error: 'Failed to cancel gig' });
-    }
-
-    // ─── Notifications ───
-    const notifs = [];
-    const gigTitle = gig.title || 'a gig';
-    const cancellerRole = isPoster ? 'poster' : 'worker';
-
-    // Fetch canceller name for notifications
-    const { data: canceller } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const cancellerName =
-      canceller?.name || canceller?.username || (isPoster ? 'The poster' : 'The worker');
-
-    // Notify the other party
-    if (isPoster && gig.accepted_by) {
-      notifs.push({
-        userId: gig.accepted_by,
-        type: 'gig_cancelled',
-        title: `"${gigTitle}" has been cancelled`,
-        body: `The poster cancelled this gig.${info.fee > 0 ? ` Cancellation fee: $${info.fee.toFixed(2)}` : ''}`,
-        icon: '🚫',
-        link: `/gigs/${gigId}`,
-        metadata: { gig_id: gigId, zone: info.zone, fee: info.fee, cancelled_by: 'poster' },
-      });
-    } else if (isWorker) {
-      notifs.push({
-        userId: gig.user_id,
-        type: 'gig_cancelled',
-        title: `Worker cancelled "${gigTitle}"`,
-        body: `${cancellerName} cancelled.${reason ? ` Reason: ${reason.replace(/_/g, ' ')}` : ''}${info.fee > 0 ? ` Fee: $${info.fee.toFixed(2)}` : ''}`,
-        icon: '🚫',
-        link: `/gigs/${gigId}`,
-        metadata: { gig_id: gigId, zone: info.zone, fee: info.fee, cancelled_by: 'worker' },
-      });
-    }
-
-    // Reject all remaining standby bids and notify bidders (all zones, since bids now survive past assignment)
-    {
-      const { data: pendingBids } = await supabaseAdmin
-        .from('GigBid')
-        .select('id, user_id')
-        .eq('gig_id', gigId)
-        .in('status', ['pending', 'countered']);
-
-      if (pendingBids && pendingBids.length > 0) {
-        const pendingBidIds = pendingBids.map((b) => b.id);
-        await supabaseAdmin
-          .from('GigBid')
-          .update({ status: 'rejected', updated_at: new Date().toISOString() })
-          .in('id', pendingBidIds);
-
-        for (const pb of pendingBids) {
-          notifs.push({
-            userId: pb.user_id,
-            type: 'gig_cancelled',
-            title: `"${gigTitle}" has been cancelled`,
-            body: 'The gig you bid on was cancelled. Your bid is now closed.',
-            icon: '🚫',
-            link: `/gigs/${gigId}`,
-            metadata: { gig_id: gigId },
-          });
-        }
-      }
-    }
-
-    if (notifs.length > 0) {
-      createBulkNotifications(notifs);
-    }
-
-    // ─── Track late-cancel in reliability metrics ───
-    if (info.zone >= 1 && !info.in_grace) {
-      const { data: cancelUser } = await supabaseAdmin
-        .from('User')
-        .select('late_cancel_count, no_show_count, reliability_score')
-        .eq('id', userId)
-        .single();
-      if (cancelUser) {
-        const newLateCancelCount = (cancelUser.late_cancel_count || 0) + 1;
-        const newScore = Math.max(
-          0,
-          100 - (cancelUser.no_show_count || 0) * 15 - newLateCancelCount * 5
-        );
-        await supabaseAdmin
-          .from('User')
-          .update({ late_cancel_count: newLateCancelCount, reliability_score: newScore })
-          .eq('id', userId);
-      }
-    }
-
-    logger.info('Gig cancelled', {
-      gigId,
-      zone: info.zone,
-      fee: info.fee,
-      cancelledBy: cancellerRole,
-    });
-    emitGigUpdate(req, gigId, 'status-change');
-    res.json({
-      gig: updatedGig,
-      cancellation: {
-        zone: info.zone,
-        zone_label: info.zone_label,
-        fee: info.fee,
-        in_grace: info.in_grace,
-        cancelled_by: cancellerRole,
-      },
-    });
-  } catch (err) {
-    logger.error('Cancel gig error', { error: err.message });
-    res.status(500).json({ error: 'Failed to cancel gig' });
-  }
-});
+router.post('/:gigId/cancel', verifyToken, stopCommand('cancel'));
 
 // ================================
 // CHANGE ORDERS
@@ -7974,11 +7062,12 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
       .from('GigBid')
       .update(patch)
       .eq('id', existing.id)
+      .eq('status', 'pending')
       .select('*')
       .single();
 
-    if (error) {
-      logger.error('Error updating bid', { error: error.message, gigId, userId });
+    if (error || !data) {
+      logger.error('Error updating bid', { error: error?.message || 'Bid changed', gigId, userId });
       return res.status(500).json({ error: 'Failed to update bid' });
     }
 
@@ -8019,9 +7108,9 @@ router.delete('/:id/my-bid', verifyToken, async (req, res) => {
     if (existing.status !== 'pending')
       return res.status(400).json({ error: 'Only pending bids can be withdrawn' });
 
-    const { error } = await supabaseAdmin.from('GigBid').delete().eq('id', existing.id);
-    if (error) {
-      logger.error('Error deleting bid', { error: error.message, gigId, userId });
+    const { data: deletedBid, error } = await supabaseAdmin.from('GigBid').delete().eq('id', existing.id).eq('status', 'pending').select('id').single();
+    if (error || !(Array.isArray(deletedBid) ? deletedBid.length : deletedBid?.id)) {
+      logger.error('Error deleting bid', { error: error?.message || 'Bid changed', gigId, userId });
       return res.status(500).json({ error: 'Failed to withdraw bid' });
     }
 
@@ -8036,40 +7125,7 @@ router.delete('/:id/my-bid', verifyToken, async (req, res) => {
 // POST close/cancel gig
 // POST /api/gigs/:id/close
 // ================================
-router.post('/:id/close', verifyToken, async (req, res) => {
-  const gigId = req.params.id;
-  const userId = req.user.id;
-
-  try {
-    // Ensure owner
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, status')
-      .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) return res.status(403).json({ error: 'Not allowed' });
-
-    const { data, error } = await supabaseAdmin
-      .from('Gig')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-      .eq('id', gigId)
-      .select('*')
-      .single();
-
-    if (error) {
-      logger.error('Error closing gig', { error: error.message, gigId, userId });
-      return res.status(500).json({ error: 'Failed to close gig' });
-    }
-
-    return res.json({ gig: data });
-  } catch (err) {
-    logger.error('Close gig error', { error: err.message, gigId, userId });
-    return res.status(500).json({ error: 'Failed to close gig' });
-  }
-});
+router.post('/:id/close', verifyToken, stopCommand('close'));
 
 // ================================
 // Accept bid -> set gig.status = assigned
@@ -8339,208 +7395,49 @@ router.post('/:gigId/complete-payment-setup', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * POST /api/gigs/:gigId/retry-authorization
- * Called when off-session authorization failed and user wants to retry on-session.
- * Returns a new clientSecret for frontend SCA completion.
- */
-router.post('/:gigId/retry-authorization', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status, price')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
-    }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can retry authorization' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    if (gig.payment_status !== PAYMENT_STATES.AUTHORIZATION_FAILED) {
-      return res
-        .status(400)
-        .json({
-          error: `Payment is not in authorization_failed state (current: ${gig.payment_status})`,
-        });
-    }
-
-    // Get the existing payment to find payee and amount
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    // Create a new on-session PaymentIntent (user can complete SCA in browser)
-    const result = await stripeService.createPaymentIntentForGig({
-      payerId: payment.payer_id,
-      payeeId: payment.payee_id,
-      gigId,
-      amount: payment.amount_total,
-      paymentMethodId: payment.stripe_payment_method_id,
-      offSession: false, // on-session — user completes in browser
-      existingPaymentId: gig.payment_id,
+/** Recover only the current assigned payment; provider reads never imply success. */
+for (const [action, mode] of [
+  ['retry-authorization', 'resume'],
+  ['continue-authorization', 'resume'],
+  ['refresh-payment-status', 'check'],
+]) {
+  router.post(`/:gigId/${action}`, verifyToken, async (req, res) => {
+    const expectedSchema = Joi.object({
+      expectedActorId: Joi.string().min(1).max(128).required(),
+      expectedSessionScope: Joi.string().pattern(/^[a-f0-9]{64}$/).required(),
+      expectedPaymentId: Joi.string().uuid().required(),
+      expectedPayerId: Joi.string().uuid().required(),
+      expectedAmountCents: Joi.number().integer().min(50).required(),
+      expectedPayeeId: Joi.string().uuid().required(),
+      currency: Joi.string().valid('usd').required(),
     });
-
-    emitGigUpdate(req, gigId, 'payment-update');
-    res.json({
-      clientSecret: result.clientSecret,
-      paymentIntentId: result.paymentIntentId,
-      paymentId: result.paymentId,
-    });
-  } catch (err) {
-    logger.error('Retry authorization error', { error: err.message });
-    res.status(500).json({ error: 'Failed to retry authorization' });
-  }
-});
-
-/**
- * POST /api/gigs/:gigId/continue-authorization
- * Resume an in-progress on-session authorization (authorize_pending).
- * Returns the existing PaymentIntent clientSecret so frontend can confirm.
- */
-router.post('/:gigId/continue-authorization', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
+    const expected = mode === 'resume' ? expectedSchema.validate(req.body, { convert: false }) : { value: {} };
+    if (expected.error) return res.status(400).json({ error: 'Refresh the payment details before retrying authorization.', code: 'authorization_terms_required' });
+    if (mode === 'resume') {
+      if (expected.value.expectedActorId !== req.user.id) return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your signed-in account changed. Reopen payment details.' });
+      if (!requireExpectedSessionScope({ user: req.user, session: req.session, cookies: req.cookies,
+        headers: { ...req.headers, 'x-pantopus-session-scope': expected.value.expectedSessionScope } }, res, { required: true })) return;
     }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can continue authorization' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    if (gig.payment_status !== PAYMENT_STATES.AUTHORIZE_PENDING) {
-      return res
-        .status(400)
-        .json({
-          error: `Payment is not in authorize_pending state (current: ${gig.payment_status})`,
-        });
-    }
-
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('id, stripe_payment_intent_id')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment || !payment.stripe_payment_intent_id) {
-      return res.status(404).json({ error: 'PaymentIntent not found for this gig payment' });
-    }
-
-    // Reconcile with Stripe in case webhook delivery is delayed.
-    const reconciled = await stripeService.syncPaymentAuthorizationStatus(payment.id);
-    if (reconciled?.payment_status === PAYMENT_STATES.AUTHORIZED) {
-      return res.json({
-        alreadyAuthorized: true,
-        paymentId: payment.id,
+    try {
+      const scope = getRequestSessionScope(req);
+      const result = await require('../services/legacyGigAuthorization').recover({
+        gigId: req.params.gigId, actorId: req.user.id, mode,
+        ...(mode === 'resume' ? { expectedPaymentId: expected.value.expectedPaymentId, expectedTerms: {
+          payerId: expected.value.expectedPayerId, payeeId: expected.value.expectedPayeeId, amount: expected.value.expectedAmountCents, currency: expected.value.currency,
+        } } : {}),
+      });
+      const { paymentChanged, ...progress } = result;
+      if (paymentChanged) emitGigUpdate(req, req.params.gigId, 'payment-update');
+      return res.json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
+    } catch (error) {
+      logger.warn('Assigned authorization recovery failed', { gigId: req.params.gigId, code: error.code });
+      return res.status(error.statusCode || 503).json({
+        error: error.statusCode ? error.message : 'Authorization could not be checked. Please retry.',
+        code: error.code || 'authorization_unknown',
       });
     }
-
-    const clientSecret = await stripeService.getPaymentIntentClientSecret(
-      payment.stripe_payment_intent_id
-    );
-
-    res.json({
-      clientSecret,
-      paymentIntentId: payment.stripe_payment_intent_id,
-      paymentId: payment.id,
-    });
-  } catch (err) {
-    logger.error('Continue authorization error', { error: err.message });
-    res.status(500).json({ error: 'Failed to continue authorization' });
-  }
-});
-
-/**
- * POST /api/gigs/:gigId/refresh-payment-status
- * Owner-triggered status sync for authorize_pending payments.
- * Useful in local/test environments when webhooks are delayed.
- */
-router.post('/:gigId/refresh-payment-status', verifyToken, async (req, res) => {
-  try {
-    const { gigId } = req.params;
-    const userId = req.user.id;
-
-    const { data: gig, error: gigFetchErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, payment_id, payment_status')
-      .eq('id', gigId)
-      .single();
-
-    if (gigFetchErr) {
-      return res.status(500).json({ error: 'Failed to fetch gig' });
-    }
-    if (!gig) return res.status(404).json({ error: 'Gig not found' });
-
-    const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'Only the gig owner can refresh payment status' });
-    }
-
-    if (!gig.payment_id) {
-      return res.status(400).json({ error: 'No payment linked to this gig' });
-    }
-
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('id, payment_status')
-      .eq('id', gig.payment_id)
-      .single();
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    let beforeStatus = payment.payment_status;
-    let afterStatus = beforeStatus;
-
-    if (beforeStatus === PAYMENT_STATES.AUTHORIZE_PENDING) {
-      const reconciled = await stripeService.syncPaymentAuthorizationStatus(payment.id);
-      afterStatus = reconciled?.payment_status || beforeStatus;
-    }
-
-    return res.json({
-      paymentStatus: afterStatus,
-      previousPaymentStatus: beforeStatus,
-      changed: beforeStatus !== afterStatus,
-    });
-  } catch (err) {
-    logger.error('Refresh payment status error', { error: err.message });
-    res.status(500).json({ error: 'Failed to refresh payment status' });
-  }
-});
+  });
+}
 
 /**
  * GET /api/gigs/:gigId/payment
@@ -8574,15 +7471,16 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
 
     const isPoster = String(gig.user_id) === String(userId);
     const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
-    if (!isPoster && !isWorker) {
-      return res.status(403).json({ error: 'Only the poster or worker can view payment details' });
+    const isDelegate = !isPoster && !isWorker && (await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage')).allowed;
+    if (!isPoster && !isWorker && !isDelegate) {
+      return res.status(403).json({ error: 'Only the poster, authorized manager, or worker can view payment details' });
     }
 
     if (!gig.payment_id) {
       return res.json({ payment: null, stateInfo: null });
     }
 
-    const [{ data: payment }, { data: successfulTips }] = await Promise.all([
+    const [{ data: payment, error: paymentReadError }, { data: successfulTips, error: tipsReadError }] = await Promise.all([
       supabaseAdmin
         .from('Payment')
         .select('*')
@@ -8596,12 +7494,27 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         .not('payment_succeeded_at', 'is', null),
     ]);
 
+    if (paymentReadError || tipsReadError) return res.status(503).json({ error: 'Payment verification is unavailable' });
     if (payment) {
+      if (payment.gig_id !== gig.id || payment.payer_id !== gig.user_id
+        || (isWorker && payment.payee_id !== userId)) {
+        return res.status(409).json({ error: 'Payment ownership needs verification' });
+      }
+      Object.assign(payment, await require('../services/walletSettlementService').readProjection(payment));
       payment.tip_amount = (successfulTips || []).reduce((sum, tip) => {
         const grossTip = Number(tip?.tip_amount || 0) || 0;
         const refundedTip = Number(tip?.refunded_amount || 0) || 0;
         return sum + Math.max(0, grossTip - refundedTip);
       }, 0);
+    }
+
+    const { data: currentGig, error: currentGigError } = await supabaseAdmin.from('Gig')
+      .select('id, user_id, accepted_by, payment_id').eq('id', gig.id).maybeSingle();
+    if (currentGigError) return res.status(503).json({ error: 'Payment verification is unavailable' });
+    if (!currentGig || currentGig.user_id !== gig.user_id || currentGig.accepted_by !== gig.accepted_by
+      || currentGig.payment_id !== gig.payment_id) return res.status(409).json({ error: 'Payment ownership changed. Please refresh.' });
+    if (isDelegate && !(await getGigOwnerAccess(currentGig.user_id, userId, 'gigs.manage')).allowed) {
+      return res.status(403).json({ error: 'Your permission to view this payment changed.' });
     }
 
     // Don't expose sensitive fields to the worker
@@ -8619,7 +7532,7 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
     res.json({ payment: payment || null, stateInfo });
   } catch (err) {
     logger.error('Get gig payment error', { error: err.message });
-    res.status(500).json({ error: 'Failed to get payment details' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to get payment details' });
   }
 });
 

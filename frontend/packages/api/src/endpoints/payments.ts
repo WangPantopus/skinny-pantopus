@@ -169,21 +169,63 @@ export async function getPayment(paymentId: string): Promise<{
   return get<{ payment: Payment }>(`/api/payments/${paymentId}`);
 }
 
-/**
- * Refund a payment
- */
+export type PaymentRefundReason = 'duplicate' | 'fraudulent' | 'requested_by_customer' | 'work_not_completed' | 'other';
+export type PaymentRefundStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'canceled';
+
+export interface PaymentRefundRequest {
+  requestId: string;
+  paymentId: string;
+  operation: 'refund' | 'release';
+  amountCents: number;
+  currency: string;
+  status: PaymentRefundStatus;
+  providerRefundId: string | null;
+  canRetry: boolean;
+  reversalStatus: string | null;
+  requestedAmountCents: number | null;
+  reason: PaymentRefundReason;
+  description: string | null;
+}
+
+export interface PaymentRefundReceipt {
+  stripe_refund_id: string;
+  payment_id: string;
+  amount: number;
+  currency: string;
+  refund_status: PaymentRefundStatus;
+  refund_succeeded_at: string | null;
+}
+
+export type RefundPaymentSummary = Pick<Payment,
+  'id' | 'payment_status' | 'amount_total' | 'refunded_amount' | 'currency' | 'captured_at'
+  | 'payee_release_status' | 'wallet_settlement'>;
+
+export interface PaymentRefundHistory {
+  requests: PaymentRefundRequest[];
+  refunds: PaymentRefundReceipt[];
+  payment: RefundPaymentSummary;
+}
+
+export interface PaymentRefundResult {
+  success: boolean;
+  refundRequest: PaymentRefundRequest;
+  refund: PaymentRefundReceipt | null;
+  payment: RefundPaymentSummary;
+}
+
+/** Read current payer/admin receipts without starting a provider operation. */
+export async function getPaymentRefunds(paymentId: string): Promise<PaymentRefundHistory> {
+  return get<PaymentRefundHistory>(`/api/payments/${paymentId}/refunds`);
+}
+
+/** Keep requestId and original terms unchanged after any uncertain result. */
 export async function refundPayment(
-  paymentId: string, 
+  paymentId: string,
   reason: string,
-  amount?: number
-): Promise<{ 
-  refund: {
-    id: string;
-    amount: number;
-    status: string;
-  };
-}> {
-  return post<{ refund: any }>(`/api/payments/${paymentId}/refund`, { reason, amount });
+  amount?: number,
+  options?: { requestId: string; description?: string },
+): Promise<PaymentRefundResult> {
+  return post<PaymentRefundResult>(`/api/payments/${paymentId}/refund`, { reason, amount, ...options });
 }
 
 /**
@@ -255,53 +297,55 @@ export async function completePaymentSetup(gigId: string): Promise<{
   );
 }
 
-/**
- * Retry authorization after off-session auth failure.
- * Returns a new clientSecret for on-session SCA completion.
- */
-export async function retryAuthorization(gigId: string): Promise<{
-  clientSecret: string;
-  paymentIntentId: string;
-  paymentId: string;
-}> {
-  return post<{
-    clientSecret: string;
-    paymentIntentId: string;
-    paymentId: string;
-  }>(`/api/gigs/${gigId}/retry-authorization`);
+/** Exact displayed terms required before resuming an assigned payment. */
+export interface AssignedAuthorizationTerms {
+  expectedActorId: string;
+  expectedSessionScope: string;
+  expectedPaymentId: string;
+  expectedPayerId: string;
+  expectedAmountCents: number;
+  expectedPayeeId: string;
+  currency: 'usd';
 }
 
-/**
- * Continue an in-progress on-session authorization (authorize_pending).
- * Returns the existing PaymentIntent clientSecret.
- */
-export async function continueAuthorization(gigId: string): Promise<{
-  clientSecret?: string;
-  paymentIntentId?: string;
+export interface AssignedAuthorizationProgress {
+  gigId: string;
+  actorId: string;
+  sessionScope: string;
   paymentId: string;
-  alreadyAuthorized?: boolean;
-}> {
-  return post<{
-    clientSecret?: string;
-    paymentIntentId?: string;
-    paymentId: string;
-    alreadyAuthorized?: boolean;
-  }>(`/api/gigs/${gigId}/continue-authorization`);
-}
-
-/**
- * Refresh/reconcile payment status with Stripe (owner action).
- */
-export async function refreshPaymentStatus(gigId: string): Promise<{
+  payerId: string;
+  payeeId: string;
+  authorizationAttemptId: string;
+  paymentIntentId: string | null;
+  amountCents: number;
+  currency: 'usd';
   paymentStatus: string;
-  previousPaymentStatus: string;
-  changed: boolean;
-}> {
-  return post<{
-    paymentStatus: string;
-    previousPaymentStatus: string;
-    changed: boolean;
-  }>(`/api/gigs/${gigId}/refresh-payment-status`);
+  providerStatus: string | null;
+  authorizationReady: boolean;
+  alreadyAuthorized: boolean;
+  cancellationPending: boolean;
+  authorizationAvailableAt: string | null;
+  recoveryState: 'ready' | 'action_required' | 'pending' | 'needs_review';
+  canRetry: boolean;
+  clientSecret?: string;
+}
+
+/** Resume the exact assigned authorization without replacing an active intent. */
+export async function retryAuthorization(
+  gigId: string, terms: AssignedAuthorizationTerms,
+): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/retry-authorization`, terms);
+}
+
+export async function continueAuthorization(
+  gigId: string, terms: AssignedAuthorizationTerms,
+): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/continue-authorization`, terms);
+}
+
+/** Read provider state and reconcile its exact receipt; never creates an intent. */
+export async function refreshPaymentStatus(gigId: string): Promise<AssignedAuthorizationProgress> {
+  return post(`/api/gigs/${gigId}/refresh-payment-status`);
 }
 
 /**

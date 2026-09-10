@@ -142,6 +142,10 @@ final class GigDetailViewModelTests: XCTestCase {
             gigId: "g1",
             api: api,
             checkout: CheckoutCoordinator(api: api, presenter: presenter),
+            bidAcceptance: GigBidAcceptanceCoordinator(
+                api: api,
+                checkout: CheckoutCoordinator(api: api, presenter: presenter)
+            ) { "origin|owner|session" },
             currentUserId: "owner-1",
             roomEvents: { _ in AsyncStream { $0.finish() } },
             emitRoom: { event, gigId in emitRecorder.events.append("\(event):\(gigId)") }
@@ -240,9 +244,9 @@ final class GigDetailViewModelTests: XCTestCase {
             ],
             "/api/gigs/g1/bids/b1/accept": [.status(
                 200,
-                body: #"{"requiresPaymentSetup":true,"clientSecret":"pi_x","customer":"cus","ephemeralKey":"ek","publishableKey":"pk"}"#
+                body: #"{"bid":{"id":"b1","status":"pending_payment"},"amountCents":6000,"currency":"usd","requiresPaymentSetup":true,"clientSecret":"pi_x","customer":"cus","ephemeralKey":"ek","publishableKey":"pk"}"#
             )],
-            "/api/gigs/g1/bids/b1/finalize-accept": [.status(200, body: #"{"message":"ok"}"#)],
+            "/api/gigs/g1/bids/b1/finalize-accept": [.status(200, body: #"{"bid":{"id":"b1","status":"accepted"}}"#)],
             "/api/gigs/g1/no-show-check": [.status(200, body: #"{"can_report":false}"#)]
         ])
         let presenter = StubAcceptPresenter()
@@ -481,35 +485,21 @@ final class GigDetailViewModelTests: XCTestCase {
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.url?.path, "/api/gigs/g1/report")
     }
 
-    func testCancellationPreviewParsesZoneAndCancelPosts() async {
+    func testTaskStopEntryCannotUseAnUnverifiedOpeningAccount() async {
         stubRoutes([
-            "/api/gigs/g1": [
-                .status(200, body: Self.gigJSON(#""status":"assigned","user_id":"owner-1","accepted_by":"w1""#)),
-                .status(200, body: Self.gigJSON(#""status":"cancelled","user_id":"owner-1""#))
-            ],
-            "/api/gigs/g1/bids": [.status(200, body: #"{"bids":[]}"#), .status(200, body: #"{"bids":[]}"#)],
-            "/api/gigs/g1/questions": [
-                .status(200, body: Self.questionsJSON),
-                .status(200, body: Self.questionsJSON)
-            ],
-            "/api/gigs/g1/no-show-check": [.status(200, body: #"{"can_report":false}"#)],
-            "/api/gigs/g1/cancellation-preview": [.status(
-                200,
-                body: #"{"zone":1,"zone_label":"After acceptance (grace period expired)","fee":3,"fee_pct":5,"in_grace":false,"policy":"standard","can_reschedule":true}"#
-            )],
-            "/api/gigs/g1/cancel": [.status(200, body: #"{"message":"ok"}"#)]
+            "/api/gigs/g1": [.status(200, body: Self.gigJSON(#""status":"assigned","user_id":"owner-1","accepted_by":"w1""#))],
+            "/api/gigs/g1/bids": [.status(200, body: #"{"bids":[]}"#)],
+            "/api/gigs/g1/questions": [.status(200, body: Self.questionsJSON)],
+            "/api/gigs/g1/no-show-check": [.status(200, body: #"{"can_report":false}"#)]
         ])
         let vm = makeOwnerVM()
         await vm.load()
         XCTAssertTrue(vm.canCancelTask)
-        let preview = await vm.loadCancellationPreview()
-        XCTAssertEqual(preview?.zone, 1)
-        XCTAssertEqual(preview?.fee, 3)
-        XCTAssertEqual(preview?.inGrace, false)
-        let error = await vm.cancelTask(reason: .changedPlans)
-        XCTAssertNil(error)
-        XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/cancel" })
-        XCTAssertFalse(vm.canCancelTask, "Cancelled gigs can't be cancelled again.")
+        XCTAssertNil(vm.makeStopViewModel(action: .cancel))
+        XCTAssertNil(vm.makeStopViewModel(action: .close))
+        XCTAssertNil(vm.makeStopViewModel(action: .reopenBidding))
+        XCTAssertNil(vm.makeStopViewModel(action: .workerRelease))
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "POST" || $0.httpMethod == "DELETE" })
     }
 
     // MARK: - Phase 5 — realtime room

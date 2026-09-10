@@ -1197,6 +1197,18 @@ export type PaymentType =
   | 'deposit'
   | 'withdrawal';
 
+export type PayeeReleaseStatus = 'held' | 'wallet_credited' | 'no_earnings' | 'external_transfer' | 'unknown';
+
+export interface PaymentWalletSettlement {
+  id: string;
+  paymentId: string;
+  status: 'credited' | 'no_earnings';
+  amountCents: number;
+  currency: string;
+  refundBasisCents: number;
+  createdAt: string;
+}
+
 export interface Payment {
   id: string;
   payer_id: string;
@@ -1214,6 +1226,10 @@ export interface Payment {
   // Status
   payment_status: PaymentStatus;
   payment_type: PaymentType;
+  // Worker release is independent of capture/refund status. Older responses
+  // omit this projection; clients must not infer release from a status label.
+  payee_release_status?: PayeeReleaseStatus;
+  wallet_settlement?: PaymentWalletSettlement | null;
   // Stripe references
   stripe_payment_intent_id?: string;
   stripe_setup_intent_id?: string;

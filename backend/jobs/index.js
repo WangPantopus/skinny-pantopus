@@ -85,6 +85,14 @@ const neighborhoodPreviewRefresh = require('./neighborhoodPreviewRefresh');
 const autoRemindWorker = require('./autoRemindWorker');
 // Payment bid expiry
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
+const deliverGigAcceptance = require('./deliverGigAcceptance');
+const deliverWalletSettlement = require('./deliverWalletSettlement');
+const reconcileGigAuthorizationExpiry = require('./reconcileGigAuthorizationExpiry');
+const deliverGigAuthorizationExpiry = require('./deliverGigAuthorizationExpiry');
+const deliverGigStop = require('./deliverGigStop');
+const reconcileGigStop = require('./reconcileGigStop');
+const reconcileGigAcceptance = require('./reconcileGigAcceptance');
+const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 // Persistent login registry housekeeping
 const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
@@ -111,6 +119,14 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'organicMatch',
   'refreshDiscoveryCache',
   'expirePendingPaymentBids',
+  'deliverGigAcceptance',
+  'deliverWalletSettlement',
+  'reconcileGigAuthorizationExpiry',
+  'deliverGigAuthorizationExpiry',
+  'deliverGigStop',
+  'reconcileGigStop',
+  'reconcileGigAcceptance',
+  'reconcilePaymentRefunds',
   'computeReputation',
   'earnRiskReview',
   'processClaimWindows',
@@ -202,6 +218,8 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
+  scheduleCron('*/5 * * * *', wrapJob('reconcilePaymentRefunds', reconcilePaymentRefunds), { scheduled: true, timezone: 'UTC' });
+
   // ─── Retry Capture Failures ───
   // Runs every 15 minutes at :20/:35/:50/:05.
   // Retries payment capture for gigs where owner confirmed completion
@@ -213,9 +231,8 @@ function startJobs(options = {}) {
 
   // ─── Expire Uncaptured Authorizations ───
   // Runs daily at 3:00 AM UTC.
-  // Cancels gigs whose payment auth is expiring soon (within 24h)
-  // if work hasn't started. Alerts admins for in-progress gigs
-  // with expiring auths (needs manual re-authorization).
+  // Preserves the independent abandoned/expiring booking payment policy.
+  // Gig reconciliation and durable notices run independently below.
   scheduleCron('0 3 * * *', wrapJob('expireUncapturedAuthorizations', expireUncapturedAuthorizations), {
     scheduled: true,
     timezone: 'UTC',
@@ -577,6 +594,33 @@ function startJobs(options = {}) {
   scheduleCron('12,27,42,57 * * * *', wrapJob('checkAndAlertStuckPayments', checkAndAlertStuckPayments), {
     scheduled: true,
     timezone: 'UTC',
+  });
+
+  scheduleCron('*/2 * * * *', wrapJob('reconcileGigAcceptance', reconcileGigAcceptance), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigAcceptance', deliverGigAcceptance), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverWalletSettlement', deliverWalletSettlement), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('*/15 * * * *', wrapJob('reconcileGigAuthorizationExpiry', reconcileGigAuthorizationExpiry), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigAuthorizationExpiry', deliverGigAuthorizationExpiry), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigStop', deliverGigStop), {
+    scheduled: true, timezone: 'UTC',
+  });
+  scheduleCron('*/5 * * * *', wrapJob('reconcileGigStop', reconcileGigStop), {
+    scheduled: true, timezone: 'UTC',
   });
 
   // ─── Expire Stale pending_payment Bids ───

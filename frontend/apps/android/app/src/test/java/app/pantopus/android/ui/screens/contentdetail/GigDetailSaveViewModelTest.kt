@@ -29,17 +29,20 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.files.FilesRepository
-import app.pantopus.android.data.gigs.GigReassignmentRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,7 +87,6 @@ private class RecordingActiveNotifier : GigActiveNotifier {
 class GigDetailSaveViewModelTest {
     private val repo: GigsRepository = mockk()
     private val extrasRepo: app.pantopus.android.data.gigs.GigExtrasRepository = mockk()
-    private val reassignmentRepo: GigReassignmentRepository = mockk()
     private val viewerBidRepo: GigViewerBidRepository = mockk()
     private val ownerActionsRepo: app.pantopus.android.data.gigs.GigOwnerActionsRepository = mockk()
     private val offersRepo: OffersRepository = mockk()
@@ -132,7 +134,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -144,6 +145,10 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -257,7 +262,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -269,6 +273,10 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -293,17 +301,22 @@ class GigDetailSaveViewModelTest {
             val vm = ownerOpenGigVm(bids = listOf(GigBidDto(id = "b1", userId = "u2", bidAmount = 40.0)))
             coEvery { repo.acceptBid("g1", "b1") } returns
                 NetworkResult.Success(
-                    GigBidAcceptResponse(requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk"),
+                    GigBidAcceptResponse(
+                        bid = GigBidDto(id = "b1", gigId = "g1", status = "pending_payment"),
+                        requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk", paymentIntentId = "pi_test",
+                        amountCents = 4000, currency = "usd",
+                    ),
                 )
             coEvery { repo.finalizeAcceptBid("g1", "b1") } returns
-                NetworkResult.Success(GigBidAcceptResponse())
+                NetworkResult.Success(GigBidAcceptResponse(bid = GigBidDto(id = "b1", gigId = "g1", status = "accepted")))
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 vm.lifecycleEvents.toList(events)
             }
             vm.acceptBidAsOwner("b1")
-            assertTrue(events.any { it is GigLifecycleEvent.PresentPaymentSheet })
-            vm.onLifecycleCheckoutOutcome(
+            val presentation = checkNotNull(vm.bidCheckout.state.value.presentation)
+            vm.bidCheckout.onSheetResult(
+                presentation.token,
                 app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome.Paid,
             )
             coVerify(exactly = 1) { repo.finalizeAcceptBid("g1", "b1") }
@@ -338,7 +351,6 @@ class GigDetailSaveViewModelTest {
                 GigDetailViewModel(
                     repo,
                     extrasRepo,
-                    reassignmentRepo,
                     viewerBidRepo,
                     ownerActionsRepo,
                     offersRepo,
@@ -350,6 +362,10 @@ class GigDetailSaveViewModelTest {
                     activeNotifier,
                     gigsV2Repo,
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                    checkoutIdentities = gigIdentityFixture(),
+                    refundFactory = mockk(relaxed = true),
+                    authorizationFactory = authorizationFactory(),
+                    stopFactory = mockk(relaxed = true),
                 )
             vm.load()
             assertTrue(vm.canInstantAccept())
@@ -361,12 +377,22 @@ class GigDetailSaveViewModelTest {
 
     // MARK: - Phase 5b · lifecycle completers
 
+    private fun authorizationFactory(): GigAssignedAuthorizationFactory =
+        mockk {
+            every { create(any(), any()) } returns
+                mockk(relaxed = true) {
+                    coEvery { isCurrentReadScope() } returns true
+                    every { state } returns MutableStateFlow(GigAssignedAuthorizationState())
+                }
+        }
+
     private fun assignedGig(
         acceptedBy: String,
         ownerId: String = "poster-1",
     ) = GigDto(
         id = "g1",
         title = "Hang shelves",
+        paymentId = "11111111-1111-4111-8111-111111111111",
         userId = ownerId,
         status = "assigned",
         acceptedBy = acceptedBy,
@@ -375,10 +401,21 @@ class GigDetailSaveViewModelTest {
     private fun lifecycleVm(
         gig: GigDto,
         noShowCanReport: Boolean = false,
+        checkoutIdentity: () -> Pair<String, String?>? = { "u1" to "test-session" },
         changeOrders: List<GigChangeOrderDto> = emptyList(),
         payment: NetworkResult<GigPaymentResponse> =
             NetworkResult.Success(
-                GigPaymentResponse(payment = GigPaymentDto(amountTotal = 5_000, amountSubtotal = 5_000)),
+                GigPaymentResponse(
+                    payment =
+                        GigPaymentDto(
+                            id = gig.paymentId,
+                            gigId = gig.id,
+                            payerId = gig.userId,
+                            payeeId = gig.acceptedBy,
+                            amountTotal = 5_000,
+                            amountSubtotal = 5_000,
+                        ),
+                ),
             ),
     ): GigDetailViewModel {
         coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = gig))
@@ -394,7 +431,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -406,10 +442,40 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(checkoutIdentity),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
             )
         vm.load()
         return vm
     }
+
+    @Test
+    fun changed_screen_identity_shows_reopen_error_without_fetching_new_account_data() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "session-1"
+            val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+            assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+            identity = "u2" to "session-2"
+            vm.silentRefetch()
+            assertTrue(vm.state.value is ContentDetailUiState.Error)
+            coVerify(exactly = 1) { repo.detail("g1") }
+            vm.bidCheckout.start("g1", "b1")
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
+
+    @Test
+    fun anonymous_and_legacy_session_reads_still_load_without_payment_admission() =
+        runTest {
+            for (identity in listOf(null, "u1" to null)) {
+                val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+                assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+                vm.bidCheckout.start("g1", "b1")
+                assertEquals(app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutPhase.Idle, vm.bidCheckout.state.value.phase)
+            }
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
 
     @Test
     fun worker_running_late_gate_and_endpoint() =
@@ -460,7 +526,16 @@ class GigDetailSaveViewModelTest {
                     payment =
                         NetworkResult.Success(
                             GigPaymentResponse(
-                                payment = GigPaymentDto(amountTotal = 7_000, amountSubtotal = 7_000, tipAmount = 500),
+                                payment =
+                                    GigPaymentDto(
+                                        id = gig.paymentId,
+                                        gigId = gig.id,
+                                        payerId = gig.userId,
+                                        payeeId = gig.acceptedBy,
+                                        amountTotal = 7_000,
+                                        amountSubtotal = 7_000,
+                                        tipAmount = 500,
+                                    ),
                             ),
                         ),
                 )
@@ -476,6 +551,31 @@ class GigDetailSaveViewModelTest {
             val vm = lifecycleVm(assignedGig(acceptedBy = "viewer-1"))
             assertNull(vm.payment.value)
             coVerify(exactly = 0) { repo.gigPayment(any()) }
+        }
+
+    @Test
+    fun payer_refund_entry_opens_only_the_exact_owned_payment() =
+        runTest {
+            val gig = assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
+            val payment =
+                GigPaymentDto(
+                    id = "11111111-1111-4111-8111-111111111111",
+                    gigId = "g1",
+                    payerId = "viewer-1",
+                    payeeId = "worker-9",
+                    amountTotal = 1000,
+                    currency = "usd",
+                )
+            val vm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(payment)))
+            assertTrue(vm.canOpenRefunds())
+            vm.openRefunds()
+            verify(exactly = 1) { vm.refunds.open("g1", payment) }
+            for (invalid in listOf(payment.copy(payerId = "other"), payment.copy(gigId = "other"), payment.copy(id = null))) {
+                val invalidVm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(invalid)))
+                assertFalse(invalidVm.canOpenRefunds())
+                invalidVm.openRefunds()
+                verify(exactly = 0) { invalidVm.refunds.open(any(), any()) }
+            }
         }
 
     @Test

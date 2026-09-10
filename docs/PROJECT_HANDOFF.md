@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 9, 2026. This is the continuing-work entry point. Detailed
+Updated September 10, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -14,33 +14,564 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Payment integration and next checkpoints — September 9
+### Fresh-session source checkpoint — September 10
 
-[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) merged into
-master as `d7be416b872a31ceb53094d7d19c3f114185831f` at 04:15 UTC September 10.
-Every [final-head CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34434288893)
-passed at `57787d55d`, including all three iOS simulator jobs and Android
-quality/build/snapshot/instrumented checks. Native saved-card acceptance and
-exact cleanup are complete. No checks were waived, no production deployment ran,
-and the completed payment fixtures must not be reused.
+The owner requested detailed handoff and commit/push of all agent-owned changes
+for a fresh session. The [tip draft checkpoint](paid-gig-tip-draft-checkpoint-2026-09-10.md)
+records the two new files, syntax-only verification, unwired behavior and exact
+remaining backend/client/provider steps. **Durable tips are not implemented.**
+All CI passed at the preceding completed milestone `48afcc68f`; check the new
+checkpoint's actual head separately. PR #34 remains an unfinished draft.
 
-Home authority/deletion is committed and pushed in draft PR #32 at `7f6b59ba3`,
-with full current-head CI passing, 4,661 backend tests and 24 real concurrency
-checks. Continue ordinary admission, WiFi creation and the remaining resource,
-record, storage and client permission gates before household acceptance.
-Paid-gig backend proof is committed/pushed at `15754b439` on
-`codex/staging-paid-gig`: 4,692 backend tests, fresh replay, 19 SQL contracts and
-35 concurrent connections pass. It still needs provider reconciliation,
-durable delivery, native/web recovery, refunds and actual sandbox acceptance.
+The comprehensive cross-workstream continuation is
+[the Home branch's session checkpoint](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-permission-boundaries/docs/SESSION_RESUME_2026-09-10.md).
+Read it before substantial work. It includes the latest native CI failures,
+browser review findings, Android attachment draft, failed first installed iOS
+journey, worktrees and remaining launch sequence. All paid services, including
+Smarty, remain one final owner launch-preparation bundle. Preserve unrelated
+local edits; do not repeat completed physical Beacon/native saved-card checks.
 
-The separate `codex/native-sensitive-auth` worktree repairs the reproduced
-money-screen authentication failure and stale-account prompt paths. Its
-[milestone report](native-sensitive-auth-2026-09-09.md) records 19 passing iOS
-tests, 12 Android tests, native lint and Android APK assembly. Independent review
-and current-head CI remain integration gates. Continue paid-gig web/native
-recovery and Home admission/resource boundaries next. Older status below is
-historical where it conflicts with this checkpoint. The main checkout's
-unrelated design/handoff work is preserved.
+### Android payment opening identity — September 10
+
+Bid checkout, refunds and assigned-task authorization now bind their opening
+account, stored credentials and actual API origin before asynchronous work.
+Missing or inconsistent signed-in credentials cannot become anonymous access;
+retired actions stay retired, and an old payment sheet keeps its admission until
+its original callback. The [identity report](paid-gig-android-payment-identity-2026-09-10.md)
+records passing final checks/build, source quality and independent review.
+
+**Next:** durable tip creation/recovery and exact provider completion proof before
+repairing tip client success states, then complete provider/installed journeys and
+remaining fee, started-work, dispute/Connect/debt and capacity work. Tip migration
+version `20260910190000` is reserved; Home already owns `170000` and `180000`.
+Combined migration versions/dependencies must be audited before integration.
+Home iOS private attachments are pushed as `502de726f`, Android task routing as
+`f5ca4acfd`, with installed household acceptance, Android attachments and browser
+retained forms underway. PRs #32/#34 remain unfinished drafts. All paid services
+remain one final launch-preparation step. Completed physical Beacon and saved-card
+acceptance must not be repeated. No hosted data or paid service changed.
+
+### Android task stop recovery checkpoint — September 10
+
+All four Android task-stop actions now retain the original command, verify exact
+terms and receipts, and keep saved status reachable after cancellation or worker
+release. Opening identity is captured before asynchronous work; dismissal and
+competing storage writes cannot erase recovery. The
+[Android report](paid-gig-android-stop-recovery-2026-09-10.md) records the fresh
+passing checks, debug build, source quality and independent review. These results
+cover synthetic HTTP/storage behavior; installed emulator and provider journey
+acceptance remain open.
+
+**Next:** repair the same initial identity edge in the earlier Android payment
+coordinators, complete provider/emulator acceptance, then remaining started-work,
+fee, tip, dispute/Connect/debt and capacity work. Home retained iOS task forms are
+pushed as `f24785404` and durable assignment notices as `92a35b7f9`; Android forms
+are under final build verification, with exact notification routing and private
+attachments continuing. PRs #32/#34 remain unfinished drafts. Every paid service
+or subscription remains deferred to one final launch-preparation step. Completed
+physical Beacon and saved-card acceptance must not be repeated. No hosted data,
+owner-phone installation or paid service changed.
+
+### Browser saved task-action recovery checkpoint — September 10
+
+Both browser gig layouts now expose the original saved action after cancellation,
+worker release or unavailable detail. Recovery stays bound to the current account,
+origin and opening session, and cannot silently start another action if storage
+changes. Failed replacement writes preserve the original command. The
+[browser entry report](paid-gig-web-saved-stop-entry-2026-09-10.md) records checks
+through both actual page components, the passing full browser regression, clean
+type checking and independent review. These synthetic HTTP checks do not claim
+new hosted/provider acceptance.
+
+**Next:** finish Android stop recovery and complete provider/emulator acceptance,
+then the remaining started-work, fee, tip, dispute/Connect/debt and capacity work.
+iOS recovery is pushed as `687d07cf8`; its backend, browser, database and privacy
+CI passes, with native CI still running at the last observation. Home retained
+native creation and sparse editing are underway after both browsing checkpoints;
+private attachments and durable assignment notices remain next. PRs #32/#34
+remain unfinished drafts. All paid services stay together for final launch
+preparation. Completed physical Beacon and saved-card acceptance must not be
+repeated. No hosted data or paid service changed.
+
+### iOS task stop recovery checkpoint — September 10
+
+All four native task-stop actions now share current terms, one retained request
+and exact receipt validation. Saved status remains reachable after cancellation,
+worker release or unavailable ordinary task details. The recovery entry cannot
+start another action when its saved record disappears. The
+[iOS stop report](paid-gig-ios-stop-recovery-2026-09-10.md) records the passing app
+build, final affected checks, strict source quality and independent review.
+No owner-phone update or hosted/provider acceptance is claimed by this build.
+
+**Next:** finish matching Android and browser saved-status entry controls, then
+complete provider/emulator acceptance and the remaining started/no-show/fee,
+tip, dispute/Connect/debt and capacity work. The durable backend is pushed as
+`9840dd2a5`; its backend, browser, database and privacy CI passes, with native CI
+still running at the last observation. Home native task browsing is pushed as
+`e015b77f0` and `0fdfaab1d`; retained creation/editing, attachments and durable
+assignment notices continue. Both PRs remain unfinished drafts. All paid services
+stay together for final launch preparation. Completed physical Beacon and
+saved-card acceptance must not be repeated. No hosted data or paid service changed.
+
+### Durable task stop checkpoint — September 10
+
+Cancellation, reopening, worker release and closing now retain one original
+command before financial work. Pending outcomes block conflicting task/payment
+changes; only verified release/refund evidence and an exact terminal receipt
+complete the action. The [stop backend report](paid-gig-unstarted-stop-2026-09-10.md)
+records real service/SQL interruption and lock-order checks, a clean complete
+migration replay, exact populated-upgrade preservation, unchanged archived
+financial implementations and independent review. The final broad regression had
+one unrelated Home watch timeout; its unchanged affected-suite recheck passed.
+No timeout cause is claimed. Privacy gates passed.
+
+**Next:** finish native stop recovery, including reopening a saved action after
+the task has already cancelled or the worker has been released. Browser recovery
+is pushed as `650ac9ce0`. Then finish started/no-show/fee execution, tip receipt
+acceptance, disputes/Connect/debt, retained-operation support, complete provider
+journeys and capacity/integration. Native Home task browsing is under app
+verification; retained creation/editing/private attachments and durable task
+assignment notices remain next there. PR #32 and #34 remain unfinished drafts.
+All paid dependencies stay together for final launch preparation. Completed
+physical Beacon and saved-card acceptance must not be repeated. No hosted
+migration, scheduler flag or paid service changed.
+
+### Browser task stop recovery checkpoint — September 10
+
+Both live browser gig layouts now share current-term task cancellation,
+reopening and worker-release controls. Unknown responses preserve their exact
+request through close/reload; only a matching completed task/financial receipt
+reports success. The [browser recovery report](paid-gig-web-stop-recovery-2026-09-10.md)
+records independent review, the complete web regression, final focused checks,
+clean type checking and an actual Chrome rehearsal against synthetic HTTP replies.
+
+**Next:** finish the matching durable stop backend/migration verification and
+native parity, then started/no-show/fee execution, disputes/Connect/debt, durable
+attention and full provider acceptance. Backend verification found old worker
+release fixtures that lacked the newly required proof; their updated checks pass,
+and final release-indicator protections are being verified before commit. All
+three remote iOS 18.5 jobs now pass `0037a3115` in
+[run 34467842363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34467842363).
+Home native evidence and task-creation recovery milestones are committed in
+draft PR #32, with native task detail/attachments continuing. Both PRs remain
+unfinished. All paid dependencies remain together for final launch preparation;
+completed physical Beacon and saved-card checks must not be repeated. No hosted
+migration or paid service changed.
+
+### iOS tip CI fixture correction — September 10
+
+The tip fixture now supplies the current actor/session and binds responses to
+their actual routes, preserving the runtime payment-access guard. The
+[CI repair report](paid-gig-ios-tip-ci-2026-09-10.md) records the shared cause of
+the three remote failures, independent review and a passing final simulator
+app build. Remote iOS 18.5 verification of the new head remains required.
+
+**Next:** durable manual cancellation/reopening/worker release is being
+implemented with retained request identity, exact displayed terms and confirmed
+financial receipts. Browser controls are being updated to preserve pending
+outcomes. The expiry checkpoint is pushed as `05676d6a5`; backend/web/database/
+privacy CI passes on that head, with native checks still running at this
+observation. Home native private evidence is under final app verification in
+draft PR #32. Both PRs remain unfinished. All paid dependencies remain together
+for final launch preparation; completed physical Beacon and saved-card checks
+must not be repeated. No hosted migration or paid dependency changed.
+
+### Durable authorization expiry checkpoint — September 10
+
+Expiry cancellation now reserves the current task/payment and exact provider
+authorization before releasing a hold. Unknown outcomes retain their operation
+and block conflicting start/capture actions. Only confirmed zero-capture release
+can cancel an assigned, unstarted task and create its durable notices. In-progress
+work receives payment attention without a false completion prompt. Reconciliation
+and notice retries have independent schedules; the daily booking policy remains
+separate. The [expiry report](paid-gig-authorization-expiry-2026-09-10.md) records
+actual service/SQL interruption and concurrency checks, a clean full replay,
+populated-upgrade preservation, independent review and the isolated full-backend
+HTTP failure followed by a passing unchanged-suite recheck. The fresh Stripe
+test hold was released with zero capture and its synthetic customer removed.
+
+**Next:** fix durable manual cancellation/reopening/worker release, including
+current actor/session, original terms and pending financial outcomes; then
+started/no-show/fee policy, dispute/Connect/debt, pending-state client controls,
+full provider journeys and capacity/integration. Current PR #34 head `9ef31ba7c`
+passes backend/web/database/privacy CI but all three iOS 18.5 test jobs failed
+in [run 34463214786](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34463214786).
+The cause is being investigated; local iOS passes do not waive that requirement.
+Draft PR #34 remains unfinished. Home browser private previews are pushed as
+`696e1a9f6` in draft PR #32; native evidence controls and household workflows
+continue there. No hosted migration, scheduler flag or paid dependency changed.
+All subscriptions stay together for final launch preparation. Completed physical
+Beacon and saved-card acceptance must not be repeated.
+
+### Exact provider hold deadlines — September 10
+
+Paid-gig authorization now uses the exact Stripe Charge capture deadline.
+Reopening or recovering an existing payment cannot invent a fresh seven-day
+window. Current intent/Charge binding and the locked legacy receipt protect
+readiness; missing or expired proof remains unresolved. The
+[deadline report](paid-gig-authorization-deadlines-2026-09-10.md) records the full
+backend pass, fresh replay, actual service/SQL recovery, populated-upgrade
+preservation and independent review. Existing historical dates are not bulk
+backfilled; matching runtime/migration deployment is required.
+
+**Next:** durable authorization-expiry cancellation is in progress. Its provider
+outcome must be confirmed before cancelling the exact current task, and pending
+work must block conflicting start/capture actions. Then continue manual
+cancellation/dispute/Connect/debt, durable attention, fresh full provider
+journeys and capacity/integration. iOS/Android recovery is pushed as
+`1d0953b82`/`5a2d5695f`. Home native evidence controls continue after `fad41cd3d`.
+Draft PRs #32/#34 remain unfinished. Paid subscriptions remain together for
+final launch preparation; completed physical Beacon/saved-card acceptance stays
+complete. No hosted migration or paid dependency ran at this checkpoint.
+
+### Android assigned-payment recovery — September 10
+
+Both native clients now provide the assigned task's exact payment-recovery
+controls. Android checks the opening account/session, displayed task/payment
+terms and the same provider operation immediately before checkout and after its
+result. Closing the screen retires late responses. The
+[Android report](paid-gig-android-assigned-authorization-2026-09-10.md) records
+compiled behavior checks, formatting/static analysis, zero lint errors, APK
+assembly and independent review. iOS is pushed as `1d0953b82`.
+
+**Next:** finish provider-reported authorization deadlines and durable expiry
+cancellation, then remaining manual cancellation/dispute/Connect/debt, durable
+attention, fresh full provider journeys and capacity work. The expiry audit found
+that the old job could cancel a task after an unknown hold-release result; this
+is being repaired before acceptance. Home native private evidence upload/review/
+retirement continues after its pushed `fad41cd3d` storage checkpoint. Draft PRs
+#32 and #34 remain unfinished; final integrated checks and release rehearsal are
+still required. All paid services stay together for final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
+### iOS assigned-payment recovery — September 10
+
+The native payment card now supports current poster/business-manager recovery
+with exact displayed terms, server session and provider operation checks. Late
+results after leaving the screen cannot reopen payment or claim success. The
+[iOS report](paid-gig-ios-assigned-authorization-2026-09-10.md) records a passing
+simulator app build, formatting/lint and independent review; fresh provider
+acceptance remains separate.
+
+**Next:** finish Android parity, then fresh full sandbox paid-gig journeys and
+remaining cancellation/dispute/Connect/debt, durable attention and capacity
+work before checked integration. Home private evidence/task storage is pushed
+as `fad41cd3d`; native private file controls continue in draft PR #32. Draft
+PR #34 remains unfinished. All paid subscriptions remain together for final
+launch preparation. Completed physical Beacon and saved-card checks stay complete.
+
+### Browser assigned-payment controls — September 10
+
+Both browser gig layouts now display the actual authorization form, resume exact
+displayed terms, check the opening server session before mutation and SDK
+submission, and confirm the server receipt before reporting readiness. Scheduled
+and cancelling payments remain explicit pending states; payment return secrets
+are removed even when authorization completes before page load. The
+[web report](paid-gig-web-assigned-authorization-2026-09-10.md) records the full
+web pass, type/lint results, independent review and provider-acceptance limits.
+The matching backend is committed/pushed as `e6f478891`.
+
+**Next:** finish iOS/Android assigned-payment recovery, then complete fresh
+provider/browser/emulator journeys and remaining payment lifecycle, durable
+attention and capacity checks. iOS source is under app-build verification;
+Android parity is in progress. Draft PR #34 remains unfinished. Home private
+attachments/evidence continue in draft PR #32; its regression found fixture
+updates and a real withdrawn-claim upload-retirement gap being repaired before
+that checkpoint. No paid dependencies, hosted migration or owner-device step
+ran. All paid services remain together for final launch preparation.
+
+### Historical assigned-payment recovery — September 10
+
+Historical assigned payments now recover through one protected authorization
+operation. Current actor/session and displayed payment terms are checked before
+mutation; interrupted provider requests retain their original identity. New holds
+respect the 24-hour window. Cancellation blocks worker start until its outcome
+is reconciled, and unchanged status checks no longer reload the gig repeatedly.
+
+The [authorization report](paid-gig-legacy-authorization-2026-09-10.md) records
+independent review, the full backend pass, fresh database replay, actual service/
+SQL interruption and concurrency checks, and populated-upgrade preservation.
+No historical authorization is backfilled automatically. Provider/device
+acceptance remains open; legacy attention notifications still need durable
+recovery. The migration and matching runtime must be deployed together.
+
+**Next:** commit the reviewed browser recovery controls, finish iOS/Android
+parity, then complete new and historical paid-gig sandbox journeys, remaining
+cancellation/dispute/Connect/debt and durable attention flows, capacity/retention
+checks and checked integration. Draft PR #34 remains unfinished. Home Android
+claims are pushed as `188801150`; the earlier dashboard repair passed all three
+affected iOS 18.5 jobs. Private Home attachments/evidence continue in draft PR #32.
+All paid dependencies remain deferred together to final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
+### Browser alert preferences and account changes — September 10
+
+Browser popups now follow the server's push eligibility stream; in-app updates
+remain available with alerts off. Restoring preferences does not replay old
+alerts. Socket connections and retained popups retire on same-tab or cross-tab
+session changes, including replacement cookie sessions with the same marker.
+The [browser report](browser-notification-preferences-2026-09-10.md) records
+1,089 web checks, zero type/lint errors, 4,833 backend checks (16 existing skips),
+all privacy gates and independent review. Actual combined browser acceptance
+and current-head CI remain open; no provider/device update occurred.
+
+**Next:** complete historical assigned-payment recovery and its web/native
+controls, including the existing continue-authorization button that currently
+sets state without displaying a payment form. Then finish cancellation/dispute/
+Connect/debt workflows, fresh full sandbox paid-gig acceptance, capacity/retention
+checks and checked integration. Draft PR #32 has iOS claim review `9035329a1` and
+a further dashboard runtime fix `a68bbc5a8` pushed; the affected iOS 18.5 CI proof
+is pending, while Android claims and private evidence/attachments continue.
+All paid dependencies remain deferred together until final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
+### Android refund recovery checkpoint — September 10
+
+Both native clients now have source implementations for exact payer refund and
+hold-release history, confirmation and interrupted-request recovery. Android's
+[refund report](paid-gig-android-refunds-2026-09-10.md) records 56 passing
+behavioral checks, formatting, static analysis, zero lint errors, debug assembly
+and independent review. Invalid-target reopening no longer retains a previous
+payment. Android is committed/pushed as `61501a3c5`. iOS refund recovery is
+committed/pushed as `22d7ada36`; its payment-summary follow-up also passes the
+50-check app build and independent review. It separates tips from the original
+task amount, distinguishes holds from charges and leaves missing totals unavailable. Actual provider/emulator acceptance of
+the full paid-gig journey remains open.
+
+Wallet notification durability is committed/pushed as `3b862f2ba`, with complete
+backend, fresh database, actual relay/SQL and populated-upgrade checks recorded
+below. **Next:** historical assigned authorization recovery, remaining
+cancellation/dispute/Connect/debt workflows and the full fresh sandbox paid-gig
+journey, then capacity/retention checks and checked integration. Home native claim
+review/withdrawal now passes 47 final iOS checks; Android current-session controls
+and private task attachments/evidence continue in draft PR #32. All paid services
+remain deferred to one final launch-preparation step; completed Beacon and
+saved-card device acceptance stays complete.
+
+### Wallet notification durability checkpoint — September 10
+
+New paid-gig wallet credit now commits its two in-app notices and delivery events
+with the money receipt. Process death, unknown transport and lost acknowledgement
+recover the same event/notification identities. Deleted or suppressed notices
+are not replayed, and historical/zero/reused credits create no new notice.
+The [wallet delivery report](paid-gig-wallet-delivery-2026-09-10.md) records the
+full 4,821-test backend pass (16 existing skips), privacy gates, 17 fresh
+migrations, 23 SQL contracts/wrappers, zero SQL lint errors, 36 concurrent
+connections, actual relay/SQL recovery and populated-upgrade preservation.
+Independent review is complete. Transport remains at least once after an
+uncertain provider acknowledgement; hosted/provider acceptance is still open.
+
+iOS refund recovery is committed/pushed as `22d7ada36`; Android has passed its
+56 behavioral checks and is finishing formatting/static/build validation before
+its separate checkpoint. **Next:** historical assigned authorization recovery,
+cancellation/dispute/Connect/debt workflows, the fresh full sandbox paid-gig
+journey, capacity/retention checks and checked integration. Home native claim
+review and private attachments/evidence continue in draft PR #32. Paid services
+remain deferred together until final launch preparation. Completed Beacon and
+saved-card acceptance stays complete and must not be repeated.
+
+### iOS refund recovery checkpoint — September 10
+
+The existing owner payment card now supports confirmed refund/hold-release
+requests and read-only history. Interrupted operations retain their original
+UUID, amount and reason across restart; exact server receipts, current account
+scope and caller retry permission control recovery. The [iOS refund report](paid-gig-ios-refunds-2026-09-10.md)
+records a passing simulator app build, 50 focused checks, strict formatting/lint
+and independent review. These controlled responses do not replace the fresh
+provider lifecycle acceptance. Android parity remains in validation.
+
+**Next:** finish Android refund recovery, historical assigned authorization,
+wallet notification durability and cancellation/dispute/Connect/debt workflows,
+then the full fresh sandbox paid-gig journey and checked integration. Wallet
+delivery source is currently uncommitted under local SQL/relay validation;
+its first contracts prove atomic notice creation, rollback and exact retry.
+Home ordinary claim review is committed/pushed as `c315267a6` in draft PR #32;
+native claim controls and private attachments/evidence continue there. Final
+current-head CI and household acceptance remain required. Paid dependencies
+remain deferred together until final launch preparation. Completed Beacon and
+saved-card device acceptance stays complete and must not be repeated.
+
+### Residual worker settlement checkpoint — September 10
+
+Worker wallet release now credits the verified amount remaining after refunds
+in one transaction with its durable receipt. A later permitted refund recovers
+only the additional worker share; original payment terms remain unchanged.
+Exact wallet owner/currency and legacy credit proof are required, and duplicate
+calls cannot credit twice. The [settlement report](paid-gig-wallet-settlement-2026-09-10.md)
+records final **4,808 backend checks passing (16 existing skips)**, **22 SQL
+contracts**, zero function-lint errors, **36 concurrent connections** and a
+populated upgrade rehearsal preserving historical financial rows. Independent
+review is complete; source is in draft [PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34).
+The separately pushed web release display is `991b4f77d`. No hosted migration,
+provider operation or full paid-gig device acceptance is claimed here.
+
+**Next:** native refund controls, historical assigned authorization recovery,
+remaining cancellation/dispute/Connect/debt and wallet-notification delivery,
+then a fresh complete sandbox paid-gig journey and checked integration. The
+report distinguishes held policy cases from completed settlement behavior.
+Home task/calendar, claim review and native finance controls continue in draft
+PR #32; its previous iOS CI failures are under investigation before any merge.
+Completed Beacon and saved-card device acceptance is preserved.
+
+The owner now defers **all paid subscriptions and paid dependencies** to one
+final launch-preparation step after other development and available validation
+are complete. The earlier timed Smarty reminder is paused. Track required
+subscriptions and their remaining real-provider acceptance together; do not
+purchase or activate them during this development phase. Complete user journeys,
+failure recovery, maintainable code and realistic capacity checks are the
+priority. Passing isolated tests does not establish full workflow readiness.
+
+### Worker release display checkpoint — September 9
+
+Web refunds now require an explicit held-worker state before starting a new
+request. Worker summaries distinguish original expected earnings from the exact
+historical wallet credit after refunds, including zero earnings and subsequent
+adjustments. The [web report](paid-gig-web-refunds-2026-09-09.md) records **1,082
+web tests**, **58 final focused checks**, zero TypeScript/lint errors and
+independent review. Durable refund checkpoint `80d155b30` is committed/pushed;
+the matching residual-settlement backend (`20260910070000`) is still under
+local database/recovery verification in draft PR #34. Do not deploy the new
+projection independently or treat source tests as provider acceptance.
+
+Next finish and review that settlement transaction, then native refund controls,
+historical assigned authorization and the complete fresh sandbox paid-gig
+journey. Home claim invitation checkpoint `d35f7b844` is committed/pushed
+separately in draft PR #32; task/calendar regression, legacy claim review and
+iOS finance permission controls continue there. No owner device input is pending.
+
+### Durable refund checkpoint — September 9
+
+Payer/admin refunds and authorization-hold releases now retain one protected
+request identity and reconcile exact provider receipts. Refund reservation,
+provider lease and wallet credit recheck their current state under database
+locks; a new dispute prevents a new refund mutation. Unknown outcomes retain
+the same request, and a provider-confirmed refund remains distinct from any
+unrecovered worker balance. The [refund report](paid-gig-refund-receipts-2026-09-09.md)
+records **4,768 backend tests passing (16 skipped)**, **37 final focused tests**,
+all privacy gates, **21 fresh SQL contracts**, zero function-lint errors and
+**28 concurrent database connections**, plus populated-upgrade preservation.
+Root's independent review of the final dispute/lease/state guards passed.
+
+Web refund controls are committed at `13a8dc9b8`; their [report](paid-gig-web-refunds-2026-09-09.md)
+records the separate client evidence. Both source checkpoints are in draft
+[PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34); current-head CI
+and integration remain required. No provider or hosted migration/runtime change
+ran. **Next: release residual worker earnings after a pre-release partial
+refund**, then historical assigned authorization, native refund controls and a
+fresh complete sandbox paid-gig journey. Historical Connect/debt recovery and
+broader dispute accounting remain explicit release gates. Completed saved-card
+fixtures remain cleaned and must not be reused.
+
+### Web refund recovery checkpoint — September 9
+
+The existing payer payment section now has explicit refund/hold-release
+confirmation and scoped history recovery. Unknown results keep the original
+request identity and terms across restart; exact receipts determine completion.
+Account, session and API changes fence the old screen. The [web refund report](paid-gig-web-refunds-2026-09-09.md)
+records the full **1,060-test web pass**, **26 focused UI/shared-client checks**,
+lint, zero-error typecheck and independent contract review. This source depends
+on the same PR's durable refund backend/migration recorded above;
+it must not deploy independently.
+
+The subsequent backend checkpoint closes the dispute-at-provider-lease race. Remaining
+paid-gig work includes native refund controls, historical assigned authorization,
+residual earnings after partial refunds, complete test-mode completion/capture/
+notification/refund/cleanup and applicable release checks. No provider operation
+or hosted paid-gig migration/runtime change has run. Home native navigation is
+committed/pushed separately at `115c238ac` with **53 iOS and 54 Android tests**;
+the next claim invitation transaction is under isolated final replay/regression
+checks, while task/calendar/resource work continues independently.
+
+### Native paid-bid recovery checkpoint — September 9
+
+The subsequent web summary checkpoint distinguishes authorization holds from
+captured charges and does not label a pending hold release as a charge. Twelve
+focused tests, changed-file lint and the zero-error TypeScript gate pass; see
+the [web report](paid-gig-web-recovery-2026-09-09.md). Durable refund/release
+receipts and wallet settlement serialization are now being implemented in the
+isolated paid-gig branch. No provider acceptance is claimed yet.
+
+The three active owner-bid entry points on both native clients now use shared
+recovery coordinators. iOS passes **101 simulator tests**; Android passes **148
+JVM tests**, formatting, static analysis and debug assembly. Independent review
+closed old-screen account binding, anonymous/legacy read compatibility and
+competing SDK presentation gaps. Exact server receipts control accepted/canceled
+UI; lost responses resume the same bid without persisting payment secrets.
+See the [iOS report](paid-gig-ios-recovery-2026-09-09.md) and
+[Android report](paid-gig-android-recovery-2026-09-09.md).
+
+Native milestone `59b9cff7b` is committed and pushed in draft PR #34. Current
+master `390091cdb` is now integrated, including the completed
+[sensitive-auth repair](native-sensitive-auth-2026-09-09.md) (19 iOS and 12
+Android focused tests plus full PR #33 CI). Only this handoff conflicted; both
+source milestones and their reports are preserved. Check final-head CI while
+finishing durable payer/admin refund receipts and historical assigned
+authorization before a fresh test-mode paid-gig lifecycle. No paid-gig
+provider call, hosted migration or runtime change has run. The current private
+saved-card acceptance remains completed and cleaned; do not reuse its fixtures.
+
+Home invitation and sharing is committed as `0c973b8df`, with master integrated
+at `269128f31`, in draft PR #32. Final local regression passes **4,827 backend
+tests, 16 skipped**, privacy gates and 36 real database races. Every applicable
+[CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34441879676)
+passed at that head. An earlier new-test mock-path mismatch was corrected;
+intermittent HTTP socket/timeouts in payment/chat also occurred under Node 22,
+so runtime version alone does not explain them. Ownership/claim-bound admission
+and task/calendar/attachment boundaries are the next active source slices.
+Ordinary role defaults and hosted Home grants are unchanged.
+
+### Earlier paid-gig recovery and delivery checkpoint — September 9
+
+**Native sensitive-auth integration is complete.** PR #33 merged as
+`390091cdbfb12c3f2a2b7ce331453433d6344e80` at 05:01:17 UTC September 10 after
+every [current-head CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34437250525)
+passed at `b85febb8c`, including all three iOS simulator jobs and Android
+instrumented tests. No checks were waived and no hosted runtime changed.
+
+Paid-gig work is now draft [PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34),
+with web/backend checkpoints and master `d7be416b8` integration pushed, plus
+exact test-profile cleanup `63d475474` carried from Home checkpoint `f76f16847`.
+Root's combined backend run passes **4,730 tests, 16 skipped under Node 22**, the
+CI runtime. Two earlier Node 24 runs encountered intermittent HTTP socket/timeout
+failures in unrelated Home-file/intelligence tests; all 44 focused cases pass.
+The Node 22 pass does not establish the cause of those intermittent failures.
+Current iOS/Android paid-bid recovery is uncommitted and under test. Finish this
+milestone before safely incorporating newer master into these active worktrees.
+
+The first paid-gig backend checkpoint is committed/pushed as `fa3a70a43` and
+fixture follow-up `15754b439`. Web exact-bid checkout and cold/redirect recovery
+are committed/pushed as `68cb112a4`; its [report](paid-gig-web-recovery-2026-09-09.md)
+records the checked client amount, authorization-ready, cancellation, actor and
+redirect-secret boundaries. PR #31 merged after all final-head checks passed;
+its merged master is `d7be416b872a31ceb53094d7d19c3f114185831f`. Source merging
+has not enabled deployment or changed the private payment runtime.
+
+The second backend/SQL checkpoint is committed/pushed as `4bc0e2d7d` in
+`/private/tmp/pantopus-staging-paid-gig`. It discovers the exact existing provider
+intent after a lost response, returns verified readiness and durable amount,
+rechecks delegated business authority, and persists chat plus in-app notification
+outbox alongside assignment. The relay retries unknown transport outcomes under
+one notification ID, with current eligibility/preferences; external transport is
+at least once. All 4,730 backend tests pass (16 existing skips), fresh canonical
+replay passes 20 SQL contracts and zero-error function lint, and 56 concurrent
+PostgreSQL connections pass with exact cleanup. Populated upgrade rehearsal
+preserves original Gig/Bid/Payment/acceptance values and historical chat rooms.
+See the [recovery/delivery report](paid-gig-recovery-delivery-2026-09-09.md) for
+privacy-gate results, source evidence and explicit remaining limitations.
+
+Current master `d7be416b8` has been integrated, preserving the completed payment
+acceptance and its reports. Integrate the separate exact test-fixture cleanup
+fix and pass current-head CI, then finish native paid-bid recovery and
+real test-mode paid-gig acceptance. Historical assigned off-session renewal,
+payer refund receipts, wallet/Connect paths and final provider/device journeys
+remain. No paid-gig provider call or hosted migration/runtime change has run.
+
+Home admission/access-secret source is committed in draft PR #32 at `0362ba8f2`,
+with master integration `4e0ecaa3e` passing 4,766 backend tests. Invitations and
+guest/scoped sharing are the next isolated Home slices. Native sensitive-auth
+PR #33 (`b85febb8c`) is now merged after complete CI as recorded above.
+Main-checkout design/handoff changes
+and unrelated PR #24 remain preserved.
 
 ### Current source and acceptance checkpoint — September 9
 
@@ -453,11 +984,12 @@ are retained for rollback. Production and the old testing database are preserved
 
 ### First unfinished work
 
-1. Complete application mail-code dispatch/confirmation and uncertain-send
-   recovery, then reachable sandbox payment UI/transactions and real OAuth
-   callbacks. Browser signup/recovery and staging hostname/TLS now pass.
-   Smarty needs an existing active subscription; Google/Apple staging OAuth
-   remains disabled. Use existing/free capacity.
+1. Mail-code dispatch/confirmation and saved-card native acceptance are complete.
+   Continue PR #34 durable paid-gig refunds, assigned authorization and actual
+   sandbox lifecycle acceptance. In parallel, finish PR #32 Home ownership,
+   resource and derived-data boundaries before household acceptance. Real OAuth
+   callbacks and activated Smarty provider coverage remain vendor prerequisites;
+   Google/Apple staging OAuth remains disabled. Use existing/free capacity.
 2. PRs #23, #25 and #26 are merged after their required checks passed. Continue
    monitoring merged-master CI. Home replacement, saved-card API retry and Lob
    mail-purpose acceptance are recorded in their reports; public runtime

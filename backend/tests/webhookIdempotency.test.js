@@ -165,6 +165,7 @@ describe('Webhook handler — payment_intent.succeeded processing', () => {
     }]);
     seedTable('Gig', [{
       id: 'gig-wh-001',
+      payment_id: 'pay-wh-001',
       payment_status: PAYMENT_STATES.AUTHORIZED,
     }]);
 

@@ -284,6 +284,17 @@ class GigsRepository
         /** `GET /api/gigs/:gigId/payment` — payment card for poster/worker. */
         suspend fun gigPayment(gigId: String): NetworkResult<GigPaymentResponse> = safeApiCall { api.gigPayment(gigId) }
 
+        suspend fun assignedAuthorizationStatus(
+            gigId: String,
+        ): NetworkResult<app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto> =
+            safeApiCall { api.assignedAuthorizationStatus(gigId) }
+
+        suspend fun continueAssignedAuthorization(
+            gigId: String,
+            body: app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationBody,
+        ): NetworkResult<app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto> =
+            safeApiCall { api.continueAssignedAuthorization(gigId, body) }
+
         /** `GET /api/gigs/:gigId/change-orders` — list for poster/worker. */
         suspend fun changeOrders(gigId: String): NetworkResult<GigChangeOrdersResponse> = safeApiCall { api.changeOrders(gigId) }
 
