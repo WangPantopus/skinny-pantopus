@@ -15,6 +15,20 @@ function formatCents(cents: number | undefined | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function payerTotalLabel(payment: Payment): string {
+  if (payment.payment_status === 'authorized') return 'Authorization hold';
+  if (payment.payment_status === 'capture_pending') return 'Capture pending';
+  // A pending refund may instead be cancellation of an uncaptured hold.
+  if (payment.payment_status === 'refund_pending') {
+    return payment.captured_at ? 'Task charged' : 'Payment total';
+  }
+  if (['captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred',
+    'refunded_partial', 'refunded_full', 'disputed'].includes(payment.payment_status)) {
+    return 'Task charged';
+  }
+  return 'Payment total';
+}
+
 export default function PaymentBreakdown({
   payment,
   perspective = 'payer',
@@ -70,7 +84,7 @@ export default function PaymentBreakdown({
         {/* Platform fee */}
         {perspective === 'payer' ? (
           <div className="flex justify-between">
-            <span className="text-app-text-secondary">Service fee</span>
+            <span className="text-app-text-secondary">Platform fee (included)</span>
             <span className="text-app-text">{formatCents(platformFee)}</span>
           </div>
         ) : (
@@ -94,12 +108,12 @@ export default function PaymentBreakdown({
         {/* Total or Earnings */}
         {perspective === 'payer' ? (
           <div className="flex justify-between font-semibold">
-            <span className="text-app-text">Total charged</span>
+            <span className="text-app-text">{payerTotalLabel(payment)}</span>
             <span className="text-app-text">{formatCents(total)}</span>
           </div>
         ) : (
           <div className="flex justify-between font-semibold">
-            <span className="text-app-text">You earn</span>
+            <span className="text-app-text">Expected earnings</span>
             <span className="text-green-700">{formatCents(toPayee + tip)}</span>
           </div>
         )}

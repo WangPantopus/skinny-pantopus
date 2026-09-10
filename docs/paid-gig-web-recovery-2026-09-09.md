@@ -35,6 +35,15 @@ authority, current terms, payment proof and assignment.
 
 ## Verification and limits
 
+The payment summary now labels an authorized amount as an authorization hold,
+capture-in-progress as pending, and captured task amounts as charged. A pending
+refund without `captured_at` does not claim a charge: that operation can release
+an uncaptured hold. The existing platform fee is identified as included, and
+worker amounts are described as expected earnings. Amount calculations are
+unchanged. Twelve focused rendering cases pass, along with changed-file lint
+and the zero-error TypeScript gate. This display checkpoint does not establish
+provider refund completion or worker payout.
+
 The complete pre-review web suite passes: 77 suites / 1,019 tests. After independent
 review, the additional redirect-secret regression passes with all 20 focused
 checkout/SDK-redirect tests, plus 4 acceptance-entry-point tests. Web TypeScript
@@ -46,6 +55,7 @@ The tests cover exact amount, delayed account/bid changes, same-bid recovery,
 duplicate clicks, unknown finalization/cancellation, invalid terms, free
 acceptance and provider return URL identity. These use controlled API and SDK
 responses. No real provider transaction, hosted migration, native paid-gig
-acceptance or refund is claimed by this report. The next milestones are native
-checkout recovery, remaining assigned-payment/refund boundaries and the actual
+acceptance or refund is claimed by this report. Native checkout recovery is now
+committed separately with its own iOS/Android reports. The next milestones are
+remaining assigned-payment/refund boundaries and the actual
 synthetic sandbox paid-gig journey with exact cleanup.

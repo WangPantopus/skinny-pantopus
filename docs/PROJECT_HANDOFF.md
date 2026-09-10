@@ -16,6 +16,13 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Native paid-bid recovery checkpoint — September 9
 
+The subsequent web summary checkpoint distinguishes authorization holds from
+captured charges and does not label a pending hold release as a charge. Twelve
+focused tests, changed-file lint and the zero-error TypeScript gate pass; see
+the [web report](paid-gig-web-recovery-2026-09-09.md). Durable refund/release
+receipts and wallet settlement serialization are now being implemented in the
+isolated paid-gig branch. No provider acceptance is claimed yet.
+
 The three active owner-bid entry points on both native clients now use shared
 recovery coordinators. iOS passes **101 simulator tests**; Android passes **148
 JVM tests**, formatting, static analysis and debug assembly. Independent review
@@ -35,14 +42,15 @@ authorization before a fresh test-mode paid-gig lifecycle. No paid-gig
 provider call, hosted migration or runtime change has run. The current private
 saved-card acceptance remains completed and cleaned; do not reuse its fixtures.
 
-Home invitation and sharing source is finishing its separate draft PR #32
-checkpoint: the earlier broad run passed 4,824 backend tests, privacy gates,
-and 36 real database races. A final run exposed a new test mock-path mismatch
-(now fixed) plus intermittent HTTP socket/timeout failures in payment/chat
-tests; final regression verification remains pending. Those HTTP failures also
-occurred under Node 22, so runtime version alone does not explain them.
-Continue ownership enrollment and remaining resource boundaries after that
-milestone. Ordinary role defaults and hosted Home grants are unchanged.
+Home invitation and sharing is committed as `0c973b8df`, with master integrated
+at `269128f31`, in draft PR #32. Final local regression passes **4,827 backend
+tests, 16 skipped**, privacy gates and 36 real database races. Every applicable
+[CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34441879676)
+passed at that head. An earlier new-test mock-path mismatch was corrected;
+intermittent HTTP socket/timeouts in payment/chat also occurred under Node 22,
+so runtime version alone does not explain them. Ownership/claim-bound admission
+and task/calendar/attachment boundaries are the next active source slices.
+Ordinary role defaults and hosted Home grants are unchanged.
 
 ### Earlier paid-gig recovery and delivery checkpoint — September 9
 
