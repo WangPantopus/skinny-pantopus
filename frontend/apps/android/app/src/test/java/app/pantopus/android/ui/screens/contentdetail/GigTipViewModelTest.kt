@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.gigs.GigBidsResponse
 import app.pantopus.android.data.api.models.gigs.GigDetailResponse
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.gigs.GigMyBidResponse
+import app.pantopus.android.data.api.models.gigs.GigPaymentDto
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionsResponse
 import app.pantopus.android.data.api.models.offers.MyBidsResponse
@@ -27,11 +28,14 @@ import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,10 +70,13 @@ class GigTipViewModelTest {
     private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository = mockk(relaxed = true)
     private val socket: SocketManager = mockk(relaxed = true)
     private val activeNotifier: GigActiveNotifier = mockk(relaxed = true)
+    private val authorization: GigAssignedAuthorizationCoordinator = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { authorization.isCurrentReadScope() } returns true
+        every { authorization.state } returns MutableStateFlow(GigAssignedAuthorizationState())
         val signed =
             AuthRepository.State.SignedIn(
                 user = UserDto(id = "owner-1", email = "o@example.com", displayName = "Owner", avatarUrl = null),
@@ -103,6 +110,14 @@ class GigTipViewModelTest {
         coEvery { reviewsRepo.myPending() } returns NetworkResult.Success(MyPendingReviewsResponse(pending = emptyList()))
         // Phase 5b — the owner of an assigned+ gig fetches the payment card.
         coEvery { repo.gigPayment("g1") } returns NetworkResult.Success(GigPaymentResponse())
+        coEvery { repo.noShowCheck("g1") } returns
+            NetworkResult.Success(
+                app.pantopus.android.data.api.models.gigs.NoShowCheckResponse(canReport = false),
+            )
+        coEvery { repo.changeOrders("g1") } returns
+            NetworkResult.Success(
+                app.pantopus.android.data.api.models.gigs.GigChangeOrdersResponse(),
+            )
         return GigDetailViewModel(
             repo,
             extrasRepo,
@@ -120,6 +135,7 @@ class GigTipViewModelTest {
             SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
             checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
             refundFactory = mockk(relaxed = true),
+            authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
         )
     }
 
@@ -209,5 +225,72 @@ class GigTipViewModelTest {
             vm.load()
             vm.sendTip(1000)
             assertTrue(vm.tipStatus.value is TipStatus.Failed)
+        }
+
+    @Test fun assignedPayerAndBusinessManagerCanOpenExactServerPayment() =
+        runTest {
+            for (actor in listOf("owner-1", "delegate-1")) {
+                every { authRepo.state } returns
+                    MutableStateFlow<AuthRepository.State>(
+                        AuthRepository.State.SignedIn(
+                            UserDto(id = actor, email = "a@example.com", displayName = "Actor", avatarUrl = null),
+                        ),
+                    )
+                val vm = vmWithLoadedTip()
+                val task = completedConfirmedGig().copy(status = "assigned", price = 12.0, paymentId = "payment-1")
+                val payment =
+                    GigPaymentDto(
+                        id = "payment-1",
+                        gigId = "g1",
+                        payerId = "owner-1",
+                        payeeId = "worker-1",
+                        amountTotal = 1200,
+                        currency = "USD",
+                        paymentStatus = "authorization_failed",
+                    )
+                coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = task))
+                coEvery { repo.gigPayment("g1") } returns NetworkResult.Success(GigPaymentResponse(payment))
+                vm.load()
+                assertTrue(vm.canOpenAssignedAuthorization())
+                vm.openAssignedAuthorization()
+                verify { authorization.open(task, payment) }
+            }
+        }
+
+    @Test fun changedPaymentReceiptNeverExposesAuthorizationEntry() =
+        runTest {
+            val vm = vmWithLoadedTip()
+            val task = completedConfirmedGig().copy(status = "assigned", price = 12.0, paymentId = "payment-1")
+            coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = task))
+            coEvery { repo.gigPayment("g1") } returns
+                NetworkResult.Success(
+                    GigPaymentResponse(
+                        GigPaymentDto(
+                            id = "different-payment", gigId = "g1", payerId = "owner-1", payeeId = "worker-1", amountTotal = 1200,
+                            currency = "USD", paymentStatus = "authorization_failed",
+                        ),
+                    ),
+                )
+            vm.load()
+            assertFalse(vm.canOpenAssignedAuthorization())
+            assertEquals(null, vm.payment.value)
+        }
+
+    @Test fun workerHasNoPayerAuthorizationEntry() =
+        runTest {
+            every { authRepo.state } returns
+                MutableStateFlow<AuthRepository.State>(
+                    AuthRepository.State.SignedIn(
+                        UserDto(id = "worker-1", email = "w@example.com", displayName = "Worker", avatarUrl = null),
+                    ),
+                )
+            val vm = vmWithLoadedTip()
+            coEvery { repo.detail("g1") } returns
+                NetworkResult.Success(
+                    GigDetailResponse(gig = completedConfirmedGig().copy(status = "assigned")),
+                )
+            vm.load()
+            assertFalse(vm.canOpenAssignedAuthorization())
+            coVerify(exactly = 0) { repo.gigPayment(any()) }
         }
 }

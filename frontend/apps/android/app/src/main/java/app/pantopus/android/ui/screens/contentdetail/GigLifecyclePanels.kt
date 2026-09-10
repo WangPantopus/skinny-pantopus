@@ -88,6 +88,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val reviewState by viewModel.reviewState.collectAsStateWithLifecycle()
     val payment by viewModel.payment.collectAsStateWithLifecycle()
     val refundState by viewModel.refunds.state.collectAsStateWithLifecycle()
+    val authorizationState by viewModel.assignedAuthorization.state.collectAsStateWithLifecycle()
     val changeOrders by viewModel.changeOrders.collectAsStateWithLifecycle()
     val changeOrderActionInFlight by viewModel.changeOrderActionInFlight.collectAsStateWithLifecycle()
     val fulfillment by viewModel.fulfillment.collectAsStateWithLifecycle()
@@ -235,8 +236,13 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     }
 
     // 5b work item 1 — compact payment card (owner, assigned+).
-    if (!refundState.invalidated) {
+    if (!refundState.invalidated && !authorizationState.invalidated) {
         payment?.let { GigPaymentCard(payment = it) }
+        if (viewModel.canOpenAssignedAuthorization()) {
+            TextButton(onClick = viewModel::openAssignedAuthorization, modifier = Modifier.testTag("gigDetail.authorization")) {
+                Text("Payment authorization")
+            }
+        }
         if (viewModel.canOpenRefunds()) {
             TextButton(onClick = viewModel::openRefunds, modifier = Modifier.testTag("gigDetail.refunds")) {
                 Text("Refunds and hold releases")

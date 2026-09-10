@@ -36,6 +36,8 @@ import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -147,6 +149,7 @@ class GigDetailSaveViewModelTest {
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
                 refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
             )
         vm.load()
         return vm
@@ -274,6 +277,7 @@ class GigDetailSaveViewModelTest {
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
                 refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
             )
         vm.load()
         return vm
@@ -362,6 +366,7 @@ class GigDetailSaveViewModelTest {
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                     checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
                     refundFactory = mockk(relaxed = true),
+                    authorizationFactory = authorizationFactory(),
                 )
             vm.load()
             assertTrue(vm.canInstantAccept())
@@ -373,12 +378,22 @@ class GigDetailSaveViewModelTest {
 
     // MARK: - Phase 5b · lifecycle completers
 
+    private fun authorizationFactory(): GigAssignedAuthorizationFactory =
+        mockk {
+            every { create(any(), any()) } returns
+                mockk(relaxed = true) {
+                    coEvery { isCurrentReadScope() } returns true
+                    every { state } returns MutableStateFlow(GigAssignedAuthorizationState())
+                }
+        }
+
     private fun assignedGig(
         acceptedBy: String,
         ownerId: String = "poster-1",
     ) = GigDto(
         id = "g1",
         title = "Hang shelves",
+        paymentId = "11111111-1111-4111-8111-111111111111",
         userId = ownerId,
         status = "assigned",
         acceptedBy = acceptedBy,
@@ -391,7 +406,17 @@ class GigDetailSaveViewModelTest {
         changeOrders: List<GigChangeOrderDto> = emptyList(),
         payment: NetworkResult<GigPaymentResponse> =
             NetworkResult.Success(
-                GigPaymentResponse(payment = GigPaymentDto(amountTotal = 5_000, amountSubtotal = 5_000)),
+                GigPaymentResponse(
+                    payment =
+                        GigPaymentDto(
+                            id = gig.paymentId,
+                            gigId = gig.id,
+                            payerId = gig.userId,
+                            payeeId = gig.acceptedBy,
+                            amountTotal = 5_000,
+                            amountSubtotal = 5_000,
+                        ),
+                ),
             ),
     ): GigDetailViewModel {
         coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = gig))
@@ -421,6 +446,7 @@ class GigDetailSaveViewModelTest {
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
                 checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } coAnswers { checkoutIdentity() } },
                 refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
             )
         vm.load()
         return vm
@@ -501,7 +527,16 @@ class GigDetailSaveViewModelTest {
                     payment =
                         NetworkResult.Success(
                             GigPaymentResponse(
-                                payment = GigPaymentDto(amountTotal = 7_000, amountSubtotal = 7_000, tipAmount = 500),
+                                payment =
+                                    GigPaymentDto(
+                                        id = gig.paymentId,
+                                        gigId = gig.id,
+                                        payerId = gig.userId,
+                                        payeeId = gig.acceptedBy,
+                                        amountTotal = 7_000,
+                                        amountSubtotal = 7_000,
+                                        tipAmount = 500,
+                                    ),
                             ),
                         ),
                 )
@@ -528,6 +563,7 @@ class GigDetailSaveViewModelTest {
                     id = "11111111-1111-4111-8111-111111111111",
                     gigId = "g1",
                     payerId = "viewer-1",
+                    payeeId = "worker-9",
                     amountTotal = 1000,
                     currency = "usd",
                 )

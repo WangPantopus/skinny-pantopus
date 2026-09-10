@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android assigned-payment recovery — September 10
+
+Both native clients now provide the assigned task's exact payment-recovery
+controls. Android checks the opening account/session, displayed task/payment
+terms and the same provider operation immediately before checkout and after its
+result. Closing the screen retires late responses. The
+[Android report](paid-gig-android-assigned-authorization-2026-09-10.md) records
+compiled behavior checks, formatting/static analysis, zero lint errors, APK
+assembly and independent review. iOS is pushed as `1d0953b82`.
+
+**Next:** finish provider-reported authorization deadlines and durable expiry
+cancellation, then remaining manual cancellation/dispute/Connect/debt, durable
+attention, fresh full provider journeys and capacity work. The expiry audit found
+that the old job could cancel a task after an unknown hold-release result; this
+is being repaired before acceptance. Home native private evidence upload/review/
+retirement continues after its pushed `fad41cd3d` storage checkpoint. Draft PRs
+#32 and #34 remain unfinished; final integrated checks and release rehearsal are
+still required. All paid services stay together for final launch preparation.
+Completed physical Beacon and saved-card acceptance remains complete.
+
 ### iOS assigned-payment recovery — September 10
 
 The native payment card now supports current poster/business-manager recovery

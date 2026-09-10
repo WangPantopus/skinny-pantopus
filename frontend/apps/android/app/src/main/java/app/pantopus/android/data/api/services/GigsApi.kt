@@ -397,6 +397,17 @@ interface GigsApi {
         @Path("gigId") gigId: String,
     ): GigPaymentResponse
 
+    @POST("api/gigs/{gigId}/refresh-payment-status")
+    suspend fun assignedAuthorizationStatus(
+        @Path("gigId") gigId: String,
+    ): app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto
+
+    @POST("api/gigs/{gigId}/continue-authorization")
+    suspend fun continueAssignedAuthorization(
+        @Path("gigId") gigId: String,
+        @Body body: app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationBody,
+    ): app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto
+
     /**
      * `GET /api/gigs/:gigId/change-orders` — list change orders, newest
      * first (poster or worker). Route `backend/routes/gigs.js:6640`.

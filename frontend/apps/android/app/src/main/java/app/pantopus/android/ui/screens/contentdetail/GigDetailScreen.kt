@@ -104,6 +104,7 @@ fun GigDetailScreen(
 
     GigBidCheckoutHost(viewModel.bidCheckout)
     app.pantopus.android.ui.screens.gigs.refunds.GigRefundSheet(viewModel.refunds)
+    app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationHost(viewModel.assignedAuthorization)
 
     LaunchedEffect(Unit) { viewModel.load() }
     // Phase 5 — join the gig:<id> realtime room while the screen is visible.

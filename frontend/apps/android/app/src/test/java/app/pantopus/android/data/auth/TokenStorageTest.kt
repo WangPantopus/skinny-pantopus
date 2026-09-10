@@ -196,4 +196,21 @@ class TokenStorageTest {
             // Context is never rewritten by a rotation.
             assertEquals("interactive", storage.sessionContext())
         }
+
+    @Test fun coherentCredentialsRetainLegacyTokenAndTrackRegisteredReplacement() =
+        runTest {
+            assertNull(storage.sessionCredentials())
+            storage.save("legacy-a", null, "user-a")
+            val legacy = checkNotNull(storage.sessionCredentials())
+            assertEquals("user-a", legacy.userId)
+            assertEquals("legacy-a", legacy.accessToken)
+            assertNull(legacy.sessionId)
+            storage.save("registered-b", null, "user-b", sessionId = "session-b")
+            val current = checkNotNull(storage.sessionCredentials())
+            assertEquals("user-b", current.userId)
+            assertEquals("registered-b", current.accessToken)
+            assertEquals("session-b", current.sessionId)
+            storage.clear()
+            assertNull(storage.sessionCredentials())
+        }
 }

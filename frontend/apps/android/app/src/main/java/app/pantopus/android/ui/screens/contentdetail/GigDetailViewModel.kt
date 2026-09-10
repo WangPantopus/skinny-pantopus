@@ -39,6 +39,7 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
@@ -125,6 +126,7 @@ class GigDetailViewModel
         savedStateHandle: SavedStateHandle,
         private val checkoutTokens: TokenStorage,
         refundFactory: GigRefundFactory,
+        authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -438,7 +440,20 @@ class GigDetailViewModel
         private val _payment = MutableStateFlow<GigPaymentResponse?>(null)
         val payment: StateFlow<GigPaymentResponse?> = _payment.asStateFlow()
         val refunds = refundFactory.create(viewModelScope) { silentRefetch() }
+        val assignedAuthorization = authorizationFactory.create(viewModelScope) { silentRefetch() }
         private var paymentGeneration = 0
+
+        fun canOpenAssignedAuthorization(): Boolean {
+            val gig = rawGig ?: return false
+            val payment = _payment.value?.payment ?: return false
+            return !assignedAuthorization.state.value.invalidated &&
+                GigAssignedAuthorizationCoordinator.validTarget(gig, payment, currentUserId())
+        }
+
+        fun openAssignedAuthorization() {
+            if (!canOpenAssignedAuthorization()) return
+            assignedAuthorization.open(checkNotNull(rawGig), checkNotNull(_payment.value?.payment))
+        }
 
         fun canOpenRefunds(): Boolean =
             viewerIsOwner &&
@@ -1254,7 +1269,7 @@ class GigDetailViewModel
         // MARK: - Phase 5b · payment card (work item 1)
 
         /**
-         * Owner on an assigned+ task: fetch the payment summary; the card
+         * The server admits the current owner or business manager on an assigned+ task; the card
          * silently hides on failure / 404 / no linked payment. Re-runs with
          * every gig refresh (including `gig:*` room events).
          */
@@ -1263,18 +1278,30 @@ class GigDetailViewModel
             uid: String?,
         ) {
             val revision = ++paymentGeneration
-            val isOwner = uid != null && uid == gig.userId
+            val mayReadPayerSummary = uid != null && uid != gig.acceptedBy
             val assignedPlus = gig.status?.lowercase() in listOf("assigned", "in_progress", "completed")
-            if (!isOwner || !assignedPlus) {
+            if (!mayReadPayerSummary || !assignedPlus) {
                 _payment.value = null
                 return
             }
             viewModelScope.launch {
-                if (!bidCheckout.isCurrentReadScope() || uid != currentUserId()) return@launch
+                if (!bidCheckout.isCurrentReadScope() || !assignedAuthorization.isCurrentReadScope() || uid != currentUserId()) {
+                    return@launch
+                }
                 val result = repo.gigPayment(gigId)
-                if (revision != paymentGeneration || !bidCheckout.isCurrentReadScope() || uid != currentUserId()) return@launch
+                if (revision != paymentGeneration || !bidCheckout.isCurrentReadScope() ||
+                    !assignedAuthorization.isCurrentReadScope() || uid != currentUserId()
+                ) {
+                    return@launch
+                }
                 when (result) {
-                    is NetworkResult.Success -> _payment.value = result.data.takeIf { it.payment != null }
+                    is NetworkResult.Success ->
+                        _payment.value =
+                            result.data.takeIf {
+                                val receipt = it.payment
+                                receipt != null && receipt.id == gig.paymentId && receipt.gigId == gig.id &&
+                                    receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy
+                            }
                     is NetworkResult.Failure -> _payment.value = null
                 }
             }
