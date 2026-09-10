@@ -121,6 +121,7 @@ class HomeClaimDecisionTest {
             homeRepo,
             SavedStateHandle(mapOf(HOME_CLAIM_REVIEW_HOME_ID_KEY to "home-1")),
             claimScopeFactory(session),
+            mockk(relaxed = true),
         )
 
     private fun admin(session: HomeClaimScopeTestFixture = HomeClaimScopeTestFixture()) =
@@ -128,6 +129,7 @@ class HomeClaimDecisionTest {
             adminRepo,
             SavedStateHandle(mapOf(ReviewClaimDetailViewModel.CLAIM_ID_KEY to "claim-1")),
             claimScopeFactory(session),
+            mockk(relaxed = true),
         )
 
     @Test fun preparationReturnsDisplayedTypeAndEligibleEvidenceWithoutWriting() =
@@ -165,15 +167,20 @@ class HomeClaimDecisionTest {
             coEvery { homeRepo.ownershipClaimDetail(any(), any()) } returns NetworkResult.Success(homeDetail())
             coEvery { homeRepo.reviewOwnershipClaim(any(), any(), any(), any(), any()) } returnsMany
                 listOf(
-                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(receipt(replayed = true)),
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                    NetworkResult.Failure(NetworkError.ClientError(408, null)),
+                    NetworkResult.Failure(NetworkError.ClientError(429, null)),
+                    NetworkResult.Success(receipt(replayed = true)),
                 )
             val vm = home()
             val snapshot = requireNotNull(vm.prepareReview("claim-1", HomeClaimReviewVerdict.Approve))
+            repeat(3) {
+                vm.review(snapshot, HomeClaimReviewVerdict.Approve)
+                assertNull(vm.prepareReview("claim-1", HomeClaimReviewVerdict.Reject))
+                assertEquals(snapshot, vm.prepareReview("claim-1", HomeClaimReviewVerdict.Approve))
+            }
             vm.review(snapshot, HomeClaimReviewVerdict.Approve)
-            assertNull(vm.prepareReview("claim-1", HomeClaimReviewVerdict.Reject))
-            assertEquals(snapshot, vm.prepareReview("claim-1", HomeClaimReviewVerdict.Approve))
-            vm.review(snapshot, HomeClaimReviewVerdict.Approve)
-            coVerify(exactly = 2) { homeRepo.reviewOwnershipClaim("home-1", "claim-1", "approve", token, null) }
+            coVerify(exactly = 4) { homeRepo.reviewOwnershipClaim("home-1", "claim-1", "approve", token, null) }
             coVerify(exactly = 1) { homeRepo.ownershipClaimDetail(any(), any()) }
         }
 
@@ -272,14 +279,19 @@ class HomeClaimDecisionTest {
             coEvery { adminRepo.claimDetail(any()) } returns NetworkResult.Success(adminDetail())
             coEvery { adminRepo.reviewClaim(any(), any()) } returnsMany
                 listOf(
-                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(receipt("reject", replayed = true)),
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                    NetworkResult.Failure(NetworkError.ClientError(408, null)),
+                    NetworkResult.Failure(NetworkError.ClientError(429, null)),
+                    NetworkResult.Success(receipt("reject", replayed = true)),
                 )
             val vm = admin()
             vm.load()
-            assertFalse(vm.review(AdminClaimReviewAction.Reject, "Exact reason"))
-            assertFalse(vm.review(AdminClaimReviewAction.Reject, "Changed reason"))
+            repeat(3) {
+                assertFalse(vm.review(AdminClaimReviewAction.Reject, "Exact reason"))
+                assertFalse(vm.review(AdminClaimReviewAction.Reject, "Changed reason"))
+            }
             assertTrue(vm.review(AdminClaimReviewAction.Reject, "Exact reason"))
-            coVerify(exactly = 2) { adminRepo.reviewClaim("claim-1", AdminClaimReviewRequest("reject", token, "Exact reason")) }
+            coVerify(exactly = 4) { adminRepo.reviewClaim("claim-1", AdminClaimReviewRequest("reject", token, "Exact reason")) }
         }
 
     @Test fun mismatchedPlatformReceiptAndLateAccountCannotClaimSuccess() =

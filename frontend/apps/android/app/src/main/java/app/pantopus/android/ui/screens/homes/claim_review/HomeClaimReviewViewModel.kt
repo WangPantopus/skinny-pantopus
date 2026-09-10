@@ -19,6 +19,8 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeClaimReviewRepository
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceAccessFactory
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -216,6 +218,7 @@ class HomeClaimReviewViewModel
         private val repo: HomeClaimReviewRepository,
         savedStateHandle: SavedStateHandle,
         scopeFactory: HomeClaimSessionScopeFactory,
+        private val evidenceFactory: HomePrivateEvidenceAccessFactory,
     ) : ViewModel() {
         val homeId: String = savedStateHandle[HOME_CLAIM_REVIEW_HOME_ID_KEY] ?: ""
 
@@ -240,6 +243,49 @@ class HomeClaimReviewViewModel
         private var readGeneration = 0
         private var prepared: HomeClaimReviewSnapshot? = null
         private var pendingDecision: Pair<HomeClaimReviewSnapshot, HomeClaimReviewVerdict>? = null
+        private val _evidencePanel = MutableStateFlow<HomePrivateEvidenceController?>(null)
+        val evidencePanel = _evidencePanel.asStateFlow()
+
+        fun openEvidence(claimId: String) {
+            if (!session.isCurrent || _actionLoading.value != null) return
+            if (pendingDecision != null || _evidencePanel.value != null) return
+            val current = (_state.value as? HomeClaimReviewUiState.Loaded)?.data ?: return
+            if (current.ownership.none { it.id == claimId }) return
+            _actionLoading.value = "$claimId:evidence"
+            viewModelScope.launch {
+                try {
+                    session.requireCurrent()
+                    val response = repo.ownershipClaimDetail(homeId, claimId)
+                    session.requireCurrent()
+                    val claim =
+                        when (response) {
+                            is NetworkResult.Success -> response.data.claim
+                            is NetworkResult.Failure -> throw response.error
+                        }
+                    val snapshot = snapshotFor(claim, claimId)
+                    prepared = null
+                    _evidencePanel.value =
+                        HomePrivateEvidenceController(
+                            viewModelScope,
+                            evidenceFactory.create(session, homeId, claimId), false, snapshot.reviewToken,
+                        )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: NetworkError) {
+                    _toast.value = HomeClaimReviewToast(error.message, true)
+                } catch (error: IllegalStateException) {
+                    _toast.value = HomeClaimReviewToast(error.message ?: CLAIM_SNAPSHOT_CHANGED, true)
+                } finally {
+                    _actionLoading.value = null
+                }
+            }
+        }
+
+        fun closeEvidence() {
+            _evidencePanel.value?.close()
+            _evidencePanel.value = null
+            refresh()
+        }
 
         init {
             viewModelScope.launch {
@@ -273,7 +319,7 @@ class HomeClaimReviewViewModel
             claimId: String,
             verdict: HomeClaimReviewVerdict,
         ): HomeClaimReviewSnapshot? {
-            if (_actionLoading.value != null) return null
+            if (_actionLoading.value != null || _evidencePanel.value != null) return null
             return try {
                 session.requireCurrent()
                 pendingDecision?.let { pending ->
@@ -313,7 +359,7 @@ class HomeClaimReviewViewModel
             snapshot: HomeClaimReviewSnapshot,
             verdict: HomeClaimReviewVerdict,
         ) {
-            if (_actionLoading.value != null) return
+            if (_actionLoading.value != null || _evidencePanel.value != null) return
             _actionLoading.value = "${snapshot.claimId}:${verdict.wire}"
             viewModelScope.launch {
                 try {
@@ -371,7 +417,7 @@ class HomeClaimReviewViewModel
         }
 
         private fun reviewFailed(error: Throwable) {
-            if ((error as? NetworkError)?.code?.let { it in 400..499 } == true || !session.isCurrent) {
+            if (error.isFinalHomeClaimFailure() || !session.isCurrent) {
                 prepared = null
                 pendingDecision = null
             }

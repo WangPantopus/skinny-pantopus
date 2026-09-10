@@ -34,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +71,7 @@ import app.pantopus.android.data.api.models.admin.AdminClaimRecordDto
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewAction
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -127,6 +129,8 @@ fun ReviewClaimDetailScreen(
     viewModel: ReviewClaimDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val evidencePanel by viewModel.evidencePanel.collectAsStateWithLifecycle()
+    evidencePanel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
     val reviewingAction by viewModel.reviewingAction.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val selectedReasons by viewModel.selectedReasons.collectAsStateWithLifecycle()
@@ -154,6 +158,7 @@ fun ReviewClaimDetailScreen(
             is ReviewClaimDetailUiState.Loaded ->
                 LoadedShell(
                     detail = current.detail,
+                    onOpenEvidence = viewModel::openEvidence,
                     reviewingAction = reviewingAction,
                     onBack = onBack,
                     onAccept = {
@@ -295,6 +300,7 @@ private fun ErrorShell(
 @Composable
 private fun LoadedShell(
     detail: AdminClaimDetailResponse,
+    onOpenEvidence: () -> Unit,
     reviewingAction: AdminClaimReviewAction?,
     onBack: () -> Unit,
     onAccept: () -> Unit,
@@ -326,6 +332,9 @@ private fun LoadedShell(
                     )
                 }
                 OverlineSection(title = evidenceOverline(detail.evidence.size)) {
+                    TextButton(onClick = onOpenEvidence, modifier = Modifier.testTag("reviewClaimDetail_openPrivateEvidence")) {
+                        Text("Open private documents")
+                    }
                     EvidenceContent(
                         evidence = detail.evidence,
                         modifier = Modifier.testTag("reviewClaimDetail_evidence"),
@@ -760,7 +769,11 @@ private fun EvidenceContent(
                 Text(evidenceMeta(item), color = PantopusColors.appTextSecondary)
             }
         }
-        Text("Evidence metadata is shown here. Legacy documents require a private re-upload.", color = PantopusColors.appTextSecondary)
+        Text(
+            "Open private documents to inspect exact files and explicitly verify pending evidence. " +
+                "Legacy documents require a private re-upload.",
+            color = PantopusColors.appTextSecondary,
+        )
     }
 }
 

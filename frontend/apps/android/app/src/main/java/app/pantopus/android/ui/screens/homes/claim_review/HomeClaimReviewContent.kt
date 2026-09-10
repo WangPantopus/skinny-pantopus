@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -341,9 +342,13 @@ fun HomeClaimOwnershipCard(
     item: HomeClaimReviewOwnershipItem,
     isBusy: Boolean,
     onVerdict: (HomeClaimReviewVerdict) -> Unit,
+    onOpenEvidence: () -> Unit = {},
     onRelationship: (HomeClaimRelationshipAction) -> Unit,
 ) {
     ClaimCardSurface(tag = "homeClaimReview_ownershipCard") {
+        TextButton(onClick = onOpenEvidence, enabled = !isBusy, modifier = Modifier.testTag("homeClaimReview_privateEvidence_${item.id}")) {
+            Text("Private documents")
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             HomeClaimAvatar(initials = item.initials)
             Column(modifier = Modifier.weight(1f)) {

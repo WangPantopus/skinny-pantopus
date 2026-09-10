@@ -49,6 +49,7 @@ import app.pantopus.android.data.api.services.HomeOwnershipClaimApi
 import app.pantopus.android.data.api.services.HomeOwnershipSecurityApi
 import app.pantopus.android.data.api.services.HomePetsApi
 import app.pantopus.android.data.api.services.HomePrivacyApi
+import app.pantopus.android.data.api.services.HomePrivateEvidenceApi
 import app.pantopus.android.data.api.services.HomeSettingsApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomeVerificationApi
@@ -418,6 +419,10 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideHomesApi(retrofit: Retrofit): HomesApi = retrofit.create(HomesApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideHomePrivateEvidenceApi(retrofit: Retrofit): HomePrivateEvidenceApi = retrofit.create(HomePrivateEvidenceApi::class.java)
 
     /** H6 — per-home owner claim review (ownership + residency claims). */
     @Provides @Singleton

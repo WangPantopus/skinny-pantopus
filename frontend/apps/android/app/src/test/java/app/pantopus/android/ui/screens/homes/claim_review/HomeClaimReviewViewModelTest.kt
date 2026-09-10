@@ -51,6 +51,7 @@ class HomeClaimReviewViewModelTest {
         HomeClaimReviewViewModel(
             repo = repo,
             scopeFactory = claimScopeFactory(),
+            evidenceFactory = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(mapOf(HOME_CLAIM_REVIEW_HOME_ID_KEY to "home_1")),
         )
 

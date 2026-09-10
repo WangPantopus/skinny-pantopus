@@ -113,7 +113,8 @@ open class HomesRepository
         open suspend fun submitClaim(
             homeId: String,
             request: SubmitClaimRequest,
-        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request) }
+            expectedSession: String? = null,
+        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request, expectedSession) }
 
         /** `POST /api/homes/:id/ownership-claims/:claimId/evidence`. */
         open suspend fun uploadEvidence(

@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.claim_review
 
 import android.util.Base64
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import retrofit2.Retrofit
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_CLIENT_TIMEOUT
 import java.security.GeneralSecurityException
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -23,6 +25,7 @@ internal const val CLAIM_SESSION_CHANGED = "Your session changed. Reopen the cla
 internal const val CLAIM_SNAPSHOT_CHANGED = "The claim changed. Reopen it and review the current evidence."
 internal const val CLAIM_PENDING_DECISION = "Retry the previous decision or reload the claim before choosing another action."
 internal const val CLAIM_DISPUTE_REVIEW = "This disputed claim needs the dedicated dispute review flow."
+private const val HTTP_TOO_MANY_REQUESTS = 429
 
 class HomeClaimSessionScopeFactory
     @Inject
@@ -77,6 +80,8 @@ class HomeClaimSessionScope(
 
     val isCurrent: Boolean
         get() = initialized && openingIdentity != null && !_invalidated.value && openingAccount != null && account() == openingAccount
+
+    val actorId: String? get() = openingAccount.takeIf { isCurrent }
 
     suspend fun requireCurrent() {
         check(isCurrent) { CLAIM_SESSION_CHANGED }
@@ -148,4 +153,10 @@ data class HomeClaimReviewSnapshot(
     companion object {
         fun validToken(token: String?): Boolean = token?.matches(Regex("^[a-f0-9]{64}$")) == true
     }
+}
+
+/** HTTP timeout and rate-limit replies do not resolve an earlier unknown decision. */
+internal fun Throwable.isFinalHomeClaimFailure(): Boolean {
+    val status = (this as? NetworkError)?.code ?: return false
+    return status in 400..499 && status != HTTP_CLIENT_TIMEOUT && status != HTTP_TOO_MANY_REQUESTS
 }

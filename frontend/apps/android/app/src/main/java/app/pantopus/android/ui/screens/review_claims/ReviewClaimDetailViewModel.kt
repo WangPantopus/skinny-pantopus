@@ -12,12 +12,15 @@ import app.pantopus.android.data.api.models.admin.AdminClaimReviewAction
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceAccessFactory
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceController
 import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_DISPUTE_REVIEW
 import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_PENDING_DECISION
 import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SESSION_CHANGED
 import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SNAPSHOT_CHANGED
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimReviewSnapshot
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
+import app.pantopus.android.ui.screens.homes.claim_review.isFinalHomeClaimFailure
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +75,7 @@ class ReviewClaimDetailViewModel
         private val repo: AdminRepository,
         savedStateHandle: SavedStateHandle,
         scopeFactory: HomeClaimSessionScopeFactory,
+        private val evidenceFactory: HomePrivateEvidenceAccessFactory,
     ) : ViewModel() {
         private val claimId: String =
             savedStateHandle.get<String>(CLAIM_ID_KEY).orEmpty()
@@ -95,6 +99,26 @@ class ReviewClaimDetailViewModel
         private var loadedOnce: Boolean = false
         private val session = scopeFactory.create(viewModelScope)
         private var loadGeneration = 0
+        private val _evidencePanel = MutableStateFlow<HomePrivateEvidenceController?>(null)
+        val evidencePanel = _evidencePanel.asStateFlow()
+
+        fun openEvidence() {
+            if (!session.isCurrent || _reviewingAction.value != null) return
+            if (pendingDecision != null || _evidencePanel.value != null) return
+            val detail = (_state.value as? ReviewClaimDetailUiState.Loaded)?.detail ?: return
+            if (detail.claim.id != claimId || !HomeClaimReviewSnapshot.validToken(detail.claim.reviewToken)) return
+            _evidencePanel.value =
+                HomePrivateEvidenceController(
+                    viewModelScope,
+                    evidenceFactory.create(session, detail.claim.homeId, claimId, true), false, detail.claim.reviewToken,
+                )
+        }
+
+        fun closeEvidence() {
+            _evidencePanel.value?.close()
+            _evidencePanel.value = null
+            load()
+        }
 
         private data class PendingDecision(val claim: AdminClaimRecordDto, val action: AdminClaimReviewAction, val note: String?)
 
@@ -124,7 +148,7 @@ class ReviewClaimDetailViewModel
             action: AdminClaimReviewAction,
             note: String? = null,
         ): Boolean {
-            if (_reviewingAction.value != null) return false
+            if (_reviewingAction.value != null || _evidencePanel.value != null) return false
             _reviewingAction.value = action
             return try {
                 session.requireCurrent()
@@ -243,7 +267,7 @@ class ReviewClaimDetailViewModel
         }
 
         private fun reviewFailed(error: Throwable): Boolean {
-            if ((error as? NetworkError)?.code?.let { it in 400..499 } == true || !session.isCurrent) pendingDecision = null
+            if (error.isFinalHomeClaimFailure() || !session.isCurrent) pendingDecision = null
             _toast.value = ReviewClaimToast(text = error.message ?: "Could not confirm the claim result. Please retry.", isError = true)
             return false
         }

@@ -36,6 +36,7 @@ import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Spacing
@@ -83,6 +84,7 @@ fun HomeClaimReviewScreen(
 ) {
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    HomeClaimEvidencePanel(viewModel)
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
@@ -150,6 +152,7 @@ fun HomeClaimReviewScreen(
                         HomeClaimReviewTab.Ownership ->
                             OwnershipTab(
                                 items = current.data.ownership,
+                                onOpenEvidence = viewModel::openEvidence,
                                 actionLoading = actionLoading,
                                 onVerdict = { claimId, verdict ->
                                     scope.launch {
@@ -292,6 +295,7 @@ private fun tabItems(data: HomeClaimReviewData): List<HomeClaimReviewTabItem> {
 @Composable
 private fun OwnershipTab(
     items: List<HomeClaimReviewOwnershipItem>,
+    onOpenEvidence: (String) -> Unit,
     actionLoading: String?,
     onVerdict: (String, HomeClaimReviewVerdict) -> Unit,
     onRelationship: (String, HomeClaimRelationshipAction, Boolean) -> Unit,
@@ -322,6 +326,7 @@ private fun OwnershipTab(
                 item = item,
                 isBusy = actionLoading?.startsWith("${item.id}:") == true,
                 onVerdict = { verdict -> onVerdict(item.id, verdict) },
+                onOpenEvidence = { onOpenEvidence(item.id) },
                 onRelationship = { action ->
                     onRelationship(item.id, action, item.claimType == "owner")
                 },
@@ -390,4 +395,10 @@ private fun CompareTab(comparison: HomeClaimReviewComparison?) {
     ) {
         HomeClaimComparePanel(comparison = comparison)
     }
+}
+
+@Composable
+private fun HomeClaimEvidencePanel(viewModel: HomeClaimReviewViewModel) {
+    val panel by viewModel.evidencePanel.collectAsStateWithLifecycle()
+    panel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
 }

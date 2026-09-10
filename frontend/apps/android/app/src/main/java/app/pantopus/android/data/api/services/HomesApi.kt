@@ -177,6 +177,7 @@ interface HomesApi {
     suspend fun submitClaim(
         @Path("id") homeId: String,
         @Body body: SubmitClaimRequest,
+        @retrofit2.http.Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): SubmitClaimResponse
 
     /**

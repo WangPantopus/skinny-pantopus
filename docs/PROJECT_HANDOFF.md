@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android private claim evidence checkpoint — September 10
+
+Android now connects the claim wizard, My Claims and Home/platform reviewers to
+private evidence upload, inspection, verification and retirement. Unknown
+outcomes keep the original request; session and authority changes clear private
+previews. The [Android report](home-android-private-evidence-2026-09-10.md) records
+independent review, the final passing app checks and APK assembly, zero static
+findings and zero lint errors. Existing project warnings remain documented.
+iOS parity is pushed as `cec7bb9a2`.
+
+**Next:** native task detail and attachments with current server capabilities,
+plus stable task-create recovery before attaching files. The collection
+capability is pushed as `d21192200`; its complete local SQL/HTTP checks pass.
+The next creation receipt will preserve the exact task after an interrupted
+response without duplicating it. Installed-app evidence visuals, relationships,
+ownership lifecycles and full household acceptance remain open. Draft PRs
+#32/#34 remain unfinished; durable paid-task cancellation/reopening/release and
+browser recovery controls continue in #34. All paid subscriptions remain together
+for final launch preparation. Completed physical Beacon and saved-card acceptance
+must not be repeated. No hosted migration or paid service was activated.
+
 ### Current task collection permissions — September 10
 
 Task lists now return an explicit creation capability from the same locked

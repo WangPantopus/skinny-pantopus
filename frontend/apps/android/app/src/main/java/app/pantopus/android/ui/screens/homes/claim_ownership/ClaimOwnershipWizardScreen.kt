@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.claim_ownership
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -43,9 +44,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.homes.readHomeEvidenceBytes
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimDocumentTypePicker
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimHomeChip
-import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimStatement
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlot
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlotFile
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlotState
@@ -62,6 +63,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Test tag applied to the Claim Ownership wizard root. */
 const val CLAIM_OWNERSHIP_SCREEN_TAG: String = "claimOwnershipWizard"
@@ -575,21 +578,25 @@ private fun UploadStep(
     vm: ClaimOwnershipWizardViewModel,
 ) {
     val context = LocalContext.current
-    var pickerSlot by remember { mutableStateOf<ClaimEvidenceSlot?>(null) }
+    var pickerSlot by remember { mutableStateOf<Pair<ClaimEvidenceSlot, String>?>(null) }
     val picker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument(),
         ) { uri: Uri? ->
-            val slot = pickerSlot ?: return@rememberLauncherForActivityResult
+            val (slot, ticket) = pickerSlot ?: return@rememberLauncherForActivityResult
             pickerSlot = null
             if (uri == null) return@rememberLauncherForActivityResult
-            val resolver = context.contentResolver
-            val mime = resolver.getType(uri) ?: "application/octet-stream"
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "evidence"
-            val bytes =
-                resolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: return@rememberLauncherForActivityResult
-            vm.picked(slot, ClaimPickedFile(filename = name, mimeType = mime, bytes = bytes))
+            vm.acceptPick(slot, ticket) {
+                withContext(Dispatchers.IO) {
+                    val resolver = context.contentResolver
+                    val mime = resolver.getType(uri) ?: "application/octet-stream"
+                    val name =
+                        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                            if (it.moveToFirst()) it.getString(0) else null
+                        } ?: "evidence"
+                    resolver.openInputStream(uri)?.use { ClaimPickedFile(name, mime, readHomeEvidenceBytes(it)) }
+                }
+            }
         }
 
     UploadStepContent(
@@ -608,19 +615,18 @@ private fun UploadStep(
                     hint = slot.acceptHint,
                     state =
                         (state.slots[slot] ?: ClaimSlotState.Empty)
-                            .toUploadState(state.addressMatches[slot], state.startContent.homeLabel),
+                            .toUploadState(),
                 )
             },
-        note = state.note,
-        onNoteChange = vm::setNote,
         verificationType = state.verificationType,
         documentOptions = state.documentOptions,
         selectedDocumentType = state.selectedDocumentType,
         submitError = state.submitError,
         onPick = { id ->
             val slot = ClaimEvidenceSlot.entries.firstOrNull { it.name == id } ?: return@UploadStepContent
-            pickerSlot = slot
-            picker.launch(arrayOf("image/*", "application/pdf"))
+            val ticket = vm.beginPick(slot) ?: return@UploadStepContent
+            pickerSlot = slot to ticket
+            picker.launch(arrayOf("image/*", "application/pdf", "text/plain"))
         },
         onRemove = { id ->
             val slot = ClaimEvidenceSlot.entries.firstOrNull { it.name == id } ?: return@UploadStepContent
@@ -648,8 +654,6 @@ internal data class ClaimUploadSlotModel(
 internal fun UploadStepContent(
     homeLabel: String,
     slots: List<ClaimUploadSlotModel>,
-    note: String,
-    onNoteChange: (String) -> Unit,
     submitError: String?,
     onPick: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -728,11 +732,6 @@ internal fun UploadStepContent(
                 }
             }
         }
-        ClaimStatement(
-            value = note,
-            onValueChange = onNoteChange,
-            placeholder = ClaimUploadCopy.STATEMENT_PLACEHOLDER,
-        )
         submitError?.let { ErrorBanner(it) }
         EncryptionFooter()
     }
@@ -798,25 +797,13 @@ private fun SuccessStep(outcomeNote: String? = null) {
 
 // MARK: - Helpers
 
-private fun ClaimSlotState.toUploadState(
-    verdict: ClaimAddressMatch?,
-    homeLabel: String,
-): UploadSlotState =
+private fun ClaimSlotState.toUploadState(): UploadSlotState =
     when (this) {
         ClaimSlotState.Empty -> UploadSlotState.Empty
         is ClaimSlotState.Uploading -> UploadSlotState.Uploading(file.toDisplay(), fraction)
-        is ClaimSlotState.Picked -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-        is ClaimSlotState.Uploaded -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-        is ClaimSlotState.Failed -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-    }
-
-private fun ClaimPickedFile.fallbackMatch(homeLabel: String): ClaimAddressMatch =
-    ClaimOwnershipSampleData.addressMatch(filename = filename, homeLabel = homeLabel)
-
-private fun UploadSlotFile.withVerdict(verdict: ClaimAddressMatch): UploadSlotState =
-    when (verdict) {
-        is ClaimAddressMatch.Matches -> UploadSlotState.Done(this, verdict.detail)
-        is ClaimAddressMatch.Differs -> UploadSlotState.Warn(this, verdict.detail)
+        is ClaimSlotState.Picked -> UploadSlotState.Pending(file.toDisplay(), "Selected. Submit to save for review.")
+        is ClaimSlotState.Uploaded -> UploadSlotState.Pending(file.toDisplay(), "Saved pending review. No access has been granted.")
+        is ClaimSlotState.Failed -> UploadSlotState.Pending(file.toDisplay(), message)
     }
 
 private fun ClaimPickedFile.toDisplay(): UploadSlotFile =
