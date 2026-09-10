@@ -67,7 +67,7 @@ describe('processPendingTransfers', () => {
   test('credits eligible payment to wallet after cooling off', async () => {
     seedTable('Payment', [makeEligiblePayment()]);
     seedTable('StripeAccount', [makePayeeAccount()]);
-    seedTable('Gig', [{ id: 'gig-001', title: 'Test Gig' }]);
+    seedTable('Gig', [{ id: 'gig-001', payment_id: 'pay-001', title: 'Test Gig' }]);
 
     await processPendingTransfers();
 
@@ -118,7 +118,7 @@ describe('processPendingTransfers', () => {
       created_at: hoursAgo(72),
     })]);
     seedTable('StripeAccount', [makePayeeAccount()]);
-    seedTable('Gig', [{ id: 'gig-001', title: 'Legacy Gig' }]);
+    seedTable('Gig', [{ id: 'gig-001', payment_id: 'pay-001', title: 'Legacy Gig' }]);
 
     await processPendingTransfers();
 
@@ -170,7 +170,7 @@ describe('processPendingTransfers', () => {
     // Seed the payment in captured_hold initially (matches query)
     seedTable('Payment', [makeEligiblePayment()]);
     seedTable('StripeAccount', [makePayeeAccount()]);
-    seedTable('Gig', [{ id: 'gig-001', title: 'Race Gig' }]);
+    seedTable('Gig', [{ id: 'gig-001', payment_id: 'pay-001', title: 'Race Gig' }]);
 
     // Simulate race: after the initial query, the state changes to 'disputed'
     // The second fetch (race-condition guard) will see the changed state.
@@ -192,7 +192,7 @@ describe('processPendingTransfers', () => {
   test('reverts to captured_hold when wallet credit fails', async () => {
     seedTable('Payment', [makeEligiblePayment()]);
     seedTable('StripeAccount', [makePayeeAccount()]);
-    seedTable('Gig', [{ id: 'gig-001', title: 'Gig' }]);
+    seedTable('Gig', [{ id: 'gig-001', payment_id: 'pay-001', title: 'Gig' }]);
 
     // Make wallet credit fail
     walletService.creditGigIncome.mockRejectedValueOnce(new Error('wallet rpc failed'));

@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Paid-gig backend checkpoint — September 9
+
+The isolated `codex/staging-paid-gig` source is ready for final review/commit.
+It reserves one paid acceptance, verifies exact provider authorization before
+assignment/start, fences stale bid/cancel mutations, and reconciles capture into
+an idempotent receipt. Accepted retries repair chat participation. All 4,692
+backend tests pass (16 skipped), privacy gates pass, and a fresh full migration
+replay passes 19 SQL contracts, 35 concurrent PostgreSQL connections, populated
+row preservation and zero-error function lint. See the
+[paid-gig report](staging-paid-gig-2026-09-09.md) for source evidence and limits.
+
+Next commit/push this checkpoint, integrate current master/payment-sheet work,
+then finish exact unknown-provider reconciliation and durable acceptance side
+effects. Native/web pending-payment recovery, the web selected-bid amount,
+payer refund receipts and real test-mode paid-gig acceptance remain. No paid-gig
+provider call or hosted migration/runtime change has run for this checkpoint.
+
 ### Android payment and Home source checkpoint — September 9
 
 Android real SDK acceptance now passes cancellation/restart of the same setup,

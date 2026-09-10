@@ -161,7 +161,7 @@ describe('Tip payment lifecycle', () => {
 // ============================================================
 
 describe('Capture retry cap', () => {
-  test('capturePayment rejects when MAX_CAPTURE_ATTEMPTS exceeded', async () => {
+  test('retry job delegates exhausted attempts for provider reconciliation', async () => {
     // We test the cap via the stripeService directly.
     // Since stripeService requires Stripe SDK, we test the logic
     // through the retryCaptureFailures job instead.
@@ -192,8 +192,8 @@ describe('Capture retry cap', () => {
 
     await retryCaptureFailures();
 
-    // Should NOT attempt capture (exhausted retries)
-    expect(stripeService.capturePayment).not.toHaveBeenCalled();
+    // The service reconciles provider proof before enforcing its new-capture cap.
+    expect(stripeService.capturePayment).toHaveBeenCalledWith('pay-cap-001');
   });
 
   test('capturePayment is called when under MAX_CAPTURE_ATTEMPTS', async () => {

@@ -72,6 +72,7 @@ describe('Normal transfer flow', () => {
     seedTable('Payment', [makeEligiblePayment()]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       title: 'Test Gig',
       payment_status: PAYMENT_STATES.CAPTURED_HOLD,
     }]);
@@ -127,6 +128,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_SCHEDULED,
     }]);
     seedTable('WalletTransaction', []); // No wallet credit
@@ -144,6 +146,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_SCHEDULED,
     }]);
     seedTable('WalletTransaction', [{
@@ -167,6 +170,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_SCHEDULED,
     }]);
     seedTable('WalletTransaction', [{
@@ -189,6 +193,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_PENDING,
     }]);
     seedTable('WalletTransaction', [{
@@ -213,6 +218,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_PENDING,
     }]);
     seedTable('WalletTransaction', []); // No wallet credit
@@ -230,6 +236,7 @@ describe('Stranded transfer recovery', () => {
     })]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       payment_status: PAYMENT_STATES.TRANSFER_SCHEDULED,
     }]);
     seedTable('WalletTransaction', []);
@@ -249,6 +256,7 @@ describe('Catch block recovery', () => {
     seedTable('Payment', [makeEligiblePayment()]);
     seedTable('Gig', [{
       id: 'gig-tr-001',
+      payment_id: 'pay-tr-001',
       title: 'Test Gig',
       payment_status: PAYMENT_STATES.CAPTURED_HOLD,
     }]);
