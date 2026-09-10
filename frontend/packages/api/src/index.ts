@@ -491,6 +491,7 @@ export type {
 
 export { assertHomeTaskSession, taskSessionChanged } from './taskSessionScope';
 export type { HomeTaskSessionScope } from './taskSessionScope';
+export { taskSessionHeaders } from './taskSessionScope';
 
 export * as claimEvidence from './endpoints/claimEvidence';
 export type { ClaimEvidenceSession } from './endpoints/claimEvidence';

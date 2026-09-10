@@ -1,10 +1,22 @@
-export function resolveWebNotificationPath(link: string | null | undefined): string | null {
+type NotificationTarget = { type?: string; metadata?: Record<string, unknown> | null };
+const taskId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function resolveWebNotificationPath(link: string | null | undefined, notification?: NotificationTarget): string | null {
+  // The old dashboard link remains usable by older clients. Current clients
+  // resolve task notifications through the exact current-permission detail page.
+  if (notification?.type === 'task_assigned' || notification?.type === 'task_completed') {
+    const home = notification.metadata?.home_id;
+    const task = notification.metadata?.task_id;
+    if (typeof home === 'string' && taskId.test(home) && typeof task === 'string' && taskId.test(task)) {
+      return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
+    }
+  }
   if (!link) return null;
   const trimmed = link.trim();
   if (!trimmed) return null;
 
   const path = extractPath(trimmed);
-  if (!path) return trimmed;
+  if (!path || !safeInternalPath(path)) return null;
   if (path.startsWith('/app/')) return path;
 
   const postMatch = path.match(/^\/posts?\/([^/?#]+)/i);
@@ -31,11 +43,20 @@ export function resolveWebNotificationPath(link: string | null | undefined): str
 }
 
 function extractPath(link: string) {
-  if (link.startsWith('/')) return link;
+  if (link.startsWith('/')) return safeInternalPath(link) ? link : null;
   try {
     const parsed = new URL(link);
+    if (!['https:', 'http:'].includes(parsed.protocol)) return null;
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return null;
   }
+}
+
+function safeInternalPath(path: string): boolean {
+  try {
+    const decoded = decodeURIComponent(path);
+    return decoded.startsWith('/') && !decoded.startsWith('//')
+      && !/[\\\u0000-\u001f\u007f]/.test(decoded);
+  } catch { return false; }
 }

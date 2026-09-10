@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser exact task notification journey — September 10
+
+Browser notification entry points now open an exact Home task through a current
+permission read. Delayed taps cannot navigate after a session/view change;
+reopening denied tasks hides their content. Browser OS alerts use the separate
+preference-checked event. The [browser report](home-web-task-notification-routing-2026-09-10.md)
+records full browser checks, current backend/privacy evidence, independent review
+and actual Chrome exact-task/revocation/cross-tab acceptance against synthetic
+HTTP replies. One broad backend HTTP failure passed its unchanged affected
+recheck; no cause or hosted/provider acceptance is claimed.
+
+**Next:** bring the existing browser task forms onto stable create receipts and
+sparse edits; finish native attachments, Android exact notification routing and
+installed household journeys. Android retained forms are pushed as `848bf28c6`,
+iOS routing as `c1cac2a30`; payment opening-identity repairs continue after
+`4dec19088`. Notification-list cache lifetime, automatic recurrence,
+relationships/ownership and remaining payments/release work stay open. Both PRs
+#32/#34 remain unfinished drafts. All paid services remain one final launch-
+preparation step. Completed physical Beacon and saved-card acceptance must not
+be repeated. No owner-phone installation, hosted data or paid service changed.
+
 ### Android retained task creation and sparse editing — September 10
 
 Android task forms now preserve one protected original create request and exact

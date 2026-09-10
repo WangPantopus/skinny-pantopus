@@ -233,3 +233,9 @@ export const authDevices = {
     Boolean(code && ['TOKEN_REUSE', 'DEVICE_MISMATCH', 'DEVICE_REVOKED', 'SESSION_REVOKED', 'SESSION_EXPIRED_INACTIVE', 'DPOP_REQUIRED'].includes(code)),
   STEP_UP_HEADER: 'X-Step-Up',
 };
+
+export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
+export const getApiBaseUrl = jest.fn(() => 'https://synthetic.invalid');
+export const onTokenChange = jest.fn((_listener: () => void) => () => {});
+
+export const users = { getMyProfile: jest.fn() };
