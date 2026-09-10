@@ -36,6 +36,21 @@ class TokenStorageTest {
     }
 
     @Test
+    fun `checkout identity keeps refresh but changes with login and clears with logout`() =
+        runTest {
+            assertNull(storage.sessionIdentity())
+            storage.save(accessToken = "synthetic-a", refreshToken = "synthetic-r", userId = "u-1", sessionId = "session-1")
+            val first = checkNotNull(storage.sessionIdentity())
+            assertEquals("u-1", first.first)
+            storage.updateTokens(accessToken = "synthetic-b", refreshToken = null)
+            assertEquals(first, storage.sessionIdentity())
+            storage.save(accessToken = "synthetic-c", refreshToken = "synthetic-r", userId = "u-1", sessionId = "session-2")
+            org.junit.Assert.assertNotEquals(first, storage.sessionIdentity())
+            storage.clear()
+            assertNull(storage.sessionIdentity())
+        }
+
+    @Test
     fun `save persists access, refresh, userId`() =
         runTest {
             storage.save(accessToken = "at-1", refreshToken = "rt-1", userId = "u-1")

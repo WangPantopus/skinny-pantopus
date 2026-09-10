@@ -142,6 +142,10 @@ final class GigDetailViewModelTests: XCTestCase {
             gigId: "g1",
             api: api,
             checkout: CheckoutCoordinator(api: api, presenter: presenter),
+            bidAcceptance: GigBidAcceptanceCoordinator(
+                api: api,
+                checkout: CheckoutCoordinator(api: api, presenter: presenter)
+            ) { "origin|owner|session" },
             currentUserId: "owner-1",
             roomEvents: { _ in AsyncStream { $0.finish() } },
             emitRoom: { event, gigId in emitRecorder.events.append("\(event):\(gigId)") }
@@ -240,9 +244,9 @@ final class GigDetailViewModelTests: XCTestCase {
             ],
             "/api/gigs/g1/bids/b1/accept": [.status(
                 200,
-                body: #"{"requiresPaymentSetup":true,"clientSecret":"pi_x","customer":"cus","ephemeralKey":"ek","publishableKey":"pk"}"#
+                body: #"{"bid":{"id":"b1","status":"pending_payment"},"amountCents":6000,"currency":"usd","requiresPaymentSetup":true,"clientSecret":"pi_x","customer":"cus","ephemeralKey":"ek","publishableKey":"pk"}"#
             )],
-            "/api/gigs/g1/bids/b1/finalize-accept": [.status(200, body: #"{"message":"ok"}"#)],
+            "/api/gigs/g1/bids/b1/finalize-accept": [.status(200, body: #"{"bid":{"id":"b1","status":"accepted"}}"#)],
             "/api/gigs/g1/no-show-check": [.status(200, body: #"{"can_report":false}"#)]
         ])
         let presenter = StubAcceptPresenter()

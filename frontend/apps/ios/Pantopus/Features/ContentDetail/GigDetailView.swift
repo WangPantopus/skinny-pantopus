@@ -267,6 +267,7 @@ public struct GigDetailView: View {
                     onCounter: { bid in counterTarget = GigCounterSheetTarget(id: bid.id, bid: bid) },
                     onReject: { bid in rejectCandidate = bid },
                     onWithdrawCounter: { bid in withdrawCounterCandidate = bid },
+                    onCancelPayment: { bid in Task { await cancelBidPayment(bid) } },
                     rankings: viewModel.offerRankings
                 )
             }
@@ -386,6 +387,14 @@ public struct GigDetailView: View {
             toast = ToastMessage(text: "Payment canceled.", kind: .error)
         case let .failed(message):
             toast = ToastMessage(text: message, kind: .error)
+        }
+    }
+
+    private func cancelBidPayment(_ bid: GigBidDTO) async {
+        switch await viewModel.cancelBidAcceptance(bidId: bid.id) {
+        case .canceled: toast = ToastMessage(text: "Payment setup canceled.", kind: .success)
+        case .accepted: toast = ToastMessage(text: "Bid acceptance already confirmed.", kind: .success)
+        case let .failed(message): toast = ToastMessage(text: message, kind: .error)
         }
     }
 

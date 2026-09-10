@@ -144,6 +144,7 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
             )
         vm.load()
         return vm
@@ -269,6 +270,7 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
             )
         vm.load()
         return vm
@@ -293,17 +295,22 @@ class GigDetailSaveViewModelTest {
             val vm = ownerOpenGigVm(bids = listOf(GigBidDto(id = "b1", userId = "u2", bidAmount = 40.0)))
             coEvery { repo.acceptBid("g1", "b1") } returns
                 NetworkResult.Success(
-                    GigBidAcceptResponse(requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk"),
+                    GigBidAcceptResponse(
+                        bid = GigBidDto(id = "b1", gigId = "g1", status = "pending_payment"),
+                        requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk", paymentIntentId = "pi_test",
+                        amountCents = 4000, currency = "usd",
+                    ),
                 )
             coEvery { repo.finalizeAcceptBid("g1", "b1") } returns
-                NetworkResult.Success(GigBidAcceptResponse())
+                NetworkResult.Success(GigBidAcceptResponse(bid = GigBidDto(id = "b1", gigId = "g1", status = "accepted")))
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 vm.lifecycleEvents.toList(events)
             }
             vm.acceptBidAsOwner("b1")
-            assertTrue(events.any { it is GigLifecycleEvent.PresentPaymentSheet })
-            vm.onLifecycleCheckoutOutcome(
+            val presentation = checkNotNull(vm.bidCheckout.state.value.presentation)
+            vm.bidCheckout.onSheetResult(
+                presentation.token,
                 app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome.Paid,
             )
             coVerify(exactly = 1) { repo.finalizeAcceptBid("g1", "b1") }
@@ -350,6 +357,7 @@ class GigDetailSaveViewModelTest {
                     activeNotifier,
                     gigsV2Repo,
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
                 )
             vm.load()
             assertTrue(vm.canInstantAccept())
@@ -375,6 +383,7 @@ class GigDetailSaveViewModelTest {
     private fun lifecycleVm(
         gig: GigDto,
         noShowCanReport: Boolean = false,
+        checkoutIdentity: () -> Pair<String, String?>? = { "u1" to "test-session" },
         changeOrders: List<GigChangeOrderDto> = emptyList(),
         payment: NetworkResult<GigPaymentResponse> =
             NetworkResult.Success(
@@ -406,10 +415,37 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } coAnswers { checkoutIdentity() } },
             )
         vm.load()
         return vm
     }
+
+    @Test
+    fun changed_screen_identity_shows_reopen_error_without_fetching_new_account_data() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "session-1"
+            val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+            assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+            identity = "u2" to "session-2"
+            vm.silentRefetch()
+            assertTrue(vm.state.value is ContentDetailUiState.Error)
+            coVerify(exactly = 1) { repo.detail("g1") }
+            vm.bidCheckout.start("g1", "b1")
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
+
+    @Test
+    fun anonymous_and_legacy_session_reads_still_load_without_payment_admission() =
+        runTest {
+            for (identity in listOf(null, "u1" to null)) {
+                val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+                assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+                vm.bidCheckout.start("g1", "b1")
+                assertEquals(app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutPhase.Idle, vm.bidCheckout.state.value.phase)
+            }
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
 
     @Test
     fun worker_running_late_gate_and_endpoint() =

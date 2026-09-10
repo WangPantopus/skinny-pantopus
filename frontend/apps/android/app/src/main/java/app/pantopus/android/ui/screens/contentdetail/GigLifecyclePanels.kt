@@ -83,6 +83,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val bids by viewModel.bids.collectAsStateWithLifecycle()
     val offerRankings by viewModel.offerRankings.collectAsStateWithLifecycle()
     val bidActionInFlight by viewModel.bidActionInFlight.collectAsStateWithLifecycle()
+    val bidCheckout by viewModel.bidCheckout.state.collectAsStateWithLifecycle()
     val activeTask by viewModel.activeTask.collectAsStateWithLifecycle()
     val reviewState by viewModel.reviewState.collectAsStateWithLifecycle()
     val payment by viewModel.payment.collectAsStateWithLifecycle()
@@ -111,7 +112,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     if (ownerSeesBidsPanel) {
         GigOwnerBidsPanel(
             bids = bids,
-            actionInFlightBidId = bidActionInFlight,
+            actionInFlightBidId = bidActionInFlight ?: bidCheckout.bidId?.takeIf { bidCheckout.blocksNewBidActions },
             onAccept = { viewModel.acceptBidAsOwner(it.id) },
             onCounter = { counterTarget = it },
             onReject = { rejectTarget = it },
@@ -463,6 +464,15 @@ private fun GigOwnerBidRow(
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextMuted,
                 )
+            bid.status == "pending_payment" ->
+                BidActionButton(
+                    label = "Resume payment",
+                    prominent = true,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().testTag("gigDetail.bid_${bid.id}.resume"),
+                    onClick = onAccept,
+                )
+            bid.status == "accepted" -> Text("Bid accepted", color = PantopusColors.appTextSecondary)
             countered ->
                 // RN keeps the poster in control while the bidder mulls it
                 // over: the counter can be pulled back and the bid reverts

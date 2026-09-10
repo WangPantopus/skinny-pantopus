@@ -118,6 +118,7 @@ class GigTipViewModelTest {
             activeNotifier,
             gigsV2Repo,
             SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+            checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
         )
     }
 

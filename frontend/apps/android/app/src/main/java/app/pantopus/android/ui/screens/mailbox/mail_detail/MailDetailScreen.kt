@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +32,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.BookletDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.CertifiedDetailLayout
@@ -44,14 +44,12 @@ import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.MemoryDetail
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.PackageDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.PartyDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.RecordsDetailLayout
-import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailItemDetailTopBar
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarConfig
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-import com.stripe.android.paymentsheet.rememberPaymentSheet
 
 /**
  * T6.5b (P20) — Android generic A17.1 mail item detail. Mirror of iOS
@@ -90,7 +88,8 @@ fun MailDetailScreen(
     val ackInFlight by viewModel.ackInFlight.collectAsStateWithLifecycle()
     val rsvpInFlight by viewModel.rsvpInFlight.collectAsStateWithLifecycle()
     val couponRedeemInFlight by viewModel.couponRedeemInFlight.collectAsStateWithLifecycle()
-    val gigBidInFlight by viewModel.gigBidInFlight.collectAsStateWithLifecycle()
+    val gigBidCheckout by viewModel.bidCheckout.state.collectAsStateWithLifecycle()
+    val gigBidInFlight = gigBidCheckout.blocksNewBidActions
     val partyRsvpInFlight by viewModel.partyRsvpInFlight.collectAsStateWithLifecycle()
     val recordsFileInFlight by viewModel.recordsFileInFlight.collectAsStateWithLifecycle()
     val saveToVaultInFlight by viewModel.saveToVaultInFlight.collectAsStateWithLifecycle()
@@ -102,11 +101,7 @@ fun MailDetailScreen(
     val categoryActionInFlight by viewModel.categoryActionInFlight.collectAsStateWithLifecycle()
     val pendingDestructiveAction by viewModel.pendingDestructiveAction.collectAsStateWithLifecycle()
     val ceremonialRedirectMailId by viewModel.ceremonialRedirectMailId.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val paymentSheet =
-        rememberPaymentSheet { result ->
-            viewModel.onGigBidCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result))
-        }
+    GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(ceremonialRedirectMailId) {
@@ -114,23 +109,6 @@ fun MailDetailScreen(
         if (redirect != null && onOpenCeremonialMail != null) {
             viewModel.acknowledgeCeremonialRedirect()
             onOpenCeremonialMail(redirect)
-        }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is MailDetailEvent.PresentGigBidCheckout ->
-                    paymentSheet.presentWithPaymentIntent(
-                        paymentIntentClientSecret = event.params.clientSecret.orEmpty(),
-                        configuration =
-                            StripePaymentSheets.paymentConfiguration(
-                                context = context,
-                                customerId = event.params.customer,
-                                ephemeralKey = event.params.ephemeralKey,
-                                publishableKey = event.params.publishableKey,
-                            ),
-                    )
-            }
         }
     }
     LaunchedEffect(toast) {

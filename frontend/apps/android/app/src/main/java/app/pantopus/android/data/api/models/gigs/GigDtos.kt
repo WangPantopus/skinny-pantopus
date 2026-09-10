@@ -218,6 +218,7 @@ data class GigBidDto(
     @Json(name = "countered_at") val counteredAt: String? = null,
     val bidder: GigCreator? = null,
     @Json(name = "User") val legacyBidder: GigCreator? = null,
+    @Json(name = "gig_id") val gigId: String? = null,
 ) {
     fun bidderIdentity(): GigCreator? = bidder ?: legacyBidder
 
@@ -323,6 +324,11 @@ data class GigBidAcceptResponse(
     val bid: GigBidDto? = null,
     val message: String? = null,
     val requiresPaymentSetup: Boolean? = null,
+    val authorizationReady: Boolean? = null,
+    val paymentStatus: String? = null,
+    val providerStatus: String? = null,
+    val amountCents: Int? = null,
+    val currency: String? = null,
     val isSetupIntent: Boolean? = null,
     val payment: PaymentPayload? = null,
     val publishableKey: String? = null,

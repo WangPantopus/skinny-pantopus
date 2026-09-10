@@ -46,6 +46,7 @@ public enum OfferStatus: Sendable, Hashable {
     case countered
     case accepted
     case pending
+    case pendingPayment
     case declined
     case withdrawn
     case expired
@@ -65,6 +66,7 @@ public enum OfferStatus: Sendable, Hashable {
         case .countered: "Countered"
         case .accepted: "Accepted"
         case .pending: "Pending response"
+        case .pendingPayment: "Payment pending"
         case .declined: "Declined"
         case .withdrawn: "Withdrawn"
         case .expired: "Expired"
@@ -78,6 +80,7 @@ public enum OfferStatus: Sendable, Hashable {
         case .countered: .arrowsRepeat
         case .accepted: .check
         case .pending: .hourglass
+        case .pendingPayment: .creditCard
         case .declined: .x
         case .withdrawn: .arrowLeft
         case .expired: .alertCircle
@@ -88,7 +91,7 @@ public enum OfferStatus: Sendable, Hashable {
         switch self {
         case .new: .personal
         case .expiring: .error
-        case .countered: .warning
+        case .countered, .pendingPayment: .warning
         case .accepted: .success
         case .pending, .declined, .withdrawn, .expired: .neutral
         }
@@ -245,7 +248,7 @@ public final class OffersViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
-    private let checkout: CheckoutCoordinator
+    private let bidAcceptance: GigBidAcceptanceCoordinator
     private let onOpenOfferDetail: @MainActor (BidDTO) -> Void
     private let onBrowseListings: @MainActor () -> Void
     private let onPostTask: @MainActor () -> Void
@@ -260,13 +263,14 @@ public final class OffersViewModel: ListOfRowsDataSource {
     init(
         api: APIClient = .shared,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
+        bidAcceptance: GigBidAcceptanceCoordinator? = nil,
         onOpenOfferDetail: @escaping @MainActor (BidDTO) -> Void = { _ in },
         onBrowseListings: @escaping @MainActor () -> Void = {},
         onPostTask: @escaping @MainActor () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
-        self.checkout = checkout
+        self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.onOpenOfferDetail = onOpenOfferDetail
         self.onBrowseListings = onBrowseListings
         self.onPostTask = onPostTask
@@ -371,6 +375,9 @@ public final class OffersViewModel: ListOfRowsDataSource {
                     },
                     onWithdraw: { [weak self] in
                         Task { @MainActor in self?.withdrawCandidate = dto }
+                    },
+                    onCancelPayment: { [weak self] in
+                        Task { @MainActor in await self?.cancelPendingPayment(dto) }
                     }
                 )
             ) { [weak self] in
@@ -385,7 +392,7 @@ public final class OffersViewModel: ListOfRowsDataSource {
     /// Map a derived offer status onto one of the three filter chip ids.
     public static func statusFilterId(for status: OfferStatus) -> String {
         switch status {
-        case .new, .expiring, .countered, .pending: "pending"
+        case .new, .expiring, .countered, .pending, .pendingPayment: "pending"
         case .accepted: "accepted"
         case .declined, .withdrawn, .expired: "declined"
         }
@@ -457,7 +464,7 @@ public final class OffersViewModel: ListOfRowsDataSource {
 
     /// Poster accepts a received bid: `POST .../bids/:bidId/accept`;
     /// paid gigs return PaymentSheet params → present → `finalize-accept`
-    /// (or `abort-accept` on cancel/decline). Mirrors the gig-detail flow.
+    /// (or `abort-accept` on explicit cancellation). Mirrors the gig-detail flow.
     public func confirmAccept() async {
         guard let dto = acceptCandidate else { return }
         acceptCandidate = nil
@@ -472,45 +479,31 @@ public final class OffersViewModel: ListOfRowsDataSource {
             actionInFlight = nil
             rebuild()
         }
-        do {
-            let response: GigBidAcceptResponse = try await api.request(
-                GigsEndpoints.acceptBid(gigId: gigId, bidId: dto.id)
-            )
-            let requiresPayment = response.requiresPaymentSetup == true
-                || response.sheetParams.clientSecret != nil
-            if requiresPayment {
-                switch await checkout.present(response.sheetParams) {
-                case .paid:
-                    let _: GigBidAcceptResponse = try await api.request(
-                        GigsEndpoints.finalizeAcceptBid(gigId: gigId, bidId: dto.id)
-                    )
-                    toast = ToastMessage(text: "Offer accepted and payment authorized.", kind: .success)
-                case .canceled:
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: dto.id),
-                        as: GigBidAcceptResponse.self
-                    )
-                    toast = ToastMessage(
-                        text: "Payment authorization is required before accepting this offer.",
-                        kind: .error
-                    )
-                case let .declined(message), let .failed(message):
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: dto.id),
-                        as: GigBidAcceptResponse.self
-                    )
-                    toast = ToastMessage(text: message, kind: .error)
-                }
-            } else {
-                toast = ToastMessage(text: "Offer accepted.", kind: .success)
-            }
-            await fetchAll()
-        } catch {
-            toast = ToastMessage(
-                text: (error as? APIError)?.errorDescription ?? "Couldn't accept this offer.",
-                kind: .error
-            )
+        let result = await bidAcceptance.accept(gigId: gigId, bidId: dto.id)
+        guard bidAcceptance.isCurrentAccount else { return }
+        switch result {
+        case .accepted: toast = ToastMessage(text: "Offer accepted.", kind: .success)
+        case .canceled: toast = ToastMessage(text: "Payment setup canceled.", kind: .success)
+        case let .failed(message): toast = ToastMessage(text: message, kind: .error)
         }
+        await fetchAll()
+    }
+
+    public func cancelPendingPayment(_ dto: BidDTO) async {
+        guard let gigId = dto.gigId ?? dto.gig?.id, actionInFlight == nil else { return }
+        actionInFlight = dto.id
+        rebuild()
+        defer { actionInFlight = nil
+            rebuild()
+        }
+        let result = await bidAcceptance.cancel(gigId: gigId, bidId: dto.id)
+        guard bidAcceptance.isCurrentAccount else { return }
+        switch result {
+        case .canceled: toast = ToastMessage(text: "Payment setup canceled.", kind: .success)
+        case .accepted: toast = ToastMessage(text: "Offer acceptance already confirmed.", kind: .success)
+        case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+        }
+        await fetchAll()
     }
 
     /// Poster rejects a received bid — `POST .../bids/:bidId/reject`.
@@ -618,12 +611,29 @@ public final class OffersViewModel: ListOfRowsDataSource {
         isBusy: Bool,
         onAccept: @escaping @Sendable () -> Void,
         onReject: @escaping @Sendable () -> Void,
-        onWithdraw: @escaping @Sendable () -> Void
+        onWithdraw: @escaping @Sendable () -> Void,
+        onCancelPayment: @escaping @Sendable () -> Void = {}
     ) -> RowFooter? {
         let status = (dto.status ?? "").lowercased()
         switch perspective {
         case .received:
-            guard status == "pending" else { return nil }
+            if status == "pending_payment" {
+                return RowFooter(actions: [
+                    RowFooterAction(
+                        title: "Resume payment",
+                        icon: .creditCard,
+                        variant: .primary,
+                        identifier: "offers.\(dto.id).resumePayment"
+                    ) { if !isBusy { onAccept() } },
+                    RowFooterAction(
+                        title: "Cancel payment",
+                        icon: .x,
+                        variant: .destructive,
+                        identifier: "offers.\(dto.id).cancelPayment"
+                    ) { if !isBusy { onCancelPayment() } }
+                ])
+            }
+            guard status == "pending" || (status == "countered" && dto.counterStatus == "accepted") else { return nil }
             return RowFooter(actions: [
                 RowFooterAction(
                     title: "Reject",
@@ -660,23 +670,24 @@ public final class OffersViewModel: ListOfRowsDataSource {
         if hasLiveCounter, isPending(dto.status) { return .countered }
 
         switch (dto.status ?? "").lowercased() {
+        case "pending_payment": return .pendingPayment
         case "accepted", "assigned": return .accepted
         case "rejected", "declined": return .declined
         case "withdrawn": return .withdrawn
         case "expired": return .expired
-        case "pending":
-            if let expires = parseDate(dto.expiresAt) {
-                let timeLeft = expires.timeIntervalSince(now)
-                if timeLeft > 0, timeLeft < OfferStatus.expiringWindow { return .expiring }
-                if timeLeft <= 0 { return .expired }
-            }
-            if let created = parseDate(dto.createdAt) {
-                if now.timeIntervalSince(created) < OfferStatus.newWindow { return .new }
-            }
-            return .pending
-        default:
-            return .pending
+        case "pending": return pendingStatus(for: dto, now: now)
+        default: return .pending
         }
+    }
+
+    private static func pendingStatus(for dto: BidDTO, now: Date) -> OfferStatus {
+        if let expires = parseDate(dto.expiresAt) {
+            let timeLeft = expires.timeIntervalSince(now)
+            if timeLeft > 0, timeLeft < OfferStatus.expiringWindow { return .expiring }
+            if timeLeft <= 0 { return .expired }
+        }
+        if let created = parseDate(dto.createdAt), now.timeIntervalSince(created) < OfferStatus.newWindow { return .new }
+        return .pending
     }
 
     /// Render the row subtitle: counterparty + city + relative time.

@@ -28,6 +28,7 @@ import app.pantopus.android.data.api.models.reviews.CreateReviewBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigOwnerActionsRepository
 import app.pantopus.android.data.gigs.GigReassignmentRepository
@@ -38,6 +39,8 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -118,6 +121,7 @@ class GigDetailViewModel
         // "share live status" link.
         private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository,
         savedStateHandle: SavedStateHandle,
+        private val checkoutTokens: TokenStorage,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -455,10 +459,17 @@ class GigDetailViewModel
 
         /** Which checkout the presented PaymentSheet belongs to. */
         private sealed interface PendingCheckout {
-            data class BidAccept(val bidId: String) : PendingCheckout
-
             data object InstantAccept : PendingCheckout
         }
+
+        val bidCheckout =
+            GigBidCheckoutCoordinator(
+                repo,
+                viewModelScope,
+                checkoutTokens::gigCheckoutIdentity,
+                onAccepted = { _, _ -> silentRefetch() },
+                onCanceled = { silentRefetch() },
+            )
 
         private var pendingCheckout: PendingCheckout? = null
         private var canInstantAccept = false
@@ -765,12 +776,28 @@ class GigDetailViewModel
             if (showLoading) _state.value = ContentDetailUiState.Loading
             refetchInFlight = true
             viewModelScope.launch {
-                when (val result = repo.detail(gigId)) {
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                    refetchInFlight = false
+                    return@launch
+                }
+                val result = repo.detail(gigId)
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                    refetchInFlight = false
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         val bids = fetchOwnerBids(result.data.gig)
                         // Bidder side — resolve before projecting so the
                         // dock renders "Update bid" on the first frame.
                         loadViewerBid(result.data.gig)
+                        if (!bidCheckout.isCurrentReadScope()) {
+                            _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                            refetchInFlight = false
+                            return@launch
+                        }
                         applyLoaded(result.data.gig, bids)
                         loadQuestions()
                     }
@@ -870,6 +897,7 @@ class GigDetailViewModel
             canTip = viewerCanTip(gig, uid)
             canInstantAccept = viewerCanInstantAccept(gig, uid)
             _bids.value = bids
+            if (viewerIsOwner) bidCheckout.restore(gigId, bids)
             _activeTask.value = deriveActiveTask(gig, uid)
             syncWorkerReminderCooldown(gig)
             syncActiveNotification(gig, uid)
@@ -1514,29 +1542,8 @@ class GigDetailViewModel
          * A17.6).
          */
         fun acceptBidAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
-            _bidActionInFlight.value = bidId
-            viewModelScope.launch {
-                when (val result = repo.acceptBid(gigId, bidId)) {
-                    is NetworkResult.Success -> {
-                        val params = result.data.sheetParams()
-                        val needsPayment =
-                            result.data.requiresPaymentSetup == true || !params.clientSecret.isNullOrBlank()
-                        if (needsPayment) {
-                            pendingCheckout = PendingCheckout.BidAccept(bidId)
-                            _lifecycleEvents.emit(GigLifecycleEvent.PresentPaymentSheet(params))
-                        } else {
-                            _lifecycleEvents.emit(GigLifecycleEvent.Toast("Bid accepted"))
-                            _bidActionInFlight.value = null
-                            silentRefetch()
-                        }
-                    }
-                    is NetworkResult.Failure -> {
-                        _bidActionInFlight.value = null
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
-                    }
-                }
-            }
+            if (_bidActionInFlight.value != null || !viewerIsOwner) return
+            bidCheckout.start(gigId, bidId)
         }
 
         /** Owner counters a pending bid; the row flips to "Countered $X". */
@@ -1546,7 +1553,7 @@ class GigDetailViewModel
             message: String?,
             onResult: (Boolean) -> Unit = {},
         ) {
-            if (_bidActionInFlight.value != null) {
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) {
                 onResult(false)
                 return
             }
@@ -1570,7 +1577,7 @@ class GigDetailViewModel
 
         /** Owner rejects a bid after the confirm step; the row dims. */
         fun rejectBidAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) return
             _bidActionInFlight.value = bidId
             viewModelScope.launch {
                 when (val result = repo.rejectBid(gigId, bidId)) {
@@ -1595,7 +1602,7 @@ class GigDetailViewModel
          * (`OffersPanel.tsx:177`). Route `backend/routes/gigs.js:5342`.
          */
         fun withdrawCounterAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) return
             _bidActionInFlight.value = bidId
             viewModelScope.launch {
                 when (val result = ownerActionsRepo.withdrawCounterOffer(gigId, bidId)) {
@@ -1680,34 +1687,6 @@ class GigDetailViewModel
             pendingCheckout = null
             viewModelScope.launch {
                 when (pending) {
-                    is PendingCheckout.BidAccept -> {
-                        when (outcome) {
-                            CheckoutOutcome.Paid -> {
-                                when (val result = repo.finalizeAcceptBid(gigId, pending.bidId)) {
-                                    is NetworkResult.Success ->
-                                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Bid accepted"))
-                                    is NetworkResult.Failure ->
-                                        _lifecycleEvents.emit(
-                                            GigLifecycleEvent.Toast(result.error.message, isError = true),
-                                        )
-                                }
-                            }
-                            CheckoutOutcome.Canceled -> {
-                                repo.abortAcceptBid(gigId, pending.bidId)
-                                _lifecycleEvents.emit(GigLifecycleEvent.Toast("Payment canceled", isError = true))
-                            }
-                            is CheckoutOutcome.Declined -> {
-                                repo.abortAcceptBid(gigId, pending.bidId)
-                                _lifecycleEvents.emit(
-                                    GigLifecycleEvent.Toast(
-                                        outcome.message ?: "Your card was declined.",
-                                        isError = true,
-                                    ),
-                                )
-                            }
-                        }
-                        _bidActionInFlight.value = null
-                    }
                     is PendingCheckout.InstantAccept -> {
                         when (outcome) {
                             CheckoutOutcome.Paid ->

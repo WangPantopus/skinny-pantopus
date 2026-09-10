@@ -14,7 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Paid-gig recovery and delivery checkpoint — September 9
+### Native paid-bid recovery checkpoint — September 9
+
+The three active owner-bid entry points on both native clients now use shared
+recovery coordinators. iOS passes **101 simulator tests**; Android passes **148
+JVM tests**, formatting, static analysis and debug assembly. Independent review
+closed old-screen account binding, anonymous/legacy read compatibility and
+competing SDK presentation gaps. Exact server receipts control accepted/canceled
+UI; lost responses resume the same bid without persisting payment secrets.
+See the [iOS report](paid-gig-ios-recovery-2026-09-09.md) and
+[Android report](paid-gig-android-recovery-2026-09-09.md).
+
+Commit/push this frozen native milestone in draft PR #34, integrate current
+master `390091cdb`, then finish durable payer/admin refund receipts and historical
+assigned authorization before a fresh test-mode paid-gig lifecycle. No paid-gig
+provider call, hosted migration or runtime change has run. The current private
+saved-card acceptance remains completed and cleaned; do not reuse its fixtures.
+
+Home invitation and sharing source is finishing its separate draft PR #32
+checkpoint: the earlier broad run passed 4,824 backend tests, privacy gates,
+and 36 real database races. A final run exposed a new test mock-path mismatch
+(now fixed) plus intermittent HTTP socket/timeout failures in payment/chat
+tests; final regression verification remains pending. Those HTTP failures also
+occurred under Node 22, so runtime version alone does not explain them.
+Continue ownership enrollment and remaining resource boundaries after that
+milestone. Ordinary role defaults and hosted Home grants are unchanged.
+
+### Earlier paid-gig recovery and delivery checkpoint — September 9
 
 **Native sensitive-auth integration is complete.** PR #33 merged as
 `390091cdbfb12c3f2a2b7ce331453433d6344e80` at 05:01:17 UTC September 10 after

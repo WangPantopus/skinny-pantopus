@@ -15,13 +15,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.BidderUserDto
-import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.ui.components.StatusChipVariant
-import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.gigCheckoutIdentity
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -42,11 +43,8 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -71,11 +69,6 @@ data class OffersToast(
     val text: String,
     val isError: Boolean = false,
 )
-
-/** One-shot side effects the screen performs (Stripe PaymentSheet). */
-sealed interface OffersEvent {
-    data class PresentCheckout(val params: PaymentIntentSheetParamsDto) : OffersEvent
-}
 
 /**
  * Eight lifecycle states the design's STATUS map calls out. Common-case
@@ -218,6 +211,7 @@ class OffersViewModel
         private val repo: OffersRepository,
         // Accept / reject live on the gig bid routes, not the offers ones.
         private val gigsRepo: GigsRepository,
+        private val checkoutTokens: TokenStorage,
     ) : ViewModel() {
         private var received: List<BidDto> = emptyList()
         private var sent: List<BidDto> = emptyList()
@@ -247,16 +241,14 @@ class OffersViewModel
         private val _toast = MutableStateFlow<OffersToast?>(null)
         val toast: StateFlow<OffersToast?> = _toast.asStateFlow()
 
-        private val _events = MutableSharedFlow<OffersEvent>(extraBufferCapacity = 4)
-        val events: SharedFlow<OffersEvent> = _events.asSharedFlow()
-
-        /** Bid whose PaymentSheet is on screen, awaiting its outcome. */
-        private var pendingAccept: PendingAccept? = null
-
-        private data class PendingAccept(
-            val gigId: String,
-            val bidId: String,
-        )
+        val bidCheckout =
+            GigBidCheckoutCoordinator(
+                gigsRepo,
+                viewModelScope,
+                checkoutTokens::gigCheckoutIdentity,
+                onAccepted = { _, _ -> finishAction(refetch = true) },
+                onCanceled = { finishAction(refetch = true) },
+            )
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -306,6 +298,12 @@ class OffersViewModel
         /** Offers carry an amount, so the full sort set applies. */
         val sortFilterOptions = ActivitySortOrder.ALL
 
+        init {
+            viewModelScope.launch {
+                bidCheckout.state.collect { if (loadedAtLeastOnce) applyState() }
+            }
+        }
+
         fun openFilterSheet() {
             _showFilterSheet.value = true
         }
@@ -354,10 +352,18 @@ class OffersViewModel
         private fun reload() {
             if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ListOfRowsUiState.Error("Your account changed. Reopen Offers to continue.")
+                    return@launch
+                }
                 val receivedDeferred = async { repo.receivedOffers() }
                 val sentDeferred = async { repo.myBids() }
                 val receivedResult = receivedDeferred.await()
                 val sentResult = sentDeferred.await()
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ListOfRowsUiState.Error("Your account changed. Reopen Offers to continue.")
+                    return@launch
+                }
                 when {
                     receivedResult is NetworkResult.Success && sentResult is NetworkResult.Success -> {
                         received = receivedResult.data.offers
@@ -413,7 +419,7 @@ class OffersViewModel
                     }
                 return
             }
-            val isBusy = _actionInFlight.value != null
+            val isBusy = _actionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions
             val rows =
                 visible.map { dto ->
                     row(
@@ -465,70 +471,8 @@ class OffersViewModel
             val dto = _acceptCandidate.value ?: return
             _acceptCandidate.value = null
             val gigId = dto.gigId ?: dto.gig?.id
-            if (gigId.isNullOrBlank()) {
-                _toast.value = OffersToast("Gig not found for this offer.", isError = true)
-                return
-            }
-            if (_actionInFlight.value != null) return
-            _actionInFlight.value = dto.id
-            applyState()
-            viewModelScope.launch {
-                when (val result = gigsRepo.acceptBid(gigId, dto.id)) {
-                    is NetworkResult.Success -> {
-                        val params = result.data.sheetParams()
-                        val needsPayment =
-                            result.data.requiresPaymentSetup == true || !params.clientSecret.isNullOrBlank()
-                        if (needsPayment) {
-                            pendingAccept = PendingAccept(gigId = gigId, bidId = dto.id)
-                            _events.emit(OffersEvent.PresentCheckout(params))
-                        } else {
-                            _toast.value = OffersToast("Offer accepted.")
-                            finishAction(refetch = true)
-                        }
-                    }
-                    is NetworkResult.Failure -> {
-                        _toast.value =
-                            OffersToast(result.error.displayMessage("Couldn't accept this offer."), isError = true)
-                        finishAction(refetch = false)
-                    }
-                }
-            }
-        }
-
-        /** PaymentSheet result → `finalize-accept` or `abort-accept`. */
-        fun onCheckoutOutcome(outcome: CheckoutOutcome) {
-            val pending = pendingAccept ?: return
-            pendingAccept = null
-            viewModelScope.launch {
-                when (outcome) {
-                    CheckoutOutcome.Paid -> {
-                        when (val result = gigsRepo.finalizeAcceptBid(pending.gigId, pending.bidId)) {
-                            is NetworkResult.Success ->
-                                _toast.value = OffersToast("Offer accepted and payment authorized.")
-                            is NetworkResult.Failure ->
-                                _toast.value =
-                                    OffersToast(
-                                        result.error.displayMessage("Couldn't finish accepting this offer."),
-                                        isError = true,
-                                    )
-                        }
-                    }
-                    CheckoutOutcome.Canceled -> {
-                        gigsRepo.abortAcceptBid(pending.gigId, pending.bidId)
-                        _toast.value =
-                            OffersToast(
-                                "Payment authorization is required before accepting this offer.",
-                                isError = true,
-                            )
-                    }
-                    is CheckoutOutcome.Declined -> {
-                        gigsRepo.abortAcceptBid(pending.gigId, pending.bidId)
-                        _toast.value =
-                            OffersToast(outcome.message ?: "Your card was declined.", isError = true)
-                    }
-                }
-                finishAction(refetch = true)
-            }
+            if (gigId.isNullOrBlank() || _actionInFlight.value != null) return
+            bidCheckout.start(gigId, dto.id)
         }
 
         /** Poster rejects a received bid — `POST .../bids/:bidId/reject`. */
@@ -569,7 +513,7 @@ class OffersViewModel
             failure: String,
             call: suspend () -> NetworkResult<*>,
         ) {
-            if (_actionInFlight.value != null) return
+            if (_actionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) return
             _actionInFlight.value = bidId
             applyState()
             viewModelScope.launch {
@@ -695,30 +639,39 @@ class OffersViewModel
             ): RowFooter? {
                 val status = (dto.status ?: "").lowercase(Locale.ROOT)
                 return when (perspective) {
-                    OfferPerspective.Received ->
-                        if (status != "pending") {
+                    OfferPerspective.Received -> {
+                        val counterAccepted = dto.counterStatus == "accepted"
+                        val eligible = status in listOf("pending", "pending_payment") || (status == "countered" && counterAccepted)
+                        if (!eligible || (dto.counterStatus == "pending" && status != "pending_payment")) {
                             null
                         } else {
                             RowFooter(
                                 actions =
-                                    listOf(
-                                        RowFooterAction(
-                                            title = "Reject",
-                                            icon = PantopusIcon.X,
-                                            variant = CompactButtonVariant.Destructive,
-                                            testTag = "offers.${dto.id}.reject",
-                                            onClick = { if (!isBusy) onReject() },
-                                        ),
-                                        RowFooterAction(
-                                            title = "Accept",
-                                            icon = PantopusIcon.Check,
-                                            variant = CompactButtonVariant.Primary,
-                                            testTag = "offers.${dto.id}.accept",
-                                            onClick = { if (!isBusy) onAccept() },
-                                        ),
-                                    ),
+                                    buildList {
+                                        if (status != "pending_payment") {
+                                            add(
+                                                RowFooterAction(
+                                                    title = "Reject",
+                                                    icon = PantopusIcon.X,
+                                                    variant = CompactButtonVariant.Destructive,
+                                                    testTag = "offers.${dto.id}.reject",
+                                                    onClick = { if (!isBusy) onReject() },
+                                                ),
+                                            )
+                                        }
+                                        add(
+                                            RowFooterAction(
+                                                title = if (status == "pending_payment") "Resume payment" else "Accept",
+                                                icon = PantopusIcon.Check,
+                                                variant = CompactButtonVariant.Primary,
+                                                testTag = "offers.${dto.id}.accept",
+                                                onClick = { if (!isBusy) onAccept() },
+                                            ),
+                                        )
+                                    },
                             )
                         }
+                    }
                     OfferPerspective.Sent ->
                         if (status != "pending" && status != "countered") {
                             null
@@ -743,19 +696,22 @@ class OffersViewModel
              * Confirm copy for Accept. Paid offers authorize a hold first,
              * so the dialog quotes the exact amount (RN `handleAcceptBid`).
              */
-            fun acceptConfirmTitle(dto: BidDto): String = if ((dto.bidAmount ?: 0.0) > 0) "Authorize payment method?" else "Accept offer"
+            fun acceptConfirmTitle(dto: BidDto): String = if (agreedAmount(dto) > 0) "Authorize payment method?" else "Accept offer"
 
             fun acceptConfirmMessage(dto: BidDto): String {
-                val amount = dto.bidAmount ?: 0.0
+                val amount = agreedAmount(dto)
                 if (amount <= 0) return "Accept this offer?"
                 return "Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. " +
                     "You are charged only after you confirm the task is completed. " +
                     "If canceled per policy, the hold is released (or only applicable fees apply)."
             }
 
-            fun acceptConfirmCta(dto: BidDto): String = if ((dto.bidAmount ?: 0.0) > 0) "Continue to Payment" else "Accept"
+            fun acceptConfirmCta(dto: BidDto): String = if (agreedAmount(dto) > 0) "Continue to Payment" else "Accept"
 
-            fun acceptConfirmCancel(dto: BidDto): String = if ((dto.bidAmount ?: 0.0) > 0) "Not now" else "Cancel"
+            fun acceptConfirmCancel(dto: BidDto): String = if (agreedAmount(dto) > 0) "Not now" else "Cancel"
+
+            private fun agreedAmount(dto: BidDto): Double =
+                if (dto.counterStatus == "accepted") dto.counterAmount ?: dto.bidAmount ?: 0.0 else dto.bidAmount ?: 0.0
 
             /** `$120.00` — the accept dialog quotes cents, unlike the row. */
             fun formatUsd(amount: Double): String = String.format(Locale.US, "$%.2f", amount)

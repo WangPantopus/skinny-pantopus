@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.offers.BidDto
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetTarget
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
@@ -100,6 +101,8 @@ fun GigDetailScreen(
         rememberPaymentSheet { result ->
             viewModel.onLifecycleCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result))
         }
+
+    GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
     // Phase 5 — join the gig:<id> realtime room while the screen is visible.

@@ -193,6 +193,7 @@ public final class GigDetailViewModel {
     private let api: APIClient
     private let uploader: MultipartUploader
     private let checkout: CheckoutCoordinator
+    private let bidAcceptance: GigBidAcceptanceCoordinator
     private let currentUserId: String?
     /// Phase 6b — lock-screen Live Activity driver. The default real
     /// controller no-ops in tests / previews; tests inject a recorder.
@@ -203,6 +204,7 @@ public final class GigDetailViewModel {
         api: APIClient = .shared,
         uploader: MultipartUploader = .shared,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
+        bidAcceptance: GigBidAcceptanceCoordinator? = nil,
         currentUserId: String? = GigDetailViewModel.currentSignedInUserId(),
         liveActivity: any GigLiveActivityControlling = GigLiveActivityController.shared,
         roomEvents: @escaping @MainActor (String) -> AsyncStream<GigRoomEvent> = { name in
@@ -216,6 +218,7 @@ public final class GigDetailViewModel {
         self.api = api
         self.uploader = uploader
         self.checkout = checkout
+        self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.currentUserId = currentUserId
         self.liveActivity = liveActivity
         self.roomEvents = roomEvents
@@ -1262,42 +1265,32 @@ public extension GigDetailViewModel {
 
     /// Poster accepts a bid: `POST .../bids/:bidId/accept`; paid gigs
     /// return PaymentSheet params → present → `finalize-accept` (or
-    /// `abort-accept` on cancel/decline). Refreshes the gig on success.
+    /// `abort-accept` on explicit cancellation). Unknown outcomes retain recovery.
     func acceptBid(bidId: String) async -> BidAcceptOutcome {
-        guard bidActionInFlight == nil else { return .canceled }
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
         bidActionInFlight = bidId
         defer { bidActionInFlight = nil }
-        do {
-            let response: GigBidAcceptResponse = try await api.request(
-                GigsEndpoints.acceptBid(gigId: gigId, bidId: bidId)
-            )
-            let requiresPayment = response.requiresPaymentSetup == true
-                || response.sheetParams.clientSecret != nil
-            if requiresPayment {
-                let outcome = await checkout.present(response.sheetParams)
-                switch outcome {
-                case .paid:
-                    let _: GigBidAcceptResponse = try await api.request(
-                        GigsEndpoints.finalizeAcceptBid(gigId: gigId, bidId: bidId)
-                    )
-                case .canceled:
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .canceled
-                case let .declined(message), let .failed(message):
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .failed(message: message)
-                }
-            }
-            await refreshSilently()
-            return .accepted
-        } catch {
-            return .failed(message: (error as? APIError)?.errorDescription ?? "Couldn't accept this bid.")
+        let result = await bidAcceptance.accept(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
+        }
+    }
+
+    func cancelBidAcceptance(bidId: String) async -> BidAcceptOutcome {
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
+        bidActionInFlight = bidId
+        defer { bidActionInFlight = nil }
+        let result = await bidAcceptance.cancel(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
         }
     }
 
@@ -1841,7 +1834,8 @@ public extension GigDetailViewModel {
             createdAt: bid.createdAt,
             bidder: bid.bidder,
             counterAmount: clearCounter ? nil : (counterAmount ?? bid.counterAmount),
-            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus)
+            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus),
+            gigId: bid.gigId
         )
     }
 }

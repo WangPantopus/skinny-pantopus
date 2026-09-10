@@ -436,6 +436,7 @@ public struct GigDetailResponse: Decodable, Sendable {
 /// One bid on a gig.
 public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let gigId: String?
     public let userId: String?
     public let bidAmount: Double?
     public let amount: Double?
@@ -451,6 +452,7 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case gigId = "gig_id"
         case userId = "user_id"
         case bidAmount = "bid_amount"
         case amount
@@ -466,6 +468,7 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        gigId = try c.decodeIfPresent(String.self, forKey: .gigId)
         userId = try c.decodeIfPresent(String.self, forKey: .userId)
         bidAmount = try c.decodeIfPresent(Double.self, forKey: .bidAmount)
         amount = try c.decodeIfPresent(Double.self, forKey: .amount)
@@ -488,9 +491,11 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt: String?,
         bidder: GigCreator?,
         counterAmount: Double? = nil,
-        counterStatus: String? = nil
+        counterStatus: String? = nil,
+        gigId: String? = nil
     ) {
         self.id = id
+        self.gigId = gigId
         self.userId = userId
         self.bidAmount = bidAmount
         self.amount = amount
@@ -616,6 +621,10 @@ public struct GigBidAcceptResponse: Decodable, Sendable, Hashable {
     public let bid: GigBidDTO?
     public let message: String?
     public let requiresPaymentSetup: Bool?
+    public let authorizationReady: Bool?
+    public let paymentStatus: String?
+    public let amountCents: Int?
+    public let currency: String?
     public let isSetupIntent: Bool?
     public let payment: PaymentPayload?
     public let publishableKey: String?

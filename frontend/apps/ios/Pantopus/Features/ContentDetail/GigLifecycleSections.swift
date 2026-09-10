@@ -28,6 +28,7 @@ struct GigOwnerBidsPanel: View {
     /// Poster pulls back the counter they sent (`/counter/withdraw`).
     /// Mirrors RN's "Withdraw Counter" (`OffersPanel.tsx:475`).
     var onWithdrawCounter: @MainActor (GigBidDTO) -> Void = { _ in }
+    var onCancelPayment: @MainActor (GigBidDTO) -> Void = { _ in }
     /// Server ranking per bid id, present only when the list came from
     /// `GET /api/v2/gigs/:gigId/offers`. Empty on the `/bids` fallback,
     /// which renders exactly as before.
@@ -76,7 +77,7 @@ struct GigOwnerBidsPanel: View {
     private func bidCard(_ bid: GigBidDTO) -> some View {
         let status = (bid.status ?? "pending").lowercased()
         let rejected = status == "rejected"
-        let inFlight = inFlightBidId == bid.id
+        let inFlight = inFlightBidId != nil
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             headerRow(bid)
             if let message = bid.message, !message.isEmpty {
@@ -147,7 +148,22 @@ struct GigOwnerBidsPanel: View {
 
     @ViewBuilder
     private func statusOrActions(_ bid: GigBidDTO, status: String, inFlight: Bool) -> some View {
-        if status == "countered" {
+        if status == "pending_payment" {
+            panelButton(
+                "Resume payment",
+                icon: .creditCard,
+                style: .primary,
+                identifier: "gigDetail.bid_\(bid.id).resumePayment"
+            ) { onAccept(bid) }
+                .disabled(inFlight)
+            panelButton(
+                "Cancel payment setup",
+                icon: .x,
+                style: .outline,
+                identifier: "gigDetail.bid_\(bid.id).cancelPayment"
+            ) { onCancelPayment(bid) }
+                .disabled(inFlight)
+        } else if status == "countered" {
             statusPill(
                 label: "Countered \(Self.amountLabel(bid.counterAmount ?? 0))",
                 icon: .arrowsRepeat,
@@ -169,6 +185,14 @@ struct GigOwnerBidsPanel: View {
                 ) { onWithdrawCounter(bid) }
                     .disabled(inFlight)
                     .opacity(inFlight ? 0.6 : 1)
+            } else if bid.counterStatus?.lowercased() == "accepted" {
+                panelButton(
+                    "Accept agreed bid",
+                    icon: .check,
+                    style: .primary,
+                    identifier: "gigDetail.bid_\(bid.id).accept"
+                ) { onAccept(bid) }
+                    .disabled(inFlight)
             }
         } else if status == "rejected" {
             statusPill(label: "Rejected", icon: .x, fg: Theme.Color.appTextSecondary, bg: Theme.Color.appSurfaceSunken)

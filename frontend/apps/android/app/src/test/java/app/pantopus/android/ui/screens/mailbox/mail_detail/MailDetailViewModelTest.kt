@@ -98,6 +98,7 @@ class MailDetailViewModelTest {
             packageRepo = packageRepo,
             documentRepo = documentRepo,
             savedStateHandle = SavedStateHandle(mapOf(MAIL_DETAIL_MAIL_ID_KEY to "m1")),
+            checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
         )
 
     // ─── Four states ───────────────────────────────────────

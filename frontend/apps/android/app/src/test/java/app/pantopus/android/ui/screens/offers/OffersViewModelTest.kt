@@ -138,7 +138,12 @@ class OffersViewModelTest {
         runTest {
             coEvery { repo.receivedOffers(any()) } returns NetworkResult.Success(oneReceived)
             coEvery { repo.myBids(any()) } returns NetworkResult.Success(oneSent)
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Loaded)
@@ -154,7 +159,12 @@ class OffersViewModelTest {
         runTest {
             coEvery { repo.receivedOffers(any()) } returns NetworkResult.Success(emptyReceived)
             coEvery { repo.myBids(any()) } returns NetworkResult.Success(emptySent)
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Empty)
@@ -168,7 +178,12 @@ class OffersViewModelTest {
         runTest {
             coEvery { repo.receivedOffers(any()) } returns NetworkResult.Success(emptyReceived)
             coEvery { repo.myBids(any()) } returns NetworkResult.Success(emptySent)
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             vm.load()
             vm.selectTab(OffersTab.SENT)
             val state = vm.state.value
@@ -185,7 +200,12 @@ class OffersViewModelTest {
                 NetworkResult.Failure(NetworkError.Server(500, null))
             coEvery { repo.myBids(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Error)
@@ -361,12 +381,38 @@ class OffersViewModelTest {
         assertEquals("counter $185", rowSent.metaTail)
     }
 
+    @Test
+    fun pending_payment_row_resumes_the_exact_bid_without_reject_action() {
+        var selected: String? = null
+        val bid = dto("resume", status = "pending_payment")
+        val footer = checkNotNull(OffersViewModel.footer(bid, OfferPerspective.Received, false, { selected = bid.id }, {}, {}))
+        assertEquals(listOf("Resume payment"), footer.actions.map { it.title })
+        footer.actions.single().onClick()
+        assertEquals("resume", selected)
+    }
+
+    @Test
+    fun accepted_counter_can_continue_to_payment_but_unaccepted_counter_cannot() {
+        val bid = dto("counter", status = "countered", counterAmount = 65.0).copy(counterStatus = "accepted")
+        val footer = OffersViewModel.footer(bid, OfferPerspective.Received, false, {}, {}, {})
+        assertEquals(listOf("Reject", "Accept"), footer?.actions?.map { it.title })
+        org.junit.Assert.assertNull(
+            OffersViewModel.footer(bid.copy(counterStatus = "pending"), OfferPerspective.Received, false, {}, {}, {}),
+        )
+        assertTrue(OffersViewModel.acceptConfirmMessage(bid).contains("65.00"))
+    }
+
     // MARK: - Top-bar & tabs
 
     @Test
     fun filter_top_bar_action_always_present() =
         runTest {
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             assertNotNull(vm.topBarAction.value)
             assertEquals(PantopusIcon.Filter, vm.topBarAction.value?.icon)
             assertEquals(true, vm.topBarAction.value?.isEnabled)
@@ -374,7 +420,12 @@ class OffersViewModelTest {
 
     @Test
     fun tabs_expose_received_and_sent_in_order() {
-        val vm = OffersViewModel(repo, gigsRepo)
+        val vm =
+            OffersViewModel(
+                repo,
+                gigsRepo,
+                checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+            )
         assertEquals(2, vm.tabs.value.size)
         assertEquals(OffersTab.RECEIVED, vm.tabs.value[0].id)
         assertEquals("Received", vm.tabs.value[0].label)
@@ -387,7 +438,12 @@ class OffersViewModelTest {
         runTest {
             coEvery { repo.receivedOffers(any()) } returns NetworkResult.Success(oneReceived)
             coEvery { repo.myBids(any()) } returns NetworkResult.Success(oneSent)
-            val vm = OffersViewModel(repo, gigsRepo)
+            val vm =
+                OffersViewModel(
+                    repo,
+                    gigsRepo,
+                    checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
+                )
             vm.load()
             vm.selectTab(OffersTab.SENT)
             val state = vm.state.value
