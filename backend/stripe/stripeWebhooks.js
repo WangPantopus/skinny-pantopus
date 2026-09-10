@@ -223,6 +223,9 @@ router.post('/', async (req, res) => {
 
       // ============ REFUND EVENTS ============
 
+      case 'refund.created':
+      case 'refund.updated':
+      case 'refund.failed':
       case 'charge.refund.updated':
         await handleRefundUpdated(event.data.object);
         break;
@@ -954,57 +957,12 @@ async function handleChargeFailed(charge) {
 }
 
 async function handleChargeRefunded(charge) {
-  logger.info('Charge refunded', {
+  // Events may arrive out of order. Read current exact provider receipts and
+  // atomically reconcile them; durable failures must retry the webhook.
+  return require('../services/paymentRefundService').reconcileEvent({
+    paymentIntentId: typeof charge.payment_intent === 'object' ? charge.payment_intent?.id : charge.payment_intent,
     chargeId: charge.id,
-    amountRefunded: charge.amount_refunded,
   });
-
-  const isFullRefund = charge.amount_refunded === charge.amount;
-
-  const payment = await findPaymentByCharge(charge.id);
-  if (!payment) {
-    // Fallback: look up by PI
-    await supabaseAdmin
-      .from('Payment')
-      .update({
-        payment_status: isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL,
-        refunded_amount: charge.amount_refunded,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('stripe_payment_intent_id', charge.payment_intent);
-    return;
-  }
-
-  // Use state machine transition if possible
-  const targetState = isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL;
-
-  if (payment.payment_status === PAYMENT_STATES.REFUND_PENDING) {
-    try {
-      await transitionPaymentStatus(payment.id, targetState, {
-        refunded_amount: charge.amount_refunded,
-      });
-    } catch (transErr) {
-      // Direct update fallback
-      await supabaseAdmin
-        .from('Payment')
-        .update({
-          payment_status: targetState,
-          refunded_amount: charge.amount_refunded,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payment.id);
-    }
-  } else {
-    // Direct update for non-state-machine flows
-    await supabaseAdmin
-      .from('Payment')
-      .update({
-        payment_status: targetState,
-        refunded_amount: charge.amount_refunded,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', payment.id);
-  }
 }
 
 // ============================================================
@@ -1554,18 +1512,10 @@ async function handlePayoutFailed(payout, connectedAccountId) {
 // ============================================================
 
 async function handleRefundUpdated(refund) {
-  logger.info('Refund updated', {
-    refundId: refund.id,
-    status: refund.status,
+  return require('../services/paymentRefundService').reconcileEvent({
+    paymentIntentId: typeof refund.payment_intent === 'object' ? refund.payment_intent?.id : refund.payment_intent,
+    chargeId: typeof refund.charge === 'object' ? refund.charge?.id : refund.charge,
   });
-
-  await supabaseAdmin
-    .from('Refund')
-    .update({
-      refund_status: refund.status,
-      refund_succeeded_at: refund.status === 'succeeded' ? new Date().toISOString() : null,
-    })
-    .eq('stripe_refund_id', refund.id);
 }
 
 async function handlePaymentMethodAttached(paymentMethod) {

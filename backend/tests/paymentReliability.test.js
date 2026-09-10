@@ -33,8 +33,14 @@ const processPendingTransfers = require('../jobs/processPendingTransfers');
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
-  walletService.creditGigIncome.mockResolvedValue({ id: 'wtx_mock_1' });
-  walletService.creditTipIncome.mockResolvedValue({ id: 'wtx_mock_tip_1' });
+  walletService.creditGigIncome.mockImplementation(async (user, amount, gig, payment) => {
+    const tx = { id: `wtx_${payment}`, payment_id: payment, user_id: user, amount, type: 'gig_income', direction: 'credit' };
+    getTable('WalletTransaction').push(tx); return tx;
+  });
+  walletService.creditTipIncome.mockImplementation(async (user, amount, gig, payment) => {
+    const tx = { id: `wtx_${payment}`, payment_id: payment, user_id: user, amount, type: 'tip_income', direction: 'credit' };
+    getTable('WalletTransaction').push(tx); return tx;
+  });
 });
 
 // ── Helpers ──

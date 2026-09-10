@@ -145,6 +145,7 @@ const attachPaymentMethodSchema = Joi.object({
 });
 
 const createRefundSchema = Joi.object({
+  requestId: Joi.string().uuid().optional(),
   amount: Joi.number().integer().min(50).optional(), // If not provided, full refund
   reason: Joi.string().valid(
     'duplicate', 'fraudulent', 'requested_by_customer', 
@@ -869,66 +870,27 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
  * POST /api/payments/:paymentId/refund
  * Create refund
  */
+function refundError(res, err) {
+  return res.status(err.statusCode || 503).json({ error: err.message, code: err.code,
+    ...(err.refundRequest ? { refundRequest: err.refundRequest } : {}) });
+}
+router.get('/:paymentId/refunds', verifyToken, async (req, res) => {
+  try {
+    const refundService = require('../services/paymentRefundService');
+    // The service rechecks the current persisted admin role. Token claims alone
+    // never grant access to another payer's receipt history.
+    const result = await refundService.history(req.params.paymentId, req.user.id, req.user.role === 'admin' ? 'admin' : 'payer');
+    return res.json(result);
+  } catch (err) { return refundError(res, err); }
+});
 router.post('/:paymentId/refund', verifyToken, validate(createRefundSchema), async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const userId = req.user.id;
-    const { amount, reason, description } = req.body;
-    
-    // Get payment
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', paymentId)
-      .single();
-
-    if (paymentError) {
-      logger.error('Error fetching payment for refund', { error: paymentError.message, paymentId });
-      return res.status(500).json({ error: 'Failed to fetch payment' });
-    }
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    // Only the payer can initiate a refund
-    if (payment.payer_id !== userId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Terminal states cannot be refunded
-    const terminalStates = ['refunded_full', 'canceled', 'disputed'];
-    if (terminalStates.includes(payment.payment_status)) {
-      return res.status(400).json({ error: 'Payment is in a terminal state and cannot be refunded' });
-    }
-
-    // Transferred payments require admin/support intervention
-    if (payment.payment_status === 'transferred') {
-      return res.status(403).json({ error: 'Payment already transferred. Contact support for refund.' });
-    }
-
-    // Default to full refund
-    const refundAmount = amount || payment.amount_total;
-    
-    const result = await stripeService.createRefund(
-      paymentId,
-      refundAmount,
-      reason,
-      userId
-    );
-    
-    res.status(201).json({
-      message: 'Refund created successfully',
-      refund: result.refund
+    const result = await require('../services/paymentRefundService').create({
+      amount: req.body.amount, reason: req.body.reason, description: req.body.description, requestId: req.body.requestId,
+      paymentId: req.params.paymentId, actorId: req.user.id, actorMode: 'payer',
     });
-    
-  } catch (err) {
-    logger.error('Refund creation error', { error: err.message, paymentId: req.params.paymentId });
-    res.status(500).json({ 
-      error: 'Failed to create refund',
-      message: err.message 
-    });
-  }
+    return res.status(result.success ? 200 : 202).json(result);
+  } catch (err) { return refundError(res, err); }
 });
 
 /**
@@ -937,6 +899,7 @@ router.post('/:paymentId/refund', verifyToken, validate(createRefundSchema), asy
  * Delegates to createSmartRefund which handles Stripe refund + transfer reversal.
  */
 const adminRefundSchema = Joi.object({
+  requestId: Joi.string().uuid().optional(),
   amount: Joi.number().integer().min(50).optional(),
   reason: Joi.string().valid(
     'duplicate', 'fraudulent', 'requested_by_customer',
@@ -947,66 +910,12 @@ const adminRefundSchema = Joi.object({
 
 router.post('/:paymentId/admin-refund', verifyToken, requireAdmin, validate(adminRefundSchema), async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const adminUserId = req.user.id;
-    const { amount, reason, description } = req.body;
-
-    // `maybeSingle`, not `single`: real PostgREST reports zero rows from
-    // `.single()` as an ERROR (PGRST116), so the guard below answered a
-    // missing payment with 500 "Failed to fetch payment" instead of the
-    // 404 three lines further down. The test suite did not catch it
-    // because the in-memory mock collapsed the two terminals; it models
-    // them separately now, which is what surfaced this.
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', paymentId)
-      .maybeSingle();
-
-    if (paymentError) {
-      logger.error('Admin refund: error fetching payment', { error: paymentError.message, paymentId });
-      return res.status(500).json({ error: 'Failed to fetch payment' });
-    }
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const terminalStates = ['refunded_full', 'canceled'];
-    if (terminalStates.includes(payment.payment_status)) {
-      return res.status(400).json({ error: `Payment is in terminal state (${payment.payment_status}) and cannot be refunded` });
-    }
-
-    const refundAmount = amount || payment.amount_total;
-
-    logger.info('Admin refund initiated', {
-      adminUserId,
-      paymentId,
-      amount: refundAmount,
-      reason,
-      description: description || null,
-      currentStatus: payment.payment_status,
+    const result = await require('../services/paymentRefundService').create({
+      amount: req.body.amount, reason: req.body.reason, description: req.body.description, requestId: req.body.requestId,
+      paymentId: req.params.paymentId, actorId: req.user.id, actorMode: 'admin',
     });
-
-    const result = await stripeService.createSmartRefund(
-      paymentId,
-      refundAmount,
-      reason,
-      adminUserId
-    );
-
-    res.status(201).json({
-      message: 'Admin refund created successfully',
-      refund: result.refund,
-    });
-
-  } catch (err) {
-    logger.error('Admin refund error', { error: err.message, paymentId: req.params.paymentId });
-    res.status(500).json({
-      error: 'Failed to create admin refund',
-      message: err.message,
-    });
-  }
+    return res.status(result.success ? 200 : 202).json(result);
+  } catch (err) { return refundError(res, err); }
 });
 
 // ============ PAYMENT METHOD ROUTES ============

@@ -87,6 +87,7 @@ const autoRemindWorker = require('./autoRemindWorker');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
+const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 // Persistent login registry housekeeping
 const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
@@ -115,6 +116,7 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'expirePendingPaymentBids',
   'deliverGigAcceptance',
   'reconcileGigAcceptance',
+  'reconcilePaymentRefunds',
   'computeReputation',
   'earnRiskReview',
   'processClaimWindows',
@@ -205,6 +207,8 @@ function startJobs(options = {}) {
     scheduled: true,
     timezone: 'UTC',
   });
+
+  scheduleCron('*/5 * * * *', wrapJob('reconcilePaymentRefunds', reconcilePaymentRefunds), { scheduled: true, timezone: 'UTC' });
 
   // ─── Retry Capture Failures ───
   // Runs every 15 minutes at :20/:35/:50/:05.

@@ -42,7 +42,10 @@ beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
   stripeService.capturePayment.mockResolvedValue({ success: true, chargeId: 'ch_lifecycle_001' });
-  walletService.creditGigIncome.mockResolvedValue({ id: 'wtx_lifecycle_001' });
+  walletService.creditGigIncome.mockImplementation(async (user, amount, gig, payment) => {
+    const tx = { id: `wtx_${payment}`, payment_id: payment, user_id: user, amount, type: 'gig_income', direction: 'credit' };
+    getTable('WalletTransaction').push(tx); return tx;
+  });
 });
 
 // ── Constants ──

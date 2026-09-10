@@ -22,6 +22,10 @@ const processPendingTransfers = require('../jobs/processPendingTransfers');
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  walletService.creditGigIncome.mockImplementation(async (user, amount, gig, payment) => {
+    const tx = { id: `wtx_${payment}`, payment_id: payment, user_id: user, amount, type: 'gig_income', direction: 'credit' };
+    getTable('WalletTransaction').push(tx); return tx;
+  });
 });
 
 function hoursAgo(h) {

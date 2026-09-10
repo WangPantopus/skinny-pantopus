@@ -8,6 +8,7 @@ const refreshDiscoveryCache = require('./refreshDiscoveryCache');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
+const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 const computeReputation = require('./computeReputation');
 const earnRiskReview = require('./earnRiskReview');
 const processClaimWindows = require('./processClaimWindows');
@@ -29,6 +30,7 @@ const QUEUE_OPTIONS = {
 };
 
 const JOBS = [
+  { name: 'reconcile-payment-refunds', cron: '*/5 * * * *', fn: reconcilePaymentRefunds },
   { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
   { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },
   { name: 'recompute-utility-scores',     cron: '10,25,40,55 * * * *', fn: recomputeUtilityScores },

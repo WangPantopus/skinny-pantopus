@@ -5,10 +5,10 @@
 //   - Stranded transfer_scheduled with no wallet credit → reverted to captured_hold
 //   - Stranded transfer_scheduled with wallet credit → advanced to transferred
 //   - Stranded transfer_pending with wallet credit → advanced to transferred
-//   - Stranded transfer_pending with no wallet credit → reverted to captured_hold
+//   - Stranded transfer_pending with no wallet credit → unknown outcome retained
 // ============================================================
 
-const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 const { PAYMENT_STATES, transitionPaymentStatus, canTransition } = require('../stripe/paymentStateMachine');
 
 jest.mock('../services/walletService', () => ({
@@ -21,7 +21,24 @@ const processPendingTransfers = require('../jobs/processPendingTransfers');
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
-  walletService.creditGigIncome.mockResolvedValue({ id: 'wtx_mock_1' });
+  walletService.creditGigIncome.mockImplementation(async (user, amount, gig, payment) => {
+    getTable('WalletTransaction').push({ id: 'wtx_mock_1', payment_id: payment, user_id: user, amount, type: 'gig_income', direction: 'credit' });
+    return { id: 'wtx_mock_1' };
+  });
+  // Transaction boundary is exercised with real PostgreSQL separately. This
+  // double lets the job tests exercise admission, failures and notifications.
+  setRpcMock(async (name, args) => {
+    if (name !== 'reconcile_payment_wallet_release') throw new Error('Unexpected RPC');
+    const p = getTable('Payment').find(x => x.id === args.p_payment_id);
+    if (!p) return { data: { error: 'NOT_FOUND' } };
+    if (!['transfer_scheduled', 'transfer_pending'].includes(p.payment_status)) return { data: { payment: p } };
+    const credited = getTable('WalletTransaction').some(x => x.payment_id === p.id && x.amount === p.amount_to_payee && x.direction === 'credit' && x.user_id === p.payee_id);
+    if (!credited && p.payment_status === 'transfer_pending') return { data: { error: 'TRANSFER_UNKNOWN' } };
+    p.payment_status = credited ? 'transferred' : 'captured_hold';
+    if (credited) { p.transfer_status = 'wallet_credited'; p.transfer_completed_at = new Date().toISOString(); }
+    const g = getTable('Gig').find(x => x.payment_id === p.id); if (g) g.payment_status = p.payment_status;
+    return { data: { payment: p } };
+  });
 });
 
 // ── Helpers ──
@@ -153,7 +170,7 @@ describe('Stranded transfer recovery', () => {
       id: 'wtx-existing',
       payment_id: 'pay-tr-001',
       type: 'gig_income',
-      amount: 8500,
+      amount: 8500, direction: 'credit', user_id: 'user-payee',
     }]);
 
     await processPendingTransfers();
@@ -177,7 +194,7 @@ describe('Stranded transfer recovery', () => {
       id: 'wtx-existing-tip',
       payment_id: 'pay-tr-001',
       type: 'tip_income',
-      amount: 8500,
+      amount: 8500, direction: 'credit', user_id: 'user-payee',
     }]);
 
     await processPendingTransfers();
@@ -200,7 +217,7 @@ describe('Stranded transfer recovery', () => {
       id: 'wtx-existing-2',
       payment_id: 'pay-tr-001',
       type: 'gig_income',
-      amount: 8500,
+      amount: 8500, direction: 'credit', user_id: 'user-payee',
     }]);
 
     await processPendingTransfers();
@@ -209,7 +226,7 @@ describe('Stranded transfer recovery', () => {
     expect(payment.payment_status).toBe(PAYMENT_STATES.TRANSFERRED);
   });
 
-  test('transfer_pending with no wallet credit → reverted to captured_hold', async () => {
+  test('transfer_pending with no wallet credit → unknown outcome retained', async () => {
     // Set cooling_off_ends_at to the future so Phase 2 doesn't re-process
     seedTable('Payment', [makeEligiblePayment({
       payment_status: PAYMENT_STATES.TRANSFER_PENDING,
@@ -226,7 +243,7 @@ describe('Stranded transfer recovery', () => {
     await processPendingTransfers();
 
     const payment = getTable('Payment').find((p) => p.id === 'pay-tr-001');
-    expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
+    expect(payment.payment_status).toBe(PAYMENT_STATES.TRANSFER_PENDING);
   });
 
   test('recently stuck payment (< 10 min) is NOT recovered yet', async () => {
@@ -270,4 +287,12 @@ describe('Catch block recovery', () => {
     const payment = getTable('Payment').find((p) => p.id === 'pay-tr-001');
     expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
   });
+});
+
+test('reconciliation database failure does not reset a stranded payment', async () => {
+  seedTable('Payment', [makeEligiblePayment({ payment_status: 'transfer_pending' })]);
+  setRpcMock(async () => ({ error: { code: '08006' } }));
+  await processPendingTransfers();
+  expect(getTable('Payment')[0].payment_status).toBe('transfer_pending');
+  expect(walletService.creditGigIncome).not.toHaveBeenCalled();
 });

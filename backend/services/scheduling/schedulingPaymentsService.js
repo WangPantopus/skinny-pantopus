@@ -133,8 +133,9 @@ async function refundForBooking({ booking, initiatedBy, reason = 'booking_cancel
     return { refunded: false, amount: 0 };
   }
   try {
-    await stripeService.createSmartRefund(payment.id, amount, reason, initiatedBy || 'system');
-    return { refunded: true, amount };
+    const result = await stripeService.createSmartRefund(payment.id, amount, reason, initiatedBy || 'system');
+    return { refunded: result.success === true, amount, pending: ['pending', 'requires_action'].includes(result.refundRequest?.status),
+      refundRequest: result.refundRequest || null };
   } catch (err) {
     logger.error('[schedulingPaymentsService] refund failed', { paymentId: payment.id, error: err.message });
     return { refunded: false, error: err.message };

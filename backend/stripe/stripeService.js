@@ -1203,73 +1203,14 @@ class StripeService {
 
   /**
    * Create an explicit transfer to the provider's Connect account.
-   * Called by the processPendingTransfers background job after cooling off.
-   * Uses source_transaction to link the transfer to the original charge.
+   * Currently disabled; active settlement credits the Pantopus wallet.
    */
-  async createTransfer(paymentId) {
-    try {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('*')
-        .eq('id', paymentId)
-        .single();
-
-      if (!payment) throw new Error('Payment not found');
-      if (!['captured_hold', 'transfer_scheduled'].includes(payment.payment_status)) {
-        throw new Error(`Cannot transfer: payment is in ${payment.payment_status} state`);
-      }
-      if (!payment.stripe_charge_id) {
-        throw new Error('No charge ID on payment — cannot create transfer');
-      }
-
-      // Get payee's Stripe Connect account
-      const { data: payeeAccount } = await supabaseAdmin
-        .from('StripeAccount')
-        .select('stripe_account_id, payouts_enabled')
-        .eq('user_id', payment.payee_id)
-        .single();
-
-      if (!payeeAccount) {
-        throw new Error('Payee Stripe account not found');
-      }
-      if (!payeeAccount.payouts_enabled) {
-        throw new Error('Payee payouts not enabled — skipping transfer');
-      }
-
-      // Create transfer
-      const transfer = await stripe.transfers.create({
-        amount: payment.amount_to_payee,
-        currency: payment.currency || 'usd',
-        destination: payeeAccount.stripe_account_id,
-        source_transaction: payment.stripe_charge_id,
-        metadata: {
-          payment_id: paymentId,
-          gig_id: payment.gig_id || '',
-          payer_id: payment.payer_id,
-          payee_id: payment.payee_id,
-        },
-      });
-
-      // Transition state
-      await transitionPaymentStatus(paymentId, PAYMENT_STATES.TRANSFER_PENDING, {
-        stripe_transfer_id: transfer.id,
-        transfer_status: 'in_transit',
-        transfer_scheduled_at: new Date().toISOString(),
-      });
-
-      logger.info('Transfer created', {
-        paymentId,
-        transferId: transfer.id,
-        amount: payment.amount_to_payee,
-        destination: payeeAccount.stripe_account_id,
-      });
-
-      return { success: true, transferId: transfer.id };
-
-    } catch (err) {
-      logger.error('Error creating transfer', { error: err.message, paymentId });
-      throw err;
-    }
+  async createTransfer(_paymentId) {
+    // Active gig settlement uses the fenced wallet transaction. The historical
+    // unused Connect helper issued an external transfer before reserving local
+    // state, which could race a refund. Keep it closed until it has its own
+    // durable transfer operation and exact unknown-response reconciliation.
+    throw conflict('Direct Connect transfers require a durable settlement workflow.');
   }
 
   /**
@@ -1345,162 +1286,15 @@ class StripeService {
    * @param {string} reason - Refund reason
    * @param {string} initiatedBy - UUID of who initiated
    */
-  async createSmartRefund(paymentId, amount, reason, initiatedBy) {
-    try {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('*')
-        .eq('id', paymentId)
-        .single();
-
-      if (!payment) throw new Error('Payment not found');
-
-      const refundAmount = amount || payment.amount_total;
-
-      // Validate refund amount doesn't exceed remaining refundable amount
-      const alreadyRefunded = payment.refunded_amount || 0;
-      const maxRefundable = payment.amount_total - alreadyRefunded;
-      if (refundAmount <= 0) {
-        throw new Error('Refund amount must be positive');
-      }
-      if (refundAmount > maxRefundable) {
-        throw new Error(
-          `Refund amount ($${(refundAmount / 100).toFixed(2)}) exceeds remaining refundable amount ($${(maxRefundable / 100).toFixed(2)})`
-        );
-      }
-
-      const status = payment.payment_status;
-
-      // Scenario 1: Before capture — cancel PI (release hold)
-      if ([PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.AUTHORIZE_PENDING].includes(status)) {
-        return await this.cancelAuthorization(paymentId);
-      }
-
-      // Scenario 2: After capture, before transfer
-      if ([PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED].includes(status)) {
-        // Move to intermediate state BEFORE any external side effects
-        await transitionPaymentStatus(paymentId, PAYMENT_STATES.REFUND_PENDING, {
-          refund_reason: reason,
-        });
-
-        const refund = await stripe.refunds.create({
-          payment_intent: payment.stripe_payment_intent_id,
-          amount: refundAmount,
-          reason: reason === 'fraudulent' ? 'fraudulent' : 'requested_by_customer',
-          metadata: { payment_id: paymentId, initiated_by: initiatedBy },
-        });
-
-        // Save refund record after Stripe succeeds
-        await supabaseAdmin.from('Refund').insert({
-          payment_id: paymentId,
-          stripe_refund_id: refund.id,
-          amount: refundAmount,
-          reason,
-          refund_status: refund.status,
-          initiated_by: initiatedBy,
-        });
-
-        const isFullRefund = refundAmount >= payment.amount_total;
-        await transitionPaymentStatus(
-          paymentId,
-          isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL,
-          {
-            refunded_amount: (payment.refunded_amount || 0) + refundAmount,
-          }
-        );
-
-        logger.info('Refund created (pre-transfer)', { paymentId, refundAmount, refundId: refund.id });
-        return { success: true, refundId: refund.id };
-      }
-
-      // Scenario 3: After transfer — refund customer + reverse transfer
-      if ([PAYMENT_STATES.TRANSFER_PENDING, PAYMENT_STATES.TRANSFERRED].includes(status)) {
-        // Move to intermediate state BEFORE any external side effects
-        await transitionPaymentStatus(paymentId, PAYMENT_STATES.REFUND_PENDING, {
-          refund_reason: reason,
-        });
-
-        // Step 1: Refund the customer
-        const refund = await stripe.refunds.create({
-          payment_intent: payment.stripe_payment_intent_id,
-          amount: refundAmount,
-          reason: reason === 'fraudulent' ? 'fraudulent' : 'requested_by_customer',
-          metadata: { payment_id: paymentId, initiated_by: initiatedBy },
-        });
-
-        await supabaseAdmin.from('Refund').insert({
-          payment_id: paymentId,
-          stripe_refund_id: refund.id,
-          amount: refundAmount,
-          reason,
-          refund_status: refund.status,
-          initiated_by: initiatedBy,
-        });
-
-        // Step 2: Reverse the transfer to claw back from provider
-        let reversalResult = null;
-        if (payment.stripe_transfer_id) {
-          // Calculate the provider's portion of the refund
-          const providerRefundAmount = Math.min(
-            Math.floor(refundAmount * payment.amount_to_payee / payment.amount_total),
-            payment.amount_to_payee
-          );
-
-          try {
-            const reversal = await stripe.transfers.createReversal(
-              payment.stripe_transfer_id,
-              {
-                amount: providerRefundAmount,
-                metadata: { payment_id: paymentId, reason },
-              }
-            );
-            reversalResult = reversal;
-
-            await supabaseAdmin.from('Payment').update({
-              stripe_transfer_reversal_id: reversal.id,
-            }).eq('id', paymentId);
-
-            logger.info('Transfer reversed', { paymentId, reversalId: reversal.id, amount: providerRefundAmount });
-
-          } catch (reversalErr) {
-            // Reversal failed — connected account has insufficient balance
-            logger.error('Transfer reversal failed — provider may have insufficient balance', {
-              error: reversalErr.message,
-              paymentId,
-              transferId: payment.stripe_transfer_id,
-            });
-            // Record the failure — this becomes a debt the provider owes
-            await supabaseAdmin.from('Payment').update({
-              metadata: {
-                ...payment.metadata,
-                reversal_failed: true,
-                reversal_failure_reason: reversalErr.message,
-                reversal_failed_at: new Date().toISOString(),
-                provider_debt_amount: providerRefundAmount,
-              },
-            }).eq('id', paymentId);
-          }
-        }
-
-        const isFullRefund = refundAmount >= payment.amount_total;
-        await transitionPaymentStatus(
-          paymentId,
-          isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL,
-          {
-            refunded_amount: (payment.refunded_amount || 0) + refundAmount,
-          }
-        );
-
-        logger.info('Refund created (post-transfer)', { paymentId, refundAmount, refundId: refund.id });
-        return { success: true, refundId: refund.id, reversalResult };
-      }
-
-      throw new Error(`Cannot refund: payment is in ${status} state`);
-
-    } catch (err) {
-      logger.error('Error creating smart refund', { error: err.message, paymentId });
-      throw err;
-    }
+  async createSmartRefund(paymentId, amount, reason, initiatedBy, options = {}) {
+    // Existing internal cancellation callers retain policy authority. HTTP
+    // routes explicitly use payer/admin modes in the dedicated service.
+    const normalized = ['duplicate', 'fraudulent', 'requested_by_customer', 'work_not_completed', 'other'].includes(reason) ? reason : 'other';
+    return require('../services/paymentRefundService').create({
+      paymentId, amount: amount ?? null, reason: normalized, actorId: initiatedBy,
+      actorMode: options.actorMode || 'policy', requestId: options.requestId,
+      description: options.description || (normalized !== reason ? reason : null),
+    });
   }
 
   /**

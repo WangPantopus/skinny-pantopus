@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Durable refund checkpoint — September 9
+
+Payer/admin refunds and authorization-hold releases now retain one protected
+request identity and reconcile exact provider receipts. Refund reservation,
+provider lease and wallet credit recheck their current state under database
+locks; a new dispute prevents a new refund mutation. Unknown outcomes retain
+the same request, and a provider-confirmed refund remains distinct from any
+unrecovered worker balance. The [refund report](paid-gig-refund-receipts-2026-09-09.md)
+records **4,768 backend tests passing (16 skipped)**, **37 final focused tests**,
+all privacy gates, **21 fresh SQL contracts**, zero function-lint errors and
+**28 concurrent database connections**, plus populated-upgrade preservation.
+Root's independent review of the final dispute/lease/state guards passed.
+
+Web refund controls are committed at `13a8dc9b8`; their [report](paid-gig-web-refunds-2026-09-09.md)
+records the separate client evidence. Both source checkpoints are in draft
+[PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34); current-head CI
+and integration remain required. No provider or hosted migration/runtime change
+ran. **Next: release residual worker earnings after a pre-release partial
+refund**, then historical assigned authorization, native refund controls and a
+fresh complete sandbox paid-gig journey. Historical Connect/debt recovery and
+broader dispute accounting remain explicit release gates. Completed saved-card
+fixtures remain cleaned and must not be reused.
+
 ### Web refund recovery checkpoint — September 9
 
 The existing payer payment section now has explicit refund/hold-release
@@ -22,10 +45,10 @@ request identity and terms across restart; exact receipts determine completion.
 Account, session and API changes fence the old screen. The [web refund report](paid-gig-web-refunds-2026-09-09.md)
 records the full **1,060-test web pass**, **26 focused UI/shared-client checks**,
 lint, zero-error typecheck and independent contract review. This source depends
-on the same PR's durable refund backend/migration, which is still being verified;
+on the same PR's durable refund backend/migration recorded above;
 it must not deploy independently.
 
-The refund review found and is closing a dispute-at-provider-lease race. Remaining
+The subsequent backend checkpoint closes the dispute-at-provider-lease race. Remaining
 paid-gig work includes native refund controls, historical assigned authorization,
 residual earnings after partial refunds, complete test-mode completion/capture/
 notification/refund/cleanup and applicable release checks. No provider operation

@@ -23,85 +23,20 @@ const { createNotification } = require('../services/notificationService');
 const { sendAlert, SEVERITY } = require('../services/alertingService');
 const logger = require('../utils/logger');
 
-// ─── Helper: check if wallet was already credited for a payment ───
-async function wasWalletCredited(paymentId) {
-  const { data, error } = await supabaseAdmin
-    .from('WalletTransaction')
-    .select('id')
-    .eq('payment_id', paymentId)
-    // A payment can credit wallet as gig income or tip income.
-    .in('type', ['gig_income', 'tip_income'])
-    .limit(1);
-
-  if (error) {
-    logger.error('wasWalletCredited: query error', { paymentId, error: error.message });
-    return false;
-  }
-  return data && data.length > 0;
+// The transaction rechecks exact income proof and serializes with refunds.
+async function reconcileWalletRelease(paymentId) {
+  const { data, error } = await supabaseAdmin.rpc('reconcile_payment_wallet_release', { p_payment_id: paymentId });
+  if (error || !data || data.error) throw new Error('Wallet release requires reconciliation');
+  return data.payment;
 }
-
-// ─── Recovery: unstrand transfer_scheduled / transfer_pending payments ───
-async function recoverStrandedTransfers(nowIso) {
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-
-  const { data: stranded, error } = await supabaseAdmin
-    .from('Payment')
-    .select('id, gig_id, payment_status')
+async function recoverStrandedTransfers() {
+  const { data, error } = await supabaseAdmin.from('Payment').select('id')
     .in('payment_status', [PAYMENT_STATES.TRANSFER_SCHEDULED, PAYMENT_STATES.TRANSFER_PENDING])
-    .lte('updated_at', tenMinAgo)
-    .is('dispute_id', null);
-
-  if (error) {
-    logger.error('recoverStrandedTransfers: query error', { error: error.message });
-    return;
-  }
-
-  if (!stranded || stranded.length === 0) return;
-
-  logger.warn('recoverStrandedTransfers: found stranded payments', { count: stranded.length });
-
-  for (const payment of stranded) {
-    try {
-      const credited = await wasWalletCredited(payment.id);
-
-      if (credited) {
-        // Wallet was credited — advance to transferred
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFERRED, {
-          transfer_status: 'wallet_credited',
-          transfer_completed_at: nowIso,
-        });
-        logger.info('recoverStrandedTransfers: advanced to transferred (wallet already credited)', {
-          paymentId: payment.id,
-          previousStatus: payment.payment_status,
-        });
-      } else {
-        // Wallet was NOT credited — revert to captured_hold for re-processing
-        // Use compare-and-swap to avoid overwriting a concurrent transition
-        await supabaseAdmin
-          .from('Payment')
-          .update({ payment_status: PAYMENT_STATES.CAPTURED_HOLD, updated_at: nowIso })
-          .eq('id', payment.id)
-          .eq('payment_status', payment.payment_status);
-
-        if (payment.gig_id) {
-          await supabaseAdmin
-            .from('Gig')
-            .update({ payment_status: PAYMENT_STATES.CAPTURED_HOLD, updated_at: nowIso })
-            .eq('id', payment.gig_id)
-            .eq('payment_status', payment.payment_status);
-        }
-
-        logger.info('recoverStrandedTransfers: reverted to captured_hold (no wallet credit)', {
-          paymentId: payment.id,
-          previousStatus: payment.payment_status,
-        });
-      }
-    } catch (recoverErr) {
-      logger.error('recoverStrandedTransfers: failed to recover payment', {
-        paymentId: payment.id,
-        error: recoverErr.message,
-      });
-    }
+    .lte('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()).is('dispute_id', null);
+  if (error) throw new Error('Wallet release recovery is unavailable');
+  for (const payment of data || []) {
+    try { await reconcileWalletRelease(payment.id); }
+    catch (err) { logger.error('Wallet release remains pending', { paymentId: payment.id, error: err.message }); }
   }
 }
 
@@ -248,11 +183,8 @@ async function processPendingTransfers() {
         // Wallet credit is synchronous — no need for intermediate
         // transfer_pending state. transfer_pending is reserved for
         // async Stripe Transfers if ever needed in the future.
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFERRED, {
-          transfer_status: 'wallet_credited',
-          transfer_scheduled_at: nowIso,
-          transfer_completed_at: new Date().toISOString(),
-        });
+        const completed = await reconcileWalletRelease(payment.id);
+        if (completed?.payment_status !== PAYMENT_STATES.TRANSFERRED) throw new Error('Wallet release state changed');
 
         successCount++;
 
@@ -311,58 +243,9 @@ async function processPendingTransfers() {
           error: errMessage,
         });
 
-        // ─── Error recovery: revert or advance based on wallet credit status ───
-        try {
-          const { data: currentPayment } = await supabaseAdmin
-            .from('Payment')
-            .select('payment_status')
-            .eq('id', payment.id)
-            .single();
-
-          const status = currentPayment?.payment_status;
-
-          if (status === PAYMENT_STATES.TRANSFER_SCHEDULED || status === PAYMENT_STATES.TRANSFER_PENDING) {
-            const credited = await wasWalletCredited(payment.id);
-
-            if (credited) {
-              // Wallet was credited but state transition failed — advance to transferred
-              await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFERRED, {
-                transfer_status: 'wallet_credited',
-                transfer_completed_at: nowIso,
-              });
-              logger.info('processPendingTransfers: advanced stranded payment to transferred', {
-                paymentId: payment.id,
-                previousStatus: status,
-              });
-              // Count as success since funds were correctly credited
-              errorCount--;
-              successCount++;
-            } else {
-              // Wallet was NOT credited — revert to captured_hold for retry
-              // Use compare-and-swap to avoid overwriting a concurrent transition
-              await supabaseAdmin
-                .from('Payment')
-                .update({
-                  payment_status: PAYMENT_STATES.CAPTURED_HOLD,
-                  updated_at: nowIso,
-                })
-                .eq('id', payment.id)
-                .eq('payment_status', status);
-
-              if (payment.gig_id) {
-                await supabaseAdmin
-                  .from('Gig')
-                  .update({ payment_status: PAYMENT_STATES.CAPTURED_HOLD, updated_at: nowIso })
-                  .eq('id', payment.gig_id)
-                  .eq('payment_status', status);
-              }
-            }
-          }
-        } catch (revertErr) {
-          logger.error('processPendingTransfers: failed to revert status', {
-            paymentId: payment.id,
-            error: revertErr.message,
-          });
+        try { await reconcileWalletRelease(payment.id); }
+        catch (revertErr) {
+          logger.error('processPendingTransfers: recovery remains pending', { paymentId: payment.id, error: revertErr.message });
         }
       }
     }
