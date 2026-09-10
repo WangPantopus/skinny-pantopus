@@ -11,7 +11,10 @@ The subsequent [browser access report](home-web-task-access-recovery-2026-09-10.
 closes browser findings 1 and 2 below with actual Chrome evidence. The
 [confirmed recovery report](home-web-task-confirmed-recovery-2026-09-10.md) closes
 finding 4 with actual encrypted IndexedDB, reload, competing-tab and corrupt-slot
-acceptance. Finding 3 and attachment reselection acceptance remain required.
+acceptance. The [upload reselection report](home-web-task-upload-reselection-2026-09-10.md)
+closes finding 3 with actual encrypted Chrome recovery, exact reselected bytes,
+competing tabs, current metadata/retirement, corrupt storage and account changes.
+All four browser findings below are now historical; remaining Home scope is open.
 The resumed [installed iOS journey](home-ios-task-installed-journey-2026-09-10.md)
 now passes end to end after repairing the blank attachment sheet and the test
 workflow. Its newer evidence supersedes the original failed execution below.

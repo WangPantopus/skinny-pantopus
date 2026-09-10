@@ -8,6 +8,13 @@ import SlidePanel from './SlidePanel';
 import { useHomeTaskForm } from './tasks/useHomeTaskForm';
 import type { HomeTask } from './tasks/homeTaskModel';
 import type { HomeTaskClient } from './tasks/HomeTaskClient';
+import { PendingHomeTaskUploadStore, type TaskUploadSnapshot } from './tasks/PendingHomeTaskUploadStore';
+
+function uploadStore(client: HomeTaskClient, taskId: string) {
+  client.requireCurrent();
+  if (!client.actorId) throw api.taskSessionChanged();
+  return new PendingHomeTaskUploadStore(client.origin, client.actorId, client.homeId, taskId);
+}
 
 const TASK_TYPES: { value: string; label: string; icon: ReactNode }[] = [
   { value: 'chore', label: 'Chore', icon: <Paintbrush className="w-4 h-4" /> },
@@ -50,8 +57,11 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
   const [uploadProgress, setUploadProgress] = useState('');
   const [canUpload, setCanUpload] = useState(false);
   const [attachmentRevision, setAttachmentRevision] = useState(0);
-  const [retiredUpload, setRetiredUpload] = useState<File | null>(null);
-  const uploadIds = useRef(new Map<File, string>());
+  const [retiredUpload, setRetiredUpload] = useState<TaskUploadSnapshot | null>(null);
+  const uploadRequests = useRef(new Map<File, TaskUploadSnapshot>());
+  const [pendingUpload, setPendingUpload] = useState<TaskUploadSnapshot | null>(null);
+  const [recoveryError, setRecoveryError] = useState('');
+  const currentForm = form.current;
   const activeSave = useRef(false);
   const completed = useRef(false);
   const generation = useRef(0);
@@ -60,16 +70,33 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
   useEffect(() => {
     const invalidate = () => { generation.current++; picker.current = null; };
     invalidate(); activeSave.current = false; completed.current = false;
-    uploadIds.current.clear(); picker.current = null;
+    uploadRequests.current.clear(); setPendingUpload(null); setRecoveryError(''); picker.current = null;
     setSaving(false); setMediaFiles([]); setError(''); setUploadProgress(''); setRetiredUpload(null); setCanUpload(false);
     return invalidate;
   }, [open, homeId, task?.id]);
   useEffect(() => {
     if (form.retired) {
-      generation.current++; picker.current = null; uploadIds.current.clear();
+      generation.current++; picker.current = null; uploadRequests.current.clear(); setPendingUpload(null); setRecoveryError('');
       setMediaFiles([]); setSaving(false); setError(''); setUploadProgress(''); setRetiredUpload(null);
     }
   }, [form.retired]);
+
+  useEffect(() => {
+    if (!open || !savedTaskId || !form.ready) return;
+    let active = true;
+    const request = generation.current;
+    void (async () => {
+      try {
+        const { client } = currentForm(); const revision = client.revision;
+        const saved = await uploadStore(client, savedTaskId).load();
+        client.requireCurrent(revision);
+        if (active && request === generation.current) { setPendingUpload(saved); setRecoveryError(''); }
+      } catch (failure) {
+        if (active && request === generation.current) setRecoveryError(failure instanceof Error ? failure.message : 'Attachment recovery is unavailable. Reopen this task.');
+      }
+    })();
+    return () => { active = false; };
+  }, [open, savedTaskId, form.ready, currentForm]);
 
   const close = () => { generation.current++; completed.current = true; picker.current = null; form.close(); onClose(); };
   const requireAction = (client: HomeTaskClient, revision: number, request: number) => {
@@ -92,25 +119,32 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
         requireAction(client, revision, request);
         await api.assertHomeTaskSession(scope, saved.id);
         requireAction(client, revision, request);
-        let uploadId = uploadIds.current.get(file);
-        if (!uploadId) { uploadId = crypto.randomUUID(); uploadIds.current.set(file, uploadId); }
+        const store = uploadStore(client, saved.id);
+        const current = () => { try { requireAction(client, revision, request); return true; } catch { return false; } };
+        const original = await store.prepare(file, uploadRequests.current.get(file), current);
+        requireAction(client, revision, request);
+        uploadRequests.current.set(file, original); setPendingUpload(original); setRecoveryError('');
+        const uploadId = original.draft.upload_id;
+        const selected = new File([file], original.draft.filename, { type: original.draft.mime_type });
         setUploadProgress(`Uploading ${file.name}…`);
         try {
-          await api.upload.uploadHomeTaskMedia(client.homeId, saved.id, [file], [uploadId], scope,
+          await api.upload.uploadHomeTaskMedia(client.homeId, saved.id, [selected], [uploadId], scope,
             () => requireAction(client, revision, request));
         } catch (failure) {
           requireAction(client, revision, request);
           const response = failure as { statusCode?: number; code?: string; data?: { code?: string } };
           if (response?.code === 'SESSION_SCOPE_CHANGED') throw failure;
           if (response?.statusCode === 409 && (response.code || response.data?.code) === 'HOME_TASK_UPLOAD_RETIRED') {
-            setRetiredUpload(file);
+            setRetiredUpload(original);
             throw new Error('This upload was removed. Acknowledge it before selecting another file.');
           }
           throw new Error('The task is saved. Some attachments were not confirmed; retry the same remaining files.');
         }
         await api.assertHomeTaskSession(scope, saved.id);
         requireAction(client, revision, request);
-        uploadIds.current.delete(file);
+        const confirmed = await store.confirm(original, current);
+        requireAction(client, revision, request);
+        setPendingUpload(confirmed); uploadRequests.current.delete(file);
         setMediaFiles(previous => previous.filter(candidate => candidate !== file));
         setAttachmentRevision(value => value + 1);
       }
@@ -122,19 +156,24 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
       if (request === generation.current) { activeSave.current = false; setSaving(false); setUploadProgress(''); }
     }
   };
-  const acknowledge = async (file: File | null) => {
+  const acknowledge = async (upload: TaskUploadSnapshot | null) => {
     if (activeSave.current || completed.current) return;
     const request = generation.current;
     activeSave.current = true; setSaving(true); setError('');
     try {
       const { client } = form.current(); const revision = client.revision;
-      if (file) {
-        const uploadId = uploadIds.current.get(file);
-        if (file !== retiredUpload || !uploadId || !savedTaskId) throw new Error('Reload the original upload before continuing.');
+      if (upload) {
+        if (upload !== retiredUpload || !savedTaskId) throw new Error('Reload the original upload before continuing.');
         await client.detail(savedTaskId, revision);
         requireAction(client, revision, request);
-        if (uploadIds.current.get(file) !== uploadId) throw new Error('The selected upload changed. Reopen this task.');
-        uploadIds.current.delete(file); setMediaFiles(previous => previous.filter(candidate => candidate !== file)); setRetiredUpload(null);
+        await uploadStore(client, savedTaskId).clear(upload, () => {
+          try { requireAction(client, revision, request); return true; } catch { return false; }
+        });
+        requireAction(client, revision, request);
+        const removed = new Set([...uploadRequests.current.entries()].filter(([, value]) => value.draft.upload_id === upload.draft.upload_id).map(([file]) => file));
+        for (const file of removed) uploadRequests.current.delete(file);
+        setMediaFiles(previous => previous.filter(file => !removed.has(file)));
+        setRetiredUpload(null); setPendingUpload(null);
         setAttachmentRevision(value => value + 1);
       } else {
         await form.acknowledge(); requireAction(client, revision, request); close();
@@ -144,6 +183,37 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
     } finally {
       if (request === generation.current) { activeSave.current = false; setSaving(false); }
     }
+  };
+  const checkPreviousUpload = async () => {
+    if (activeSave.current || completed.current || !savedTaskId) return;
+    const request = generation.current; activeSave.current = true; setSaving(true); setError('');
+    try {
+      const { client } = currentForm(); const revision = client.revision;
+      await client.detail(savedTaskId, revision); requireAction(client, revision, request);
+      const store = uploadStore(client, savedTaskId); const original = await store.load();
+      requireAction(client, revision, request);
+      const scope = client.currentScope;
+      if (!scope || !original || original.revision !== pendingUpload?.revision) throw new Error('Attachment recovery changed. Reopen this task.');
+      const result = await api.upload.getHomeTaskMedia(client.homeId, savedTaskId, scope);
+      requireAction(client, revision, request);
+      const row = result.media.find(item => item.id === original.draft.upload_id);
+      const ext = original.draft.filename.match(/\.([a-zA-Z0-9]{1,5})$/)?.[1]?.toLowerCase() || 'bin';
+      if (!row || row.uploaded_by !== client.actorId || row.file_name !== `task-attachment-${original.draft.upload_id}.${ext}`
+        || row.file_size !== original.draft.size || row.mime_type !== original.draft.mime_type) {
+        throw new Error('The original upload is still unconfirmed. Reselect the same file to retry it.');
+      }
+      if (row.state === 'retired' && !row.available) { setRetiredUpload(original); return; }
+      if (row.state !== 'ready' || !row.available) throw new Error('The original upload is incomplete. Reselect the same file, or remove its reservation below.');
+      const confirmed = await store.confirm(original, () => {
+        try { requireAction(client, revision, request); return true; } catch { return false; }
+      });
+      requireAction(client, revision, request); setPendingUpload(confirmed); setRecoveryError('');
+      const recovered = new Set([...uploadRequests.current.entries()].filter(([, value]) => value.draft.upload_id === original.draft.upload_id).map(([file]) => file));
+      setMediaFiles(previous => previous.filter(file => !recovered.has(file)));
+      for (const file of recovered) uploadRequests.current.delete(file); setAttachmentRevision(value => value + 1);
+    } catch (failure) {
+      if (request === generation.current) setError(failure instanceof Error ? failure.message : 'The attachment is still unconfirmed.');
+    } finally { if (request === generation.current) { activeSave.current = false; setSaving(false); } }
   };
   const startAnother = async () => {
     if (activeSave.current || completed.current) return;
@@ -183,7 +253,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
           </div>
         )}
 
-        {form.pending && <p role="status" className="text-sm">A previous create request is unconfirmed. Retry that original request to recover the exact task.</p>}
+        {form.pending && !form.pending.confirmed && <p role="status" className="text-sm">A previous create request is unconfirmed. Retry that original request to recover the exact task.</p>}
         {form.canAcknowledge && <button type="button" disabled={saving} onClick={() => void acknowledge(null)}>Acknowledge unavailable request</button>}
         {retiredUpload && <button type="button" disabled={saving} onClick={() => void acknowledge(retiredUpload)}>Acknowledge removed upload</button>}
         {/* Task Type */}
@@ -299,9 +369,14 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
         </div>
 
         {open && homeId && savedTaskId && scope && <TaskAttachmentList key={`${homeId}:${savedTaskId}`} homeId={homeId} taskId={savedTaskId} revision={attachmentRevision} onAccess={setCanUpload} openingScope={scope} />}
+        {recoveryError && <p role="alert">{recoveryError}</p>}
+        {pendingUpload && !pendingUpload.draft.confirmed && <div className="space-y-2 text-sm">
+          <p>An attachment is unconfirmed: {pendingUpload.draft.filename}. Reselect that same file to retry the original upload. File bytes are not saved for automatic replay.</p>
+          <button type="button" disabled={saving} onClick={() => void checkPreviousUpload()} className="underline">Check previous attachment</button>
+        </div>}
         {(savedTaskId ? canUpload : form.canEdit) && <div>
           <label className="block text-sm font-medium text-app-text-strong mb-1" htmlFor="task-private-attachments">Attachments (optional)</label>
-          <input id="task-private-attachments" type="file" multiple disabled={saving || !!retiredUpload || !!form.pending}
+          <input id="task-private-attachments" type="file" multiple disabled={saving || !!retiredUpload || !!form.pending || !!recoveryError}
             onClick={() => {
               try { const { client } = form.current(); picker.current = { client, revision: client.revision, taskId: savedTaskId }; }
               catch { picker.current = null; }
@@ -320,7 +395,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
               setMediaFiles(previous => [...previous, ...picked]); event.target.value = '';
             }} />
           <p className="text-xs text-app-text-secondary mt-1">PDF, text, JPEG, PNG, WebP or HEIC. Attachments follow this task’s access.</p>
-          {mediaFiles.map((file, index) => <p key={`${file.name}-${index}`} className="text-sm mt-1">{file.name} <button type="button" disabled={saving || uploadIds.current.has(file)} onClick={() => setMediaFiles(previous => previous.filter((_, i) => i !== index))} className="underline">Remove selected file</button></p>)}
+          {mediaFiles.map((file, index) => <p key={`${file.name}-${index}`} className="text-sm mt-1">{file.name} <button type="button" disabled={saving || uploadRequests.current.has(file)} onClick={() => setMediaFiles(previous => previous.filter((_, i) => i !== index))} className="underline">Remove selected file</button></p>)}
         </div>}
 
         {/* Upload progress */}

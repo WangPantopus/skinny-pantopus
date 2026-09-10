@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser attachment reselection — September 10
+
+All four checkpoint browser findings are addressed. Unknown uploads now retain
+encrypted original metadata/fingerprints through reload and explicit reselection;
+identical renamed bytes reuse the original identity. Current server metadata can
+confirm or explicitly acknowledge the original outcome. Actual Chrome verified
+reselection, competing tabs, corruption and account changes; earlier access/create
+journeys still pass. The [reselection report](home-web-task-upload-reselection-2026-09-10.md)
+records 1,160 passing web checks, clean types/lint and precise storage limits.
+
+**Next:** complete installed Android attachment acceptance and final Android
+quality checks. Its two emulator control checks now pass; the full installed iOS
+journey is complete. Continue the remaining ordered Home/payment workflow scope,
+then reconcile the combined migration stream and required CI before integration.
+PR #34 at `e9ef2decb` now has all checks passing but remains unfinished/draft;
+PR #32 checks are in progress. Paid services remain one final launch bundle.
+
 ### Installed iOS Home task attachments — September 10
 
 The full installed simulator journey now passes: exact task creation/replay,

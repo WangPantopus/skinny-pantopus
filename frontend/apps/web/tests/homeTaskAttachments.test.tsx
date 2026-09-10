@@ -21,6 +21,28 @@ jest.mock('../src/components/home/tasks/PendingHomeTaskStore', () => ({ PendingH
   mockDraftStore.value = null;
  }
 } }));
+const mockUploadStore = { value: null as import('../src/components/home/tasks/PendingHomeTaskUploadStore').TaskUploadSnapshot | null, revision: 0 };
+jest.mock('../src/components/home/tasks/PendingHomeTaskUploadStore', () => ({ PendingHomeTaskUploadStore: class {
+ constructor(readonly origin: string, readonly actorId: string, readonly homeId: string, readonly taskId: string) {}
+ async load() { return structuredClone(mockUploadStore.value); }
+ async prepare(file: File, expected: { revision: string } | undefined, current: () => boolean) {
+  if (!current() || (expected && mockUploadStore.value?.revision !== expected.revision)) throw new Error('Attachment recovery changed');
+  const saved = mockUploadStore.value;
+  if (saved?.draft.filename === file.name && saved.draft.size === file.size) return structuredClone(saved);
+  if (saved && !saved.draft.confirmed) throw new Error('Reselect the original attachment.');
+  mockUploadStore.value = { revision: `upload-${++mockUploadStore.revision}`, draft: { version: 1, origin: this.origin, actor_id: this.actorId, home_id: this.homeId, task_id: this.taskId, upload_id: crypto.randomUUID(), filename: file.name, mime_type: file.type, size: file.size, sha256: 'a'.repeat(64), confirmed: false } };
+  return structuredClone(mockUploadStore.value);
+ }
+ async confirm(expected: { revision: string }, current: () => boolean) {
+  if (!current() || mockUploadStore.value?.revision !== expected.revision) throw new Error('Attachment recovery changed');
+  mockUploadStore.value = { ...mockUploadStore.value, draft: { ...mockUploadStore.value.draft, confirmed: true }, revision: `upload-${++mockUploadStore.revision}` };
+  return structuredClone(mockUploadStore.value);
+ }
+ async clear(expected: { revision: string }, current: () => boolean) {
+  if (!current() || mockUploadStore.value?.revision !== expected.revision) throw new Error('Attachment recovery changed');
+  mockUploadStore.value = null;
+ }
+} }));
 const mocked = api.upload as jest.Mocked<typeof api.upload>;
 const homeId = 'ddf10001-0000-4000-8000-000000000100'; const taskId = 'ddf10001-0000-4000-8000-000000000200';
 const mediaId = 'ddf10001-0000-4000-8000-000000000300';
@@ -30,7 +52,7 @@ const openingScope = { actor_id: actor, home_id: homeId, session_scope: 'a'.repe
 const receipt = (command: Record<string, unknown>) => ({ task: saved, task_session: openingScope, replayed: false, creation_receipt: { home_id: homeId, actor_id: actor, request_id: command.request_id, task_id: taskId, payload_hash: 'c'.repeat(64), created_at: '2026-09-10T12:00:00Z' } });
 const ready = { id: mediaId, home_id: homeId, task_id: taskId, uploaded_by: 'actor', file_name: 'private.txt', file_type: 'document',
  mime_type: 'text/plain', file_size: 4, created_at: '', state: 'ready' as const, available: true };
-beforeEach(() => { jest.resetAllMocks(); mockDraftStore.value = null; mockDraftStore.revision = 0; localStorage.clear();
+beforeEach(() => { jest.resetAllMocks(); mockUploadStore.value = null; mockUploadStore.revision = 0; mockDraftStore.value = null; mockDraftStore.revision = 0; localStorage.clear();
  (api.getAuthToken as jest.Mock).mockReturnValue('synthetic-session'); (api.onTokenChange as jest.Mock).mockReturnValue(jest.fn());
  (api.users.getMyProfile as jest.Mock).mockResolvedValue({ id: actor });
  (api.get as jest.Mock).mockImplementation(async (path: string) => path.endsWith(taskId) ? { task: saved, task_session: openingScope } : { tasks: [], task_session: openingScope, collection_capabilities: { can_create: true } });
@@ -294,4 +316,24 @@ test('retired upload acknowledgment clears only its original file without a repl
  await waitFor(() => expect(screen.queryByRole('button', { name: 'Acknowledge removed upload' })).not.toBeInTheDocument());
  expect(mocked.uploadHomeTaskMedia).toHaveBeenCalledTimes(1); expect(mocked.deleteHomeTaskMedia).not.toHaveBeenCalled();
  expect(api.post).toHaveBeenCalledTimes(1); expect(api.put).not.toHaveBeenCalled();
+});
+
+
+test('unknown upload survives panel reopen and reselected file retains its original upload ID', async () => {
+ mocked.uploadHomeTaskMedia.mockRejectedValueOnce(new Error('Lost upload reply'));
+ const props = { onClose: jest.fn(), onSaved: jest.fn(), homeId, openingScope, members: [], task: { id: taskId } };
+ const view = render(<TaskSlidePanel open {...props} />);
+ const input = await screen.findByLabelText('Attachments (optional)');
+ fireEvent.click(input); fireEvent.change(input, { target: { files: [new File(['private'], 'original.txt', { type: 'text/plain' })] } });
+ fireEvent.click(screen.getByRole('button', { name: 'Save Task' }));
+ await screen.findByText(/The task is saved. Some attachments were not confirmed/);
+ const original = mockUploadStore.value!.draft.upload_id;
+ view.unmount(); render(<TaskSlidePanel open {...props} />);
+ await screen.findByText(/An attachment is unconfirmed: original.txt/);
+ const reopened = await screen.findByLabelText('Attachments (optional)');
+ fireEvent.click(reopened); fireEvent.change(reopened, { target: { files: [new File(['private'], 'original.txt', { type: 'text/plain' })] } });
+ fireEvent.click(screen.getByRole('button', { name: 'Save Task' }));
+ await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
+ expect(mocked.uploadHomeTaskMedia.mock.calls.map(call => call[3]?.[0])).toEqual([original, original]);
+ expect(mockUploadStore.value!.draft.confirmed).toBe(true);
 });
