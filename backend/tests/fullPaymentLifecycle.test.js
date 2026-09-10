@@ -370,10 +370,11 @@ describe('Capture failure blocks gig confirmation (B1 fix)', () => {
     const payment = getTable('Payment').find(p => p.id === PAYMENT_ID);
     expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
     const gig = getTable('Gig').find(g => g.id === GIG_ID);
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
+    // Mocked capture changed only Payment; the job must not fabricate a second Gig write.
+    expect(gig.payment_status).toBe(PAYMENT_STATES.AUTHORIZED);
   });
 
-  test('retryCaptureFailures stops after MAX_CAPTURE_ATTEMPTS', async () => {
+  test('retryCaptureFailures delegates exhausted attempts for provider reconciliation', async () => {
     seedFullScenario({
       paymentStatus: PAYMENT_STATES.AUTHORIZED,
       gigPaymentStatus: PAYMENT_STATES.AUTHORIZED,
@@ -387,8 +388,8 @@ describe('Capture failure blocks gig confirmation (B1 fix)', () => {
 
     await retryCaptureFailures();
 
-    // Should NOT attempt capture (already exhausted retries)
-    expect(stripeService.capturePayment).not.toHaveBeenCalled();
+    // The service reconciles provider proof before enforcing new-capture caps.
+    expect(stripeService.capturePayment).toHaveBeenCalledWith(PAYMENT_ID);
   });
 });
 
