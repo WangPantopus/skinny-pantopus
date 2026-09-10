@@ -63,6 +63,42 @@ Auth configuration: private Home document delivery uses the checked backend path
 Hosted redirect allowlists, real SMTP, OAuth, object-service behavior and external
 file bytes remain separate verification work.
 
+## Follow-up definition and data precondition review
+
+The initial catalog was reviewed further without hosted writes. Eight tables have
+RLS disabled on staging while canonical replay enables it: AnalyticsEvent,
+CountyRadonZone, GigShare, HudFmr, ListingShare, NeighborMessage,
+NeighborhoodPreview and PlaceSectionCache. This requires policy/consumer review,
+not a blanket grant replacement.
+
+NeighborhoodPreview lacks created_at, updated_at and last_milestone_notified;
+its verified_users_count is nullable. UserFeedPreference lacks
+show_politics_following, and UserFollow lacks source. UserFollow's missing named
+unique constraint has an identical valid unique index; no current application
+`ON CONFLICT ON CONSTRAINT` dependency was found. NeighborhoodPreview's geohash
+uniqueness and both share-count trigger bindings match despite naming differences.
+These naming observations are bounded definition equivalence, not full replay
+identity.
+
+The hosted Mail recipient check omits the canonical non-null escrow guard, and
+Payment.home_id lacks canonical ON DELETE SET NULL. Hosted Home deletion permits
+owner or home.edit, broader than the canonical owner rule. Hosted Home SELECT
+adds creator visibility, requiring a narrow first-use/revocation analysis.
+Hosted Post public visibility lacks the canonical followers branch.
+
+A read-only aggregate preflight on Free staging found zero invalid recipient/
+escrow rows, null neighborhood verified counts, duplicate follow pairs, duplicate
+Stripe customer bindings or multiple default saved cards. TLS verification stayed
+on. These observations support forward-reconciliation planning; they do not
+replace lock-time preconditions or the final candidate inventory. The subsequent
+payment migration and pending Home changes must be included in that fresh replay.
+
+The [Home role policy audit](home-role-policy-audit-2026-09-09.md) now records the
+proposed default matrix and the authorization prerequisites. The first effective
+permission checkpoint is pushed as `2fabe0c94` in draft PR #32, with 4,620 backend
+tests, privacy gates, 29 web hook tests and 19 SQL contracts passing. Broader
+record/delegation/RLS repairs remain active before any new default grants.
+
 ## Next adoption package
 
 1. Replay the final committed release stream into a fresh disposable database.

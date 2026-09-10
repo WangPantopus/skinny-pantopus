@@ -14,6 +14,24 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Inventory follow-up checkpoint — September 9
+
+The [release inventory](staging-release-inventory-2026-09-09.md) now distinguishes
+reviewed naming equivalence, missing columns/RLS, broader Home policies and
+zero-row precondition findings. The [Home role audit](home-role-policy-audit-2026-09-09.md)
+records the proposed defaults and required guards. No hosted reconciliation or
+role grants ran. First Home effective-permission source is committed/pushed at
+`2fabe0c94` in draft [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32):
+4,620 backend tests, privacy gates, 29 web hook tests and 19 SQL contracts pass.
+Direct IAM/deletion, legacy RLS and task/calendar record restrictions remain next.
+
+Draft payment PR #31 is at `2e7b04293`, with all current-head CI passing.
+Its additive migration is applied only to Free staging and private candidate
+`2e7b04293`/`2e0a32e8b0e2`; native SDK acceptance and exact cleanup are active.
+PR #29/#30 are merged. Final candidate replay, effect/version manifest,
+external-object recovery and integrated acceptance remain unfinished. Older
+checkpoint entries below are historical where they conflict.
+
 ### Current continuation and release inventory — September 9
 
 The active feature priority is `/private/tmp/pantopus-staging-payment-sheet`,
