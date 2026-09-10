@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Latest continuation checkpoint — September 10
+
+Six verified milestones were committed/pushed on `codex/home-permission-boundaries`:
+`811380722` entitled iOS host, `eb125472c` browser access/lifetime, `d33789aca`
+confirmed-create recovery, `5e6bee218` installed iOS/sheet repair, `c547125eb`
+browser upload reselection, and `3af3fec34` Android cleanup/installed acceptance.
+The worktree is clean. PR #32's final implementation run
+[34533005932](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34533005932)
+was queued at this observation; a documentation push may supersede it. Refresh
+the exact current head before relying on CI. PR #34 remains at `e9ef2decb` with
+all checks passing, but its durable-tip and remaining payment scope is incomplete.
+Neither PR is ready to merge. Collision-free migration filenames are only an
+inventory result; the final combined dependency/upgrade replay is still required.
+
+The synthetic HTTP servers on 18081/18082 and browser server on 3107 were stopped.
+The dedicated iOS simulator `A410A5E9-41B9-4A5E-B122-C1B478E7F897` and Android
+`Pantopus_Home_Task_Acceptance` / emulator-5556 were shut down. Their private
+synthetic evidence is linked in the reports. The owner's booted iPhone simulator,
+existing emulator-5554, port 8000 listener, paid-gig worktree and three unrelated
+owner-checkout files remain untouched. No hosted migration, owner phone or paid
+service changed. Continue with the next action immediately below; do not rerun
+completed Beacon or native attachment fixtures as a substitute for remaining work.
+
 ### Android attachment cleanup and installed acceptance — September 10
 
 The known Android compiler/formatting, cancellation cleanup and stale snapshot

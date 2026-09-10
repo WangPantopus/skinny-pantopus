@@ -23,6 +23,10 @@ closes the draft compiler/formatting, cancellation/temporary-file and stale imag
 findings. Local full gates, emulator controls/PDF and the installed complete
 attachment journey pass. Remote required CI on the final head remains a separate
 gate. Older failed/unbuilt observations below are retained only as history.
+The latest handoff checkpoint lists all six pushed continuation milestones and
+the next remaining scope. The new synthetic servers and dedicated simulators
+were stopped after acceptance; existing owner sessions remain untouched. Refresh
+current PR #32 CI rather than relying on a superseded run.
 Read this document and the top of `PROJECT_HANDOFF.md` first; consult older
 reports only for the next concrete task. Refresh Git and CI before relying on
 the observations below.
