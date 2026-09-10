@@ -222,6 +222,26 @@ test('fresh permission loss blocks editing even when the opening task allowed it
  await screen.findByText(/no longer have permission to edit/); expect(api.put).not.toHaveBeenCalled();
 });
 
+test.each([403, 404])('current task read %s during save removes private fields and invalidates the form', async statusCode => {
+ const onSaved = jest.fn();
+ const privateTask = { ...saved, title: 'Private repair detail', description: 'Private household instructions' };
+ (api.get as jest.Mock).mockResolvedValue({ task: privateTask, task_session: openingScope });
+ render(<TaskSlidePanel open task={saved} onClose={jest.fn()} onSaved={onSaved} homeId={homeId} openingScope={openingScope} members={[]} />);
+ await screen.findByRole('button', { name: 'Save Task' });
+ fireEvent.change(screen.getByPlaceholderText('e.g., Fix leaky faucet'), { target: { value: 'Unsaved private title' } });
+ (api.get as jest.Mock).mockRejectedValue(Object.assign(new Error('Current task denied'), { statusCode }));
+ fireEvent.click(screen.getByRole('button', { name: 'Save Task' }));
+ expect(await screen.findByRole('button', { name: 'Reload task' })).toBeInTheDocument();
+ expect(screen.queryByDisplayValue('Unsaved private title')).not.toBeInTheDocument();
+ expect(screen.queryByDisplayValue(privateTask.description)).not.toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: 'Save Task' })).not.toBeInTheDocument();
+ expect(api.put).not.toHaveBeenCalled(); expect(onSaved).not.toHaveBeenCalled();
+ (api.get as jest.Mock).mockResolvedValue({ task: { ...saved, title: 'Current permitted task' }, task_session: openingScope });
+ fireEvent.click(screen.getByRole('button', { name: 'Reload task' }));
+ expect(await screen.findByDisplayValue('Current permitted task')).toBeInTheDocument();
+ expect(screen.queryByDisplayValue('Unsaved private title')).not.toBeInTheDocument();
+});
+
 test('competing saved request survives a stale retry and never gets a new POST', async () => {
  (api.post as jest.Mock).mockRejectedValueOnce(new Error('Lost reply'));
  render(<TaskSlidePanel open onClose={jest.fn()} onSaved={jest.fn()} homeId={homeId} openingScope={openingScope} members={[]} />);

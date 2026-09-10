@@ -7,6 +7,9 @@ The [resumed native recovery report](home-native-ci-recovery-2026-09-10.md)
 records the subsequent origin/PR refresh, iOS simulator-signing repair and
 passing protected-store checks. Its newer observations supersede those specific
 CI findings below; Android/browser/installed-journey gates remain open.
+The subsequent [browser access report](home-web-task-access-recovery-2026-09-10.md)
+closes browser findings 1 and 2 below with actual Chrome evidence. Findings 3
+and 4 and protected-storage acceptance remain required.
 Read this document and the top of `PROJECT_HANDOFF.md` first; consult older
 reports only for the next concrete task. Refresh Git and CI before relying on
 the observations below.

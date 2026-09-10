@@ -9,6 +9,7 @@ import type { HomeTask, HomeTaskFields, HomeTaskPatch, RetainedTaskCreate } from
 export type TaskFormValues = { taskType: string; title: string; description: string; assignedTo: string;
   priority: string; status: string; dueAt: string; budget: string };
 const isHidden = () => document.visibilityState === 'hidden';
+const isReadDenied = (failure: unknown) => [403, 404].includes((failure as { statusCode?: number })?.statusCode || 0);
 const empty: TaskFormValues = { taskType: 'chore', title: '', description: '', assignedTo: '', priority: 'medium', status: 'open', dueAt: '', budget: '' };
 function values(task: HomeTaskFields & { status?: string }): TaskFormValues {
   return { taskType: task.task_type, title: task.title, description: task.description || '', assignedTo: task.assigned_to || '',
@@ -28,7 +29,7 @@ function patch(form: TaskFormValues, initial: TaskFormValues): HomeTaskPatch {
 }
 interface FormContext {
   client: HomeTaskClient; active: boolean; loadedRevision?: number; task: HomeTask | null;
-  creation: HomeTaskCreationController | null; retire: () => void;
+  creation: HomeTaskCreationController | null; retire: () => void; targetId?: string;
 }
 
 /** Lifecycle and current values shared by the existing browser task form. */
@@ -47,13 +48,18 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
   const [, refreshControllerState] = useState(0);
   const reload = useRef<() => void>(() => {});
   const opening = useRef(openingScope); opening.current = openingScope;
+  const clearDenied = useCallback((ctx: FormContext) => {
+    ctx.loadedRevision = undefined; ctx.task = null;
+    setReady(false); setTask(null); setPending(null);
+    setFields(empty); fieldRef.current = empty; initial.current = empty;
+  }, []);
 
   useEffect(() => {
     setReady(false); setTask(null); setPending(null); setError(''); setRetired(false);
     setFields(empty); initial.current = empty; fieldRef.current = empty;
     if (!open || !homeId) { setLoading(false); return; }
     const client = new HomeTaskClient(homeId, opening.current);
-    const ctx: FormContext = { client, active: true, task: null, creation: null, retire: () => {} };
+    const ctx: FormContext = { client, active: true, task: null, creation: null, retire: () => {}, targetId: taskId };
     context.current = ctx;
     let working = false;
     let queued = false;
@@ -77,11 +83,11 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
       setReady(false); setLoading(true); setError(''); setTask(null);
       try {
         let fresh: TaskFormValues;
-        const exactId = ctx.task?.id || taskId;
+        const exactId = ctx.targetId || ctx.creation?.pending?.confirmed?.task_id;
         if (exactId) {
           const result = await client.detail(exactId, revision);
           if (!current(revision)) return;
-          ctx.task = result; setTask(result); fresh = values(result);
+          ctx.targetId = result.id; ctx.task = result; setTask(result); fresh = values(result);
         } else {
           if (!ctx.creation) {
             const controller = await HomeTaskCreationController.open(client);
@@ -105,7 +111,10 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
       } catch (failure) {
         if (context.current !== ctx || !ctx.active) return;
         try { client.requireCurrent(); } catch { ctx.retire(); return; }
-        if (current(revision)) setError(failure instanceof Error ? failure.message : 'Current task access could not be checked. Retry.');
+        if (current(revision)) {
+          if (isReadDenied(failure)) { clearDenied(ctx); populated = false; }
+          setError(failure instanceof Error ? failure.message : 'Current task access could not be checked. Retry.');
+        }
       } finally {
         working = false;
         if (context.current === ctx && ctx.active && revision === client.revision) setLoading(false);
@@ -129,7 +138,7 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
       window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility);
       if (context.current === ctx) { context.current = null; reload.current = () => {}; }
     };
-  }, [open, homeId, taskId]);
+  }, [open, homeId, taskId, clearDenied]);
 
   useEffect(() => {
     const ctx = context.current;
@@ -162,9 +171,15 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
         : await ctx.creation!.submit(payload(fieldRef.current));
       ctx.client.requireCurrent(revision);
       if (context.current !== ctx || !ctx.active) throw new Error('This task form is no longer open.');
-      ctx.task = saved; setTask(saved); setPending(null);
+      ctx.targetId = saved.id; ctx.task = saved; setTask(saved); setPending(null);
       const fresh = values(saved); initial.current = fresh; fieldRef.current = fresh; setFields(fresh);
       return saved;
+    } catch (failure) {
+      if (context.current === ctx && ctx.active && ctx.client.revision === revision && isReadDenied(failure)) {
+        clearDenied(ctx);
+        setError('This task is no longer available. Reload to check current access.');
+      }
+      throw failure;
     } finally {
       if (context.current === ctx && ctx.active) {
         try {
@@ -175,7 +190,7 @@ export function useHomeTaskForm(open: boolean, homeId: string | undefined, taskI
         } catch { ctx.retire(); }
       }
     }
-  }, [requireReady]);
+  }, [requireReady, clearDenied]);
   const acknowledge = useCallback(async () => {
     const ctx = requireReady(); const revision = ctx.client.revision;
     if (!ctx.creation) throw new Error('No saved request can be cleared.');

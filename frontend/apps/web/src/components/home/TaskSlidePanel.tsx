@@ -96,7 +96,8 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
         if (!uploadId) { uploadId = crypto.randomUUID(); uploadIds.current.set(file, uploadId); }
         setUploadProgress(`Uploading ${file.name}…`);
         try {
-          await api.upload.uploadHomeTaskMedia(client.homeId, saved.id, [file], [uploadId], scope);
+          await api.upload.uploadHomeTaskMedia(client.homeId, saved.id, [file], [uploadId], scope,
+            () => requireAction(client, revision, request));
         } catch (failure) {
           requireAction(client, revision, request);
           const response = failure as { statusCode?: number; code?: string; data?: { code?: string } };

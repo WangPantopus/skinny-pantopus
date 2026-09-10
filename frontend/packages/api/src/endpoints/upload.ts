@@ -252,6 +252,7 @@ export async function uploadHomeTaskMedia(
   files: File[],
   uploadIds: string[] = files.map(() => crypto.randomUUID()),
   scope?: HomeTaskSessionScope,
+  requireCurrent: () => void = () => {},
 ): Promise<{ media: HomeTaskMedia[] }> {
   if (files.length !== uploadIds.length || files.length > 10) throw new Error('Choose up to ten attachments.');
   if (scope) { if (scope.home_id !== homeId) throw new Error('The Home changed. Reopen the task.'); await assertHomeTaskSession(scope, taskId); }
@@ -264,11 +265,16 @@ export async function uploadHomeTaskMedia(
     // Retain filename privacy while keeping the exact name stable on retries.
     const ext = files[index].name.match(/\.([a-zA-Z0-9]{1,5})$/)?.[1]?.toLowerCase() || 'bin';
     formData.append('file', files[index], `task-attachment-${id}.${ext}`);
+    // A session preflight can outlive the form that authorized this upload.
+    // Check its lifetime after every await and immediately before dispatch.
+    requireCurrent();
     const response = await apiClient.post<{ media: HomeTaskMedia[] }>(
       `/api/upload/home-task-media/${homeId}/${taskId}`, formData,
       { headers: { 'Content-Type': 'multipart/form-data', ...taskSessionHeaders(scope) } },
     ).catch(rethrowTaskSessionError);
+    requireCurrent();
     if (scope) await assertHomeTaskSession(scope, taskId);
+    requireCurrent();
     const item = response.data.media?.[0];
     if (response.data.media?.length !== 1 || item.id !== id || item.home_id !== homeId || item.task_id !== taskId
       || item.state !== 'ready' || item.available !== true) throw new Error('The attachment was not confirmed. Retry it.');

@@ -14,6 +14,25 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser access and upload lifetime — September 10
+
+Current 403/404 reads during task save now remove private form fields and
+invalidate readiness. The upload helper checks the form lifetime after its
+own permission preflight. Actual Chrome verified denial/reload, exact sparse
+edits and zero upload POSTs after closing during that suspended preflight. It
+also exposed and verified a repair for the app header covering the panel's
+Close button. The [browser recovery report](home-web-task-access-recovery-2026-09-10.md)
+records full web regression and the remaining limits.
+
+**Next:** finish unresolved attachment identity across panel reopen and safe
+confirmed-create consumption, then encrypted IndexedDB/race acceptance. Android
+draft cleanup now compiles and is undergoing quality/build checks; installed
+iOS reaches the task form after normal login/protected-session return, with
+test selectors still being corrected. Complete native attachment journeys and
+the remaining Home/payment scope. Both PRs remain unfinished drafts; migration
+version inventory is collision-free but combined dependency/replay proof is
+still required. Paid services remain one final launch-preparation bundle.
+
 ### Resumed native verification — September 10
 
 Origin and both draft PRs were refreshed: Home was clean at `5441da1b8`, paid
