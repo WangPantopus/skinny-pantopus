@@ -4,7 +4,7 @@ import Foundation
 /// Generic Home membership and inferred owner roles are not task authority.
 @MainActor
 final class HomeTaskAccess: HomeTaskCreationAccess {
-    enum AccessError: LocalizedError {
+    enum AccessError: LocalizedError, Equatable {
         case changed
         case denied
         case busy
@@ -164,9 +164,57 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         let message: String
     }
 
+    func recurrence(taskId: String) async throws -> HomeTaskRecurrenceState {
+        let revision = generation
+        try requireCurrent(revision)
+        guard UUID(uuidString: taskId) != nil else { throw APIError.invalidResponse }
+        let result: HomeTaskRecurrenceState = try await api.request(recurrenceEndpoint(taskId: taskId))
+        try requireCurrent(revision)
+        try bind(result.taskSession)
+        guard result.matches(home: homeId, task: taskId) else { throw APIError.invalidResponse }
+        return result
+    }
+
+    func changeRecurrence(
+        _ draft: HomeTaskRecurrenceDraft,
+        beforeDispatch: @MainActor () throws -> Void
+    ) async throws -> HomeTaskRecurrenceResponse {
+        let revision = generation
+        guard !mutating else { throw AccessError.busy }
+        mutating = true
+        defer { mutating = false }
+        let current = try await recurrence(taskId: draft.taskId)
+        guard current.canManage else { throw AccessError.denied }
+        guard let actorId, draft.matches(origin: api.apiBaseURL.absoluteString, home: homeId, task: draft.taskId, actor: actorId) else {
+            throw APIError.invalidResponse
+        }
+        try beforeDispatch()
+        try requireCurrent(revision)
+        let result: HomeTaskRecurrenceResponse = try await api.request(recurrenceEndpoint(
+            taskId: draft.taskId, body: HomeTaskRecurrenceDraft.Request(draft: draft)
+        ))
+        try requireCurrent(revision)
+        try bind(result.state.taskSession)
+        guard result.state.matches(home: homeId, task: draft.taskId), result.receipt.matches(draft),
+              result.state.revision >= result.receipt.revision,
+              draft.confirmed == nil || draft.confirmed == result.receipt else { throw APIError.invalidResponse }
+        return result
+    }
+
+    private func recurrenceEndpoint(taskId: String, body: (any Encodable & Sendable)? = nil) -> Endpoint {
+        Endpoint(
+            method: body == nil ? .get : .post,
+            path: "/api/homes/\(homeId)/tasks/\(taskId)/recurrence",
+            body: body,
+            headers: currentHeaders,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        )
+    }
+
     private func valid(_ task: HomeTaskDTO) -> Bool {
         UUID(uuidString: homeId) != nil && UUID(uuidString: task.id) != nil && task.homeId == homeId
             && ["open", "in_progress", "done", "canceled"].contains(task.status)
+            && (task.automaticRecurrence?.valid ?? true)
     }
 
     private func bind(_ session: HomeTaskSession?) throws {

@@ -7,6 +7,7 @@ struct HouseholdTaskDetailView: View {
     @State private var isVisible = false
     @State private var mediaModel: HomeTaskMediaViewModel?
     @State private var attachmentPresentation: AttachmentPresentation?
+    @State private var recurrencePresentation: RecurrencePresentation?
     private let homeId: String
     private let taskId: String
     private let onEdit: @MainActor () -> Void
@@ -41,12 +42,21 @@ struct HouseholdTaskDetailView: View {
                         LabeledContent("Status", value: task.status.replacingOccurrences(of: "_", with: " ").capitalized)
                         if let priority = task.priority { LabeledContent("Priority", value: priority.capitalized) }
                         if let due = task.dueAt { LabeledContent("Due", value: dueLabel(due)) }
-                        if let recurrence = HouseholdTasksListViewModel.humanRecurrence(rule: task.recurrenceRule) {
+                        if let automatic = task.automaticRecurrence {
+                            Text(automatic.label)
+                        } else if let recurrence = HouseholdTasksListViewModel.humanRecurrence(rule: task.recurrenceRule) {
                             LabeledContent("Repeat preference", value: recurrence)
-                            Text("New tasks are not created automatically.").font(.caption)
+                            Text("Automatic repeats are off.").font(.caption)
                         }
                     }
                     Section {
+                        Button("Repeat schedule") {
+                            guard viewModel.isCurrent, isVisible else { return }
+                            recurrencePresentation = RecurrencePresentation(model: HomeTaskRecurrenceViewModel(
+                                homeId: homeId,
+                                taskId: taskId
+                            ))
+                        }.accessibilityIdentifier("householdTaskDetail.recurrence")
                         Button("Private attachments") {
                             guard viewModel.isCurrent, isVisible else { return }
                             if mediaModel == nil { mediaModel = HomeTaskMediaViewModel(homeId: homeId, taskId: taskId) }
@@ -80,6 +90,9 @@ struct HouseholdTaskDetailView: View {
         .sheet(item: $attachmentPresentation) { presentation in
             HomeTaskMediaView(model: presentation.model)
         }
+        .sheet(item: $recurrencePresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
+            HomeTaskRecurrenceView(model: presentation.model)
+        })
         .onAppear { isVisible = true }
         .task { await viewModel.load() }
         .onChange(of: scenePhase) { _, phase in
@@ -96,6 +109,8 @@ struct HouseholdTaskDetailView: View {
             if !current { mediaModel?.retire()
                 mediaModel = nil
                 attachmentPresentation = nil
+                recurrencePresentation?.model.retire()
+                recurrencePresentation = nil
             }
         }
         .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
@@ -112,6 +127,11 @@ struct HouseholdTaskDetailView: View {
     private struct AttachmentPresentation: Identifiable {
         let id = UUID()
         let model: HomeTaskMediaViewModel
+    }
+
+    private struct RecurrencePresentation: Identifiable {
+        let id = UUID()
+        let model: HomeTaskRecurrenceViewModel
     }
 
     private func resumeCurrentScreen() {

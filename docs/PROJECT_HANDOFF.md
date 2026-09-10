@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS automatic task recurrence — September 10
+
+The [iOS recurrence checkpoint](home-ios-task-recurrence-2026-09-10.md) adds
+explicit start/change/pause, current schedule projections/Recurring filters and
+Keychain original-command/confirmation recovery. The installed simulator journey
+passes normal login, exact task routing, lost replies, process-death recovery,
+later-pause preservation, background retry and current denial. Review also fixed
+immediate private-state cleanup after an account change. All 14 affected checks
+pass after that fix; 136 unchanged related checks passed in the preceding run.
+Final build, actual Keychain entitlement/storage checks and full Swift quality
+gates pass. The report separates synthetic native HTTP proof from the earlier
+real SQL/service/browser generation proof and records reviewed screen evidence.
+
+**Next:** Android recurrence controls and protected recovery, real schedule
+projections/Recurring filters and installed acceptance. Then continue task-to-Gig
+and the ordered Home/payment scope. The browser head `c7ebfdd2d` has passed all
+checks except Android lint/test/assemble, still running at this observation;
+refresh the new iOS milestone's exact head separately. Both PRs remain drafts;
+paid-gig `e9ef2decb` remains green but unfinished. Combined migration dependencies
+and fresh/populated replay are still required before integration. The owned
+18083 fixture and dedicated recurrence simulator are stopped. Owner files,
+existing runtimes, hosted services and paid services remain unchanged. Keep all
+paid dependencies in the final launch-preparation bundle.
+
 ### Browser automatic task recurrence — September 10
 
 The [browser recurrence checkpoint](home-web-task-recurrence-2026-09-10.md)

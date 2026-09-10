@@ -504,7 +504,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         let category = HouseholdTaskCategory.from(title: task.title, taskType: task.taskType)
         let assigneeLabel = assigneeDisplay(for: task.assignedTo)
         let isAssigned = assigneeLabel != nil
-        let recurrenceChip = humanRecurrence(rule: task.recurrenceRule)
+        let recurrenceChip = task.automaticRecurrence?.label ?? humanRecurrence(rule: task.recurrenceRule).map { "Saved: \($0)" }
         // Status / chip / subtitle vary by status.
         switch task.status {
         case "done":
@@ -616,7 +616,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// Pass the row through tab membership. Per the brief:
     ///   - Active    = status in {open, in_progress}
     ///   - Done      = status == done within the last 30 days
-    ///   - Recurring = recurrence_rule != nil
+    ///   - Recurring = configured automatic schedule or saved repeat preference
     static func passes(
         _ task: HomeTaskDTO,
         tab: HouseholdTasksTab,
@@ -637,6 +637,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
             }
             return now.timeIntervalSince(date) <= 30 * 24 * 60 * 60
         case .recurring:
+            if task.automaticRecurrence != nil { return true }
             guard let rule = task.recurrenceRule else { return false }
             return !rule.isEmpty
         }

@@ -11,7 +11,7 @@ extension AddHouseholdTaskFormView {
     var scheduleSection: some View {
         FormFieldGroup("Schedule") {
             recurrencePicker
-            Text("This preference is saved; new tasks are not created automatically.")
+            Text("This saves a preference. To start or change automatic repeats, open Repeat schedule on the saved task.")
                 .font(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             if viewModel.showsCustomRecurrenceSubForm {

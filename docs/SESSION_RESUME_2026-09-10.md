@@ -3,6 +3,16 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The latest [iOS recurrence report](home-ios-task-recurrence-2026-09-10.md)
+records explicit native controls, actual schedule status, protected original
+recovery and passing installed simulator acceptance. The account-change cleanup
+finding is fixed; 14 affected tests pass, with 136 related checks passed earlier.
+Final build/Keychain verification and full Swift quality gates pass. Native
+acceptance uses synthetic HTTP; real generation remains the earlier service/SQL
+and browser proof. Android recurrence and its installed acceptance are now next,
+then task-to-Gig and the remaining ordered Home/payment scope. The owned 18083
+fixture and dedicated iOS recurrence simulator are stopped. Required CI on the
+new exact head, combined migrations and final paid dependencies remain open.
 The latest [browser recurrence report](home-web-task-recurrence-2026-09-10.md)
 records completed browser activation/pause and protected original recovery,
 actual Chrome with production service/local SQL, and the additive task status

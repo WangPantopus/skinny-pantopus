@@ -30,6 +30,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let assignedTo: String?
     public let dueAt: String?
     public let recurrenceRule: String?
+    public let automaticRecurrence: HomeTaskAutomaticRecurrence?
     public let status: String
     public let priority: String?
     public let completedAt: String?
@@ -47,6 +48,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case assignedTo = "assigned_to"
         case dueAt = "due_at"
         case recurrenceRule = "recurrence_rule"
+        case automaticRecurrence = "automatic_recurrence"
         case status
         case priority
         case completedAt = "completed_at"
@@ -71,7 +73,8 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         createdBy: String? = nil,
         createdAt: String? = nil,
         updatedAt: String? = nil,
-        capabilities: HomeTaskCapabilities? = nil
+        capabilities: HomeTaskCapabilities? = nil,
+        automaticRecurrence: HomeTaskAutomaticRecurrence? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -88,6 +91,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.capabilities = capabilities
+        self.automaticRecurrence = automaticRecurrence
     }
 }
 
