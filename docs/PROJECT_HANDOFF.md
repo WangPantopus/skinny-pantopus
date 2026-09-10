@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Native Home navigation checkpoint — September 9
+
+Both native clients now require the effective permission list for Home tab and
+quick-action navigation, including member management and document entry.
+`finance.view` opens Bills without granting changes; absent access and recorded
+owner/admin roles do not bypass a deny. Refreshing after access loss resets an
+unavailable selected tab to Overview. The [native report](home-native-effective-navigation-2026-09-09.md)
+records **53 iOS and 54 Android focused tests passing**, formatting, static analysis,
+Android debug assembly and independent review. Native bill forms/FABs, other entry points and derived overview data remain
+unfinished; this is a bounded source milestone, not household acceptance.
+
+The previous Home invitation/sharing plus master-integration head `269128f31`
+passed every applicable [CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34441879676).
+Continue the active claim-bound invitation transaction (`20260910045000`) and
+task/calendar/media boundary (`20260910060000`) slices, then the remaining
+ownership/lease lifecycle, private attachment delivery, native/web controls and
+household acceptance. PR #34 separately has native paid-bid recovery and accurate
+charge-summary checkpoints pushed; durable refunds and settlement serialization
+are under implementation. No paid-gig provider acceptance or hosted Home rollout
+has run.
+
 ### Home invitation and exact-resource sharing checkpoint — September 9
 
 Home source milestone `0c973b8df` is committed and pushed from
@@ -47,10 +68,10 @@ rechecks are recorded without claiming a cause. Current master `390091cdb` is no
 and both source milestones/reports are preserved. No hosted Home migration,
 ordinary role grant, verification-age rollout or release ran.
 
-**Next:** verify current-head CI while finishing distinct claim
-submission/challenge and ownership/lease lifecycle
-transactions (reserved Home migration `20260910045000`; paid-gig refund work owns
-`20260910050000`). Follow with task/calendar/attachment/derived data access and
+**Next:** finish the distinct claim-bound invitation transaction
+(reserved Home migration `20260910045000`; paid-gig refund work owns
+`20260910050000`), then claim submission/challenge and ownership/lease lifecycle.
+Continue task/calendar/attachment/derived data access and
 mutations, remaining web/native permission and finance read-only controls,
 storage retirement/deletion, and ordinary-default review only once every
 alternate path is protected. The resource slice may reserve `20260910060000`.
@@ -63,7 +84,7 @@ write. This checkpoint is not full Home acceptance.
 Native sensitive-auth [PR #33](https://github.com/WangPantopus/skinny-pantopus/pull/33)
 merged after all final-head CI checks passed (run `34437250525`) at 05:01:17 UTC
 September 10, producing master `390091cdbfb12c3f2a2b7ce331453433d6344e80`.
-That master has not been merged into the uncommitted Home worktree. Completed
+That master is integrated into the Home worktree at `269128f31`. Completed
 physical Beacon and native saved-card acceptance are not repeated here.
 
 ### Home access-secret and residency admission checkpoint — September 9

@@ -268,9 +268,8 @@ class HomeDashboardViewModel
 
         /**
          * The viewer's own per-home access record. Gates the quick-action
-         * tiles + tab strip exactly as RN gates its dashboard cards.
-         * Best-effort: a 403 / offline read leaves this null and the
-         * surface renders ungated rather than blank.
+         * tiles and tab strip. A failed read leaves private navigation
+         * unavailable while the overview can still render.
          */
         private var accessData: HomeAccessDto? = null
 
@@ -281,6 +280,7 @@ class HomeDashboardViewModel
 
         /** Switch the active grid tab. */
         fun selectTab(id: String) {
+            if (HomeDashboardProjection.gatedTabs(accessData).none { it.id == id }) return
             _selectedTab.value = id
         }
 
@@ -351,11 +351,12 @@ class HomeDashboardViewModel
                 val dashboardResult = dashboardDeferred.await()
                 val accessResult = accessDeferred.await()
                 dashboardData = if (dashboardResult is NetworkResult.Success) dashboardResult.data else null
-                // The 403 body decodes into the same shape with
-                // hasAccess=false; treat that as "unknown" so the surface
-                // stays ungated.
+                // Missing or denied access leaves private navigation unavailable.
                 accessData =
                     (accessResult as? NetworkResult.Success)?.data?.takeIf { it.hasAccess }
+                if (HomeDashboardProjection.gatedTabs(accessData).none { it.id == _selectedTab.value }) {
+                    _selectedTab.value = "overview"
+                }
 
                 when (detailResult) {
                     is NetworkResult.Success -> {

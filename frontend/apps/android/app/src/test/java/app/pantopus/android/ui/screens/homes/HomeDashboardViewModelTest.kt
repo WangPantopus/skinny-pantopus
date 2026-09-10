@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemD
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistProgressDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistSeasonDto
 import app.pantopus.android.data.api.models.homes.BillDto
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDetail
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.HomePublicProfile
@@ -54,9 +55,13 @@ class HomeDashboardViewModelTest {
         // Every Home Intelligence read defaults to "unavailable" so each
         // test only stubs what it asserts on.
         coEvery { intelligenceRepo.dashboard(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
-        // No access record by default → tiles + tabs render ungated, the
-        // same fallback the VM takes on a 403 from `GET /:id/me`.
-        coEvery { adminRepo.myAccess(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
+        coEvery { adminRepo.myAccess(any()) } returns
+            NetworkResult.Success(
+                HomeAccessDto(
+                    hasAccess = true,
+                    permissions = listOf("tasks.view", "finance.view", "packages.view", "members.view", "ownership.view", "docs.view"),
+                ),
+            )
         coEvery { intelligenceRepo.healthScore(any(), any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
         coEvery { intelligenceRepo.seasonalChecklist(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
         coEvery { intelligenceRepo.propertyValue(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
@@ -222,6 +227,25 @@ class HomeDashboardViewModelTest {
         )
 
     // ── Core dashboard ──────────────────────────────────────────────
+
+    @Test
+    fun access_loss_removes_private_navigation_and_resets_selected_tab() =
+        runTest {
+            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab("bills")
+            assertEquals("bills", vm.selectedTab.value)
+            coEvery { adminRepo.myAccess("h1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+            vm.refresh()
+            val loaded = vm.state.value as HomeDashboardUiState.Loaded
+            assertEquals(listOf("overview"), loaded.content.tabs.map { it.id })
+            assertTrue(loaded.content.quickActions.isEmpty())
+            assertEquals("overview", vm.selectedTab.value)
+            vm.selectTab("bills")
+            assertEquals("overview", vm.selectedTab.value)
+        }
 
     @Test
     fun hero_stats_come_from_the_dashboard_aggregate() =

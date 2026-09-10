@@ -48,23 +48,19 @@ object HomeDashboardProjection {
         )
 
     /**
-     * Permission-gated tab strip. Mirrors RN's
-     * `src/app/homes/[id]/dashboard.tsx:169-176`, which gates on the five
-     * navigation booleans from `GET /api/homes/:id/me`
-     * (`backend/routes/homeIam.js:51`) and never on role strings.
-     * A null access record (403 / offline) leaves the strip ungated so a
-     * failed side-read can't blank the screen — the same fallback RN
-     * takes at `src/app/homes/[id]/index.tsx:124`.
+     * Reading a section requires its effective view permission. Overview
+     * remains reachable while access is unavailable, without granting actions.
      */
     fun gatedTabs(access: HomeAccessDto?): List<GridTabsTab> {
-        if (access == null) return tabs
         return tabs.filter { tab ->
             when (tab.id) {
-                "tasks" -> access.canManageTasks
-                "bills" -> access.canManageFinance
-                "members" -> access.canManageAccess
-                "ownership" -> access.isOwner || access.canManageHome
-                else -> true
+                "overview" -> true
+                "tasks" -> access?.can("tasks.view") == true
+                "bills" -> access?.can("finance.view") == true
+                "packages" -> access?.can("packages.view") == true
+                "members" -> access?.can("members.view") == true
+                "ownership" -> access?.can("ownership.view") == true
+                else -> false
             }
         }
     }
@@ -100,12 +96,7 @@ object HomeDashboardProjection {
     // ── Quick actions ───────────────────────────────────────────────
 
     /**
-     * Quick-action tiles, permission-gated the same way RN gates its
-     * dashboard cards (`src/app/homes/[id]/index.tsx:324`, `:353`,
-     * `:374`) using the IAM permission strings from
-     * `GET /api/homes/:id/me`. A null access record leaves every tile in
-     * place — RN's `can()` also falls through to "allow" when it has no
-     * permission list to test.
+     * Quick actions use confirmed effective permissions from the access read.
      */
     fun quickActions(
         counts: HomeDashboardCountsDto?,
@@ -113,7 +104,7 @@ object HomeDashboardProjection {
     ): List<QuickActionTile> {
         val safe = counts ?: HomeDashboardCountsDto()
 
-        fun allowed(permission: String): Boolean = access?.can(permission) ?: true
+        fun allowed(permission: String): Boolean = access?.can(permission) == true
         return buildList {
             if (allowed("tasks.view")) {
                 add(tile("view_tasks", "Tasks", PantopusIcon.ListChecks, QuickActionTone.Warning, safe.tasksOpen))
@@ -121,7 +112,7 @@ object HomeDashboardProjection {
             if (allowed("finance.view")) {
                 add(tile("view_bills", "Bills", PantopusIcon.Receipt, QuickActionTone.Error, safe.billsDue))
             }
-            if (allowed("mailbox.view")) {
+            if (allowed("packages.view")) {
                 add(
                     tile(
                         "view_packages",
@@ -132,19 +123,21 @@ object HomeDashboardProjection {
                     ),
                 )
             }
-            if (access?.hasAccess == true && (access.isOwner || "docs.view" in access.permissions)) {
+            if (allowed("docs.view")) {
                 add(tile("view_docs", "Documents", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
             }
-            add(
-                tile(
-                    "add_member",
-                    "Members",
-                    PantopusIcon.Users,
-                    QuickActionTone.Home,
-                    safe.membersActive,
-                    showsBadge = false,
-                ),
-            )
+            if (allowed("members.view")) {
+                add(
+                    tile(
+                        "add_member",
+                        "Members",
+                        PantopusIcon.Users,
+                        QuickActionTone.Home,
+                        safe.membersActive,
+                        showsBadge = false,
+                    ),
+                )
+            }
         }
     }
 

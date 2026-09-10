@@ -135,10 +135,15 @@ final class HomeDashboardViewModelTests: XCTestCase {
         health: [SequencedURLProtocol.Response]? = nil,
         checklist: [SequencedURLProtocol.Response]? = nil,
         propertyValue: [SequencedURLProtocol.Response]? = nil,
-        billTrends: [SequencedURLProtocol.Response]? = nil
+        billTrends: [SequencedURLProtocol.Response]? = nil,
+        access: [SequencedURLProtocol.Response]? = nil
     ) {
         SequencedURLProtocol.routeResponses = [
             "/api/homes/h1": detail ?? [.status(200, body: Self.detailBody)],
+            "/api/homes/h1/me": access ?? [.status(200, body: """
+            {"hasAccess":true,"permissions":["tasks.view","finance.view","packages.view",
+            "members.view","ownership.view","docs.view"]}
+            """)],
             "/api/homes/h1/dashboard": dashboard ?? [.status(200, body: Self.dashboardBody)],
             "/api/homes/h1/health-score": health ?? [.status(200, body: Self.healthBody)],
             "/api/homes/h1/seasonal-checklist": checklist ?? [.status(200, body: Self.checklistBody)],
@@ -148,6 +153,22 @@ final class HomeDashboardViewModelTests: XCTestCase {
     }
 
     // MARK: - Core dashboard
+
+    func testAccessLossRemovesPrivateNavigationAndResetsSelectedTab() async {
+        stubHappyPath()
+        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        await vm.load()
+        vm.selectTab("bills")
+        XCTAssertEqual(vm.selectedTab, "bills")
+        stubHappyPath(access: [.status(403, body: "{\"error\":\"Forbidden\"}")])
+        await vm.refresh()
+        guard case let .loaded(content) = vm.state else { return XCTFail("Expected loaded overview") }
+        XCTAssertEqual(content.tabs.map(\.id), ["overview"])
+        XCTAssertTrue(content.quickActions.isEmpty)
+        XCTAssertEqual(vm.selectedTab, "overview")
+        vm.selectTab("bills")
+        XCTAssertEqual(vm.selectedTab, "overview")
+    }
 
     func testHeroStatsComeFromTheDashboardAggregate() async {
         stubHappyPath()

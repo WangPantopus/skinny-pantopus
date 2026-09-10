@@ -233,7 +233,7 @@ struct HomeDashboardView: View {
                         tabs: content.tabs,
                         selectedTab: Binding(
                             get: { viewModel.selectedTab },
-                            set: { viewModel.selectedTab = $0 }
+                            set: { viewModel.selectTab($0) }
                         ),
                         onQuickAction: { handleQuickAction($0) },
                         overview: {
@@ -393,7 +393,7 @@ struct HomeDashboardView: View {
         // callback. Falls back to the legacy InviteOwnerForm sheet.
         if let onOpenMembers {
             onOpenMembers(homeId)
-        } else {
+        } else if viewModel.access?.can("ownership.manage") == true {
             showsInviteOwner = true
         }
     }

@@ -193,7 +193,12 @@ final class HomeDashboardViewModel {
     /// Currently displayed state.
     private(set) var state: HomeDashboardState = .loading
     /// Currently selected grid tab.
-    var selectedTab: String = "overview"
+    private(set) var selectedTab: String = "overview"
+
+    func selectTab(_ id: String) {
+        guard HomeDashboardProjection.gatedTabs(access: access).contains(where: { $0.id == id }) else { return }
+        selectedTab = id
+    }
 
     // MARK: - Home Intelligence (independent per-card state)
 
@@ -276,6 +281,9 @@ final class HomeDashboardViewModel {
         let outcome = await detailOutcome
         dashboardData = await dashboard
         access = await myAccess
+        if !HomeDashboardProjection.gatedTabs(access: access).contains(where: { $0.id == selectedTab }) {
+            selectedTab = "overview"
+        }
 
         switch outcome {
         case let .detail(home):
@@ -323,8 +331,7 @@ final class HomeDashboardViewModel {
             HomeAdminEndpoints.myAccess(homeId: homeId),
             as: HomeAccessDTO.self
         )
-        // The 403 body decodes into the same shape with hasAccess=false;
-        // treat that as "unknown" so the surface stays ungated.
+        // Missing or denied access leaves private navigation unavailable.
         guard let record, record.hasAccess else { return nil }
         return record
     }

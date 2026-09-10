@@ -23,22 +23,18 @@ public enum HomeDashboardProjection {
         GridTabsTab(id: "ownership", label: "Ownership")
     ]
 
-    /// Permission-gated tab strip. Mirrors RN's
-    /// `src/app/homes/[id]/dashboard.tsx:169-176`, which gates on the
-    /// five navigation booleans from `GET /api/homes/:id/me`
-    /// (`backend/routes/homeIam.js:51`) and never on role strings.
-    /// A nil access record (403 / offline) leaves the strip ungated so a
-    /// failed side-read can't blank the screen — the same fallback RN
-    /// takes at `src/app/homes/[id]/index.tsx:124`.
+    /// Reading a section requires its effective view permission. Overview
+    /// remains reachable while access is unavailable, without granting actions.
     public static func gatedTabs(access: HomeAccessDTO?) -> [GridTabsTab] {
-        guard let access else { return tabs }
-        return tabs.filter { tab in
+        tabs.filter { tab in
             switch tab.id {
-            case "tasks": access.canManageTasks
-            case "bills": access.canManageFinance
-            case "members": access.canManageAccess
-            case "ownership": access.isOwner || access.canManageHome
-            default: true
+            case "overview": true
+            case "tasks": access?.can("tasks.view") == true
+            case "bills": access?.can("finance.view") == true
+            case "packages": access?.can("packages.view") == true
+            case "members": access?.can("members.view") == true
+            case "ownership": access?.can("ownership.view") == true
+            default: false
             }
         }
     }
@@ -61,19 +57,14 @@ public enum HomeDashboardProjection {
 extension HomeDashboardProjection {
     // MARK: - Quick actions
 
-    /// Quick-action tiles, permission-gated the same way RN gates its
-    /// dashboard cards (`src/app/homes/[id]/index.tsx:324`, `:353`,
-    /// `:374`) using the IAM permission strings from
-    /// `GET /api/homes/:id/me`. A nil access record leaves every tile in
-    /// place — RN's `can()` also falls through to "allow" when it has no
-    /// permission list to test.
+    /// Quick actions use confirmed effective permissions from the access read.
     static func quickActions(
         counts: HomeDashboardCountsDTO?,
         access: HomeAccessDTO? = nil
     ) -> [QuickActionTile] {
         let counts = counts ?? HomeDashboardCountsDTO()
         func allowed(_ permission: String) -> Bool {
-            access?.can(permission) ?? true
+            access?.can(permission) == true
         }
         var out: [QuickActionTile] = []
         if allowed("tasks.view") {
@@ -98,7 +89,7 @@ extension HomeDashboardProjection {
                 )
             )
         }
-        if allowed("mailbox.view") {
+        if allowed("packages.view") {
             out.append(
                 tile(
                     id: "view_packages",
@@ -109,19 +100,21 @@ extension HomeDashboardProjection {
                 )
             )
         }
-        if let access, access.hasAccess, access.isOwner || access.permissions.contains("docs.view") {
+        if allowed("docs.view") {
             out.append(tile(id: "view_docs", label: "Documents", icon: .fileText, tone: .home, count: counts.documents))
         }
-        out.append(
-            tile(
-                id: "add_member",
-                label: "Members",
-                icon: .users,
-                tone: .home,
-                count: counts.membersActive,
-                showsBadge: false
+        if allowed("members.view") {
+            out.append(
+                tile(
+                    id: "add_member",
+                    label: "Members",
+                    icon: .users,
+                    tone: .home,
+                    count: counts.membersActive,
+                    showsBadge: false
+                )
             )
-        )
+        }
         return out
     }
 
