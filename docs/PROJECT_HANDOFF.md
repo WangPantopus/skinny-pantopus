@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Wallet notification durability checkpoint — September 10
+
+New paid-gig wallet credit now commits its two in-app notices and delivery events
+with the money receipt. Process death, unknown transport and lost acknowledgement
+recover the same event/notification identities. Deleted or suppressed notices
+are not replayed, and historical/zero/reused credits create no new notice.
+The [wallet delivery report](paid-gig-wallet-delivery-2026-09-10.md) records the
+full 4,821-test backend pass (16 existing skips), privacy gates, 17 fresh
+migrations, 23 SQL contracts/wrappers, zero SQL lint errors, 36 concurrent
+connections, actual relay/SQL recovery and populated-upgrade preservation.
+Independent review is complete. Transport remains at least once after an
+uncertain provider acknowledgement; hosted/provider acceptance is still open.
+
+iOS refund recovery is committed/pushed as `22d7ada36`; Android has passed its
+56 behavioral checks and is finishing formatting/static/build validation before
+its separate checkpoint. **Next:** historical assigned authorization recovery,
+cancellation/dispute/Connect/debt workflows, the fresh full sandbox paid-gig
+journey, capacity/retention checks and checked integration. Home native claim
+review and private attachments/evidence continue in draft PR #32. Paid services
+remain deferred together until final launch preparation. Completed Beacon and
+saved-card acceptance stays complete and must not be repeated.
+
 ### iOS refund recovery checkpoint — September 10
 
 The existing owner payment card now supports confirmed refund/hold-release

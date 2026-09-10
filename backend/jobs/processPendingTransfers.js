@@ -158,7 +158,10 @@ async function processPendingTransfers() {
         if (preciseGig) {
           const result = await walletSettlement.settle(payment);
           if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
-          transferAmount = result.settlement.amount_cents;
+          // Money, in-app notices and delivery events committed together. The
+          // durable relay sends the same notification after a process restart.
+          successCount++;
+          continue;
         } else {
           // ─── Transition to transfer_scheduled (concurrency guard) ───
           try {

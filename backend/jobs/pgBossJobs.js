@@ -7,6 +7,7 @@ const organicMatch = require('./organicMatch');
 const refreshDiscoveryCache = require('./refreshDiscoveryCache');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
+const deliverWalletSettlement = require('./deliverWalletSettlement');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 const computeReputation = require('./computeReputation');
@@ -33,6 +34,7 @@ const JOBS = [
   { name: 'reconcile-payment-refunds', cron: '*/5 * * * *', fn: reconcilePaymentRefunds },
   { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
   { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },
+  { name: 'deliver-wallet-settlement', cron: '* * * * *', fn: deliverWalletSettlement },
   { name: 'recompute-utility-scores',     cron: '10,25,40,55 * * * *', fn: recomputeUtilityScores },
   { name: 'organic-match',                cron: '*/2 * * * *',  fn: organicMatch },
   { name: 'refresh-discovery-cache',      cron: '*/2 * * * *',  fn: refreshDiscoveryCache },

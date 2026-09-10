@@ -1,0 +1,96 @@
+BEGIN;
+INSERT INTO auth.users(id,email) VALUES
+ ('aaf80000-0000-4000-8000-000000000001','wallet-delivery-payer@example.invalid'),
+ ('aaf80000-0000-4000-8000-000000000002','wallet-delivery-worker@example.invalid'),
+ ('aaf80000-0000-4000-8000-000000000003','wallet-delivery-admin@example.invalid');
+INSERT INTO public."User"(id,email,username,name,role) SELECT id,email,'wallet_delivery_'||right(id::text,1),'Wallet settlement',
+ CASE WHEN right(id::text,1)='3' THEN 'admin' ELSE 'user' END FROM auth.users WHERE id::text LIKE 'aaf80000-%';
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,worker_completed_at,owner_confirmed_at)
+SELECT ('aaf80000-0000-4000-8000-00000000010'||i)::uuid,'aaf80000-0000-4000-8000-000000000001',
+'aaf80000-0000-4000-8000-000000000001','Wallet settle','Synthetic',10,'completed','aaf80000-0000-4000-8000-000000000002',now()-interval '3 days',now()-interval '3 days'
+FROM generate_series(1,5) i;
+INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,amount_total,amount_subtotal,amount_platform_fee,amount_to_payee,
+ stripe_customer_id,stripe_payment_intent_id,stripe_charge_id,payment_status,captured_at,cooling_off_ends_at)
+SELECT ('aaf80000-0000-4000-8000-00000000030'||i)::uuid,('aaf80000-0000-4000-8000-00000000010'||i)::uuid,
+'aaf80000-0000-4000-8000-000000000001','aaf80000-0000-4000-8000-000000000002',1000,1000,150,850,
+'cus_settle','pi_settle'||i,'ch_settle'||i,'captured_hold',now()-interval '3 days',now()-interval '1 day'
+FROM generate_series(1,5) i;
+UPDATE public."Gig" g SET payment_id=p.id FROM public."Payment" p WHERE p.gig_id=g.id AND g.id::text LIKE 'aaf80000-%';
+CREATE FUNCTION pg_temp.wallet_settle(p uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.settle_paid_gig_wallet_income(p,public.refund_payment_snapshot(x)) FROM public."Payment" x WHERE id=p
+$$;
+CREATE FUNCTION pg_temp.wallet_refund(p uuid,r uuid,amount integer,ref text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.record_payment_refund_receipts(p,public.refund_payment_snapshot(x),jsonb_build_array(jsonb_build_object(
+ 'id',ref,'intentId',x.stripe_payment_intent_id,'chargeId',x.stripe_charge_id,'currency','usd','amountCents',amount,
+ 'status','succeeded','requestId',r,'createdAt',now()))) FROM public."Payment" x WHERE id=p
+$$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE p uuid:='aaf80000-0000-4000-8000-000000000301'; s jsonb; e jsonb; other jsonb; reclaimed jsonb; checked jsonb;
+BEGIN
+ PERFORM pg_temp.wallet_refund(p,NULL,300,'re_delivery_partial');
+ s:=pg_temp.wallet_settle(p);
+ IF s->'settlement'->>'amount_cents'<>'595' THEN RAISE EXCEPTION 'Wrong credit'; END IF;
+ IF (SELECT count(*) FROM public."PaymentWalletDelivery")<>2 OR (SELECT count(*) FROM public."Notification" WHERE metadata->>'payment_id'=p::text)<>2 THEN RAISE EXCEPTION 'Credit omitted atomic notices'; END IF;
+ IF EXISTS(SELECT FROM public."Notification" WHERE metadata->>'payment_id'=p::text AND (metadata->>'amount_cents'<>'595' OR metadata->>'currency'<>'usd')) THEN RAISE EXCEPTION 'Notice amount is not actual credit'; END IF;
+ IF NOT EXISTS(SELECT FROM public."Notification" WHERE metadata->>'payment_id'=p::text AND type='payout_sent' AND link='/app/wallet'
+  AND user_id='aaf80000-0000-4000-8000-000000000002') THEN RAISE EXCEPTION 'Worker notice has wrong destination'; END IF;
+ IF pg_temp.wallet_settle(p)->>'reused' IS DISTINCT FROM 'true' OR (SELECT count(*) FROM public."PaymentWalletDelivery")<>2 THEN RAISE EXCEPTION 'Retry duplicated notice'; END IF;
+ e:=public.claim_wallet_settlement_delivery(); other:=public.claim_wallet_settlement_delivery();
+ IF e IS NULL OR other IS NULL OR e->>'id'=other->>'id' OR public.claim_wallet_settlement_delivery() IS NOT NULL THEN RAISE EXCEPTION 'Active lease claimed twice'; END IF;
+ checked:=public.read_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid);
+ IF checked->>'eligible' IS DISTINCT FROM 'true' OR checked->'notification'->>'id' IS DISTINCT FROM e->>'notification_id' THEN RAISE EXCEPTION 'Wrong current notification'; END IF;
+ IF NOT public.finish_wallet_settlement_delivery((other->>'id')::uuid,(other->>'lease_id')::uuid,'suppressed') THEN RAISE EXCEPTION 'Suppression failed'; END IF;
+ IF NOT public.finish_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid,'retry','unknown') OR public.claim_wallet_settlement_delivery() IS NOT NULL THEN RAISE EXCEPTION 'Unknown result missing backoff'; END IF;
+ UPDATE public."PaymentWalletDelivery" SET retry_at=clock_timestamp()-interval '1 second' WHERE id=(e->>'id')::uuid;
+ reclaimed:=public.claim_wallet_settlement_delivery();
+ IF reclaimed->>'id' IS DISTINCT FROM e->>'id' OR reclaimed->>'lease_id'=e->>'lease_id' OR reclaimed->>'notification_id' IS DISTINCT FROM e->>'notification_id' THEN RAISE EXCEPTION 'Retry did not retain exact notification'; END IF;
+ IF public.finish_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid,'done') OR public.read_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid)->>'error' IS DISTINCT FROM 'LEASE_LOST' THEN RAISE EXCEPTION 'Old lease acknowledged new attempt'; END IF;
+ -- A process death leaves a reclaimable lease without creating another row.
+ UPDATE public."PaymentWalletDelivery" SET lease_until=clock_timestamp()-interval '1 second' WHERE id=(e->>'id')::uuid;
+ e:=public.claim_wallet_settlement_delivery();
+ IF e->>'id' IS DISTINCT FROM reclaimed->>'id' OR e->>'lease_id'=reclaimed->>'lease_id' THEN RAISE EXCEPTION 'Expired lease not recovered'; END IF;
+ DELETE FROM public."Notification" WHERE id=(e->>'notification_id')::uuid;
+ IF public.read_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid)->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Deleted notification was delivered'; END IF;
+ PERFORM public.finish_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid,'suppressed');
+ PERFORM pg_temp.wallet_settle(p);
+ IF (SELECT count(*) FROM public."Notification" WHERE metadata->>'payment_id'=p::text)<>1 OR public.claim_wallet_settlement_delivery() IS NOT NULL THEN RAISE EXCEPTION 'Suppressed/deleted notification replayed'; END IF;
+END $$;
+DO $$ DECLARE p uuid:='aaf80000-0000-4000-8000-000000000302'; BEGIN
+ PERFORM pg_temp.wallet_refund(p,NULL,1000,'re_delivery_zero'); PERFORM pg_temp.wallet_settle(p);
+ IF EXISTS(SELECT FROM public."PaymentWalletDelivery" d JOIN public."PaymentWalletSettlement" s ON s.id=d.settlement_id WHERE s.payment_id=p) THEN RAISE EXCEPTION 'Zero credit announced'; END IF;
+END $$;
+DO $$ DECLARE p uuid:='aaf80000-0000-4000-8000-000000000303'; BEGIN
+ PERFORM public.wallet_credit('aaf80000-0000-4000-8000-000000000002',850,'gig_income',NULL,p,
+  'aaf80000-0000-4000-8000-000000000103','aaf80000-0000-4000-8000-000000000001',NULL,'legacy-delivery');
+ PERFORM pg_temp.wallet_settle(p);
+ IF EXISTS(SELECT FROM public."PaymentWalletDelivery" d JOIN public."PaymentWalletSettlement" s ON s.id=d.settlement_id WHERE s.payment_id=p) THEN RAISE EXCEPTION 'Historical credit was replayed'; END IF;
+END $$;
+-- Failure after the wallet primitive and receipt insert rolls everything back.
+RESET ROLE;
+CREATE FUNCTION pg_temp.reject_delivery_note() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.metadata->>'payment_id'='aaf80000-0000-4000-8000-000000000304' THEN RAISE EXCEPTION 'Injected notification storage failure' USING ERRCODE='40001'; END IF;
+ RETURN NEW; END $$;
+CREATE TRIGGER reject_delivery_note BEFORE INSERT ON public."Notification" FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_delivery_note();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE p uuid:='aaf80000-0000-4000-8000-000000000304'; balance_before bigint; BEGIN
+ SELECT balance INTO balance_before FROM public."Wallet" WHERE user_id='aaf80000-0000-4000-8000-000000000002';
+ BEGIN PERFORM pg_temp.wallet_settle(p); RAISE EXCEPTION 'Injection did not fail'; EXCEPTION WHEN serialization_failure THEN NULL; END;
+ IF EXISTS(SELECT FROM public."PaymentWalletSettlement" WHERE payment_id=p) OR EXISTS(SELECT FROM public."WalletTransaction" WHERE payment_id=p)
+  OR (SELECT balance FROM public."Wallet" WHERE user_id='aaf80000-0000-4000-8000-000000000002')<>balance_before THEN RAISE EXCEPTION 'Partial credit survived notification failure'; END IF;
+END $$;
+DO $$ DECLARE p uuid:='aaf80000-0000-4000-8000-000000000305'; e jsonb; BEGIN
+ PERFORM pg_temp.wallet_settle(p);
+ e:=public.claim_wallet_settlement_delivery();
+ UPDATE public."Wallet" SET currency='EUR' WHERE user_id='aaf80000-0000-4000-8000-000000000002';
+ IF public.read_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid)->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Changed wallet proof allowed delivery'; END IF;
+ UPDATE public."Wallet" SET currency='USD' WHERE user_id='aaf80000-0000-4000-8000-000000000002';
+ UPDATE public."Notification" SET metadata=jsonb_set(metadata,'{amount_cents}','999') WHERE id=(e->>'notification_id')::uuid;
+ IF public.read_wallet_settlement_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid)->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Changed notification amount allowed delivery'; END IF;
+END $$;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN PERFORM public.claim_wallet_settlement_delivery(); RAISE EXCEPTION 'Client claimed delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM * FROM public."PaymentWalletDelivery"; RAISE EXCEPTION 'Client read delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+ROLLBACK;

@@ -49,6 +49,8 @@ async function overlap(first, following) {
   return Promise.all([leader.done, ...following.map(sql => query(sql).done)]);
 }
 const financialCleanup = `
+ DELETE FROM public."Notification" WHERE id IN (SELECT d.notification_id FROM public."PaymentWalletDelivery" d JOIN public."PaymentWalletSettlement" s ON s.id=d.settlement_id WHERE s.payment_id='${payment}');
+ DELETE FROM public."PaymentWalletDelivery" WHERE settlement_id IN (SELECT id FROM public."PaymentWalletSettlement" WHERE payment_id='${payment}');
  DELETE FROM public."PaymentWalletSettlement" WHERE payment_id='${payment}';
  DELETE FROM public."Refund" WHERE payment_id='${payment}';
  DELETE FROM public."PaymentRefundReceipt" WHERE payment_id='${payment}';

@@ -104,11 +104,11 @@ function scheduled(result) {
     return result;
   }); setRpcMock(rpc); return rpc;
 }
-test('actual scheduler uses one atomic residual transaction and announces exact credited amount', async () => {
+test('actual scheduler uses one atomic transaction without a second post-commit notification', async () => {
   const rpc = scheduled({ data: { payment: payment(), settlement: receipt(payment()), reused: false } });
   await processTransfers(); expect(rpc).toHaveBeenCalledTimes(1);
   expect(wallet.creditGigIncome).not.toHaveBeenCalled();
-  expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'worker', title: '$5.95 added to your wallet', metadata: expect.objectContaining({ amount: 595 }) }));
+  expect(notifications.createNotification).not.toHaveBeenCalled();
 });
 test.each([{ reused: true, status: 'credited' }, { reused: false, status: 'no_earnings' }])('scheduler duplicate/zero receipt does not announce another credit: %j', async flags => {
   scheduled({ data: { payment: payment(), settlement: receipt(payment(), { status: flags.status }), reused: flags.reused } });

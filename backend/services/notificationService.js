@@ -199,7 +199,7 @@ const GIG_TYPES = new Set([
   // Payments
   'payment_auth_failed', 'payment_captured', 'payment_released',
   'payment_action_required', 'payment_setup_failed',
-  'payout_sent', 'payout_onboarding_nudge',
+  'payout_sent', 'payout_onboarding_nudge', 'payment_completed',
   // Disputes
   'dispute_created', 'dispute_resolved',
   // Worker coordination
@@ -1267,7 +1267,7 @@ async function notifyHouseholdAccessRequest({
 
 /** Deliver an already-committed paid-gig notification without inserting again. */
 async function deliverStoredGigNotification(notification) {
-  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge'].includes(notification.type)) {
+  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed'].includes(notification.type)) {
     throw new Error('Unsupported stored gig notification');
   }
   const userId = notification.user_id;

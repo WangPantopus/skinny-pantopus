@@ -86,6 +86,7 @@ const autoRemindWorker = require('./autoRemindWorker');
 // Payment bid expiry
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
+const deliverWalletSettlement = require('./deliverWalletSettlement');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 // Persistent login registry housekeeping
@@ -115,6 +116,7 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'refreshDiscoveryCache',
   'expirePendingPaymentBids',
   'deliverGigAcceptance',
+  'deliverWalletSettlement',
   'reconcileGigAcceptance',
   'reconcilePaymentRefunds',
   'computeReputation',
@@ -592,6 +594,10 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('* * * * *', wrapJob('deliverGigAcceptance', deliverGigAcceptance), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverWalletSettlement', deliverWalletSettlement), {
     scheduled: true, timezone: 'UTC',
   });
 
