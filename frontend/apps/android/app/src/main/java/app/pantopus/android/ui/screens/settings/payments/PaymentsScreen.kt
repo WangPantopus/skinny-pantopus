@@ -93,6 +93,7 @@ fun PaymentsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val addCardPhase by viewModel.addCardPhase.collectAsStateWithLifecycle()
     val toastController = remember { ToastController() }
     val context = LocalContext.current
 
@@ -108,7 +109,8 @@ fun PaymentsScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is PaymentsEvent.PresentAddCardSheet ->
+                is PaymentsEvent.PresentAddCardSheet -> {
+                    if (!viewModel.canPresentAddCardSheet(event.params)) return@collect
                     paymentSheet.presentWithSetupIntent(
                         setupIntentClientSecret = event.params.setupIntent,
                         configuration =
@@ -119,6 +121,7 @@ fun PaymentsScreen(
                                 publishableKey = event.params.publishableKey,
                             ),
                     )
+                }
                 is PaymentsEvent.ShowMessage -> toastController.error(event.text)
             }
         }
@@ -154,6 +157,7 @@ fun PaymentsScreen(
                             },
                             onCloseAccount = viewModel::tapCloseAccount,
                             onRetry = viewModel::refresh,
+                            addCardPhase = addCardPhase,
                         ),
                 )
             }
@@ -170,6 +174,7 @@ internal data class PaymentsScreenActions(
     val onTapRow: (String) -> Unit,
     val onCloseAccount: () -> Unit,
     val onRetry: () -> Unit,
+    val addCardPhase: AddCardPhase = AddCardPhase.Idle,
 )
 
 /**
@@ -204,6 +209,7 @@ internal fun PaymentsScreenContent(
                     loaded = current.content,
                     onTapMethod = { selectedMethod = it },
                     onAddMethod = actions.onAddMethod,
+                    addCardPhase = actions.addCardPhase,
                     onTapRow = actions.onTapRow,
                     onCloseAccount = actions.onCloseAccount,
                 )
@@ -434,6 +440,7 @@ private fun LoadedFrame(
     onAddMethod: () -> Unit,
     onTapRow: (String) -> Unit,
     onCloseAccount: () -> Unit,
+    addCardPhase: AddCardPhase,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("paymentsContent"),
@@ -446,7 +453,7 @@ private fun LoadedFrame(
         }
         item(key = "overline_methods") { SectionOverline("Payment methods", id = "methods") }
         item(key = "card_methods") {
-            MethodsCard(methods = loaded.methods, onTapMethod = onTapMethod, onAddMethod = onAddMethod)
+            MethodsCard(methods = loaded.methods, onTapMethod = onTapMethod, onAddMethod = onAddMethod, addCardPhase = addCardPhase)
         }
         item(key = "overline_payouts") { SectionOverline("Payouts", id = "payouts") }
         item(key = "card_payouts") {
@@ -525,6 +532,7 @@ private fun MethodsCard(
     methods: List<PaymentMethod>,
     onTapMethod: (PaymentMethod) -> Unit,
     onAddMethod: () -> Unit,
+    addCardPhase: AddCardPhase,
 ) {
     Card(id = "methods") {
         if (methods.isEmpty()) {
@@ -557,7 +565,7 @@ private fun MethodsCard(
             }
             Divider()
         }
-        AddMethodRow(onAddMethod = onAddMethod)
+        AddMethodRow(onAddMethod = onAddMethod, phase = addCardPhase)
     }
 }
 
@@ -903,13 +911,16 @@ private fun ActivityEmptyRow(
 }
 
 @Composable
-private fun AddMethodRow(onAddMethod: () -> Unit) {
+private fun AddMethodRow(
+    onAddMethod: () -> Unit,
+    phase: AddCardPhase,
+) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .clickable(onClick = onAddMethod)
+                .clickable(enabled = !phase.isBusy, onClick = onAddMethod)
                 .padding(horizontal = Spacing.s4, vertical = 13.dp)
                 .testTag("payments.addMethodBtn"),
         verticalAlignment = Alignment.CenterVertically,
@@ -932,7 +943,7 @@ private fun AddMethodRow(onAddMethod: () -> Unit) {
             )
         }
         Text(
-            text = "Add payment method",
+            text = phase.label,
             color = PantopusColors.primary600,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,

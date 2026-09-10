@@ -202,7 +202,8 @@ final class PaymentsViewModelTests: XCTestCase {
     )
 
     private static let addCardParamsJSON = """
-    {"setupIntent":"seti_123_secret_abc","ephemeralKey":"ek_test_123","customer":"cus_123","publishableKey":"pk_test_x"}
+    {"setupIntent":"seti_123_secret_abc","setupIntentId":"seti_123","setupStatus":"requires_payment_method","ephemeralKey":"ek_test_123",
+    "customer":"cus_123","publishableKey":"pk_test_x"}
     """
 
     /// `GET /api/payments/history` — every live `load()` reads it right after
@@ -333,11 +334,12 @@ final class PaymentsViewModelTests: XCTestCase {
     }
 
     func testAddCardCompletedRefreshesMethods() async {
-        // load (empty) → add-card params → reload (now one card).
+        // load (empty) → add-card params → durable receipt → refreshed list.
         SequencedURLProtocol.sequence = [
             .status(200, body: "{\"paymentMethods\":[]}"),
             .status(200, body: Self.emptyHistoryJSON),
             .status(200, body: Self.addCardParamsJSON),
+            .status(200, body: "{\"confirmed\":true,\"paymentMethod\":\(Self.cardJSON(Self.defaultVisa))}"),
             .status(200, body: Self.methodsJSON)
         ]
         let presenter = StubPaymentSheetPresenter()

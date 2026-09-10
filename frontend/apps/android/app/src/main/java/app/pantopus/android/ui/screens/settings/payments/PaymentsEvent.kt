@@ -30,3 +30,23 @@ sealed interface AddCardOutcome {
 
     data class Failed(val message: String?) : AddCardOutcome
 }
+
+/** An unfinished save recovers the same setup before resuming or confirming it. */
+enum class AddCardPhase {
+    Idle,
+    Preparing,
+    Presenting,
+    Confirming,
+    Retry,
+    ;
+
+    val isBusy: Boolean get() = this != Idle && this != Retry
+    val label: String get() =
+        if (isBusy) {
+            "Adding card…"
+        } else if (this == Retry) {
+            "Retry saving card"
+        } else {
+            "Add payment method"
+        }
+}

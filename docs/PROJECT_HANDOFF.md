@@ -35,7 +35,11 @@ and cannot silently restore revoked membership. No ordinary role grant,
 verification-age rollout or hosted Home migration ran. This remains a source
 checkpoint, not full Home acceptance or a release.
 
-**Next:** commit this checkpoint, integrate current master safely, then finish
+Source checkpoint `0362ba8f2` is committed and pushed. Current master has been
+integrated, retaining the completed payment changes and both handoff records.
+Repeat the combined backend/schema checks before the next source checkpoint.
+
+**Next:** finish
 invite creation/acceptance/decline and household-request conversion. Follow with
 claim submission/challenge and remaining ownership/lease lifecycle paths,
 guest/scoped exact-resource sharing, task/calendar/attachment access and derived
@@ -127,7 +131,56 @@ do not rerun fixture initializers or the migration. Public/browser/production
 runtimes are unchanged. PR #29/#30 are merged; the older checkpoint below is
 historical where it conflicts. Physical iPhone Beacon acceptance is complete.
 
-### Source integration checkpoint — September 9
+### Current source and acceptance checkpoint — September 9
+
+**Saved-card PaymentSheet acceptance and exact cleanup are complete.** Draft
+[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) contains the
+owned-setup recovery, atomic preferences/removal, customer-binding protection and
+native accessibility repairs. Both simulators pass cancel → cold restart → same
+setup, two-card save/default/cold persistence, removal cancellation/fallback/empty
+state and normal logout. Provider/API checks confirm exactly two successful
+setups per actor, foreign/removed-proof denial, no charges and exact cleanup.
+The [payment report](staging-payment-sheet-2026-09-09.md) records the staged iOS
+reconciliation, 85 focused native tests, 4,607 backend tests (16 skipped), privacy,
+18 SQL contracts and 32-connection concurrency coverage. Never rerun the completed
+payment actors, SDK setup or cleanup. No owner device input is pending.
+
+**Next integrate PR #31 only after all final current-head checks pass**, then
+continue the isolated paid-gig and Home authorization work below. No CI waiver
+applies to this PR. The private API candidate remains committed `2e7b04293`, image
+`2e0a32e8b0e2`; its additive payment migration is applied only to Free staging,
+preserving existing records and the absent ledger. Native app source includes
+`9fbf548bf`; later acceptance-selector edits are test-only. The prior private
+candidate is retained stopped. Public API/worker, browser API/web and production
+runtimes are unchanged. Source integration does not enable deployment.
+
+Home work is isolated in `/private/tmp/pantopus-home-permission-boundaries`,
+`codex/home-permission-boundaries`, draft [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
+First effective-permission checkpoint `2fabe0c94` and finance RLS checkpoint
+`a248b15c1` pass current-head CI; the latter passes all 20 SQL contracts. Initial
+full backend coverage is 4,620 tests, privacy gates, 29 web hook tests and web
+TypeScript. Core IAM/deletion is in progress: the raw authority contract passes
+and deletion passes 13 local races; final source review/full integration tests
+remain pending. No hosted Home policies or new role grants ran. Continue enrollment,
+scoped resources, task/calendar/attachment/dashboard/recipient boundaries, client
+navigation, then reviewed ordinary defaults and actual household acceptance.
+
+Paid-gig work is isolated in `/private/tmp/pantopus-staging-paid-gig`, branch
+`codex/staging-paid-gig`, initially from `89662d8da`. Backend/SQL work addresses
+concurrent acceptance, proof before assignment, exact capture and cancellation
+recovery. No hosted migration or provider call ran there. UI pending recovery,
+selected-bid amount and scoped refund follow the first backend checkpoint.
+
+The adoption inventory/audit documentation is pushed at `71473ed5a` on
+`codex/staging-adoption-plan`. Ledger reconciliation, final candidate replay,
+managed Auth/storage and external-object restore remain unfinished. Native
+sensitive-screen invalid-capability handling is a separate pre-release repair
+found during payment diagnosis; normal simulator success does not cover it.
+Smarty subscription activation/retest remains an owner launch prerequisite, with
+its existing reminder retained. PR #29/#30 and mail acceptance are complete.
+The older checkpoint below is historical where it conflicts.
+
+### Earlier source integration checkpoint — September 9
 
 **Next active work:** `/private/tmp/pantopus-staging-payment-sheet`, branch
 `codex/staging-payment-sheet`. Complete account-scoped recovery of the same

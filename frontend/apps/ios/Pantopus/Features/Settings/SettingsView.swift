@@ -69,6 +69,7 @@ public struct SettingsView: View {
         currentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.Color.appBg)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("settings")
     }
 
