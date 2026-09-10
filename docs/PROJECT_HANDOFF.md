@@ -19,8 +19,10 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 Active work is `/private/tmp/pantopus-staging-payment-sheet`, branch
 `codex/staging-payment-sheet`. The [payment report](staging-payment-sheet-2026-09-09.md)
 records owned SetupIntent preparation/resume and durable confirmation, with
-57 focused tests, 4,548 backend tests and privacy gates passing. Native lifecycle
-checks are still running; no live payment fixtures or candidate changes ran.
+57 focused tests, 4,548 backend tests and privacy gates passing before the mail
+integration. The frozen iOS lifecycle implementation passes all 36 focused tests
+and strict formatting/lint checks; Android's final run is active. No live payment
+fixtures or candidate changes ran.
 Before acceptance, finish the reproduced default/removal race with atomic
 app-owned preference and durable removal guards, then exercise actual Stripe
 SDK/test-mode journeys on both simulators and clean their exact fixtures.
@@ -33,8 +35,14 @@ are applied only to Free staging, preserving records and the absent ledger.
 Public/browser/production runtimes are unchanged. Do not rerun completed mail
 publishers, cleanup or appliers. The separate rollback binding fix is ready
 PR #30 (`8f7a6121a`), with 47 local deployment tests passing and full CI pending.
-Merge current master into this payment branch before final checks/integration;
-the earlier source checkpoint below is historical where it conflicts.
+Master `3009eb0be` is integrated into this payment branch by `98dbc77d0`;
+PR #29's merged-master CI also passes (run `34425657480`). PR #30 has only
+one iOS simulator CI job pending at this checkpoint. The independent staging
+inventory branch `codex/staging-adoption-plan` is pushed at `a6b1b5748`;
+its report records remaining schema/ACL differences and matching reference
+values, with no hosted adoption or production write. Continue atomic card
+preference/removal verification and native acceptance before payment integration.
+The earlier source checkpoint below is historical where it conflicts.
 
 ### Earlier source integration checkpoint — September 9
 

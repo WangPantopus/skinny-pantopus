@@ -36,6 +36,20 @@ public final class PaymentsViewModel {
     /// DELETE only fires once the user confirms, so the action menu's
     /// "Remove Card" item sets this instead of calling `removeMethod(_:)`.
     public private(set) var pendingRemoval: PaymentMethod?
+    public private(set) var isAddingMethod = false
+    public private(set) var isChangingMethod = false
+    public var addMethodLabel: String {
+        if isAddingMethod { return "Adding card…" }
+        return pendingSetupIntentId == nil ? "Add payment method" : "Retry saving card"
+    }
+
+    /// Persisted before presentation; never stores a client secret.
+    private var pendingSetupIntentId: String?
+    private var pendingAccountScope: String?
+    private var needsPreparation = true
+    private var methodsGeneration = 0
+    private let pendingSaveStore: (any PendingCardSaveStoring)?
+    private let userIdProvider: () -> String?
 
     private let api: APIClient
     private let sheetPresenter: any PaymentSheetPresenting
@@ -44,20 +58,37 @@ public final class PaymentsViewModel {
 
     /// Live (production) — real backend + Stripe PaymentSheet.
     public convenience init() {
-        self.init(api: .shared, sheetPresenter: StripePaymentSheetPresenter())
+        self.init(
+            api: .shared,
+            sheetPresenter: StripePaymentSheetPresenter(),
+            pendingSaveStore: PendingCardSaveStore()
+        ) {
+            if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+            return nil
+        }
     }
 
     /// Live with injected collaborators — used by the live-path unit tests.
-    init(api: APIClient, sheetPresenter: any PaymentSheetPresenting) {
+    init(
+        api: APIClient,
+        sheetPresenter: any PaymentSheetPresenting,
+        pendingSaveStore: (any PendingCardSaveStoring)? = nil,
+        userIdProvider: @escaping () -> String? = { nil }
+    ) {
         self.api = api
         self.sheetPresenter = sheetPresenter
+        self.pendingSaveStore = pendingSaveStore
+        self.userIdProvider = userIdProvider
         seed = nil
+        restorePendingSave()
     }
 
     /// Fixture-driven — previews, snapshot tests, projection tests.
     public init(seed: PaymentsSeed) {
         api = .shared
         sheetPresenter = StripePaymentSheetPresenter()
+        pendingSaveStore = nil
+        userIdProvider = { nil }
         self.seed = seed
     }
 
@@ -71,26 +102,31 @@ public final class PaymentsViewModel {
     /// so a pull-to-refresh does not tear the list down under the user's finger.
     /// Mirrors `WalletViewModel.fetchLive(showLoading:)`.
     private func load(showLoading: Bool) async {
+        guard !isAddingMethod, !isChangingMethod else { return }
+        restorePendingSave()
         if let seed {
             state = .loaded(Self.fixture(for: seed))
             return
         }
         if showLoading { state = .loading }
+        let generation = methodsGeneration
+        let scope = currentSaveScope
         do {
             let methods = try await fetchMethods()
             // History + lifetime totals are supplementary — a failure there
             // shouldn't sink the whole screen, so each degrades on its own
             // (the "couldn't load" activity row / an em-dash tile) while the
             // methods card still renders.
-            state = await .loaded(
-                Self.liveFrame(
-                    methods: methods,
-                    activity: fetchActivity(),
-                    earnings: fetchEarnings(),
-                    connectAccount: fetchConnectAccount()
-                )
+            let content = await Self.liveFrame(
+                methods: methods,
+                activity: fetchActivity(),
+                earnings: fetchEarnings(),
+                connectAccount: fetchConnectAccount()
             )
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
+            state = .loaded(content)
         } catch {
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
             state = .error(message: Self.message(for: error))
         }
     }
@@ -107,41 +143,173 @@ public final class PaymentsViewModel {
     // MARK: - Add a card (Stripe PaymentSheet, SetupIntent)
 
     public func tapAddMethod() async {
-        guard seed == nil else { return }
+        guard seed == nil, !isAddingMethod, !isChangingMethod else { return }
+        restorePendingSave()
+        let scope = currentSaveScope
+        guard pendingSaveStore == nil || scope != nil else {
+            actionError = "Sign in again before adding a payment method."
+            return
+        }
+        isAddingMethod = true
+        methodsGeneration += 1
+        actionError = nil
+        defer { isAddingMethod = false }
+        if pendingSetupIntentId != nil, !needsPreparation {
+            await reconcileAddedCard(scope: scope)
+            return
+        }
         do {
-            let params: AddCardSheetParams = try await api.request(PaymentsEndpoints.addCardSheet())
-            let outcome = await sheetPresenter.presentAddCard(
-                setupIntentClientSecret: params.setupIntent,
-                customer: params.customer,
-                ephemeralKey: params.ephemeralKey,
-                publishableKey: params.publishableKey
+            let requestedId = pendingSetupIntentId
+            let params: AddCardSheetParams = try await api.request(PaymentsEndpoints.addCardSheet(setupIntentId: requestedId))
+            guard accountStillMatches(scope) else { return }
+            guard !params.setupIntentId.isEmpty, requestedId == nil || requestedId == params.setupIntentId else {
+                actionError = "Couldn't resume this card setup. Please try again."
+                return
+            }
+            pendingSetupIntentId = params.setupIntentId
+            if let scope { try pendingSaveStore?.save(params.setupIntentId, scope: scope) }
+            try await resumePreparedCard(params, scope: scope)
+        } catch {
+            guard accountStillMatches(scope) else { return }
+            handleSaveFailure(error, scope: scope)
+        }
+    }
+
+    private func resumePreparedCard(_ params: AddCardSheetParams, scope: String?) async throws {
+        switch params.setupStatus {
+        case "succeeded":
+            needsPreparation = false
+            await reconcileAddedCard(scope: scope)
+            return
+        case "processing":
+            actionError = "Your card setup is still processing. Please retry shortly."
+            return
+        case "canceled":
+            try clearPendingSave(scope: scope)
+            actionError = "This card setup is no longer available. You can add a payment method again."
+            return
+        case "requires_payment_method", "requires_confirmation", "requires_action": break
+        default:
+            actionError = "Couldn't confirm the card setup status. Please retry."
+            return
+        }
+        let outcome = await sheetPresenter.presentAddCard(
+            setupIntentClientSecret: params.setupIntent,
+            customer: params.customer,
+            ephemeralKey: params.ephemeralKey,
+            publishableKey: params.publishableKey
+        )
+        guard accountStillMatches(scope) else { return }
+        switch outcome {
+        case .completed:
+            needsPreparation = false
+            await reconcileAddedCard(scope: scope)
+        case .canceled:
+            break
+        case let .failed(message):
+            actionError = message
+        }
+    }
+
+    private func reconcileAddedCard(scope: String?) async {
+        guard let pendingSetupIntentId else { return }
+        do {
+            let receipt: ConfirmAddCardResponse = try await api.request(
+                PaymentsEndpoints.confirmAddCard(setupIntentId: pendingSetupIntentId)
             )
-            switch outcome {
-            case .completed:
-                // The attached card is reconciled into the backend by the
-                // `payment_method.attached` webhook; re-read the source of
-                // truth so the list reflects server state.
-                await reloadMethods()
-            case .canceled:
-                break
-            case let .failed(message):
-                actionError = message
+            guard accountStillMatches(scope) else { return }
+            guard receipt.confirmed, !receipt.paymentMethod.id.isEmpty else {
+                actionError = "Your card hasn't been saved yet. Tap Retry saving card."
+                return
+            }
+            let method = Self.uiMethod(from: receipt.paymentMethod)
+            let current = if case let .loaded(loaded) = state { loaded } else { Self.liveFrame(methods: []) }
+            state = .loaded(current.savingMethod(method))
+            try clearPendingSave(scope: scope)
+            // Keep the receipt on read failure; a successful fresh list wins
+            // if another device removed the card or changed its default.
+            do {
+                let methods = try await fetchMethods()
+                guard accountStillMatches(scope) else { return }
+                if case let .loaded(loaded) = state {
+                    state = .loaded(loaded.replacingMethods(methods))
+                }
+            } catch {
+                guard accountStillMatches(scope) else { return }
+                actionError = "Your card was saved. Couldn't refresh the other payment methods; pull down to retry."
             }
         } catch {
-            actionError = Self.message(for: error)
+            guard accountStillMatches(scope) else { return }
+            handleSaveFailure(error, scope: scope)
+        }
+    }
+
+    private var currentSaveScope: String? {
+        userIdProvider().map { "\(api.apiBaseURL.absoluteString)|\($0)" }
+    }
+
+    private func restorePendingSave() {
+        let scope = currentSaveScope
+        if pendingAccountScope != scope {
+            pendingSetupIntentId = nil
+            pendingAccountScope = scope
+            needsPreparation = true
+        }
+        if pendingSetupIntentId == nil, let scope, let stored = pendingSaveStore?.load(scope: scope) {
+            pendingSetupIntentId = stored
+            needsPreparation = true
+        }
+    }
+
+    private func accountStillMatches(_ scope: String?) -> Bool {
+        guard scope == currentSaveScope else {
+            restorePendingSave()
+            state = .loading
+            actionError = nil
+            return false
+        }
+        return true
+    }
+
+    private func clearPendingSave(scope: String?) throws {
+        if let scope { try pendingSaveStore?.clear(scope: scope) }
+        pendingSetupIntentId = nil
+        needsPreparation = true
+    }
+
+    private func handleSaveFailure(_ error: any Error, scope: String?) {
+        if case APIError.notFound = error {
+            do {
+                try clearPendingSave(scope: scope)
+                actionError = "This card setup is no longer available. You can add a payment method again."
+            } catch {
+                actionError = "Couldn't clear the unavailable card setup. Please retry."
+            }
+        } else {
+            if case APIError.clientError(status: 409, message: _) = error { needsPreparation = true }
+            actionError = pendingSetupIntentId == nil
+                ? Self.message(for: error)
+                : "Saving your card hasn't been confirmed. Tap Retry saving card."
         }
     }
 
     // MARK: - Set default / remove (optimistic, then reconcile)
 
     public func setDefault(_ id: String) async {
-        guard seed == nil, case let .loaded(loaded) = state else { return }
+        guard seed == nil, !isAddingMethod, !isChangingMethod, case let .loaded(loaded) = state else { return }
+        isChangingMethod = true
+        methodsGeneration += 1
+        let generation = methodsGeneration
+        let scope = currentSaveScope
+        defer { isChangingMethod = false }
         let previous = loaded
         state = .loaded(loaded.markingDefault(id))
         do {
             try await api.request(PaymentsEndpoints.setDefaultMethod(id: id))
-            await reloadMethods()
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
+            await reloadMethods(generation: generation, scope: scope)
         } catch {
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
             state = .loaded(previous)
             actionError = "Couldn't update your default payment method. Please try again."
         }
@@ -161,13 +329,20 @@ public final class PaymentsViewModel {
     /// issues `DELETE /api/payments/methods/{id}`.
     public func removeMethod(_ id: String) async {
         pendingRemoval = nil
-        guard seed == nil, case let .loaded(loaded) = state else { return }
+        guard seed == nil, !isAddingMethod, !isChangingMethod, case let .loaded(loaded) = state else { return }
+        isChangingMethod = true
+        methodsGeneration += 1
+        let generation = methodsGeneration
+        let scope = currentSaveScope
+        defer { isChangingMethod = false }
         let previous = loaded
         state = .loaded(loaded.removingMethod(id))
         do {
             try await api.request(PaymentsEndpoints.removeMethod(id: id))
-            await reloadMethods()
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
+            await reloadMethods(generation: generation, scope: scope)
         } catch {
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
             state = .loaded(previous)
             actionError = "Couldn't remove that payment method. Please try again."
         }
@@ -236,15 +411,17 @@ public final class PaymentsViewModel {
         )
     }
 
-    private func reloadMethods() async {
+    private func reloadMethods(generation: Int, scope: String?) async {
         do {
             let methods = try await fetchMethods()
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
             if case let .loaded(current) = state {
                 state = .loaded(current.replacingMethods(methods))
             } else {
                 state = .loaded(Self.liveFrame(methods: methods))
             }
         } catch {
+            guard generation == methodsGeneration, accountStillMatches(scope) else { return }
             // Keep the optimistic state; surface a soft error.
             actionError = Self.message(for: error)
         }
@@ -557,6 +734,13 @@ public final class PaymentsViewModel {
 // MARK: - PaymentsLoaded transforms
 
 private extension PaymentsLoaded {
+    func savingMethod(_ saved: PaymentMethod) -> PaymentsLoaded {
+        var updated = methods.filter { $0.id != saved.id }
+        updated.insert(saved, at: 0)
+        let result = replacingMethods(updated)
+        return saved.chip == nil ? result : result.markingDefault(saved.id)
+    }
+
     func replacingMethods(_ methods: [PaymentMethod]) -> PaymentsLoaded {
         PaymentsLoaded(
             balance: balance,

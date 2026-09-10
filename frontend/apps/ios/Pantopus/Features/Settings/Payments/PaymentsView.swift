@@ -507,7 +507,7 @@ private extension PaymentsView {
                         .frame(width: 38, height: 26)
                     Icon(.plus, size: 16, strokeWidth: 2.5, color: Theme.Color.primary600)
                 }
-                Text("Add payment method")
+                Text(viewModel.addMethodLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary600)
                 Spacer(minLength: Spacing.s0)
@@ -518,6 +518,7 @@ private extension PaymentsView {
             .contentShape(Rectangle())
         })
         .buttonStyle(.plain)
+        .disabled(viewModel.isAddingMethod || viewModel.isChangingMethod)
         .accessibilityIdentifier("payments.addMethodBtn")
     }
 

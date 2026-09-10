@@ -30,7 +30,24 @@ of PR #29's additional mail tests. Native account/origin-scoped persistence,
 same-setup recovery after navigation/restart, terminal-denial handling and stale
 UI response guards are being verified separately before their commit. The first
 iOS recovery run passed 33 focused tests; a final reverse-order action guard and
-Android verification remain in progress at this backend-only checkpoint.
+Android verification remained in progress at that backend-only checkpoint.
+
+## iOS recovery checkpoint
+
+The branch now includes merged master `3009eb0be` through merge `98dbc77d0`.
+iOS persists only the non-secret setup identifier, scoped to the signed-in
+account and API origin, before presenting Stripe. Returning to Payments or
+restarting the app resumes that setup; processing and retryable confirmation
+failures keep recovery available. Terminal missing/foreign proof is cleared
+with an accurate message. A fresh successful card list wins over the receipt,
+while a failed refresh preserves the confirmed saved card.
+
+Add, default and removal actions cannot overlap. Account and request-generation
+checks prevent a delayed list or failed optimistic action from replacing a newer
+screen state. All 36 focused iOS tests pass (13 recovery, 8 save, 15 existing),
+with strict SwiftLint, SwiftFormat and whitespace checks passing. These tests
+used explicit localhost API/socket settings and do not certify a live Stripe
+SDK journey. Android's corresponding final quality/test run is still active.
 
 ## Required default/removal repair before acceptance
 
@@ -46,8 +63,8 @@ removal records and revoke authenticated direct table mutations that bypass the
 service protocol. Explicit checkout-selected cards and existing authorizations
 remain authoritative. Stripe invoice-default mirroring is to be removed because
 the current payment workflows do not use it as their charge source. This is a
-design decision awaiting implementation and real SQL/API verification, not a
-completed guarantee.
+design decision whose implementation is now under local SQL/API verification,
+not a completed staging guarantee.
 
 After source integration and checks: refresh the private staging candidate, run
 actual Stripe SDK/test-mode add/cancel/default/remove and cold-start journeys on
