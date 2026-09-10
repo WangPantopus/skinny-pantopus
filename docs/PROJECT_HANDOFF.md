@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Fresh-session source checkpoint — September 10
+
+The owner requested detailed handoff and commit/push of all agent-owned changes
+for a fresh session. The [tip draft checkpoint](paid-gig-tip-draft-checkpoint-2026-09-10.md)
+records the two new files, syntax-only verification, unwired behavior and exact
+remaining backend/client/provider steps. **Durable tips are not implemented.**
+All CI passed at the preceding completed milestone `48afcc68f`; check the new
+checkpoint's actual head separately. PR #34 remains an unfinished draft.
+
+The comprehensive cross-workstream continuation is
+[the Home branch's session checkpoint](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-permission-boundaries/docs/SESSION_RESUME_2026-09-10.md).
+Read it before substantial work. It includes the latest native CI failures,
+browser review findings, Android attachment draft, failed first installed iOS
+journey, worktrees and remaining launch sequence. All paid services, including
+Smarty, remain one final owner launch-preparation bundle. Preserve unrelated
+local edits; do not repeat completed physical Beacon/native saved-card checks.
+
 ### Android payment opening identity — September 10
 
 Bid checkout, refunds and assigned-task authorization now bind their opening
