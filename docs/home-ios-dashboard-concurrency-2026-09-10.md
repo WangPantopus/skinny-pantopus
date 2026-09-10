@@ -28,3 +28,22 @@ retains the existing assertions and test selection.
 **Verification limit:** final-head CI on iOS 18.5 must pass before this is marked
 resolved or merged. The local newer runtime cannot establish that result. No
 physical iPhone, hosted service, dependency or deployment setting changed.
+
+## Remaining core async-let repair
+
+The next [CI run 34451266542](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34451266542)
+on `c315267a6` passed backend, database, web and Android, but reproduced the same
+ten dashboard crashes on all three iOS 18.5 devices. The actual iPhone 16 crash
+bundle again reports `swift_task_dealloc` through async-let cleanup in the core
+loading child. Changing only the outer group had not removed the failing path.
+
+The three remaining core async lets now use a typed task group too. Detail,
+dashboard and access reads still run concurrently; the group joins before any
+of those results are published. No detached work or error suppression was added.
+Existing assertions and test selection remain intact. Independent review passes;
+the final iOS 26.5 app build passes all 13 dashboard checks with formatting,
+strict lint and no new dashboard warnings. Private verification log:
+`/private/tmp/pantopus-home-dashboard-taskgroup-ios-r2.log`.
+
+The affected iOS 18.5 runtime still must pass current-head CI before this repair
+is considered verified. Do not merge from the newer local runtime result alone.

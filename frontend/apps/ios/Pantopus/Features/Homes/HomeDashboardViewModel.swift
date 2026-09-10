@@ -274,10 +274,21 @@ final class HomeDashboardViewModel {
     /// Home detail (identity / ownership) + the dashboard aggregate +
     /// the viewer's access record.
     private func fetchCore() async {
-        async let detailOutcome = loadDetail()
-        async let dashboard = loadDashboard()
-        async let myAccess = loadAccess()
-        let (outcome, currentDashboard, currentAccess) = await (detailOutcome, dashboard, myAccess)
+        var outcome = DetailOutcome.failed(message: "Couldn't load home.")
+        var currentDashboard: HomeDashboardResponse?
+        var currentAccess: HomeAccessDTO?
+        await withTaskGroup(of: CoreReadResult.self) { group in
+            group.addTask { [self] in await .detail(loadDetail()) }
+            group.addTask { [self] in await .dashboard(loadDashboard()) }
+            group.addTask { [self] in await .access(loadAccess()) }
+            for await result in group {
+                switch result {
+                case let .detail(value): outcome = value
+                case let .dashboard(value): currentDashboard = value
+                case let .access(value): currentAccess = value
+                }
+            }
+        }
         dashboardData = currentDashboard
         access = currentAccess
         if !HomeDashboardProjection.gatedTabs(access: access).contains(where: { $0.id == selectedTab }) {
@@ -296,6 +307,12 @@ final class HomeDashboardViewModel {
             publicData = nil
             state = .error(message: message)
         }
+    }
+
+    private enum CoreReadResult {
+        case detail(DetailOutcome)
+        case dashboard(HomeDashboardResponse?)
+        case access(HomeAccessDTO?)
     }
 
     private enum DetailOutcome {

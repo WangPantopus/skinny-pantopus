@@ -14,6 +14,25 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Remaining iOS dashboard concurrency repair — September 10
+
+The repeated iOS 18.5 crash still points to async-let cleanup in dashboard core
+loading. Its three remaining async lets now use a typed task group, preserving
+concurrent requests and publishing only after joining. The [runtime report](home-ios-dashboard-concurrency-2026-09-10.md)
+records the second crash evidence, unchanged assertions, independent review and
+13 passing final local dashboard checks with no new warnings. Current-head
+remote iOS 18.5 verification remains required; draft PR #32 is not merge-ready.
+
+The iOS claim checkpoint is committed/pushed as `9035329a1`. Android validation
+found that its API error type extends Throwable directly; review catches now
+handle those errors while preserving cancellation and fatal-error behavior.
+Its full focused/static/build checks are running. **Next:** verify the dashboard
+on CI, finish Android claims and private task attachments/evidence, then complete
+the remaining Home workflows and household acceptance. PR #34 has both native
+refunds committed/pushed (`61501a3c5`, iOS summary `296ce1b8b`); historical assigned
+payment recovery and browser alert preference handling continue there.
+Paid dependencies remain deferred together until final launch preparation.
+
 ### iOS claim review and withdrawal checkpoint — September 10
 
 The native Home/platform review screens now submit the exact displayed evidence
