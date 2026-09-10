@@ -14,7 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Source integration checkpoint — September 9
+### Current continuation and release inventory — September 9
+
+The active feature priority is `/private/tmp/pantopus-staging-payment-sheet`,
+branch `codex/staging-payment-sheet`: owned SetupIntent resume/reconciliation is
+committed and pushed; native lifecycle checks and atomic default/removal repairs
+are in progress. No live payment fixtures or candidate changes ran yet.
+PR #29 merged as `3009eb0be78efc900c234cc8588a7206526f9626` after full final CI
+at `76ada1aa1` (run `34425328329`); modern mail staging acceptance and exact cleanup
+are complete. The private candidate remains `694a213e2`/`68e3e052a578`, with
+`312b5a382fd6` retained stopped. Public/browser/production runtimes are unchanged.
+
+The [read-only release inventory](staging-release-inventory-2026-09-09.md) is
+isolated in `/private/tmp/pantopus-staging-adoption-plan`, branch
+`codex/staging-adoption-plan`. Fresh Free staging catalog/reference/managed
+inventories are captured privately. Comparison finds one missing grant table,
+permission/RLS and three routine-definition differences requiring classification;
+calendar reference behavior matches despite generated ID/timestamp differences.
+No hosted reconciliation, ledger adoption or production query ran. The next
+adoption task is an exact final-stream version/effect manifest and local clone
+rehearsal, preserving records and existing IDs. Ordinary member IAM defaults and
+external-object recovery remain unfinished. This audit can continue independently
+while PaymentSheet acceptance remains the first active feature priority.
+
+Rollback binding repair PR #30 (`8f7a6121a`) passes 47 local deployment tests;
+full current-head CI remains required before its merge. No hosted rollback ran.
+The older source checkpoint below is historical where it conflicts.
+
+### Earlier source integration checkpoint — September 9
 
 **Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
 `codex/staging-mail-unit-binding`. The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
