@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS private task attachments — September 10
+
+The exact saved task now opens private attachments with current access checks,
+immutable upload retries, bounded in-memory previews and exact removal/cleanup
+receipts. An explicitly retired upload offers a guarded local acknowledgment;
+unknown outcomes retain their original request. The
+[iOS attachment report](home-ios-task-private-media-2026-09-10.md) records passing
+actual app checks across the final affected and unchanged suites, strict source
+quality, independent review and precise persistence/provider limits.
+
+**Next:** installed iOS task creation, exact-route, picker, preview and removal
+acceptance against a synthetic local API; Android private attachment parity is
+underway. Android task routing is pushed as `f5ca4acfd`. Browser task forms are
+being moved to protected original requests and sparse edits. Android payment
+identity is under final verification, with durable tip recovery next. Automatic
+recurrence, relationships/ownership and remaining payment/release work stay open.
+PRs #32/#34 remain unfinished drafts. All paid subscriptions remain one final
+launch-preparation step. Completed physical Beacon and saved-card acceptance
+must not be repeated. No owner-phone install, hosted data or paid service changed.
+
 ### Android exact task notification routing — September 10
 
 Android task notifications now preserve the exact Home/task destination through

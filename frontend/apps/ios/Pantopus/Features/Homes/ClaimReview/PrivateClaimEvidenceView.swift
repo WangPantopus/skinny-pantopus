@@ -55,8 +55,12 @@ struct PrivateClaimEvidenceView: View {
                     if let preview = model.visiblePreview {
                         Divider()
                         Text(preview.record.fileName).font(.headline)
-                        PrivateClaimDocumentPreview(data: preview.bytes, mimeType: preview.record.mimeType)
-                            .frame(minHeight: 280)
+                        PrivateHomeFilePreview(
+                            data: preview.bytes,
+                            mimeType: preview.record.mimeType,
+                            unavailableMessage: "This document cannot be previewed. Do not verify it until you can inspect its contents."
+                        )
+                        .frame(minHeight: 280)
                         if preview.inspection != nil, preview.canRender {
                             Toggle(
                                 "I inspected this document and confirm it supports this claim.",
@@ -101,9 +105,11 @@ struct PrivateClaimEvidenceView: View {
     }
 }
 
-private struct PrivateClaimDocumentPreview: View {
+struct PrivateHomeFilePreview: View {
     let data: Data
     let mimeType: String
+    var unavailableMessage = "This file cannot be previewed."
+    var textLimit: Int?
     var body: some View {
         if mimeType == "application/pdf", let document = PDFDocument(data: data) {
             LazyVStack(spacing: 16) {
@@ -115,10 +121,11 @@ private struct PrivateClaimDocumentPreview: View {
                 }
             }
         } else if mimeType == "text/plain", let text = String(data: data, encoding: .utf8) {
-            Text(text).frame(maxWidth: .infinity, alignment: .leading)
+            Text(textLimit.map { String(text.prefix($0)) } ?? text).frame(maxWidth: .infinity, alignment: .leading)
+            if let textLimit, text.count > textLimit { Text("This preview shows the first \(textLimit) characters.").font(.caption) }
         } else if let image = PrivateClaimImagePreview.decode(data) {
             Image(uiImage: image).resizable().scaledToFit()
-        } else { Text("This document cannot be previewed. Do not verify it until you can inspect its contents.") }
+        } else { Text(unavailableMessage) }
     }
 }
 

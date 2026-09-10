@@ -209,6 +209,27 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// The original task upload ID, private bytes and session header survive a
+    /// refresh replay; no generic File URL is created or accepted.
+    func uploadHomeTaskMedia(
+        homeId: String,
+        taskId: String,
+        uploadId: String,
+        headers: [String: String],
+        file: MultipartFile
+    ) async throws -> HomeTaskMediaUpload {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/home-task-media/\(homeId)/\(taskId)")
+        let body = Self.buildBody(boundary: boundary, file: file, fields: ["upload_id": uploadId], extendedFilenames: true)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body, headers: headers)
+        switch http.statusCode {
+        case 200..<300: return try JSONDecoder().decode(HomeTaskMediaUpload.self, from: data)
+        case 401: throw APIError.unauthorized
+        case 400..<500: throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default: throw APIError.server(status: http.statusCode, body: "The upload is unconfirmed. Retry the same file.")
+        }
+    }
+
     /// Upload private Home document bytes under a stable retry identifier.
     public func uploadHomeDocument(
         homeId: String,

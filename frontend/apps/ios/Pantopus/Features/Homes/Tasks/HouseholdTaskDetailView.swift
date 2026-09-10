@@ -5,6 +5,8 @@ struct HouseholdTaskDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HouseholdTaskDetailViewModel
     @State private var isVisible = false
+    @State private var mediaModel: HomeTaskMediaViewModel?
+    @State private var showingAttachments = false
     private let homeId: String
     private let taskId: String
     private let onEdit: @MainActor () -> Void
@@ -44,6 +46,14 @@ struct HouseholdTaskDetailView: View {
                             Text("New tasks are not created automatically.").font(.caption)
                         }
                     }
+                    Section {
+                        Button("Private attachments") {
+                            guard viewModel.isCurrent, isVisible else { return }
+                            if mediaModel == nil { mediaModel = HomeTaskMediaViewModel(homeId: homeId, taskId: taskId) }
+                            showingAttachments = true
+                        }
+                        .accessibilityIdentifier("householdTaskDetail.attachments")
+                    }
                     if task.capabilities?.canEdit == true {
                         Section {
                             Button("Edit task") { Task { await viewModel.edit(onAllowed: onEdit) } }
@@ -67,6 +77,9 @@ struct HouseholdTaskDetailView: View {
         .navigationTitle("Task")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("householdTaskDetail")
+        .sheet(isPresented: $showingAttachments) {
+            if let mediaModel { HomeTaskMediaView(model: mediaModel) }
+        }
         .onAppear { isVisible = true }
         .task { await viewModel.load() }
         .onChange(of: scenePhase) { _, phase in
@@ -78,10 +91,18 @@ struct HouseholdTaskDetailView: View {
                 DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             }
         }
-        .onChange(of: viewModel.isCurrent) { _, _ in viewModel.accessChanged() }
+        .onChange(of: viewModel.isCurrent) { _, current in
+            viewModel.accessChanged()
+            if !current { mediaModel?.retire()
+                mediaModel = nil
+            }
+        }
         .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             isVisible = false
             viewModel.suspend()
+            if !showingAttachments { mediaModel?.retire()
+                mediaModel = nil
+            }
         }
     }
 
