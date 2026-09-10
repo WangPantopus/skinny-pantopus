@@ -22,7 +22,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const addressConfig = require('../../config/addressVerification');
 const mailVendorService = require('./mailVendorService');
 const observability = require('./addressVerificationObservability');
-const { unitKey, destinationFor, sameDestination } = require('./mailDestination');
+const { unitKey, destinationFor, destinationForHome, sameDestination } = require('./mailDestination');
 
 // ── Constants (from config, with env-var overrides) ──────────
 
@@ -615,14 +615,16 @@ class MailVerificationService {
     }
     const homeId = job.metadata.confirmed_home_id;
     const reads = await Promise.all([
-      supabaseAdmin.from('Home').select('id, address_id, address2, security_state').eq('id', homeId).maybeSingle(),
+      supabaseAdmin.from('Home').select('id, address_id, address, address2, city, state, zipcode, security_state').eq('id', homeId).maybeSingle(),
       supabaseAdmin.from('HomeOccupancy').select('id, is_active, verification_status, end_at, access_start_at, access_end_at')
         .eq('id', job.metadata.confirmed_occupancy_id).eq('home_id', homeId).eq('user_id', userId).maybeSingle(),
       supabaseAdmin.from('HomeAddress').select('address_line1_norm, address_line2_norm, city_norm, state, postal_code, building_type, missing_secondary_flag')
         .eq('id', addressId).maybeSingle(),
+      supabaseAdmin.from('AddressClaim').select('id, unit_number, claim_status, created_at')
+        .eq('address_id', addressId).eq('user_id', userId),
     ]);
     if (reads.some(r => r.error)) return { success: false, statusCode: 503, error: 'Could not check Home membership. Please retry.' };
-    const [home, occupancy, address] = reads.map(r => r.data);
+    const [home, occupancy, address, claims] = reads.map(r => r.data);
     const denied = { success: false, statusCode: 403, error: 'Home membership is no longer available.' };
     if (!home || !occupancy || !address || home.address_id !== addressId
       || ['frozen', 'frozen_silent'].includes(home.security_state) || occupancy.is_active !== true
@@ -633,7 +635,12 @@ class MailVerificationService {
     const legacy = current && !current.line2 && address.building_type !== 'multi_unit' && !address.missing_secondary_flag;
     const destination = job.metadata.destination || (legacy ? current : null);
     if (!sameDestination(destination, current)
-      || unitKey(home.address2 || address.address_line2_norm) !== unitKey(destination.line2)) return denied;
+      || !sameDestination(destination, destinationForHome(home, address))) return denied;
+    const latestClaim = (claims || []).filter(claim =>
+      unitKey(String(claim.unit_number || '').trim() || address.address_line2_norm) === unitKey(destination.line2))
+      .sort((left, right) => (new Date(right.created_at) - new Date(left.created_at))
+        || right.id.localeCompare(left.id))[0];
+    if (latestClaim?.claim_status === 'rejected') return denied;
     return { success: true };
   }
 

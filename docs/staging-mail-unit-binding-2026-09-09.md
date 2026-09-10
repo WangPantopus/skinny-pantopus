@@ -3,7 +3,7 @@
 Worktree `/private/tmp/pantopus-staging-mail-unit-binding`, branch
 `codex/staging-mail-unit-binding`, starts from PR #28 source `95842b119`.
 PR #28 contains completed native postcard simulator acceptance and merged as
-`2259b8ee9` after full current-head CI `34401283503` passed. No new hosted changes or mail fixtures
+`2259b8ee9` after full current-head CI `34401283503` passed. No new hosted changes or hosted mail fixtures
 have been created for this next milestone.
 
 ## Destination and apartment milestone
@@ -102,3 +102,44 @@ recovery/access acceptance with exact fixture cleanup. The migration has only
 been applied to the disposable local `mail_confirmation_contract` database so
 far. Source CI/integration and hosted acceptance remain; no production or public
 runtime change is authorized by this engineering checkpoint.
+
+## Independent review and concurrency repair
+
+Review found that webhook metadata replacement could erase the newly recorded
+membership IDs; a Home address edit could leave its `address_id` unchanged; and
+existing pending owners/inactive occupants could transition after the household
+check. Confirmed status also overlooked a later rejected unit claim.
+
+The confirmation transaction now compares the locked Home's street, city, state
+and ZIP to the mailed destination and locks existing owner/occupancy rows in
+stable order before evaluating authority. It explicitly rejects a child template
+that grants task management. Status applies the same destination and latest
+matching-unit claim restrictions, failing closed on a claim read outage.
+
+The second additive migration provides service-only dispatch/webhook updates
+that merge into current metadata under the row lock. Dispatch preserves its
+pending/no-receipt claim and additionally rejects a unit/destination changed
+since the caller read it. No stale vendor read can erase the completion IDs.
+Neither migration rewrites historical rows; apply both before the new backend.
+
+Verification at this milestone: 4,554 backend tests pass (16 skipped), privacy
+gates pass, all 17 SQL contracts pass, and lint checks 124 application functions
+and 73 trigger bindings with the same six reviewed PostGIS findings/38 existing
+warnings. The original 14-connection same-code/lockout/freeze matrix passes again.
+Real competing transactions also prove pending-owner promotion and inactive
+resident reactivation block confirmation until they commit, then deny without
+consuming proof. Separate two-writer checks prove webhook/dispatch metadata
+preservation and stale-unit rejection. All exact local fixtures are cleaned.
+
+[PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29) is draft. Its
+first backend/image checks passed; the migration prerequisite required the
+literal compatibility annotation `Backwards compatible: yes`. The annotation
+now passes locally without changing the guard. Fresh current-head CI remains
+required. PR #28 merged-master CI passed. Hosted multi-unit acceptance is next;
+the private API still runs `26102bfb2`/`312b5a382fd6` at this checkpoint.
+
+Known limits: no physical mail or externally delivered Lob callback is certified.
+Delivery-status ordering when a webhook beats a provider response is an existing
+separate display-state concern; these changes protect proof/membership metadata.
+Source tests do not certify the modern printed web link or provider eligibility;
+Smarty activation and its real retest remain a launch prerequisite.

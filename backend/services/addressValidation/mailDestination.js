@@ -26,4 +26,14 @@ function sameDestination(left, right) {
     && unitKey(left.line2) === unitKey(right.line2);
 }
 
-module.exports = { unitKey, destinationFor, sameDestination };
+function destinationForHome(home, address) {
+  return {
+    line1: home.address,
+    line2: String(home.address2 || '').trim() || address.address_line2_norm || null,
+    city: home.city,
+    state: home.state,
+    zip: home.zipcode,
+  };
+}
+
+module.exports = { unitKey, destinationFor, destinationForHome, sameDestination };

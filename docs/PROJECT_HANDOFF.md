@@ -19,14 +19,21 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 **Next active work:** `/private/tmp/pantopus-staging-mail-unit-binding`, branch
 `codex/staging-mail-unit-binding`. The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
 records exact apartment/destination binding plus atomic confirmation, current
-membership retry/status and legacy partial-proof recovery. All 4,540 backend
-tests and privacy gates pass. The database has 16 passing SQL contracts,
-122 application functions/73 trigger bindings, and 14 competing connections
-proving one membership, bounded guesses and concurrent-freeze denial.
+membership retry/status and legacy partial-proof recovery. Independent review
+also repaired Home-only address changes, pending-owner/resident transitions,
+rejected-claim status, and webhook/dispatch metadata races. All 4,554 backend
+tests and privacy gates pass. The database has 17 passing SQL contracts and
+124 application functions/73 trigger bindings. Real competing transactions
+prove one membership, bounded guesses, concurrent-freeze/authority denial and
+preservation of confirmation metadata during vendor updates.
 
 Next apply the checked additive confirmation function only to Free staging,
 refresh the private candidate from a committed source, and run scoped live
 multi-unit/rollback/retry acceptance with exact cleanup before PR integration.
+Both additive migrations must precede the candidate. [Draft PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29)
+is open. Its first backend/image checks passed, but the migration prerequisite
+rejected a missing literal `yes` in the compatibility comment; that is repaired.
+Require fresh full current-head CI before integration. No checks are waived.
 Nothing from this modern-mail branch is hosted yet. The private candidate remains
 `26102bfb2` (`312b5a382fd6`); public/browser/production runtimes are unchanged.
 
@@ -34,9 +41,16 @@ Nothing from this modern-mail branch is hosted yet. The private candidate remain
 `2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after
 [full current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34401283503)
 passed at `95842b119`, including all three iOS simulator jobs and Android
-quality/build/snapshots/instrumented tests. Its merged-master CI is pending.
+quality/build/snapshots/instrumented tests. Its [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34404747901) also passed.
 The prior native worktree and branch are preserved. All native simulator mail
 fixtures are cleaned; no owner device check is pending.
+
+The next native PaymentSheet repair is isolated in
+`/private/tmp/pantopus-staging-payment-sheet`, branch `codex/staging-payment-sheet`,
+from master `2259b8ee9`. Backend and native changes are in progress there:
+reconcile the exact owned successful SetupIntent before claiming a saved card,
+retain retry state and prevent duplicate presentation. This is separate from
+PR #29; no payment provider calls or live fixtures have run for that milestone.
 
 [PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
 19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)

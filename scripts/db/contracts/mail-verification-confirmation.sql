@@ -42,6 +42,25 @@ DO $$ DECLARE r jsonb; BEGIN
  r:=public.confirm_mail_verification('eed00000-0000-4000-8000-000000000006','eed00000-0000-4000-8000-000000000001',repeat('b',64),pg_temp.mail_templates(),730);
  IF r->>'error' IS DISTINCT FROM 'WRONG_CODE' OR r->>'attempts_remaining' IS DISTINCT FROM '4' THEN RAISE EXCEPTION 'Wrong guess did not count'; END IF;
 END $$;
+-- Home edits can leave its canonical address_id unchanged. Each actual Home
+-- address field must still match the saved mailing destination before proof
+-- is consumed; normalizing case and whitespace must remain harmless.
+DO $$ DECLARE r jsonb; change record; original jsonb; BEGIN
+ SELECT to_jsonb(h) INTO original FROM public."Home" h WHERE id='eed00000-0000-4000-8000-000000000004';
+ FOR change IN SELECT * FROM jsonb_each_text('{"address":"200 Other St","city":"Elsewhere","state":"NY","zipcode":"10001"}'::jsonb) LOOP
+  EXECUTE format('UPDATE public."Home" SET %I=$1 WHERE id=$2',change.key)
+   USING change.value,'eed00000-0000-4000-8000-000000000004'::uuid;
+  r:=public.confirm_mail_verification('eed00000-0000-4000-8000-000000000006','eed00000-0000-4000-8000-000000000001',repeat('a',64),pg_temp.mail_templates(),730);
+  IF r->>'error' IS DISTINCT FROM 'ADDRESS_CHANGED' THEN RAISE EXCEPTION 'Changed Home % accepted mailed proof',change.key; END IF;
+  IF EXISTS(SELECT FROM public."AddressVerificationToken" WHERE attempt_id='eed00000-0000-4000-8000-000000000006' AND (used_at IS NOT NULL OR attempt_count<>1))
+  OR EXISTS(SELECT FROM public."HomeOccupancy" WHERE user_id='eed00000-0000-4000-8000-000000000001') THEN
+   RAISE EXCEPTION 'Changed Home address consumed proof or attached membership'; END IF;
+  EXECUTE format('UPDATE public."Home" SET %I=$1 WHERE id=$2',change.key)
+   USING original->>change.key,'eed00000-0000-4000-8000-000000000004'::uuid;
+ END LOOP;
+ UPDATE public."Home" SET address='  100  synthetic st ',city=' test ',state='ca'
+  WHERE id='eed00000-0000-4000-8000-000000000004';
+END $$;
 RESET ROLE;
 CREATE FUNCTION pg_temp.reject_mail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Mail contract audit failure'; END $$;
 CREATE TRIGGER mail_contract_audit_failure BEFORE INSERT ON public."HomeAuditLog" FOR EACH ROW
@@ -94,6 +113,13 @@ DO $$ DECLARE r jsonb; BEGIN
  UPDATE public."MailVerificationJob" SET metadata=metadata-'confirmed_home_id'-'confirmed_occupancy_id' WHERE attempt_id='eed00000-0000-4000-8000-000000000006';
  UPDATE public."HomeOccupancy" SET is_active=true,verification_status='pending_postcard',role_base='restricted_member',age_band='child'
  WHERE user_id='eed00000-0000-4000-8000-000000000001';
+ BEGIN
+  PERFORM public.confirm_mail_verification('eed00000-0000-4000-8000-000000000006','eed00000-0000-4000-8000-000000000001',repeat('a',64),
+   jsonb_set(pg_temp.mail_templates(),'{child,can_manage_tasks}','true'::jsonb),730);
+  RAISE EXCEPTION 'Child task-management template was accepted';
+ EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+ IF EXISTS(SELECT FROM public."AddressVerificationToken" WHERE attempt_id='eed00000-0000-4000-8000-000000000006' AND (used_at IS NOT NULL OR attempt_count<>0)) THEN
+  RAISE EXCEPTION 'Rejected child template consumed proof'; END IF;
  r:=public.confirm_mail_verification('eed00000-0000-4000-8000-000000000006','eed00000-0000-4000-8000-000000000001',repeat('a',64),pg_temp.mail_templates(),730);
  IF r->'occupancy'->>'role_base' IS DISTINCT FROM 'member' OR (r->'occupancy'->>'can_view_sensitive')::boolean
  OR (r->'occupancy'->>'can_manage_tasks')::boolean THEN RAISE EXCEPTION 'Child permissions expanded'; END IF;

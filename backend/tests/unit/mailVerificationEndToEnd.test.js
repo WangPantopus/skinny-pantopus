@@ -55,8 +55,8 @@ beforeEach(() => {
     address_line1_norm: '742 Evergreen Ter',
     address_line2_norm: null,
     city_norm: 'Portland',
-    state_norm: 'OR',
-    zip_norm: '97201',
+    state: 'OR',
+    postal_code: '97201',
     validation_raw_response: { dpv_match_code: 'Y' },
     last_validated_at: new Date().toISOString(),
   }]);
@@ -409,4 +409,56 @@ test('missing Home recovery uses the same unconsumed code and sends no more mail
   expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
   expect(getTable('AddressVerificationToken')[0].attempt_count).toBe(1);
   expect(lobRequests).toHaveLength(1);
+});
+
+test.each([['address', '99 Different St'], ['city', 'Different City'], ['state', 'CA'], ['zipcode', '99999']])(
+  'a Home-only %s edit denies both pending proof and confirmed status', async (field, changed) => {
+    const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+    const code = codeOnTheMailedPostcard();
+    const home = getTable('Home')[0];
+    const original = home[field];
+    home[field] = changed;
+    expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: false, statusCode: 409 });
+    expect(getTable('HomeOccupancy')).toHaveLength(0);
+    expect(getTable('AddressVerificationToken')[0].used_at).toBeFalsy();
+    home[field] = original;
+    expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
+    home[field] = changed;
+    expect(await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).toMatchObject({ success: false, statusCode: 403 });
+    expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: false, statusCode: 409 });
+    expect(lobRequests).toHaveLength(1);
+  },
+);
+
+test('confirmed status and retry use the latest claim for only the mailed unit', async () => {
+  getTable('Home')[0].address2 = 'Apt 4';
+  const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID, 'Unit 4');
+  const code = codeOnTheMailedPostcard();
+  expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
+  seedTable('AddressClaim', [
+    { id: 'claim-old', user_id: USER_ID, address_id: ADDRESS_ID, unit_number: '4', claim_status: 'rejected', created_at: '2026-09-01T00:00:00Z' },
+    { id: 'claim-other-unit', user_id: USER_ID, address_id: ADDRESS_ID, unit_number: '5', claim_status: 'rejected', created_at: '2026-09-09T00:00:00Z' },
+    { id: 'claim-current', user_id: USER_ID, address_id: ADDRESS_ID, unit_number: 'Apartment 4', claim_status: 'verified', created_at: '2026-09-08T00:00:00Z' },
+  ]);
+  expect((await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).status).toBe('confirmed');
+  expect((await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).verified).toBe(true);
+  getTable('AddressClaim').find(c => c.id === 'claim-current').claim_status = 'rejected';
+  expect(await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).toMatchObject({ success: false, statusCode: 403 });
+  expect(await mailVerificationService.confirmCode(start.attempt_id, code, USER_ID)).toMatchObject({ verified: false, statusCode: 403 });
+  expect(getTable('AddressVerificationToken')[0].attempt_count).toBe(1);
+});
+
+test('a claim lookup outage never reports confirmed membership', async () => {
+  const start = await mailVerificationService.startVerification(USER_ID, ADDRESS_ID);
+  expect((await mailVerificationService.confirmCode(start.attempt_id, codeOnTheMailedPostcard(), USER_ID)).verified).toBe(true);
+  const db = require('../__mocks__/supabaseAdmin');
+  const from = db.from;
+  const spy = jest.spyOn(db, 'from').mockImplementation(table => {
+    if (table !== 'AddressClaim') return from(table);
+    const query = { select: () => query, eq: () => query, order: () => query, then: resolve => resolve({ data: null, error: { message: 'unavailable' } }) };
+    return query;
+  });
+  try {
+    expect(await mailVerificationService.getVerificationStatus(start.attempt_id, USER_ID)).toMatchObject({ success: false, statusCode: 503 });
+  } finally { spy.mockRestore(); }
 });

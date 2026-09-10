@@ -591,6 +591,31 @@ describe('MailVendorService', () => {
 
   let service;
 
+  // Return the originally read snapshot while another database writer commits
+  // before the service uses it, matching two independent PostgREST requests.
+  function changeJobAfterRead(change) {
+    const db = require('../../config/supabaseAdmin');
+    const originalFrom = db.from.bind(db);
+    let changed = false;
+    return jest.spyOn(db, 'from').mockImplementation((table) => {
+      const query = originalFrom(table);
+      if (table === 'MailVerificationJob') {
+        const execute = query._execute.bind(query);
+        query._execute = () => {
+          const result = execute();
+          if (!changed && result.data && !Array.isArray(result.data)) {
+            const snapshot = structuredClone(result);
+            changed = true;
+            change(getTable('MailVerificationJob')[0]);
+            return snapshot;
+          }
+          return result;
+        };
+      }
+      return query;
+    });
+  }
+
   beforeEach(() => {
     service = new MailVendorService();
     lobProvider.isAvailable.mockReturnValue(false);
@@ -781,6 +806,46 @@ describe('MailVendorService', () => {
       expect(getTable('MailVerificationJob')[0].vendor_job_id).toBe('mock_psc_1');
     });
 
+    test('dispatch preserves completion and other metadata committed after its read', async () => {
+      seedJobData();
+      const spy = changeJobAfterRead((job) => {
+        job.metadata = { ...job.metadata, confirmed_home_id: 'home-1', confirmed_occupancy_id: 'occupancy-1', other: { keep: true } };
+      });
+      try {
+        expect((await service.dispatchPostcard('job-1', '123456')).success).toBe(true);
+        expect(getTable('MailVerificationJob')[0].metadata).toEqual(expect.objectContaining({
+          confirmed_home_id: 'home-1', confirmed_occupancy_id: 'occupancy-1', other: { keep: true },
+          destination: expect.objectContaining({ line1: '123 Main St' }),
+        }));
+        expect(getTable('MailVerificationJob')[0].metadata.code).toBeUndefined();
+      } finally { spy.mockRestore(); }
+    });
+
+    test.each(['unit', 'destination', 'receipt'])('dispatch rejects a concurrent %s change without printing', async (changedField) => {
+      seedJobData();
+      const spy = changeJobAfterRead((job) => {
+        if (changedField === 'unit') job.metadata.unit = 'Apt 2';
+        if (changedField === 'destination') job.metadata.destination = { line1: 'Different destination' };
+        if (changedField === 'receipt') job.vendor_job_id = 'psc_concurrent';
+      });
+      try {
+        expect((await service.dispatchPostcard('job-1', '123456')).success).toBe(false);
+        expect(mockProvider.sendPostcard).not.toHaveBeenCalled();
+        expect(getTable('MailVerificationJob')[0].metadata.code).toBe('123456');
+      } finally { spy.mockRestore(); }
+    });
+
+    test('unavailable dispatch RPC fails closed without printing', async () => {
+      seedJobData();
+      const db = require('../../config/supabaseAdmin');
+      const spy = jest.spyOn(db, 'rpc').mockResolvedValueOnce({ data: null, error: { message: 'RPC unavailable' } });
+      try {
+        expect((await service.dispatchPostcard('job-1', '123456')).success).toBe(false);
+        expect(mockProvider.sendPostcard).not.toHaveBeenCalled();
+        expect(getTable('MailVerificationJob')[0].vendor_status).toBe('pending');
+      } finally { spy.mockRestore(); }
+    });
+
     test('a claimed job is never replayed after the provider key has expired', async () => {
       seedJobData();
       getTable('MailVerificationJob')[0].vendor_status = 'dispatching';
@@ -937,6 +1002,46 @@ describe('MailVendorService', () => {
       const job = jobs.find((j) => j.vendor_job_id === 'psc_lob_123');
       expect(job.metadata.last_webhook_event).toBe('postcard.in_transit');
       expect(job.metadata.last_webhook_at).toBeTruthy();
+    });
+
+    test('webhook preserves confirmation and arbitrary metadata committed after its read', async () => {
+      seedJobWithVendor();
+      const spy = changeJobAfterRead((job) => {
+        job.metadata = { ...job.metadata, confirmed_home_id: 'home-1', confirmed_occupancy_id: 'occupancy-1', other: { keep: true } };
+        getTable('AddressVerificationAttempt')[0].status = 'verified';
+      });
+      try {
+        expect((await service.processWebhookEvent('psc_lob_123', 'postcard.delivered', {})).success).toBe(true);
+        expect(getTable('MailVerificationJob')[0].metadata).toEqual(expect.objectContaining({
+          confirmed_home_id: 'home-1', confirmed_occupancy_id: 'occupancy-1', other: { keep: true },
+          last_webhook_event: 'postcard.delivered',
+        }));
+        expect(getTable('AddressVerificationAttempt')[0].status).toBe('verified');
+      } finally { spy.mockRestore(); }
+    });
+
+    test('webhook cannot update a receipt replaced after lookup', async () => {
+      seedJobWithVendor();
+      const spy = changeJobAfterRead((job) => { job.vendor_job_id = 'psc_different'; });
+      try {
+        const result = await service.processWebhookEvent('psc_lob_123', 'postcard.delivered', {});
+        expect(result).toEqual(expect.objectContaining({ success: false, retryable: true }));
+        expect(getTable('MailVerificationJob')[0].vendor_status).toBe('created');
+        expect(getTable('MailVerificationJob')[0].metadata.last_webhook_event).toBeUndefined();
+        expect(getTable('AddressVerificationAttempt')[0].status).toBe('sent');
+      } finally { spy.mockRestore(); }
+    });
+
+    test('unavailable webhook RPC is retryable and does not transition the attempt', async () => {
+      seedJobWithVendor();
+      const db = require('../../config/supabaseAdmin');
+      const spy = jest.spyOn(db, 'rpc').mockResolvedValueOnce({ data: null, error: { message: 'RPC unavailable' } });
+      try {
+        expect(await service.processWebhookEvent('psc_lob_123', 'postcard.delivered', {}))
+          .toEqual(expect.objectContaining({ success: false, retryable: true }));
+        expect(getTable('AddressVerificationAttempt')[0].status).toBe('sent');
+        expect(getTable('MailVerificationJob')[0].vendor_status).toBe('created');
+      } finally { spy.mockRestore(); }
     });
 
     test('returns error when job not found', async () => {

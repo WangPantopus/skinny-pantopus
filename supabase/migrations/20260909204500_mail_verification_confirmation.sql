@@ -1,5 +1,5 @@
--- Backwards compatible: additive service-only confirmation. No historical rows
--- are rewritten. Deploy with the matching backend; missing RPC must fail closed.
+-- Backwards compatible: yes. Adds service-only confirmation without changing existing functions or historical rows.
+-- Apply before the matching backend; its missing-RPC path deliberately fails closed.
 SET LOCAL lock_timeout='5s';
 CREATE FUNCTION public.mail_address_text_key(p_value text) RETURNS text
 LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp AS $$
@@ -100,9 +100,21 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('home-postcard:home:'||selected_home_id::text,0));
  SELECT * INTO h FROM public."Home" WHERE id=selected_home_id FOR UPDATE;
  IF NOT FOUND OR h.address_id IS DISTINCT FROM a.address_id
+ OR public.mail_address_text_key(h.address)<>public.mail_address_text_key(d->>'line1')
+ OR public.mail_address_text_key(h.city)<>public.mail_address_text_key(d->>'city')
+ OR public.mail_address_text_key(h.state)<>public.mail_address_text_key(d->>'state')
+ OR public.mail_address_text_key(h.zipcode)<>public.mail_address_text_key(d->>'zip')
  OR public.mail_address_unit_key(coalesce(nullif(btrim(h.address2),''),adr.address_line2_norm))<>unit_key THEN
   RETURN jsonb_build_object('error','ADDRESS_CHANGED');
  END IF;
+ -- Home address edits need not replace address_id. Compare the locked Home's
+ -- fields above as well as the canonical address, so that link cannot move
+ -- mailed proof to a different street, city, state or postal code.
+ -- The Home row lock blocks new foreign-key inserts, but not promotions or
+ -- reactivations of existing owner/occupancy rows. Lock even pending/inactive
+ -- rows before reading authority; a preceding transition must finish first.
+ PERFORM 1 FROM public."HomeOwner" WHERE "HomeOwner".home_id=h.id ORDER BY id FOR UPDATE;
+ PERFORM 1 FROM public."HomeOccupancy" WHERE "HomeOccupancy".home_id=h.id ORDER BY id FOR UPDATE;
  SELECT * INTO o FROM public."HomeOccupancy" WHERE "HomeOccupancy".home_id=h.id AND user_id=p_user_id FOR UPDATE;
  existing:=FOUND;
  SELECT * INTO c FROM public."AddressClaim" WHERE user_id=p_user_id AND address_id=a.address_id
@@ -136,6 +148,7 @@ BEGIN
   OR (template->>'can_manage_access')::boolean IS DISTINCT FROM false
   OR (template->>'can_manage_finance')::boolean IS DISTINCT FROM false
   OR (template->>'can_manage_tasks')::boolean IS NULL OR (template->>'can_view_sensitive')::boolean IS NULL
+  OR (o.age_band='child' AND (template->>'can_manage_tasks')::boolean)
   OR (o.age_band IN ('child','teen') AND (template->>'can_view_sensitive')::boolean) THEN
    RAISE EXCEPTION 'Invalid mail membership template' USING ERRCODE='22023';
   END IF;

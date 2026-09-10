@@ -1,7 +1,7 @@
 // In-memory RPC boundary for the existing mail orchestration suites. Actual SQL
 // locking, rollback, grants and concurrent behavior are tested in db/contracts.
 const { randomUUID } = require('crypto');
-const { unitKey, destinationFor, sameDestination } = require('../../services/addressValidation/mailDestination');
+const { unitKey, destinationFor, destinationForHome, sameDestination } = require('../../services/addressValidation/mailDestination');
 module.exports = (p, table) => {
   const result = data => ({ data, error: null });
   const fail = error => result({ error });
@@ -43,9 +43,11 @@ module.exports = (p, table) => {
   const matches = table('Home').filter(h => h.address_id === a.address_id && unitKey(h.address2 || adr.address_line2_norm) === unitKey(destination.line2));
   if (matches.length !== 1) return fail('AMBIGUOUS_HOME');
   const h = matches[0];
+  if (!sameDestination(destination, destinationForHome(h, adr))) return fail('ADDRESS_CHANGED');
   let o = table('HomeOccupancy').find(r => r.home_id === h.id && r.user_id === p.p_user_id);
   const claims = table('AddressClaim').filter(c => c.user_id === p.p_user_id && c.address_id === a.address_id && unitKey(c.unit_number || adr.address_line2_norm) === unitKey(destination.line2));
-  if (['frozen', 'frozen_silent'].includes(h.security_state) || claims.some(c => c.claim_status === 'rejected')
+  const latestClaim = [...claims].sort((x, y) => (new Date(y.created_at || 0) - new Date(x.created_at || 0)) || String(y.id).localeCompare(String(x.id)))[0];
+  if (['frozen', 'frozen_silent'].includes(h.security_state) || latestClaim?.claim_status === 'rejected'
     || (o && (o.is_active !== true || o.end_at || new Date(o.access_start_at) > new Date()
       || (o.access_end_at && new Date(o.access_end_at) <= new Date())
       || ['suspended', 'suspended_challenged', 'inactive', 'moved_out'].includes(o.verification_status)))) return fail('ACCESS_REVOKED');
