@@ -14,6 +14,26 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS task stop recovery checkpoint — September 10
+
+All four native task-stop actions now share current terms, one retained request
+and exact receipt validation. Saved status remains reachable after cancellation,
+worker release or unavailable ordinary task details. The recovery entry cannot
+start another action when its saved record disappears. The
+[iOS stop report](paid-gig-ios-stop-recovery-2026-09-10.md) records the passing app
+build, final affected checks, strict source quality and independent review.
+No owner-phone update or hosted/provider acceptance is claimed by this build.
+
+**Next:** finish matching Android and browser saved-status entry controls, then
+complete provider/emulator acceptance and the remaining started/no-show/fee,
+tip, dispute/Connect/debt and capacity work. The durable backend is pushed as
+`9840dd2a5`; its backend, browser, database and privacy CI passes, with native CI
+still running at the last observation. Home native task browsing is pushed as
+`e015b77f0` and `0fdfaab1d`; retained creation/editing, attachments and durable
+assignment notices continue. Both PRs remain unfinished drafts. All paid services
+stay together for final launch preparation. Completed physical Beacon and
+saved-card acceptance must not be repeated. No hosted data or paid service changed.
+
 ### Durable task stop checkpoint — September 10
 
 Cancellation, reopening, worker release and closing now retain one original
