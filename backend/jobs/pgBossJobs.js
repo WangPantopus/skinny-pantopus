@@ -8,6 +8,8 @@ const refreshDiscoveryCache = require('./refreshDiscoveryCache');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
 const deliverWalletSettlement = require('./deliverWalletSettlement');
+const reconcileGigAuthorizationExpiry = require('./reconcileGigAuthorizationExpiry');
+const deliverGigAuthorizationExpiry = require('./deliverGigAuthorizationExpiry');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 const computeReputation = require('./computeReputation');
@@ -31,6 +33,8 @@ const QUEUE_OPTIONS = {
 };
 
 const JOBS = [
+  { name: 'reconcile-gig-authorization-expiry', cron: '*/15 * * * *', fn: reconcileGigAuthorizationExpiry },
+  { name: 'deliver-gig-authorization-expiry', cron: '* * * * *', fn: deliverGigAuthorizationExpiry },
   { name: 'reconcile-payment-refunds', cron: '*/5 * * * *', fn: reconcilePaymentRefunds },
   { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
   { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },

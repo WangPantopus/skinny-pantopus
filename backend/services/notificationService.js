@@ -1278,7 +1278,7 @@ async function notifyHouseholdAccessRequest({
 
 /** Deliver an already-committed paid-gig notification without inserting again. */
 async function deliverStoredGigNotification(notification) {
-  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed'].includes(notification.type)) {
+  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed', 'gig_auto_cancelled', 'payment_auth_expiring'].includes(notification.type)) {
     throw new Error('Unsupported stored gig notification');
   }
   const userId = notification.user_id;

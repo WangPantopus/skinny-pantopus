@@ -87,6 +87,8 @@ const autoRemindWorker = require('./autoRemindWorker');
 const expirePendingPaymentBids = require('./expirePendingPaymentBids');
 const deliverGigAcceptance = require('./deliverGigAcceptance');
 const deliverWalletSettlement = require('./deliverWalletSettlement');
+const reconcileGigAuthorizationExpiry = require('./reconcileGigAuthorizationExpiry');
+const deliverGigAuthorizationExpiry = require('./deliverGigAuthorizationExpiry');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 // Persistent login registry housekeeping
@@ -117,6 +119,8 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'expirePendingPaymentBids',
   'deliverGigAcceptance',
   'deliverWalletSettlement',
+  'reconcileGigAuthorizationExpiry',
+  'deliverGigAuthorizationExpiry',
   'reconcileGigAcceptance',
   'reconcilePaymentRefunds',
   'computeReputation',
@@ -223,9 +227,8 @@ function startJobs(options = {}) {
 
   // ─── Expire Uncaptured Authorizations ───
   // Runs daily at 3:00 AM UTC.
-  // Cancels gigs whose payment auth is expiring soon (within 24h)
-  // if work hasn't started. Alerts admins for in-progress gigs
-  // with expiring auths (needs manual re-authorization).
+  // Preserves the independent abandoned/expiring booking payment policy.
+  // Gig reconciliation and durable notices run independently below.
   scheduleCron('0 3 * * *', wrapJob('expireUncapturedAuthorizations', expireUncapturedAuthorizations), {
     scheduled: true,
     timezone: 'UTC',
@@ -598,6 +601,14 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('* * * * *', wrapJob('deliverWalletSettlement', deliverWalletSettlement), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('*/15 * * * *', wrapJob('reconcileGigAuthorizationExpiry', reconcileGigAuthorizationExpiry), {
+    scheduled: true, timezone: 'UTC',
+  });
+
+  scheduleCron('* * * * *', wrapJob('deliverGigAuthorizationExpiry', deliverGigAuthorizationExpiry), {
     scheduled: true, timezone: 'UTC',
   });
 

@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Durable authorization expiry checkpoint — September 10
+
+Expiry cancellation now reserves the current task/payment and exact provider
+authorization before releasing a hold. Unknown outcomes retain their operation
+and block conflicting start/capture actions. Only confirmed zero-capture release
+can cancel an assigned, unstarted task and create its durable notices. In-progress
+work receives payment attention without a false completion prompt. Reconciliation
+and notice retries have independent schedules; the daily booking policy remains
+separate. The [expiry report](paid-gig-authorization-expiry-2026-09-10.md) records
+actual service/SQL interruption and concurrency checks, a clean full replay,
+populated-upgrade preservation, independent review and the isolated full-backend
+HTTP failure followed by a passing unchanged-suite recheck. The fresh Stripe
+test hold was released with zero capture and its synthetic customer removed.
+
+**Next:** fix durable manual cancellation/reopening/worker release, including
+current actor/session, original terms and pending financial outcomes; then
+started/no-show/fee policy, dispute/Connect/debt, pending-state client controls,
+full provider journeys and capacity/integration. Current PR #34 head `9ef31ba7c`
+passes backend/web/database/privacy CI but all three iOS 18.5 test jobs failed
+in [run 34463214786](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34463214786).
+The cause is being investigated; local iOS passes do not waive that requirement.
+Draft PR #34 remains unfinished. Home browser private previews are pushed as
+`696e1a9f6` in draft PR #32; native evidence controls and household workflows
+continue there. No hosted migration, scheduler flag or paid dependency changed.
+All subscriptions stay together for final launch preparation. Completed physical
+Beacon and saved-card acceptance must not be repeated.
+
 ### Exact provider hold deadlines — September 10
 
 Paid-gig authorization now uses the exact Stripe Charge capture deadline.
