@@ -14,6 +14,31 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Current Home authorization checkpoint — September 9
+
+The first bounded Home repair is in `/private/tmp/pantopus-home-permission-boundaries`,
+branch `codex/home-permission-boundaries`, based on merged PR #30 (`c262b84afe`).
+The [effective-permission report](home-effective-permissions-2026-09-09.md) records
+4,620 backend tests passing (16 skipped), privacy gates, 63 focused authorization
+cases, 29 web hook tests, web TypeScript, 19 SQL contracts and independent review.
+Effective membership, time/age ceilings, explicit denies and narrow private pickup
+now agree across the repaired JS/SQL paths. A reproduced finance read-to-write
+regression is repaired and tested with real RLS roles. No role grants or hosted
+Home changes ran. This is a source checkpoint, not full Home acceptance.
+
+Next continue direct IAM/deletion and legacy RLS boundaries, task/calendar record
+and attachment visibility, recipient limits and finance read-only navigation.
+Only then review ordinary role defaults and run the integrated household journey.
+
+In parallel, draft [PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31)
+remains at `2e7b04293` with full CI passing (run `34428681238`). Its payment
+migration is applied only to Free staging, preserving existing records and the
+absent ledger. The private candidate is `2e7b04293`/`2e0a32e8b0e2`, with the prior
+candidate retained stopped. Native SDK acceptance and exact cleanup are active;
+do not rerun fixture initializers or the migration. Public/browser/production
+runtimes are unchanged. PR #29/#30 are merged; the older checkpoint below is
+historical where it conflicts. Physical iPhone Beacon acceptance is complete.
+
 ### Source integration checkpoint — September 9
 
 **Next active work:** `/private/tmp/pantopus-staging-payment-sheet`, branch

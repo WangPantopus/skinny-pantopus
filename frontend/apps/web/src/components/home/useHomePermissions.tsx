@@ -10,6 +10,7 @@ export interface HomeAccess {
   hasAccess: boolean;
   isOwner: boolean;
   role_base: string | null;
+  effective_role_base?: string | null;
   permissions: string[];
   occupancy: {
     id: string;
@@ -19,7 +20,7 @@ export interface HomeAccess {
     end_at: string | null;
     age_band: string | null;
   } | null;
-  // Navigation-gating booleans (from occupancy row)
+  // Navigation booleans projected from effective permissions by the server.
   can_manage_home: boolean;
   can_manage_access: boolean;
   can_manage_finance: boolean;
@@ -75,9 +76,11 @@ interface HomePermissionsContextType {
 // ============================================================
 
 const ROLE_RANK: Record<string, number> = {
+  service_provider: 5,
   guest: 10,
   restricted_member: 20,
   member: 30,
+  lease_resident: 35,
   manager: 40,
   admin: 50,
   owner: 60,
@@ -160,8 +163,7 @@ export function HomePermissionsProvider({
 
   const can = useCallback(
     (permission: string) => {
-      if (!access) return false;
-      if (access.isOwner) return true; // owner can do everything
+      if (!access?.hasAccess) return false;
       return access.permissions.includes(permission);
     },
     [access]
@@ -169,9 +171,12 @@ export function HomePermissionsProvider({
 
   const hasRoleAtLeast = useCallback(
     (minRole: string) => {
-      if (!access?.role_base) return false;
-      if (access.isOwner) return true;
-      return (ROLE_RANK[access.role_base] || 0) >= (ROLE_RANK[minRole] || 0);
+      if (!access?.hasAccess || !ROLE_RANK[minRole]) return false;
+      const role = access.effective_role_base ?? access.role_base;
+      const rank = ROLE_RANK[role || ''] || 0;
+      const ceiling = access.age_band === 'child' ? ROLE_RANK.restricted_member
+        : access.age_band === 'teen' ? ROLE_RANK.member : rank;
+      return Math.min(rank, ceiling) >= ROLE_RANK[minRole];
     },
     [access]
   );

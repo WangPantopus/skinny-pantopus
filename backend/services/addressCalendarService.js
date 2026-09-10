@@ -106,10 +106,10 @@ function daysBetween(fromDay, toDay) {
  * The address calendar for a home.
  * @returns {Promise<{upcoming: object[], next: object|null, needs_pickup_day: boolean, window_days: number, rule_count: number}>}
  */
-async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS } = {}) {
+async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null } = {}) {
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
-  const loaded = await loadRules(home);
+  const loaded = suppliedRules || await loadRules(home);
   const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && r.kind === 'garbage');
   // Once the household sets its schedule, unknown pickup kinds must not
   // silently fall back to a guessed city week (including briefing signals).
@@ -230,33 +230,43 @@ async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', rec
       rrule: `FREQ=WEEKLY;INTERVAL=${recyclingFrequency === 'biweekly' ? 2 : 1};BYDAY=${recyclingDay}`,
     });
   }
-  // The uniqueness index on (scope_key, kind) is partial (WHERE scope_type =
-  // 'home'), and PostgREST cannot express the predicate in ON CONFLICT, so an
-  // upsert against it fails to resolve its conflict target. A delete then an
-  // insert would leave the household with no reminders if the insert failed.
-  // `set_home_pickup_rules` (migration 199) swaps the rules in one
-  // transaction: either the new pair lands or nothing changes.
-  const { error } = await supabaseAdmin.rpc('set_home_pickup_rules', {
-    p_home_id: String(home.id),
-    p_rows: rows.map(({ scope_type: _scopeType, scope_key: _scopeKey, ...rest }) => rest),
-  });
-  if (error) throw new Error(error.message);
+  await pickupMutation(home.id, userId, rows.map(({ scope_type: _scopeType, scope_key: _scopeKey, ...rest }) => rest));
   return { weekday: wd, dtstart, rules: rows.length };
 }
 
-async function clearPickupDay(home) {
-  const { error } = await supabaseAdmin
-    .from('AddressCalendarRule')
-    .delete()
-    .eq('scope_type', 'home')
-    .eq('scope_key', String(home.id))
-    .in('kind', ['garbage', 'recycling', 'yard_waste']);
-  if (error) throw new Error(error.message);
+function pickupError(denied = false) {
+  return Object.assign(new Error(denied ? 'Not authorized to access this pickup calendar.' : 'Could not check the pickup calendar. Please retry.'), {
+    code: denied ? 'HOME_ACCESS_DENIED' : 'HOME_ACCESS_UNAVAILABLE', statusCode: denied ? 403 : 503,
+  });
+}
+
+async function pickupRpc(name, args) {
+  let result;
+  try { result = await supabaseAdmin.rpc(name, args); } catch (_) { throw pickupError(); }
+  if (result.error || !result.data) throw pickupError();
+  if (result.data.allowed !== true) throw pickupError(true);
+  return result.data;
+}
+
+async function getPickupContext(homeId, userId) {
+  const context = await pickupRpc('get_home_pickup_calendar', { p_home_id: homeId, p_user_id: userId });
+  if (context.home?.id !== homeId || !Array.isArray(context.rules)) throw pickupError();
+  return context;
+}
+
+async function pickupMutation(homeId, userId, rows) {
+  if (!userId) throw pickupError(true);
+  return pickupRpc('mutate_home_pickup_calendar', { p_home_id: homeId, p_user_id: userId, p_rows: rows });
+}
+
+async function clearPickupDay(home, userId) {
+  await pickupMutation(home.id, userId, null);
   return true;
 }
 
 module.exports = {
   composeForHome,
+  getPickupContext,
   composeForHomeId,
   setPickupDay,
   clearPickupDay,

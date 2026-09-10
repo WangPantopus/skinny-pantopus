@@ -14,7 +14,6 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const {
   checkHomePermission,
-  isVerifiedOwner,
   mapLegacyRole,
   writeAuditLog,
   applyOccupancyTemplate,
@@ -255,12 +254,10 @@ const parsePostGISPoint = (point) => {
   return null;
 };
 
-/** Verified owners or members.manage can review household access requests. */
+/** Current effective members.manage is required, including for verified owners. */
 async function canReviewHouseholdAccessRequests(homeId, userId) {
   const perm = await checkHomePermission(homeId, userId, 'members.manage');
-  if (perm.hasAccess) return true;
-  const vo = await isVerifiedOwner(homeId, userId);
-  return !!vo?.isOwner;
+  return perm.hasAccess;
 }
 
 function mapAccessRequestToInviteRelationship(requestedIdentity) {
@@ -3082,10 +3079,6 @@ router.get('/:id', verifyToken, async (req, res) => {
       .eq('home_id', id)
       .neq('owner_status', 'revoked');
 
-    const isVerifiedOwner = (owners || []).some(
-      o => o.subject_id === userId && o.owner_status === 'verified'
-    );
-
     // Check if user has a pending ownership claim (for verification banner)
     const userOwnerRow = (owners || []).find(o => o.subject_id === userId);
     const isPendingOwner = userOwnerRow?.owner_status === 'pending';
@@ -3105,7 +3098,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     res.json({
       home: {
         ...home,
-        isOwner: isOwner || isVerifiedOwner,
+        isOwner,
         isPendingOwner,
         pendingClaimId,
         isOccupant,
@@ -4712,7 +4705,7 @@ router.get('/:id/bills', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { status } = req.query;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'finance.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     let query = supabaseAdmin
@@ -4832,7 +4825,7 @@ router.get('/:id/bills/:billId/splits', verifyToken, async (req, res) => {
     const { id: homeId, billId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'finance.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     // Verify bill belongs to home
@@ -6066,8 +6059,9 @@ router.get('/:id/access', verifyToken, async (req, res) => {
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     // Filter by visibility based on permissions
-    const canManageAccess = access.isOwner || (access.occupancy && access.occupancy.can_manage_access);
-    const canViewSensitive = access.isOwner || (access.occupancy && access.occupancy.can_view_sensitive);
+    const permissions = new Set(access.permissions || []);
+    const canManageAccess = permissions.has('access.manage');
+    const canViewSensitive = permissions.has('sensitive.view');
 
     let query = supabaseAdmin
       .from('HomeAccessSecret')
@@ -6622,8 +6616,8 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
     const myAccess = await getUserAccess(homeId, userId);
     const perms = new Set(myAccess.permissions || []);
 
-    const canFinance = myAccess.isOwner || perms.has('finance.view') || perms.has('finance.manage');
-    const canViewDocuments = access.isOwner || myAccess.isOwner || perms.has('docs.view');
+    const canFinance = perms.has('finance.view');
+    const canViewDocuments = perms.has('docs.view');
     const documentVisibility = canViewDocuments
       ? await homeDocumentVisibilities(homeId, userId, access)
       : { allowed: [] };
@@ -8026,7 +8020,7 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
     const { getUserAccess } = require('../utils/homePermissions');
     const myAccess = await getUserAccess(homeId, userId);
     const perms = new Set(myAccess.permissions || []);
-    const canFinance = myAccess.isOwner || perms.has('finance.view') || perms.has('finance.manage');
+    const canFinance = perms.has('finance.view');
     if (!canFinance) return res.status(403).json({ error: 'No finance access' });
 
     // Fetch paid bills (last 24 months)

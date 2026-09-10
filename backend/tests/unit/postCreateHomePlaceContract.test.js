@@ -68,7 +68,7 @@ describe('Post creation home-place contract', () => {
         user_id: USER_ID,
         role: 'owner',
         role_base: 'owner',
-        is_active: true,
+        is_active: true, verification_status: 'verified',
       },
     ]);
 

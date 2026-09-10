@@ -38,7 +38,7 @@ router.post('/:id/fridge-cards', verifyToken, fridgeCardIssueLimiter, async (req
   try {
     const access = await checkHomePermission(id, userId, 'can_manage_home');
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to manage this place.' });
+      return res.status(403).json({ error: 'You do not have permission to manage this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     if (!isVerifiedResident(access)) {
       return res.status(403).json({
@@ -70,7 +70,7 @@ router.get('/:id/fridge-cards', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     // Verified residents only — the list carries every card's medical
     // content AND its live bearer code. A guest or service-provider
@@ -97,7 +97,7 @@ router.post('/:id/fridge-cards/:cardId/revoke', verifyToken, async (req, res) =>
   try {
     const access = await checkHomePermission(id, userId, 'can_manage_home');
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to manage this place.' });
+      return res.status(403).json({ error: 'You do not have permission to manage this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const card = await fridgeCardService.revokeCard({ homeId: id, cardId });
     if (!card) {

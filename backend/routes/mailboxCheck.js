@@ -17,7 +17,7 @@ const express = require('express');
 const router = express.Router();
 
 const verifyToken = require('../middleware/verifyToken');
-const { checkHomePermission } = require('../utils/homePermissions');
+const { checkHomePermission, getHomePersonalContext } = require('../utils/homePermissions');
 const mailboxCheckService = require('../services/mailboxCheckService');
 const logger = require('../utils/logger');
 
@@ -26,6 +26,11 @@ router.get('/:id/mailbox-check', verifyToken, async (req, res) => {
   const userId = req.user.id;
   try {
     const access = await checkHomePermission(id, userId);
+    if (!access.hasAccess && await getHomePersonalContext(id, userId)) {
+      return res.json({ check: { verdict: 'unknown', findings: [], checked_at: null,
+        physical: { status: 'not_run', title: 'Verify your address',
+          detail: 'Complete your own address verification to see the mailbox check.' } } });
+    }
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have access to this place.' });
     }

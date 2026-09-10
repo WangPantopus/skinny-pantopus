@@ -29,6 +29,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const { invalidateRoleCache } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
+const { OLD_TO_NEW_PERM } = require('../utils/homeAccessPolicy');
 const {
   checkHomePermission,
   getUserAccess,
@@ -40,7 +41,6 @@ const {
   assertCanMutateTarget,
   assertCanGrantPermission,
   ROLE_RANK,
-  VERIFIED_TEMPLATES,
 } = require('../utils/homePermissions');
 
 
@@ -60,20 +60,22 @@ router.get('/:id/me', verifyToken, async (req, res) => {
         hasAccess: false,
         role_base: null,
         permissions: [],
+        verification_status: access.occupancy?.verification_status || null,
       });
     }
 
-    const occ = access.occupancy;
+    const occ = access.occupancy || {};
 
-    // Owner-equivalent for UI + nav: verified/legacy owner (getUserAccess.isOwner) OR IAM role owner.
-    // Role-only promotion can leave HomeOccupancy booleans stale; merge with verified-owner template.
-    const isOwnerLike = access.isOwner || access.role_base === 'owner';
-    const ot = VERIFIED_TEMPLATES.owner;
-    const can_manage_home = !!occ.can_manage_home || (isOwnerLike && ot.can_manage_home);
-    const can_manage_access = !!occ.can_manage_access || (isOwnerLike && ot.can_manage_access);
-    const can_manage_finance = !!occ.can_manage_finance || (isOwnerLike && ot.can_manage_finance);
-    const can_manage_tasks = !!occ.can_manage_tasks || (isOwnerLike && ot.can_manage_tasks);
-    const can_view_sensitive = !!occ.can_view_sensitive || (isOwnerLike && ot.can_view_sensitive);
+    // Navigation is a projection of the same effective rights as API checks.
+    // A stale template flag or recorded owner role must not undo a deny/age cap.
+    const permissions = new Set(access.permissions || []);
+    const can = flag => OLD_TO_NEW_PERM[flag].some(permission => permissions.has(permission));
+    const isOwnerLike = access.isOwner;
+    const can_manage_home = can('can_manage_home');
+    const can_manage_access = can('can_manage_access');
+    const can_manage_finance = can('can_manage_finance');
+    const can_manage_tasks = can('can_manage_tasks');
+    const can_view_sensitive = can('can_view_sensitive');
 
     // Challenge window check
     const is_in_challenge_window = occ.verification_status === 'provisional'
@@ -133,6 +135,7 @@ router.get('/:id/me', verifyToken, async (req, res) => {
       claim_window_ends_at,
       // Member context
       role_base: access.role_base,
+      effective_role_base: access.effective_role_base,
       is_owner: isOwnerLike,
       age_band: occ.age_band || null,
       occupancy_id: occ.id,
@@ -152,7 +155,7 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('GET /me error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to load access info' });
+    res.status(err.code === 'HOME_ACCESS_UNAVAILABLE' ? 503 : 500).json({ error: 'Failed to load access info. Please retry.' });
   }
 });
 

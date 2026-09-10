@@ -17,7 +17,7 @@ const visibilities = ['public', 'members', 'managers', 'sensitive'];
 
 function allow({ role = 'member', sensitive = false, denied = [], owner = false } = {}) {
   checkHomePermission.mockImplementation(async (_home, _user, permission) => ({
-    hasAccess: permission === 'sensitive.view' ? sensitive : !denied.includes(permission),
+    hasAccess: permission === 'sensitive.view' ? (sensitive || owner) : !denied.includes(permission),
     isOwner: owner,
     occupancy: { role_base: role, can_view_sensitive: true, can_manage_home: true },
   }));

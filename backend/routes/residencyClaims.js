@@ -39,7 +39,7 @@ router.post('/:id/residency-claims', verifyToken, residencyClaimIssueLimiter, as
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     if (!isVerifiedResident(access)) {
       return res.status(403).json({
@@ -72,7 +72,7 @@ router.get('/:id/residency-claims', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const claims = await residencyClaimService.listClaims({ homeId: id, userId });
     return res.json({ claims });
@@ -89,7 +89,7 @@ router.get('/:id/residency-claims/:claimId/views', verifyToken, async (req, res)
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const views = await residencyClaimService.listClaimViews({ homeId: id, userId, claimId });
     if (views === null) {
@@ -109,7 +109,7 @@ router.post('/:id/residency-claims/:claimId/revoke', verifyToken, async (req, re
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const claim = await residencyClaimService.revokeClaim({ homeId: id, userId, claimId });
     if (!claim) {

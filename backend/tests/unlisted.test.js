@@ -285,21 +285,18 @@ describe('removal progress', () => {
 
     try {
       seedHome();
-      const access = await checkHomePermission(HOME_ID, USER);
-      // "We could not check" — distinct from a decision to deny.
-      expect(access.readFailed).toBe(true);
-      expect(access.hasAccess).toBe(false);
+      await expect(checkHomePermission(HOME_ID, USER)).rejects.toMatchObject({
+        code: 'HOME_ACCESS_UNAVAILABLE', statusCode: 503,
+      });
     } finally {
       spy.mockRestore();
     }
   });
 
-  test('PGRST116 — "zero rows" — is not treated as a database failure', async () => {
-    // Real PostgREST signals zero rows from `.single()` as an ERROR with
-    // this code; the in-memory mock does not, which is why switching the
-    // read back to `.single()` does NOT fail the test below. This one
-    // models the real semantics directly, so the guard is defended
-    // whichever terminal a future edit picks.
+  test('an ambiguous PGRST116 response stays retryable; maybeSingle absence is tested separately', async () => {
+    // PGRST116 can mean multiple rows as well as none. The helper uses
+    // maybeSingle, whose absent-row result has no error; an error result
+    // must remain retryable instead of guessing which cardinality occurred.
     const { checkHomePermission } = require('../utils/homePermissions');
     const supabaseAdmin = require('../config/supabaseAdmin');
     const realFrom = supabaseAdmin.from.bind(supabaseAdmin);
@@ -319,9 +316,9 @@ describe('removal progress', () => {
     const spy = jest.spyOn(supabaseAdmin, 'from')
       .mockImplementation((table) => (table === 'Home' ? wrap(realFrom(table)) : realFrom(table)));
     try {
-      const access = await checkHomePermission(HOME_ID, USER);
-      expect(access.readFailed).toBeFalsy();
-      expect(access.hasAccess).toBe(false);
+      await expect(checkHomePermission(HOME_ID, USER)).rejects.toMatchObject({
+        code: 'HOME_ACCESS_UNAVAILABLE', statusCode: 503,
+      });
     } finally {
       spy.mockRestore();
     }

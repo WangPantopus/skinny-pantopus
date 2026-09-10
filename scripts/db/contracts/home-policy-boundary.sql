@@ -21,9 +21,9 @@ FROM auth.users WHERE id IN (
 INSERT INTO public."Home" (id, owner_id, created_by_user_id, address, city, state, zipcode)
 VALUES ('ddd00000-0000-4000-8000-000000000010', 'ddd00000-0000-4000-8000-000000000001',
         'ddd00000-0000-4000-8000-000000000003', '100 Synthetic Street', 'Test City', 'WA', '98607');
-INSERT INTO public."HomeOccupancy" (home_id, user_id, role, role_base, is_active)
+INSERT INTO public."HomeOccupancy" (home_id, user_id, role, role_base, is_active, verification_status)
 VALUES ('ddd00000-0000-4000-8000-000000000010', 'ddd00000-0000-4000-8000-000000000002',
-        'admin', 'admin', true);
+        'admin', 'admin', true, 'verified');
 -- Isolate the policy behavior from the incomplete historical reference matrix.
 INSERT INTO public."HomeRolePermission" (role_base, permission, allowed)
 VALUES ('admin', 'home.edit', true)

@@ -239,16 +239,10 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
             isOwner?: boolean;
           };
           const mergedRole = dm.role_base ?? access.role_base ?? null;
-          // Dashboard getUserAccess must align with GET /api/homes/:id/me; if either says owner-like, keep it.
-          const ownerLike =
-            !!dm.isOwner ||
-            mergedRole === 'owner' ||
-            access.isOwner ||
-            access.role_base === 'owner';
           result.myAccess = {
             permissions: dm.permissions || access.permissions || [],
             role_base: mergedRole,
-            isOwner: ownerLike,
+            isOwner: dm.isOwner ?? access.isOwner,
           };
         }
       } catch {
@@ -344,11 +338,9 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
 
   const can = useCallback(
     (perm: string): boolean => {
-      if (state.myAccess.isOwner || state.home?.owner_id === state.currentUserId) return true;
-      if (state.myAccess.permissions.length === 0 && !state.myAccess.role_base) return true;
       return state.myAccess.permissions.includes(perm);
     },
-    [state.myAccess, state.home?.owner_id, state.currentUserId]
+    [state.myAccess]
   );
 
   const makeEntityUpdater = useCallback(

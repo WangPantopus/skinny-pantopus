@@ -34,7 +34,7 @@ router.put('/:id/rent-report', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     if (!isVerifiedResident(access)) {
       return res.status(403).json({
@@ -73,7 +73,7 @@ router.get('/:id/rent-report', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const report = await realRentService.getReport({ homeId: id, userId });
     return res.json({ report });
@@ -90,7 +90,7 @@ router.delete('/:id/rent-report', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     await realRentService.deleteReport({ homeId: id, userId });
     return res.json({ removed: true });

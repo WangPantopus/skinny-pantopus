@@ -12,257 +12,113 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
-// ============================================================
-// PERMISSION MAP: old flag → new IAM permission(s)
-// ============================================================
+const {
+  HOME_PERMISSIONS, OLD_TO_NEW_PERM, ROLE_RANK, resolveHomeRole,
+  currentOccupancy, ageAllows, effectiveRole,
+} = require('./homeAccessPolicy');
 
-const OLD_TO_NEW_PERM = {
-  can_manage_home:    ['home.edit'],
-  can_manage_finance: ['finance.view', 'finance.manage'],
-  can_manage_access:  ['access.manage', 'members.manage'],
-  can_manage_tasks:   ['tasks.edit', 'tasks.manage'],
-  can_view_sensitive:  ['sensitive.view'],
-};
+function accessUnavailable() {
+  return Object.assign(new Error('Could not check Home access. Please retry.'), {
+    code: 'HOME_ACCESS_UNAVAILABLE', status: 503, statusCode: 503,
+  });
+}
 
-// ============================================================
-// ROLE HIERARCHY
-// ============================================================
-
-const ROLE_RANK = {
-  guest: 10,
-  restricted_member: 20,
-  member: 30,
-  manager: 40,
-  admin: 50,
-  owner: 60,
-};
-
-// ============================================================
-// Core: check if a user has a specific IAM permission in a home
-// ============================================================
-
-/**
- * Check if a user has a specific permission in a home.
- * Mirrors the DB function public.home_has_permission().
- *
- * @param {string} homeId
- * @param {string} userId
- * @param {string} permission - e.g. 'home.edit', 'tasks.manage', 'finance.view'
- * @returns {Promise<boolean>}
- */
-async function hasPermission(homeId, userId, permission) {
-  // 1) Get the user's occupancy
-  const occ = await getActiveOccupancy(homeId, userId);
-  if (!occ) return false;
-
-  const roleBase = occ.role_base || mapLegacyRole(occ.role);
-
-  // 2) Check overrides first (explicit grant/deny)
-  const { data: override } = await supabaseAdmin
-    .from('HomePermissionOverride')
-    .select('allowed')
-    .eq('home_id', homeId)
-    .eq('user_id', userId)
-    .eq('permission', permission)
-    .maybeSingle();
-
-  if (override && override.allowed !== null && override.allowed !== undefined) {
-    return override.allowed;
-  }
-
-  // 3) Check base role permissions
-  const { data: rolePerm } = await supabaseAdmin
-    .from('HomeRolePermission')
-    .select('allowed')
-    .eq('role_base', roleBase)
-    .eq('permission', permission)
-    .maybeSingle();
-
-  return rolePerm?.allowed === true;
+async function checked(query) {
+  let result;
+  try { result = await query; } catch (_) { throw accessUnavailable(); }
+  if (!result || result.error) throw accessUnavailable();
+  return result.data;
 }
 
 /**
- * Get all permissions for a user in a home.
- * Returns { permissions: string[], role_base: string, occupancy: object }
+ * Resolve one current effective policy. Unknown verification does not attest
+ * membership; missing age is preserved as historical adult-compatible data.
+ * Errors throw so callers cannot turn an unreadable deny into a base grant.
  */
 async function getUserAccess(homeId, userId) {
-  const occ = await getActiveOccupancy(homeId, userId);
-  if (!occ) {
-    return { permissions: [], role_base: null, occupancy: null, hasAccess: false, isOwner: false };
+  const empty = { permissions: [], role_base: null, effective_role_base: null,
+    occupancy: null, hasAccess: false, isOwner: false };
+  if (!homeId || !userId) return empty;
+  const [home, occupancy, owner] = await Promise.all([
+    checked(supabaseAdmin.from('Home').select('id, owner_id').eq('id', homeId).maybeSingle()),
+    checked(supabaseAdmin.from('HomeOccupancy').select('*').eq('home_id', homeId).eq('user_id', userId).maybeSingle()),
+    checked(supabaseAdmin.from('HomeOwner').select('id, subject_type, owner_status')
+      .eq('home_id', homeId).eq('subject_id', userId).eq('subject_type', 'user')
+      .eq('owner_status', 'verified').maybeSingle()),
+  ]);
+  if (!home) return empty;
+  const role = resolveHomeRole(occupancy);
+  const verifiedOccupancy = currentOccupancy(occupancy) && occupancy.verification_status === 'verified' && !!role;
+  const ownership = home.owner_id === userId || (owner && owner.subject_type === 'user')
+    || (verifiedOccupancy && role === 'owner');
+  // An explicit revoked/ended/pending occupancy fences a stale ownership pointer.
+  const admitted = occupancy ? verifiedOccupancy : !!ownership;
+  if (!admitted) return { ...empty, occupancy, role_base: role,
+    verificationRequired: currentOccupancy(occupancy) && !!role
+      && ['unverified', 'provisional', 'provisional_bootstrap', 'pending_doc', 'pending_postcard',
+        'pending_approval', 'pending', 'none'].includes(occupancy.verification_status) };
+
+  const ownerEntitlement = !!ownership;
+  const baseRole = ownerEntitlement ? 'owner' : role;
+  const [roleRows, overrides] = await Promise.all([
+    checked(supabaseAdmin.from('HomeRolePermission').select('permission, allowed').eq('role_base', baseRole)),
+    checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
+      .eq('home_id', homeId).eq('user_id', userId)),
+  ]);
+  const allowed = new Set(ownerEntitlement ? HOME_PERMISSIONS : []);
+  for (const row of (roleRows || [])) {
+    if (row.allowed === true) allowed.add(row.permission);
+    else allowed.delete(row.permission);
   }
-
-  const roleBase = occ.role_base || mapLegacyRole(occ.role);
-
-  // Get base role permissions
-  const { data: rolePerms } = await supabaseAdmin
-    .from('HomeRolePermission')
-    .select('permission')
-    .eq('role_base', roleBase)
-    .eq('allowed', true);
-
-  const basePerms = new Set((rolePerms || []).map(r => r.permission));
-
-  // Get overrides
-  const { data: overrides } = await supabaseAdmin
-    .from('HomePermissionOverride')
-    .select('permission, allowed')
-    .eq('home_id', homeId)
-    .eq('user_id', userId);
-
-  for (const ov of (overrides || [])) {
-    if (ov.allowed) {
-      basePerms.add(ov.permission);
-    } else {
-      basePerms.delete(ov.permission);
-    }
+  for (const row of (overrides || [])) {
+    if (row.allowed === true) allowed.add(row.permission);
+    else allowed.delete(row.permission);
   }
-
-  // Align with checkHomePermission: legacy Home.owner_id OR verified HomeOwner row
-  const { data: home } = await supabaseAdmin
-    .from('Home')
-    .select('owner_id')
-    .eq('id', homeId)
-    .single();
-
-  const ownerCheck = await isVerifiedOwner(homeId, userId);
-  // IAM "owner" role must count as owner for dashboard /myAccess (matches GET /:id/me isOwnerLike).
-  const isOwner =
-    home?.owner_id === userId || ownerCheck.isOwner || roleBase === 'owner';
-
+  const age = occupancy?.age_band;
+  const permissions = HOME_PERMISSIONS.filter(permission => allowed.has(permission) && ageAllows(age, permission));
   return {
-    permissions: Array.from(basePerms),
-    role_base: roleBase,
-    occupancy: occ,
-    hasAccess: true,
-    isOwner,
+    permissions, role_base: role || 'owner',
+    effective_role_base: effectiveRole(ownerEntitlement ? 'owner' : role, age),
+    occupancy, hasAccess: true,
+    // Existing owner shortcuts must never reinstate a minor's hard-denied powers.
+    isOwner: ownerEntitlement && (age == null || age === 'adult'),
   };
 }
 
-// ============================================================
-// Upgraded checkHomePermission (drop-in replacement)
-// ============================================================
-
-/**
- * Drop-in replacement for the old checkHomePermission.
- * Supports both old-style flags AND new IAM permission strings.
- *
- * @param {string} homeId
- * @param {string} userId
- * @param {string|null} permission - old flag like 'can_manage_home' OR new perm like 'tasks.edit'
- * @returns {Promise<{ hasAccess: boolean, isOwner: boolean, occupancy: object|null, permissions: string[] }>}
- */
-async function checkHomePermission(homeId, userId, permission = null) {
-  // Check ownership
-  // `.maybeSingle()`, NOT `.single()`.
-  //
-  // `.single()` signals "zero rows" as an ERROR (PGRST116), so the
-  // readFailed guard below turned "this home does not exist" — an
-  // ordinary 404/403 — into a database-failure 500. That is a regression
-  // this same wave introduced while fixing the opposite problem, and it
-  // is the reason to prefer maybeSingle: it puts "no row" in `data` and
-  // reserves `error` for things that actually went wrong.
-  const { data: home, error: homeError } = await supabaseAdmin
-    .from('Home')
-    .select('owner_id')
-    .eq('id', homeId)
-    .maybeSingle();
-
-  // A DATABASE FAILURE IS NOT A PERMISSION DECISION.
-  //
-  // PostgREST resolves rather than rejects on a transport failure or a
-  // non-2xx, so `data` is null both when the home does not exist and when
-  // we could not find out. Collapsing them denies access, and every
-  // caller renders that as "You do not have access to this place." — told
-  // to a resident, about their own home, because a query timed out.
-  //
-  // `readFailed` is ADDITIVE: 19 call sites read this return value, and
-  // all of them keep today's behaviour (deny) unless they opt in. Callers
-  // that can distinguish should return 500 rather than 403, which is also
-  // what gets the request auto-retried by the native clients instead of
-  // parked behind a manual Try again.
-  // PGRST116 is `.single()`'s "zero rows" signal, not a failure. The read
-  // above uses maybeSingle so it should never appear — this is belt and
-  // braces for the next person who switches it back, because the cost of
-  // getting it wrong is a 500 on every request for a home that simply
-  // does not exist.
-  if (homeError && homeError.code !== 'PGRST116') {
-    logger.error('homePermissions: home read failed', { homeId, userId, error: homeError.message });
-    return {
-      hasAccess: false, isOwner: false, occupancy: null, permissions: [], readFailed: true,
-    };
-  }
-
-  if (!home) return { hasAccess: false, isOwner: false, occupancy: null };
-
-  const isLegacyOwner = home.owner_id === userId;
-
-  // Also check HomeOwner table for verified ownership
-  const ownerCheck = await isVerifiedOwner(homeId, userId);
-
-  // Check occupancy (needed for IAM owner role and permission resolution)
-  const occ = await getActiveOccupancy(homeId, userId);
-  const roleBase = occ ? (occ.role_base || mapLegacyRole(occ.role)) : null;
-  const isIamOwner = roleBase === 'owner';
-  const isOwner = isLegacyOwner || ownerCheck.isOwner || isIamOwner;
-
-  const hasAccess = isOwner || !!occ;
-
-  if (!hasAccess) return { hasAccess: false, isOwner: false, occupancy: null };
-
-  // No specific permission needed — just check membership
-  if (!permission) return { hasAccess: true, isOwner, occupancy: occ };
-
-  // Owner always has all permissions
-  if (isOwner) return { hasAccess: true, isOwner: true, occupancy: occ };
-
-  // Resolve permission: old flag → new IAM perm(s)
-  let permsToCheck;
-  if (OLD_TO_NEW_PERM[permission]) {
-    // Old-style flag: check ANY of the mapped new permissions
-    permsToCheck = OLD_TO_NEW_PERM[permission];
-  } else if (permission.includes('.')) {
-    // Already a new-style IAM permission
-    permsToCheck = [permission];
-  } else {
-    // Unknown — try as occupancy field fallback
-    const hasPerm = occ && occ[permission] === true;
-    return { hasAccess: hasPerm, isOwner: false, occupancy: occ };
-  }
-
-  // Check the IAM permissions
-  for (const perm of permsToCheck) {
-    const allowed = await hasPermission(homeId, userId, perm);
-    if (allowed) return { hasAccess: true, isOwner: false, occupancy: occ };
-  }
-
-  return { hasAccess: false, isOwner: false, occupancy: occ };
+async function hasPermission(homeId, userId, permission) {
+  const access = await getUserAccess(homeId, userId);
+  return access.hasAccess && access.permissions.includes(permission);
 }
 
+async function checkHomePermission(homeId, userId, permission = null) {
+  const access = await getUserAccess(homeId, userId);
+  if (!access.hasAccess || !permission) return access;
+  const requested = OLD_TO_NEW_PERM[permission] || [permission];
+  return { ...access, hasAccess: requested.some(value => access.permissions.includes(value)) };
+}
 
-// ============================================================
-// Helpers
-// ============================================================
-
-/**
- * Get active occupancy for a user in a home (respects time windows)
- */
 async function getActiveOccupancy(homeId, userId) {
-  const { data: occ } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('*')
-    .eq('home_id', homeId)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .maybeSingle();
+  const occupancy = await checked(supabaseAdmin.from('HomeOccupancy').select('*')
+    .eq('home_id', homeId).eq('user_id', userId).maybeSingle());
+  return currentOccupancy(occupancy) && occupancy.verification_status === 'verified'
+    && resolveHomeRole(occupancy) ? occupancy : null;
+}
 
-  if (!occ) return null;
-
-  // Check time windows
-  const now = new Date();
-  if (occ.start_at && new Date(occ.start_at) > now) return null;
-  if (occ.end_at && new Date(occ.end_at) <= now) return null;
-
-  return occ;
+/** Own onboarding/personal progress only. This is deliberately not membership.
+ * Callers must return only the caller's records/status and public state-level
+ * guidance. Never use it to authorize shared Home content or operations.
+ */
+async function getHomePersonalContext(homeId, userId) {
+  if (!homeId || !userId) return null;
+  const [home, occupancy] = await Promise.all([
+    checked(supabaseAdmin.from('Home').select('id').eq('id', homeId).maybeSingle()),
+    checked(supabaseAdmin.from('HomeOccupancy').select('*')
+      .eq('home_id', homeId).eq('user_id', userId).maybeSingle()),
+  ]);
+  return home && currentOccupancy(occupancy) && resolveHomeRole(occupancy)
+    && ['verified', 'unverified', 'provisional', 'provisional_bootstrap', 'pending_doc',
+      'pending_postcard', 'pending_approval', 'pending', 'none'].includes(occupancy.verification_status)
+    ? { occupancy } : null;
 }
 
 /**
@@ -375,15 +231,13 @@ async function assertCanGrantPermission(actorRoleBase, permission) {
  * Check if a user is a verified owner via the HomeOwner table.
  */
 async function isVerifiedOwner(homeId, userId) {
-  const { data: owner } = await supabaseAdmin
-    .from('HomeOwner')
-    .select('id, verification_tier, is_primary_owner')
-    .eq('home_id', homeId)
-    .eq('subject_id', userId)
-    .eq('owner_status', 'verified')
-    .maybeSingle();
-
-  return owner ? { isOwner: true, tier: owner.verification_tier, isPrimary: owner.is_primary_owner } : { isOwner: false };
+  const owner = await checked(supabaseAdmin.from('HomeOwner')
+    .select('id, subject_type, verification_tier, is_primary_owner')
+    .eq('home_id', homeId).eq('subject_id', userId)
+    .eq('subject_type', 'user').eq('owner_status', 'verified').maybeSingle());
+  return owner?.subject_type === 'user'
+    ? { isOwner: true, tier: owner.verification_tier, isPrimary: owner.is_primary_owner }
+    : { isOwner: false };
 }
 
 /**
@@ -601,4 +455,6 @@ module.exports = {
   ALL_FALSE_TEMPLATE,
   OLD_TO_NEW_PERM,
   ROLE_RANK,
+  accessUnavailable,
+  getHomePersonalContext,
 };

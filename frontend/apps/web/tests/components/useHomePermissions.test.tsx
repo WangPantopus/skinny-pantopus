@@ -59,6 +59,31 @@ beforeEach(() => {
   mockGet.mockReset();
 });
 
+test('an owner can use only effective permissions and cannot bypass a denied operation', async () => {
+  mockGet.mockResolvedValueOnce(buildAccess({ isOwner: true, role_base: 'owner', permissions: ['home.view'] }));
+  const { result } = renderHook(() => useHomePermissions(), { wrapper });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.can('home.view')).toBe(true);
+  expect(result.current.can('finance.view')).toBe(false);
+  expect(result.current.can('finance.manage')).toBe(false);
+});
+
+test.each(['child', 'teen'])('a recorded %s owner cannot regain manager authority in role checks', async age_band => {
+  mockGet.mockResolvedValueOnce(buildAccess({ role_base: 'owner', age_band, permissions: ['home.view'] }));
+  const { result } = renderHook(() => useHomePermissions(), { wrapper });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.hasRoleAtLeast('manager')).toBe(false);
+  expect(result.current.hasRoleAtLeast('restricted_member')).toBe(true);
+  expect(result.current.hasRoleAtLeast('unknown')).toBe(false);
+});
+
+test('the effective role wins over an older recorded role', async () => {
+  mockGet.mockResolvedValueOnce(buildAccess({ role_base: 'owner', effective_role_base: 'guest' }));
+  const { result } = renderHook(() => useHomePermissions(), { wrapper });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.hasRoleAtLeast('member')).toBe(false);
+});
+
 // ============================================================
 // canSeeTab
 // ============================================================
