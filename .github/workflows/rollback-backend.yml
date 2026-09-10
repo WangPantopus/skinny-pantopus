@@ -49,4 +49,5 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DEPLOY_TARGET: ${{ inputs.target }}
           DEPLOY_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ inputs.digest }}
+          DEPLOY_API_BIND: ${{ vars.BACKEND_API_BIND }}
         run: bash scripts/deploy/remote.sh
