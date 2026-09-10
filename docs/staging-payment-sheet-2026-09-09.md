@@ -173,3 +173,17 @@ This avoids relying on a wrapper identifier or a badge hidden inside a button.
 The rebuilt opt-in harness and strict lint/format checks pass; live iOS acceptance
 is continuing from the still-empty actor. Android exact PostgREST denials were
 also verified as permission-denied errors, not generic request failures.
+
+## iOS first-card checkpoint
+
+Real iOS SDK cancellation, retry persistence across cold launch and successful
+Visa setup now pass. Provider reconciliation proves exactly one successful owned
+setup and one attached default Visa, with no charges. A later test query exposed
+SwiftUI combining inherited child identifiers into an invalid saved-row identifier.
+The stable identifier is now attached directly to the saved-card button.
+
+The rebuilt harness resumes only from the privately reconciled single-card
+checkpoint; it does not repeat successful setup or treat a partial run as full
+acceptance. It still must prove second-card setup/default/restart/removal/logout,
+then complete API/provider checks and exact cleanup. Strict lint/format and the
+new test build pass. Android remains complete and must not be replayed.

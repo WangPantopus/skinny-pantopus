@@ -36,19 +36,23 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         app.launch()
         signIn()
         openPayments()
-        XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 20))
+        let resumeAfterVisa = ProcessInfo.processInfo.environment["PAYMENT_SHEET_RESUME_AFTER_VISA"] == "1"
+        if !resumeAfterVisa {
+            XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 20))
+            openSheet()
+            closeSheet()
+            XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 10))
+            assertAddLabel("Retry saving card")
+            restartAndOpenPayments()
+            assertAddLabel("Retry saving card")
 
-        openSheet()
-        closeSheet()
-        XCTAssertTrue(element("payments.empty").waitForExistence(timeout: 10))
-        assertAddLabel("Retry saving card")
-        restartAndOpenPayments()
-        assertAddLabel("Retry saving card")
-
-        // Official Stripe test cards are entered only into Stripe's UI, never
-        // posted directly to our API: https://docs.stripe.com/testing#cards.
-        openSheet()
-        saveTestCard("4242424242424242")
+            // Official Stripe test cards are entered only into Stripe's UI,
+            // never posted directly to our API: https://docs.stripe.com/testing#cards.
+            openSheet()
+            saveTestCard("4242424242424242")
+        }
+        // A private operator may resume only after reconciling the exact first
+        // successful setup and single default Visa against the provider/API.
         let cardA = try waitForCard(last4: "4242")
         assertDefault(cardA)
         openSheet()

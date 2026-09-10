@@ -14,6 +14,21 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS payment first-card checkpoint — September 9
+
+The iOS real SDK has passed cancellation, same-setup cold recovery and first-card
+save. Exact provider reconciliation confirms one successful setup, one attached
+default Visa and no charges. A saved-row accessibility identifier is repaired;
+strict lint and test build pass. Continue only the gated resume-from-Visa journey
+for second-card/default/removal/logout. Do not repeat its successful first setup.
+Android remains fully accepted/API-verified; customer/session cleanup waits for
+both platforms. Full final-head CI remains required before PR #31 integration.
+
+Home finance follow-up `a248b15c1` in PR #32 passes current-head CI and all 20 SQL
+contracts. Core IAM/deletion is in progress. The next paid-gig backend/SQL
+invariants are isolated in `/private/tmp/pantopus-staging-paid-gig`, branch
+`codex/staging-paid-gig`; no provider calls or hosted changes ran there.
+
 ### Android payment and Home source checkpoint — September 9
 
 Android real SDK acceptance now passes cancellation/restart of the same setup,
