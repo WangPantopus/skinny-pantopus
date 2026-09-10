@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.admin
 
+import app.pantopus.android.data.api.models.homes.HomeClaimDecisionReceipt
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -132,6 +133,8 @@ data class AdminClaimEvidenceDto(
     @Json(name = "file_name") val fileName: String?,
     @Json(name = "file_size") val fileSize: Int?,
     @Json(name = "mime_type") val mimeType: String?,
+    @Json(name = "eligible_for_review") val eligibleForReview: Boolean? = null,
+    @Json(name = "availability_code") val availabilityCode: String? = null,
     @Json(name = "created_at") val createdAt: String,
 )
 
@@ -156,7 +159,15 @@ data class AdminClaimRecordDto(
     // Claimant identity-verification state — `not_started | pending |
     // verified | failed`. Drives the "Verified ID" trust chip (A13.3).
     @Json(name = "identity_status") val identityStatus: String? = null,
-)
+    @Json(name = "review_token") val reviewToken: String? = null,
+    @Json(name = "claim_phase_v2") val claimPhaseV2: String? = null,
+    @Json(name = "challenge_state") val challengeState: String? = null,
+    @Json(name = "routing_classification") val routingClassification: String? = null,
+) {
+    val requiresDisputeReview: Boolean get() =
+        state == "disputed" || claimPhaseV2 == "challenged" ||
+            challengeState == "challenged" || routingClassification == "challenge_claim"
+}
 
 /** Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. */
 @JsonClass(generateAdapter = true)
@@ -176,6 +187,7 @@ data class AdminClaimDetailResponse(
 @JsonClass(generateAdapter = true)
 data class AdminClaimReviewRequest(
     val action: String,
+    @Json(name = "review_token") val reviewToken: String,
     val note: String?,
 )
 
@@ -183,10 +195,4 @@ data class AdminClaimReviewRequest(
  * Generic ack returned by the review endpoint — we ignore most of the
  * body and refetch the bucket / counts on success.
  */
-@JsonClass(generateAdapter = true)
-data class AdminClaimReviewResponse(
-    val action: String? = null,
-    val newState: String? = null,
-    val claimId: String? = null,
-    val homeId: String? = null,
-)
+typealias AdminClaimReviewResponse = HomeClaimDecisionReceipt

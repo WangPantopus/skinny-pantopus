@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Test tag on the claim-review root. Mirrors iOS `homeClaimReview`. */
 const val HOME_CLAIM_REVIEW_TAG = "homeClaimReview"
@@ -46,7 +48,7 @@ const val HOME_CLAIM_REVIEW_TAG = "homeClaimReview"
 private const val TOAST_DURATION_MS = 2_000L
 
 private data class VerdictConfirm(
-    val claimId: String,
+    val snapshot: HomeClaimReviewSnapshot,
     val verdict: HomeClaimReviewVerdict,
 )
 
@@ -79,6 +81,7 @@ fun HomeClaimReviewScreen(
     onBack: () -> Unit,
     viewModel: HomeClaimReviewViewModel = hiltViewModel(),
 ) {
+    val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
@@ -149,7 +152,9 @@ fun HomeClaimReviewScreen(
                                 items = current.data.ownership,
                                 actionLoading = actionLoading,
                                 onVerdict = { claimId, verdict ->
-                                    verdictConfirm = VerdictConfirm(claimId, verdict)
+                                    scope.launch {
+                                        viewModel.prepareReview(claimId, verdict)?.let { verdictConfirm = VerdictConfirm(it, verdict) }
+                                    }
                                 },
                                 onRelationship = { claimId, action, isOwnerClaim ->
                                     relationshipConfirm =
@@ -193,11 +198,11 @@ fun HomeClaimReviewScreen(
         AlertDialog(
             onDismissRequest = { verdictConfirm = null },
             title = { Text(target.verdict.title) },
-            text = { Text(target.verdict.confirmBody) },
+            text = { Text(target.verdict.confirmBody + "\n\n" + target.snapshot.summary) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.review(target.claimId, target.verdict)
+                        viewModel.review(target.snapshot, target.verdict)
                         verdictConfirm = null
                     },
                     modifier = Modifier.testTag("homeClaimReview_verdictConfirm"),

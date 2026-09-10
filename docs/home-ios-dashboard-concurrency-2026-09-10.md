@@ -47,3 +47,12 @@ strict lint and no new dashboard warnings. Private verification log:
 
 The affected iOS 18.5 runtime still must pass current-head CI before this repair
 is considered verified. Do not merge from the newer local runtime result alone.
+
+## Affected runtime verification
+
+[CI run 34455246057](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34455246057)
+at `a68bbc5a8057718d15cfefa19d401e28b38984f6` passes all three actual iOS 18.5
+jobs: iPhone 16, iPhone 16 Pro and iPhone SE (third generation). This establishes
+the previously missing runtime proof for the final repair. Assertions and test
+selection were unchanged. The wider Home branch remains draft, and complete
+final-head CI and household acceptance still gate integration/release.

@@ -7,10 +7,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.admin.AdminRepository
 import app.pantopus.android.data.api.models.admin.AdminClaimDetailResponse
+import app.pantopus.android.data.api.models.admin.AdminClaimRecordDto
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewAction
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_DISPUTE_REVIEW
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_PENDING_DECISION
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SESSION_CHANGED
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SNAPSHOT_CHANGED
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimReviewSnapshot
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +71,7 @@ class ReviewClaimDetailViewModel
     constructor(
         private val repo: AdminRepository,
         savedStateHandle: SavedStateHandle,
+        scopeFactory: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         private val claimId: String =
             savedStateHandle.get<String>(CLAIM_ID_KEY).orEmpty()
@@ -83,27 +93,27 @@ class ReviewClaimDetailViewModel
         val challengeQuestion: StateFlow<String> = _challengeQuestion.asStateFlow()
 
         private var loadedOnce: Boolean = false
+        private val session = scopeFactory.create(viewModelScope)
+        private var loadGeneration = 0
+
+        private data class PendingDecision(val claim: AdminClaimRecordDto, val action: AdminClaimReviewAction, val note: String?)
+
+        private var pendingDecision: PendingDecision? = null
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect { if (it) _state.value = ReviewClaimDetailUiState.Error(CLAIM_SESSION_CHANGED) }
+            }
+        }
 
         fun load() {
-            if (claimId.isBlank()) {
-                _state.value = ReviewClaimDetailUiState.Error("Missing claim id.")
+            if (_reviewingAction.value != null) return
+            if (claimId.isBlank() || !session.isCurrent) {
+                _state.value = ReviewClaimDetailUiState.Error(if (claimId.isBlank()) "Missing claim id." else CLAIM_SESSION_CHANGED)
                 return
             }
-            // Refetch on every appear so the admin always sees fresh state;
-            // only flip back to the loading shimmer the first time.
             if (!loadedOnce) _state.value = ReviewClaimDetailUiState.Loading
-            viewModelScope.launch {
-                when (val result = repo.claimDetail(claimId)) {
-                    is NetworkResult.Success -> {
-                        _state.value = ReviewClaimDetailUiState.Loaded(result.data)
-                        loadedOnce = true
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value =
-                            ReviewClaimDetailUiState.Error("Couldn't load claim details. Try again.")
-                    }
-                }
-            }
+            viewModelScope.launch { reload() }
         }
 
         /**
@@ -117,23 +127,47 @@ class ReviewClaimDetailViewModel
             if (_reviewingAction.value != null) return false
             _reviewingAction.value = action
             return try {
-                val request = AdminClaimReviewRequest(action = action.backendValue, note = note)
-                when (val result = repo.reviewClaim(claimId, request)) {
-                    is NetworkResult.Success -> {
-                        _toast.update {
-                            ReviewClaimToast(text = successCopy(action), isError = false)
-                        }
-                        // Refresh detail so the body shows the new state.
-                        viewModelScope.launch { reload() }
-                        true
-                    }
-                    is NetworkResult.Failure -> {
-                        _toast.update {
-                            ReviewClaimToast(text = "Couldn't review this claim. Try again.", isError = true)
-                        }
-                        false
-                    }
+                session.requireCurrent()
+                val detail = (_state.value as? ReviewClaimDetailUiState.Loaded)?.detail
+                check(detail != null && detail.claim.id == claimId && HomeClaimReviewSnapshot.validToken(detail.claim.reviewToken)) {
+                    CLAIM_SNAPSHOT_CHANGED
                 }
+                check(!detail.claim.requiresDisputeReview) { CLAIM_DISPUTE_REVIEW }
+                pendingDecision?.let {
+                    check(
+                        it.claim == detail.claim && it.action == action && it.note == note,
+                    ) { CLAIM_PENDING_DECISION }
+                }
+                pendingDecision = PendingDecision(detail.claim, action, note)
+                val request =
+                    AdminClaimReviewRequest(
+                        action = action.backendValue,
+                        reviewToken = requireNotNull(detail.claim.reviewToken),
+                        note = note,
+                    )
+                val result = repo.reviewClaim(claimId, request)
+                session.requireCurrent()
+                val receipt =
+                    when (result) {
+                        is NetworkResult.Success -> result.data
+                        is NetworkResult.Failure -> throw result.error
+                    }
+                check(receipt.matches(detail.claim.homeId, claimId, detail.claim.claimantUserId, action.backendValue)) {
+                    "Could not confirm the claim result. Please retry."
+                }
+                pendingDecision = null
+                _toast.value = ReviewClaimToast(text = successCopy(action), isError = false)
+                _reviewingAction.value = null
+                reload()
+                true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: NetworkError) {
+                reviewFailed(error)
+            } catch (error: IllegalStateException) {
+                reviewFailed(error)
+            } catch (error: IllegalArgumentException) {
+                reviewFailed(error)
             } finally {
                 _reviewingAction.value = null
             }
@@ -179,19 +213,46 @@ class ReviewClaimDetailViewModel
         }
 
         private suspend fun reload() {
-            when (val result = repo.claimDetail(claimId)) {
-                is NetworkResult.Success -> {
-                    _state.value = ReviewClaimDetailUiState.Loaded(result.data)
-                }
-                is NetworkResult.Failure -> Unit
+            val revision = ++loadGeneration
+            try {
+                session.requireCurrent()
+                val result = repo.claimDetail(claimId)
+                session.requireCurrent()
+                if (revision != loadGeneration) return
+                val detail =
+                    when (result) {
+                        is NetworkResult.Success -> result.data
+                        is NetworkResult.Failure -> throw result.error
+                    }
+                check(
+                    detail.claim.id == claimId && detail.home?.id == detail.claim.homeId &&
+                        detail.claimant?.id == detail.claim.claimantUserId && HomeClaimReviewSnapshot.validToken(detail.claim.reviewToken),
+                ) { CLAIM_SNAPSHOT_CHANGED }
+                _state.value = ReviewClaimDetailUiState.Loaded(detail)
+                pendingDecision = null
+                loadedOnce = true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: NetworkError) {
+                if (revision == loadGeneration) _state.value = ReviewClaimDetailUiState.Error(error.message)
+            } catch (error: IllegalStateException) {
+                if (revision == loadGeneration) _state.value = ReviewClaimDetailUiState.Error(error.message ?: CLAIM_SNAPSHOT_CHANGED)
+            } catch (error: IllegalArgumentException) {
+                if (revision == loadGeneration) _state.value = ReviewClaimDetailUiState.Error(error.message ?: CLAIM_SNAPSHOT_CHANGED)
             }
+        }
+
+        private fun reviewFailed(error: Throwable): Boolean {
+            if ((error as? NetworkError)?.code?.let { it in 400..499 } == true || !session.isCurrent) pendingDecision = null
+            _toast.value = ReviewClaimToast(text = error.message ?: "Could not confirm the claim result. Please retry.", isError = true)
+            return false
         }
 
         private fun successCopy(action: AdminClaimReviewAction): String =
             when (action) {
-                AdminClaimReviewAction.Approve -> "Claim accepted. The claimant is now a verified owner."
-                AdminClaimReviewAction.Reject -> "Claim rejected. The claimant has been notified."
-                AdminClaimReviewAction.Challenge -> "Challenge sent. The claimant has 14 days to respond."
+                AdminClaimReviewAction.Approve -> "Claim approved."
+                AdminClaimReviewAction.Reject -> "Claim rejected."
+                AdminClaimReviewAction.Challenge -> "Request for more information saved."
             }
 
         companion object {

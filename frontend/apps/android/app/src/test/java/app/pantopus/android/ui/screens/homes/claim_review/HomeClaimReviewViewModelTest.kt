@@ -50,6 +50,7 @@ class HomeClaimReviewViewModelTest {
     private fun makeVm(): HomeClaimReviewViewModel =
         HomeClaimReviewViewModel(
             repo = repo,
+            scopeFactory = claimScopeFactory(),
             savedStateHandle = SavedStateHandle(mapOf(HOME_CLAIM_REVIEW_HOME_ID_KEY to "home_1")),
         )
 

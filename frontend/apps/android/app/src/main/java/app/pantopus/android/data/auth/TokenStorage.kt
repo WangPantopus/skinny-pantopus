@@ -197,6 +197,18 @@ class TokenStorage
                 if (userId == null) null else userId to sessionId
             }
 
+        /** One stored snapshot; never combine a token with a separately read replacement account. */
+        class SessionCredentials(val userId: String, val sessionId: String?, val accessToken: String)
+
+        suspend fun sessionCredentials(): SessionCredentials? =
+            withPrefs { prefs ->
+                val snapshot = prefs.all
+                val user = (snapshot[Keys.USER_ID] as? String)?.takeIf(String::isNotBlank)
+                val token = (snapshot[Keys.ACCESS] as? String)?.takeIf(String::isNotBlank)
+                val session = (snapshot[Keys.SESSION_ID] as? String)?.takeIf(String::isNotBlank)
+                if (user == null || token == null) null else SessionCredentials(user, session, token)
+            }
+
         /** `interactive` | `restored` — gates client-side step-up affordances. */
         suspend fun sessionContext(): String? = withPrefs { it.getString(Keys.SESSION_CONTEXT, null) }
 

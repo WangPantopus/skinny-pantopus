@@ -3,7 +3,9 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonDto
+import app.pantopus.android.data.api.models.homes.HomeClaimDecisionReceipt
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimActionResponse
+import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimResolveRelationshipRequest
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimReviewRequest
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimsResponse
@@ -60,12 +62,18 @@ interface HomeClaimReviewApi {
      * `backend/routes/homeOwnership.js:665`. `action` ∈
      * approve | reject | flag.
      */
+    @GET("api/homes/{id}/ownership-claims/{claimId}")
+    suspend fun ownershipClaimDetail(
+        @Path("id") homeId: String,
+        @Path("claimId") claimId: String,
+    ): HomeOwnershipClaimDetailResponse
+
     @POST("api/homes/{id}/ownership-claims/{claimId}/review")
     suspend fun reviewOwnershipClaim(
         @Path("id") homeId: String,
         @Path("claimId") claimId: String,
         @Body body: HomeOwnershipClaimReviewRequest,
-    ): HomeOwnershipClaimActionResponse
+    ): HomeClaimDecisionReceipt
 
     /**
      * `POST /api/homes/:id/ownership-claims/:claimId/resolve-relationship`

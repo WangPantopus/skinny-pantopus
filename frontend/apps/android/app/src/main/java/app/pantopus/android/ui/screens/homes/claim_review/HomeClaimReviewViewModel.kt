@@ -15,10 +15,12 @@ import app.pantopus.android.data.api.models.homes.HomeClaimComparisonClaimDto
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.HomeResidencyClaimDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeClaimReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -213,6 +215,7 @@ class HomeClaimReviewViewModel
     constructor(
         private val repo: HomeClaimReviewRepository,
         savedStateHandle: SavedStateHandle,
+        scopeFactory: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         val homeId: String = savedStateHandle[HOME_CLAIM_REVIEW_HOME_ID_KEY] ?: ""
 
@@ -233,15 +236,27 @@ class HomeClaimReviewViewModel
         val selectedTab: StateFlow<HomeClaimReviewTab> = _selectedTab.asStateFlow()
 
         private var loadedOnce = false
+        private val session = scopeFactory.create(viewModelScope)
+        private var readGeneration = 0
+        private var prepared: HomeClaimReviewSnapshot? = null
+        private var pendingDecision: Pair<HomeClaimReviewSnapshot, HomeClaimReviewVerdict>? = null
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect { if (it) _state.value = HomeClaimReviewUiState.Error(CLAIM_SESSION_CHANGED) }
+            }
+        }
 
         /** Idempotent — re-running won't refetch once content is loaded. */
         fun load() {
-            if (loadedOnce) return
+            if (loadedOnce || _actionLoading.value != null) return
             reload()
         }
 
         /** Pull-to-refresh / retry. */
-        fun refresh() = reload()
+        fun refresh() {
+            if (_actionLoading.value == null) reload()
+        }
 
         fun selectTab(tab: HomeClaimReviewTab) {
             _selectedTab.value = tab
@@ -254,26 +269,113 @@ class HomeClaimReviewViewModel
         // region Mutations
 
         /** `POST /api/homes/:id/ownership-claims/:claimId/review`. */
-        fun review(
+        suspend fun prepareReview(
             claimId: String,
             verdict: HomeClaimReviewVerdict,
-        ) {
-            _actionLoading.value = "$claimId:${verdict.wire}"
-            viewModelScope.launch {
-                when (val result = repo.reviewOwnershipClaim(homeId, claimId, verdict.wire)) {
-                    is NetworkResult.Success -> {
-                        _toast.value = HomeClaimReviewToast(verdict.doneCopy, isError = false)
-                        fetch()
-                    }
-                    is NetworkResult.Failure ->
-                        _toast.value =
-                            HomeClaimReviewToast(
-                                result.error.displayMessage("Failed to review claim"),
-                                isError = true,
-                            )
+        ): HomeClaimReviewSnapshot? {
+            if (_actionLoading.value != null) return null
+            return try {
+                session.requireCurrent()
+                pendingDecision?.let { pending ->
+                    check(pending.first.claimId == claimId && pending.second == verdict) { CLAIM_PENDING_DECISION }
+                    prepared = pending.first
+                    return pending.first
                 }
+                val revision = ++readGeneration
+                prepared = null
+                _actionLoading.value = "$claimId:prepare"
+                val result = repo.ownershipClaimDetail(homeId, claimId)
+                session.requireCurrent()
+                check(revision == readGeneration) { CLAIM_SNAPSHOT_CHANGED }
+                val claim =
+                    when (result) {
+                        is NetworkResult.Success -> result.data.claim
+                        is NetworkResult.Failure -> throw result.error
+                    }
+                snapshotFor(claim, claimId).also { prepared = it }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: NetworkError) {
+                _toast.value = HomeClaimReviewToast(error.message, isError = true)
+                null
+            } catch (error: IllegalStateException) {
+                _toast.value = HomeClaimReviewToast(error.message ?: CLAIM_SNAPSHOT_CHANGED, isError = true)
+                null
+            } catch (error: IllegalArgumentException) {
+                _toast.value = HomeClaimReviewToast(error.message ?: CLAIM_SNAPSHOT_CHANGED, isError = true)
+                null
+            } finally {
                 _actionLoading.value = null
             }
+        }
+
+        fun review(
+            snapshot: HomeClaimReviewSnapshot,
+            verdict: HomeClaimReviewVerdict,
+        ) {
+            if (_actionLoading.value != null) return
+            _actionLoading.value = "${snapshot.claimId}:${verdict.wire}"
+            viewModelScope.launch {
+                try {
+                    session.requireCurrent()
+                    check(prepared == snapshot && snapshot.homeId == homeId) { CLAIM_SNAPSHOT_CHANGED }
+                    pendingDecision?.let { check(it.first == snapshot && it.second == verdict) { CLAIM_PENDING_DECISION } }
+                    pendingDecision = snapshot to verdict
+                    val result = repo.reviewOwnershipClaim(homeId, snapshot.claimId, verdict.wire, snapshot.reviewToken)
+                    session.requireCurrent()
+                    val receipt =
+                        when (result) {
+                            is NetworkResult.Success -> result.data
+                            is NetworkResult.Failure -> throw result.error
+                        }
+                    check(
+                        receipt.matches(homeId, snapshot.claimId, snapshot.claimantId, verdict.wire),
+                    ) { "Could not confirm the claim result. Please retry." }
+                    prepared = null
+                    pendingDecision = null
+                    _toast.value = HomeClaimReviewToast(verdict.doneCopy, isError = false)
+                    fetch()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: NetworkError) {
+                    reviewFailed(error)
+                } catch (error: IllegalStateException) {
+                    reviewFailed(error)
+                } catch (error: IllegalArgumentException) {
+                    reviewFailed(error)
+                } finally {
+                    _actionLoading.value = null
+                }
+            }
+        }
+
+        private fun snapshotFor(
+            claim: HomeOwnershipClaimDto,
+            claimId: String,
+        ): HomeClaimReviewSnapshot {
+            check(claim.id == claimId && claim.homeId == homeId && !claim.claimantUserId.isNullOrBlank()) { CLAIM_SNAPSHOT_CHANGED }
+            check(HomeClaimReviewSnapshot.validToken(claim.reviewToken) && claim.state in PENDING_LEGACY_STATES) { CLAIM_SNAPSHOT_CHANGED }
+            check(
+                claim.claimPhaseV2 != "challenged" && claim.challengeState != "challenged" &&
+                    claim.routingClassification != "challenge_claim",
+            ) { CLAIM_DISPUTE_REVIEW }
+            return HomeClaimReviewSnapshot(
+                homeId,
+                claimId,
+                requireNotNull(claim.claimantUserId),
+                requireNotNull(claim.reviewToken),
+                claim.claimType ?: "Claim",
+                claim.evidence.orEmpty().count { it.eligibleForReview == true },
+                claim.evidence.orEmpty().size,
+            )
+        }
+
+        private fun reviewFailed(error: Throwable) {
+            if ((error as? NetworkError)?.code?.let { it in 400..499 } == true || !session.isCurrent) {
+                prepared = null
+                pendingDecision = null
+            }
+            _toast.value = HomeClaimReviewToast(error.message ?: "Could not confirm the claim result. Please retry.", isError = true)
         }
 
         /**
@@ -283,15 +385,24 @@ class HomeClaimReviewViewModel
             claimId: String,
             action: HomeClaimRelationshipAction,
         ) {
+            if (_actionLoading.value != null || !session.isCurrent) return
             _actionLoading.value = "$claimId:${action.wire}"
             viewModelScope.launch {
+                if (!session.confirmCurrent()) {
+                    _actionLoading.value = null
+                    return@launch
+                }
                 val result = repo.resolveOwnershipClaimRelationship(homeId, claimId, action.wire)
+                if (!session.confirmCurrent()) {
+                    _actionLoading.value = null
+                    return@launch
+                }
                 when (result) {
                     is NetworkResult.Success -> {
                         _toast.value =
                             HomeClaimReviewToast(
                                 if (action == HomeClaimRelationshipAction.InviteToHousehold) {
-                                    "Invitation sent."
+                                    "Invitation created."
                                 } else {
                                     "Claim updated."
                                 },
@@ -317,14 +428,23 @@ class HomeClaimReviewViewModel
             claimId: String,
             approve: Boolean,
         ) {
+            if (_actionLoading.value != null || !session.isCurrent) return
             _actionLoading.value = claimId
             viewModelScope.launch {
+                if (!session.confirmCurrent()) {
+                    _actionLoading.value = null
+                    return@launch
+                }
                 val result =
                     if (approve) {
                         repo.approveResidencyClaim(homeId, claimId)
                     } else {
                         repo.rejectResidencyClaim(homeId, claimId)
                     }
+                if (!session.confirmCurrent()) {
+                    _actionLoading.value = null
+                    return@launch
+                }
                 when (result) {
                     is NetworkResult.Success -> {
                         _toast.value =
@@ -354,6 +474,10 @@ class HomeClaimReviewViewModel
         // endregion
 
         private fun reload() {
+            if (!session.isCurrent) {
+                _state.value = HomeClaimReviewUiState.Error(CLAIM_SESSION_CHANGED)
+                return
+            }
             _state.value = HomeClaimReviewUiState.Loading
             viewModelScope.launch { fetch() }
         }
@@ -367,6 +491,11 @@ class HomeClaimReviewViewModel
          * the error state.
          */
         private suspend fun fetch() {
+            if (!session.confirmCurrent()) {
+                _state.value = HomeClaimReviewUiState.Error(CLAIM_SESSION_CHANGED)
+                return
+            }
+            val revision = ++readGeneration
             val results =
                 coroutineScope {
                     val ownershipDeferred = async { repo.ownershipClaims(homeId) }
@@ -378,6 +507,9 @@ class HomeClaimReviewViewModel
                         comparisonDeferred.await(),
                     )
                 }
+            if (revision != readGeneration || !session.confirmCurrent()) return
+            prepared = null
+            pendingDecision = null
             val ownershipResult = results.first
             val residencyResult = results.second
             val comparisonResult = results.third

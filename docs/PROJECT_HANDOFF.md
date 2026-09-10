@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android claim review and iOS runtime verification — September 10
+
+Android now submits the exact displayed claim/evidence snapshot and accepts only
+matching decision or retained-history withdrawal receipts. Session replacement
+retires the old screen before another read or write, including collector lag.
+The [Android report](home-android-claim-review-2026-09-10.md) records final app
+assembly, formatting/static checks, zero lint errors, 47 focused behavior checks
+and independent review. The source is ready for this milestone's commit/push.
+
+The dashboard repair at `a68bbc5a8` now passes all three affected iOS 18.5
+simulator jobs in [CI run 34455246057](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34455246057).
+The [runtime report](home-ios-dashboard-concurrency-2026-09-10.md) preserves the
+original failures and final evidence. Android quality CI is still running at
+this observation; a complete final-head pass remains required before integration.
+
+**Next:** finish trusted private claim evidence and task attachments, then native
+evidence controls, relationship/residency receipts and complete household
+acceptance. Draft PR #32 remains unfinished. Paid-gig recovery continues in draft
+PR #34. All paid dependencies stay together for final launch preparation; completed
+physical Beacon and saved-card acceptance remains complete. No hosted policy,
+provider, subscription or production setting changed.
+
 ### Remaining iOS dashboard concurrency repair — September 10
 
 The repeated iOS 18.5 crash still points to async-let cleanup in dashboard core
