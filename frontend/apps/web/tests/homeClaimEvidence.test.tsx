@@ -27,7 +27,9 @@ test('opening exact private bytes never automatically verifies evidence or appro
   const { onVerified } = show();
   await inspect();
   expect(api.inspectClaimEvidence).toHaveBeenCalledWith(scope, 'evidence-1', reviewToken, true);
-  expect(screen.getByTitle('Private claim evidence')).toHaveAttribute('sandbox', '');
+  expect(screen.getByTitle('Private claim evidence').tagName).toBe('OBJECT');
+  expect(screen.getByTitle('Private claim evidence')).toHaveAttribute('type', 'application/pdf');
+  expect(screen.getByTitle('Private claim evidence')).toHaveAttribute('data', 'blob:private-test');
   expect(screen.getByRole('button', { name: 'Confirm evidence verification' })).toBeDisabled();
   expect(api.verifyClaimEvidence).not.toHaveBeenCalled();
   expect(onVerified).not.toHaveBeenCalled();
@@ -49,7 +51,13 @@ test('unknown verification result keeps the exact inspection available for retry
   fireEvent.click(screen.getByRole('button', { name: 'Confirm evidence verification' }));
   await screen.findByRole('alert');
   expect(onVerified).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm evidence verification' }));
+  expect(screen.queryByTitle('Private claim evidence')).not.toBeInTheDocument();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+  const open = screen.getByRole('button', { name: 'Open private document' });
+  expect(open).toBeDisabled();
+  fireEvent.click(open);
+  expect(api.inspectClaimEvidence).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry evidence verification' }));
   await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
   expect(api.inspectClaimEvidence).toHaveBeenCalledTimes(1);
   expect(api.verifyClaimEvidence.mock.calls[0]).toEqual(api.verifyClaimEvidence.mock.calls[1]);
@@ -100,4 +108,82 @@ test('session invalidation hides already fetched bytes and cannot rebind the old
   expect(screen.getByRole('alert')).toHaveTextContent('Reopen the claim');
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
   expect(api.verifyClaimEvidence).not.toHaveBeenCalled();
+});
+
+test('a changed review context revokes bytes and cannot revive when earlier props return', async () => {
+  const { rerender, onVerified } = show(); await inspect();
+  rerender(<ClaimEvidenceReview scope={scope} evidenceId="evidence-2" reviewToken={reviewToken} platformAdmin onVerified={onVerified} />);
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+  rerender(<ClaimEvidenceReview scope={scope} evidenceId="evidence-1" reviewToken={reviewToken} platformAdmin onVerified={onVerified} />);
+  expect(screen.queryByTitle('Private claim evidence')).not.toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('Reopen the claim');
+  expect(screen.queryByRole('button', { name: 'Open private document' })).not.toBeInTheDocument();
+});
+
+test('session retirement while the browser decodes bytes prevents creating a viewer', async () => {
+  const read = FileReader.prototype.readAsArrayBuffer;
+  let complete!: () => void;
+  const reader = jest.spyOn(FileReader.prototype, 'readAsArrayBuffer').mockImplementation(function (this: FileReader, blob) {
+    complete = () => read.call(this, blob);
+  });
+  try {
+    show(); fireEvent.click(screen.getByRole('button', { name: 'Open private document' }));
+    await waitFor(() => expect(reader).toHaveBeenCalled());
+    act(() => [...listeners].forEach(fn => fn()));
+    await act(async () => {
+      complete();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  } finally { reader.mockRestore(); }
+});
+
+test('a denied reopen immediately removes the previous preview and verification controls', async () => {
+  show(); await inspect(); fireEvent.click(screen.getByRole('checkbox'));
+  api.inspectClaimEvidence.mockRejectedValue({ statusCode: 403, message: 'Your access to this claim was removed.' });
+  fireEvent.click(screen.getByRole('button', { name: 'Open private document' }));
+  expect(screen.queryByTitle('Private claim evidence')).not.toBeInTheDocument();
+  await screen.findByText('Your access to this claim was removed.');
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Retry evidence verification' })).not.toBeInTheDocument();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
+test('final verification denial clears private bytes and the retired receipt', async () => {
+  api.verifyClaimEvidence.mockRejectedValue({ statusCode: 403, message: 'Your access to this claim was removed.' });
+  show(); await inspect(); fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm evidence verification' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByTitle('Private claim evidence')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Retry evidence verification' })).not.toBeInTheDocument();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
+test.each(['text/html', 'image/svg+xml', 'application/pdf'])('HTML content cannot become a %s document viewer or verification receipt', async mime => {
+  api.inspectClaimEvidence.mockResolvedValue({ bytes: new Blob(['<script>alert(1)</script>'], { type: mime }), inspection });
+  show(); fireEvent.click(screen.getByRole('button', { name: 'Open private document' }));
+  await screen.findByRole('alert');
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(screen.queryByTitle('Private claim evidence')).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+});
+
+test('plain text evidence displays markup as text without creating a browsing context', async () => {
+  api.inspectClaimEvidence.mockResolvedValue({ bytes: new Blob(['<img src=x onerror="alert(1)">'], { type: 'text/plain' }), inspection });
+  const { container } = show(); await inspect();
+  expect(screen.getByTitle('Private claim evidence').tagName).toBe('PRE');
+  expect(screen.getByTitle('Private claim evidence')).toHaveTextContent('<img src=x onerror="alert(1)">');
+  expect(container.querySelector('img, iframe, object, script')).toBeNull();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
+
+test('unsupported image rendering offers the same private Blob as an explicit download', async () => {
+  api.inspectClaimEvidence.mockResolvedValue({ bytes: new Blob([new Uint8Array([0, 0, 0, 24]), 'ftypheic'], { type: 'image/heic' }), inspection });
+  show(); await inspect();
+  fireEvent.error(screen.getByRole('img'));
+  expect(screen.getByText('This browser could not display the image. Download it below to inspect it.')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'download this document' })).toHaveAttribute('href', 'blob:private-test');
+  expect(screen.getByRole('link', { name: 'download this document' })).toHaveAttribute('download', 'claim-evidence.heic');
+  expect(screen.getByRole('button', { name: 'Confirm evidence verification' })).toBeDisabled();
 });

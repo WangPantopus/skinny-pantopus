@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser private document preview repair — September 10
+
+The sandboxed claim-evidence PDF viewer failed in an actual Chrome check. Its
+replacement now renders the document through a validated, explicitly typed
+preview, with escaped plain text and a same-file download fallback. Access
+failures clear prior bytes, and interrupted verification retains its exact
+receipt without letting another Open action discard it. The
+[browser preview report](home-claim-evidence-browser-preview-2026-09-10.md) records
+the real renderer reproduction and repair, independent review, complete browser
+regression, and clean type/lint checks.
+
+**Next:** finish native private evidence upload/read/verification/retirement and
+task attachments, then remaining relationships, ownership lifecycles and full
+household acceptance. Both native evidence candidates are under final app
+verification; this browser milestone does not certify those journeys. PR #32
+remains draft and unfinished. In PR #34, assigned-payment recovery is pushed on
+both native platforms and provider-derived hold deadlines are pushed as
+`9ef31ba7c`; durable expiry reconciliation and delivery continue. A fresh Stripe
+test-mode hold was released with zero capture and its synthetic customer was
+cleaned up; the complete provider lifecycle remains open. All paid dependencies
+stay together for final launch preparation. Completed physical Beacon and
+saved-card acceptance must not be repeated.
+
 ### Private Home evidence and task attachments — September 10
 
 Private uploads now retain exact file identity through interrupted writes,
