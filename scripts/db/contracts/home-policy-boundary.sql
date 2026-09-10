@@ -1,6 +1,7 @@
 -- Preserve production's stricter Home boundary during baseline reconciliation.
 -- The backend owns creator onboarding and verified-primary-owner deletion.
--- An editor's home.edit permission must not grant direct Home deletion.
+-- Direct Home DML goes through the authenticated backend transaction; neither
+-- an editor nor an owner may forge pointer/provenance or bypass deletion guards.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
@@ -52,23 +53,26 @@ BEGIN
   IF NOT EXISTS (SELECT FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010') THEN
     RAISE EXCEPTION 'Active member cannot read their home';
   END IF;
-  UPDATE public."Home" SET name = 'Edited by fixture'
-  WHERE id = 'ddd00000-0000-4000-8000-000000000010';
-  GET DIAGNOSTICS affected = ROW_COUNT;
-  IF affected <> 1 THEN RAISE EXCEPTION 'Authorized editor cannot update home'; END IF;
-  DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
-  GET DIAGNOSTICS affected = ROW_COUNT;
-  IF affected <> 0 THEN RAISE EXCEPTION 'home.edit allowed direct deletion'; END IF;
+  BEGIN
+    UPDATE public."Home" SET name = 'Edited by fixture'
+      WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+    RAISE EXCEPTION 'Editor bypassed API Home update boundary';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+    RAISE EXCEPTION 'home.edit allowed direct deletion';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 
 SELECT set_config('request.jwt.claim.sub', 'ddd00000-0000-4000-8000-000000000001', true);
 DO $$
 DECLARE affected integer;
 BEGIN
-  DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
-  GET DIAGNOSTICS affected = ROW_COUNT;
-  IF affected <> 1 THEN RAISE EXCEPTION 'Primary legacy owner cannot delete their home'; END IF;
+  BEGIN
+    DELETE FROM public."Home" WHERE id = 'ddd00000-0000-4000-8000-000000000010';
+    RAISE EXCEPTION 'Primary legacy owner bypassed atomic deletion guards';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 ROLLBACK;
-SELECT 'PASS: private Home denial, member/editor access and owner-only direct deletion' AS result;
+SELECT 'PASS: private Home denial, member reads and API-only Home authority/deletion mutations' AS result;

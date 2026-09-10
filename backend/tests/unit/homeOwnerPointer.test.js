@@ -11,7 +11,7 @@
 
 const express = require('express');
 const request = require('supertest');
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 
 jest.setTimeout(15000);
 
@@ -157,16 +157,22 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     seedTable('HomeOwner', []);
   }
 
-  test('the sole creator can still delete a home they created by mistake', async () => {
+  test('the sole creator deletion uses the exact atomic transaction without route-level partial writes', async () => {
     seedCreatedHome();
+    const rpc = jest.fn(async () => ({ data: { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+    setRpcMock(rpc);
     const app = createApp();
 
     const res = await request(app).delete('/api/homes/home-del-1');
     expect(res.status).toBe(200);
-    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: 'home-del-1', p_user_id: TEST_USER });
+    // The real SQL contract proves deletion/cascades. This HTTP transport test
+    // proves the route itself does not unlink payments or delete independently.
+    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeTruthy();
   });
 
   test('a creator with other household members cannot delete without verifying ownership', async () => {
+    setRpcMock(async () => ({ data: { allowed: false, deleted: false, code: 'DELETE_HOME_NOT_PRIMARY' }, error: null }));
     seedCreatedHome([{
       id: 'occ-roommate',
       home_id: 'home-del-1',
@@ -184,6 +190,7 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
 
   test('a stranger cannot delete someone else\'s home', async () => {
     seedCreatedHome();
+    setRpcMock(async () => ({ data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }));
     const app = createApp();
 
     const res = await request(app)
@@ -223,6 +230,7 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
 
   test('an admin cannot remove the owner', async () => {
     seedOwnerAndAdmin();
+    setRpcMock(async () => ({ data: { ok: false, code: 'TARGET_RANK_FORBIDDEN', status: 403 }, error: null }));
     checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: false, occupancy: null });
     const app = createApp();
 
@@ -237,8 +245,9 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
     expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBe(OWNER_ID);
   });
 
-  test('detaching the pointer-owner deactivates the row and clears the pointer', async () => {
+  test('detaching the primary pointer-owner requires ownership transfer and changes nothing', async () => {
     seedOwnerAndAdmin();
+    setRpcMock(async () => ({ data: { ok: false, code: 'TRANSFER_REQUIRED', status: 409 }, error: null }));
     checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: true, occupancy: null });
     const app = createApp();
 
@@ -247,13 +256,12 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
       .set('x-test-user-id', OWNER_ID)
       .send({ userId: OWNER_ID });
 
-    expect(res.status).toBe(200);
-    // Deactivated, not hard-deleted: history and audit trail survive.
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('TRANSFER_REQUIRED');
     const occ = getTable('HomeOccupancy').find((o) => o.id === 'occ-owner');
     expect(occ).toBeTruthy();
-    expect(occ.is_active).toBe(false);
-    // The pointer goes with the occupancy, exactly as move-out does it.
-    expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBeNull();
+    expect(occ.is_active).toBe(true);
+    expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBe(OWNER_ID);
   });
 });
 

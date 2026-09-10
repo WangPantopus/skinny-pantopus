@@ -12,6 +12,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
+const homeAuthorityService = require('../services/homeAuthorityService');
 const {
   checkHomePermission,
   mapLegacyRole,
@@ -56,49 +57,11 @@ function findLatestPendingOwnershipClaim(claims) {
 }
 
 /**
- * Only the legacy Home.owner_id or the single verified primary HomeOwner may DELETE the Home row.
- * Other verified co-owners must leave or transfer primary ownership first — never wipe the home for everyone.
+ * Advisory projection of the same guarded primary-owner/private-creator deletion
+ * transaction. The delete RPC locks and rechecks current authority and history.
  */
-async function canUserDeleteHomeRecord(homeId, userId, legacyOwnerId) {
-  if (legacyOwnerId && legacyOwnerId === userId) return true;
-  const { data: row } = await supabaseAdmin
-    .from('HomeOwner')
-    .select('id')
-    .eq('home_id', homeId)
-    .eq('subject_id', userId)
-    .eq('owner_status', 'verified')
-    .eq('is_primary_owner', true)
-    .maybeSingle();
-  if (row) return true;
-
-  // Creator fallback: owner_id is no longer set at create time (it arrives
-  // with claim approval), so someone who just created a home by mistake would
-  // otherwise be unable to remove it until a deed verified. Allow the creator
-  // to delete only while the home is still theirs alone - no verified owner,
-  // and no other active member who would lose their household.
-  const { data: home } = await supabaseAdmin
-    .from('Home')
-    .select('created_by_user_id')
-    .eq('id', homeId)
-    .maybeSingle();
-  if (!home || home.created_by_user_id !== userId) return false;
-
-  const { data: verifiedOwners } = await supabaseAdmin
-    .from('HomeOwner')
-    .select('id')
-    .eq('home_id', homeId)
-    .eq('owner_status', 'verified')
-    .limit(1);
-  if (verifiedOwners && verifiedOwners.length > 0) return false;
-
-  const { data: otherMembers } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('id')
-    .eq('home_id', homeId)
-    .eq('is_active', true)
-    .neq('user_id', userId)
-    .limit(1);
-  return !otherMembers || otherMembers.length === 0;
+async function canUserDeleteHomeRecord(homeId, userId) {
+  return (await homeAuthorityService.deleteEligibility(homeId, userId)).allowed;
 }
 
 // ============ VALIDATION SCHEMAS ============
@@ -3093,7 +3056,7 @@ router.get('/:id', verifyToken, async (req, res) => {
       pendingClaimId = findLatestPendingOwnershipClaim(pendingClaims)?.id || null;
     }
 
-    const can_delete_home = await canUserDeleteHomeRecord(id, userId, home.owner_id);
+    const can_delete_home = await canUserDeleteHomeRecord(id, userId);
 
     res.json({
       home: {
@@ -3109,6 +3072,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Home fetch error', { error: err.message, homeId: req.params.id });
+    if (err.statusCode === 503) return res.status(503).json({ error: err.message, code: err.code });
     res.status(500).json({ error: 'Failed to fetch home' });
   }
 });
@@ -3334,59 +3298,11 @@ router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) =
  */
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check ownership
-    const { data: existingHome, error: fetchError } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existingHome) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    const canDelete = await canUserDeleteHomeRecord(id, userId, existingHome.owner_id);
-    if (!canDelete) {
-      return res.status(403).json({
-        error:
-          'Only the primary owner can delete this home. Other members can leave the home instead.',
-        code: 'DELETE_HOME_NOT_PRIMARY',
-      });
-    }
-
-    // Unlink payments (Payment.home_id FK has no ON DELETE in older DBs; home_id is nullable).
-    const { error: payUnlinkErr } = await supabaseAdmin
-      .from('Payment')
-      .update({ home_id: null })
-      .eq('home_id', id);
-    if (payUnlinkErr) {
-      logger.error('Error unlinking payments before home delete', {
-        error: payUnlinkErr.message,
-        homeId: id,
-      });
-      return res.status(500).json({ error: 'Failed to delete home' });
-    }
-
-    const { error } = await supabaseAdmin
-      .from('Home')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      logger.error('Error deleting home', { error: error.message, homeId: id });
-      return res.status(500).json({ error: 'Failed to delete home' });
-    }
-
-    logger.info('Home deleted', { homeId: id, userId });
-
+    await homeAuthorityService.deleteHome(req.params.id, req.user.id);
     res.json({ message: 'Home deleted successfully' });
-
   } catch (err) {
-    logger.error('Home delete error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to delete home' });
+    logger.error('Home delete error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -3472,295 +3388,45 @@ router.post('/:id/attach', verifyToken, validate(attachDetachSchema), async (req
  */
 router.post('/:id/detach', verifyToken, validate(attachDetachSchema), async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const { userId: userToDetach } = req.body;
-    const requestingUserId = req.user.id;
-
-    // Check home exists and requester is owner
-    const { data: home, error: homeError } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id')
-      .eq('id', homeId)
-      .single();
-
-    if (homeError || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    const detachAccess = await checkHomePermission(homeId, requestingUserId, 'members.manage');
-    if (!detachAccess.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to manage members' });
-    }
-
-    // Rank guard: removing an owner is an ownership action, not member
-    // management. Without this, an admin could detach the owner's occupancy
-    // while the Home.owner_id pointer stayed behind — stripped of membership
-    // yet still holding full owner access via checkHomePermission.
-    if (userToDetach !== requestingUserId) {
-      const targetIsPointerOwner = home.owner_id === userToDetach;
-      const { data: targetOwnerRow } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('id')
-        .eq('home_id', homeId)
-        .eq('subject_id', userToDetach)
-        .eq('owner_status', 'verified')
-        .maybeSingle();
-      if ((targetIsPointerOwner || targetOwnerRow) && !detachAccess.isOwner) {
-        return res.status(403).json({ error: 'Only an owner can remove an owner from the home' });
-      }
-    }
-
-    // LIF-01: go through the single detach chokepoint rather than hard-deleting
-    // the row. detach() deactivates the occupancy (preserving history), clears
-    // the Home.owner_id pointer when the departing user holds it, revokes
-    // outstanding residency letters, and writes the audit entries this route's
-    // raw DELETE used to skip.
-    const occupancyAttachService = require('../services/occupancyAttachService');
-    const detachResult = await occupancyAttachService.detach({
-      homeId,
-      userId: userToDetach,
-      reason: 'removed',
-      actorId: requestingUserId,
-      metadata: { source: 'owner_detach_route' },
-    });
-
-    if (!detachResult.success) {
-      if (detachResult.error === 'No active occupancy found') {
-        return res.status(400).json({ error: 'User is not attached to this home' });
-      }
-      logger.error('Error detaching user', { error: detachResult.error, homeId, userToDetach });
-      return res.status(500).json({ error: 'Failed to detach user' });
-    }
-
-    logger.info('User detached from home', { homeId, userId: userToDetach, by: requestingUserId });
-
+    await homeAuthorityService.mutateMember({ homeId: req.params.id, actorId: req.user.id,
+      targetId: req.body.userId, action: 'remove' });
     res.json({ message: 'User detached from home successfully' });
-
   } catch (err) {
-    logger.error('Detach user error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to detach user' });
+    logger.error('Detach user error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
 /**
  * POST /api/homes/:id/move-out
  * Self-initiated move-out. Soft-deactivates the caller's occupancy,
- * marks non-primary HomeOwner records inactive, and sets Home.vacancy_at
- * if no authority-level occupants remain.
+ * revokes non-primary ownership and residency letters in one transaction.
+ * Primary owners must complete ownership transfer before leaving.
  */
 router.post('/:id/move-out', verifyToken, async (req, res) => {
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    // 1. Prefer an active occupancy (normal leave)
-    const { data: occupancy } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id, role_base')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    // 1b. No active row — e.g. occupancy was already deactivated by challenge revoke /
-    //     admin detach (is_active false, verification_status still not moved_out).
-    //     Normalize to moved_out so my-homes stops listing this home and the user can exit.
-    if (!occupancy) {
-      const { data: staleRows, error: staleErr } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('id, role_base')
-        .eq('home_id', homeId)
-        .eq('user_id', userId)
-        .eq('is_active', false)
-        .neq('verification_status', 'moved_out');
-
-      if (staleErr) {
-        logger.error('move-out stale occupancy lookup failed', { error: staleErr.message, homeId, userId });
-        return res.status(500).json({ error: 'Failed to process move-out' });
+    const result = await homeAuthorityService.mutateMember({ homeId: req.params.id, actorId: req.user.id,
+      targetId: req.user.id, action: 'remove' });
+    // Membership, credentials and vacancy are committed together. Notify only
+    // the current recipients returned by that transaction after it succeeds.
+    if (result.notify_user_ids?.length) {
+      try {
+        const { data: user } = await supabaseAdmin.from('User').select('username, name, first_name')
+          .eq('id', req.user.id).single();
+        const userName = user?.name || user?.first_name || user?.username || 'A member';
+        await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
+          userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
+          link: `/homes/${req.params.id}/occupants`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
+        })));
+      } catch (error) {
+        logger.warn('Failed to send move-out notifications (non-fatal)', { error: error.message });
       }
-
-      if (staleRows && staleRows.length > 0) {
-        const now = new Date().toISOString();
-        const staleIds = staleRows.map((r) => r.id);
-        const { error: staleUpdateErr } = await supabaseAdmin
-          .from('HomeOccupancy')
-          .update({
-            verification_status: 'moved_out',
-            updated_at: now,
-          })
-          .in('id', staleIds);
-
-        if (staleUpdateErr) {
-          logger.error('Failed to normalize stale occupancy on move-out', { error: staleUpdateErr.message, homeId, userId });
-          return res.status(500).json({ error: 'Failed to process move-out' });
-        }
-
-        await supabaseAdmin
-          .from('HomeOwner')
-          .update({ owner_status: 'inactive', updated_at: now })
-          .eq('home_id', homeId)
-          .eq('subject_id', userId)
-          .eq('subject_type', 'user')
-          .eq('is_primary_owner', false);
-
-        await writeAuditLog(homeId, userId, 'MEMBER_MOVED_OUT', 'HomeOccupancy', staleIds[0], {
-          role_base: staleRows[0].role_base,
-          reconciled_stale_occupancy: true,
-        });
-
-        return res.json({
-          message: 'You have been removed from this home',
-          homeId,
-          reconciled_stale_occupancy: true,
-        });
-      }
-
-      return res.status(404).json({ error: 'You do not have an active occupancy at this home' });
     }
-
-    // 2. Block primary owners — they must transfer ownership first
-    const { data: primaryOwner } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('subject_id', userId)
-      .eq('subject_type', 'user')
-      .eq('is_primary_owner', true)
-      .eq('owner_status', 'verified')
-      .maybeSingle();
-
-    if (primaryOwner) {
-      return res.status(400).json({
-        error: 'Primary owners must transfer ownership before moving out',
-        code: 'TRANSFER_REQUIRED',
-      });
-    }
-
-    // 3. Soft-deactivate occupancy
-    const now = new Date().toISOString();
-    const { error: occUpdateError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .update({
-        is_active: false,
-        end_at: now,
-        verification_status: 'moved_out',
-        updated_at: now,
-      })
-      .eq('id', occupancy.id);
-
-    if (occUpdateError) {
-      logger.error('Failed to deactivate occupancy on move-out', { error: occUpdateError.message, homeId, userId });
-      return res.status(500).json({ error: 'Failed to process move-out' });
-    }
-
-    // Mark non-primary HomeOwner record inactive (if one exists)
-    await supabaseAdmin
-      .from('HomeOwner')
-      .update({ owner_status: 'inactive', updated_at: now })
-      .eq('home_id', homeId)
-      .eq('subject_id', userId)
-      .eq('subject_type', 'user')
-      .eq('is_primary_owner', false);
-
-    // LIF-01: clear the legacy owner pointer, exactly as
-    // occupancyAttachService.detach does. checkHomePermission treats
-    // Home.owner_id === userId as ownership, so leaving it set here meant the
-    // app's own Move Out button returned 200 while the departed user kept full
-    // administrative control of the home — including deleting it. detach() is
-    // not the single chokepoint the LIF-01 fix assumed: this route writes
-    // HomeOccupancy directly.
-    const { error: clearOwnerErr } = await supabaseAdmin
-      .from('Home')
-      .update({ owner_id: null, updated_at: now })
-      .eq('id', homeId)
-      .eq('owner_id', userId);
-
-    if (clearOwnerErr) {
-      // Do not report success: the occupancy is inactive but the user would
-      // still hold owner-level access, which is the bug this prevents.
-      logger.error('Failed to clear owner_id on move-out', {
-        error: clearOwnerErr.message, homeId, userId,
-      });
-      return res.status(500).json({ error: 'Failed to process move-out' });
-    }
-
-    // LIF-06: a residency letter asserts to landlords, schools and the DMV that
-    // this person lives here. Moving out must retire the credential — it
-    // otherwise stayed valid until its 90-day expiry for a home the user no
-    // longer occupies.
-    try {
-      const residencyLetterService = require('../services/residencyLetterService');
-      await residencyLetterService.revokeLettersForResidency(homeId, userId, 'residency_move_out');
-    } catch (letterErr) {
-      // Never block the move-out itself on this, but make the gap visible.
-      logger.error('Failed to revoke residency letters on move-out', {
-        homeId, userId, error: letterErr.message,
-      });
-    }
-
-    // 4. Check if any active authorities remain
-    const { count: authorityCount } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id', { count: 'exact', head: true })
-      .eq('home_id', homeId)
-      .eq('is_active', true)
-      .in('role_base', ['owner', 'admin', 'manager']);
-
-    if (authorityCount === 0) {
-      await supabaseAdmin
-        .from('Home')
-        .update({ vacancy_at: now, updated_at: now })
-        .eq('id', homeId);
-    }
-
-    // 5. Notify remaining active members
-    try {
-      const notificationService = require('../services/notificationService');
-
-      const { data: user } = await supabaseAdmin
-        .from('User')
-        .select('username, name, first_name')
-        .eq('id', userId)
-        .single();
-
-      const userName = user?.name || user?.first_name || user?.username || 'A member';
-
-      const { data: activeMembers } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('user_id')
-        .eq('home_id', homeId)
-        .eq('is_active', true);
-
-      const notifications = (activeMembers || [])
-        .filter(m => m.user_id !== userId)
-        .map(m => ({
-          userId: m.user_id,
-          type: 'member_moved_out',
-          title: 'Member moved out',
-          body: `${userName} has moved out.`,
-          link: `/homes/${homeId}/occupants`,
-          metadata: { home_id: homeId, moved_out_user_id: userId },
-        }));
-
-      if (notifications.length > 0) {
-        await notificationService.createBulkNotifications(notifications);
-      }
-    } catch (notifErr) {
-      logger.warn('Failed to send move-out notifications (non-fatal)', { error: notifErr.message });
-    }
-
-    // 6. Audit log
-    await writeAuditLog(homeId, userId, 'MEMBER_MOVED_OUT', 'HomeOccupancy', occupancy.id, {
-      role_base: occupancy.role_base,
-      vacancy_set: authorityCount === 0,
-    });
-
-    // 7. Response
-    res.json({ message: 'You have been removed from this home', homeId });
-
+    res.json({ message: 'You have been removed from this home', homeId: req.params.id,
+      ...(result.reconciled_stale_occupancy ? { reconciled_stale_occupancy: true } : {}) });
   } catch (err) {
-    logger.error('Move-out error', { error: err.message, homeId: req.params.id, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to process move-out' });
+    logger.error('Move-out error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -6776,7 +6442,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
       if (parsed) home.location = parsed;
     }
 
-    home.can_delete_home = await canUserDeleteHomeRecord(homeId, userId, home.owner_id);
+    home.can_delete_home = await canUserDeleteHomeRecord(homeId, userId);
 
     // Enrich members with HomeOwner status
     const rawMembers = extractData(membersRes);
@@ -6854,6 +6520,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Dashboard aggregate error', { error: err.message, homeId: req.params.id });
+    if (err.statusCode === 503) return res.status(503).json({ error: err.message, code: err.code });
     res.status(500).json({ error: 'Failed to load dashboard' });
   }
 });
@@ -7153,6 +6820,18 @@ router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
       return res.status(400).json({ error: `Cannot approve a ${claim.status} claim` });
     }
 
+    // Residency approval cannot create ownership or management authority.
+    // Full atomic enrollment and target-state preservation is the next bounded
+    // milestone; close the existing high-role shortcut before that rollout.
+    const grantedRole = proposed_role || claim.claimed_role || 'member';
+    const roleBase = mapLegacyRole(grantedRole);
+    if (['owner', 'admin', 'manager'].includes(roleBase)) {
+      return res.status(403).json({
+        error: 'Residency approval cannot grant ownership or management roles.',
+        code: 'RESIDENCY_ROLE_FORBIDDEN',
+      });
+    }
+
     // Update claim to verified
     const { error: claimError } = await supabaseAdmin
       .from('HomeResidencyClaim')
@@ -7168,10 +6847,6 @@ router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
       logger.error('Error approving claim', { error: claimError.message });
       return res.status(500).json({ error: 'Failed to approve claim' });
     }
-
-    // Determine role: admin's proposed_role overrides claimant's claimed_role
-    const grantedRole = proposed_role || claim.claimed_role || 'member';
-    const roleBase = mapLegacyRole(grantedRole);
 
     // Create/activate occupancy via applyOccupancyTemplate (upserts, prevents duplicates)
     let occupancy;

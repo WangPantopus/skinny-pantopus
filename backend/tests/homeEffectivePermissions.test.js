@@ -279,5 +279,5 @@ test.each(['/:id/bills', '/:id/access', '/:id/dashboard', '/:id/household-access
     if (name === 'HomePermissionOverride') query.then = (resolve, reject) => Promise.resolve({ data: null, error: {} }).then(resolve, reject);
     return query;
   });
-  expect((await homeRoute(path)).status).toHaveBeenCalledWith(500);
+  expect((await homeRoute(path)).status).toHaveBeenCalledWith(path === '/:id/dashboard' ? 503 : 500);
 });

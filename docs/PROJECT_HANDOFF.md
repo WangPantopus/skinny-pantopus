@@ -14,6 +14,38 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home authority/deletion source checkpoint — September 9
+
+The next bounded Home checkpoint is complete in
+`/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`, for draft
+[PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
+The [authority/deletion report](home-authority-transactions-2026-09-09.md)
+records **4,661 backend tests passing (16 skipped), privacy gates including 15
+E2E checks, 22 raw SQL contracts plus 22 pgTAP wrappers, and 24 real concurrency
+checks**. Independent review and root review accept this bounded core; SQL lint
+has zero errors and five existing warnings. Current-head CI must pass before
+integration; continue the remaining Home work from this checkpoint.
+
+Member role/preset/override/removal and Home deletion now use service-only
+transactions with current authority, age/window/rank and explicit-deny checks.
+Direct client authority DML and the unsafe legacy preset/transfer shortcuts are
+closed. Exact private creator cleanup and legitimate primary-owner transfer
+requirements remain; a proven stale revoked-owner pointer can clear atomically
+when its exact subject leaves. Attached file/evidence history blocks Home
+deletion until storage retirement exists. No hosted Home migration, new ordinary
+role grant or verification-age rollout ran. This remains a source checkpoint,
+not complete Home acceptance or a final release.
+
+**Next:** finish transactional admission/invite/claim lifecycle gateways while
+repairing the reproduced WiFi-secret creation trigger defect. Then finish exact
+resource/guest sharing, task/calendar records and attachments across alternate
+routes, dashboard/notification filtering, storage retirement and web/native
+permission controls. Only then review ordinary role defaults and run integrated
+household acceptance. The report separates these remaining gates from completed
+core work. Payment final-head checks/integration continue separately; completed
+Beacon physical-device acceptance should not be repeated.
+
 ### Home finance RLS source checkpoint — September 9
 
 Draft [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32) now adds a

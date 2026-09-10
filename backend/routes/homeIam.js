@@ -30,17 +30,12 @@ const verifyToken = require('../middleware/verifyToken');
 const { invalidateRoleCache } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { OLD_TO_NEW_PERM } = require('../utils/homeAccessPolicy');
+const homeAuthorityService = require('../services/homeAuthorityService');
 const {
   checkHomePermission,
   getUserAccess,
-  isVerifiedOwner,
   hasPermission,
-  mapLegacyRole,
-  getRoleRank,
   writeAuditLog,
-  assertCanMutateTarget,
-  assertCanGrantPermission,
-  ROLE_RANK,
 } = require('../utils/homePermissions');
 
 
@@ -214,179 +209,16 @@ router.get('/:id/role-templates', verifyToken, async (req, res) => {
 
 router.post('/:id/members/:userId/role', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, userId: targetUserId } = req.params;
-    const actorId = req.user.id;
-
-    // Require members.manage permission
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', home_id: homeId, ip: req.ip });
-      return res.status(403).json({ error: 'No permission to manage members' });
-    }
-
-    const { preset_key, role_base, start_at, end_at } = req.body;
-
-    // Prevent demoting self from owner
-    if (targetUserId === actorId && access.isOwner && role_base && role_base !== 'owner') {
-      return res.status(400).json({ error: 'Cannot demote yourself from owner. Transfer ownership instead.' });
-    }
-
-    // Prevent promoting to owner (must go through verification)
-    if (role_base === 'owner' && !access.isOwner) {
-      logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: 'non_owner_promote_to_owner', home_id: homeId, ip: req.ip });
-      return res.status(403).json({ error: 'Only the owner can promote to owner' });
-    }
-
-    // ── Rank enforcement (AUTH-1.4) ──────────────────────────
-    if (targetUserId !== actorId) {
-      const { data: actorOcc } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('role_base')
-        .eq('home_id', homeId)
-        .eq('user_id', actorId)
-        .eq('is_active', true)
-        .maybeSingle();
-      const { data: targetOcc } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('role_base')
-        .eq('home_id', homeId)
-        .eq('user_id', targetUserId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      const actorRoleBase = actorOcc?.role_base || 'guest';
-      const targetRoleBase = targetOcc?.role_base || 'guest';
-
-      const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
-      if (!mutateCheck.allowed) {
-        logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, actor_role: actorRoleBase, target_role: targetRoleBase, home_id: homeId, ip: req.ip });
-        return res.status(403).json({ error: mutateCheck.reason });
-      }
-
-      // If changing role_base, verify actor can assign the new role
-      const newRole = role_base || (preset_key ? null : null);
-      if (newRole) {
-        const assignCheck = assertCanMutateTarget(actorRoleBase, newRole);
-        if (!assignCheck.allowed) {
-          logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: assignCheck.reason, new_role: newRole, home_id: homeId, ip: req.ip });
-          return res.status(403).json({ error: `Cannot assign role '${newRole}': ${assignCheck.reason}` });
-        }
-      }
-    }
-
-    // If using a preset, apply it
-    if (preset_key) {
-      const { data: preset } = await supabaseAdmin
-        .from('HomeRolePreset')
-        .select('*')
-        .eq('key', preset_key)
-        .single();
-
-      if (!preset) {
-        return res.status(400).json({ error: `Unknown preset: ${preset_key}` });
-      }
-
-      // Upsert occupancy
-      const { error: occErr } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .upsert({
-          home_id: homeId,
-          user_id: targetUserId,
-          role: preset.role_base, // sync the text role
-          role_base: preset.role_base,
-          start_at: start_at || null,
-          end_at: end_at || null,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'home_id,user_id' });
-
-      if (occErr) {
-        logger.error('Error updating occupancy for preset', { error: occErr.message });
-        return res.status(500).json({ error: 'Failed to update member role' });
-      }
-
-      // Clear existing overrides
-      await supabaseAdmin
-        .from('HomePermissionOverride')
-        .delete()
-        .eq('home_id', homeId)
-        .eq('user_id', targetUserId);
-
-      // Apply preset grants
-      if (preset.grant_perms && preset.grant_perms.length > 0) {
-        const grants = preset.grant_perms.map(perm => ({
-          home_id: homeId,
-          user_id: targetUserId,
-          permission: perm,
-          allowed: true,
-          created_by: actorId,
-        }));
-        await supabaseAdmin
-          .from('HomePermissionOverride')
-          .upsert(grants, { onConflict: 'home_id,user_id,permission' });
-      }
-
-      // Apply preset denies
-      if (preset.deny_perms && preset.deny_perms.length > 0) {
-        const denies = preset.deny_perms.map(perm => ({
-          home_id: homeId,
-          user_id: targetUserId,
-          permission: perm,
-          allowed: false,
-          created_by: actorId,
-        }));
-        await supabaseAdmin
-          .from('HomePermissionOverride')
-          .upsert(denies, { onConflict: 'home_id,user_id,permission' });
-      }
-
-      await writeAuditLog(homeId, actorId, 'apply_role_preset', 'HomeOccupancy', targetUserId, {
-        preset_key,
-        role_base: preset.role_base,
-      });
-
-      invalidateRoleCache(targetUserId); // AUTH-3.4
-      logger.info('auth.action', { event: 'role_changed', actor_id: actorId, target_id: targetUserId, home_id: homeId, preset_key, new_role: preset.role_base });
-      return res.json({ message: 'Preset applied', preset_key, role_base: preset.role_base });
-    }
-
-    // Direct role_base update (no preset)
-    if (role_base) {
-      const validRoles = Object.keys(ROLE_RANK);
-      if (!validRoles.includes(role_base)) {
-        return res.status(400).json({ error: `Invalid role_base: ${role_base}` });
-      }
-
-      const { error: occErr } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .update({
-          role_base,
-          role: role_base, // sync text column
-          start_at: start_at !== undefined ? start_at : undefined,
-          end_at: end_at !== undefined ? end_at : undefined,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('home_id', homeId)
-        .eq('user_id', targetUserId);
-
-      if (occErr) {
-        logger.error('Error updating member role', { error: occErr.message });
-        return res.status(500).json({ error: 'Failed to update role' });
-      }
-
-      await writeAuditLog(homeId, actorId, 'change_role', 'HomeOccupancy', targetUserId, {
-        new_role_base: role_base,
-      });
-
-      invalidateRoleCache(targetUserId); // AUTH-3.4
-      logger.info('auth.action', { event: 'role_changed', actor_id: actorId, target_id: targetUserId, home_id: homeId, new_role: role_base });
-      return res.json({ message: 'Role updated', role_base });
-    }
-
-    res.status(400).json({ error: 'preset_key or role_base is required' });
+    const result = await homeAuthorityService.mutateMember({
+      homeId: req.params.id, actorId: req.user.id, targetId: req.params.userId,
+      action: 'role', payload: req.body,
+    });
+    invalidateRoleCache?.(req.params.userId);
+    res.json({ message: result.preset_key ? 'Preset applied' : 'Role updated',
+      role_base: result.role_base, ...(result.preset_key ? { preset_key: result.preset_key } : {}) });
   } catch (err) {
-    logger.error('Update member role error', { error: err.message });
-    res.status(500).json({ error: 'Failed to update member role' });
+    logger.error('Update member role error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -397,80 +229,15 @@ router.post('/:id/members/:userId/role', verifyToken, async (req, res) => {
 
 router.post('/:id/members/:userId/permissions', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, userId: targetUserId } = req.params;
-    const actorId = req.user.id;
-
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      logger.warn('auth.denied', { event: 'permission_override_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', home_id: homeId, ip: req.ip });
-      return res.status(403).json({ error: 'No permission to manage members' });
-    }
-
-    const { permission, allowed } = req.body;
-
-    if (!permission || typeof allowed !== 'boolean') {
-      return res.status(400).json({ error: 'permission (string) and allowed (boolean) are required' });
-    }
-
-    // ── Rank enforcement (AUTH-1.4) ──────────────────────────
-    const { data: actorOcc } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('role_base')
-      .eq('home_id', homeId)
-      .eq('user_id', actorId)
-      .eq('is_active', true)
-      .maybeSingle();
-    const { data: targetOcc } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('role_base')
-      .eq('home_id', homeId)
-      .eq('user_id', targetUserId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    const actorRoleBase = actorOcc?.role_base || 'guest';
-    const targetRoleBase = targetOcc?.role_base || 'guest';
-
-    const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
-    if (!mutateCheck.allowed) {
-      logger.warn('auth.denied', { event: 'permission_override_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, home_id: homeId, ip: req.ip });
-      return res.status(403).json({ error: mutateCheck.reason });
-    }
-
-    if (allowed) {
-      const grantCheck = await assertCanGrantPermission(actorRoleBase, permission);
-      if (!grantCheck.allowed) {
-        logger.warn('auth.denied', { event: 'permission_override_denied', actor_id: actorId, target_id: targetUserId, reason: grantCheck.reason, permission, home_id: homeId, ip: req.ip });
-        return res.status(403).json({ error: grantCheck.reason });
-      }
-    }
-
-    // Upsert the override
-    const { error } = await supabaseAdmin
-      .from('HomePermissionOverride')
-      .upsert({
-        home_id: homeId,
-        user_id: targetUserId,
-        permission,
-        allowed,
-        created_by: actorId,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'home_id,user_id,permission' });
-
-    if (error) {
-      logger.error('Error toggling permission', { error: error.message });
-      return res.status(500).json({ error: 'Failed to update permission' });
-    }
-
-    await writeAuditLog(homeId, actorId, 'toggle_permission', 'HomePermissionOverride', targetUserId, {
-      permission,
-      allowed,
+    const result = await homeAuthorityService.mutateMember({
+      homeId: req.params.id, actorId: req.user.id, targetId: req.params.userId,
+      action: 'override', payload: req.body,
     });
-
-    res.json({ message: 'Permission updated', permission, allowed });
+    invalidateRoleCache?.(req.params.userId);
+    res.json({ message: 'Permission updated', permission: result.permission, allowed: result.allowed });
   } catch (err) {
-    logger.error('Toggle permission error', { error: err.message });
-    res.status(500).json({ error: 'Failed to update permission' });
+    logger.error('Toggle permission error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -514,119 +281,14 @@ router.get('/:id/members/:userId/permissions', verifyToken, async (req, res) => 
 
 router.delete('/:id/members/:userId', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, userId: targetUserId } = req.params;
-    const actorId = req.user.id;
-
-    // Self-removal is always allowed
-    const isSelf = targetUserId === actorId;
-
-    if (!isSelf) {
-      const access = await checkHomePermission(homeId, actorId, 'members.manage');
-      if (!access.hasAccess) {
-        logger.warn('auth.denied', { event: 'member_remove_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', home_id: homeId, ip: req.ip });
-        return res.status(403).json({ error: 'No permission to remove members' });
-      }
-
-      // ── Rank enforcement (AUTH-1.4) ──────────────────────────
-      const { data: actorOcc } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('role_base')
-        .eq('home_id', homeId)
-        .eq('user_id', actorId)
-        .eq('is_active', true)
-        .maybeSingle();
-      const { data: targetOcc } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('role_base')
-        .eq('home_id', homeId)
-        .eq('user_id', targetUserId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      const actorRoleBase = actorOcc?.role_base || 'guest';
-      const targetRoleBase = targetOcc?.role_base || 'guest';
-
-      const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
-      if (!mutateCheck.allowed) {
-        logger.warn('auth.denied', { event: 'member_remove_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, home_id: homeId, ip: req.ip });
-        return res.status(403).json({ error: mutateCheck.reason });
-      }
-    }
-
-    // Cannot remove the owner
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id')
-      .eq('id', homeId)
-      .single();
-
-    const targetOwnerCheck = await isVerifiedOwner(homeId, targetUserId);
-    if ((targetOwnerCheck.isOwner || home?.owner_id === targetUserId) && !isSelf) {
-      return res.status(400).json({ error: 'Cannot remove the home owner' });
-    }
-
-    // LIF-01: self-removal used to skip the owner guard entirely, so a primary
-    // owner could leave through this route while POST /:id/move-out refused the
-    // same action with TRANSFER_REQUIRED. Keep the two paths consistent: a
-    // verified primary owner must hand over before leaving a home that still
-    // has other residents, otherwise the household is left with no owner.
-    if (isSelf) {
-      const { data: primaryOwner } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('id')
-        .eq('home_id', homeId)
-        .eq('subject_id', targetUserId)
-        .eq('subject_type', 'user')
-        .eq('is_primary_owner', true)
-        .eq('owner_status', 'verified')
-        .maybeSingle();
-
-      if (primaryOwner) {
-        const { count: otherOccupants } = await supabaseAdmin
-          .from('HomeOccupancy')
-          .select('id', { count: 'exact', head: true })
-          .eq('home_id', homeId)
-          .eq('is_active', true)
-          .neq('user_id', targetUserId);
-
-        if ((otherOccupants || 0) > 0) {
-          return res.status(400).json({
-            error: 'Primary owners must transfer ownership before leaving',
-            code: 'TRANSFER_REQUIRED',
-          });
-        }
-      }
-    }
-
-    // Soft-revoke via centralized gateway
-    const occupancyAttachService = require('../services/occupancyAttachService');
-    const detachResult = await occupancyAttachService.detach({
-      homeId,
-      userId: targetUserId,
-      reason: isSelf ? 'move_out' : 'removed',
-      actorId,
-      metadata: { source: isSelf ? 'self_leave' : 'admin_removal' },
+    await homeAuthorityService.mutateMember({
+      homeId: req.params.id, actorId: req.user.id, targetId: req.params.userId, action: 'remove',
     });
-
-    if (!detachResult.success) {
-      logger.error('Error removing member', { error: detachResult.error });
-      return res.status(500).json({ error: 'Failed to remove member' });
-    }
-
-    // Clean up permission overrides
-    await supabaseAdmin
-      .from('HomePermissionOverride')
-      .delete()
-      .eq('home_id', homeId)
-      .eq('user_id', targetUserId);
-
-    await writeAuditLog(homeId, actorId, isSelf ? 'self_leave' : 'remove_member', 'HomeOccupancy', targetUserId, {});
-
-    logger.info('auth.action', { event: 'member_removed', actor_id: actorId, target_id: targetUserId, home_id: homeId, self_leave: isSelf });
+    invalidateRoleCache?.(req.params.userId);
     res.json({ message: 'Member removed' });
   } catch (err) {
-    logger.error('Remove member error', { error: err.message });
-    res.status(500).json({ error: 'Failed to remove member' });
+    logger.error('Remove member error', { code: err.code, homeId: req.params.id });
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
   }
 });
 
@@ -1315,124 +977,13 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
 // POST /:id/transfer-admin — Transfer primary ownership
 // ============================================================
 
-router.post('/:id/transfer-admin', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const actorId = req.user.id;
-
-    // Verify the current user is the primary owner
-    const { data: home, error: homeErr } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id')
-      .eq('id', homeId)
-      .single();
-
-    if (homeErr || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    // SEC-13: this said "Only the primary owner can transfer admin" but checked
-    // only isOwner, which isVerifiedOwner returns true for ANY verified owner.
-    // Any co-owner could therefore seize primary ownership from the actual
-    // primary owner. The helper already reports isPrimary; the route ignored it.
-    const transferOwnerCheck = await isVerifiedOwner(homeId, actorId);
-    const isPrimaryOwner = transferOwnerCheck.isOwner && transferOwnerCheck.isPrimary;
-    const isLegacyOwner = home.owner_id === actorId;
-
-    if (!isPrimaryOwner && !isLegacyOwner) {
-      return res.status(403).json({ error: 'Only the primary owner can transfer admin' });
-    }
-
-    const { new_admin_user_id } = req.body;
-
-    if (!new_admin_user_id) {
-      return res.status(400).json({ error: 'new_admin_user_id is required' });
-    }
-
-    if (new_admin_user_id === actorId) {
-      return res.status(400).json({ error: 'Cannot transfer ownership to yourself' });
-    }
-
-    // Verify the new admin is a member of this home
-    const { data: newAdminOccupancy } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id, role_base, is_active')
-      .eq('home_id', homeId)
-      .eq('user_id', new_admin_user_id)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!newAdminOccupancy) {
-      return res.status(400).json({ error: 'Target user is not an active member of this home' });
-    }
-
-    const now = new Date().toISOString();
-
-    // Perform the transfer in sequence:
-    // 1. Update Home.owner_id
-    const { error: ownerErr } = await supabaseAdmin
-      .from('Home')
-      .update({ owner_id: new_admin_user_id, ownership_state: 'owner_verified', updated_at: now })
-      .eq('id', homeId);
-
-    if (ownerErr) {
-      logger.error('Error transferring home owner_id', { error: ownerErr.message });
-      return res.status(500).json({ error: 'Failed to transfer ownership' });
-    }
-
-    // 2. Demote old owner to admin
-    const { error: demoteErr } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .update({ role_base: 'admin', role: 'admin', updated_at: now })
-      .eq('home_id', homeId)
-      .eq('user_id', actorId);
-
-    if (demoteErr) {
-      logger.error('Error demoting old owner', { error: demoteErr.message });
-      // Attempt to rollback the owner_id change
-      await supabaseAdmin
-        .from('Home')
-        .update({ owner_id: actorId, updated_at: now })
-        .eq('id', homeId);
-      return res.status(500).json({ error: 'Failed to transfer ownership (rollback attempted)' });
-    }
-
-    // 3. Promote new admin to owner
-    const { error: promoteErr } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .update({ role_base: 'owner', role: 'owner', updated_at: now })
-      .eq('home_id', homeId)
-      .eq('user_id', new_admin_user_id);
-
-    if (promoteErr) {
-      logger.error('Error promoting new owner', { error: promoteErr.message });
-      // Attempt to rollback
-      await supabaseAdmin
-        .from('Home')
-        .update({ owner_id: actorId, updated_at: now })
-        .eq('id', homeId);
-      await supabaseAdmin
-        .from('HomeOccupancy')
-        .update({ role_base: 'owner', role: 'owner', updated_at: now })
-        .eq('home_id', homeId)
-        .eq('user_id', actorId);
-      return res.status(500).json({ error: 'Failed to transfer ownership (rollback attempted)' });
-    }
-
-    await writeAuditLog(homeId, actorId, 'admin_transferred', 'Home', homeId, {
-      previous_owner: actorId,
-      new_owner: new_admin_user_id,
-    });
-
-    res.json({
-      message: 'Ownership transferred successfully',
-      previous_owner: actorId,
-      new_owner: new_admin_user_id,
-    });
-  } catch (err) {
-    logger.error('Transfer admin error', { error: err.message });
-    res.status(500).json({ error: 'Failed to transfer ownership' });
-  }
+router.post('/:id/transfer-admin', verifyToken, async (_req, res) => {
+  // The old sequential pointer/role rewrite bypassed HomeOwner verification,
+  // current authority and ownership transaction integrity.
+  res.status(409).json({
+    error: 'Use the ownership transfer flow so the new owner can verify ownership.',
+    code: 'OWNERSHIP_FLOW_REQUIRED',
+  });
 });
 
 

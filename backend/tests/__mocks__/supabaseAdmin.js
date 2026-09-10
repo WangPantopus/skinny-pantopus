@@ -733,6 +733,9 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    // Read-only capability defaults closed in unrelated Home route fixtures.
+    // Deletion/authority behavior itself is covered by real SQL contracts.
+    if (args[0] === 'home_delete_eligibility') return { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null };
     if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
     if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
     if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {
