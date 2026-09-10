@@ -94,6 +94,7 @@ function seedFullScenario(overrides = {}) {
     currency: 'usd',
     dispute_id: null,
     dispute_status: null,
+    transfer_completed_at: null,
     cooling_off_ends_at: overrides.coolingOffEndsAt || null,
     updated_at: overrides.updatedAt || new Date().toISOString(),
     ...overrides.payment,

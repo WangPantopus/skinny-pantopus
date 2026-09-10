@@ -184,3 +184,47 @@ describe('GET /api/gigs/:gigId/payment', () => {
     expect(mockGetPaymentStateInfo).toHaveBeenCalledWith('captured_hold');
   });
 });
+
+const walletProjection = require('../../services/walletSettlementService');
+function releaseFixture(patch = {}) {
+  const payment = { id: MAIN_PAYMENT_ID, gig_id: GIG_ID, payer_id: POSTER_ID, payee_id: WORKER_ID,
+    payment_type: 'gig_payment', payment_status: 'refunded_partial', amount_total: 1000, amount_to_payee: 850,
+    currency: 'usd', refunded_amount: 300, stripe_customer_id: 'cus_exact', stripe_payment_intent_id: 'pi_exact',
+    stripe_charge_id: 'ch_exact', ...patch };
+  seedTable('Gig', [{ id: GIG_ID, user_id: POSTER_ID, accepted_by: WORKER_ID, payment_id: MAIN_PAYMENT_ID }]);
+  seedTable('Payment', [payment]);
+  seedTable('PaymentRefundReceipt', [{ payment_id: MAIN_PAYMENT_ID, amount_cents: 300, status: 'succeeded' }]);
+  seedTable('PaymentWalletSettlement', [{ id: 'aaf60000-0000-4000-8000-000000000099', payment_id: MAIN_PAYMENT_ID,
+    frozen_payment: walletProjection.snapshot(payment), wallet_transaction_id: 'income', amount_cents: 595,
+    refund_basis_cents: 300, status: 'credited', currency: 'usd', created_at: '2026-01-01T00:00:00Z' }]);
+  seedTable('WalletTransaction', [{ id: 'income', payment_id: MAIN_PAYMENT_ID, user_id: WORKER_ID, counterparty_id: POSTER_ID,
+    gig_id: GIG_ID, wallet_id: 'wallet', amount: 595, type: 'gig_income', direction: 'credit' }]);
+  seedTable('Wallet', [{ id: 'wallet', user_id: WORKER_ID, currency: 'usd' }]);
+}
+describe('exact shared worker release projection', () => {
+  beforeEach(() => { resetTables(); jest.clearAllMocks(); jest.restoreAllMocks(); });
+  test.each([POSTER_ID, WORKER_ID])('current party %s sees original terms and exact residual receipt', async actor => {
+    releaseFixture();
+    const res = await request(createApp()).get(`/api/gigs/${GIG_ID}/payment`).set('x-test-user-id', actor);
+    expect(res.status).toBe(200);
+    expect(res.body.payment).toMatchObject({ amount_total: 1000, amount_to_payee: 850, refunded_amount: 300,
+      payee_release_status: 'wallet_credited', wallet_settlement: { paymentId: MAIN_PAYMENT_ID, amountCents: 595, refundBasisCents: 300 } });
+    expect(JSON.stringify(res.body)).not.toContain('frozen_payment');
+    if (actor === WORKER_ID) expect(res.body.payment.stripe_payment_intent_id).toBeUndefined();
+  });
+  test.each([{ gig_id: 'foreign' }, { payer_id: 'foreign' }])('wrong linked payment ownership %j exposes no payment', async patch => {
+    releaseFixture(patch);
+    const res = await request(createApp()).get(`/api/gigs/${GIG_ID}/payment`).set('x-test-user-id', POSTER_ID);
+    expect(res.status).toBe(409); expect(res.body.payment).toBeUndefined();
+  });
+  test('newly assigned worker cannot read another worker payment from stale Gig link', async () => {
+    releaseFixture({ payee_id: 'former-worker' });
+    const res = await request(createApp()).get(`/api/gigs/${GIG_ID}/payment`).set('x-test-user-id', WORKER_ID);
+    expect(res.status).toBe(409); expect(res.body.payment).toBeUndefined();
+  });
+  test('settlement proof read failure returns 503 without a false held response', async () => {
+    releaseFixture(); jest.spyOn(walletProjection, 'readProjection').mockRejectedValue(Object.assign(new Error('DB unavailable'), { statusCode: 503 }));
+    const res = await request(createApp()).get(`/api/gigs/${GIG_ID}/payment`).set('x-test-user-id', POSTER_ID);
+    expect(res.status).toBe(503); expect(res.body.payment).toBeUndefined();
+  });
+});

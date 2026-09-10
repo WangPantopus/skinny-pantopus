@@ -49,6 +49,7 @@ function makeEligiblePayment(overrides = {}) {
     stripe_charge_id: 'ch_mock_123',
     stripe_payment_intent_id: 'pi_mock_123',
     payment_status: PAYMENT_STATES.CAPTURED_HOLD,
+    transfer_completed_at: null,
     cooling_off_ends_at: hoursAgo(1), // Cooling off ended 1h ago
     dispute_id: null,
     dispute_status: null,

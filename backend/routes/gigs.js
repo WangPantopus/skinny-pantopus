@@ -8175,7 +8175,7 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       return res.json({ payment: null, stateInfo: null });
     }
 
-    const [{ data: payment }, { data: successfulTips }] = await Promise.all([
+    const [{ data: payment, error: paymentReadError }, { data: successfulTips, error: tipsReadError }] = await Promise.all([
       supabaseAdmin
         .from('Payment')
         .select('*')
@@ -8189,7 +8189,13 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         .not('payment_succeeded_at', 'is', null),
     ]);
 
+    if (paymentReadError || tipsReadError) return res.status(503).json({ error: 'Payment verification is unavailable' });
     if (payment) {
+      if (payment.gig_id !== gig.id || payment.payer_id !== gig.user_id
+        || (isWorker && payment.payee_id !== userId)) {
+        return res.status(409).json({ error: 'Payment ownership needs verification' });
+      }
+      Object.assign(payment, await require('../services/walletSettlementService').readProjection(payment));
       payment.tip_amount = (successfulTips || []).reduce((sum, tip) => {
         const grossTip = Number(tip?.tip_amount || 0) || 0;
         const refundedTip = Number(tip?.refunded_amount || 0) || 0;
@@ -8212,7 +8218,7 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
     res.json({ payment: payment || null, stateInfo });
   } catch (err) {
     logger.error('Get gig payment error', { error: err.message });
-    res.status(500).json({ error: 'Failed to get payment details' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to get payment details' });
   }
 });
 

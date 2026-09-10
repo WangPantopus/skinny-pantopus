@@ -18,6 +18,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const walletService = require('../services/walletService');
+const walletSettlement = require('../services/walletSettlementService');
 const { PAYMENT_STATES, transitionPaymentStatus } = require('../stripe/paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
 const { sendAlert, SEVERITY } = require('../services/alertingService');
@@ -64,6 +65,12 @@ async function processPendingTransfers() {
       amount_platform_fee,
       currency,
       payment_type,
+      captured_at,
+      stripe_customer_id,
+      stripe_transfer_id,
+      refunded_amount,
+      transfer_status,
+      transfer_completed_at,
       stripe_charge_id,
       stripe_payment_intent_id,
       payment_status,
@@ -77,7 +84,8 @@ async function processPendingTransfers() {
       supabaseAdmin
         .from('Payment')
         .select(selectFields)
-        .eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
+        .in('payment_status', [PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL])
+        .is('transfer_completed_at', null)
         .lte('cooling_off_ends_at', nowIso)
         .is('dispute_id', null),
       // Legacy safety-net: older captured_hold rows may have null cooling_off_ends_at.
@@ -85,7 +93,8 @@ async function processPendingTransfers() {
       supabaseAdmin
         .from('Payment')
         .select(selectFields)
-        .eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
+        .in('payment_status', [PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL])
+        .is('transfer_completed_at', null)
         .is('cooling_off_ends_at', null)
         .lte('created_at', legacyCoolingFallbackIso)
         .is('dispute_id', null),
@@ -124,7 +133,9 @@ async function processPendingTransfers() {
           .eq('id', payment.id)
           .single();
 
-        if (!fresh || fresh.payment_status !== PAYMENT_STATES.CAPTURED_HOLD || fresh.dispute_id) {
+        const preciseGig = payment.payment_type === 'gig_payment';
+        const admittedStates = preciseGig ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
+        if (!fresh || !admittedStates.includes(fresh.payment_status) || fresh.dispute_id) {
           logger.info('processPendingTransfers: skipping (state changed)', {
             paymentId: payment.id,
             currentStatus: fresh?.payment_status,
@@ -134,8 +145,8 @@ async function processPendingTransfers() {
         }
 
         // Safety: verify amount makes sense
-        const transferAmount = payment.amount_to_payee;
-        if (!transferAmount || transferAmount <= 0) {
+        let transferAmount = payment.amount_to_payee;
+        if (!preciseGig && (!transferAmount || transferAmount <= 0)) {
           logger.error('processPendingTransfers: invalid transfer amount', {
             paymentId: payment.id,
             amount: transferAmount,
@@ -144,47 +155,53 @@ async function processPendingTransfers() {
           continue;
         }
 
-        // ─── Transition to transfer_scheduled (concurrency guard) ───
-        try {
-          await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFER_SCHEDULED);
-        } catch (transErr) {
-          // If transition fails, another process probably got here first
-          logger.warn('processPendingTransfers: transition to transfer_scheduled failed (likely race)', {
-            paymentId: payment.id,
-            error: transErr.message,
-          });
-          skipCount++;
-          continue;
-        }
-
-        // ─── Credit provider's WALLET ───
-        // Funds sit in the provider's Pantopus wallet balance.
-        // Provider can withdraw to bank whenever they want.
-        const isTipPayment = payment.payment_type === 'tip';
-        if (isTipPayment) {
-          await walletService.creditTipIncome(
-            payment.payee_id,
-            transferAmount,
-            payment.gig_id,
-            payment.id,
-            payment.payer_id,
-          );
+        if (preciseGig) {
+          const result = await walletSettlement.settle(payment);
+          if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
+          transferAmount = result.settlement.amount_cents;
         } else {
-          await walletService.creditGigIncome(
-            payment.payee_id,
-            transferAmount,
-            payment.gig_id,
-            payment.id,
-            payment.payer_id,
-          );
-        }
+          // ─── Transition to transfer_scheduled (concurrency guard) ───
+          try {
+            await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFER_SCHEDULED);
+          } catch (transErr) {
+            // If transition fails, another process probably got here first
+            logger.warn('processPendingTransfers: transition to transfer_scheduled failed (likely race)', {
+              paymentId: payment.id,
+              error: transErr.message,
+            });
+            skipCount++;
+            continue;
+          }
 
-        // ─── Transition directly to transferred ───
-        // Wallet credit is synchronous — no need for intermediate
-        // transfer_pending state. transfer_pending is reserved for
-        // async Stripe Transfers if ever needed in the future.
-        const completed = await reconcileWalletRelease(payment.id);
-        if (completed?.payment_status !== PAYMENT_STATES.TRANSFERRED) throw new Error('Wallet release state changed');
+          // ─── Credit provider's WALLET ───
+          // Funds sit in the provider's Pantopus wallet balance.
+          // Provider can withdraw to bank whenever they want.
+          const isTipPayment = payment.payment_type === 'tip';
+          if (isTipPayment) {
+            await walletService.creditTipIncome(
+              payment.payee_id,
+              transferAmount,
+              payment.gig_id,
+              payment.id,
+              payment.payer_id,
+            );
+          } else {
+            await walletService.creditGigIncome(
+              payment.payee_id,
+              transferAmount,
+              payment.gig_id,
+              payment.id,
+              payment.payer_id,
+            );
+          }
+
+          // ─── Transition directly to transferred ───
+          // Wallet credit is synchronous — no need for intermediate
+          // transfer_pending state. transfer_pending is reserved for
+          // async Stripe Transfers if ever needed in the future.
+          const completed = await reconcileWalletRelease(payment.id);
+          if (completed?.payment_status !== PAYMENT_STATES.TRANSFERRED) throw new Error('Wallet release state changed');
+        }
 
         successCount++;
 
@@ -243,6 +260,10 @@ async function processPendingTransfers() {
           error: errMessage,
         });
 
+        // The paid-gig transaction commits money and receipt together. Its
+        // failed/unknown response is retried with the same payment; never run
+        // a legacy status repair against a residual receipt.
+        if (payment.payment_type === 'gig_payment') continue;
         try { await reconcileWalletRelease(payment.id); }
         catch (revertErr) {
           logger.error('processPendingTransfers: recovery remains pending', { paymentId: payment.id, error: revertErr.message });

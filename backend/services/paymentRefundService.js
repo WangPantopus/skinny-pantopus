@@ -8,10 +8,7 @@ const stripe = getStripeClient();
 const STATUSES = new Set(['pending', 'requires_action', 'succeeded', 'failed', 'canceled']);
 const REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer', 'work_not_completed', 'other']);
 const fail = (message, statusCode = 409, code = 'refund_conflict') => Object.assign(new Error(message), { statusCode, code });
-const snapshot = p => ({ id: p.id, payer_id: p.payer_id, payee_id: p.payee_id, gig_id: p.gig_id || null,
-  payment_type: p.payment_type, amount_total: p.amount_total, amount_to_payee: p.amount_to_payee,
-  currency: String(p.currency).toLowerCase(), intent_id: p.stripe_payment_intent_id || null,
-  charge_id: p.stripe_charge_id || null, customer_id: p.stripe_customer_id || null, transfer_id: p.stripe_transfer_id || null });
+const { snapshot, readProjection } = require('./walletSettlementService');
 async function rpc(name, args) {
   const { data, error } = await db.rpc(name, args);
   if (error || !data) throw fail('Refund progress could not be saved. Retry the same request.', 503, 'refund_save_pending');
@@ -70,7 +67,7 @@ async function history(paymentId, actorId, actorMode = 'payer') {
   const payment = await paymentById(paymentId);
   await assertActor(payment, actorId, actorMode);
   const records = await localRecords(payment);
-  return { requests: records.requests.map(r => publicRequest(r, { id: actorId, mode: actorMode })), refunds: records.receipts.map(legacyReceipt), payment: publicPayment(payment) };
+  return { requests: records.requests.map(r => publicRequest(r, { id: actorId, mode: actorMode })), refunds: records.receipts.map(legacyReceipt), payment: { ...publicPayment(payment), ...await readProjection(payment) } };
 }
 async function response(paymentId, requestId) {
   const payment = await paymentById(paymentId);
@@ -79,7 +76,7 @@ async function response(paymentId, requestId) {
   if (!request) throw fail('Refund request recovery is unavailable.', 503);
   const receipt = records.receipts.find(r => r.request_id === requestId);
   return { success: request.status === 'succeeded', refundRequest: publicRequest(request, { id: request.actor_id, mode: request.actor_mode }),
-    refund: receipt ? legacyReceipt(receipt) : null, refundId: receipt?.provider_refund_id || null, payment: publicPayment(payment) };
+    refund: receipt ? legacyReceipt(receipt) : null, refundId: receipt?.provider_refund_id || null, payment: { ...publicPayment(payment), ...await readProjection(payment) } };
 }
 function assertIntent(payment, intent) {
   if (!intent || !payment.stripe_customer_id || !payment.stripe_payment_intent_id

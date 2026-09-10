@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 9, 2026. This is the continuing-work entry point. Detailed
+Updated September 10, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -13,6 +13,36 @@ the ordered backlog below. The owner now requests autonomous continuation and
 authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
+
+### Residual worker settlement checkpoint — September 10
+
+Worker wallet release now credits the verified amount remaining after refunds
+in one transaction with its durable receipt. A later permitted refund recovers
+only the additional worker share; original payment terms remain unchanged.
+Exact wallet owner/currency and legacy credit proof are required, and duplicate
+calls cannot credit twice. The [settlement report](paid-gig-wallet-settlement-2026-09-10.md)
+records final **4,808 backend checks passing (16 existing skips)**, **22 SQL
+contracts**, zero function-lint errors, **36 concurrent connections** and a
+populated upgrade rehearsal preserving historical financial rows. Independent
+review is complete; source is in draft [PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34).
+The separately pushed web release display is `991b4f77d`. No hosted migration,
+provider operation or full paid-gig device acceptance is claimed here.
+
+**Next:** native refund controls, historical assigned authorization recovery,
+remaining cancellation/dispute/Connect/debt and wallet-notification delivery,
+then a fresh complete sandbox paid-gig journey and checked integration. The
+report distinguishes held policy cases from completed settlement behavior.
+Home task/calendar, claim review and native finance controls continue in draft
+PR #32; its previous iOS CI failures are under investigation before any merge.
+Completed Beacon and saved-card device acceptance is preserved.
+
+The owner now defers **all paid subscriptions and paid dependencies** to one
+final launch-preparation step after other development and available validation
+are complete. The earlier timed Smarty reminder is paused. Track required
+subscriptions and their remaining real-provider acceptance together; do not
+purchase or activate them during this development phase. Complete user journeys,
+failure recovery, maintainable code and realistic capacity checks are the
+priority. Passing isolated tests does not establish full workflow readiness.
 
 ### Worker release display checkpoint — September 9
 

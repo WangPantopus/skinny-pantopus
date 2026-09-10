@@ -194,3 +194,9 @@ test('refund discovery paginates the exact payment and rejects two receipts for 
   await expect(service._test.discover(payment(), [request()])).rejects.toMatchObject({ statusCode: 409 });
   expect(mockList).toHaveBeenNthCalledWith(2, { payment_intent: 'pi_one', limit: 100, starting_after: 're_one' });
 });
+
+test('refund POST and cold history share the same read-only held projection', async () => {
+  const post = await service.create(args()); const history = await service.history('pay', 'payer');
+  expect(post.payment).toEqual(history.payment);
+  expect(history.payment).toMatchObject({ payee_release_status: 'held', wallet_settlement: null, refunded_amount: 300 });
+});

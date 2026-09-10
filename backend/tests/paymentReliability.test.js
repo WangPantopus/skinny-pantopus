@@ -62,6 +62,7 @@ function makePayment(overrides = {}) {
     stripe_charge_id: 'ch_rel_001',
     stripe_payment_intent_id: 'pi_rel_001',
     payment_status: PAYMENT_STATES.CAPTURED_HOLD,
+    transfer_completed_at: null,
     cooling_off_ends_at: hoursAgo(2),
     capture_attempts: 0,
     dispute_id: null,
