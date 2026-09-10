@@ -17,12 +17,26 @@ import XCTest
 @testable import Pantopus
 
 private enum AddHouseholdTaskFormFixtures {
+    static let collectionJSON = """
+    {
+      "tasks": [],
+      "collection_capabilities": {
+        "can_create": true
+      },
+      "task_session": {
+        "home_id": "30000000-0000-4000-8000-000000000001",
+        "actor_id": "30000000-0000-4000-8000-000000000002",
+        "session_scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+    """
+
     static let occupantsJSON = """
     {
       "occupants": [
         {
           "id": "occ-1",
-          "user_id": "user-1",
+          "user_id": "30000000-0000-4000-8000-000000000002",
           "role": "owner",
           "is_active": true,
           "display_name": "Maria Kovács",
@@ -30,7 +44,7 @@ private enum AddHouseholdTaskFormFixtures {
         },
         {
           "id": "occ-2",
-          "user_id": "user-2",
+          "user_id": "30000000-0000-4000-8000-000000000003",
           "role": "member",
           "is_active": true,
           "display_name": "Avery Park",
@@ -45,19 +59,22 @@ private enum AddHouseholdTaskFormFixtures {
         let ruleField = rule.map { "\"\($0)\"" } ?? "null"
         return """
         {
-          "tasks": [
-            {
-              "id": "task-1",
-              "home_id": "home-1",
+          "task": {
+              "id": "30000000-0000-4000-8000-000000000004",
+              "home_id": "30000000-0000-4000-8000-000000000001",
               "task_type": "chore",
               "title": "\(title)",
               "description": "Tuesday curbside.",
-              "assigned_to": "user-1",
+              "assigned_to": "30000000-0000-4000-8000-000000000002",
               "due_at": "2026-06-01",
               "recurrence_rule": \(ruleField),
-              "status": "open"
-            }
-          ]
+              "status": "open", "capabilities": {"can_edit": true}
+            },
+          "task_session": {
+            "home_id": "30000000-0000-4000-8000-000000000001",
+            "actor_id": "30000000-0000-4000-8000-000000000002",
+            "session_scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
         }
         """
     }
@@ -65,11 +82,25 @@ private enum AddHouseholdTaskFormFixtures {
     static let createdTaskJSON = """
     {
       "task": {
-        "id": "task-new",
-        "home_id": "home-1",
+        "id": "30000000-0000-4000-8000-000000000005",
+        "home_id": "30000000-0000-4000-8000-000000000001",
         "task_type": "chore",
         "title": "Wash dishes",
         "status": "open"
+      },
+      "replayed":false,
+      "creation_receipt": {
+        "home_id": "30000000-0000-4000-8000-000000000001",
+        "actor_id": "30000000-0000-4000-8000-000000000002",
+        "request_id": "30000000-0000-4000-8000-000000000006",
+        "task_id": "30000000-0000-4000-8000-000000000005",
+        "payload_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-09-10T12:00:00Z"
+      },
+      "task_session": {
+        "home_id": "30000000-0000-4000-8000-000000000001",
+        "actor_id": "30000000-0000-4000-8000-000000000002",
+        "session_scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     }
     """
@@ -77,15 +108,20 @@ private enum AddHouseholdTaskFormFixtures {
     static let updatedTaskJSON = """
     {
       "task": {
-        "id": "task-1",
-        "home_id": "home-1",
+        "id": "30000000-0000-4000-8000-000000000004",
+        "home_id": "30000000-0000-4000-8000-000000000001",
         "task_type": "chore",
-        "title": "Take out trash",
+        "title": "Take out trash (Tuesday)",
         "description": "Tuesday curbside.",
-        "assigned_to": "user-1",
+        "assigned_to": "30000000-0000-4000-8000-000000000002",
         "due_at": "2026-06-01",
         "recurrence_rule": "FREQ=WEEKLY",
-        "status": "open"
+        "status": "open", "capabilities": {"can_edit":true}
+      },
+      "task_session": {
+        "home_id": "30000000-0000-4000-8000-000000000001",
+        "actor_id": "30000000-0000-4000-8000-000000000002",
+        "session_scope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     }
     """
@@ -123,10 +159,25 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         )
     }
 
+    private func makeVM(taskId: String? = nil) -> AddHouseholdTaskFormViewModel {
+        let api = makeAPI()
+        return AddHouseholdTaskFormViewModel(
+            homeId: "30000000-0000-4000-8000-000000000001",
+            taskId: taskId,
+            api: api,
+            access: HomeTaskAccess(
+                homeId: "30000000-0000-4000-8000-000000000001",
+                api: api,
+                actorId: "30000000-0000-4000-8000-000000000002"
+            ) { "fixed-session" },
+            store: CreationMemoryStore()
+        ) { "30000000-0000-4000-8000-000000000006" }
+    }
+
     // ── Initial pose ──────────────────────────────────────────
 
     func testAddMode_initialPoseHasOneTimeRecurrenceAndOtherCategory() {
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         XCTAssertFalse(vm.isEditing)
         XCTAssertEqual(vm.selectedRecurrence, .oneTime)
         XCTAssertEqual(vm.selectedCategory, .other)
@@ -144,13 +195,13 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
             .status(200, body: AddHouseholdTaskFormFixtures.tasksJSON("FREQ=WEEKLY")),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", taskId: "task-1", api: makeAPI())
+        let vm = makeVM(taskId: "30000000-0000-4000-8000-000000000004")
         await vm.load()
         XCTAssertTrue(vm.isEditing)
         if case .editing = vm.state {} else { XCTFail("Expected .editing state after load.") }
         XCTAssertEqual(vm.fields[.title]?.value, "Take out trash")
         XCTAssertEqual(vm.fields[.notes]?.value, "Tuesday curbside.")
-        XCTAssertEqual(vm.selectedAssigneeId, "user-1")
+        XCTAssertEqual(vm.selectedAssigneeId, "30000000-0000-4000-8000-000000000002")
         XCTAssertEqual(vm.fields[.dueAt]?.value, "2026-06-01")
         XCTAssertEqual(vm.selectedRecurrence, .weekly)
         // Trash → category .cleaning per the inference table.
@@ -162,12 +213,12 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
 
     func testEditMode_missingTaskSurfacesError() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: "{\"tasks\":[]}")
+            .status(404, body: "{\"error\":\"Task unavailable\"}")
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", taskId: "task-1", api: makeAPI())
+        let vm = makeVM(taskId: "30000000-0000-4000-8000-000000000004")
         await vm.load()
         if case let .error(message) = vm.state {
-            XCTAssertEqual(message, "Couldn't find that task.")
+            XCTAssertFalse(message.isEmpty)
         } else {
             XCTFail("Expected .error state when task is missing.")
         }
@@ -175,8 +226,13 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
 
     // ── Validators ─────────────────────────────────────────────
 
-    func testTitleRequiredAndMaxLength80() {
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+    func testTitleRequiredAndMaxLength80() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
+        ]
+        let vm = makeVM()
+        await vm.load()
         vm.update(.title, to: "")
         XCTAssertNotNil(vm.fields[.title]?.error)
         vm.update(.title, to: String(repeating: "a", count: 81))
@@ -187,8 +243,13 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         XCTAssertNil(vm.fields[.title]?.error)
     }
 
-    func testCustomIntervalValidatorOnlyActiveOnCustomRecurrence() {
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+    func testCustomIntervalValidatorOnlyActiveOnCustomRecurrence() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
+        ]
+        let vm = makeVM()
+        await vm.load()
         vm.selectRecurrence(.weekly)
         vm.update(.customInterval, to: "abc")
         XCTAssertNil(
@@ -204,8 +265,13 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         XCTAssertNil(vm.fields[.customInterval]?.error)
     }
 
-    func testCustomSubFormVisibilityTracksRecurrencePicker() {
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+    func testCustomSubFormVisibilityTracksRecurrencePicker() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
+        ]
+        let vm = makeVM()
+        await vm.load()
         XCTAssertFalse(vm.showsCustomRecurrenceSubForm)
         vm.selectRecurrence(.daily)
         XCTAssertFalse(vm.showsCustomRecurrenceSubForm)
@@ -244,34 +310,36 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
 
     func testAddMode_savePostsExpectedBodyAndSignalsDismiss() async throws {
         SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(201, body: AddHouseholdTaskFormFixtures.createdTaskJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         await vm.load()
         vm.update(.title, to: "Wash dishes")
         vm.selectCategory(.cleaning)
         vm.selectRecurrence(.weekly)
-        vm.selectAssignee("user-1")
+        vm.selectAssignee("30000000-0000-4000-8000-000000000002")
         vm.setDueDate(AddHouseholdTaskFormViewModel.parseISODay("2026-06-15"))
         vm.update(.notes, to: "After dinner.")
 
         let ok = await vm.save()
         XCTAssertTrue(ok)
-        XCTAssertEqual(vm.createdTaskId, "task-new")
+        XCTAssertEqual(vm.createdTaskId, "30000000-0000-4000-8000-000000000005")
         XCTAssertTrue(vm.shouldDismiss)
         XCTAssertEqual(vm.toast?.kind, .success)
 
-        // [0] = GET occupants, [1] = POST
+        // Current collection + occupants, current collection recheck, exact POST.
         let captured = SequencedURLProtocol.capturedRequests
-        XCTAssertEqual(captured.count, 2)
-        let post = captured[1]
+        XCTAssertEqual(captured.count, 4)
+        let post = captured[3]
         XCTAssertEqual(post.httpMethod, "POST")
-        XCTAssertEqual(post.url?.path, "/api/homes/home-1/tasks")
+        XCTAssertEqual(post.url?.path, "/api/homes/30000000-0000-4000-8000-000000000001/tasks")
         let body = try decodedBody(CreateBody.self, from: post)
         XCTAssertEqual(body.title, "Wash dishes")
         XCTAssertEqual(body.task_type, "chore")
-        XCTAssertEqual(body.assigned_to, "user-1")
+        XCTAssertEqual(body.assigned_to, "30000000-0000-4000-8000-000000000002")
         XCTAssertEqual(body.due_at, "2026-06-15")
         XCTAssertEqual(body.description, "After dinner.")
         XCTAssertEqual(body.recurrence_rule, "FREQ=WEEKLY")
@@ -281,9 +349,11 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: AddHouseholdTaskFormFixtures.tasksJSON(nil)),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.tasksJSON(nil)),
+            .status(200, body: AddHouseholdTaskFormFixtures.updatedTaskJSON),
             .status(200, body: AddHouseholdTaskFormFixtures.updatedTaskJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", taskId: "task-1", api: makeAPI())
+        let vm = makeVM(taskId: "30000000-0000-4000-8000-000000000004")
         await vm.load()
         vm.update(.title, to: "Take out trash (Tuesday)")
         vm.selectRecurrence(.weekly)
@@ -294,26 +364,28 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         XCTAssertTrue(vm.shouldDismiss)
 
         let captured = SequencedURLProtocol.capturedRequests
-        // [0] tasks GET, [1] occupants GET (kicked off async), [2] PUT.
-        XCTAssertGreaterThanOrEqual(captured.count, 2)
+        // Initial task + occupants, task recheck, PUT, exact current task.
+        XCTAssertEqual(captured.count, 5)
         let put = captured.first { $0.httpMethod == "PUT" }
         XCTAssertNotNil(put)
-        XCTAssertEqual(put?.url?.path, "/api/homes/home-1/tasks/task-1")
+        XCTAssertEqual(put?.url?.path, "/api/homes/30000000-0000-4000-8000-000000000001/tasks/30000000-0000-4000-8000-000000000004")
         if let put {
             let body = try decodedBody(UpdateBody.self, from: put)
             XCTAssertEqual(body.title, "Take out trash (Tuesday)")
             XCTAssertEqual(body.recurrence_rule, "FREQ=WEEKLY")
-            XCTAssertEqual(body.description, "Tuesday curbside.")
-            XCTAssertEqual(body.assigned_to, "user-1")
+            XCTAssertNil(body.description, "Untouched notes must not be resent.")
+            XCTAssertNil(body.assigned_to, "Untouched assignment must not be resent.")
         }
     }
 
     func testAddMode_customRecurrenceBuildsIntervalRule() async throws {
         SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON),
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(201, body: AddHouseholdTaskFormFixtures.createdTaskJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         await vm.load()
         vm.update(.title, to: "Water plants")
         vm.selectCategory(.yardwork)
@@ -336,9 +408,10 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
 
     func testSave_validationErrorShakesAndDoesNotFire() async {
         SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         await vm.load()
         let before = vm.shakeTrigger
         let capturedBefore = SequencedURLProtocol.capturedRequests.count
@@ -354,10 +427,11 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
 
     func testSave_serverErrorSurfacesToast() async {
         SequencedURLProtocol.sequence = [
+            .status(200, body: AddHouseholdTaskFormFixtures.collectionJSON),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON),
             .status(500, body: "{\"error\":\"down\"}")
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         await vm.load()
         vm.update(.title, to: "Wash dishes")
         _ = await vm.save()
@@ -372,7 +446,7 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
             .status(200, body: AddHouseholdTaskFormFixtures.tasksJSON("FREQ=DAILY")),
             .status(200, body: AddHouseholdTaskFormFixtures.occupantsJSON)
         ]
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", taskId: "task-1", api: makeAPI())
+        let vm = makeVM(taskId: "30000000-0000-4000-8000-000000000004")
         await vm.load()
         XCTAssertFalse(vm.isDirty)
         vm.update(.title, to: "Take out trash NOW")
@@ -380,7 +454,7 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
     }
 
     func testAddMode_isDirtyAlwaysTrueSoSaveCanFireOnFirstEdit() {
-        let vm = AddHouseholdTaskFormViewModel(homeId: "home-1", api: makeAPI())
+        let vm = makeVM()
         XCTAssertTrue(
             vm.isDirty,
             "Add mode treats every field as new so Save is reachable from the start."

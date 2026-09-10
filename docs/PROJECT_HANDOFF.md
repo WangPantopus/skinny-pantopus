@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS retained task creation and sparse editing — September 10
+
+Both iOS Home task entry points now retain one original create request across
+interrupted responses and reopen the exact saved task after a verified receipt.
+Editing sends only changed fields, including intentional null clears. Current
+access, screen lifetime, protected-storage comparisons and a completed-form guard
+prevent stale completion or another queued create. The
+[iOS form report](home-ios-task-create-edit-2026-09-10.md) records the final passing
+app checks, independent review and precise persistence/acceptance limits.
+
+**Next:** exact notification-to-task routing, private task attachments and installed
+household acceptance. The durable assignment outbox is pushed as `92a35b7f9`;
+browser routing and preference-aware browser alerts are in progress. Android
+retained forms compiled but need their remaining static/build/behavior checks;
+no new Android form test success is claimed yet. Android paid-task stop recovery
+also continues in draft PR #34. Automatic recurrence, relationships and ownership
+lifecycles remain open. Both PRs remain unfinished drafts. All paid dependencies
+stay together for final launch preparation. Completed physical Beacon and
+saved-card acceptance must not be repeated. No hosted data or owner-phone
+installation changed.
+
 ### Recoverable task assignment notifications — September 10
 
 Home task saves and assignment changes now commit their in-app notification and

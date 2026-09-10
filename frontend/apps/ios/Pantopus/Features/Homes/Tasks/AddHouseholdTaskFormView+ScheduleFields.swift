@@ -11,6 +11,9 @@ extension AddHouseholdTaskFormView {
     var scheduleSection: some View {
         FormFieldGroup("Schedule") {
             recurrencePicker
+            Text("This preference is saved; new tasks are not created automatically.")
+                .font(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
             if viewModel.showsCustomRecurrenceSubForm {
                 customRecurrenceSubForm
             }
@@ -26,7 +29,7 @@ extension AddHouseholdTaskFormView {
 
     private var recurrencePicker: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("Repeats")
+            Text("Repeat preference")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -143,7 +146,7 @@ extension AddHouseholdTaskFormView {
     private var dueDateField: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             HStack {
-                Text(viewModel.selectedRecurrence == .oneTime ? "Due date" : "First occurrence")
+                Text("Due date")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()

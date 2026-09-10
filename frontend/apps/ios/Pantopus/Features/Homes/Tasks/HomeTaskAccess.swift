@@ -3,7 +3,7 @@ import Foundation
 /// Current record permissions include the exact private-creator first-use path.
 /// Generic Home membership and inferred owner roles are not task authority.
 @MainActor
-final class HomeTaskAccess {
+final class HomeTaskAccess: HomeTaskCreationAccess {
     enum AccessError: LocalizedError {
         case changed
         case denied
@@ -42,6 +42,18 @@ final class HomeTaskAccess {
 
     var isCurrent: Bool {
         !retired && actorId != nil && scope.isCurrent
+    }
+
+    var lifecycleRevision: Int {
+        generation
+    }
+
+    var openingActorId: String? {
+        actorId
+    }
+
+    var currentHeaders: [String: String] {
+        serverSession.map { ["X-Pantopus-Session-Scope": $0] } ?? [:]
     }
 
     func invalidatePending() {
@@ -118,6 +130,36 @@ final class HomeTaskAccess {
         guard result.message == "Task deleted" else { throw APIError.invalidResponse }
     }
 
+    func create(_ draft: HomeTaskCreateDraft) async throws -> HomeTaskCreationResult {
+        let revision = generation
+        guard !mutating else { throw AccessError.busy }
+        mutating = true
+        defer { mutating = false }
+        let collection = try await list()
+        guard collection.collectionCapabilities?.canCreate == true,
+              let actorId, draft.matches(home: homeId, actor: actorId) else { throw AccessError.denied }
+        try requireCurrent(revision)
+        let result: HomeTaskCreationResult = try await api.request(endpoint(method: .post, body: HomeTaskCreateDraft.Command(draft: draft)))
+        try requireCurrent(revision)
+        try bind(result.taskSession)
+        guard valid(result.task), result.receipt.matches(draft, task: result.task) else { throw APIError.invalidResponse }
+        return result
+    }
+
+    func edit(taskId: String, patch: HomeTaskEditPatch) async throws -> HomeTaskDTO {
+        let revision = generation
+        guard !mutating else { throw AccessError.busy }
+        mutating = true
+        defer { mutating = false }
+        let before = try await detail(taskId: taskId)
+        guard before.capabilities?.canEdit == true, !patch.values.isEmpty else { throw AccessError.denied }
+        try requireCurrent(revision)
+        let result: HomeTaskResponse = try await api.request(endpoint(taskId: taskId, method: .put, body: patch))
+        try requireCurrent(revision)
+        guard valid(result.task), result.task.id == taskId, patch.matches(result.task) else { throw APIError.invalidResponse }
+        return try await detail(taskId: taskId)
+    }
+
     private struct DeleteResult: Decodable {
         let message: String
     }
@@ -141,7 +183,7 @@ final class HomeTaskAccess {
             method: method,
             path: "/api/homes/\(homeId)/tasks" + (taskId.map { "/\($0)" } ?? ""),
             body: body,
-            headers: serverSession.map { ["X-Pantopus-Session-Scope": $0] } ?? [:],
+            headers: currentHeaders,
             cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
         )
     }

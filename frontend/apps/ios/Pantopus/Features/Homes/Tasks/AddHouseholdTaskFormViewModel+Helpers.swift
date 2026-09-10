@@ -58,6 +58,8 @@ extension AddHouseholdTaskFormViewModel {
         switch field {
         case .title:
             .all([.required("Title"), .maxLength(80)])
+        case .notes:
+            .maxLength(10000)
         case .recurrence:
             FormValidator { value in
                 AddHouseholdTaskRecurrence(rawValue: value) == nil
@@ -127,25 +129,35 @@ extension AddHouseholdTaskFormViewModel {
         )
     }
 
-    func buildUpdateRequest() -> UpdateHomeTaskRequest {
+    func buildEditPatch() -> HomeTaskEditPatch {
         let snapshot = wireSnapshot()
-        // Edit mode sends every field on the wire — the form's job
-        // is to keep the row's authoritative pose in lockstep with
-        // the user's edits. `nil` is reserved for fields the schema
-        // doesn't support yet.
-        return UpdateHomeTaskRequest(
-            status: nil,
-            title: snapshot.title,
-            description: snapshot.description,
-            assignedTo: snapshot.assignedTo,
-            dueAt: snapshot.dueAt,
-            // See top-of-file note: backend allowlist drops
-            // recurrence_rule today. We still send it so the wire
-            // tracks user intent.
-            recurrenceRule: snapshot.recurrenceRule,
-            priority: nil,
-            completedAt: nil
-        )
+        var values: [String: String?] = [:]
+        func changed(_ field: AddHouseholdTaskField) -> Bool {
+            fields[field]?.isDirty == true
+        }
+        if changed(.title) { values.updateValue(snapshot.title, forKey: "title") }
+        if changed(.category) { values.updateValue(snapshot.taskType, forKey: "task_type") }
+        if changed(.notes) { values.updateValue(snapshot.description, forKey: "description") }
+        if changed(.assignedTo) { values.updateValue(snapshot.assignedTo, forKey: "assigned_to") }
+        if changed(.dueAt) { values.updateValue(snapshot.dueAt, forKey: "due_at") }
+        if changed(.recurrence) || changed(.customInterval) || changed(.customUnit) {
+            values.updateValue(snapshot.recurrenceRule, forKey: "recurrence_rule")
+        }
+        return HomeTaskEditPatch(values: values)
+    }
+
+    func hydratePending(_ draft: HomeTaskCreateDraft) {
+        let payload = draft.payload
+        hydrate(from: HomeTaskDTO(
+            id: draft.requestId,
+            homeId: draft.homeId,
+            taskType: payload.taskType,
+            title: payload.title,
+            description: payload.description,
+            assignedTo: payload.assignedTo,
+            dueAt: payload.dueAt,
+            recurrenceRule: payload.recurrenceRule
+        ))
     }
 
     private struct WireSnapshot {

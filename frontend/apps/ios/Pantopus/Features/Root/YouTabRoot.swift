@@ -2273,9 +2273,10 @@ public struct YouTabRoot: View {
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
-                onClose: { Task { @MainActor in pop() } },
-                onCreated: { _ in
+                onClose: { pop() },
+                onCreated: { taskId in
                     if !path.isEmpty { path.removeLast() }
+                    path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
                 }
             )
         case let .editHouseholdTask(homeId, taskId):

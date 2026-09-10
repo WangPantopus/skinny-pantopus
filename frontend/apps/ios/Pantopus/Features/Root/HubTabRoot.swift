@@ -1680,11 +1680,10 @@ public struct HubTabRoot: View {
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
-                onClose: { Task { @MainActor in pop() } },
-                onCreated: { _ in
-                    // Pop back to the tasks list; the list refreshes
-                    // on `.refreshable` / next visit.
+                onClose: { pop() },
+                onCreated: { taskId in
                     if !path.isEmpty { path.removeLast() }
+                    push(.householdTaskDetail(homeId: homeId, taskId: taskId))
                 }
             )
         case let .editHouseholdTask(homeId, taskId):

@@ -108,7 +108,7 @@ extension AddHouseholdTaskFormView {
             // See top-of-file comment on the form ViewModel.
             assigneeRow(
                 id: nil,
-                title: "Unassigned (any member)",
+                title: "Unassigned",
                 subtitle: nil
             )
             ForEach(viewModel.assignableMembers) { member in
@@ -120,7 +120,7 @@ extension AddHouseholdTaskFormView {
                 )
             }
             if viewModel.assignableMembers.isEmpty {
-                Text("No members found in this home.")
+                Text("No assignable members are available.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .accessibilityHidden(true)

@@ -36,7 +36,8 @@ struct HouseholdTaskDetailView: View {
                         if let priority = task.priority { LabeledContent("Priority", value: priority.capitalized) }
                         if let due = task.dueAt { LabeledContent("Due", value: dueLabel(due)) }
                         if let recurrence = HouseholdTasksListViewModel.humanRecurrence(rule: task.recurrenceRule) {
-                            LabeledContent("Repeats", value: recurrence)
+                            LabeledContent("Repeat preference", value: recurrence)
+                            Text("New tasks are not created automatically.").font(.caption)
                         }
                     }
                     if task.capabilities?.canEdit == true {

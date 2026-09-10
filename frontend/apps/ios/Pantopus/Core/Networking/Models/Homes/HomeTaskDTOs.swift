@@ -118,7 +118,7 @@ public struct HomeTaskResponse: Decodable, Sendable {
 /// Body for `POST /api/homes/:id/tasks`. `task_type` and `title` are
 /// required; everything else is optional (see backend validation at
 /// the current task route).
-public struct CreateHomeTaskRequest: Encodable, Sendable {
+public struct CreateHomeTaskRequest: Codable, Sendable, Equatable {
     public let taskType: String
     public let title: String
     public let description: String?
@@ -156,17 +156,8 @@ public struct CreateHomeTaskRequest: Encodable, Sendable {
     }
 }
 
-/// Body for `PUT /api/homes/:id/tasks/:taskId`. All fields optional —
-/// only those set are sent on the wire.
-///
-/// Backend `allowed` list at `home.js:4316` accepts `title /
-/// description / status / assigned_to / priority / due_at / budget /
-/// details / completed_at / visibility / viewer_user_ids` —
-/// `recurrence_rule` is **not** in that allowlist today. We carry
-/// `recurrenceRule` on the client side so the Add/Edit Task form has
-/// a single source of truth; when the backend extends its allowlist,
-/// no client change is needed. Until then the field is silently
-/// dropped by the server.
+/// Sparse task update. Optional legacy fields are omitted; explicit clears use
+/// the form's typed patch so completion-only callers cannot clear other fields.
 public struct UpdateHomeTaskRequest: Encodable, Sendable {
     public let status: String?
     public let title: String?
