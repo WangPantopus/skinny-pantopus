@@ -32,6 +32,42 @@ fs.appendFileSync(process.env.SSH_LOG, JSON.stringify(process.argv.slice(2)) + '
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
+// Exercise the binding actually supplied by each workflow's remote-script step.
+// Keeping this connected to the workflow catches a missing env entry, which
+// direct remote.sh tests cannot: the script intentionally defaults to 8000.
+function workflowBinding(workflowName, variables) {
+  const lines = fs.readFileSync(path.join(root, '.github/workflows', workflowName), 'utf8').split('\n');
+  const start = lines.findIndex(line => line === '      - name: Deploy API and worker');
+  assert.notEqual(start, -1, `${workflowName} must have the remote deployment step`);
+  const next = lines.findIndex((line, index) => index > start && /^      - /.test(line));
+  const step = lines.slice(start, next < 0 ? lines.length : next);
+  assert.ok(step.includes('        run: bash scripts/deploy/remote.sh'));
+  const setting = step.find(line => /^          DEPLOY_API_BIND:/.test(line));
+  if (!setting) return '';
+  assert.equal(setting.trim(), 'DEPLOY_API_BIND: ${{ vars.BACKEND_API_BIND }}');
+  return variables.BACKEND_API_BIND || '';
+}
+
+for (const workflow of ['deploy-backend.yml', 'rollback-backend.yml']) {
+  test(`${workflow} keeps the configured staging binding through the remote command`, () => {
+    const result = invoke(workflowBinding(workflow, { BACKEND_API_BIND: '127.0.0.1:18001' }));
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.calls[1].at(-1), `bash -s -- staging ${image} 127.0.0.1:18001`);
+  });
+
+  test(`${workflow} preserves the default binding when no environment override is configured`, () => {
+    const result = invoke(workflowBinding(workflow, {}));
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.calls[1].at(-1), `bash -s -- staging ${image} 8000`);
+  });
+
+  test(`${workflow} rejects an invalid configured binding before SSH`, () => {
+    const result = invoke(workflowBinding(workflow, { BACKEND_API_BIND: '18001; false' }));
+    assert.equal(result.status, 2);
+    assert.deepEqual(result.calls, []);
+  });
+}
+
 test('remote rollout forwards the validated staging bind and pins the host key', () => {
   const result = invoke('127.0.0.1:18001');
   assert.equal(result.status, 0, result.stderr);
