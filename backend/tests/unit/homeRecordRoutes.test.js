@@ -63,18 +63,15 @@ test.each([['get','/:id/tasks'],['post','/:id/tasks'],['put','/:id/events/:recor
   db.setRpcMock(async()=>({error:{code:'55P03',message:'private database detail'}}));const res=response();
   await handler(home,method,path)(request,res);expect(res.statusCode).toBe(503);expect(res.body.error).not.toContain('private database detail');
 });
-test.each([['other',false],['recipient',true]])('assignment notification rechecks current assignee %s and title',async(assignedTo,delivered)=>{
-  const initial={...record,title:'Old title',assigned_to:'recipient'};
-  const current={...record,title:'Current title',assigned_to:assignedTo};
-  db.setRpcMock(async name=>({data:name==='mutate_home_record'
-    ? {ok:true,record:initial,notify_user_id:'recipient'}
-    : {ok:true,records:[current],attendees:[]}}));
+test('successful assignment relies on its atomic database notice and never launches a second notification', async () => {
+  const rpc=jest.fn(async()=>({data:{ok:true,record:{...record,assigned_to:'recipient'},notify_user_id:'recipient'}}));
+  db.setRpcMock(rpc);
   const res=response();await handler(home,'post','/:id/tasks')(request,res);
   await new Promise(setImmediate);
   expect(res.statusCode).toBe(201);
-  if(delivered) expect(notifications.notifyTaskAssigned).toHaveBeenCalledWith(expect.objectContaining({
-    assigneeUserId:'recipient',taskTitle:'Current title',homeId:'home',taskId:'record'}));
-  else expect(notifications.notifyTaskAssigned).not.toHaveBeenCalled();
+  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(rpc.mock.calls[0][0]).toBe('mutate_home_record');
+  expect(notifications.notifyTaskAssigned).not.toHaveBeenCalled();
 });
 
 test('task deletion uses current retirement transaction before exact deletion and never raw tables',async()=>{

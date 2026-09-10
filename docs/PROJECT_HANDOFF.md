@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Recoverable task assignment notifications — September 10
+
+Home task saves and assignment changes now commit their in-app notification and
+recoverable delivery together. Reassignment, lost access, completion and deletion
+stop stale queued alerts; a disabled-at-assignment preference cannot replay after
+push is restored. The [assignment delivery report](home-task-assignment-delivery-2026-09-10.md)
+records the real database interruption/concurrency checks, clean complete replay,
+exact populated-upgrade preservation and independently reviewed locking repairs.
+One broad HTTP socket failure passed its unchanged affected-suite recheck; no
+cause is claimed. Provider delivery remains at least once.
+
+**Next:** finish retained native task forms and private attachments, then exact
+notification-to-task navigation and hosted/provider household acceptance.
+Automatic recurrence, relationships and ownership lifecycles remain unfinished.
+iOS retained forms are in their final app/review cycle; Android form/recovery
+repairs are underway. In draft PR #34, iOS stop recovery and browser saved-action
+entry are pushed as `687d07cf8` and `d2b9b42a6`; Android stop parity continues.
+Both PRs remain unfinished drafts. All paid services stay together for final
+launch preparation. Completed physical Beacon and saved-card acceptance must not
+be repeated. No hosted data, paid service or owner-phone installation changed.
+
 ### iOS task browsing and current actions checkpoint — September 10
 
 Both iOS task roots now open exact read-only detail. Collection and record

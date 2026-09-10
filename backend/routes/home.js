@@ -3265,23 +3265,8 @@ function registerHomeRecordRoutes(path, kind) {
         creation_receipt: result.creation_receipt, replayed: result.replayed,
         task_session: { ...getRequestSessionScope(req), home_id: req.params.id },
       } : {}) });
-      if (kind === 'task' && result.notify_user_id && !result.replayed) {
-        // Recheck the recipient immediately before producing an assignment
-        // notification; the mutation already validates the exact recipient.
-        (async () => {
-          try {
-            const current = await homeRecordService.list({ homeId: req.params.id, actorId: result.notify_user_id,
-              kind: 'task', recordId: result.record.id });
-            const task = current.records[0];
-            if (task.assigned_to !== result.notify_user_id) return;
-            const { data: actor } = await supabaseAdmin.from('User').select('name, username, first_name').eq('id', req.user.id).single();
-            await require('../services/notificationService').notifyTaskAssigned({
-              assigneeUserId: result.notify_user_id, assignerName: actor?.name || actor?.first_name || actor?.username || 'Someone',
-              taskTitle: task.title, homeId: req.params.id, taskId: task.id,
-            });
-          } catch (_) { /* The saved task remains authoritative if delivery is unavailable. */ }
-        })();
-      }
+      // Assignment notices are persisted by the same protected task transaction.
+      // The independent leased relay recovers them after a process interruption.
     } catch (error) { homeRecordService.sendError(res, error); }
   });
   router.get(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {

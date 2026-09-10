@@ -1265,9 +1265,40 @@ async function notifyHouseholdAccessRequest({
 }
 
 
+/** Deliver an existing exact assignment notice; never insert a second one. */
+async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAssignment } = {}) {
+  if (!notification?.id || !notification.user_id || notification.type !== 'task_assigned'
+    || notification.context !== 'personal' || notification.context_type !== 'personal'
+    || notification.context_id != null || !notification.metadata?.assignment_event_id
+    || typeof pushAllowedAtAssignment !== 'boolean') {
+    throw new Error('Unsupported stored Home task notification');
+  }
+  const userId = notification.user_id;
+  const [global, granular] = await Promise.all([
+    supabaseAdmin.from('MailPreferences').select('push_notifications').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('UserNotificationPreferences').select('home_reminders_enabled').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (global.error || granular.error) throw new Error('Home notification preferences unavailable');
+  // A notice created while disabled stays in-app even if push is later enabled.
+  const suppressed = !pushAllowedAtAssignment || global.data?.push_notifications !== true
+    || granular.data?.home_reminders_enabled === false;
+  const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
+    : await pushService.sendToUserWithReceipt(userId, {
+      title: notification.title, body: notification.body || '',
+      data: { ...notification.metadata, notificationId: notification.id,
+        type: notification.type, link: notification.link || null },
+    });
+  badgeService.emitBadgeUpdate(userId);
+  if (_io && _connectedUsers) {
+    for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
+  }
+  return { ...result, suppressed };
+}
+
 module.exports = {
   init,
   createNotification,
+  deliverStoredHomeTaskNotification,
   createBulkNotifications,
   notifyHomeInvite,
   notifyHomeInviteAccepted,
