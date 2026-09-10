@@ -21,6 +21,7 @@ public struct GigDetailView: View {
     @State private var bidSheetTarget: EditBidSheetTarget?
     @State private var deliveryTarget: DeliveryProofTarget?
     @State private var showTipSheet = false
+    @State private var refundTarget: GigRefundViewModel?
     @State private var tipCustomAmountText = ""
     @State private var toast: ToastMessage?
     // Phase 5 — lifecycle sheets
@@ -119,6 +120,9 @@ public struct GigDetailView: View {
             )
         }
         .sheet(isPresented: $showTipSheet) { tipSheet }
+        .sheet(item: $refundTarget, onDismiss: { Task { await viewModel.refreshAfterRefund() } }, content: { target in
+            GigRefundView(model: target)
+        })
         .modifier(GigLifecycleSheets(
             viewModel: viewModel,
             counterTarget: $counterTarget,
@@ -343,6 +347,10 @@ public struct GigDetailView: View {
             }
             if viewModel.showPaymentCard, let payment = viewModel.payment {
                 GigPaymentCard(payment: payment, stateInfo: viewModel.paymentStateInfo)
+                if viewModel.canOpenRefunds {
+                    Button("Refunds and hold releases") { refundTarget = viewModel.makeRefundViewModel() }
+                        .accessibilityIdentifier("gigDetail.refunds")
+                }
             }
             if viewModel.showReviewSection {
                 GigReviewSection(

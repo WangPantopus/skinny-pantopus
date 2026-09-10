@@ -964,6 +964,10 @@ public struct GigPaymentResponse: Decodable, Sendable {
 /// tips. Sensitive Stripe ids are stripped for the worker server-side.
 public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let id: String?
+    public let gigId: String?
+    public let payerId: String?
+    public let currency: String?
+    public let capturedAt: String?
     public let paymentStatus: String?
     public let paymentType: String?
     public let amountTotal: Double?
@@ -975,7 +979,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let refundedAmount: Double?
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case id, currency
+        case gigId = "gig_id", payerId = "payer_id", capturedAt = "captured_at"
         case paymentStatus = "payment_status"
         case paymentType = "payment_type"
         case amountTotal = "amount_total"
@@ -989,6 +994,10 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
 
     public init(
         id: String? = nil,
+        gigId: String? = nil,
+        payerId: String? = nil,
+        currency: String? = nil,
+        capturedAt: String? = nil,
         paymentStatus: String? = nil,
         paymentType: String? = nil,
         amountTotal: Double? = nil,
@@ -1000,6 +1009,10 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         refundedAmount: Double? = nil
     ) {
         self.id = id
+        self.gigId = gigId
+        self.payerId = payerId
+        self.currency = currency
+        self.capturedAt = capturedAt
         self.paymentStatus = paymentStatus
         self.paymentType = paymentType
         self.amountTotal = amountTotal

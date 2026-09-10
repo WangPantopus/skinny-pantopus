@@ -108,6 +108,25 @@ public final class GigDetailViewModel {
     /// Status chip metadata riding the payment envelope.
     public private(set) var paymentStateInfo: GigPaymentStateInfo?
 
+    var canOpenRefunds: Bool {
+        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
+              payment.gigId == gigId, payment.payerId == currentUserId,
+              payment.currency?.lowercased() == "usd", let id = payment.id, UUID(uuidString: id) != nil,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount), cents >= 50 else { return false }
+        return true
+    }
+
+    func makeRefundViewModel() -> GigRefundViewModel? {
+        guard canOpenRefunds, let payment, let id = payment.id,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount) else { return nil }
+        return GigRefundViewModel(paymentId: id, total: cents, api: api)
+    }
+
+    func refreshAfterRefund() async {
+        guard bidAcceptance.isCurrentAccount else { return }
+        await refreshSilently()
+    }
+
     /// Change orders on an assigned / in-progress gig (newest first).
     public private(set) var changeOrders: [GigChangeOrderDTO] = []
 

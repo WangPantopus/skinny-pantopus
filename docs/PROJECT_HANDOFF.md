@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS refund recovery checkpoint — September 10
+
+The existing owner payment card now supports confirmed refund/hold-release
+requests and read-only history. Interrupted operations retain their original
+UUID, amount and reason across restart; exact server receipts, current account
+scope and caller retry permission control recovery. The [iOS refund report](paid-gig-ios-refunds-2026-09-10.md)
+records a passing simulator app build, 50 focused checks, strict formatting/lint
+and independent review. These controlled responses do not replace the fresh
+provider lifecycle acceptance. Android parity remains in validation.
+
+**Next:** finish Android refund recovery, historical assigned authorization,
+wallet notification durability and cancellation/dispute/Connect/debt workflows,
+then the full fresh sandbox paid-gig journey and checked integration. Wallet
+delivery source is currently uncommitted under local SQL/relay validation;
+its first contracts prove atomic notice creation, rollback and exact retry.
+Home ordinary claim review is committed/pushed as `c315267a6` in draft PR #32;
+native claim controls and private attachments/evidence continue there. Final
+current-head CI and household acceptance remain required. Paid dependencies
+remain deferred together until final launch preparation. Completed Beacon and
+saved-card device acceptance stays complete and must not be repeated.
+
 ### Residual worker settlement checkpoint — September 10
 
 Worker wallet release now credits the verified amount remaining after refunds
