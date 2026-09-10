@@ -6,7 +6,7 @@ struct HouseholdTaskDetailView: View {
     @State private var viewModel: HouseholdTaskDetailViewModel
     @State private var isVisible = false
     @State private var mediaModel: HomeTaskMediaViewModel?
-    @State private var showingAttachments = false
+    @State private var attachmentPresentation: AttachmentPresentation?
     private let homeId: String
     private let taskId: String
     private let onEdit: @MainActor () -> Void
@@ -50,7 +50,7 @@ struct HouseholdTaskDetailView: View {
                         Button("Private attachments") {
                             guard viewModel.isCurrent, isVisible else { return }
                             if mediaModel == nil { mediaModel = HomeTaskMediaViewModel(homeId: homeId, taskId: taskId) }
-                            showingAttachments = true
+                            if let mediaModel { attachmentPresentation = AttachmentPresentation(model: mediaModel) }
                         }
                         .accessibilityIdentifier("householdTaskDetail.attachments")
                     }
@@ -77,8 +77,8 @@ struct HouseholdTaskDetailView: View {
         .navigationTitle("Task")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("householdTaskDetail")
-        .sheet(isPresented: $showingAttachments) {
-            if let mediaModel { HomeTaskMediaView(model: mediaModel) }
+        .sheet(item: $attachmentPresentation) { presentation in
+            HomeTaskMediaView(model: presentation.model)
         }
         .onAppear { isVisible = true }
         .task { await viewModel.load() }
@@ -95,15 +95,23 @@ struct HouseholdTaskDetailView: View {
             viewModel.accessChanged()
             if !current { mediaModel?.retire()
                 mediaModel = nil
+                attachmentPresentation = nil
             }
         }
         .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             isVisible = false
             viewModel.suspend()
-            if !showingAttachments { mediaModel?.retire()
+            if attachmentPresentation == nil { mediaModel?.retire()
                 mediaModel = nil
             }
         }
+    }
+
+    /// Present the model atomically. A separate Boolean can present the sheet
+    /// before SwiftUI observes the lazily initialized model, leaving it empty.
+    private struct AttachmentPresentation: Identifiable {
+        let id = UUID()
+        let model: HomeTaskMediaViewModel
     }
 
     private func resumeCurrentScreen() {

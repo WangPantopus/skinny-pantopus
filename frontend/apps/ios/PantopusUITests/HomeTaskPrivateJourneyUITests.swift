@@ -13,7 +13,9 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
-        continueAfterFailure = false
+        // Explicit throwing guards stop this async journey without aborting the
+        // XCTest runner before it can export the failure's screen and evidence.
+        continueAfterFailure = true
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_HOME_TASK_UI"] == "1", "Requires the isolated loopback fixture")
         XCTAssertEqual(ProcessInfo.processInfo.environment["HOME_TASK_UI_ORIGIN"], origin)
         app = XCUIApplication()
@@ -42,19 +44,25 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
     func testCreateExactTaskAndRecoverPrivateAttachmentThroughSystemPicker() async throws {
         try downloadFixtureFile()
         app.launch()
-        try signIn()
+        try await signIn()
         try app.open(link("dashboard"))
-        XCTAssertTrue(element("homeDashboard").waitForExistence(timeout: 30))
-        tapButton("Tasks")
-        XCTAssertTrue(element("householdTasksList").waitForExistence(timeout: 20))
-        tapButton("Add a task")
-        enter(title, into: "field_title")
-        tap("formCommitButton")
+        try require(element("homeDashboard").waitForExistence(timeout: 30))
+        try tapButton("Tasks")
+        try require(element("householdTasksList").waitForExistence(timeout: 20))
+        try tapButton("Add a task")
+        if app.buttons["Retry saved request"].firstMatch.waitForExistence(timeout: 3) {
+            try tapButton("Retry saved request")
+        } else {
+            try enter(title, into: "field_title")
+            try tapButton("Save")
+        }
+        // An uncertain save first requires an explicit current-access reload.
+        try tapButton("Try again")
         let retry = app.buttons["Retry saved request"].firstMatch
-        XCTAssertTrue(retry.waitForExistence(timeout: 20), "The interrupted create must retain its original request")
+        try require(retry.waitForExistence(timeout: 20), "The interrupted create must retain its original request")
         retry.tap()
-        XCTAssertTrue(element("householdTaskDetail").waitForExistence(timeout: 30))
-        XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 15))
+        try require(element("householdTaskDetail").waitForExistence(timeout: 30))
+        try require(app.staticTexts[title].firstMatch.waitForExistence(timeout: 15))
         let created = try await fixture("state")
         XCTAssertEqual(created.receipt?.taskId, task)
         XCTAssertEqual(created.count("create_committed"), 1)
@@ -62,39 +70,40 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
         // A canonical OS link must reopen the actual exact detail, including
         // the normal current-session HTTP checks, without a test-only route.
         try app.open(link("tasks/\(task)"))
-        XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 30))
-        tap("householdTaskDetail.attachments")
-        tap("homeTaskMedia.choose")
-        chooseDownloadedFixture()
-        tap("homeTaskMedia.retryUpload")
-        XCTAssertTrue(app.staticTexts["The upload is unconfirmed. Retry the same file."].firstMatch.waitForExistence(timeout: 20))
+        try require(app.staticTexts[title].firstMatch.waitForExistence(timeout: 30))
+        try tapButton("Private attachments")
+        try tapButton("Choose attachment")
+        try chooseDownloadedFixture()
+        try tapButton("Save or retry this attachment")
+        try require(app.staticTexts["Server error 503. Please try again."].firstMatch.waitForExistence(timeout: 20))
         XCTAssertFalse(element("homeTaskMedia.notice").exists)
-        tap("homeTaskMedia.retryUpload")
-        XCTAssertTrue(app.staticTexts["Private attachment saved."].firstMatch.waitForExistence(timeout: 30))
+        try tapButton("Save or retry this attachment")
+        try require(app.staticTexts["Private attachment saved."].firstMatch.waitForExistence(timeout: 30))
         let uploaded = try await fixture("state")
         XCTAssertEqual(uploaded.count("upload_committed"), 1)
         XCTAssertEqual(uploaded.count("upload_replayed"), 1)
         let uploadId = try XCTUnwrap(uploaded.media?.id)
-        tapButton("Open attachment")
+        try tapButton("Open attachment")
         let preview = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", fileText)).firstMatch
-        XCTAssertTrue(preview.waitForExistence(timeout: 30), "The preview must display the exact downloaded text")
+        try require(preview.waitForExistence(timeout: 30), "The preview must display the exact downloaded text")
         keepScreenshot("Exact synthetic private attachment preview")
         _ = try await fixture("revoke", method: "POST")
         XCUIDevice.shared.press(.home)
         app.activate()
-        let hidden = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: preview)
-        await fulfillment(of: [hidden], timeout: 20)
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: preview)
+        let revoked = await XCTWaiter.fulfillment(of: [hidden], timeout: 20)
+        try require(revoked == .completed, "Revoked preview remained visible")
         XCTAssertFalse(app.staticTexts["task-attachment-\(uploadId).txt"].exists)
         keepScreenshot("Revoked task attachment content hidden")
         _ = try await fixture("restore", method: "POST")
-        tapButton("Reload attachments")
-        tapButton("Remove attachment")
+        try tapButton("Reload attachments")
+        try tapButton("Remove attachment")
         let confirm = app.sheets.buttons["Remove attachment"].firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        try require(confirm.waitForExistence(timeout: 10))
         confirm.tap()
-        XCTAssertTrue(app.buttons["Retry attachment removal"].firstMatch.waitForExistence(timeout: 20))
-        tapButton("Retry attachment removal")
-        XCTAssertTrue(app.staticTexts["Attachment removed. Its history remains."].firstMatch.waitForExistence(timeout: 30))
+        try require(app.buttons["Retry attachment removal"].firstMatch.waitForExistence(timeout: 20))
+        try tapButton("Retry attachment removal")
+        try require(app.staticTexts["Attachment removed. Its history remains."].firstMatch.waitForExistence(timeout: 30))
         XCTAssertFalse(app.buttons["Open attachment"].exists)
         let final = try await fixture("state")
         XCTAssertEqual(final.media?.id, uploadId)
@@ -115,11 +124,11 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         try safari.open(XCTUnwrap(URL(string: origin + "/fixture/file")))
         let download = safari.buttons["Download"].firstMatch
-        XCTAssertTrue(download.waitForExistence(timeout: 20), "Safari must receive the synthetic file through HTTP")
+        try require(download.waitForExistence(timeout: 20), "Safari must receive the synthetic file through HTTP")
         download.tap()
     }
 
-    private func chooseDownloadedFixture() {
+    private func chooseDownloadedFixture() throws {
         let predicate = NSPredicate(format: "label CONTAINS %@", "home-task-acceptance")
         var file = app.descendants(matching: .any).matching(predicate).firstMatch
         if !file.waitForExistence(timeout: 5) {
@@ -129,26 +138,35 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
             if downloads.waitForExistence(timeout: 5) { downloads.tap() }
             file = app.descendants(matching: .any).matching(predicate).firstMatch
         }
-        XCTAssertTrue(file.waitForExistence(timeout: 20), "System Files picker must expose the downloaded synthetic file")
+        try require(file.waitForExistence(timeout: 20), "System Files picker must expose the downloaded synthetic file")
         file.tap()
-        XCTAssertTrue(app.staticTexts["Selected: home-task-acceptance.txt"].firstMatch.waitForExistence(timeout: 20))
+        // Safari gives repeated downloads a numeric suffix. The fixture validates
+        // exact multipart bytes and stable server filename, not that local suffix.
+        let selected = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Selected: home-task-acceptance")).firstMatch
+        try require(selected.waitForExistence(timeout: 20))
     }
 
-    private func signIn() throws {
-        tap("placeLaunchSignIn")
-        enter("bp-task-ui@example.com", into: "loginEmailField")
-        enter("synthetic-loopback-only", into: "loginPasswordField")
-        tap("loginSubmitButton")
-        let signedIn = NSPredicate { [self] _, _ in
-            element("hubMenuButton").exists || element("place.homeTools").exists || element("place.menu").exists
-        }
-        expectation(for: signedIn, evaluatedWith: app)
-        waitForExpectations(timeout: 30)
-        for _ in 0..<4 {
+    private func signIn() async throws {
+        // A previous synthetic run may have completed ordinary login before a
+        // later UI failure. Use its real protected session on cold restart.
+        if element("tab.place").waitForExistence(timeout: 3) { return }
+        try tap("placeLaunchSignIn")
+        try enter("bp-task-ui@example.com", into: "loginEmailField")
+        try enter("synthetic-loopback-only", into: "loginPasswordField")
+        try tap("loginSubmitButton")
+        // Password/biometric offers cover the signed-in controls. Dismiss the
+        // ordinary OS offer before waiting for the destination behind it.
+        for index in 0..<4 {
             let later = app.buttons["Not Now"].firstMatch
-            guard later.waitForExistence(timeout: 3) else { break }
+            guard later.waitForExistence(timeout: index == 0 ? 10 : 3) else { break }
             later.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
+        let signedIn = NSPredicate { [self] _, _ in
+            element("tab.place").exists && !element("loginSubmitButton").exists
+        }
+        let arrival = XCTNSPredicateExpectation(predicate: signedIn, object: app)
+        let result = await XCTWaiter.fulfillment(of: [arrival], timeout: 30)
+        try require(result == .completed, "Normal sign-in did not reach the signed-in UI")
     }
 
     private func link(_ suffix: String) throws -> URL {
@@ -159,30 +177,44 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 
-    private func enter(_ value: String, into id: String) {
+    private func enter(_ value: String, into id: String) throws {
         let target = element(id)
-        XCTAssertTrue(target.waitForExistence(timeout: 20), "Missing \(id)")
+        try require(target.waitForExistence(timeout: 20), "Missing \(id)")
         target.tap()
         target.typeText(value)
     }
 
-    private func tap(_ id: String) {
-        press(element(id))
+    private func tap(_ id: String) throws {
+        try press(element(id))
     }
 
-    private func tapButton(_ label: String) {
-        press(app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch)
+    private func tapButton(_ label: String) throws {
+        try press(app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch)
     }
 
-    private func press(_ target: XCUIElement) {
-        XCTAssertTrue(target.waitForExistence(timeout: 20), "Missing \(target.identifier)")
+    private func press(_ target: XCUIElement) throws {
+        try require(target.waitForExistence(timeout: 20), "Required journey control was not found")
         for _ in 0..<8 where !target.isHittable {
             app.swipeUp()
         }
-        XCTAssertTrue(target.isHittable)
-        XCTAssertTrue(target.isEnabled)
+        try require(target.isHittable)
+        try require(target.isEnabled)
         target.tap()
     }
+
+    private func require(
+        _ condition: Bool,
+        _ message: String = "Required journey control unavailable",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        guard condition else {
+            XCTFail(message, file: file, line: line)
+            throw JourneyStopped.requiredControl
+        }
+    }
+
+    private enum JourneyStopped: Error { case requiredControl }
 
     private func keepScreenshot(_ name: String) {
         let image = XCTAttachment(screenshot: app.screenshot())

@@ -12,6 +12,9 @@ closes browser findings 1 and 2 below with actual Chrome evidence. The
 [confirmed recovery report](home-web-task-confirmed-recovery-2026-09-10.md) closes
 finding 4 with actual encrypted IndexedDB, reload, competing-tab and corrupt-slot
 acceptance. Finding 3 and attachment reselection acceptance remain required.
+The resumed [installed iOS journey](home-ios-task-installed-journey-2026-09-10.md)
+now passes end to end after repairing the blank attachment sheet and the test
+workflow. Its newer evidence supersedes the original failed execution below.
 Read this document and the top of `PROJECT_HANDOFF.md` first; consult older
 reports only for the next concrete task. Refresh Git and CI before relying on
 the observations below.

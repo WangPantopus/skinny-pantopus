@@ -14,6 +14,21 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Installed iOS Home task attachments — September 10
+
+The full installed simulator journey now passes: exact task creation/replay,
+canonical task link, system Files selection, exact upload/retry, private text
+preview, revoked-access hiding and removal/retry. It exposed and verified a fix
+for the blank attachment sheet. The [installed iOS report](home-ios-task-installed-journey-2026-09-10.md)
+records actual HTTP/UI evidence, 29 passing media regression checks and limits.
+
+**Next:** finish durable browser attachment reselection and installed Android
+attachment acceptance. Android builds/static checks and the five reviewed
+recurrence snapshots pass; an overlapping-controls test fixture is being fixed
+before its emulator rerun. PRs #32/#34 remain unfinished drafts. Combined
+migration dependencies/replay, remaining Home/payment scope and release gates
+remain open. Paid services stay one final launch-preparation bundle.
+
 ### Browser confirmed-create recovery — September 10
 
 A confirmed creation now remains in encrypted recovery through close/background

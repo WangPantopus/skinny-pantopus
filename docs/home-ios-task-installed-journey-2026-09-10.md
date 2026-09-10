@@ -1,3 +1,47 @@
+# Installed iOS Home task journey — verified continuation
+
+## September 10 resumed acceptance
+
+The entitled simulator build and the full installed journey now **pass** on a
+dedicated iOS 26.5 simulator. The ordinary synthetic login was performed through
+the app; subsequent cold launches reused its real protected session. The actual
+HTTP fixture proved one task creation plus one replay with the original request;
+canonical OS task-link opening; Safari download → system Files selection; one
+committed upload plus one replay with identical UUID, generated filename, MIME
+and all 86 bytes; downloaded text preview; revoke → background/return hiding
+private content; restored access; and removal recovery using the same media ID.
+All four removal requests are recorded (three injected uncertain replies and the
+explicit retry). The final record is retired, unavailable, with no rejected
+fixture request. Screenshots of the exact preview and denied state were reviewed.
+
+The installed run exposed a blank attachment sheet: separate presentation and
+optional-model state could present before SwiftUI observed the model. The detail
+screen now presents a single item containing the model. It retains the model on
+ordinary sheet dismissal and retires/dismisses it when the opening account is no
+longer current. This repair was exercised by the successful installed run.
+
+The UITest now stops after failed required waits, handles ordinary login offers,
+selects actual accessible controls, performs the explicit current-access reload
+before create retry, and accepts Safari's normal numeric download suffix. It
+still verifies exact bytes and generated multipart metadata at the HTTP boundary.
+Earlier execution failures below are historical and are not passing acceptance.
+
+Verification: actual app/test build passed; the complete installed journey passed
+(1 test, zero failures); all **29 private-task-media regression checks** passed;
+strict changed Swift lint and format passed. Local iOS 26.5 evidence does not
+replace required iOS 18.5 CI or physical-device/APNs acceptance. Previously
+completed owner Beacon device checks stay complete.
+
+Private evidence: `/private/tmp/pantopus-home-task-ui-r10.xcresult`,
+`/private/tmp/pantopus-home-task-ui-r10.log`, exported attachments under
+`/private/tmp/pantopus-home-task-ui-r10-attachments`, and
+`/private/tmp/pantopus-home-task-ui-regressions-r1.{log,xcresult}`. The fixture is
+`scripts/ios/home-task-ui-fixture.py`; the journey is
+`PantopusUITests/HomeTaskPrivateJourneyUITests.swift`. No hosted account, private
+operator file, owner phone, paid service or production database changed.
+
+The original failure investigation follows for continuity.
+
 # Installed iOS Home task and private attachment acceptance
 
 Status: draft preserved; first installed execution failed, September 10, 2026.
