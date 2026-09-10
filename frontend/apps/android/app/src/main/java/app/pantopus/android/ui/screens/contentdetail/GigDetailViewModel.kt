@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
-import app.pantopus.android.data.api.models.gigs.CancelGigReason
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.GigActiveStatusResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
@@ -31,7 +30,6 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigOwnerActionsRepository
-import app.pantopus.android.data.gigs.GigReassignmentRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
@@ -106,7 +104,6 @@ class GigDetailViewModel
         // RN→native parity: Q&A upvote / pin / delete + the poster's
         // "Remind worker" nudge live on their own thin repository.
         private val extrasRepo: app.pantopus.android.data.gigs.GigExtrasRepository,
-        private val reassignmentRepo: GigReassignmentRepository,
         // Bidder side — `GET /api/gigs/:id/my-bid`; the update / withdraw
         // half reuses OffersRepository rather than duplicating the routes.
         private val viewerBidRepo: GigViewerBidRepository,
@@ -127,6 +124,7 @@ class GigDetailViewModel
         private val checkoutTokens: TokenStorage,
         refundFactory: GigRefundFactory,
         authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
+        stopFactory: app.pantopus.android.ui.screens.gigs.stop.GigStopFactory,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -441,6 +439,15 @@ class GigDetailViewModel
         val payment: StateFlow<GigPaymentResponse?> = _payment.asStateFlow()
         val refunds = refundFactory.create(viewModelScope) { silentRefetch() }
         val assignedAuthorization = authorizationFactory.create(viewModelScope) { silentRefetch() }
+        val taskStop = stopFactory.create(viewModelScope) { silentRefetch() }
+
+        fun openTaskStop(action: String = "cancel") {
+            taskStop.open(gigId, action)
+            if (action == "cancel") requestCancelPreview()
+        }
+
+        fun openTaskStopRecovery() = taskStop.openRecovery(gigId)
+
         private var paymentGeneration = 0
 
         fun canOpenAssignedAuthorization(): Boolean {
@@ -792,7 +799,10 @@ class GigDetailViewModel
 
         private fun currentUserId(): String? = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
-        fun load() = fetch(showLoading = true)
+        fun load() {
+            taskStop.probeRecovery(gigId)
+            fetch(showLoading = true)
+        }
 
         /**
          * Phase 5 — refetch triggered by a `gig:*` room event: refreshes the
@@ -920,6 +930,7 @@ class GigDetailViewModel
         ) {
             val uid = currentUserId()
             rawGig = gig
+            taskStop.probeRecovery(gigId)
             _saved.value = gig.savedByUser == true
             viewerIsOwner = uid != null && uid == gig.userId
             viewerIsWorker = uid != null && uid == gig.acceptedBy
@@ -1670,36 +1681,6 @@ class GigDetailViewModel
             }
         }
 
-        /**
-         * Poster closes a **still-open** task: `DELETE /api/gigs/:id`
-         * removes the row outright (the backend 400s any other status).
-         * Mirrors RN's `handleCloseGig` open branch (`gig/[id].tsx:427`);
-         * the caller pops back once `onDone(true)` fires.
-         */
-        fun closeGig(onDone: (Boolean) -> Unit) {
-            if (!canCloseTask()) {
-                onDone(false)
-                return
-            }
-            viewModelScope.launch {
-                when (val result = ownerActionsRepo.deleteGig(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Gig closed successfully."))
-                        onDone(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to close gig."),
-                                isError = true,
-                            ),
-                        )
-                        onDone(false)
-                    }
-                }
-            }
-        }
-
         // MARK: - Phase 5 · instant accept (work item 3)
 
         /** Helper claims an instant-accept task; PaymentSheet only when the payload demands it. */
@@ -1936,77 +1917,14 @@ class GigDetailViewModel
             return ownerCanReplaceWorker(gig, currentUserId())
         }
 
-        /**
-         * Poster's "Replace worker" — `POST /reopen-bidding`. Unassigns the
-         * current worker, cancels the pre-capture payment hold, rejects
-         * their accepted bid, and moves the gig back to `open`
-         * (`backend/routes/gigs.js:4874`). Refetches on success so the
-         * lifecycle sections re-render in the reopened state.
-         */
-        fun replaceWorker(onResult: (Boolean) -> Unit = {}) {
-            viewModelScope.launch {
-                when (val result = reassignmentRepo.reopenBidding(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.data.message ?: "Worker removed and bidding reopened",
-                            ),
-                        )
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to replace worker"),
-                                isError = true,
-                            ),
-                        )
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
-        /**
-         * Assigned worker's "Can't make it" — `POST /worker-release`.
-         * Unassigns the viewer, releases the payment hold, reopens the task
-         * for bids, and notifies the poster (`backend/routes/gigs.js:5954`).
-         */
-        fun releaseAssignment(
-            note: String? = null,
-            onResult: (Boolean) -> Unit = {},
-        ) {
-            viewModelScope.launch {
-                when (val result = reassignmentRepo.workerRelease(gigId, note)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.data.message ?: "You have been released from this task",
-                            ),
-                        )
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to release from task"),
-                                isError = true,
-                            ),
-                        )
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
         /** Fetch the zone + fee preview when the cancel sheet opens. */
         fun requestCancelPreview() {
             _cancelPreview.value = null
             _cancelPreviewLoading.value = true
             viewModelScope.launch {
-                when (val result = repo.cancellationPreview(gigId)) {
+                val result = repo.cancellationPreview(gigId)
+                if (!bidCheckout.isCurrentReadScope()) return@launch
+                when (result) {
                     is NetworkResult.Success -> _cancelPreview.value = result.data
                     is NetworkResult.Failure -> Unit
                 }
@@ -2030,26 +1948,6 @@ class GigDetailViewModel
                 when (val result = repo.rescheduleGig(gigId, scheduledStartIso, note)) {
                     is NetworkResult.Success -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task rescheduled"))
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
-        /** Owner confirms the cancel with a reason radio. */
-        fun confirmCancel(
-            reason: CancelGigReason,
-            onResult: (Boolean) -> Unit = {},
-        ) {
-            viewModelScope.launch {
-                when (val result = repo.cancelGig(gigId, reason.wireValue)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task cancelled"))
                         silentRefetch()
                         onResult(true)
                     }

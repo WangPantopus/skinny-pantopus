@@ -17,10 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -68,7 +66,7 @@ fun GigDetailScreen(
     val tipStatus by viewModel.tipStatus.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     val cancelPreview by viewModel.cancelPreview.collectAsStateWithLifecycle()
-    val cancelPreviewLoading by viewModel.cancelPreviewLoading.collectAsStateWithLifecycle()
+    val stopState by viewModel.taskStop.state.collectAsStateWithLifecycle()
     // Bidder side — the viewer's own live bid, if any.
     val viewerBid by viewModel.viewerBid.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -76,18 +74,12 @@ fun GigDetailScreen(
     var deliveryTarget by remember { mutableStateOf<DeliveryProofTarget?>(null) }
     var showTipSheet by remember { mutableStateOf(false) }
     var showReportSheet by remember { mutableStateOf(false) }
-    var showCancelSheet by remember { mutableStateOf(false) }
     var showRescheduleSheet by remember { mutableStateOf(false) }
-    // Poster's pre-start "Replace worker" confirm (`POST /reopen-bidding`).
-    var showReplaceWorkerConfirm by remember { mutableStateOf(false) }
-    // Poster's "Close Gig" confirm on a still-open task (`DELETE /api/gigs/:id`).
-    var showCloseTaskConfirm by remember { mutableStateOf(false) }
     var toastText by remember { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val deliverySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tipSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val cancelSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Block 3D — Stripe PaymentSheet for tipping (created in composition).
@@ -105,6 +97,10 @@ fun GigDetailScreen(
     GigBidCheckoutHost(viewModel.bidCheckout)
     app.pantopus.android.ui.screens.gigs.refunds.GigRefundSheet(viewModel.refunds)
     app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationHost(viewModel.assignedAuthorization)
+    app.pantopus.android.ui.screens.gigs.stop.GigStopSheet(
+        viewModel.taskStop,
+        onReschedule = if (viewModel.viewerIsOwner() && cancelPreview?.canReschedule == true) ({ showRescheduleSheet = true }) else null,
+    )
 
     LaunchedEffect(Unit) { viewModel.load() }
     // Phase 5 — join the gig:<id> realtime room while the screen is visible.
@@ -221,18 +217,26 @@ fun GigDetailScreen(
                     ContentDetailOverflowItem(
                         label = "Replace worker",
                         testTag = "gigDetail.replaceWorker",
-                        onClick = { showReplaceWorkerConfirm = true },
+                        onClick = { viewModel.openTaskStop("reopen_bidding") },
                     ),
                 )
             }
-            // RN branches on status: an open gig is *closed* (deleted, no
-            // fee), anything live is *cancelled* (`gig/[id].tsx:412`).
+            if (stopState.recoveryAvailable) {
+                add(
+                    ContentDetailOverflowItem(
+                        label = "Task action status",
+                        testTag = "gigDetail.stopRecovery",
+                        onClick = { viewModel.openTaskStopRecovery() },
+                    ),
+                )
+            }
+            // Open and assigned actions share the same durable stop gateway.
             if (viewModel.canCloseTask()) {
                 add(
                     ContentDetailOverflowItem(
                         label = "Close task",
                         testTag = "gigDetail.close",
-                        onClick = { showCloseTaskConfirm = true },
+                        onClick = { viewModel.openTaskStop("close") },
                     ),
                 )
             }
@@ -241,14 +245,13 @@ fun GigDetailScreen(
                     ContentDetailOverflowItem(
                         label = "Cancel task",
                         testTag = "gigDetail.cancel",
-                        onClick = {
-                            viewModel.requestCancelPreview()
-                            showCancelSheet = true
-                        },
+                        onClick = { viewModel.openTaskStop("cancel") },
                     ),
                 )
             }
         }
+
+    LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { toastText = it } }
 
     ContentDetailShell(
         state = state,
@@ -316,65 +319,6 @@ fun GigDetailScreen(
         Box(modifier = Modifier.size(0.dp).testTag("gigDetail.instantAccept"))
     }
 
-    // Poster's "Replace worker" confirm. Not a cancellation: the hold is
-    // released and the task goes straight back out for bids, so the copy
-    // spells both consequences out before the destructive tap.
-    if (showReplaceWorkerConfirm) {
-        AlertDialog(
-            onDismissRequest = { showReplaceWorkerConfirm = false },
-            title = { Text("Replace Worker") },
-            text = {
-                Text(
-                    "This will unassign the current worker, release any payment hold, " +
-                        "and reopen the task for bids. Use this only before work starts.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showReplaceWorkerConfirm = false
-                        viewModel.replaceWorker()
-                    },
-                    modifier = Modifier.testTag("gigDetail.replaceWorkerConfirm"),
-                ) {
-                    Text("Replace Worker", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReplaceWorkerConfirm = false }) { Text("Keep worker") }
-            },
-        )
-    }
-
-    // Poster closes a still-open task. RN copy verbatim
-    // (`gig/[id].tsx:414`); the row is deleted, so we pop back on success.
-    if (showCloseTaskConfirm) {
-        AlertDialog(
-            onDismissRequest = { showCloseTaskConfirm = false },
-            title = { Text("Close Gig") },
-            text = {
-                Text(
-                    "Are you sure you want to close this gig? " +
-                        "It will be removed and this cannot be undone.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCloseTaskConfirm = false
-                        viewModel.closeGig { closed -> if (closed) onBack() }
-                    },
-                    modifier = Modifier.testTag("gigDetail.closeConfirm"),
-                ) {
-                    Text("Close Gig", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCloseTaskConfirm = false }) { Text("Keep Open") }
-            },
-        )
-    }
-
     if (showReportSheet) {
         ModalBottomSheet(
             onDismissRequest = { showReportSheet = false },
@@ -387,35 +331,6 @@ fun GigDetailScreen(
                     }
                 },
                 onCancel = { showReportSheet = false },
-            )
-        }
-    }
-
-    if (showCancelSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showCancelSheet = false },
-            sheetState = cancelSheetState,
-        ) {
-            GigCancelSheetContent(
-                preview = cancelPreview,
-                previewLoading = cancelPreviewLoading,
-                onConfirm = { reason ->
-                    viewModel.confirmCancel(reason) { ok ->
-                        if (ok) showCancelSheet = false
-                    }
-                },
-                onCancel = { showCancelSheet = false },
-                // P6b — only the poster reaches this sheet (canCancelTask),
-                // so `can_reschedule` alone gates the secondary path.
-                onReschedule =
-                    if (viewModel.viewerIsOwner()) {
-                        {
-                            showCancelSheet = false
-                            showRescheduleSheet = true
-                        }
-                    } else {
-                        null
-                    },
             )
         }
     }

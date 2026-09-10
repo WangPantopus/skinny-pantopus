@@ -21,7 +21,6 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.files.FilesRepository
-import app.pantopus.android.data.gigs.GigReassignmentRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
@@ -59,7 +58,6 @@ import org.junit.Test
 class GigTipViewModelTest {
     private val repo: GigsRepository = mockk()
     private val extrasRepo: app.pantopus.android.data.gigs.GigExtrasRepository = mockk()
-    private val reassignmentRepo: GigReassignmentRepository = mockk()
     private val viewerBidRepo: GigViewerBidRepository = mockk()
     private val ownerActionsRepo: app.pantopus.android.data.gigs.GigOwnerActionsRepository = mockk()
     private val offersRepo: OffersRepository = mockk()
@@ -121,7 +119,6 @@ class GigTipViewModelTest {
         return GigDetailViewModel(
             repo,
             extrasRepo,
-            reassignmentRepo,
             viewerBidRepo,
             ownerActionsRepo,
             offersRepo,
@@ -136,6 +133,7 @@ class GigTipViewModelTest {
             checkoutTokens = mockk(relaxed = true) { coEvery { sessionIdentity() } returns ("u1" to "test-session") },
             refundFactory = mockk(relaxed = true),
             authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
+            stopFactory = mockk(relaxed = true),
         )
     }
 

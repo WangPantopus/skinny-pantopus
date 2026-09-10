@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -98,6 +99,12 @@ class TokenStorage
 
         private val _accessTokenFlow = MutableStateFlow<String?>(null)
         val accessTokenFlow: Flow<String?> = _accessTokenFlow.asStateFlow()
+
+        /** Nonsecret opening marker; never waits for disk or binds a later login to an existing screen. */
+        fun accessTokenMarker(): String? =
+            _accessTokenFlow.value?.let { token ->
+                MessageDigest.getInstance("SHA-256").digest(token.toByteArray()).joinToString("") { "%02x".format(it) }
+            }
 
         private suspend fun <T> withPrefs(block: (SharedPreferences) -> T): T =
             withContext(Dispatchers.IO) {

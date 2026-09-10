@@ -36,6 +36,21 @@ class TokenStorageTest {
     }
 
     @Test
+    fun `opening marker is synchronous nonsecret and follows published login refresh logout`() =
+        runTest {
+            assertNull(storage.accessTokenMarker())
+            storage.save(accessToken = "synthetic-opening", refreshToken = "synthetic-refresh", userId = "u-1")
+            val first = checkNotNull(storage.accessTokenMarker())
+            org.junit.Assert.assertTrue(Regex("^[a-f0-9]{64}$").matches(first))
+            org.junit.Assert.assertNotEquals("synthetic-opening", first)
+            assertEquals(first, storage.accessTokenMarker())
+            storage.updateTokens(accessToken = "synthetic-replacement", refreshToken = null)
+            org.junit.Assert.assertNotEquals(first, storage.accessTokenMarker())
+            storage.clear()
+            assertNull(storage.accessTokenMarker())
+        }
+
+    @Test
     fun `checkout identity keeps refresh but changes with login and clears with logout`() =
         runTest {
             assertNull(storage.sessionIdentity())

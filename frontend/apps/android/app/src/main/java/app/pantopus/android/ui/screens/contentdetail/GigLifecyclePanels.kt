@@ -102,8 +102,6 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     var noShowSheetVisible by remember { mutableStateOf(false) }
     var runningLateSheetVisible by remember { mutableStateOf(false) }
     var proposeChangeSheetVisible by remember { mutableStateOf(false) }
-    // Assigned worker's pre-start "Can't make it" confirm (`POST /worker-release`).
-    var cantMakeItConfirmVisible by remember { mutableStateOf(false) }
 
     val gig = viewModel.gigSnapshot()
     // Single source of truth with the projection: whenever this panel
@@ -185,40 +183,10 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onStartTask = { viewModel.startTask() },
             onConfirmCompletion = { viewModel.confirmCompletion() },
             onReportNoShow = { noShowSheetVisible = true },
-            onCantMakeIt = { cantMakeItConfirmVisible = true },
+            onCantMakeIt = { viewModel.openTaskStop("worker_release") },
             canRemindWorker = viewModel.canRemindWorker(),
             reminderCooldownLabel = reminderCooldownLabel,
             onRemindWorker = { viewModel.remindWorker() },
-        )
-    }
-
-    // Worker's "Can't make it" confirm — releases them, drops the payment
-    // hold, and reopens the task for bids. Copy mirrors the poster's
-    // "Replace worker" dialog on the other side of the same transition.
-    if (cantMakeItConfirmVisible) {
-        AlertDialog(
-            onDismissRequest = { cantMakeItConfirmVisible = false },
-            title = { Text("Can't Make It") },
-            text = {
-                Text(
-                    "This will unassign you from the task and reopen it for new bids. " +
-                        "Any payment hold will be released.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        cantMakeItConfirmVisible = false
-                        viewModel.releaseAssignment()
-                    },
-                    modifier = Modifier.testTag("gigDetail.cantMakeItConfirm"),
-                ) {
-                    Text("I Can't Make It", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { cantMakeItConfirmVisible = false }) { Text("Stay on the task") }
-            },
         )
     }
 

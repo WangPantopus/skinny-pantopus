@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android task stop recovery checkpoint — September 10
+
+All four Android task-stop actions now retain the original command, verify exact
+terms and receipts, and keep saved status reachable after cancellation or worker
+release. Opening identity is captured before asynchronous work; dismissal and
+competing storage writes cannot erase recovery. The
+[Android report](paid-gig-android-stop-recovery-2026-09-10.md) records the fresh
+passing checks, debug build, source quality and independent review. These results
+cover synthetic HTTP/storage behavior; installed emulator and provider journey
+acceptance remain open.
+
+**Next:** repair the same initial identity edge in the earlier Android payment
+coordinators, complete provider/emulator acceptance, then remaining started-work,
+fee, tip, dispute/Connect/debt and capacity work. Home retained iOS task forms are
+pushed as `f24785404` and durable assignment notices as `92a35b7f9`; Android forms
+are under final build verification, with exact notification routing and private
+attachments continuing. PRs #32/#34 remain unfinished drafts. Every paid service
+or subscription remains deferred to one final launch-preparation step. Completed
+physical Beacon and saved-card acceptance must not be repeated. No hosted data,
+owner-phone installation or paid service changed.
+
 ### Browser saved task-action recovery checkpoint — September 10
 
 Both browser gig layouts now expose the original saved action after cancellation,
