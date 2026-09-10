@@ -22,6 +22,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const addressConfig = require('../../config/addressVerification');
 const mailVendorService = require('./mailVendorService');
 const observability = require('./addressVerificationObservability');
+const { unitKey, destinationFor, destinationForHome, sameDestination } = require('./mailDestination');
 
 // ── Constants (from config, with env-var overrides) ──────────
 
@@ -162,19 +163,22 @@ class MailVerificationService {
       return { success: false, error: 'Address not found' };
     }
 
+    const delivery = destinationFor(address, unit);
+    if (!delivery) return { success: false, error: 'Requested unit does not match the canonical address' };
+
     // Check deliverability via stored validation data
     if (address.validation_raw_response) {
       const raw = address.validation_raw_response;
       if (raw.dpv_match_code === 'N') {
         return { success: false, error: 'Address is not deliverable' };
       }
-      if (raw.missing_secondary && !unit) {
+      if (raw.missing_secondary && !delivery.line2) {
         return { success: false, error: 'Address requires a unit number' };
       }
     }
 
     // ── 2. Check for household authority conflict ────────────
-    const conflictCheck = await this._checkHouseholdConflict(addressId, userId);
+    const conflictCheck = await this._checkHouseholdConflict(addressId, userId, delivery.line2, address.address_line2_norm);
     if (conflictCheck.blocked) {
       return { success: false, error: conflictCheck.reason };
     }
@@ -439,6 +443,7 @@ class MailVerificationService {
         metadata: {
           address_id: attempt.address_id,
           unit: previousJob?.metadata?.unit || null,
+          ...(previousJob?.metadata?.destination ? { destination: previousJob.metadata.destination } : {}),
           resend_number: token.resend_count + 1,
         },
         created_at: new Date().toISOString(),
@@ -583,8 +588,13 @@ class MailVerificationService {
         .eq('id', attemptId);
     }
 
-    const { job, error: jobError } = status === 'pending'
+    const { job, error: jobError } = ['pending', 'confirmed'].includes(status)
       ? await this._latestMailJob(attempt.id) : {};
+    if (status === 'confirmed') {
+      if (jobError) return { success: false, statusCode: 503, error: 'Could not check Home membership. Please retry.' };
+      const membership = await this._readConfirmedMembership(job, attempt.address_id, userId);
+      if (!membership.success) return membership;
+    }
     const deliveryUnknown = status === 'pending' && (jobError || !job?.vendor_job_id);
     return {
       success: true,
@@ -597,6 +607,41 @@ class MailVerificationService {
       max_resends: MAX_RESENDS,
       resends_remaining: Math.max(0, MAX_RESENDS - (token.resend_count || 0)),
     };
+  }
+
+  async _readConfirmedMembership(job, addressId, userId) {
+    if (!job?.metadata?.confirmed_home_id || !job.metadata.confirmed_occupancy_id) {
+      return { success: false, statusCode: 409, error: 'Your mailed proof needs membership recovery. Enter the same code again.' };
+    }
+    const homeId = job.metadata.confirmed_home_id;
+    const reads = await Promise.all([
+      supabaseAdmin.from('Home').select('id, address_id, address, address2, city, state, zipcode, security_state').eq('id', homeId).maybeSingle(),
+      supabaseAdmin.from('HomeOccupancy').select('id, is_active, verification_status, end_at, access_start_at, access_end_at')
+        .eq('id', job.metadata.confirmed_occupancy_id).eq('home_id', homeId).eq('user_id', userId).maybeSingle(),
+      supabaseAdmin.from('HomeAddress').select('address_line1_norm, address_line2_norm, city_norm, state, postal_code, building_type, missing_secondary_flag')
+        .eq('id', addressId).maybeSingle(),
+      supabaseAdmin.from('AddressClaim').select('id, unit_number, claim_status, created_at')
+        .eq('address_id', addressId).eq('user_id', userId),
+    ]);
+    if (reads.some(r => r.error)) return { success: false, statusCode: 503, error: 'Could not check Home membership. Please retry.' };
+    const [home, occupancy, address, claims] = reads.map(r => r.data);
+    const denied = { success: false, statusCode: 403, error: 'Home membership is no longer available.' };
+    if (!home || !occupancy || !address || home.address_id !== addressId
+      || ['frozen', 'frozen_silent'].includes(home.security_state) || occupancy.is_active !== true
+      || occupancy.verification_status !== 'verified' || occupancy.end_at
+      || new Date(occupancy.access_start_at) > new Date()
+      || (occupancy.access_end_at && new Date(occupancy.access_end_at) <= new Date())) return denied;
+    const current = destinationFor(address, job.metadata.unit);
+    const legacy = current && !current.line2 && address.building_type !== 'multi_unit' && !address.missing_secondary_flag;
+    const destination = job.metadata.destination || (legacy ? current : null);
+    if (!sameDestination(destination, current)
+      || !sameDestination(destination, destinationForHome(home, address))) return denied;
+    const latestClaim = (claims || []).filter(claim =>
+      unitKey(String(claim.unit_number || '').trim() || address.address_line2_norm) === unitKey(destination.line2))
+      .sort((left, right) => (new Date(right.created_at) - new Date(left.created_at))
+        || right.id.localeCompare(left.id))[0];
+    if (latestClaim?.claim_status === 'rejected') return denied;
+    return { success: true };
   }
 
   // ================================================================
@@ -612,198 +657,45 @@ class MailVerificationService {
    * @returns {Promise<{verified: boolean, locked?: boolean, attempts_remaining?: number, error?: string, occupancy_id?: string}>}
    */
   async confirmCode(attemptId, code, userId) {
-    // ── 1. Verify attempt belongs to user ────────────────────
-    const { data: attempt } = await supabaseAdmin
-      .from('AddressVerificationAttempt')
-      .select('*')
-      .eq('id', attemptId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (!attempt) {
-      return { verified: false, error: 'Verification attempt not found' };
+    const { applyOccupancyTemplate } = require('../../utils/homePermissions');
+    const templates = {};
+    for (const band of ['adult', 'child', 'teen']) {
+      // dryRun computes policy without reading or writing a Home. The database
+      // resolves and locks the exact mailed Home inside the confirmation.
+      const prepared = await applyOccupancyTemplate(null, userId, 'member', 'verified', { dryRun: true, ageBand: band });
+      templates[band] = prepared.template;
     }
-
-    if (!ACTIVE_STATUSES.includes(attempt.status)) {
-      return { verified: false, error: `Attempt is ${attempt.status}` };
-    }
-
-    // ── 2. Check expiry ──────────────────────────────────────
-    if (new Date(attempt.expires_at) < new Date()) {
-      await supabaseAdmin
-        .from('AddressVerificationAttempt')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', attemptId);
-      return { verified: false, error: 'Verification code has expired' };
-    }
-
-    // ── 3. Fetch token ───────────────────────────────────────
-    const { data: token } = await supabaseAdmin
-      .from('AddressVerificationToken')
-      .select('*')
-      .eq('attempt_id', attemptId)
-      .maybeSingle();
-
-    if (!token) {
-      return { verified: false, error: 'Verification token not found' };
-    }
-
-    // ── 4. Check lockout (before comparison) ─────────────────
-    if (token.attempt_count >= token.max_attempts) {
-      await supabaseAdmin
-        .from('AddressVerificationAttempt')
-        .update({ status: 'locked', updated_at: new Date().toISOString() })
-        .eq('id', attemptId);
-
-      await observability.recordMailLifecycleEvent({
-        step: 'confirm',
-        status: 'locked',
-        attemptId,
-        reasons: ['max_attempts_exceeded'],
-      });
-
-      return { verified: false, locked: true, error: 'Too many attempts. Request a new code.' };
-    }
-
-    // ── 5. Claim the attempt atomically ──────────────────────
-    // SEC-04: this used to be a read-modify-write — read attempt_count, then
-    // write attempt_count + 1. Concurrent guesses all read the same value and
-    // all wrote the same value, so N parallel requests cost a single
-    // increment and the 900,000-code space could be sprayed cheaply.
-    //
-    // The extra .eq('attempt_count', ...) makes this a compare-and-swap: the
-    // row matches only if nobody else has incremented since we read it. A
-    // caller that loses the race is refused rather than retried, so running
-    // guesses in parallel is strictly worse for an attacker than running them
-    // serially — which the lockout already bounds.
-    const newAttemptCount = token.attempt_count + 1;
-    const { data: claimed, error: claimErr } = await supabaseAdmin
-      .from('AddressVerificationToken')
-      .update({ attempt_count: newAttemptCount })
-      .eq('id', token.id)
-      .eq('attempt_count', token.attempt_count)
-      .eq('code_hash', token.code_hash)
-      .is('used_at', null)
-      .select('id');
-
-    // Fail closed on both arms. If the increment errored, `claimed` is null and
-    // a `Array.isArray(claimed)` guard alone would fall through to the
-    // comparison — handing out a free, uncounted guess on every DB error and
-    // taking the 900,000-code space back out of the lockout's reach.
-    if (claimErr || !Array.isArray(claimed) || claimed.length === 0) {
-      if (claimErr) {
-        logger.error('MailVerificationService.confirmCode: attempt claim failed', {
-          attemptId, error: claimErr.message,
-        });
-      }
-      return {
-        verified: false,
-        error: 'Another verification attempt is in progress. Please try again.',
-      };
-    }
-
-    // ── 6. Compare code (timing-safe) ────────────────────────
-    const submittedHash = this._hashCode(code);
-    const match = this._timingSafeCompare(submittedHash, token.code_hash);
-
-    if (!match) {
-      // Check if this attempt now triggers lockout
-      if (newAttemptCount >= token.max_attempts) {
-        await supabaseAdmin
-          .from('AddressVerificationAttempt')
-          .update({ status: 'locked', updated_at: new Date().toISOString() })
-          .eq('id', attemptId);
-        return { verified: false, locked: true, error: 'Too many attempts. Request a new code.' };
-      }
-
-      return {
-        verified: false,
-        attempts_remaining: token.max_attempts - newAttemptCount,
-      };
-    }
-
-    // ── 7. Code matches — mark verified ──────────────────────
-    await supabaseAdmin
-      .from('AddressVerificationAttempt')
-      .update({ status: 'verified', updated_at: new Date().toISOString() })
-      .eq('id', attemptId);
-
-    await supabaseAdmin
-      .from('AddressVerificationToken')
-      .update({ used_at: new Date().toISOString() })
-      .eq('id', token.id);
-
-    // Possession of the mailed code is the strongest self-service proof the
-    // system has, so record it on the claim ledger: any pending AddressClaim
-    // this user holds on the address becomes verified/mail_code. Best-effort -
-    // the attach below does not depend on it (mail_code is an escalated
-    // method), but leaving the claim 'pending' after the mail proved it would
-    // make the ledger disagree with the occupancy forever.
-    try {
-      await supabaseAdmin
-        .from('AddressClaim')
-        .update({
-          claim_status: 'verified',
-          verification_method: 'mail_code',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('address_id', attempt.address_id)
-        .eq('claim_status', 'pending');
-    } catch (claimErr) {
-      logger.warn('MailVerificationService.confirmCode: claim stamp failed (non-fatal)', {
-        userId, addressId: attempt.address_id, error: claimErr.message,
-      });
-    }
-
-    // ── 8. Create/update HomeOccupancy ───────────────────────
-    const occupancyResult = await this._attachOccupancy(userId, attempt.address_id);
-
-    // SCN-06: this used to return verified:true with occupancy_id:null when the
-    // attach silently no-opped — because the Home had been deleted mid-flight,
-    // or the address had duplicate homes and .maybeSingle() returned null. The
-    // user typed the right code, saw a success screen, and had no residency and
-    // no way to tell. Report the partial state honestly.
-    //
-    // The attempt stays 'verified' either way: the code was genuinely proven,
-    // and must not become replayable just because the follow-up failed.
-    if (!occupancyResult.occupancy_id) {
-      logger.error('MailVerificationService.confirmCode: verified but no occupancy attached', {
-        attemptId, userId, addressId: attempt.address_id,
-      });
-
-      await observability.recordMailLifecycleEvent({
-        step: 'confirm',
-        status: 'partial',
-        addressId: attempt.address_id,
-        attemptId,
-        reasons: ['no_occupancy_attached'],
-      });
-
-      return {
-        verified: false,
-        code_accepted: true,
-        needs_support: true,
-        error: 'Your code was correct, but we could not finish setting up your home. '
-          + 'Please contact support — you will not need to request another code.',
-      };
-    }
-
-    logger.info('MailVerificationService.confirmCode: verified', {
-      attemptId, userId, occupancyId: occupancyResult.occupancy_id,
+    const { data, error } = await supabaseAdmin.rpc('confirm_mail_verification', {
+      p_attempt_id: attemptId, p_user_id: userId, p_submitted_hash: this._hashCode(code),
+      p_templates: templates, p_validity_days: require('../../utils/verificationAge').validityDays(),
     });
-
-    await observability.recordMailLifecycleEvent({
-      step: 'confirm',
-      status: 'ok',
-      addressId: attempt.address_id,
-      attemptId,
-    });
-
-    return {
-      verified: true,
-      occupancy_id: occupancyResult.occupancy_id,
+    if (error || !data) return {
+      verified: false, statusCode: 503,
+      error: 'Could not complete verification. Your code is preserved; please retry.',
     };
+    if (data.error === 'WRONG_CODE') return { verified: false, attempts_remaining: data.attempts_remaining };
+    if (data.error === 'LOCKED') return { verified: false, locked: true, error: 'Verification attempt is locked. Request a new code.' };
+    const failures = {
+      NOT_FOUND: [404, 'Verification attempt or proof not found'],
+      EXPIRED: [410, 'Verification code has expired'],
+      INACTIVE: [400, 'Verification attempt is inactive'],
+      INCONSISTENT_PROOF: [503, 'The verified proof could not be reconciled. Please contact support.'],
+      ADDRESS_CHANGED: [409, 'The mailing address changed. Contact support before requesting another code.'],
+      UNBOUND_DESTINATION: [409, 'The original mailing unit cannot be confirmed. Please contact support.'],
+      AMBIGUOUS_HOME: [409, 'We could not identify one Home for the mailed unit. Please contact support.'],
+      ACCESS_REVOKED: [403, 'Home access is restricted. Contact the household for approval.'],
+      HOME_OCCUPIED: [409, 'Someone already lives in this Home. Ask them to add you or request a review.'],
+    };
+    if (data.error) {
+      const [statusCode, message] = failures[data.error] || [503, 'Could not complete verification. Please retry.'];
+      return { verified: false, statusCode, error: message };
+    }
+    const occupancy = data.occupancy;
+    if (!occupancy?.id || occupancy.user_id !== userId || occupancy.is_active !== true
+      || occupancy.verification_status !== 'verified') {
+      return { verified: false, statusCode: 503, error: 'Verification did not return usable Home membership. Please retry.' };
+    }
+    return { verified: true, occupancy_id: occupancy.id, reused: data.reused === true };
   }
 
   // ── Private: Rate Limiting ─────────────────────────────────────
@@ -912,10 +804,10 @@ class MailVerificationService {
    * maintains. An address with existing residents routes through the claim and
    * approval flow instead of self-service mail.
    */
-  async _checkHouseholdConflict(addressId, userId) {
+  async _checkHouseholdConflict(addressId, userId, unit, canonicalUnit) {
     const { data: homes, error: homesErr } = await supabaseAdmin
       .from('Home')
-      .select('id')
+      .select('id, address2')
       .eq('address_id', addressId);
 
     if (homesErr) {
@@ -929,7 +821,11 @@ class MailVerificationService {
       return { blocked: false };
     }
 
-    const homeIds = homes.map((h) => h.id);
+    if (!unit && homes.some(home => unitKey(home.address2))) {
+      return { blocked: true, reason: 'Address requires a unit number' };
+    }
+    const homeIds = homes.filter(home => unitKey(home.address2 || canonicalUnit) === unitKey(unit)).map(home => home.id);
+    if (!homeIds.length) return { blocked: false };
 
     const { data: occupants, error: occErr } = await supabaseAdmin
       .from('HomeOccupancy')
@@ -954,51 +850,6 @@ class MailVerificationService {
     }
 
     return { blocked: false };
-  }
-
-  // ── Private: Occupancy Attachment ──────────────────────────────
-
-  /**
-   * After successful verification, create or update a HomeOccupancy
-   * for the user at the address.
-   *
-   * Delegates to the centralized OccupancyAttachService.
-   *
-   * @param {string} userId
-   * @param {string} addressId
-   * @returns {Promise<{occupancy_id: string|null}>}
-   */
-  async _attachOccupancy(userId, addressId) {
-    // Find the Home linked to this address
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id')
-      .eq('address_id', addressId)
-      .maybeSingle();
-
-    if (!home) {
-      logger.info('MailVerificationService._attachOccupancy: no Home for address', { addressId });
-      return { occupancy_id: null };
-    }
-
-    const occupancyAttachService = require('../occupancyAttachService');
-    const result = await occupancyAttachService.attach({
-      homeId: home.id,
-      userId,
-      method: 'mail_code',
-      claimType: 'resident',
-      actorId: userId,
-      metadata: { source: 'mail_verification' },
-    });
-
-    if (!result.success) {
-      logger.error('MailVerificationService._attachOccupancy: attach failed', {
-        userId, homeId: home.id, error: result.error,
-      });
-      return { occupancy_id: null };
-    }
-
-    return { occupancy_id: result.occupancy?.id || null };
   }
 
   /**

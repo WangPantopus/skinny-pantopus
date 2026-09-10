@@ -15,17 +15,11 @@
  */
 
 const logger = require('../../utils/logger');
+const { destinationFor, sameDestination } = require('./mailDestination');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
 const observability = require('./addressVerificationObservability');
-
-/** Remove any persisted plaintext code from a metadata blob. */
-function stripCode(metadata) {
-  if (!metadata || typeof metadata !== 'object') return metadata;
-  const { code, ...rest } = metadata;
-  return rest;
-}
 
 class MailVendorService {
   /**
@@ -98,13 +92,14 @@ class MailVendorService {
       return { success: false, error: 'Address not found' };
     }
 
-    const normalizedAddress = {
-      line1: address.address_line1_norm,
-      line2: address.address_line2_norm || job.metadata?.unit || undefined,
-      city: address.city_norm,
-      state: address.state,
-      zip: address.postal_code,
-    };
+    const destination = destinationFor(address, job.metadata?.unit);
+    if (!destination) {
+      return { success: false, error: 'Requested unit does not match the canonical address' };
+    }
+    if (job.metadata?.destination && !sameDestination(job.metadata.destination, destination)) {
+      return { success: false, error: 'Mailing destination changed; request was not dispatched' };
+    }
+    const normalizedAddress = { ...destination, line2: destination.line2 || undefined };
 
     // ── 3. Resolve the code ─────────────────────────────────
     // Supplied by the caller. Legacy rows created before the code was removed
@@ -123,18 +118,16 @@ class MailVendorService {
     const provider = this.getProvider();
     const providerName = lobMailProvider.isAvailable() ? 'lob' : 'mock';
 
-    const { data: claimed, error: claimError } = await supabaseAdmin
-      .from('MailVerificationJob')
-      .update({
-        vendor: providerName,
-        vendor_status: 'dispatching',
-        metadata: { ...stripCode(job.metadata), dispatch_started_at: new Date().toISOString() },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('vendor_status', 'pending')
-      .select('id');
-    if (claimError || !claimed?.length) {
+    // Merge only dispatch fields into the current row. Replacing the metadata
+    // read above could erase a concurrent confirmation's membership binding.
+    const { data: claimed, error: claimError } = await supabaseAdmin.rpc('claim_mail_verification_dispatch', {
+      p_job_id: jobId,
+      p_vendor: providerName,
+      p_destination: destination,
+      p_expected_unit: job.metadata?.unit ?? null,
+      p_expected_destination: job.metadata?.destination ?? null,
+    });
+    if (claimError || claimed !== true) {
       return { success: false, deliveryUnknown: true, error: 'Mail dispatch could not be claimed' };
     }
 
@@ -277,19 +270,15 @@ class MailVendorService {
     const newStatus = statusMap[eventType] || 'unknown';
 
     // ── 3. Update job ───────────────────────────────────────
-    const { error: statusError } = await supabaseAdmin
-      .from('MailVerificationJob')
-      .update({
-        vendor_status: newStatus,
-        metadata: {
-          ...job.metadata,
-          last_webhook_event: eventType,
-          last_webhook_at: new Date().toISOString(),
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id);
-    if (statusError) return { success: false, retryable: true, error: 'Could not save mail status' };
+    // The RPC merges into the row while holding its update lock, preserving
+    // confirmation IDs (and other metadata) added since the lookup above.
+    const { data: statusSaved, error: statusError } = await supabaseAdmin.rpc('record_mail_verification_webhook', {
+      p_job_id: job.id,
+      p_vendor_job_id: vendorJobId,
+      p_event_type: eventType,
+      p_vendor_status: newStatus,
+    });
+    if (statusError || statusSaved !== true) return { success: false, retryable: true, error: 'Could not save mail status' };
 
     // ── 4. Transition attempt status on key events ──────────
     if (eventType === 'postcard.delivered') {

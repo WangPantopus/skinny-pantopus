@@ -1,0 +1,74 @@
+-- Metadata updates preserve proof binding and claim exactly one dispatch.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+INSERT INTO auth.users(id,email) VALUES
+ ('eef00000-0000-4000-8000-000000000001','mail-metadata@example.invalid');
+INSERT INTO public."User"(id,email,username,name) VALUES
+ ('eef00000-0000-4000-8000-000000000001','mail-metadata@example.invalid','mail_metadata_contract','Mail metadata contract');
+INSERT INTO public."HomeAddress"(id,address_line1_norm,city_norm,state,postal_code,address_hash) VALUES
+ ('eef00000-0000-4000-8000-000000000002','100 Synthetic St','Test','CA','00000','mail-metadata-contract');
+INSERT INTO public."AddressVerificationAttempt"(id,user_id,address_id,expires_at,status) VALUES
+ ('eef00000-0000-4000-8000-000000000003','eef00000-0000-4000-8000-000000000001','eef00000-0000-4000-8000-000000000002',now()+interval '1 day','created');
+INSERT INTO public."MailVerificationJob"(id,attempt_id,vendor,vendor_status,metadata) VALUES
+ ('eef00000-0000-4000-8000-000000000004','eef00000-0000-4000-8000-000000000003','pending','pending',
+  '{"unit":"Unit 4","code":"123456","confirmed_home_id":"bound-home","confirmed_occupancy_id":"bound-occupancy","other":{"preserve":true}}');
+
+CREATE FUNCTION pg_temp.mail_metadata_destination() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT '{"line1":"100 Synthetic St","line2":"Unit 4","city":"Test","state":"CA","zip":"00000"}'::jsonb;
+$$;
+DO $$ DECLARE signature text; BEGIN
+ FOREACH signature IN ARRAY ARRAY[
+  'public.claim_mail_verification_dispatch(uuid,text,jsonb,text,jsonb)',
+  'public.record_mail_verification_webhook(uuid,text,text,text)'
+ ] LOOP
+  IF has_function_privilege('authenticated',signature,'execute')
+   OR has_function_privilege('anon',signature,'execute')
+   OR NOT has_function_privilege('service_role',signature,'execute') THEN
+   RAISE EXCEPTION 'Wrong mail metadata function grants';
+  END IF;
+ END LOOP;
+END $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE original jsonb; current_metadata jsonb; BEGIN
+ IF public.claim_mail_verification_dispatch('eef00000-0000-4000-8000-000000000004','lob',pg_temp.mail_metadata_destination(),'Unit 5',NULL) THEN
+  RAISE EXCEPTION 'Claim accepted stale unit'; END IF;
+ IF NOT public.claim_mail_verification_dispatch('eef00000-0000-4000-8000-000000000004','lob',pg_temp.mail_metadata_destination(),'Unit 4',NULL) THEN
+  RAISE EXCEPTION 'Valid claim failed'; END IF;
+ SELECT metadata INTO current_metadata FROM public."MailVerificationJob" WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF current_metadata->>'confirmed_home_id' IS DISTINCT FROM 'bound-home'
+  OR current_metadata->>'confirmed_occupancy_id' IS DISTINCT FROM 'bound-occupancy'
+  OR current_metadata->'other' IS DISTINCT FROM '{"preserve":true}'::jsonb
+  OR current_metadata ? 'code' OR current_metadata->'destination' IS DISTINCT FROM pg_temp.mail_metadata_destination()
+  OR current_metadata->>'dispatch_started_at' IS NULL THEN RAISE EXCEPTION 'Claim replaced unrelated metadata or retained code'; END IF;
+ IF public.claim_mail_verification_dispatch('eef00000-0000-4000-8000-000000000004','lob',pg_temp.mail_metadata_destination(),'Unit 4',pg_temp.mail_metadata_destination()) THEN
+  RAISE EXCEPTION 'Second dispatch was claimed'; END IF;
+
+ UPDATE public."MailVerificationJob" SET vendor_job_id='psc_metadata_contract' WHERE id='eef00000-0000-4000-8000-000000000004';
+ SELECT to_jsonb(j) INTO original FROM public."MailVerificationJob" j WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF public.record_mail_verification_webhook('eef00000-0000-4000-8000-000000000004','psc_other','postcard.delivered','delivered')
+  OR public.record_mail_verification_webhook('eef00000-0000-4000-8000-000000000099','psc_metadata_contract','postcard.delivered','delivered') THEN
+  RAISE EXCEPTION 'Webhook accepted another receipt/job'; END IF;
+ IF (SELECT to_jsonb(j) FROM public."MailVerificationJob" j WHERE id='eef00000-0000-4000-8000-000000000004') IS DISTINCT FROM original THEN
+  RAISE EXCEPTION 'Denied webhook changed job'; END IF;
+ IF NOT public.record_mail_verification_webhook('eef00000-0000-4000-8000-000000000004','psc_metadata_contract','postcard.delivered','delivered') THEN
+  RAISE EXCEPTION 'Webhook failed'; END IF;
+ SELECT metadata INTO current_metadata FROM public."MailVerificationJob" WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF (current_metadata-'last_webhook_event'-'last_webhook_at') IS DISTINCT FROM original->'metadata'
+  OR current_metadata->>'last_webhook_event' IS DISTINCT FROM 'postcard.delivered'
+  OR current_metadata->>'last_webhook_at' IS NULL
+  OR (SELECT vendor_status FROM public."MailVerificationJob" WHERE id='eef00000-0000-4000-8000-000000000004')<>'delivered' THEN
+  RAISE EXCEPTION 'Webhook replaced proof/destination metadata or lost status'; END IF;
+
+ UPDATE public."MailVerificationJob" SET vendor_status='pending' WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF public.claim_mail_verification_dispatch('eef00000-0000-4000-8000-000000000004','lob',pg_temp.mail_metadata_destination(),'Unit 4',pg_temp.mail_metadata_destination()) THEN
+  RAISE EXCEPTION 'Dispatch replaced existing receipt'; END IF;
+ UPDATE public."MailVerificationJob" SET vendor_job_id=NULL WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF public.claim_mail_verification_dispatch('eef00000-0000-4000-8000-000000000004','lob',pg_temp.mail_metadata_destination(),'Unit 4',NULL) THEN
+  RAISE EXCEPTION 'Dispatch replaced destination changed after read'; END IF;
+ UPDATE public."MailVerificationJob" SET vendor='mock',vendor_job_id='psc_metadata_contract' WHERE id='eef00000-0000-4000-8000-000000000004';
+ IF public.record_mail_verification_webhook('eef00000-0000-4000-8000-000000000004','psc_metadata_contract','postcard.delivered','delivered') THEN
+  RAISE EXCEPTION 'Lob webhook modified another provider'; END IF;
+END $$;
+RESET ROLE;
+ROLLBACK;

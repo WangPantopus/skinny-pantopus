@@ -579,7 +579,7 @@ router.get(
       const result = await mailVerificationService.getVerificationStatus(verification_id, userId);
 
       if (!result.success) {
-        const status = result.error?.includes('not found') ? 404 : 400;
+        const status = result.statusCode || (result.error?.includes('not found') ? 404 : 400);
         return res.status(status).json({ error: result.error });
       }
 
@@ -608,7 +608,7 @@ router.get(
 // ============================================================
 
 function mapConfirmResponse(result) {
-  if (result.verified || result.error === 'Attempt is verified') {
+  if (result.verified && result.occupancy_id) {
     const body = { status: 'confirmed' };
     if (result.occupancy_id) body.occupancy_id = result.occupancy_id;
     return body;
@@ -660,7 +660,7 @@ router.post(
         return res.status(404).json({ error: result.error });
       }
 
-      return res.status(400).json({
+      return res.status(result.statusCode || 400).json({
         error: result.error || 'Verification confirmation failed',
       });
     } catch (err) {
