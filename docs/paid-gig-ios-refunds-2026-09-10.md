@@ -27,6 +27,15 @@ explanation while retaining status/history access. Exact historical wallet
 credit with a null settlement receipt remains supported, as specified by the
 [settlement projection](paid-gig-wallet-settlement-2026-09-10.md).
 
+## Payment summary follow-up
+
+The payment card labels the original task authorization, pending capture or
+historical charge separately from tips. It identifies the platform fee as
+included, and an absent amount remains unavailable instead of appearing as zero.
+The final follow-up app build passes the same 50 focused checks, with changed-file
+formatting/strict lint, no new warnings and independent review. Private build
+log: `/private/tmp/pantopus-gig-payment-summary-ios-r1.log`.
+
 ## Verification and limits
 
 - Final app build and **50 focused simulator checks pass**: 11 refund recovery

@@ -1069,7 +1069,7 @@ struct GigNoShowSheet: View {
 // MARK: - Phase 5b — payment card
 
 /// Compact owner-side payment summary from `GET /:gigId/payment`:
-/// status chip + subtotal / fees / tip / total (amounts arrive in cents).
+/// Status and original task amount, with included fees and separate tips.
 struct GigPaymentCard: View {
     let payment: GigPaymentDTO
     let stateInfo: GigPaymentStateInfo?
@@ -1085,11 +1085,8 @@ struct GigPaymentCard: View {
                 statusChip
             }
             VStack(spacing: Spacing.s2) {
-                if let subtotal = payment.amountSubtotal {
-                    row(label: "Subtotal", cents: subtotal)
-                }
                 if let fee = payment.amountPlatformFee, fee > 0 {
-                    row(label: "Service fee", cents: fee)
+                    row(label: "Platform fee (included)", cents: fee)
                 }
                 if let tip = payment.tipAmount, tip > 0 {
                     row(label: "Tip", cents: tip)
@@ -1127,20 +1124,29 @@ struct GigPaymentCard: View {
             .clipShape(Capsule())
     }
 
-    /// Total = what the poster pays + any net tip (tips ride separate
-    /// Payment rows server-side).
+    /// Tips ride separate Payment rows and stay distinct from this task's
+    /// authorized or captured amount.
     private var totalRow: some View {
-        let total = (payment.amountTotal ?? 0) + (payment.tipAmount ?? 0)
-        return HStack {
-            Text("Total")
+        HStack {
+            Text(amountLabel)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Spacer()
-            Text(Self.centsLabel(total))
+            Text(payment.amountTotal.map(Self.centsLabel) ?? "Unavailable")
                 .font(.system(size: 15, weight: .heavy).monospacedDigit())
                 .foregroundStyle(Theme.Color.appText)
         }
         .accessibilityIdentifier("gigDetail.payment.total")
+    }
+
+    private var amountLabel: String {
+        if payment.paymentStatus == "authorized" { return "Authorization hold" }
+        if payment.paymentStatus == "capture_pending" { return "Capture pending" }
+        if payment.capturedAt != nil || [
+            "captured_hold", "transfer_scheduled", "transfer_pending", "transferred",
+            "refunded_partial", "refunded_full", "disputed"
+        ].contains(payment.paymentStatus ?? "") { return "Task charged" }
+        return "Payment total"
     }
 
     private func row(label: String, cents: Double) -> some View {

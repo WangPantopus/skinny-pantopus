@@ -21,8 +21,10 @@ hold-release history, confirmation and interrupted-request recovery. Android's
 [refund report](paid-gig-android-refunds-2026-09-10.md) records 56 passing
 behavioral checks, formatting, static analysis, zero lint errors, debug assembly
 and independent review. Invalid-target reopening no longer retains a previous
-payment. iOS is committed/pushed as `22d7ada36`; its small payment-summary wording
-follow-up is under app-build validation. Actual provider/emulator acceptance of
+payment. Android is committed/pushed as `61501a3c5`. iOS refund recovery is
+committed/pushed as `22d7ada36`; its payment-summary follow-up also passes the
+50-check app build and independent review. It separates tips from the original
+task amount, distinguishes holds from charges and leaves missing totals unavailable. Actual provider/emulator acceptance of
 the full paid-gig journey remains open.
 
 Wallet notification durability is committed/pushed as `3b862f2ba`, with complete
