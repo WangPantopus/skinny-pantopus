@@ -26,9 +26,16 @@ ktlintCheck, Detekt and compilation. The native/API contract review passes.
 The iOS/Android source milestones are pushed as `3afbf043d`/`6d322b1df`.
 The explicit opt-in iOS SDK journey compiles and passes strict lint; no live payment
 fixtures or candidate changes ran.
-Before acceptance, finish the reproduced default/removal race with atomic
-app-owned preference and durable removal guards, then exercise actual Stripe
-SDK/test-mode journeys on both simulators and clean their exact fixtures.
+The atomic default/removal and customer-binding repair now passes 73 focused
+tests, all 4,607 backend tests (16 skipped), privacy checks, 18 SQL contracts and
+32 concurrent PostgreSQL connections. Function lint has zero errors across
+130 functions/74 trigger bindings. Populated migration/rollback preserves original
+fields apart from the reviewed duplicate-default normalization; real-role tests
+deny forged customer bindings while retaining profile/signup behavior. Next apply
+the committed checked migration only to Free staging, refresh the private
+candidate, then exercise actual Stripe SDK/test-mode journeys on both simulators
+and clean exact fixtures. An unknown provider create response may leave an unused
+customer object; returned setups always use the durable winner.
 
 PR #29 is merged as `3009eb0be78efc900c234cc8588a7206526f9626` after full final
 CI at `76ada1aa1` (run `34425328329`). Its modern mail staging journey and exact

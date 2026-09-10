@@ -6,12 +6,13 @@ const mockRetrieveSetup = jest.fn();
 const mockCreateSetup = jest.fn();
 const mockRetrieveMethod = jest.fn();
 const mockAttach = jest.fn();
+const mockDetach = jest.fn();
 const mockCustomerUpdate = jest.fn();
 const mockConstructEvent = jest.fn();
 
 jest.mock('stripe', () => ({
   setupIntents: { retrieve: mockRetrieveSetup, create: mockCreateSetup },
-  paymentMethods: { retrieve: mockRetrieveMethod, attach: mockAttach },
+  paymentMethods: { retrieve: mockRetrieveMethod, attach: mockAttach, detach: mockDetach },
   customers: { update: mockCustomerUpdate },
   webhooks: { constructEvent: mockConstructEvent },
 }));
@@ -56,6 +57,7 @@ beforeEach(() => {
   seedTable('User', [{ id: owner, stripe_customer_id: 'cus_owner' }, { id: 'other', stripe_customer_id: 'cus_other' }]);
   mockRetrieveSetup.mockResolvedValue(setup());
   mockRetrieveMethod.mockResolvedValue(method());
+  mockDetach.mockResolvedValue({ id: 'pm_card1', customer: null });
   mockCustomerUpdate.mockResolvedValue({ id: 'cus_owner' });
   mockCreateSetup.mockResolvedValue({ id: setupId, client_secret: 'seti_test_secret', status: 'requires_payment_method' });
   mockConstructEvent.mockReturnValue({
@@ -72,12 +74,9 @@ function webhook() {
     .set('content-type', 'application/json').send('{}');
 }
 function failMethodInsert() {
-  const from = supabaseAdmin.from.bind(supabaseAdmin);
-  jest.spyOn(supabaseAdmin, 'from').mockImplementation((table) => {
-    const builder = from(table);
-    if (table === 'PaymentMethod') builder.insert = () => ({ select: () => ({ single: async () => ({ data: null, error: { code: '08006' } }) }) });
-    return builder;
-  });
+  const rpc = supabaseAdmin.rpc.bind(supabaseAdmin);
+  jest.spyOn(supabaseAdmin, 'rpc').mockImplementation((name, args) => name === 'save_payment_method'
+    ? { data: null, error: { code: '08006' } } : rpc(name, args));
 }
 
 describe('owned mobile SetupIntent reconciliation', () => {
@@ -153,7 +152,7 @@ describe('owned mobile SetupIntent reconciliation', () => {
     failMethodInsert();
     expect((await confirm()).status).toBe(503);
     expect(getTable('PaymentMethod')).toHaveLength(0);
-    supabaseAdmin.from.mockRestore();
+    supabaseAdmin.rpc.mockRestore();
     expect((await confirm()).status).toBe(200);
     expect(getTable('PaymentMethod')).toHaveLength(1);
     expect(mockAttach).not.toHaveBeenCalled();
@@ -182,15 +181,14 @@ describe('owned mobile SetupIntent reconciliation', () => {
     expect(mockRetrieveSetup).not.toHaveBeenCalled();
   });
 
-  test('provider default failure preserves the saved row and retry finishes it', async () => {
-    mockCustomerUpdate.mockRejectedValueOnce(new Error('provider unavailable'));
-    expect((await confirm()).status).toBe(503);
+  test('saving and retrying a card never overwrite the provider invoice preference', async () => {
+    mockCustomerUpdate.mockRejectedValue(new Error('invoice service unavailable'));
+    expect((await confirm()).status).toBe(200);
     const originalId = getTable('PaymentMethod')[0].id;
     const retry = await confirm();
     expect(retry.status).toBe(200);
     expect(retry.body.paymentMethod.id).toBe(originalId);
-    expect(getTable('PaymentMethod')).toHaveLength(1);
-    expect(mockAttach).not.toHaveBeenCalled();
+    expect(mockCustomerUpdate).not.toHaveBeenCalled();
   });
 });
 
@@ -288,7 +286,7 @@ describe('attachment webhook and post-sheet races', () => {
     expect((await webhook()).status).toBe(500);
     expect(getTable('StripeWebhookEvent')[0].processed).toBe(false);
     expect(getTable('PaymentMethod')).toHaveLength(0);
-    supabaseAdmin.from.mockRestore();
+    supabaseAdmin.rpc.mockRestore();
     expect((await webhook()).status).toBe(200);
     expect(getTable('StripeWebhookEvent')).toHaveLength(1);
     expect(getTable('StripeWebhookEvent')[0].processed).toBe(true);
@@ -324,5 +322,56 @@ describe('attachment webhook and post-sheet races', () => {
     expect((await webhook()).status).toBe(500);
     expect(mockRetrieveMethod).not.toHaveBeenCalled();
     expect(getTable('PaymentMethod')).toHaveLength(0);
+  });
+});
+
+describe('saved-card preference and removal HTTP recovery', () => {
+  test('an owned removal keeps proof on provider outage, denies stale setup and retries the same ID', async () => {
+    const saved = (await confirm()).body.paymentMethod;
+    mockDetach.mockRejectedValueOnce(new Error('private provider details'));
+    const failed = await request(app).delete(`/api/payments/methods/${saved.id}`).set('x-test-user-id', owner);
+    expect(failed.status).toBe(503);
+    expect(JSON.stringify(failed.body)).not.toContain('private');
+    expect((await confirm()).status).toBe(404);
+    expect((await request(app).put(`/api/payments/methods/${saved.id}/default`).set('x-test-user-id', owner)).status).toBe(404);
+    expect((await request(app).delete(`/api/payments/methods/${saved.id}`).set('x-test-user-id', 'other')).status).toBe(404);
+    expect((await request(app).delete(`/api/payments/methods/${saved.id}`).set('x-test-user-id', owner)).status).toBe(200);
+    expect((await request(app).delete(`/api/payments/methods/${saved.id}`).set('x-test-user-id', owner)).status).toBe(200);
+    expect(getTable('PaymentMethod')).toHaveLength(0);
+    expect(mockDetach).toHaveBeenCalledTimes(2);
+  });
+  test('a delayed customer.updated invoice snapshot cannot replace the app preference', async () => {
+    await confirm();
+    const second = { id: 'selected', user_id: owner, stripe_customer_id: 'cus_owner', stripe_payment_method_id: 'pm_other', is_default: true };
+    getTable('PaymentMethod')[0].is_default = false;
+    getTable('PaymentMethod').push(second);
+    mockConstructEvent.mockReturnValue({ id: 'evt_olddefault', type: 'customer.updated', data: {
+      object: { id: 'cus_owner', invoice_settings: { default_payment_method: 'pm_card1' } },
+    } });
+    expect((await webhook()).status).toBe(200);
+    expect(getTable('PaymentMethod').find((m) => m.id === 'selected').is_default).toBe(true);
+    expect(getTable('PaymentMethod').find((m) => m.stripe_payment_method_id === 'pm_card1').is_default).toBe(false);
+    expect(mockCustomerUpdate).not.toHaveBeenCalled();
+  });
+  test('failed detached webhook completion remains unprocessed and redelivery finishes the same removal', async () => {
+    await confirm();
+    mockRetrieveMethod.mockResolvedValue({ ...method(), customer: null });
+    mockConstructEvent.mockReturnValue({ id: 'evt_detached', type: 'payment_method.detached', data: { object: { ...method(), customer: null } } });
+    const rpc = supabaseAdmin.rpc.bind(supabaseAdmin);
+    const failed = jest.spyOn(supabaseAdmin, 'rpc').mockImplementation((name, args) => name === 'complete_payment_method_removal'
+      ? { data: null, error: { code: '08006' } } : rpc(name, args));
+    expect((await webhook()).status).toBe(500);
+    expect(getTable('StripeWebhookEvent')[0].processed).toBe(false);
+    expect(getTable('PaymentMethod')).toHaveLength(1);
+    failed.mockRestore();
+    expect((await webhook()).status).toBe(200);
+    expect((await webhook()).status).toBe(200);
+    expect(getTable('PaymentMethod')).toHaveLength(0);
+    expect(getTable('PaymentMethodRemoval')).toHaveLength(1);
+    mockRetrieveMethod.mockResolvedValue(method());
+    mockConstructEvent.mockReturnValue({ id: 'evt_lateattach', type: 'payment_method.attached', data: { object: method() } });
+    expect((await webhook()).status).toBe(200);
+    expect(getTable('PaymentMethod')).toHaveLength(0);
+    expect(getTable('StripeWebhookEvent').every((event) => event.processed)).toBe(true);
   });
 });

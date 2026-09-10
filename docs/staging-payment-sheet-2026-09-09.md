@@ -67,29 +67,49 @@ two saved cards, default selection, cold restart, removal cancellation, fallback
 default and empty state through the real UI. Actual provider calls and simulator
 UI acceptance have not run yet. Ordinary CI skips these disposable staging actions.
 
-## Required default/removal repair before acceptance
+## Atomic default/removal and customer-binding checkpoint
 
 Review reproduced an existing stale-default race: an old retry reads card A as
 default, another device selects B, then the old retry overwrites the provider's
 invoice default back to A while the local preference remains B. Another read or
 a time-limited job lock would not safely order a delayed external write.
 
-The next approved implementation makes the app's saved-card preference atomic
+The implementation makes the app's saved-card preference atomic
 under the user's database row lock, preserving a newer explicit choice across
-retries and first-card races. It will fence removed provider methods with durable
-removal records and revoke authenticated direct table mutations that bypass the
+retries and first-card races. It fences removed provider methods with durable
+removal records and revokes authenticated direct table mutations that bypass the
 service protocol. Explicit checkout-selected cards and existing authorizations
-remain authoritative. Stripe invoice-default mirroring is to be removed because
+remain authoritative. Stripe invoice-default mirroring is removed because
 the current payment workflows do not use it as their charge source. This is a
-design decision whose implementation is now under local SQL/API verification,
-not a completed staging guarantee.
+locally verified implementation; hosted application and acceptance remain next.
 
 Local verification also exposed a first-customer race and a direct authenticated
 write to the Stripe customer binding. The database milestone now includes a
 compare-and-set customer binding and a narrow guard against client changes to
-that binding. These must pass real-role/concurrency tests before any staging
-application; initial customer correctness cannot be inferred from tests that
-already had a customer.
+that binding. Two first-use requests return the durable winning customer before
+preparing a setup. Real authenticated SQL roles cannot insert, change or clear
+the binding; ordinary NULL-binding signup and profile editing still work.
+
+All 73 focused backend tests and the complete 4,607-test backend suite pass
+(16 skipped), together with privacy checks. All 18 SQL contracts and the generated
+pgTAP payment wrapper pass. The committed concurrency runner exercises 32
+PostgreSQL connections: customer binding, first cards, explicit default, delayed
+save, removal, early detach, transaction rollback, five-second lock timeout and
+successful retry. Function lint reports zero errors across 130 application
+functions and 74 trigger bindings, with three existing warnings.
+
+A separate populated disposable clone proves whole-migration rollback restores
+DDL/grants. Successful application preserves every fixture User/card field
+except the deterministically cleared duplicate-default flag, including accounts
+with false/NULL flags and no default. No cards are deleted by normalization.
+Final local database: `payment_method_upgrade_contract`.
+
+Remaining limit: an unknown provider customer-create response can leave an
+unused extra Stripe customer. The CAS prevents returning an uncommitted customer
+or binding a setup to the losing candidate; it does not atomically delete provider
+history. Free staging's read-only preflight found zero duplicate customer bindings
+and zero duplicate card defaults. No hosted migration or provider call has run
+for this milestone yet.
 
 After source integration and checks: refresh the private staging candidate, run
 actual Stripe SDK/test-mode add/cancel/default/remove and cold-start journeys on

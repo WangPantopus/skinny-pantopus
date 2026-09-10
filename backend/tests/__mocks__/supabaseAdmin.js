@@ -741,6 +741,9 @@ const supabaseAdmin = {
     if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {
       return require('./mailMetadata')(args[0], args[1], getTable);
     }
+    if (['bind_payment_customer', 'save_payment_method', 'set_default_payment_method', 'begin_payment_method_removal', 'complete_payment_method_removal'].includes(args[0])) {
+      return require('./paymentMethods')(args[0], args[1], getTable);
+    }
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {

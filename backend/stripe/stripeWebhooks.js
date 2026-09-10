@@ -1575,31 +1575,12 @@ async function handlePaymentMethodAttached(paymentMethod) {
 }
 
 async function handlePaymentMethodDetached(paymentMethod) {
-  logger.info('Payment method detached', {
-    paymentMethodId: paymentMethod.id,
-  });
-
-  await supabaseAdmin
-    .from('PaymentMethod')
-    .delete()
-    .eq('stripe_payment_method_id', paymentMethod.id);
+  await stripeService.reconcileDetachedPaymentMethod(paymentMethod);
 }
 
-async function handleCustomerUpdated(customer) {
-  logger.info('Customer updated', { customerId: customer.id });
-
-  // Update default payment method if changed
-  if (customer.invoice_settings?.default_payment_method) {
-    await supabaseAdmin
-      .from('PaymentMethod')
-      .update({ is_default: false })
-      .eq('stripe_customer_id', customer.id);
-
-    await supabaseAdmin
-      .from('PaymentMethod')
-      .update({ is_default: true })
-      .eq('stripe_payment_method_id', customer.invoice_settings.default_payment_method);
-  }
+async function handleCustomerUpdated(_customer) {
+  // The saved-card preference belongs to the app. Invoice-default snapshots
+  // can arrive out of order and must not replace an explicit app selection.
 }
 
 async function handleCapabilityUpdated(capability) {
