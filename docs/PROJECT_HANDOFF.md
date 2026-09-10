@@ -14,6 +14,24 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS bill permission checkpoint — September 10
+
+Read-only Home members can view bills without mutation controls. Direct bill
+entry, retained actions and each save/remove/mark-paid operation recheck current
+effective permissions and the original account/session/API scope; response
+identity must match the exact Home and bill. Failed removal keeps the detail open.
+The [iOS bill report](home-ios-finance-access-2026-09-10.md) records 59 focused
+simulator checks, formatting/strict lint and independent review. API fixtures do
+not replace actual household acceptance. Android parity continues independently.
+
+The Home record transaction is committed/pushed as `14f98c115`; the report below
+retains its explicit local HTTP socket verification limit. Claim review/withdrawal
+and trusted private evidence remain active. A separate Home dashboard async
+cleanup crash on CI's iOS 18.5 runtime is being repaired; that runtime must pass
+before merge. Native Home claim review snapshot binding, private attachments,
+derived views and complete household acceptance remain next. Paid dependencies
+stay deferred to the final combined launch-preparation step as requested.
+
 ### Home task/calendar transaction checkpoint — September 10
 
 Home task and calendar reads/writes now apply the current effective permission,

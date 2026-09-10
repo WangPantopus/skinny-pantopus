@@ -106,10 +106,19 @@ final class AddBillWizardViewModelTests: XCTestCase {
         )
     }
 
+    private func makeFinanceAccess() -> HomeFinanceAccess {
+        HomeFinanceAccess(
+            homeId: "home-1",
+            api: makeAPI(),
+            loadAccess: { HomeAccessDTO(hasAccess: true, permissions: ["finance.view", "finance.manage"]) },
+            identity: { "test-session" }
+        )
+    }
+
     // MARK: - Initial pose
 
     func testAddMode_initialPoseHasOneTimeAndEmptyFields() {
-        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         XCTAssertFalse(vm.isEditing)
         XCTAssertEqual(vm.schedule, .oneTime)
         XCTAssertEqual(vm.payee, "")
@@ -121,16 +130,17 @@ final class AddBillWizardViewModelTests: XCTestCase {
     }
 
     func testEditMode_initialPoseStartsHydrating() {
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         XCTAssertTrue(vm.isEditing)
         XCTAssertTrue(vm.isLoadingExisting, "Edit mode flips the loading flag on init.")
     }
 
     // MARK: - Chrome contract
 
-    func testChrome_addModeUsesAddTitlesAndCTAs() {
-        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI())
+    func testChrome_addModeUsesAddTitlesAndCTAs() async {
+        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         XCTAssertEqual(vm.chrome.title, "Add a bill")
+        await vm.load()
         // Walk through every step's CTA label.
         vm.payee = "ConEd"
         vm.amount = "100"
@@ -143,7 +153,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: AddBillFixtures.billsJSON())
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         XCTAssertEqual(vm.chrome.title, "Edit bill")
         vm.primaryTapped() // → schedule
@@ -152,7 +162,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
     }
 
     func testChrome_detailsCTADisabledWhileHydrating() {
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         // Even with the form filled, the loading flag keeps the CTA off
         // until `load()` returns.
         vm.payee = "ConEd"
@@ -169,7 +179,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: AddBillFixtures.billsJSON(scheduleKey: "monthly"))
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         XCTAssertEqual(vm.payee, "ConEd Electric")
         XCTAssertEqual(vm.amount, "142.8")
@@ -199,7 +209,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         }
         """
         SequencedURLProtocol.sequence = [.status(200, body: legacy)]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         XCTAssertEqual(vm.schedule, .quarterly)
     }
@@ -208,7 +218,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: "{\"bills\":[]}")
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         XCTAssertEqual(vm.loadError, "This bill is no longer available.")
         XCTAssertFalse(vm.isLoadingExisting)
@@ -220,7 +230,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(201, body: AddBillFixtures.createdBillJSON)
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         vm.payee = "Spectrum"
         vm.amount = "60.00"
         vm.schedule = .monthly
@@ -246,7 +256,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
             .status(200, body: AddBillFixtures.billsJSON()),
             .status(200, body: AddBillFixtures.updatedBillJSON)
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         vm.amount = "150.00"
         await vm.submit()
@@ -272,7 +282,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
             .status(200, body: AddBillFixtures.billsJSON()),
             .status(200, body: AddBillFixtures.updatedBillJSON)
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         await vm.submit()
         vm.primaryTapped() // Done on success step
@@ -283,7 +293,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(500, body: "{\"error\":\"down\"}")
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         vm.payee = "ConEd"
         vm.amount = "100"
         await vm.submit()
@@ -297,7 +307,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: AddBillFixtures.billsJSON())
         ]
-        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", billId: "bill-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         await vm.load()
         XCTAssertFalse(vm.isDirty)
         vm.amount = "200.00"
@@ -305,7 +315,7 @@ final class AddBillWizardViewModelTests: XCTestCase {
     }
 
     func testAddMode_isDirtyTrueOnceAnyFieldFilled() {
-        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI())
+        let vm = AddBillWizardViewModel(homeId: "home-1", api: makeAPI(), financeAccess: makeFinanceAccess())
         XCTAssertFalse(vm.isDirty)
         vm.payee = "ConEd"
         XCTAssertTrue(vm.isDirty)
