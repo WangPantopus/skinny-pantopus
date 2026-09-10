@@ -14,6 +14,24 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS tip CI fixture correction — September 10
+
+The tip fixture now supplies the current actor/session and binds responses to
+their actual routes, preserving the runtime payment-access guard. The
+[CI repair report](paid-gig-ios-tip-ci-2026-09-10.md) records the shared cause of
+the three remote failures, independent review and a passing final simulator
+app build. Remote iOS 18.5 verification of the new head remains required.
+
+**Next:** durable manual cancellation/reopening/worker release is being
+implemented with retained request identity, exact displayed terms and confirmed
+financial receipts. Browser controls are being updated to preserve pending
+outcomes. The expiry checkpoint is pushed as `05676d6a5`; backend/web/database/
+privacy CI passes on that head, with native checks still running at this
+observation. Home native private evidence is under final app verification in
+draft PR #32. Both PRs remain unfinished. All paid dependencies remain together
+for final launch preparation; completed physical Beacon and saved-card checks
+must not be repeated. No hosted migration or paid dependency changed.
+
 ### Durable authorization expiry checkpoint — September 10
 
 Expiry cancellation now reserves the current task/payment and exact provider
