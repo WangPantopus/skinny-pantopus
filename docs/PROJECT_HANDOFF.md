@@ -14,6 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Payment integration and next checkpoints — September 9
+
+[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) merged into
+master as `d7be416b872a31ceb53094d7d19c3f114185831f` at 04:15 UTC September 10.
+Every [final-head CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34434288893)
+passed at `57787d55d`, including all three iOS simulator jobs and Android
+quality/build/snapshot/instrumented checks. Native saved-card acceptance and
+exact cleanup are complete. No checks were waived, no production deployment ran,
+and the completed payment fixtures must not be reused.
+
+Home authority/deletion is committed and pushed in draft PR #32 at `7f6b59ba3`,
+with full current-head CI passing, 4,661 backend tests and 24 real concurrency
+checks. Continue ordinary admission, WiFi creation and the remaining resource,
+record, storage and client permission gates before household acceptance.
+Paid-gig backend proof is committed/pushed at `15754b439` on
+`codex/staging-paid-gig`: 4,692 backend tests, fresh replay, 19 SQL contracts and
+35 concurrent connections pass. It still needs provider reconciliation,
+durable delivery, native/web recovery, refunds and actual sandbox acceptance.
+
+The separate `codex/native-sensitive-auth` worktree repairs the reproduced
+money-screen authentication failure and stale-account prompt paths. Its
+[milestone report](native-sensitive-auth-2026-09-09.md) records 19 passing iOS
+tests, 12 Android tests, native lint and Android APK assembly. Independent review
+and current-head CI remain integration gates. Continue paid-gig web/native
+recovery and Home admission/resource boundaries next. Older status below is
+historical where it conflicts with this checkpoint. The main checkout's
+unrelated design/handoff work is preserved.
+
 ### Current source and acceptance checkpoint — September 9
 
 **Saved-card PaymentSheet acceptance and exact cleanup are complete.** Draft
