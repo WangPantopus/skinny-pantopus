@@ -137,196 +137,49 @@ describe('homeOwnership Phase 2 compatibility writes', () => {
     expect(home.household_resolution_updated_at).toBeTruthy();
   });
 
-  test('evidence upload updates v2 lifecycle metadata', async () => {
-    seedBaseHome({
-      household_resolution_state: 'unclaimed',
-      household_resolution_updated_at: null,
-    });
-    seedTable('HomeOwnershipClaim', [{
-      id: 'claim-1',
-      home_id: 'home-1',
-      claimant_user_id: 'user-1',
-      claim_type: 'owner',
-      state: 'draft',
-      method: 'doc_upload',
-      claim_phase_v2: 'initiated',
-      terminal_reason: 'none',
-      challenge_state: 'none',
-      identity_status: 'not_started',
-      routing_classification: 'standalone_claim',
-    }]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-1/evidence')
-      .set('x-test-user-id', 'user-1')
-      .send({
-        evidence_type: 'deed',
-        provider: 'manual',
-        metadata: {},
-      });
-
-    expect(res.status).toBe(201);
-
-    const claim = getTable('HomeOwnershipClaim')[0];
-    const home = getTable('Home')[0];
-
-    expect(claim.state).toBe('submitted');
-    expect(claim.claim_phase_v2).toBe('evidence_submitted');
-    expect(claim.claim_strength).toBeNull();
-    expect(claim.terminal_reason).toBe('none');
-    expect(claim.challenge_state).toBe('none');
-    expect(home.household_resolution_state).toBe('pending_single_claim');
+  test('metadata evidence binds the exact current claim and stores no caller refs', async () => {
+    seedBaseHome();
+    const rpc = jest.fn(async () => ({ data: { ok: false, code: 'CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED', status: 409 } }));
+    setRpcMock(rpc);
+    const res = await request(app).post('/api/homes/home-1/ownership-claims/claim-1/evidence')
+      .set('x-test-user-id', 'user-1').send({ evidence_type: 'deed', provider: 'manual', storage_ref: 'foreign/key', metadata: { file_url: 'https://example.invalid' } });
+    expect(res.status).toBe(409);
+    expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', expect.objectContaining({ p_home_id: 'home-1', p_claim_id: 'claim-1', p_actor_id: 'user-1', p_action: 'authorize_evidence', p_platform_admin: false }));
+    expect(getTable('HomeVerificationEvidence')).toHaveLength(0);
   });
 
-  test('review rejection updates v2 terminal metadata and home resolution', async () => {
-    seedBaseHome({
-      household_resolution_state: 'pending_single_claim',
-      household_resolution_updated_at: '2026-04-04T00:00:00.000Z',
-    });
-    seedTable('HomeOwnershipClaim', [{
-      id: 'claim-1',
-      home_id: 'home-1',
-      claimant_user_id: 'user-1',
-      claim_type: 'owner',
-      state: 'submitted',
-      method: 'doc_upload',
-      claim_phase_v2: 'evidence_submitted',
-      terminal_reason: 'none',
-      challenge_state: 'none',
-      identity_status: 'not_started',
-      routing_classification: 'standalone_claim',
-    }]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-1/review')
-      .set('x-test-user-id', 'owner-1')
-      .send({
-        action: 'reject',
-        note: 'Insufficient evidence',
-      });
-
+  test('review rejection delegates the displayed snapshot without local compatibility writes', async () => {
+    seedBaseHome({ owner_id: 'owner-1' });
+    const rpc = jest.fn(async () => ({ data: { ok: true, homeId: 'home-1', claimId: 'claim-1', action: 'reject', state: 'rejected', replayed: false } }));
+    setRpcMock(rpc);
+    const res = await request(app).post('/api/homes/home-1/ownership-claims/claim-1/review')
+      .set('x-test-user-id', 'owner-1').send({ action: 'reject', review_token: 'a'.repeat(64), note: 'Insufficient evidence' });
     expect(res.status).toBe(200);
-
-    const claim = getTable('HomeOwnershipClaim')[0];
-    const home = getTable('Home')[0];
-
-    expect(claim.state).toBe('rejected');
-    expect(claim.claim_phase_v2).toBe('rejected');
-    expect(claim.terminal_reason).toBe('rejected_review');
-    expect(claim.challenge_state).toBe('none');
-    expect(home.household_resolution_state).toBe('unclaimed');
-    expect(home.household_resolution_updated_at).toBeTruthy();
+    expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', expect.objectContaining({ p_home_id: 'home-1', p_claim_id: 'claim-1', p_actor_id: 'owner-1', p_action: 'reject', p_review_token: 'a'.repeat(64), p_note: 'Insufficient evidence', p_platform_admin: false }));
+    expect(getTable('Home')[0].owner_id).toBe('owner-1');
+    expect(occupancyAttachService.attach).not.toHaveBeenCalled();
   });
 
-  test('rejecting a challenged claim clears claim-driven disputed security when no active challenge remains', async () => {
-    seedBaseHome({
-      security_state: 'disputed',
-      ownership_state: 'disputed',
-      household_resolution_state: 'disputed',
-      owner_id: 'owner-incumbent',
-    });
-    seedTable('HomeOwner', [{
-      id: 'owner-1',
-      home_id: 'home-1',
-      subject_id: 'owner-incumbent',
-      owner_status: 'verified',
-      verification_tier: 'strong',
-      is_primary_owner: true,
-    }]);
-    seedTable('HomeOwnershipClaim', [{
-      id: 'claim-1',
-      home_id: 'home-1',
-      claimant_user_id: 'user-1',
-      claim_type: 'owner',
-      state: 'submitted',
-      method: 'doc_upload',
-      claim_phase_v2: 'challenged',
-      terminal_reason: 'none',
-      challenge_state: 'challenged',
-      identity_status: 'not_started',
-      routing_classification: 'challenge_claim',
-    }]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-1/review')
-      .set('x-test-user-id', 'owner-incumbent')
-      .send({
-        action: 'reject',
-        note: 'Challenge denied',
-      });
-
-    expect(res.status).toBe(200);
-
-    const home = getTable('Home')[0];
-    expect(home.household_resolution_state).toBe('verified_household');
-    expect(home.security_state).toBe('normal');
-    expect(home.ownership_state).toBe('owner_verified');
+  test('ordinary review cannot clear a challenged Home after a dedicated-flow denial', async () => {
+    seedBaseHome({ security_state: 'disputed', ownership_state: 'disputed' });
+    setRpcMock(async () => ({ data: { ok: false, code: 'CLAIM_CHALLENGE_REVIEW_REQUIRED', status: 409 } }));
+    const res = await request(app).post('/api/homes/home-1/ownership-claims/claim-1/review')
+      .set('x-test-user-id', 'owner-1').send({ action: 'reject', review_token: 'a'.repeat(64) });
+    expect(res.status).toBe(409);
+    expect(getTable('Home')[0].security_state).toBe('disputed');
+    expect(getTable('Home')[0].ownership_state).toBe('disputed');
   });
 
-  test('second owner approval verifies claim without auto dispute or security escalation', async () => {
-    policy.shouldTriggerDispute.mockReturnValue(true);
-
-    seedBaseHome({
-      security_state: 'normal',
-      household_resolution_state: 'verified_household',
-      household_resolution_updated_at: '2026-04-04T00:00:00.000Z',
-      owner_id: 'owner-incumbent',
-    });
-    seedTable('HomeOwner', [{
-      id: 'owner-1',
-      home_id: 'home-1',
-      subject_id: 'owner-incumbent',
-      owner_status: 'verified',
-      verification_tier: 'strong',
-      is_primary_owner: true,
-    }]);
-    seedTable('HomeOwnershipClaim', [{
-      id: 'claim-1',
-      home_id: 'home-1',
-      claimant_user_id: 'user-1',
-      claim_type: 'owner',
-      state: 'submitted',
-      method: 'doc_upload',
-      claim_phase_v2: 'evidence_submitted',
-      terminal_reason: 'none',
-      challenge_state: 'none',
-      identity_status: 'not_started',
-      routing_classification: 'standalone_claim',
-      merged_into_claim_id: null,
-    }]);
-    seedTable('HomeVerificationEvidence', [{
-      id: 'evidence-1',
-      claim_id: 'claim-1',
-      evidence_type: 'deed',
-      status: 'verified',
-    }]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-1/review')
-      .set('x-test-user-id', 'owner-1')
-      .send({
-        action: 'approve',
-        note: 'Second verified co-owner',
-      });
-
+  test('co-owner approval returns its exact atomic receipt without replacing the incumbent locally', async () => {
+    seedBaseHome({ owner_id: 'incumbent', security_state: 'normal' });
+    setRpcMock(async () => ({ data: { ok: true, homeId: 'home-1', claimId: 'claim-1', claimantId: 'user-1', action: 'approve', state: 'approved', replayed: false,
+      occupancy: { id: 'occ-new', home_id: 'home-1', user_id: 'user-1', role_base: 'owner' } } }));
+    const res = await request(app).post('/api/homes/home-1/ownership-claims/claim-1/review')
+      .set('x-test-user-id', 'owner-1').send({ action: 'approve', review_token: 'a'.repeat(64) });
     expect(res.status).toBe(200);
-
-    const claim = getTable('HomeOwnershipClaim')[0];
-    const home = getTable('Home')[0];
-
-    expect(claim.state).toBe('approved');
-    expect(claim.claim_phase_v2).toBe('verified');
-    expect(claim.challenge_state).toBe('none');
-    expect(claim.claim_strength).toBe('owner_legal');
-    expect(home.household_resolution_state).toBe('verified_household');
-    expect(home.security_state).toBe('normal');
-
-    const claimsRes = await request(app)
-      .get('/api/homes/my-ownership-claims')
-      .set('x-test-user-id', 'user-1');
-
-    expect(claimsRes.status).toBe(200);
-    expect(claimsRes.body.claims[0].status).toBe('approved');
+    expect(getTable('Home')[0].owner_id).toBe('incumbent');
+    expect(getTable('Home')[0].security_state).toBe('normal');
+    expect(occupancyAttachService.attach).not.toHaveBeenCalled();
   });
 
   test('flag-off preserves existing in-flight claimant block', async () => {
@@ -394,170 +247,37 @@ describe('homeOwnership Phase 2 compatibility writes', () => {
     expect(getTable('Home')[0].household_resolution_state).toBe('contested');
   });
 
-  test('strong property-data challenge claim moves verified household to disputed', async () => {
-    householdClaimConfig.flags.challengeFlow = true;
-
-    seedBaseHome({
-      security_state: 'normal',
-      household_resolution_state: 'verified_household',
-      household_resolution_updated_at: '2026-04-04T00:00:00.000Z',
-      owner_id: 'owner-incumbent',
-    });
-    seedTable('HomeOwner', [{
-      id: 'owner-1',
-      home_id: 'home-1',
-      subject_id: 'owner-incumbent',
-      owner_status: 'verified',
-      verification_tier: 'strong',
-      is_primary_owner: true,
-    }]);
-    seedTable('User', [{
-      id: 'user-2',
-      name: 'Challenger User',
-      first_name: 'Challenger',
-      last_name: 'User',
-    }]);
-    policy.canSubmitOwnerClaim.mockResolvedValueOnce({
-      allowed: true,
-      errors: [],
-      blockCode: null,
-      routingClassification: 'challenge_claim',
-      flags: { parallelSubmission: true },
-    });
+  test.each([false, true])('property-data callback uses current claim RPC without compatibility replay (challenge flag %s)', async challengeFlag => {
+    householdClaimConfig.flags.challengeFlow = challengeFlag;
+    seedBaseHome(); seedTable('User', [{ id: 'user-2', name: 'Claimant' }]);
     propertyDataService.isAvailable.mockReturnValue(true);
-    propertyDataService.verifyPropertyOwnership.mockResolvedValue({
-      matched: true,
-      confidence: 92,
-      provider: 'attom',
-      details: { source: 'public-record' },
-      apn: 'APN-123',
-    });
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims')
-      .set('x-test-user-id', 'user-2')
-      .send({
-        claim_type: 'owner',
-        method: 'property_data_match',
-      });
-
+    propertyDataService.verifyPropertyOwnership.mockResolvedValue({ matched: true, confidence: 92, provider: 'attom', details: { source: 'public-record' }, apn: 'APN-123' });
+    const rpc = jest.fn(async (_name, args) => ({ data: { ok: true, homeId: args.p_home_id, claimId: args.p_claim_id, evidenceId: 'evidence-1' } })); setRpcMock(rpc);
+    const res = await request(app).post('/api/homes/home-1/ownership-claims').set('x-test-user-id', 'user-2').send({ claim_type: 'owner', method: 'property_data_match' });
     expect(res.status).toBe(201);
-    expect(res.body.claim.routing_classification).toBe('challenge_claim');
-    expect(res.body.claim.claim_phase_v2).toBe('challenged');
-    expect(res.body.home_resolution).toBe('disputed');
-
-    const insertedClaim = getTable('HomeOwnershipClaim').find((claim) => claim.claimant_user_id === 'user-2');
-    expect(insertedClaim.routing_classification).toBe('challenge_claim');
-    expect(insertedClaim.claim_phase_v2).toBe('challenged');
-    expect(insertedClaim.challenge_state).toBe('challenged');
-    expect(insertedClaim.claim_strength).toBe('owner_legal');
-    expect(getTable('Home')[0].household_resolution_state).toBe('disputed');
-    expect(getTable('Home')[0].security_state).toBe('normal');
+    expect(rpc).toHaveBeenCalledWith('record_home_claim_provider_evidence', expect.objectContaining({ p_home_id: 'home-1', p_actor_id: 'user-2', p_provider: 'attom', p_matched: true, p_confidence: 92 }));
+    expect(getTable('HomeVerificationEvidence')).toHaveLength(0);
+    expect(getTable('HomeOwnershipClaim')[0].claim_phase_v2).toBe('evidence_submitted');
   });
 
-  test('property-data evidence does not activate challenge flow while the flag is off', async () => {
-    seedBaseHome({
-      security_state: 'normal',
-      household_resolution_state: 'verified_household',
-      household_resolution_updated_at: '2026-04-04T00:00:00.000Z',
-      owner_id: 'owner-incumbent',
-    });
-    seedTable('HomeOwner', [{
-      id: 'owner-1',
-      home_id: 'home-1',
-      subject_id: 'owner-incumbent',
-      owner_status: 'verified',
-      verification_tier: 'strong',
-      is_primary_owner: true,
-    }]);
-    seedTable('User', [{
-      id: 'user-2',
-      name: 'Challenger User',
-      first_name: 'Challenger',
-      last_name: 'User',
-    }]);
-    policy.canSubmitOwnerClaim.mockResolvedValueOnce({
-      allowed: true,
-      errors: [],
-      blockCode: null,
-      routingClassification: 'challenge_claim',
-      flags: { parallelSubmission: true },
-    });
+  test('late provider authority/source conflict is reported instead of replaying preflight claim state', async () => {
+    seedBaseHome(); seedTable('User', [{ id: 'user-2', name: 'Claimant' }]);
     propertyDataService.isAvailable.mockReturnValue(true);
-    propertyDataService.verifyPropertyOwnership.mockResolvedValue({
-      matched: true,
-      confidence: 92,
-      provider: 'attom',
-      details: { source: 'public-record' },
-      apn: 'APN-123',
-    });
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims')
-      .set('x-test-user-id', 'user-2')
-      .send({
-        claim_type: 'owner',
-        method: 'property_data_match',
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.claim.claim_phase_v2).toBe('evidence_submitted');
-
-    const insertedClaim = getTable('HomeOwnershipClaim').find((claim) => claim.claimant_user_id === 'user-2');
-    expect(insertedClaim.claim_phase_v2).toBe('evidence_submitted');
-    expect(insertedClaim.challenge_state).toBe('none');
-    expect(getTable('Home')[0].household_resolution_state).toBe('verified_household');
-    expect(getTable('Home')[0].security_state).toBe('normal');
-  });
-
-  test('claimant-specific evidence path is preserved when multiple claims exist', async () => {
-    seedBaseHome();
-    seedTable('HomeOwnershipClaim', [
-      {
-        id: 'claim-1',
-        home_id: 'home-1',
-        claimant_user_id: 'user-1',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'evidence_submitted',
-        terminal_reason: 'none',
-        challenge_state: 'none',
-        identity_status: 'not_started',
-        routing_classification: 'standalone_claim',
-        merged_into_claim_id: null,
-      },
-      {
-        id: 'claim-2',
-        home_id: 'home-1',
-        claimant_user_id: 'user-2',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'evidence_submitted',
-        terminal_reason: 'none',
-        challenge_state: 'none',
-        identity_status: 'not_started',
-        routing_classification: 'parallel_claim',
-        merged_into_claim_id: null,
-      },
-    ]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-2/evidence')
-      .set('x-test-user-id', 'user-1')
-      .send({
-        evidence_type: 'deed',
-        provider: 'manual',
-        metadata: {},
-      });
-
-    expect(res.status).toBe(403);
+    propertyDataService.verifyPropertyOwnership.mockResolvedValue({ matched: true, confidence: 92, provider: 'attom' });
+    setRpcMock(async () => ({ data: { ok: false, code: 'CLAIM_NOT_ELIGIBLE', status: 409 } }));
+    const res = await request(app).post('/api/homes/home-1/ownership-claims').set('x-test-user-id', 'user-2').send({ claim_type: 'owner', method: 'property_data_match' });
+    expect(res.status).toBe(409); expect(res.body.code).toBe('CLAIM_NOT_ELIGIBLE');
     expect(getTable('HomeVerificationEvidence')).toHaveLength(0);
   });
 
-
-
+  test('foreign claimant evidence denial does not fall through to a local insert', async () => {
+    const rpc = jest.fn(async () => ({ data: { ok: false, code: 'CLAIM_RECIPIENT_MISMATCH', status: 403 } })); setRpcMock(rpc);
+    const res = await request(app).post('/api/homes/home-1/ownership-claims/claim-2/evidence')
+      .set('x-test-user-id', 'user-1').send({ evidence_type: 'deed' });
+    expect(res.status).toBe(403);
+    expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', expect.objectContaining({ p_claim_id: 'claim-2', p_actor_id: 'user-1' }));
+    expect(getTable('HomeVerificationEvidence')).toHaveLength(0);
+  });
 
   test('flagging an unknown claimant opens dispute review on the home', async () => {
     householdClaimConfig.flags.inviteMerge = true;
@@ -755,71 +475,19 @@ describe('homeOwnership Phase 2 compatibility writes', () => {
   });
 
   describe('claimant DELETE ownership claim', () => {
-    test('hard-deletes in-progress claim row', async () => {
-      seedBaseHome();
-      seedTable('HomeOwnershipClaim', [{
-        id: 'claim-del-1',
-        home_id: 'home-1',
-        claimant_user_id: 'user-1',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'under_review',
-        terminal_reason: 'none',
-        challenge_state: 'none',
-      }]);
-
-      const res = await request(app)
-        .delete('/api/homes/home-1/ownership-claims/claim-del-1')
-        .set('x-test-user-id', 'user-1');
-
-      expect(res.status).toBe(200);
-      expect(res.body.deleted).toBe(true);
-      expect(getTable('HomeOwnershipClaim').length).toBe(0);
+    test('withdrawal retains claim history and returns no false hard-delete promise', async () => {
+      seedTable('HomeOwnershipClaim', [{ id: 'claim-1', home_id: 'home-1', claimant_user_id: 'user-1', state: 'submitted' }]);
+      const rpc = jest.fn(async () => ({ data: { ok: true, homeId: 'home-1', claimId: 'claim-1', action: 'withdraw', state: 'revoked', replayed: false, deleted: false, withdrawn: true } })); setRpcMock(rpc);
+      const res = await request(app).delete('/api/homes/home-1/ownership-claims/claim-1').set('x-test-user-id', 'user-1');
+      expect(res.status).toBe(200); expect(res.body).toMatchObject({ deleted: false, withdrawn: true });
+      expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', expect.objectContaining({ p_home_id: 'home-1', p_claim_id: 'claim-1', p_actor_id: 'user-1', p_action: 'withdraw' }));
+      expect(getTable('HomeOwnershipClaim')).toHaveLength(1);
     });
-
-    test('returns 403 when another user attempts delete', async () => {
-      seedBaseHome();
-      seedTable('HomeOwnershipClaim', [{
-        id: 'claim-x',
-        home_id: 'home-1',
-        claimant_user_id: 'user-1',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'under_review',
-        terminal_reason: 'none',
-        challenge_state: 'none',
-      }]);
-
-      const res = await request(app)
-        .delete('/api/homes/home-1/ownership-claims/claim-x')
-        .set('x-test-user-id', 'user-2');
-
-      expect(res.status).toBe(403);
-      expect(getTable('HomeOwnershipClaim').length).toBe(1);
-    });
-
-    test('returns 400 for approved claim', async () => {
-      seedBaseHome();
-      seedTable('HomeOwnershipClaim', [{
-        id: 'claim-appr',
-        home_id: 'home-1',
-        claimant_user_id: 'user-1',
-        claim_type: 'owner',
-        state: 'approved',
-        method: 'doc_upload',
-        claim_phase_v2: 'verified',
-        terminal_reason: 'none',
-        challenge_state: 'none',
-      }]);
-
-      const res = await request(app)
-        .delete('/api/homes/home-1/ownership-claims/claim-appr')
-        .set('x-test-user-id', 'user-1');
-
-      expect(res.status).toBe(400);
-      expect(getTable('HomeOwnershipClaim').length).toBe(1);
+    test.each([['CLAIM_RECIPIENT_MISMATCH', 403], ['CLAIM_NOT_ELIGIBLE', 409]])('preserves %s denial without deleting history', async (code, status) => {
+      seedTable('HomeOwnershipClaim', [{ id: 'claim-1', state: 'approved' }]);
+      setRpcMock(async () => ({ data: { ok: false, code, status } }));
+      const res = await request(app).delete('/api/homes/home-1/ownership-claims/claim-1').set('x-test-user-id', 'user-1');
+      expect(res.status).toBe(status); expect(getTable('HomeOwnershipClaim')).toHaveLength(1);
     });
   });
 });

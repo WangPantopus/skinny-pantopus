@@ -61,6 +61,7 @@ export interface OwnershipClaim {
 }
 
 export interface OwnershipClaimDetail {
+  review_token?: string;
   id: string;
   home_id: string;
   claim_type: string;
@@ -78,6 +79,8 @@ export interface OwnershipClaimDetail {
     risk_score: number;
   };
   evidence: Array<{
+    eligible_for_review?: boolean;
+    availability_code?: string;
     id: string;
     evidence_type: string;
     provider: string;
@@ -245,8 +248,8 @@ export async function getMyOwnershipClaims(): Promise<{ claims: OwnershipClaim[]
   return get('/api/homes/my-ownership-claims');
 }
 
-/** Claimant deletes their own in-progress claim (hard delete). */
-export async function deleteMyOwnershipClaim(homeId: string, claimId: string): Promise<{ ok: boolean; deleted: boolean }> {
+/** Claimant withdraws their own in-progress claim; its audit/evidence history is retained. */
+export async function deleteMyOwnershipClaim(homeId: string, claimId: string): Promise<{ ok: boolean; deleted: false; withdrawn: true }> {
   return del(`/api/homes/${homeId}/ownership-claims/${claimId}`);
 }
 
@@ -264,6 +267,7 @@ export async function getOwnershipClaimComparison(homeId: string): Promise<Owner
 
 export async function reviewOwnershipClaim(homeId: string, claimId: string, data: {
   action: 'approve' | 'reject' | 'flag';
+  review_token: string;
   note?: string;
 }): Promise<{ message: string; state: string }> {
   return post(`/api/homes/${homeId}/ownership-claims/${claimId}/review`, data);

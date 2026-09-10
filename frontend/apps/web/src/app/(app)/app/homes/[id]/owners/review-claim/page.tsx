@@ -43,18 +43,20 @@ function ReviewClaimContent() {
   useEffect(() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }, [fetchClaims]);
 
   const handleOwnershipReview = useCallback(async (claimId: string, action: 'approve' | 'reject' | 'flag') => {
-    const labels = { approve: 'Approve', reject: 'Reject', flag: 'Flag as suspicious' };
-    const yes = await confirmStore.open({
-      title: labels[action],
-      description: `Are you sure you want to ${action} this ownership claim?`,
-      confirmLabel: labels[action],
-      variant: action === 'approve' ? 'primary' : 'destructive',
-    });
-    if (!yes) return;
-
     setActionLoading(claimId);
     try {
-      await api.homeOwnership.reviewOwnershipClaim(homeId!, claimId, { action });
+      const { claim } = await api.homeOwnership.getOwnershipClaimDetail(homeId!, claimId);
+      if (!claim.review_token) throw new Error('Reopen the claim before reviewing it.');
+      const labels = { approve: 'Approve', reject: 'Reject', flag: 'Flag for review' };
+      const verifiedCount = claim.evidence.filter(e => e.eligible_for_review === true).length;
+      const yes = await confirmStore.open({
+        title: labels[action],
+        description: `This is a ${claim.claim_type} claim with ${verifiedCount} verified evidence record(s). ${labels[action]} this claim?`,
+        confirmLabel: labels[action],
+        variant: action === 'approve' ? 'primary' : 'destructive',
+      });
+      if (!yes) return;
+      await api.homeOwnership.reviewOwnershipClaim(homeId!, claimId, { action, review_token: claim.review_token });
       toast.success(`Claim ${action === 'flag' ? 'flagged' : action + 'd'}`);
       await fetchClaims();
     } catch (err: any) { toast.error(err?.message || 'Failed to review claim'); }

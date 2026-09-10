@@ -94,19 +94,19 @@ export default function HomesPage() {
 
   const removeClaim = async (claim: { id: string; home_id: string }) => {
     const yes = await confirmStore.open({
-      title: 'Delete this claim?',
-      description: 'This permanently removes your ownership claim and any uploaded evidence for this address.',
-      confirmLabel: 'Delete',
+      title: 'Withdraw this claim?',
+      description: 'This ends your pending claim. Its verification and audit history will be retained.',
+      confirmLabel: 'Withdraw',
       variant: 'destructive',
     });
     if (!yes) return;
     setDeletingClaimId(claim.id);
     try {
       await api.homeOwnership.deleteMyOwnershipClaim(claim.home_id, claim.id);
-      toast.success('Claim deleted');
+      toast.success('Claim withdrawn');
       await load();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete claim');
+      toast.error(e instanceof Error ? e.message : 'Failed to withdraw claim');
     } finally {
       setDeletingClaimId(null);
     }
@@ -173,7 +173,7 @@ export default function HomesPage() {
                           onClick={(e) => { e.stopPropagation(); removeClaim(claim); }}
                           className="shrink-0 self-start px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
                         >
-                          {busy ? '…' : 'Delete'}
+                          {busy ? '…' : 'Withdraw'}
                         </button>
                       </div>
                     );

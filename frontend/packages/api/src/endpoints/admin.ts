@@ -34,6 +34,8 @@ export interface AdminClaim {
 }
 
 export interface ClaimEvidence {
+  eligible_for_review?: boolean;
+  availability_code?: string;
   id: string;
   evidence_type: string;
   provider: string;
@@ -63,7 +65,7 @@ export async function getClaimDetail(claimId: string): Promise<ClaimDetail> {
 
 export async function reviewClaim(
   claimId: string,
-  data: { action: 'approve' | 'reject' | 'request_more_info'; note?: string }
+  data: { action: 'approve' | 'reject' | 'request_more_info'; review_token: string; note?: string }
 ): Promise<{ message: string }> {
   return post(`/api/admin/claims/${claimId}/review`, data);
 }

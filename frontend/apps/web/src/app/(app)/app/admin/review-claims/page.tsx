@@ -217,11 +217,14 @@ export default function AdminReviewClaimsPage() {
   ) => {
     setReviewingAction(action);
     try {
-      await api.admin.reviewClaim(claimId, { action, note });
+      if (claimDetail?.claim.id !== claimId || !claimDetail.claim.review_token) {
+        throw new Error('Reopen the claim before reviewing it.');
+      }
+      await api.admin.reviewClaim(claimId, { action, note, review_token: claimDetail.claim.review_token });
       toast.success(
         action === 'approve' ? 'Claim approved. User has been verified.'
-          : action === 'reject' ? 'Claim rejected. User has been notified.'
-          : 'More info requested. User has been notified.',
+          : action === 'reject' ? 'Claim rejected.'
+          : 'More information requested.',
       );
       setSelectedClaim(null);
       setClaimDetail(null);
@@ -381,6 +384,11 @@ export default function AdminReviewClaimsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-app-text">{EVIDENCE_LABELS[ev.evidence_type] || ev.evidence_type}</p>
                         <p className="text-xs text-app-text-secondary truncate">{ev.file_name || 'Document'}</p>
+                        <p className="text-xs text-app-text-secondary">
+                          {ev.availability_code === 'CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED'
+                            ? 'A private copy must be uploaded before review.'
+                            : ev.eligible_for_review ? 'Verified evidence' : 'Pending verification'}
+                        </p>
                         {ev.file_size && <p className="text-[11px] text-app-text-muted">{(ev.file_size / 1024).toFixed(0)} KB &middot; {formatDate(ev.created_at)}</p>}
                       </div>
                       {ev.file_url && (

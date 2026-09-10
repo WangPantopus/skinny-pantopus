@@ -18,14 +18,13 @@ const policy = require('../utils/homeSecurityPolicy');
 const propertyDataService = require('../services/propertyDataService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const adminAlerts = require('../services/adminAlerts');
-const { purgeClaimEvidence } = require('../services/evidencePurge');
+const homeClaimReviewService = require('../services/homeClaimReviewService');
 const homeClaimComparisonService = require('../services/homeClaimComparisonService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const householdClaimConfig = require('../config/householdClaims');
 const { ownershipClaimLimiter, postcardLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
-const { findHomeOwnerRowForClaimant } = require('../utils/homeOwnerRowLookup');
 const homePostcardService = require('../services/homePostcardService');
 
 // ============================================================
@@ -38,6 +37,7 @@ const submitClaimSchema = Joi.object({
 });
 
 const reviewClaimSchema = Joi.object({
+  review_token: Joi.string().pattern(/^[a-f0-9]{64}$/).allow(null),
   action: Joi.string().valid('approve', 'reject', 'flag').required(),
   note: Joi.string().max(1000).allow('', null),
 });
@@ -375,40 +375,14 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
           userName,
         });
 
-        // Create evidence record from property data lookup
-        await supabaseAdmin
-          .from('HomeVerificationEvidence')
-          .insert({
-            claim_id: claim.id,
-            evidence_type: 'title_match',
-            provider: result.provider,
-            status: result.matched && result.confidence >= 70 ? 'verified' : 'pending',
-            metadata: {
-              confidence: result.confidence,
-              matched: result.matched,
-              details: result.details,
-              apn: result.apn || null,
-            },
-          });
-
-        await homeClaimCompatService.updateClaimCompatibilityFields({
-          claimId: claim.id,
-          legacyState: initialState,
-          syncClaimStrength: true,
-        });
-        if (householdClaimConfig.flags.challengeFlow) {
-          const challengeActivated = await homeClaimRoutingService.syncClaimChallengeState(claim.id);
-          if (challengeActivated) {
-            responseClaimPhase = 'challenged';
-            householdResolutionState = await recalculateHouseholdResolutionState(homeId);
-          }
-        }
+        await homeClaimReviewService.recordProvider({ homeId, claimId: claim.id, actorId: userId, result });
 
         logger.info('Property data match completed', {
           homeId, claimId: claim.id, matched: result.matched,
           confidence: result.confidence, provider: result.provider,
         });
       } catch (pdErr) {
+        if (pdErr.code?.startsWith('CLAIM_') || pdErr.code === 'HOME_NOT_FOUND') return homeClaimReviewService.sendError(res, pdErr);
         logger.warn('Property data match failed (non-fatal)', { error: pdErr.message, homeId, claimId: claim.id });
       }
     }
@@ -516,445 +490,36 @@ router.get('/:id/ownership-claims/compare', verifyToken, async (req, res) => {
  */
 router.get('/:id/ownership-claims/:claimId', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'ownership.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    const { data: claim, error } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select(`
-        *,
-        evidence:HomeVerificationEvidence (*)
-      `)
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (error || !claim) return res.status(404).json({ error: 'Claim not found' });
-
-    res.json({ claim });
-  } catch (err) {
-    logger.error('Failed to fetch claim details', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch claim' });
-  }
+    const result = await homeClaimReviewService.read({ homeId: req.params.id, claimId: req.params.claimId, actorId: req.user.id });
+    res.json({ claim: result.claim });
+  } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
-/**
- * DELETE /:id/ownership-claims/:claimId
- * Claimant removes their own claim (hard delete row + cascaded evidence).
- * Not allowed once the claim is approved or in a terminal merged/verified phase.
- */
+/** Withdraw an exact own in-progress claim, retaining its evidence and audit history. */
 router.delete('/:id/ownership-claims/:claimId', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-
-    const { data: claim, error: fetchErr } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('id, home_id, claimant_user_id, state, claim_phase_v2')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .maybeSingle();
-
-    if (fetchErr) throw fetchErr;
-    if (!claim) return res.status(404).json({ error: 'Claim not found' });
-
-    if (claim.claimant_user_id !== userId) {
-      return res.status(403).json({ error: 'Not authorized to delete this claim' });
-    }
-
-    if (claim.state === 'approved') {
-      return res.status(400).json({
-        error: 'Approved claims cannot be deleted. Contact support if you need help.',
-      });
-    }
-    if (claim.claim_phase_v2 === 'verified' || claim.claim_phase_v2 === 'merged_into_household') {
-      return res.status(400).json({ error: 'This claim can no longer be deleted.' });
-    }
-
-    await writeAuditLog(homeId, userId, 'OWNERSHIP_CLAIM_DELETED', 'HomeOwnershipClaim', claimId, {
-      prior_state: claim.state,
-      prior_phase: claim.claim_phase_v2,
-    });
-
-    await supabaseAdmin
-      .from('HomeOwner')
-      .update({ owner_status: 'revoked', updated_at: new Date().toISOString() })
-      .eq('home_id', homeId)
-      .eq('subject_id', userId)
-      .eq('owner_status', 'pending');
-
-    // Withdrawn: the uploaded documents have no further job.
-    try { await purgeClaimEvidence(claimId, 'withdrawn'); } catch (purgeErr) { logger.warn('claim delete: evidence purge failed (non-fatal)', { claimId, error: purgeErr.message }); }
-    const { error: delErr } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .delete()
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .eq('claimant_user_id', userId);
-
-    if (delErr) throw delErr;
-
-    await recalculateHouseholdResolutionState(homeId);
-
-    res.json({ ok: true, deleted: true });
-  } catch (err) {
-    logger.error('Failed to delete ownership claim', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete claim' });
-  }
+    const result = await homeClaimReviewService.mutate({ homeId: req.params.id, claimId: req.params.claimId,
+      actorId: req.user.id, action: 'withdraw' });
+    res.json(result);
+  } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
-/**
- * POST /:id/ownership-claims/:claimId/review
- * Approve, reject, or flag a claim (owner-only).
- */
 router.post('/:id/ownership-claims/:claimId/review', verifyToken, validate(reviewClaimSchema), async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-    const { action, note } = req.body;
-
-    const access = await checkHomePermission(homeId, userId, 'ownership.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    const { data: claim } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('*')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (!claim) return res.status(404).json({ error: 'Claim not found' });
-
-    const isChallengeReview = (
-      claim.state === 'disputed'
-      || claim.claim_phase_v2 === 'challenged'
-      || claim.challenge_state === 'challenged'
-      || claim.routing_classification === 'challenge_claim'
-    );
-
-    const reviewableStates = ['submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info', 'disputed'];
-    if (!reviewableStates.includes(claim.state)) {
-      return res.status(400).json({ error: 'Claim is not in a reviewable state' });
-    }
-
-    let newState;
-    if (action === 'approve') {
-      newState = 'approved';
-    } else if (action === 'reject') {
-      newState = 'rejected';
-    } else if (action === 'flag') {
-      newState = 'pending_review';
-    }
-
-    const { error: updateError } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .update({
-        state: newState,
-        reviewed_by: userId,
-        reviewed_at: new Date().toISOString(),
-        review_note: note || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', claimId);
-
-    if (updateError) throw updateError;
-
-    let compatibilityLegacyState = newState;
-    let compatibilityTerminalReason = action === 'reject' ? 'rejected_review' : 'none';
-    let compatibilityChallengeState = 'none';
-    let compatibilitySyncClaimStrength = false;
-
-    // On rejection: revert ownership_state to 'unclaimed' if no other active claims
-    if (action === 'reject') {
-      const { data: otherClaims } = await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .select('id')
-        .eq('home_id', homeId)
-        .in('state', ['submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info', 'disputed'])
-        .neq('id', claimId)
-        .limit(1);
-
-      let verifiedOwnersCount = 0;
-      if (isChallengeReview) {
-        const { count } = await supabaseAdmin
-          .from('HomeOwner')
-          .select('id', { count: 'exact', head: true })
-          .eq('home_id', homeId)
-          .eq('owner_status', 'verified');
-        verifiedOwnersCount = count || 0;
-      }
-
-      if ((!otherClaims || otherClaims.length === 0) && !(isChallengeReview && verifiedOwnersCount > 0)) {
-        await supabaseAdmin
-          .from('Home')
-          .update({ ownership_state: 'unclaimed', updated_at: new Date().toISOString() })
-          .eq('id', homeId);
-      }
-    }
-
-    let skipHouseholdResolutionRecalc = false;
-
-    // On approval: verify/create HomeOwner + HomeOccupancy + claim window + dispute detection
-    if (action === 'approve') {
-      // Determine verification tier from evidence
-      const { data: evidenceRows } = await supabaseAdmin
-        .from('HomeVerificationEvidence')
-        .select('evidence_type, status')
-        .eq('claim_id', claimId)
-        .eq('status', 'verified');
-
-      let tier = 'weak';
-      const strongTypes = ['escrow_attestation', 'title_match'];
-      // Only deed, closing_disclosure, tax_bill prove ownership (standard tier).
-      // utility_bill and lease prove residency only — they do NOT count for owner verification.
-      const ownerStandardTypes = ['deed', 'closing_disclosure', 'tax_bill'];
-      for (const ev of (evidenceRows || [])) {
-        if (strongTypes.includes(ev.evidence_type)) { tier = 'strong'; break; }
-        if (ownerStandardTypes.includes(ev.evidence_type) && tier !== 'strong') tier = 'standard';
-      }
-
-      // If no verified evidence and claim has no evidence at all, require it
-      if (!evidenceRows || evidenceRows.length === 0) {
-        const { count: anyEvidence } = await supabaseAdmin
-          .from('HomeVerificationEvidence')
-          .select('id', { count: 'exact', head: true })
-          .eq('claim_id', claimId);
-
-        if (!anyEvidence || anyEvidence === 0) {
-          return res.status(400).json({
-            error: 'Cannot approve a claim with no verification evidence. The claimant must upload documents first.',
-          });
-        }
-        // Has evidence but none verified yet — allow with weak tier
-      }
-
-      // Get existing verified owners for dispute detection
-      const { data: existingOwners } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('id, subject_id, owner_status, verification_tier, is_primary_owner')
-        .eq('home_id', homeId)
-        .neq('owner_status', 'revoked');
-
-      const verifiedOwners = (existingOwners || []).filter(o => o.owner_status === 'verified');
-      const isPrimary = verifiedOwners.length === 0;
-
-      // Do not auto-escalate to dispute on approval. Multiple verified co-owners are valid;
-      // formal dispute / security_state escalation is only for user-initiated dispute flows.
-      const triggerDispute = false;
-
-      // Check if this claimant already has a HomeOwner row (pending/verified, or revoked to reactivate)
-      const existingOwnerRow = await findHomeOwnerRowForClaimant(
-        supabaseAdmin,
-        homeId,
-        claim.claimant_user_id,
-      );
-
-      if (existingOwnerRow) {
-        // Promote pending → verified (or update if already exists)
-        await supabaseAdmin
-          .from('HomeOwner')
-          .update({
-            owner_status: triggerDispute ? 'disputed' : 'verified',
-            is_primary_owner: isPrimary,
-            verification_tier: tier,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingOwnerRow.id);
-      } else {
-        // Create new HomeOwner record
-        await supabaseAdmin
-          .from('HomeOwner')
-          .insert({
-            home_id: homeId,
-            subject_type: 'user',
-            subject_id: claim.claimant_user_id,
-            owner_status: triggerDispute ? 'disputed' : 'verified',
-            is_primary_owner: isPrimary,
-            added_via: 'claim',
-            verification_tier: tier,
-          });
-      }
-
-      // Also add/upgrade occupancy via centralized gateway
-      const occupancyAttachService = require('../services/occupancyAttachService');
-      await occupancyAttachService.attach({
-        homeId,
-        userId: claim.claimant_user_id,
-        method: 'doc_upload',
-        claimType: 'owner',
-        roleOverride: 'owner',
-        actorId: userId,
-        metadata: { source: 'ownership_claim_approved', claim_id: claimId, tier },
-      });
-
-      // Set ownership_state and owner_id on Home
-      await supabaseAdmin
-        .from('Home')
-        .update({ ownership_state: 'owner_verified', owner_id: claim.claimant_user_id, updated_at: new Date().toISOString() })
-        .eq('id', homeId);
-
-      // Handle security state transitions
-      const { data: home } = await supabaseAdmin
-        .from('Home')
-        .select('security_state')
-        .eq('id', homeId)
-        .single();
-
-      if (triggerDispute) {
-        // Trigger dispute: put home in disputed state
-        if (home && home.security_state !== 'frozen' && home.security_state !== 'frozen_silent') {
-          await supabaseAdmin
-            .from('Home')
-            .update({
-              security_state: 'disputed',
-              ownership_state: 'disputed',
-              household_resolution_state: 'disputed',
-              household_resolution_updated_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', homeId);
-
-          skipHouseholdResolutionRecalc = true;
-
-          await writeAuditLog(homeId, userId, 'DISPUTE_TRIGGERED', 'HomeOwnershipClaim', claimId, {
-            reason: 'Conflicting verified ownership claims',
-            claimant_tier: tier,
-          });
-        }
-      } else if (home && home.security_state === 'normal' && isPrimary) {
-        // First verified owner: activate claim window
-        await supabaseAdmin
-          .from('Home')
-          .update({
-            security_state: 'claim_window',
-            claim_window_ends_at: policy.getClaimWindowEndsAt().toISOString(),
-          })
-          .eq('id', homeId);
-      }
-
-      compatibilityLegacyState = triggerDispute ? 'disputed' : newState;
-      compatibilityChallengeState = triggerDispute ? 'challenged' : 'none';
-      compatibilitySyncClaimStrength = true;
-    }
-
-    await homeClaimCompatService.updateClaimCompatibilityFields({
-      claimId,
-      legacyState: compatibilityLegacyState,
-      terminalReason: compatibilityTerminalReason,
-      challengeState: compatibilityChallengeState,
-      syncClaimStrength: compatibilitySyncClaimStrength,
-    });
-
-    if (!skipHouseholdResolutionRecalc) {
-      await recalculateHouseholdResolutionState(homeId);
-      await homeClaimRoutingService.reconcileOperationalDisputeState(homeId, { force: isChallengeReview });
-    }
-
-    await writeAuditLog(homeId, userId, `OWNERSHIP_CLAIM_${action.toUpperCase()}`, 'HomeOwnershipClaim', claimId, {
-      note, new_state: newState,
-    });
-
-    res.json({ message: `Claim ${action}ed`, state: newState });
-  } catch (err) {
-    logger.error('Failed to review claim', { error: err.message });
-    res.status(500).json({ error: 'Failed to review claim' });
-  }
+    const result = await homeClaimReviewService.mutate({ homeId: req.params.id, claimId: req.params.claimId,
+      actorId: req.user.id, action: req.body.action, reviewToken: req.body.review_token, note: req.body.note });
+    res.json({ ...result, message: 'Claim review saved.' });
+  } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
-/**
- * POST /:id/ownership-claims/:claimId/evidence
- * Upload verification evidence for a claim.
- */
+// A caller's metadata is not evidence provenance. Check the current exact claim
+// then return a recoverable private-upload requirement without persisting refs.
 router.post('/:id/ownership-claims/:claimId/evidence', verifyToken, validate(uploadEvidenceSchema), async (req, res) => {
   try {
-    const { id: homeId, claimId } = req.params;
-    const userId = req.user.id;
-    const { evidence_type, provider, storage_ref, metadata } = req.body;
-
-    const { data: claim } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('claimant_user_id, state, claim_phase_v2')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (!claim) return res.status(404).json({ error: 'Claim not found' });
-    if (claim.claimant_user_id !== userId) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    const uploadableLegacyStates = ['draft', 'submitted', 'needs_more_info', 'pending_review', 'rejected'];
-    const uploadablePhaseV2States = ['initiated', 'evidence_submitted', 'under_review', 'challenged'];
-    const canUploadEvidence =
-      uploadableLegacyStates.includes(claim.state) ||
-      uploadablePhaseV2States.includes(claim.claim_phase_v2);
-
-    if (!canUploadEvidence) {
-      return res.status(400).json({ error: 'Cannot upload evidence in the current claim state' });
-    }
-
-    const { data: evidence, error } = await supabaseAdmin
-      .from('HomeVerificationEvidence')
-      .insert({
-        claim_id: claimId,
-        evidence_type,
-        provider,
-        storage_ref: storage_ref || null,
-        metadata,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Move claim to a reviewable state when it was draft or rejected (re-submission)
-    if (claim.state === 'draft') {
-      await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .update({ state: 'submitted', updated_at: new Date().toISOString() })
-        .eq('id', claimId);
-    } else if (claim.state === 'rejected') {
-      await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .update({ state: 'needs_more_info', updated_at: new Date().toISOString() })
-        .eq('id', claimId);
-    }
-
-    const nextLegacyState =
-      claim.state === 'draft'
-        ? 'submitted'
-        : claim.state === 'rejected'
-          ? 'needs_more_info'
-          : claim.state;
-    const preservedChallengeState = claim.claim_phase_v2 === 'challenged' ? 'challenged' : 'none';
-    const preservedClaimPhaseV2 = claim.claim_phase_v2 === 'challenged' ? 'challenged' : null;
-
-    await homeClaimCompatService.updateClaimCompatibilityFields({
-      claimId,
-      legacyState: nextLegacyState,
-      claimPhaseV2: preservedClaimPhaseV2,
-      challengeState: preservedChallengeState,
-      syncClaimStrength: true,
-    });
-
-    await homeClaimRoutingService.syncClaimChallengeState(claimId);
-    await recalculateHouseholdResolutionState(homeId);
-
-    // Recalculate verification tier based on all evidence
-    const newTier = await policy.recalculateTier(claimId);
-
-    res.status(201).json({ evidence, verification_tier: newTier });
-  } catch (err) {
-    logger.error('Failed to upload evidence', { error: err.message });
-    res.status(500).json({ error: 'Failed to upload evidence' });
-  }
+    await homeClaimReviewService.mutate({ homeId: req.params.id, claimId: req.params.claimId,
+      actorId: req.user.id, action: 'authorize_evidence' });
+    throw new Error('Unexpected evidence authorization receipt');
+  } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
 /**

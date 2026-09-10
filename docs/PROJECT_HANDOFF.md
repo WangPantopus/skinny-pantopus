@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Ordinary claim review transaction checkpoint — September 10
+
+Ordinary Home/platform claim review and withdrawal now bind the displayed
+snapshot to current authority and exact evidence in a guarded transaction.
+Resident/admin roles remain intact. A lost successful response can recover its
+protected receipt without granting access or notifying twice. Withdrawal retains
+history and rejects competing acceptance. Untrusted legacy evidence references
+are quarantined; trusted private evidence delivery remains the next milestone.
+The [claim review report](home-claim-review-transactions-2026-09-10.md) records
+24 clean migrations, 30 SQL contracts/wrappers, 32 observed races, six SDK checks,
+zero application SQL lint errors and exact fixture cleanup. Final backend checks
+pass 4,946 with 16 existing skips and one local chat socket hangup; all 26 checks
+in that unchanged suite pass separately. Privacy gates pass. Final-head remote CI
+remains required before merge; no hosted Home policy or default role changed.
+
+**Next:** native claim snapshot/withdrawal controls, then trusted private claim
+evidence; private task attachments proceed independently. Complete task-to-gig,
+ownership/lease/challenge flows, derived views and full household acceptance
+remain open. Native payment refunds continue in draft PR #34. Android bill
+permission/recovery controls are committed/pushed as `399ac1c3b`; dashboard repair
+`5c959a64a` still needs iOS 18.5 CI proof. Paid dependencies remain deferred to one
+final launch-preparation step. Completed Beacon/saved-card device checks stay
+complete and must not be repeated.
+
 ### Android bill permission checkpoint — September 10
 
 Android now preserves bill viewing while enforcing current effective finance
