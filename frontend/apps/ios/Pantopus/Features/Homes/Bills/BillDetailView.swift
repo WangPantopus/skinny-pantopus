@@ -74,7 +74,7 @@ final class BillDetailViewModel {
                 api.request(HomesEndpoints.billSplits(homeId: homeId, billId: billId))
 
             let bills = try await billsTask.bills
-            let splits = await (try? splitsTask.splits) ?? []
+            let splits = try await splitsTask.splits
             try financeAccess.require()
             guard splits.allSatisfy({ $0.billId == billId }) else { throw APIError.invalidResponse }
             guard let bill = bills.first(where: { $0.id == billId && $0.homeId == homeId }) else {
@@ -116,7 +116,8 @@ final class BillDetailViewModel {
                 HomesEndpoints.updateBill(homeId: homeId, billId: billId, request: request)
             )
             try financeAccess.require(managing: true)
-            guard response.bill.id == billId, response.bill.homeId == homeId else { throw APIError.invalidResponse }
+            guard response.bill.id == billId, response.bill.homeId == homeId,
+                  request.status == nil || response.bill.status == request.status else { throw APIError.invalidResponse }
             onChanged()
             if case let .loaded(_, splits) = state {
                 contentState = .loaded(response.bill, splits)

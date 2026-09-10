@@ -48,3 +48,13 @@ The implementation files are HomeFinanceAccess.swift, BillsListViewModel.swift,
 BillDetailView.swift and AddBillWizardViewModel.swift/AddBillWizardView.swift in
 `frontend/apps/ios/Pantopus/Features/Homes/Bills`; the three checked suites are
 HomeFinanceAccessTests, BillsListViewModelTests and AddBillWizardViewModelTests.
+
+## Bill-detail recovery follow-up
+
+A failed split-allocation read now presents a retryable failure instead of an
+empty list that could falsely imply no household allocations. Retrying reloads
+the bill and actual allocations. Mark-paid/removal success must also return the
+requested status for the exact Home/bill; an unchanged receipt cannot close the
+detail or announce a successful change. All 14 access/detail checks pass after
+these two repairs, with formatting/strict lint and independent review. Android
+is applying the same failure distinction in its bill detail.

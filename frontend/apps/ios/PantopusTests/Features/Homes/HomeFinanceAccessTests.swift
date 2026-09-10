@@ -168,6 +168,37 @@ final class HomeFinanceAccessTests: XCTestCase {
         XCTAssertNotNil(vm.saveError)
     }
 
+    func testFailedSplitsReadRequiresRetryInsteadOfShowingNoAllocations() async {
+        let state = FinanceState()
+        let api = makeAPI()
+        let vm = BillDetailViewModel(homeId: "home-1", billId: "bill-1", api: api, financeAccess: access(state, api: api))
+        stubDetail()
+        SequencedURLProtocol.routeResponses["/api/homes/home-1/bills/bill-1/splits"] = [.status(503, body: #"{"error":"Try again"}"#)]
+        await vm.load()
+        guard case .error = vm.state else { return XCTFail("A failed allocation read is not an empty allocation list") }
+        stubDetail()
+        await vm.load()
+        guard case .loaded = vm.state else { return XCTFail("Retry should recover the bill and its verified allocations") }
+    }
+
+    func testUnchangedRemovalReceiptDoesNotCloseTheBill() async {
+        let state = FinanceState()
+        let api = makeAPI()
+        let vm = BillDetailViewModel(
+            homeId: "home-1",
+            billId: "bill-1",
+            api: api,
+            financeAccess: access(state, api: api)
+        ) { Task { @MainActor in state.callbacks += 1 } }
+        stubDetail()
+        SequencedURLProtocol.routeResponses["/api/homes/home-1/bills/bill-1"] = [.status(200, body: "{\"bill\":\(bill)}")]
+        await vm.load()
+        await vm.remove()
+        await Task.yield()
+        XCTAssertEqual(state.callbacks, 0)
+        XCTAssertNotNil(vm.saveError)
+    }
+
     func testForeignMutationReceiptCannotCloseTheCurrentBill() async {
         let state = FinanceState()
         let api = makeAPI()

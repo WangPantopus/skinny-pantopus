@@ -14,6 +14,22 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Bill-detail recovery follow-up — September 10
+
+The iOS bill detail now distinguishes unavailable split data from an empty
+allocation list, and confirms the requested status before marking a change
+successful. Fourteen focused access/detail checks and independent review pass;
+see the [bill report](home-ios-finance-access-2026-09-10.md). Android parity and
+its static checks remain in progress. Dashboard runtime repair `5c959a64a` is
+pushed; iOS 18.5 CI remains the required verification for its crash repair.
+
+Claim review is in final transaction/replay validation, including an actual NULL
+platform-role denial repair, exact lost-response receipts and protected private
+withdrawal provenance. Private evidence and attachments follow. Native refund
+controls are being implemented separately in PR #34. Paid services remain
+scheduled for one final launch-preparation step; no purchase or owner action is
+needed during these source checkpoints.
+
 ### iOS dashboard runtime repair — September 10
 
 The previous Home CI failure is traced to ten dashboard-loading crashes on iOS
