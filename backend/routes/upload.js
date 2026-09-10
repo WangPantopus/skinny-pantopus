@@ -9,6 +9,7 @@ const multer = require('multer');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homeRecordService = require('../services/homeRecordService');
 const { S3_BUCKET } = require('../config/aws');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
@@ -1244,127 +1245,23 @@ router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files
 // ============ HOME TASK MEDIA ============
 
 /**
- * POST /api/upload/home-task-media/:homeId/:taskId
- * Upload media files for a home task
+ * Legacy task media have permanent public URLs. Until the private storage
+ * lifecycle ships, authorize the exact task before returning an explicit
+ * unavailable result. No provider upload or metadata write occurs here.
  */
-router.post('/home-task-media/:homeId/:taskId', uploadLimiter, verifyToken, upload.array('files', 10), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+router.post('/home-task-media/:homeId/:taskId', uploadLimiter, verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { homeId, taskId } = req.params;
-    const files = req.files;
-
-    if (!files || files.length === 0) {
-      return res.status(400).json({ error: 'No files provided' });
-    }
-
-    // Verify home membership
-    const { data: occ, error: occErr } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single();
-
-    if (occErr || !occ) {
-      return res.status(403).json({ error: 'Not a member of this home' });
-    }
-
-    // Verify task exists
-    const { data: task, error: taskErr } = await supabaseAdmin
-      .from('HomeTask')
-      .select('id')
-      .eq('id', taskId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (taskErr || !task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    const uploadedMedia = [];
-
-    for (const file of files) {
-      const { url, key, category } = await s3.uploadHomeTaskMedia(
-        file.buffer,
-        userId,
-        homeId,
-        taskId,
-        file.originalname,
-        file.mimetype
-      );
-
-      // Generate thumbnail for images
-      let thumbnailUrl = null;
-      const thumbBuffer = await generateThumbnail(file.buffer, file.mimetype);
-      if (thumbBuffer) {
-        const thumbKey = key.replace(/(\.[^.]+)$/, '_thumb.webp');
-        const thumbResult = await s3.uploadToS3(thumbBuffer, thumbKey, 'image/webp');
-        thumbnailUrl = thumbResult.url;
-      }
-
-      const { data: mediaRecord, error: insertErr } = await supabaseAdmin
-        .from('HomeTaskMedia')
-        .insert({
-          task_id: taskId,
-          home_id: homeId,
-          uploaded_by: userId,
-          file_url: url,
-          file_key: key,
-          file_name: file.originalname,
-          file_type: category,
-          mime_type: file.mimetype,
-          file_size: file.size,
-          thumbnail_url: thumbnailUrl,
-        })
-        .select()
-        .single();
-
-      if (insertErr) {
-        logger.error('HomeTaskMedia insert error', { error: insertErr.message });
-        await s3.deleteFromS3(key);
-        continue;
-      }
-
-      uploadedMedia.push(mediaRecord);
-    }
-
-    logger.info('Home task media uploaded', { homeId, taskId, count: uploadedMedia.length });
-
-    res.json({
-      message: `${uploadedMedia.length} file(s) uploaded`,
-      media: uploadedMedia,
-    });
-  } catch (err) {
-    logger.error('Home task media upload error', { error: err.message });
-    res.status(500).json({ error: err.message || 'Failed to upload' });
-  }
+    await homeRecordService.mutate({ homeId: req.params.homeId, actorId: req.user.id, kind: 'task',
+      action: 'authorize_attachment', recordId: req.params.taskId });
+    res.status(409).json({ error: 'Private task attachments are not available yet.', code: 'HOME_TASK_PRIVATE_STORAGE_REQUIRED' });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
-
-/**
- * GET /api/upload/home-task-media/:homeId/:taskId
- * Get media for a home task
- */
 router.get('/home-task-media/:homeId/:taskId', verifyToken, async (req, res) => {
   try {
-    const { homeId, taskId } = req.params;
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeTaskMedia')
-      .select('*')
-      .eq('task_id', taskId)
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      return res.status(500).json({ error: 'Failed to fetch task media' });
-    }
-
-    res.json({ media: data || [] });
-  } catch (err) {
-    logger.error('Home task media fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch task media' });
-  }
+    const result = await homeRecordService.list({ homeId: req.params.homeId, actorId: req.user.id,
+      kind: 'task', recordId: req.params.taskId });
+    res.json({ media: result.records[0].media || [] });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
 
 

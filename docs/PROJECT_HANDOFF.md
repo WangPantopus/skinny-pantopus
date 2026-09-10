@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 9, 2026. This is the continuing-work entry point. Detailed
+Updated September 10, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -13,6 +13,43 @@ the ordered backlog below. The owner now requests autonomous continuation and
 authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
+
+### Home task/calendar transaction checkpoint — September 10
+
+Home task and calendar reads/writes now apply the current effective permission,
+visibility, creator/assignee restrictions and source-mail access in guarded
+transactions. Mail conversion and deletion keep the exact backlink consistent;
+assignment notifications use the current assignee and title. Derived Home lists
+and scheduling paths use the same record boundary. Direct client table bypasses
+are closed. The [record report](home-record-authorization-2026-09-09.md) records
+**128 final focused checks**, all privacy gates including **15 E2E checks**,
+**29 SQL contracts/wrappers**, **17 observed races**, **6 SDK checks**, zero SQL
+lint errors and exact fixture cleanup on a fresh 23-migration replay.
+
+The pre-notification full backend run passed 4,906 checks with 16 existing skips.
+Three final full runs each passed 4,907 with one socket failure in different
+HTTP suites; all 47 unchanged affected-suite rechecks pass. The cause remains
+unproven and final-head remote CI is required. Separately, previous-head iOS CI
+crashes in Home dashboard async loading are under active investigation; no
+merge or full Home acceptance is claimed.
+
+**Next:** finish private task attachments and task-to-gig conversion, ordinary
+claim review/withdrawal plus trusted private evidence, remaining native/web
+controls and derived views, then full household acceptance. Existing task-media
+upload and task-to-gig shortcuts return explicit unavailable errors until their
+complete workflows are implemented; this checkpoint does not mark them done.
+Native iOS bill controls have passed focused verification and independent
+review and await a separate source checkpoint; Android parity is active.
+Paid-gig residual wallet settlement is committed/pushed as `fbac89ef1` in draft
+PR #34, with provider/native workflow acceptance still required.
+
+The owner defers **all paid subscriptions and paid dependencies** to one final
+launch-preparation step after other development and available validation.
+The prior timed Smarty reminder is paused. Track activation and real-provider
+acceptance together; do not buy or activate subscriptions now. Prioritize
+complete, recoverable user workflows, maintainable code and realistic capacity
+validation; unit test counts alone do not establish launch readiness. Completed
+physical Beacon and native saved-card acceptance must not be repeated.
 
 ### Claim invitation transaction checkpoint — September 9
 

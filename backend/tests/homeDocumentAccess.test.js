@@ -101,6 +101,11 @@ test('a permitted member can create a document record in their visible scope', a
 });
 
 test.each([true, false])('dashboard document counts include only permitted records (docs.view=%s)', async permitted => {
+  db.setRpcMock(async name => name === 'get_home_records'
+    ? { data: { ok: true, records: [], attendees: [] }, error: null }
+    : name === 'home_delete_eligibility'
+      ? { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }
+      : { data: null, error: { message: 'Unexpected RPC' } });
   getUserAccess.mockResolvedValue({ permissions: permitted ? ['docs.view'] : [] });
   const response = await request(app).get(`/api/homes/${homeId}/dashboard`);
   expect(response.status).toBe(200);

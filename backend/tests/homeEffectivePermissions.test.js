@@ -224,6 +224,11 @@ test('an owner denied finance/docs view cannot use management rights or the dash
   seed({ role_base: 'owner' });
   override('finance.view', false);
   override('docs.view', false);
+  db.setRpcMock(async name => name === 'get_home_records'
+    ? { data: { ok: true, records: [], attendees: [] }, error: null }
+    : name === 'home_delete_eligibility'
+      ? { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }
+      : { data: null, error: { message: 'Unexpected RPC' } });
   expect(await hasPermission(HOME, USER, 'finance.manage')).toBe(true);
   const from = jest.spyOn(db, 'from');
   for (const path of ['/:id/bills', '/:id/bills/:billId/splits', '/:id/bill-trends']) {

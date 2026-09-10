@@ -253,9 +253,15 @@ DROP TRIGGER sharing_receipt_failure ON public."HomeShareReadReceipt";
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','ddf00000-0000-4000-8000-000000000003',true);
 DO $$ BEGIN
- IF public.home_has_scoped_grant('ddf00000-0000-4000-8000-000000000100','HomeTask','ddf00000-0000-4000-8000-000000000501','view')
-  OR EXISTS(SELECT FROM public."HomeTask" WHERE id='ddf00000-0000-4000-8000-000000000501') THEN
+ IF public.home_has_scoped_grant('ddf00000-0000-4000-8000-000000000100','HomeTask','ddf00000-0000-4000-8000-000000000501','view') THEN
   RAISE EXCEPTION 'Named token grant exposed raw task rows through legacy RLS'; END IF;
+ BEGIN
+  IF EXISTS(SELECT FROM public."HomeTask" WHERE id='ddf00000-0000-4000-8000-000000000501') THEN
+   RAISE EXCEPTION 'Named token grant exposed raw task rows through legacy RLS'; END IF;
+ EXCEPTION WHEN insufficient_privilege THEN
+  -- The later Home record transaction checkpoint closes direct SELECT too.
+  NULL;
+ END;
 END $$;
 RESET ROLE;
 DO $$ DECLARE t text; op text; BEGIN

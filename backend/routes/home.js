@@ -16,6 +16,7 @@ const homeAuthorityService = require('../services/homeAuthorityService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeInvitationService = require('../services/homeInvitationService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
+const homeRecordService = require('../services/homeRecordService');
 const {
   checkHomePermission,
   mapLegacyRole,
@@ -33,7 +34,7 @@ const propertySuggestionsService = require('../services/ai/propertySuggestionsSe
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const { shouldBlockCoordinateOverwrite, stripCoordinateFields } = require('../utils/verifiedCoordinateGuard');
 const { encodeGeohash } = require('../utils/geohash');
-const { HOME_DETAIL, HOME_TASK_LIST, HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST, HOME_EVENT_LIST } = require('../utils/columns');
+const { HOME_DETAIL, HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const {
   pipelineService,
   AddressVerdictStatus,
@@ -3227,218 +3228,65 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
 
 // ============ HOME TASKS ============
 
-/**
- * GET /api/homes/:id/tasks
- */
-router.get('/:id/tasks', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_tasks');
-    // Even without manage permission, members might view tasks assigned to them
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeTask')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('Error fetching home tasks', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch tasks' });
-    }
-
-    // Filter tasks based on visibility + viewer_user_ids
-    const filtered = (data || []).filter(task => {
-      // Task creator can always see their own tasks
-      if (task.created_by === userId) return true;
-      // Task assignee can always see
-      if (task.assigned_to === userId) return true;
-      // If the user is in viewer_user_ids, they can see it
-      if (task.viewer_user_ids && task.viewer_user_ids.includes(userId)) return true;
-
-      // Otherwise check the visibility level
-      if (task.visibility === 'public') return true;
-      if (task.visibility === 'members' && access.hasAccess) return true;
-      if (task.visibility === 'managers' && access.role && ['owner', 'admin', 'manager'].includes(access.role)) return true;
-      if (task.visibility === 'sensitive' && access.role && ['owner', 'admin'].includes(access.role)) return true;
-
-      return false;
-    });
-
-    // Fetch media for all returned tasks
-    const taskIds = filtered.map(t => t.id);
-    let mediaMap = {};
-    if (taskIds.length > 0) {
-      const { data: allMedia } = await supabaseAdmin
-        .from('HomeTaskMedia')
-        .select('*')
-        .in('task_id', taskIds)
-        .order('created_at', { ascending: true });
-
-      (allMedia || []).forEach(m => {
-        if (!mediaMap[m.task_id]) mediaMap[m.task_id] = [];
-        mediaMap[m.task_id].push(m);
-      });
-    }
-
-    const enriched = filtered.map(t => ({
-      ...t,
-      media: mediaMap[t.id] || [],
-    }));
-
-    res.json({ tasks: enriched });
-  } catch (err) {
-    logger.error('Tasks fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch tasks' });
-  }
-});
-
-/**
- * POST /api/homes/:id/tasks
- */
-router.post('/:id/tasks', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_tasks');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage tasks' });
-
-    const {
-      task_type, title, description, assigned_to,
-      due_at, recurrence_rule, priority, budget, details,
-      visibility, viewer_user_ids
-    } = req.body;
-
-    if (!task_type || !title) {
-      return res.status(400).json({ error: 'task_type and title are required' });
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeTask')
-      .insert({
-        home_id: homeId,
-        task_type,
-        title,
-        description: description || null,
-        assigned_to: assigned_to || null,
-        due_at: due_at || null,
-        recurrence_rule: recurrence_rule || null,
-        priority: priority || 'medium',
-        budget: budget || null,
-        details: details || {},
-        created_by: userId,
-        visibility: visibility || 'members',
-        viewer_user_ids: viewer_user_ids || [],
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating home task', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to create task' });
-    }
-
-    res.status(201).json({ task: data });
-
-    // Notify assigned user (non-blocking)
-    if (assigned_to && assigned_to !== userId) {
-      const { notifyTaskAssigned } = require('../services/notificationService');
-      (async () => {
-        try {
-          const { data: assigner } = await supabaseAdmin.from('User').select('name, username, first_name').eq('id', userId).single();
-          await notifyTaskAssigned({
-            assigneeUserId: assigned_to,
-            assignerName: assigner?.name || assigner?.first_name || assigner?.username || 'Someone',
-            taskTitle: title,
-            homeId,
-            taskId: data.id,
-          });
-        } catch (e) { /* non-blocking */ }
-      })();
-    }
-  } catch (err) {
-    logger.error('Task creation error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create task' });
-  }
-});
-
-/**
- * PUT /api/homes/:id/tasks/:taskId
- */
-router.put('/:id/tasks/:taskId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, taskId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_tasks');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage tasks' });
-
-    const allowed = [
-      'title', 'description', 'status', 'assigned_to',
-      'priority', 'due_at', 'budget', 'details', 'completed_at',
-      'visibility', 'viewer_user_ids'
-    ];
-    const updates = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
-    }
-    // Auto-set completed_at when marking done
-    if (updates.status === 'done' && !updates.completed_at) {
-      updates.completed_at = new Date().toISOString();
-    }
-    updates.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeTask')
-      .update(updates)
-      .eq('id', taskId)
-      .eq('home_id', homeId)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating home task', { error: error.message, taskId });
-      return res.status(500).json({ error: 'Failed to update task' });
-    }
-
-    res.json({ task: data });
-  } catch (err) {
-    logger.error('Task update error', { error: err.message });
-    res.status(500).json({ error: 'Failed to update task' });
-  }
-});
-
-/**
- * DELETE /api/homes/:id/tasks/:taskId
- */
-router.delete('/:id/tasks/:taskId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, taskId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId, 'can_manage_tasks');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage tasks' });
-
-    const { error } = await supabaseAdmin
-      .from('HomeTask')
-      .delete()
-      .eq('id', taskId)
-      .eq('home_id', homeId);
-
-    if (error) {
-      logger.error('Error deleting home task', { error: error.message, taskId });
-      return res.status(500).json({ error: 'Failed to delete task' });
-    }
-
-    res.json({ message: 'Task deleted' });
-  } catch (err) {
-    logger.error('Task delete error', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete task' });
-  }
-});
+// Every task/calendar gateway uses the same locked database authorization.
+function registerHomeRecordRoutes(path, kind) {
+  router.get(`/:id/${path}`, verifyToken, async (req, res) => {
+    try {
+      const result = await homeRecordService.list({ homeId: req.params.id, actorId: req.user.id, kind,
+        startAfter: kind === 'event' ? req.query.start_after || null : null,
+        startBefore: kind === 'event' ? req.query.start_before || null : null });
+      const records = kind === 'event'
+        ? result.records.sort((a, b) => new Date(a.start_at) - new Date(b.start_at)) : result.records;
+      res.json({ [path]: records });
+    } catch (error) { homeRecordService.sendError(res, error); }
+  });
+  router.post(`/:id/${path}`, verifyToken, async (req, res) => {
+    try {
+      const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
+        kind, action: 'create', payload: req.body });
+      res.status(result.replayed ? 200 : 201).json({ [kind]: result.record });
+      if (kind === 'task' && result.notify_user_id && !result.replayed) {
+        // Recheck the recipient immediately before producing an assignment
+        // notification; the mutation already validates the exact recipient.
+        (async () => {
+          try {
+            const current = await homeRecordService.list({ homeId: req.params.id, actorId: result.notify_user_id,
+              kind: 'task', recordId: result.record.id });
+            const task = current.records[0];
+            if (task.assigned_to !== result.notify_user_id) return;
+            const { data: actor } = await supabaseAdmin.from('User').select('name, username, first_name').eq('id', req.user.id).single();
+            await require('../services/notificationService').notifyTaskAssigned({
+              assigneeUserId: result.notify_user_id, assignerName: actor?.name || actor?.first_name || actor?.username || 'Someone',
+              taskTitle: task.title, homeId: req.params.id, taskId: task.id,
+            });
+          } catch (_) { /* The saved task remains authoritative if delivery is unavailable. */ }
+        })();
+      }
+    } catch (error) { homeRecordService.sendError(res, error); }
+  });
+  router.get(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
+    try {
+      const result = await homeRecordService.list({ homeId: req.params.id, actorId: req.user.id,
+        kind, recordId: req.params.recordId });
+      res.json({ [kind]: result.records[0], ...(kind === 'event' ? { attendees: result.attendees } : {}) });
+    } catch (error) { homeRecordService.sendError(res, error); }
+  });
+  router.put(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
+    try {
+      const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
+        kind, action: 'update', recordId: req.params.recordId, payload: req.body });
+      res.json({ [kind]: result.record });
+    } catch (error) { homeRecordService.sendError(res, error); }
+  });
+  router.delete(`/:id/${path}/:recordId`, verifyToken, async (req, res) => {
+    try {
+      await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
+        kind, action: 'delete', recordId: req.params.recordId });
+      res.json({ message: kind === 'task' ? 'Task deleted' : 'Event deleted' });
+    } catch (error) { homeRecordService.sendError(res, error); }
+  });
+}
+registerHomeRecordRoutes('tasks', 'task');
 
 
 // ============ HOME ISSUES ============
@@ -4058,300 +3906,13 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
 
 // ============ HOME CALENDAR EVENTS ============
 
-/**
- * GET /api/homes/:id/events
- */
-router.get('/:id/events', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-    const { start_after, start_before } = req.query;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    let query = supabaseAdmin
-      .from('HomeCalendarEvent')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('start_at', { ascending: true });
-
-    if (start_after) query = query.gte('start_at', start_after);
-    if (start_before) query = query.lte('start_at', start_before);
-
-    const { data, error } = await query;
-    if (error) {
-      logger.error('Error fetching home events', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch events' });
-    }
-
-    const events = data || [];
-
-    // Calendarly: union confirmed/pending home bookings onto the household calendar.
-    // Query-time union — bookings are never copied into HomeCalendarEvent — so the calendar
-    // always reflects the live booking state. Gated on calendar.view (matching the Booking RLS)
-    // so the booking layer is not exposed more broadly than the existing event access.
-    // Degrades gracefully if scheduling tables are absent.
-    try {
-      const calAccess = await checkHomePermission(homeId, userId, 'calendar.view');
-      let bq = supabaseAdmin
-        .from('Booking')
-        .select('id, home_id, event_type_id, resource_id, host_user_id, invitee_name, start_at, end_at, status, location_detail, created_by')
-        .eq('owner_type', 'home')
-        .eq('owner_id', homeId)
-        .is('cohost_of_booking_id', null) // co-host shadows mirror a primary row already in this list
-        .in('status', ['pending', 'confirmed']);
-      if (start_after) bq = bq.gte('start_at', start_after);
-      if (start_before) bq = bq.lte('start_at', start_before);
-      const { data: bookings } = calAccess.hasAccess ? await bq : { data: [] };
-
-      if (bookings && bookings.length) {
-        const etIds = [...new Set(bookings.map((b) => b.event_type_id).filter(Boolean))];
-        const etNames = {};
-        if (etIds.length) {
-          const { data: ets } = await supabaseAdmin.from('EventType').select('id, name').in('id', etIds);
-          for (const et of ets || []) etNames[et.id] = et.name;
-        }
-        for (const b of bookings) {
-          const baseTitle = b.event_type_id ? etNames[b.event_type_id] || 'Appointment' : 'Resource booking';
-          events.push({
-            id: b.id,
-            home_id: b.home_id,
-            event_type: b.resource_id ? 'resource_booking' : 'appointment',
-            title: b.invitee_name ? `${baseTitle} — ${b.invitee_name}` : baseTitle,
-            description: null,
-            start_at: b.start_at,
-            end_at: b.end_at,
-            location_notes: b.location_detail || null,
-            recurrence_rule: null,
-            assigned_to: b.host_user_id ? [b.host_user_id] : null,
-            alerts_enabled: true,
-            created_by: b.created_by,
-            visibility: 'members',
-            // Calendarly markers (extra fields; clients that don't read them ignore these):
-            source: 'booking',
-            booking_id: b.id,
-            booking_status: b.status,
-          });
-        }
-      }
-    } catch (unionErr) {
-      logger.warn('[home events] booking union skipped', { error: unionErr.message, homeId });
-    }
-
-    events.sort((a, b2) => new Date(a.start_at) - new Date(b2.start_at));
-    res.json({ events });
-  } catch (err) {
-    logger.error('Events fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch events' });
-  }
-});
-
-/**
- * POST /api/homes/:id/events
- */
-router.post('/:id/events', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    const { event_type, title, description, start_at, end_at, location_notes, recurrence_rule, assigned_to, alerts_enabled, request_rsvp, reminders } = req.body;
-
-    if (!event_type || !title || !start_at) {
-      return res.status(400).json({ error: 'event_type, title, and start_at are required' });
-    }
-
-    // Persist the zone a RECURRING event was authored in so the availability engine expands
-    // it at the intended wall-clock time across DST (migration 167 §5). Default: the
-    // creator's default availability-schedule timezone.
-    let timezone = typeof req.body.timezone === 'string' && req.body.timezone ? req.body.timezone.slice(0, 64) : null;
-    if (!timezone && recurrence_rule) {
-      const { data: sched } = await supabaseAdmin
-        .from('AvailabilitySchedule')
-        .select('timezone')
-        .eq('user_id', userId)
-        .eq('is_default', true)
-        .maybeSingle();
-      timezone = (sched && sched.timezone) || 'UTC';
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeCalendarEvent')
-      .insert({
-        home_id: homeId,
-        event_type,
-        title,
-        description: description || null,
-        start_at,
-        end_at: end_at || null,
-        location_notes: location_notes || null,
-        recurrence_rule: recurrence_rule || null,
-        assigned_to: assigned_to || null,
-        alerts_enabled: alerts_enabled !== false,
-        request_rsvp: request_rsvp === true,
-        reminders: Array.isArray(reminders) ? reminders : [],
-        timezone,
-        created_by: userId,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error creating home event', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to create event' });
-    }
-
-    res.status(201).json({ event: data });
-  } catch (err) {
-    logger.error('Event creation error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create event' });
-  }
-});
-
-/**
- * PUT /api/homes/:id/events/:eventId
- */
-router.put('/:id/events/:eventId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, eventId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    const allowed = ['title', 'description', 'event_type', 'start_at', 'end_at', 'location_notes', 'recurrence_rule', 'assigned_to', 'alerts_enabled', 'request_rsvp', 'reminders', 'timezone'];
-    const updates = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
-    }
-    updates.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabaseAdmin
-      .from('HomeCalendarEvent')
-      .update(updates)
-      .eq('id', eventId)
-      .eq('home_id', homeId)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating home event', { error: error.message, eventId });
-      return res.status(500).json({ error: 'Failed to update event' });
-    }
-
-    res.json({ event: data });
-  } catch (err) {
-    logger.error('Event update error', { error: err.message });
-    res.status(500).json({ error: 'Failed to update event' });
-  }
-});
-
-/**
- * DELETE /api/homes/:id/events/:eventId
- */
-router.delete('/:id/events/:eventId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, eventId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    const { error } = await supabaseAdmin
-      .from('HomeCalendarEvent')
-      .delete()
-      .eq('id', eventId)
-      .eq('home_id', homeId);
-
-    if (error) {
-      logger.error('Error deleting home event', { error: error.message, eventId });
-      return res.status(500).json({ error: 'Failed to delete event' });
-    }
-
-    res.json({ message: 'Event deleted' });
-  } catch (err) {
-    logger.error('Event delete error', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete event' });
-  }
-});
-
-/**
- * GET /api/homes/:id/events/:eventId — event detail incl. attendee RSVPs.
- */
-router.get('/:id/events/:eventId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, eventId } = req.params;
-    const access = await checkHomePermission(homeId, req.user.id);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-    const { data: event } = await supabaseAdmin
-      .from('HomeCalendarEvent')
-      .select('*')
-      .eq('id', eventId)
-      .eq('home_id', homeId)
-      .maybeSingle();
-    if (!event) return res.status(404).json({ error: 'Event not found' });
-    const { data: attendees } = await supabaseAdmin
-      .from('HomeCalendarEventAttendee')
-      .select('user_id, rsvp_status, updated_at')
-      .eq('event_id', eventId);
-    res.json({ event, attendees: attendees || [] });
-  } catch (err) {
-    logger.error('Event detail error', { error: err.message });
-    res.status(500).json({ error: 'Failed to load event' });
-  }
-});
-
-/**
- * POST /api/homes/:id/events/:eventId/rsvp — a member records their RSVP for a home event.
- */
+registerHomeRecordRoutes('events', 'event');
 router.post('/:id/events/:eventId/rsvp', verifyToken, async (req, res) => {
   try {
-    const { id: homeId, eventId } = req.params;
-    const userId = req.user.id;
-    const status = req.body && req.body.status;
-    if (!['going', 'maybe', 'declined', 'pending'].includes(status)) {
-      return res.status(400).json({ error: 'status must be going | maybe | declined | pending' });
-    }
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-    // Confirm the event belongs to this home.
-    const { data: event } = await supabaseAdmin
-      .from('HomeCalendarEvent')
-      .select('id')
-      .eq('id', eventId)
-      .eq('home_id', homeId)
-      .maybeSingle();
-    if (!event) return res.status(404).json({ error: 'Event not found' });
-
-    const { data: existing } = await supabaseAdmin
-      .from('HomeCalendarEventAttendee')
-      .select('id')
-      .eq('event_id', eventId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    let row;
-    if (existing) {
-      ({ data: row } = await supabaseAdmin
-        .from('HomeCalendarEventAttendee')
-        .update({ rsvp_status: status, updated_at: new Date().toISOString() })
-        .eq('id', existing.id)
-        .select('user_id, rsvp_status')
-        .single());
-    } else {
-      ({ data: row } = await supabaseAdmin
-        .from('HomeCalendarEventAttendee')
-        .insert({ event_id: eventId, user_id: userId, rsvp_status: status })
-        .select('user_id, rsvp_status')
-        .single());
-    }
-    res.json({ attendee: row });
-  } catch (err) {
-    logger.error('Event RSVP error', { error: err.message });
-    res.status(500).json({ error: 'Failed to record RSVP' });
-  }
+    const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
+      kind: 'event', action: 'rsvp', recordId: req.params.eventId, payload: req.body });
+    res.json({ attendee: result.attendee });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
 
 
@@ -5182,7 +4743,13 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
     const endOfToday = new Date(now);
     endOfToday.setHours(23, 59, 59, 999);
     const nowISO = now.toISOString();
-    const eodISO = endOfToday.toISOString();
+
+    const [visibleTasks, visibleEvents] = await Promise.all([
+      homeRecordService.visibleRecords({ homeId, actorId: userId, kind: 'task' }),
+      homeRecordService.visibleRecords({ homeId, actorId: userId, kind: 'event' }),
+    ]);
+    const upcomingEvents = visibleEvents.filter(e => Date.parse(e.start_at) >= now.getTime())
+      .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
 
     // Fire all queries in parallel
     const [
@@ -5215,24 +4782,10 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
         .eq('home_id', homeId)
         .eq('is_active', true),
       // today: next 3 calendar events
-      supabaseAdmin
-        .from('HomeCalendarEvent')
-        .select(HOME_EVENT_LIST)
-        .eq('home_id', homeId)
-        .gte('start_at', nowISO)
-        .lte('start_at', eodISO)
-        .order('start_at', { ascending: true })
-        .limit(3),
+      Promise.resolve({ data: upcomingEvents.filter(e => Date.parse(e.start_at) <= endOfToday.getTime()).slice(0, 3) }),
       // today: tasks due today or overdue (not done)
-      supabaseAdmin
-        .from('HomeTask')
-        .select(HOME_TASK_LIST)
-        .eq('home_id', homeId)
-        .neq('status', 'done')
-        .neq('status', 'canceled')
-        .lte('due_at', eodISO)
-        .order('due_at', { ascending: true })
-        .limit(3),
+      Promise.resolve({ data: visibleTasks.filter(t => !['done', 'canceled'].includes(t.status) && t.due_at && Date.parse(t.due_at) <= endOfToday.getTime())
+        .sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 3) }),
       // today: next bill due
       canFinance
         ? supabaseAdmin
@@ -5263,11 +4816,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
         .eq('home_id', homeId)
         .in('status', ['ordered', 'shipped', 'out_for_delivery']),
       // counts: open tasks
-      supabaseAdmin
-        .from('HomeTask')
-        .select('id', { count: 'exact', head: true })
-        .eq('home_id', homeId)
-        .in('status', ['open', 'in_progress']),
+      Promise.resolve({ count: visibleTasks.filter(t => ['open', 'in_progress'].includes(t.status)).length }),
       // counts: open issues
       supabaseAdmin
         .from('HomeIssue')
@@ -5297,11 +4846,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
             .in('visibility', documentVisibility.allowed)
         : Promise.resolve({ count: 0 }),
       // counts: upcoming events
-      supabaseAdmin
-        .from('HomeCalendarEvent')
-        .select('id', { count: 'exact', head: true })
-        .eq('home_id', homeId)
-        .gte('start_at', nowISO),
+      Promise.resolve({ count: upcomingEvents.length }),
       // counts: pets
       supabaseAdmin
         .from('HomePet')
