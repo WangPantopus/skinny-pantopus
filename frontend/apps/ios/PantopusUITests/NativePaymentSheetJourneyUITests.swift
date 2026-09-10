@@ -58,7 +58,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         tap("payments.method.\(cardB)")
         tap("paymentsRow_\(cardB)_setDefault")
         assertDefault(cardB)
-        XCTAssertFalse(element("paymentsRow_\(cardA)_defaultBadge").exists)
+        XCTAssertFalse(element("payments.method.\(cardA)").label.localizedCaseInsensitiveContains("default"))
 
         restartAndOpenPayments()
         XCTAssertTrue(element("payments.method.\(cardA)").waitForExistence(timeout: 20))
@@ -80,11 +80,11 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     private func openPayments() {
-        if element("payments.screen").exists { return }
+        if element("payments.addMethodBtn").exists { return }
         tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
         tap("navDrawer.item.settings")
         tap("groupedListRow_paymentsPayouts")
-        XCTAssertTrue(element("payments.screen").waitForExistence(timeout: 20))
+        print("PAYMENT_IDENTITY_GATE")
         XCTAssertTrue(element("payments.addMethodBtn").waitForExistence(timeout: 20))
     }
 
@@ -144,7 +144,8 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         // to settle before treating it as durable or restarting the app.
         assertAddLabel("Add payment method")
         XCTAssertFalse(app.alerts["Something went wrong"].exists)
-        XCTAssertTrue(element("paymentsRow_\(id)_defaultBadge").waitForExistence(timeout: 20))
+        expectation(for: NSPredicate(format: "label CONTAINS[c] %@", "default"), evaluatedWith: element("payments.method.\(id)"))
+        waitForExpectations(timeout: 20)
     }
 
     private func assertAddLabel(_ label: String) {

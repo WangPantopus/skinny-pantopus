@@ -21,8 +21,8 @@ two-card default/cold persistence, removal cancellation, fallback, empty state
 and logout. Provider/API checks prove two successful setups, detached cards,
 foreign/removed-proof denial and no charges. Customer/session cleanup waits for
 both platforms. Do not repeat the completed Android actions. iOS identity check
-passes with simulated Face ID; accessibility containment is repaired and the test
-build/lint pass, with real iOS card acceptance next. The private API candidate
+passes with simulated Face ID; accessibility containment and the grounded live-test
+locators are repaired, with build/lint passing and real iOS card acceptance next. The private API candidate
 remains committed `2e7b04293`/`2e0a32e8b0e2`; see the payment report below.
 
 The first Home authorization checkpoint is pushed at `2fabe0c94` in draft

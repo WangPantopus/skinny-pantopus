@@ -164,3 +164,12 @@ inherited from the Settings/payment card containers, hiding their child controls
 from XCTest. Explicit accessibility containment preserves those controls and
 screen grouping. Strict SwiftLint/SwiftFormat and the test build pass. The actual
 iOS SDK card journey is still pending, and final current-head CI is required.
+
+The follow-up UI harness now locates the actual Add control after the native
+identity gate and checks the saved row's announced default state. Exported live
+accessibility hierarchy confirms the contained card controls retain their exact
+identifiers; the outer Settings wrapper still names the enclosing screen.
+This avoids relying on a wrapper identifier or a badge hidden inside a button.
+The rebuilt opt-in harness and strict lint/format checks pass; live iOS acceptance
+is continuing from the still-empty actor. Android exact PostgREST denials were
+also verified as permission-denied errors, not generic request failures.
