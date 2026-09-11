@@ -27,3 +27,14 @@ for the changed code. No test credentials or live push providers were used.
 This change is independent of PR #6's push opt-out fix and APNs token-log
 removal. It requires no database migration or cloud configuration. Physical
 push delivery and the broader staging acceptance journey remain unverified.
+
+## September 10 integration refresh
+
+Master `390091cdb` merged into this branch cleanly. Review confirms the remaining
+code delta is the fixed-category router sink, testable injection and removal of
+notification link metadata; current authentication/routing changes remain intact.
+Strict SwiftLint (three files, zero violations) and SwiftFormat pass. The original
+101 local routing checks and previous three-device CI result remain historical;
+new exact-head required CI must pass before integration. No new installed or
+physical-device acceptance is claimed by this refresh, and no provider or paid
+service was activated. The Home/payment work continues in separate draft PRs.

@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 9, 2026. This is the continuing-work entry point. Detailed
+Updated September 10, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -13,6 +13,25 @@ the ordered backlog below. The owner now requests autonomous continuation and
 authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
+
+### Deep-link privacy integration refresh — September 10
+
+The [diagnostics report](deep-link-diagnostics-privacy-2026-09-07.md) records
+PR #7's narrow fix: iOS diagnostic events carry a fixed routing category instead
+of full URLs/destination values, and notification taps omit their link payload.
+It is refreshed against master `390091cdb` without conflicts; current source
+review and strict SwiftLint/SwiftFormat pass. Its original 101 routing checks
+passed, but the refreshed exact head must pass required CI before merge. There
+is no migration, hosted configuration, provider action or deployment in this PR.
+
+Continue primary work in `/private/tmp/pantopus-home-permission-boundaries`;
+that branch's more recent handoff and September 10 resume are the detailed
+continuation record. Home #32 at `3393baa18` now passes required CI, completing
+the iOS relationship milestone; Android installed recovery is in progress there.
+Paid #34 stays `e9ef2decb`, green but unfinished. Neither feature PR is ready to
+merge: remaining Home/payment scope and combined 43-version migration dependencies
+are open. Keep all paid services in one final launch bundle and preserve owner
+files/runtimes. Earlier progress below is historical.
 
 ### Payment integration and next checkpoints — September 9
 
