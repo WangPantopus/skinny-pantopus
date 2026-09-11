@@ -1,4 +1,5 @@
 import * as api from '@pantopus/api';
+import { validTaskGigState, validPendingTaskGig, validTaskGigReceipt, taskGigBody, type TaskGigState, type PendingTaskGig, type TaskGigResponse } from './homeTaskGigModel';
 import { validPendingRecurrence, validRecurrenceState, validRecurrenceReceipt,
   type PendingRecurrence, type RecurrenceState, type RecurrenceResponse } from './homeTaskRecurrenceModel';
 import { TASK_UUID, validTask, validTaskFields, taskPatchMatches, validRetainedTaskCreate,
@@ -117,6 +118,37 @@ export class HomeTaskClient {
     if (this.mutating) throw new Error('Wait for the current task action to finish.');
     this.mutating = true;
     try { return await run(this.generation); } finally { this.mutating = false; }
+  }
+
+  async gigPublication(taskId: string, revision = this.generation): Promise<TaskGigState> {
+    await this.identify(revision);
+    const result = await this.request(() => api.get<TaskGigState>(`${this.endpoint(taskId)}/gig-publication`, undefined, this.options()), revision);
+    this.bind(result.task_session);
+    if (!validTaskGigState(result, this.homeId, taskId)) throw new Error('Current publication access could not be verified. Reload.');
+    return result;
+  }
+
+  async publishGig(pending: PendingTaskGig, requireSaved: () => Promise<void>): Promise<TaskGigResponse> {
+    return this.mutation(async revision => {
+      // Re-read current authority, but do not reject an already linked source:
+      // an unknown original publication must still recover its immutable receipt.
+      await this.gigPublication(pending.task_id, revision);
+      if (!this.actor || !validPendingTaskGig(pending, this.origin, this.actor, this.homeId, pending.task_id)) {
+        throw new Error('The original publication could not be verified.');
+      }
+      await requireSaved();
+      this.requireCurrent(revision);
+      const result = await this.request(() => api.post<TaskGigResponse>('/api/gigs', taskGigBody(pending), this.options()), revision);
+      this.bind(result.task_session);
+      if (typeof result.replayed !== 'boolean' || !validTaskGigReceipt(result.publication_receipt, pending)
+        || result.gig?.id !== result.publication_receipt.gig_id || result.gig.user_id !== this.actor || result.gig.created_by !== this.actor
+        || typeof result.gig.status !== 'string' || (!result.replayed && (result.gig.title !== pending.fields.title
+          || result.gig.description !== pending.fields.description || result.gig.price !== pending.fields.price))
+        || (pending.confirmed && JSON.stringify(result.publication_receipt) !== JSON.stringify(pending.confirmed))) {
+        throw new Error('Publication was not confirmed. Retry the original saved request.');
+      }
+      return result;
+    });
   }
 
   async recurrence(taskId: string, revision = this.generation): Promise<RecurrenceState> {

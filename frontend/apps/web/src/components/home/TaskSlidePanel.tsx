@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import * as api from '@pantopus/api';
+import Link from 'next/link';
 import TaskAttachmentList from './TaskAttachmentList';
 import { Paintbrush, ShoppingCart, Wrench, Hammer, Bell } from 'lucide-react';
 import SlidePanel from './SlidePanel';
@@ -449,6 +450,12 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
           </button>
         </div>
       </form>
+      {form.task && form.canEdit && !form.hasUnsavedChanges && !saving && <section className="mt-6 space-y-2 border-t border-app-border pt-5 text-sm" aria-label="Gig publication">
+        <h3 className="font-semibold">Find outside help</h3>
+        <p>Review public details or recover an existing publication. Private mail, files and household access details stay private.</p>
+        <Link prefetch={false} className="inline-block rounded-lg border border-app-border px-3 py-2 font-medium"
+          href={`/app/gigs/new?sourceHomeId=${form.task.home_id}&sourceTaskId=${form.task.id}`}>Review Gig publication</Link>
+      </section>}
       {form.task?.updated_at && scope && <HomeTaskRecurrenceCard task={form.task} scope={scope} busy={saving}
         hasUnsavedChanges={form.hasUnsavedChanges} onTaskReload={form.reload} onTaskUpdated={onSaved} />}
     </SlidePanel>

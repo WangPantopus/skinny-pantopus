@@ -25,6 +25,7 @@ type Props = {
   placeholder?: string;
   /** Id of the visible <label> for this field, so the combobox is named. */
   labelId?: string;
+  hintText?: string;
 };
 
 function useDebounced<T>(value: T, delayMs: number) {
@@ -58,6 +59,7 @@ export default function AddressAutocomplete({
   onChange,
   onSelectNormalized,
   placeholder = '123 Main St',
+  hintText = 'Start typing, then pick a suggestion to verify.',
   labelId,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -281,7 +283,7 @@ export default function AddressAutocomplete({
         </p>
       )}
       <p id={hintId} className="mt-1 text-xs text-app-text-secondary">
-        Start typing, then pick a suggestion to verify.
+        {hintText}
       </p>
     </div>
   );

@@ -674,7 +674,10 @@ apiClient.interceptors.response.use(
     const status = error.response?.status;
     const requestUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
     const isNetworkError = !error.response;
-    const errorCode = typeof responseData?.error === 'string' ? responseData.error : error.code;
+    // Newer endpoints separate their stable recovery code from human copy.
+    // Keep the legacy error-field fallback for older response envelopes.
+    const errorCode = typeof responseData?.code === 'string' ? responseData.code
+      : typeof responseData?.error === 'string' ? responseData.error : error.code;
     const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
     const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
     const errorMessage = isValidationError && validationErrors.length > 0

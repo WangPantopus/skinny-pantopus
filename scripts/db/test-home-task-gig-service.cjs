@@ -2,68 +2,9 @@
 // Actual Gig HTTP route + validation + production service + isolated PostgreSQL.
 // Authentication is synthetic; provider fanout is replaced and no charges run.
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
-const Module = require('node:module');
-const path = require('node:path');
-const root = path.resolve(__dirname, '../..');
-const [container, database] = process.argv.slice(2);
-assert.match(container || '', /^supabase_db_pantopus-home-gig-[a-z0-9_-]+$/);
-assert.match(database || '', /^(postgres|[a-z0-9_]+_contract)$/);
-const id = n => `ddf22000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const actor=id(1), other=id(2), home=id(100), literal=v=>`'${String(v).replaceAll("'","''")}'`;
-function sql(query) {
-  return execFileSync('docker',['exec','-i',container,'psql','-X','-qAt','-U','postgres','-d',database,'-v','ON_ERROR_STOP=1'],
-    {input:query,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
-}
-const rpc = (name,args) => {
-  assert.match(name,/^[a-z_]+$/);
-  const params=Object.entries(args).map(([key,value])=>{
-    assert.match(key,/^p_[a-z_]+$/);
-    return `${key} => ${value===null?'NULL':literal(typeof value==='object'?JSON.stringify(value):value)}`;
-  });
-  return JSON.parse(sql(`SET ROLE service_role; SELECT public.${name}(${params.join(',')})::text; RESET ROLE;`));
-};
-let loseReply=false, publishEvents=0;
-const db={from:table=>{
-  assert.equal(table,'Gig');
-  return {insert:payload=>({select:()=>({single:async()=>{
-    const keys=Object.keys(payload);keys.forEach(key=>assert.match(key,/^[a-z_]+$/));
-    const row=JSON.parse(sql(`SET ROLE service_role; WITH inserted AS (
-      INSERT INTO public."Gig"(${keys.join(',')}) SELECT ${keys.map(key=>'g.'+key).join(',')}
-      FROM jsonb_populate_record(NULL::public."Gig",${literal(JSON.stringify(payload))}::jsonb) g RETURNING *)
-      SELECT to_jsonb(inserted)::text FROM inserted; RESET ROLE;`));
-    return {data:row,error:null};
-  }})})};
-},rpc:async(name,args)=>{
-  const data=rpc(name,args);
-  if(name==='publish_home_task_gig' && data.ok && loseReply){loseReply=false;throw new Error('Synthetic lost committed reply');}
-  return {data,error:null};
-}};
-const load=Module._load;
-const express=require(path.join(root,'backend/node_modules/express'));
-const scope=require(path.join(root,'backend/utils/requestSessionScope'));
-Module._load=function(request,parent,isMain){
-  if(parent?.filename.endsWith('/services/homeTaskGigService.js') && request==='../config/supabaseAdmin')return db;
-  if(parent?.filename.endsWith('/routes/gigs.js')){
-    if(request==='../config/supabaseAdmin')return db;
-    if(request==='../middleware/verifyToken')return (req,res,next)=>{
-      req.user={id:req.headers['x-fixture-actor']||actor};req.session={id:'local-task-gig-acceptance'};next();
-    };
-    if(request==='../middleware/optionalAuth')return (req,res,next)=>next();
-    const real=['express','joi','../middleware/validate','../services/homeTaskGigService','../utils/requestSessionScope','../utils/moduleSchemas'];
-    if(!real.includes(request)){
-      if(request==='../services/gig/browseCacheService')return {invalidateNear:()=>{publishEvents++;}};
-      if(request==='../services/savedSearchAlertService')return {alertMatchingSavedSearches:async()=>{}};
-      if(request==='../utils/logger')return {info:()=>{},warn:()=>{},error:()=>{}};
-      return {};
-    }
-  }
-  return load.call(this,request,parent,isMain);
-};
-const router=require(path.join(root,'backend/routes/gigs'));
-const service=require(path.join(root,'backend/services/homeTaskGigService'));
-Module._load=load;
-const app=express();app.use(express.json());app.use('/api/gigs',router);
+const [container,database] = process.argv.slice(2);
+const fixture = require('./home-task-gig-http-fixture.cjs')(container,database);
+const {id,actor,other,home,literal,sql,rpc,scope,app,service} = fixture;
 let server;
 async function main(){
   let initialized=false;
@@ -96,7 +37,7 @@ async function main(){
     assert.equal((await post(request,other)).status,403);
     assert.equal(sql(`SELECT count(*) FROM public."HomeTaskGigReceipt" WHERE home_id=${literal(home)};`),'0');
     console.log('PASS: real HTTP validation rejects missing session, unreviewed publication, implicit Home location, public address reveal and foreign actor');
-    loseReply=true;const lost=await post(request);assert.equal(lost.status,503,JSON.stringify(lost.body));
+    fixture.loseNextReply();const lost=await post(request);assert.equal(lost.status,503,JSON.stringify(lost.body));
     let result=await post(request);assert.equal(result.status,200,JSON.stringify(result.body));assert.equal(result.body.replayed,true);
     const gig=result.body.gig.id,receipt=result.body.publication_receipt;
     assert.equal(result.headers.get('cache-control'),'private, no-store');
@@ -111,7 +52,7 @@ async function main(){
     assert.equal((await post({...request,home_task_source:{...request.home_task_source,request_id:id(501)}})).body.code,'HOME_TASK_GIG_LINKED');
     sql(`UPDATE public."Gig" SET status='cancelled',price=30 WHERE id=${literal(gig)};`);
     result=await post(request);assert.deepEqual(result.body.publication_receipt,receipt);assert.equal(result.body.gig.status,'cancelled');assert.equal(result.body.gig.price,30);
-    assert.equal(publishEvents,0); // lost transport happened before first fanout; replay does not resend.
+    assert.equal(fixture.publicationEvents(),0); // lost transport happened before first fanout; replay does not resend.
     console.log('PASS: changed terms conflict; new UUID cannot duplicate; original replay preserves subsequent cancellation and edited price');
     sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${literal(home)} AND user_id=${literal(actor)};`);
     assert.equal((await post(request)).status,403);
@@ -130,7 +71,7 @@ async function main(){
     const {home_task_source:unused,...ordinary}=request;
     const normal=await post(ordinary);assert.equal(normal.status,201,JSON.stringify(normal.body));
     assert.equal(normal.body.gig.task_format,'in_person');assert.equal(normal.body.publication_receipt,undefined);
-    assert.equal(publishEvents,1);
+    assert.equal(fixture.publicationEvents(),1);
     console.log('PASS: ordinary HTTP Gig creation writes a valid required task format on the canonical schema');
   }finally{
     if(server)await new Promise(resolve=>server.close(resolve));

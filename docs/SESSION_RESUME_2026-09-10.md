@@ -3,7 +3,20 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [task-to-Gig publication report](home-task-gig-publication-2026-09-10.md)
+The newest [browser conversion report](home-web-task-gig-publication-2026-09-10.md)
+completes core public review and encrypted original/receipt recovery in Chrome
+against production HTTP/service/local SQL. Actual recovery, stale/cancelled states,
+storage failure, competing tabs, current access/account changes and narrow/keyboard
+journeys pass. Types, focused lint and 1,178 existing web checks pass. Next is iOS
+conversion and installed acceptance, then Android and the remaining ordered scope.
+Advanced composer options/provider acceptance remain explicit limits. Retain the
+terminal cancellation guard when reconciling paid #34's `CompletionFlow`. Backend
+`b08e280d5` passed all three remote iOS jobs; Android lint/test/assemble was still
+running. Refresh the current browser head separately. Both PRs stay draft, combined
+migration dependencies remain open and paid services stay one final launch bundle.
+The owned Gig SQL/web runtimes remain available; owner files/runtimes are preserved.
+
+The preceding [task-to-Gig publication report](home-task-gig-publication-2026-09-10.md)
 records the verified atomic backend and exact HTTP/SQL recovery. The next action
 is browser composer/recovery and actual Chrome acceptance, followed by native
 conversion controls and installed journeys. Those UI workflows are unfinished.

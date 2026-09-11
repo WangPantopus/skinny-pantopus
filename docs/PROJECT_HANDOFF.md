@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser task-to-Gig publication — September 10
+
+The [browser conversion report](home-web-task-gig-publication-2026-09-10.md)
+records normal saved-task entry, explicit public review and encrypted original/
+confirmation recovery. Actual Chrome with the production HTTP/service and local
+SQL passes lost replies, current Gig destination/cancellation, stale tasks,
+competing tabs, corrupt/unwritable storage, held preflight background/account
+changes and narrow/keyboard workflows. It found and repaired API machine-code
+mapping and terminal cancellation controls. Final types, focused lint (existing
+warnings only) and all 1,178 existing web checks pass. Private fixture cleanup is
+verified. Core conversion fields are implemented; advanced ordinary-composer
+options and provider/native acceptance are explicitly outside this checkpoint.
+
+**Next:** iOS conversion with Keychain original/receipt recovery and installed
+acceptance, then Android, relationships/residency, ownership and lease/resource
+cleanup. Preserve the terminal cancellation guard when reconciling paid #34's
+changes to `CompletionFlow`. Backend `b08e280d5` now passes all three remote iOS
+18.5 jobs and backend/web/database/instrumentation; Android lint/test/assemble
+was still running. Refresh the browser milestone's exact CI. Both PRs remain
+drafts; paid `e9ef2decb` is unchanged/green but unfinished. Final combined migration
+dependencies/replay and the single paid launch bundle remain open. Owner files
+and runtimes remain untouched; the owned Gig database/web listener remain for
+immediate continuation. The owner prioritizes actual app workflows over coverage.
+
 ### Recoverable task-to-Gig publication backend — September 10
 
 The [publication report](home-task-gig-publication-2026-09-10.md) records the
