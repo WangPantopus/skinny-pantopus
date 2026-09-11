@@ -102,11 +102,17 @@ object PantopusTextStyle {
  */
 val PantopusTypography =
     Typography(
-        displaySmall = PantopusTextStyle.h1,
-        headlineLarge = PantopusTextStyle.h2,
-        headlineSmall = PantopusTextStyle.h3,
-        bodyLarge = PantopusTextStyle.body,
-        bodyMedium = PantopusTextStyle.small,
-        labelSmall = PantopusTextStyle.caption,
-        labelMedium = PantopusTextStyle.overline,
+        displaySmall = PantopusTextStyle.h1.materialMetrics(),
+        headlineLarge = PantopusTextStyle.h2.materialMetrics(),
+        headlineSmall = PantopusTextStyle.h3.materialMetrics(),
+        bodyLarge = PantopusTextStyle.body.materialMetrics(),
+        bodyMedium = PantopusTextStyle.small.materialMetrics(),
+        labelSmall = PantopusTextStyle.caption.materialMetrics(),
+        labelMedium = PantopusTextStyle.overline.materialMetrics(),
     )
+
+/** Material animates between mapped and default slots (for example a floating
+ * label's bodyLarge/bodySmall). Their letter-spacing units must agree. Convert
+ * our em tracking to its equivalent sp at the declared size, preserving metrics
+ * and font scaling while keeping the design ramp itself expressed in em. */
+private fun TextStyle.materialMetrics(): TextStyle = copy(letterSpacing = (letterSpacing.value * fontSize.value).sp)

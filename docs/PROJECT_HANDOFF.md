@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android claimant relationship review and recovery — September 10
+
+The [Android relationship report](home-android-claim-relationship-recovery-2026-09-10.md)
+records installed app → production HTTP/service → SQL acceptance: five POSTs,
+three receipts, original/current separation, cold recovery, ciphertext corruption/
+restoration, stale review, authority revocation and held-preflight interruption.
+Final empty recovery/list denial passes in a resumed segment after a UIAutomator
+capture timeout; the report preserves that limit. Normal Profile navigation and
+a shared Material typography crash are repaired. App/test builds, quality/lint,
+12 affected model cases and two installed field cases pass. Private UI remains
+FLAG_SECURE with accessibility evidence; broader pixel/provider/device limits
+remain explicit.
+
+**Next:** finish [residency review receipts and submission recovery](home-residency-review-continuation-2026-09-10.md),
+then ownership transfer/challenge, lease/resource cleanup and the ordered backlog.
+A candidate residency migration, service and SQL contract are local/unverified,
+not applied or included in the Android milestone. The committed Home set remains
+34 migrations (43 combined with paid); the candidate would make 35/44. Both
+feature PRs stay drafts. Paid #34 remains `e9ef2decb`, green but unfinished.
+Preceding iOS `3393baa18` passes required CI; verify the new Android exact head.
+PR #24's documentation-only archive merged as `cd764458f`; PR #7 is refreshed at
+`8c2eaa110` with new CI pending after updating its obsolete test hook. Integrate
+current master after committing this checkpoint, preserving both handoff/design
+history and private-routing changes. All paid services remain one final launch
+bundle. Exact native fixtures are cleaned and owned emulator/listener stopped;
+the owned Gig database remains for residency work. Owner work/runtimes stay intact.
+
 ### iOS claimant relationship review and recovery — September 10
 
 The [iOS relationship report](home-ios-claim-relationship-recovery-2026-09-10.md)

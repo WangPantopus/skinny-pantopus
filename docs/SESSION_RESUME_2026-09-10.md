@@ -3,7 +3,30 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [iOS relationship report](home-ios-claim-relationship-recovery-2026-09-10.md)
+The newest [Android relationship report](home-android-claim-relationship-recovery-2026-09-10.md)
+records installed app/Keystore → production HTTP/service → SQL: five POSTs/three
+receipts, cold/current recovery, corruption/restoration, stale review, current
+revocation and background interruption pass. A UIAutomator capture timed out at
+the final empty state; remaining evidence and denied-list checks passed in a
+resumed segment on the same fixture. Normal Profile navigation and the shared
+Material field-label crash are repaired; final builds/quality/lint, 12 affected
+model cases and two installed typography cases pass. The report retains private
+pixel, native fault-matrix, physical/provider and automation-load limits.
+
+Next: residency review receipts (candidate migration/service/SQL contract exist
+locally, unverified and unapplied), then submission/cold-start/resubmission and
+ownership/lease/resource work. The candidate is excluded from the Android source
+milestone. Committed migrations remain 34 Home/43 combined; it would make 35/44.
+Both feature PRs stay drafts. Paid #34 stays `e9ef2decb`, green but unfinished.
+Preceding iOS `3393baa18` passes required CI; refresh the new exact head. Design
+PR #24 merged as `cd764458f`; diagnostics PR #7 at `8c2eaa110` has fresh CI pending
+after its old test-hook repair. Integrate master after the Android commit and
+preserve both current handoff and design history. Paid services stay one final
+launch bundle. Exact native fixture cleanup passes; owned emulator/listener are
+stopped; the owned Gig database remains for residency. Owner files/runtimes are
+preserved. Earlier next-action and CI notes below are historical.
+
+The preceding [iOS relationship report](home-ios-claim-relationship-recovery-2026-09-10.md)
 completes prepared review and actual Keychain original/confirmation recovery.
 Installed normal navigation → production HTTP/service → SQL passes five POSTs,
 three receipts, two restarts, later rejection, stale review, revocation/restoration,

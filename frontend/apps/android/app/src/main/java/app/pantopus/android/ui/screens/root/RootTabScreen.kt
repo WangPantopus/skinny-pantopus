@@ -7,11 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
@@ -24,11 +22,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.invisibleToUser
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -6045,13 +6040,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     }
 }
 
-/**
- * Wraps [HubScreen] with a 44dp invisible 5-tap target in the top-leading
- * corner so debug builds can jump to the token gallery — the production
- * hub hides its toolbar so there's no visible title to attach to. No-op in
- * release builds; semantically hidden so TalkBack can't trip it.
- */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+/** Observe the developer gesture without putting a touch target over Profile. */
 @Composable
 @Suppress("ModifierMissing")
 private fun HubWithDebugFiveTap(
@@ -6062,31 +6051,51 @@ private fun HubWithDebugFiveTap(
         content()
         return
     }
-    Box {
+    Box(Modifier.observeHubDebugTaps { navController.navigate(ChildRoutes.TOKEN_GALLERY) }) {
         content()
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .size(44.dp)
-                    .semantics { invisibleToUser() }
-                    .pointerInput(Unit) {
-                        var taps = 0
-                        var lastTap = 0L
-                        detectTapGestures(onTap = {
-                            val now = System.currentTimeMillis()
-                            taps = if (now - lastTap < FIVE_TAP_WINDOW_MS) taps + 1 else 1
-                            lastTap = now
-                            if (taps >= 5) {
-                                taps = 0
-                                navController.navigate(ChildRoutes.TOKEN_GALLERY)
-                            }
-                        })
-                    },
-        )
     }
 }
 
+/** Initial-pass observation deliberately never consumes a pointer change. */
+private fun Modifier.observeHubDebugTaps(onFifthTap: () -> Unit): Modifier =
+    pointerInput(Unit) {
+        val target = 44.dp.toPx()
+        awaitPointerEventScope {
+            var taps = 0
+            var lastTap = 0L
+            var started = 0L
+            var origin = androidx.compose.ui.geometry.Offset.Zero
+            var candidate = false
+            while (true) {
+                val change = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.singleOrNull()
+                if (change == null) {
+                    candidate = false
+                    taps = 0
+                    continue
+                }
+                if (change.pressed && !change.previousPressed) {
+                    origin = change.position
+                    started = change.uptimeMillis
+                    candidate = origin.x in 0f..target && origin.y in 0f..target
+                }
+                if ((change.position - origin).getDistance() > viewConfiguration.touchSlop) candidate = false
+                if (!change.pressed && change.previousPressed) {
+                    if (candidate && change.uptimeMillis - started < viewConfiguration.longPressTimeoutMillis) {
+                        val now = change.uptimeMillis
+                        taps = if (now - lastTap < FIVE_TAP_WINDOW_MS) taps + 1 else 1
+                        lastTap = now
+                        if (taps >= DEBUG_GALLERY_TAP_COUNT) {
+                            taps = 0
+                            onFifthTap()
+                        }
+                    }
+                    candidate = false
+                }
+            }
+        }
+    }
+
+private const val DEBUG_GALLERY_TAP_COUNT = 5
 private const val FIVE_TAP_WINDOW_MS: Long = 1_500L
 
 /**

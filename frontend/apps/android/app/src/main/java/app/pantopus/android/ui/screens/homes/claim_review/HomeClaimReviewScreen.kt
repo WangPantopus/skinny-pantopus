@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.homes.HomeRelationshipAction
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Toast
@@ -81,10 +82,12 @@ private data class ResidencyConfirm(
 fun HomeClaimReviewScreen(
     onBack: () -> Unit,
     viewModel: HomeClaimReviewViewModel = hiltViewModel(),
+    relationshipModel: HomeRelationshipViewModel = hiltViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
     HomeClaimEvidencePanel(viewModel)
+    HomeRelationshipPanel(relationshipModel, viewModel::refresh)
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
@@ -110,6 +113,9 @@ fun HomeClaimReviewScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeClaimReviewTopBar(onBack = onBack)
+            TextButton(onClick = { relationshipModel.open() }, modifier = Modifier.testTag("homeClaimReview.relationshipRecovery")) {
+                Text("Relationship decisions and recovery")
+            }
             val loaded = state as? HomeClaimReviewUiState.Loaded
             if (loaded != null) {
                 HomeClaimReviewTabStrip(
@@ -152,6 +158,8 @@ fun HomeClaimReviewScreen(
                         HomeClaimReviewTab.Ownership ->
                             OwnershipTab(
                                 items = current.data.ownership,
+                                unavailable = current.data.ownershipUnavailable,
+                                onReload = viewModel::refresh,
                                 onOpenEvidence = viewModel::openEvidence,
                                 actionLoading = actionLoading,
                                 onVerdict = { claimId, verdict ->
@@ -160,13 +168,14 @@ fun HomeClaimReviewScreen(
                                     }
                                 },
                                 onRelationship = { claimId, action, isOwnerClaim ->
-                                    relationshipConfirm =
-                                        RelationshipConfirm(claimId, action, isOwnerClaim)
+                                    relationshipConfirm = prepareRelationship(claimId, action, isOwnerClaim, relationshipModel)
                                 },
                             )
                         HomeClaimReviewTab.Residency ->
                             ResidencyTab(
                                 items = current.data.residency,
+                                unavailable = current.data.residencyUnavailable,
+                                onReload = viewModel::refresh,
                                 actionLoading = actionLoading,
                                 onConfirm = { claimId, name, approve ->
                                     residencyConfirm = ResidencyConfirm(claimId, name, approve)
@@ -295,11 +304,17 @@ private fun tabItems(data: HomeClaimReviewData): List<HomeClaimReviewTabItem> {
 @Composable
 private fun OwnershipTab(
     items: List<HomeClaimReviewOwnershipItem>,
+    unavailable: Boolean,
+    onReload: () -> Unit,
     onOpenEvidence: (String) -> Unit,
     actionLoading: String?,
     onVerdict: (String, HomeClaimReviewVerdict) -> Unit,
     onRelationship: (String, HomeClaimRelationshipAction, Boolean) -> Unit,
 ) {
+    if (unavailable) {
+        UnavailableClaimCollection("ownership", onReload)
+        return
+    }
     if (items.isEmpty()) {
         EmptyState(
             icon = PantopusIcon.CheckCheck,
@@ -338,9 +353,15 @@ private fun OwnershipTab(
 @Composable
 private fun ResidencyTab(
     items: List<HomeClaimReviewResidencyItem>,
+    unavailable: Boolean,
+    onReload: () -> Unit,
     actionLoading: String?,
     onConfirm: (String, String, Boolean) -> Unit,
 ) {
+    if (unavailable) {
+        UnavailableClaimCollection("residency", onReload)
+        return
+    }
     if (items.isEmpty()) {
         EmptyState(
             icon = PantopusIcon.CheckCheck,
@@ -401,4 +422,45 @@ private fun CompareTab(comparison: HomeClaimReviewComparison?) {
 private fun HomeClaimEvidencePanel(viewModel: HomeClaimReviewViewModel) {
     val panel by viewModel.evidencePanel.collectAsStateWithLifecycle()
     panel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
+}
+
+@Composable
+private fun UnavailableClaimCollection(
+    collection: String,
+    onReload: () -> Unit,
+) {
+    ErrorState(
+        headline = "Couldn't load $collection claims",
+        message = "Current access or claim data could not be verified. Reload to try again.",
+        modifier = Modifier.testTag("homeClaimReview_${collection}Unavailable"),
+        onRetry = onReload,
+    )
+}
+
+@Composable
+private fun HomeRelationshipPanel(
+    model: HomeRelationshipViewModel,
+    onClosed: () -> Unit,
+) {
+    val panel by model.panel.collectAsStateWithLifecycle()
+    panel?.let { controller ->
+        HomeRelationshipDialog(controller) {
+            model.dismiss()
+            onClosed()
+        }
+    }
+}
+
+private fun prepareRelationship(
+    claimId: String,
+    action: HomeClaimRelationshipAction,
+    isOwnerClaim: Boolean,
+    model: HomeRelationshipViewModel,
+): RelationshipConfirm? {
+    if (action == HomeClaimRelationshipAction.InviteToHousehold) return RelationshipConfirm(claimId, action, isOwnerClaim)
+    model.open(
+        claimId,
+        if (action == HomeClaimRelationshipAction.DeclineRelationship) HomeRelationshipAction.Decline else HomeRelationshipAction.Flag,
+    )
+    return null
 }

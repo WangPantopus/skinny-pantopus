@@ -185,6 +185,8 @@ data class HomeClaimReviewData(
     val ownership: List<HomeClaimReviewOwnershipItem>,
     val residency: List<HomeClaimReviewResidencyItem>,
     val comparison: HomeClaimReviewComparison?,
+    val ownershipUnavailable: Boolean = false,
+    val residencyUnavailable: Boolean = false,
 )
 
 /** Four-state rule: Loading / Empty / Loaded / Error. */
@@ -542,6 +544,7 @@ class HomeClaimReviewViewModel
                 return
             }
             val revision = ++readGeneration
+            _state.value = HomeClaimReviewUiState.Loading
             val results =
                 coroutineScope {
                     val ownershipDeferred = async { repo.ownershipClaims(homeId) }
@@ -577,7 +580,11 @@ class HomeClaimReviewViewModel
             val residency = residencyItems(residencyClaims.orEmpty())
             val comparisonModel = comparisonDto?.let { comparison(it) }
 
-            if (ownership.isEmpty() && residency.isEmpty() && comparisonModel == null) {
+            val ownershipUnavailable = ownershipClaims == null && comparisonDto == null
+            val residencyUnavailable = residencyClaims == null
+            val bothCollectionsAvailable = !ownershipUnavailable && !residencyUnavailable
+            val noClaims = ownership.isEmpty() && residency.isEmpty() && comparisonModel == null
+            if (bothCollectionsAvailable && noClaims) {
                 _selectedTab.value = HomeClaimReviewTab.Ownership
                 _state.value = HomeClaimReviewUiState.Empty
                 return
@@ -591,6 +598,8 @@ class HomeClaimReviewViewModel
                         ownership = ownership,
                         residency = residency,
                         comparison = comparisonModel,
+                        ownershipUnavailable = ownershipUnavailable,
+                        residencyUnavailable = residencyUnavailable,
                     ),
                 )
         }
