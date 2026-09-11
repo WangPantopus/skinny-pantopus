@@ -18,6 +18,12 @@ async function main() {
       assert.match(response.headers.get('cache-control'), /no-store/);
       return { status: response.status, body: await response.json() };
     };
+    const resource = async (kind, suffix = '') => {
+      const response = await fetch(base.replace(/dashboard$/, kind) + suffix,
+        { headers: { 'x-fixture-actor': actor }, signal: AbortSignal.timeout(30000) });
+      assert.match(response.headers.get('cache-control'), /no-store/);
+      return { status: response.status, body: await response.json() };
+    };
     const unavailable = response => { assert.equal(response.status, 503, JSON.stringify(response)); assert(!('counts' in response.body)); assert(!('home' in response.body)); };
     let r = await request(); assert.equal(r.status, 200, JSON.stringify(r));
     assert.deepEqual(r.body.counts, { tasks_open: 0, issues_open: 0, bills_due: 0, packages_expected: 0, documents: 0, events_upcoming: 0, members_active: 1, pets: 0 });
@@ -73,6 +79,25 @@ async function main() {
     assert.deepEqual(r.body.home.location, { latitude: 0, longitude: 0 });
     console.log('PASS: real tasks/events, overdue bills, expected/arriving packages, scheduled issues, guest dates, member windows, private Mail and header projection');
 
+    for (const [kind, table, total, status] of [['issues', 'HomeIssue', 4, 'scheduled'], ['packages', 'HomePackage', 5, 'expected']]) {
+      let result = await resource(kind); assert.equal(result.status, 200, JSON.stringify(result));
+      assert.equal(result.body[kind].length, total);
+      assert(result.body[kind].every(row => row.home_id === home));
+      result = await resource(kind, `?status=${status}`); assert.equal(result.status, 200);
+      assert.equal(result.body[kind].length, 4); assert(result.body[kind].every(row => row.status === status));
+      assert.equal((await resource(kind, '?status=in_transit')).status, 400);
+      assert.equal((await resource(kind, '?status=open&status=expected')).status, 400);
+      for (const reject of [false, true]) { f.failNextQuery(table, reject); unavailable(await resource(kind)); }
+      for (const malformed of [null, [{ id: id(999), home_id: id(101) }], [null]]) {
+        f.interceptNextQuery(table, result => ({ ...result, data: malformed })); unavailable(await resource(kind));
+      }
+      assert.equal((await resource(kind)).status, 200);
+    }
+    assert.equal((await resource('issues', '?severity=urgent')).body.issues.length, 0);
+    assert.equal((await resource('issues', '?severity=invalid')).status, 400);
+    assert.equal((await resource('packages', '?severity=urgent')).status, 400);
+    console.log('PASS: actual issue/package lists, canonical filters, SQL/transport and malformed-list failure, no-store and recovery');
+
     for (const table of ['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride', 'HomeBill', 'Mail', 'HomeGuestPass', 'HomePackage', 'HomeIssue', 'HomeDocument', 'HomePet', 'HomeAuditLog']) {
       for (const reject of [false, true]) { f.failNextQuery(table, reject); unavailable(await request()); }
     }
@@ -99,6 +124,11 @@ async function main() {
     assert.deepEqual(r.body.counts, { tasks_open: 0, issues_open: 0, bills_due: 0, packages_expected: 0, documents: 0, events_upcoming: 0, members_active: 0, pets: 1 });
     assert.equal(r.body.today.unread_mail_count, 0); assert.equal(r.body.today.active_guest_passes, 0); assert.deepEqual(r.body.members, []); assert.deepEqual(r.body.recent_activity, []);
     const queried = f.queryDetails.slice(beforeQueries);
+    for (const [kind, table] of [['issues', 'HomeIssue'], ['packages', 'HomePackage']]) {
+      const before = f.queryDetails.length;
+      assert.equal((await resource(kind)).status, 403);
+      assert(!f.queryDetails.slice(before).some(query => query.table === table));
+    }
     for (const table of ['HomeBill', 'Mail', 'HomeGuestPass', 'HomePackage', 'HomeIssue', 'HomeDocument', 'HomeAuditLog', 'HomeSeasonalChecklistItem']) assert(!queried.some(query => query.table === table), table);
     assert(!queried.some(query => query.table === 'HomeOccupancy' && query.columns.includes('jsonb_build_object')));
     assert(!f.rpcCalls.slice(beforeRpcs).includes('get_home_records'));
@@ -109,11 +139,26 @@ async function main() {
       UPDATE public."HomeOccupancy" SET role='member',role_base='member' WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     for (const name of ['home.view', 'docs.view', 'maintenance.view', 'packages.view']) permission(name, true);
     r = await request(); assert.equal(r.status, 200, JSON.stringify(r)); assert.equal(r.body.counts.documents, 2); assert.equal(r.body.counts.issues_open, 2); assert.equal(r.body.counts.packages_expected, 3);
+    assert.equal((await resource('issues')).body.issues.length, 2);
+    assert.equal((await resource('packages')).body.packages.length, 3);
+    // A separately granted resource is usable without inventing home.view.
+    permission('home.view', false); assert.equal((await request()).status, 403);
+    assert.equal((await resource('issues')).status, 200); assert.equal((await resource('packages')).status, 200);
     sql(`UPDATE public."Home" SET owner_id=${q(actor)} WHERE id=${q(home)};
       INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner,verification_tier) VALUES(${q(home)},${q(actor)},'verified',true,'strong');
       UPDATE public."HomeOccupancy" SET role='owner',role_base='owner' WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     restore();
     console.log('PASS: explicit resource denials skip private reads even for owner; sensitive and manager visibility stay scoped');
+
+    for (const [kind, table, grant] of [['issues', 'HomeIssue', 'maintenance.view'], ['packages', 'HomePackage', 'packages.view']]) {
+      let release, captured;
+      const held = new Promise(resolve => { captured = resolve; });
+      f.interceptNextQuery(table, async result => { captured(); await new Promise(resolve => { release = resolve; }); return result; });
+      const pending = resource(kind); await held; permission(grant, false); release();
+      const result = await pending; assert.equal(result.status, 403); assert(!(kind in result.body));
+      restore(); assert.equal((await resource(kind)).status, 200);
+    }
+    console.log('PASS: held issue/package SQL replies cannot restore a revoked view grant; explicit resource-only grants remain usable');
 
     // Pause an already-produced real SQL response. Mutate actual authority
     // through another connection, then release it to the production aggregate.
@@ -158,6 +203,12 @@ async function main() {
       assert.equal(r.body.counts.packages_expected, 5); assert.equal(r.body.today.deliveries_arriving, 1);
       assert.equal(r.body.members[0].user.displayName, 'residency_http_01'); assert.equal(r.body.counts.members_active, 1);
       assert.deepEqual(r.body.home.location, { latitude: 0, longitude: 0 });
+      for (const [kind, total] of [['issues', 4], ['packages', 5]]) {
+        const result = await resource(kind); assert.equal(result.status, 200, JSON.stringify(result)); assert.equal(result.body[kind].length, total);
+      }
+      permission('sensitive.view', false);
+      assert.equal((await resource('issues', '?status=scheduled')).body.issues.length, 3);
+      assert.equal((await resource('packages', '?status=expected')).body.packages.length, 3); restore();
       permission('finance.view', false); r = await request(); assert.equal(r.status, 200); assert.equal(r.body.counts.bills_due, 0); assert.equal(r.body.today.next_bill, null); restore();
       sql(`UPDATE public."Home" SET security_state='frozen' WHERE id=${q(home)};`);
       assert.equal((await request()).status, 403);

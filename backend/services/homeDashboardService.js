@@ -3,7 +3,7 @@ const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../serial
 const { getUserAccess } = require('../utils/homePermissions');
 const { ROLE_RANK, currentOccupancy, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const { staleAffectsTrust } = require('../utils/verificationAge');
-const { HOME_LIST, HOME_BILL_LIST } = require('../utils/columns');
+const { HOME_LIST, HOME_BILL_LIST, HOME_ISSUE_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const records = require('./homeRecordService');
 const authority = require('./homeAuthorityService');
@@ -13,6 +13,8 @@ const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
   HOME_DASHBOARD_ACCESS_CHANGED: 'Home access changed while loading. Please retry.',
   HOME_DASHBOARD_DENIED: 'No access to this home.',
+  HOME_RESOURCE_INVALID: 'Check the record filters and try again.',
+  HOME_RESOURCE_DENIED: 'You do not have permission to view these records.',
   HOME_NOT_FOUND: 'Home not found.',
 };
 function failure(code = 'HOME_DASHBOARD_UNAVAILABLE', statusCode = 503) {
@@ -35,16 +37,17 @@ async function count(query) {
   return total;
 }
 const permissionKey = permissions => JSON.stringify([...permissions].sort());
-async function readAccess(homeId, actorId) {
+async function readAccess(homeId, actorId, permission = 'home.view') {
+  const denied = permission === 'home.view' ? 'HOME_DASHBOARD_DENIED' : 'HOME_RESOURCE_DENIED';
   const access = await getUserAccess(homeId, actorId);
-  if (!access.hasAccess || !access.permissions.includes('home.view')) throw failure('HOME_DASHBOARD_DENIED', 403);
+  if (!access.hasAccess || !access.permissions.includes(permission)) throw failure(denied, 403);
   // Use the established SQL context as well: it fences frozen/archived Homes,
   // disputed ownership pointers and private setup. Private task first-use stays
   // on its own exact collection capability; it is not shared dashboard access.
   const { data: context } = await checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId }));
   if (!context || typeof context.allowed !== 'boolean' || typeof context.private !== 'boolean'
     || !Array.isArray(context.permissions)) throw failure();
-  if (!context.allowed || context.private || !context.permissions.includes('home.view')) throw failure('HOME_DASHBOARD_DENIED', 403);
+  if (!context.allowed || context.private || !context.permissions.includes(permission)) throw failure(denied, 403);
   if (permissionKey(context.permissions) !== permissionKey(access.permissions)
     || context.role !== access.effective_role_base || context.user_id !== actorId) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
   return access;
@@ -54,6 +57,34 @@ function fingerprint(access) {
   return JSON.stringify([permissionKey(access.permissions), access.role_base, access.effective_role_base, access.isOwner,
     o && ['id', 'is_active', 'role', 'role_base', 'age_band', 'verification_status', 'verified_at',
       'start_at', 'end_at', 'access_start_at', 'access_end_at'].map(key => o[key] ?? null)]);
+}
+function visibleScopes(access) {
+  const visibility = ['public', 'members'];
+  if ((ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager) visibility.push('managers');
+  if (access.permissions.includes('sensitive.view')) visibility.push('sensitive');
+  return visibility;
+}
+// Lists used by the dashboard must share its current resource/visibility gate.
+// The legacy generic-membership lists bypassed these record boundaries.
+async function readResource({ homeId, actorId, kind, status, severity }) {
+  const spec = { issues: ['HomeIssue', 'maintenance.view', HOME_ISSUE_LIST],
+    packages: ['HomePackage', 'packages.view', HOME_PACKAGE_LIST] }[kind];
+  if (!spec) throw failure();
+  const statuses = kind === 'issues' ? ['open', 'scheduled', 'in_progress', 'resolved', 'canceled']
+    : ['expected', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
+  if ((status !== undefined && !statuses.includes(status))
+    || (severity !== undefined && (kind !== 'issues' || !['low', 'medium', 'high', 'urgent'].includes(severity)))) throw failure('HOME_RESOURCE_INVALID', 400);
+  const access = await readAccess(homeId, actorId, spec[1]);
+  if (!access.permissions.includes(spec[1])) throw failure('HOME_RESOURCE_DENIED', 403);
+  let query = db.from(spec[0]).select(spec[2]).eq('home_id', homeId)
+    .in('visibility', visibleScopes(access)).order('created_at', { ascending: false });
+  if (status) query = query.eq('status', status);
+  if (severity && kind === 'issues') query = query.eq('severity', severity);
+  const result = await rows(query);
+  if (result.some(row => !row || row.home_id !== homeId || typeof row.id !== 'string')) throw failure();
+  const current = await readAccess(homeId, actorId, spec[1]);
+  if (fingerprint(current) !== fingerprint(access)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+  return result;
 }
 
 // A Home badge must not reveal someone else's personal/attention-only mail.
@@ -78,9 +109,7 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
   const access = await readAccess(homeId, actorId);
   const permissions = new Set(access.permissions);
   const has = permission => permissions.has(permission);
-  const visibility = ['public', 'members'];
-  if ((ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager) visibility.push('managers');
-  if (has('sensitive.view')) visibility.push('sensitive');
+  const visibility = visibleScopes(access);
   const now = new Date();
   const nowISO = now.toISOString();
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
@@ -156,4 +185,4 @@ function sendError(res, error) {
   const safe = error && Object.hasOwn(MESSAGES, error.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, sendError };
+module.exports = { read, readResource, sendError };

@@ -4,6 +4,86 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## Populated browser and standalone list milestone
+
+The browser now uses the aggregate's actual counts/today contract and reads
+full task/issue/bill/package/document/event collections only with their explicit
+view grants. The fictional aggregate arrays and permissive fallback are removed.
+A failed aggregate performs no fallback collection reads. Required SQL failures,
+missing arrays and wrong Home identities remain unavailable; optional card
+failures have explicit Retry states. Refresh rechecks current access and totals.
+Invitation refresh uses the safe current roster rather than reintroducing legal
+names or counting pending invitations as members.
+
+Actual populated UI exposed and repaired these functional defects:
+
+- Stored tasks/events and outstanding counts were absent from the overview.
+- Bills show their own major-unit currency and two decimal places. The overview
+  counts bills due without adding USD to CAD. Calendar-only due dates keep the
+  saved day in America/Los_Angeles; a bill due today is not prematurely overdue.
+  Finance viewers lack Add Bill/Mark Paid controls. No bills due does not claim
+  every historical bill was paid; rendering does not sort shared state in place.
+- Today issue/package shortcuts now open Maintenance/Deliveries. Maintenance's
+  default Active list includes open, in-progress and scheduled records; previously
+  open/in-progress issues had no list. Preview cards support Enter/Space and focus.
+- Future packages are pending rather than arriving, and vendor names render.
+  The property preview no longer claims an ATTOM source without evidence.
+  Document/package/calendar/expanded-card visibility uses current explicit grants.
+
+Issue/package GETs now validate filters and rows, enforce current permissions and
+visibility, send no-store, and recheck authority after reading. Owner pointers
+cannot bypass a resource denial. Explicit standalone resource grants remain
+usable without inventing a parent home.view grant. Writes/media/receipts are
+separate unfinished scope.
+
+HTTP/SQL **r7 passes**, including both list endpoints, valid/invalid/duplicate
+filters, SQL/transport/malformed/cross-Home failures, visibility, denied reads,
+two held replies after revocation and real SDK/PostgREST list filters, plus the
+prior aggregate matrix. Chrome **r6 passes all 13 journey groups**, zero page
+errors/mutations and exact cleanup. Core records and pets use production HTTP/
+services/SQL; seven denied view sections issue no forbidden collection requests.
+The previous account/access/lifecycle/applicant/held-reply matrix also passes.
+Final overview, active maintenance and fractional-currency/date screens were
+reviewed. Identity, ancillary/provider responses and deterministic lifecycle
+signals remain synthetic; this is not complete write or native acceptance.
+
+A policy finding remains: the owned baseline allows a verified generic member
+to lack home.view. Browser r1's approved-member restoration used the old fallback
+after aggregate denial; it was not proof of correct admission. Current acceptance
+keeps that Home denied, then applies an explicit grant and verifies restoration
+without owner controls. Reconcile role presets/defaults with actual residency
+and invitation onboarding. No inferred grant or fallback bypass was introduced.
+
+Full backend regression passes 317 suites / 5,169 checks (existing one suite /
+16 skips). Final web regression r3 passes 92 suites / 1,178; final typecheck r3 passes,
+affected lint r2 reports zero errors / 104 warnings across the wider edited set,
+and all five identity/privacy gates pass. No migration or hosted/provider change.
+
+Private proof: `/private/tmp/pantopus-home-dashboard-http-r7.log`,
+`/private/tmp/pantopus-home-dashboard-production-web-r6/`, and
+`/private/tmp/pantopus-home-dashboard-web-contract-{backend-r1,regression-r3,types-r3,lint-r2}.log`.
+Browser r3/r4 failed ambiguous selectors after accessible cards were introduced;
+r5 exposed the real missing active-maintenance destination. Final r6 passes after
+repair. Web regression's old aggregate fixture was corrected to the real contract
+without weakening denied-permission assertions. Earlier evidence below remains
+historical; its web fallback and standalone GET findings are superseded here.
+
+Next: native strict aggregate decoding, safe identity, current access, foreground/
+return/account/held-reply retirement and proper applicant/private-first-use entry.
+Native default DTOs still hide missing aggregates, core/intelligence reads remain
+unscoped, and public-profile fallback is not shared Home authority. Claim ownership
+must not be offered to every non-owner. Existing verification/waiting-room readers
+also discard the 403 verification body and need actual residency review.
+
+Other reachable findings remain: embedded issue/bill/package handlers discard
+media and some write errors only log; standalone bill units/package states differ;
+document sharing, Share Center, member/security and provider-list errors need
+acceptance. Keep pets' missing-table fallback, mailbox privacy, guest redemption/
+limits, Home-day timezone boundaries, pagination, narrow member/chat overlap and
+property verification wording open. Native identity drafts remain uncommitted
+without installed proof. Full Home/Place/Pulse/Beacon/account/payment/release
+priorities, combined migrations and the final paid-provider bundle remain.
+
 ## Production contract repaired
 
 `GET /api/homes/:id/dashboard` now delegates to `homeDashboardService`, validates

@@ -304,19 +304,27 @@ export async function getHomeMembers(homeId: string) {
 
 // ---- Dashboard aggregate ----
 
+export interface HomeDashboardCounts {
+  tasks_open: number; issues_open: number; bills_due: number; packages_expected: number;
+  documents: number; events_upcoming: number; members_active: number; pets: number;
+}
+
+export interface HomeDashboardResponse {
+  home: Record<string, any>;
+  myAccess: { permissions: string[]; role_base: string | null; isOwner: boolean };
+  members: any[];
+  counts: HomeDashboardCounts;
+  today: { next_events: any[]; tasks_due: any[]; next_bill: any | null;
+    unread_mail_count: number; active_guest_passes: number; deliveries_arriving: number };
+  task_session?: HomeTaskSessionScope;
+  recent_activity: any[];
+  health_score?: any;
+}
+
 export async function getHomeDashboard(homeId: string, params?: {
   include_health_score?: boolean;
 }) {
-  return get<{
-    home: any;
-    members: any[];
-    tasks: any[];
-    issues: any[];
-    bills: any[];
-    packages: any[];
-    events: any[];
-    health_score?: any;
-  }>(`/api/homes/${homeId}/dashboard`, params);
+  return get<HomeDashboardResponse>(`/api/homes/${homeId}/dashboard`, params);
 }
 
 // ---- Pets ----

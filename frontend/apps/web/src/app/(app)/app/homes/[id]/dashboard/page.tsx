@@ -134,7 +134,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
     home, members, tasks, issues, bills, packages, documents, events,
     secrets, emergencies, nearbyGigs, homeGigs, pets, polls,
     currentUserId, taskSession, myAccess, can, refresh,
-    setTasks, setIssues, setBills, setPackages, setMembers, setSecrets,
+    setTasks, setIssues, setBills, setPackages, setSecrets,
   } = data;
 
   const { reload: reloadPermissions } = useHomePermissions();
@@ -244,17 +244,10 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
   const handleInvite = useCallback(
     async (data: { email?: string; user_id?: string; username?: string; relationship: string; preset_key?: string; message?: string; start_at?: string; end_at?: string }) => {
       const result = await api.homes.inviteToHome(homeId, data);
-      try {
-        const membersData = await api.homes.getHomeOccupants(homeId);
-        const activeMembers = (membersData as Record<string, any>).occupants as Record<string, any>[] || [];
-        const pending = (membersData as Record<string, any>).pendingInvites as Record<string, any>[] || [];
-        setMembers(() => [...activeMembers, ...pending]);
-      } catch {
-        // occupants may not reflect invite immediately
-      }
+      await refresh();
       return result;
     },
-    [homeId, setMembers]
+    [homeId, refresh]
   );
 
   // ── Issue handler ──
@@ -350,11 +343,10 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   // ── Stat helpers ──
 
-  const activeTasks = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length;
-  const openIssues = issues.filter((i) => i.status !== 'resolved' && i.status !== 'canceled').length;
-  const unpaidBills = bills.filter((b) => b.status === 'due' || b.status === 'overdue');
-  const totalDue = unpaidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
-  const pendingPkgs = packages.filter((p) => p.status !== 'picked_up' && p.status !== 'returned').length;
+  const activeTasks = data.summaryCounts?.tasks_open ?? 0;
+  const openIssues = data.summaryCounts?.issues_open ?? 0;
+  const billsDueCount = data.summaryCounts?.bills_due ?? 0;
+  const pendingPkgs = data.summaryCounts?.packages_expected ?? 0;
 
   // ── Tab navigation ──
 
@@ -409,8 +401,8 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
       {/* Header with High-Level Tabs */}
       <HomeHeader
-        homeName={home?.name || home?.address_line1 || 'Home Dashboard'}
-        homeAddress={home?.address_line1 && home?.name ? home.address_line1 : undefined}
+        homeName={home?.name || home?.address || home?.address_line1 || 'Home Dashboard'}
+        homeAddress={home?.name ? (home.address || home.address_line1) : undefined}
         roleBadge={myAccess.role_base}
         isOwner={myAccess.isOwner}
         homeId={homeId}
@@ -425,7 +417,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           homeId={homeId}
           activeTasks={activeTasks}
           openIssues={openIssues}
-          totalDue={totalDue}
+          billsDueCount={billsDueCount}
           pendingPkgs={pendingPkgs}
           tasks={tasks}
           issues={issues}
@@ -460,6 +452,8 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           intelligence={intelligence}
           selectedBillType={selectedBillType}
           onBillTypeChange={setSelectedBillType}
+          entityErrors={data.entityErrors}
+          onReloadData={() => void refresh()}
         />
       )}
 
@@ -521,7 +515,7 @@ function DashboardTab({
   homeId,
   activeTasks,
   openIssues,
-  totalDue,
+  billsDueCount,
   pendingPkgs,
   tasks,
   issues,
@@ -556,12 +550,14 @@ function DashboardTab({
   intelligence,
   selectedBillType,
   onBillTypeChange,
+  entityErrors,
+  onReloadData,
 }: {
   home: Record<string, any>;
   homeId: string;
   activeTasks: number;
   openIssues: number;
-  totalDue: number;
+  billsDueCount: number;
   pendingPkgs: number;
   tasks: Record<string, any>[];
   issues: Record<string, any>[];
@@ -596,9 +592,26 @@ function DashboardTab({
   intelligence: ReturnType<typeof useHomeIntelligence>;
   selectedBillType: string | null;
   onBillTypeChange: (type: string) => void;
+  entityErrors: UseHomeDataReturn['entityErrors'];
+  onReloadData: () => void;
 }) {
   const router = useRouter();
   const onBack = () => onExpandCard(null);
+
+  const cardPermissions: Record<string, string> = {
+    tasks: 'tasks.view', bills: 'finance.view', calendar: 'calendar.view', deliveries: 'packages.view',
+    maintenance: 'maintenance.view', documents: 'docs.view', emergency: 'sensitive.view',
+  };
+  const cardEntities: Record<string, keyof UseHomeDataReturn['entityErrors']> = {
+    homehelp: 'homeGigs', access: 'secrets', emergency: 'emergencies', pets: 'pets', polls: 'polls',
+  };
+  if (expandedCard && ((cardPermissions[expandedCard] && !can(cardPermissions[expandedCard]))
+    || (expandedCard === 'access' && !can('access.view_wifi') && !can('access.view_codes')))) {
+    return <div role="status"><p>This Home section is not available with your current access.</p><button onClick={onBack} className="mt-3 rounded-lg border px-3 py-2">Back to overview</button></div>;
+  }
+  const expandedError = expandedCard === 'homehelp' ? entityErrors.homeGigs || entityErrors.nearbyGigs
+    : expandedCard ? entityErrors[cardEntities[expandedCard]] : undefined;
+  if (expandedCard && expandedError) return <div><button onClick={onBack} className="mb-3 rounded-lg border px-3 py-2">Back to overview</button><HomeSummaryBoundary title="Home records" error={expandedError} loading={false} onRetry={onReloadData}>{null}</HomeSummaryBoundary></div>;
 
   // If a card is expanded, show its full-view detail component
   if (expandedCard) {
@@ -633,6 +646,7 @@ function DashboardTab({
             onAddBill={onAddBill}
             onMarkBillPaid={onMarkBillPaid}
             onBack={onBack}
+            canManage={can('finance.manage')}
             highlightBillId={linkedType === 'bill' ? linkedId : undefined}
           />
         )}
@@ -641,7 +655,7 @@ function DashboardTab({
             tasks={can('tasks.view') ? tasks : []}
             bills={can('finance.view') ? bills : []}
             events={events}
-            packages={can('mailbox.view') ? packages : []}
+            packages={can('packages.view') ? packages : []}
             onBack={onBack}
           />
         )}
@@ -664,6 +678,7 @@ function DashboardTab({
             onAddIssue={onAddIssue}
             onViewIssue={onViewIssue}
             onBack={onBack}
+            canManage={can('maintenance.edit') || can('maintenance.manage')}
           />
         )}
         {expandedCard === 'documents' && (
@@ -709,7 +724,8 @@ function DashboardTab({
 
   // Empty state
   const isEmpty = tasks.length === 0 && issues.length === 0 && bills.length === 0 &&
-    packages.length === 0 && documents.length === 0 && homeGigs.length === 0;
+    packages.length === 0 && documents.length === 0 && homeGigs.length === 0 &&
+    events.length === 0 && pets.length === 0 && polls.length === 0 && Object.keys(entityErrors).length === 0;
 
   return (
     <div className="space-y-4">
@@ -717,9 +733,9 @@ function DashboardTab({
       <TodayCard
         activeTasks={activeTasks}
         openIssues={openIssues}
-        totalDue={totalDue}
+        billsDueCount={billsDueCount}
         pendingPkgs={pendingPkgs}
-        memberCount={members.length}
+        memberCount={can('members.view') ? members.length : null}
         events={events}
         onNavigateTab={(t) => onExpandCard(t)}
       />
@@ -775,17 +791,17 @@ function DashboardTab({
             <TasksCardPreview tasks={tasks} members={members} activeTasks={activeTasks} onExpand={() => onExpandCard('tasks')} />
           )}
 
-          {(homeGigs.length > 0 || nearbyGigs.length > 0) && (
-            <HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} />
+          {(homeGigs.length > 0 || nearbyGigs.length > 0 || entityErrors.homeGigs || entityErrors.nearbyGigs) && (
+            <HomeSummaryBoundary title="Home help" error={entityErrors.homeGigs || entityErrors.nearbyGigs || null} loading={false} onRetry={onReloadData}><HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} /></HomeSummaryBoundary>
           )}
 
           {can('finance.view') && (
-            <BillsBudgetCardPreview bills={bills} totalDue={totalDue} onExpand={() => onExpandCard('bills')} />
+            <BillsBudgetCardPreview bills={bills} billsDueCount={billsDueCount} onExpand={() => onExpandCard('bills')} />
           )}
 
-          <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />
+          {can('calendar.view') && <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />}
 
-          {can('mailbox.view') && (
+          {can('packages.view') && (
             <DeliveriesCardPreview packages={packages} pendingPkgs={pendingPkgs} onExpand={() => onExpandCard('deliveries')} />
           )}
 
@@ -793,19 +809,19 @@ function DashboardTab({
             <MaintenanceCardPreview issues={issues} onExpand={() => onExpandCard('maintenance')} />
           )}
 
-          {can('mailbox.view') && (
+          {can('docs.view') && (
             <DocsCardPreview documents={documents} onExpand={() => onExpandCard('documents')} />
           )}
 
           {(can('access.view_wifi') || can('access.view_codes')) && (
-            <AccessCardPreview secrets={secrets} onExpand={() => onExpandCard('access')} />
+            <HomeSummaryBoundary title="Access information" error={entityErrors.secrets || null} loading={false} onRetry={onReloadData}><AccessCardPreview secrets={secrets} onExpand={() => onExpandCard('access')} /></HomeSummaryBoundary>
           )}
 
-          <EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} />
+          {can('sensitive.view') && <HomeSummaryBoundary title="Emergency information" error={entityErrors.emergencies || null} loading={false} onRetry={onReloadData}><EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} /></HomeSummaryBoundary>}
 
-          <PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} />
+          <HomeSummaryBoundary title="Pets" error={entityErrors.pets || null} loading={false} onRetry={onReloadData}><PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} /></HomeSummaryBoundary>
 
-          <PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} />
+          <HomeSummaryBoundary title="Polls" error={entityErrors.polls || null} loading={false} onRetry={onReloadData}><PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} /></HomeSummaryBoundary>
         </div>
       ) : (
         <div className="bg-surface rounded-xl border border-app p-8 text-center">

@@ -27,10 +27,11 @@ beforeEach(() => {
 });
 
 test('owner pointers and owner role do not restore denied permission buttons', async () => {
-  mockAccess.mockResolvedValue({ hasAccess: true, isOwner: true, role_base: 'owner', permissions: ['home.view'] });
+  mockAccess.mockResolvedValue({ hasAccess: true, isOwner: false, role_base: 'owner', permissions: ['home.view'] });
   mockDashboard.mockResolvedValue({ home: { id: 'home', owner_id: 'owner' }, myAccess: {
     isOwner: false, role_base: 'owner', permissions: ['home.view'],
-  } });
+  }, members: [], counts: { tasks_open: 0, issues_open: 0, bills_due: 0, packages_expected: 0,
+    documents: 0, events_upcoming: 0, members_active: 0, pets: 0 }, today: { next_events: [], tasks_due: [] } });
   const { result } = renderHook(() => useHomeData('home'));
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.myAccess.isOwner).toBe(false);

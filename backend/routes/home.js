@@ -3305,34 +3305,14 @@ router.post('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
  * GET /api/homes/:id/issues
  */
 router.get('/:id/issues', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  const dashboardService = require('../services/homeDashboardService');
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-    const { status, severity } = req.query;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    let query = supabaseAdmin
-      .from('HomeIssue')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false });
-
-    if (status) query = query.eq('status', status);
-    if (severity) query = query.eq('severity', severity);
-
-    const { data, error } = await query;
-    if (error) {
-      logger.error('Error fetching home issues', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch issues' });
-    }
-
-    res.json({ issues: data || [] });
-  } catch (err) {
-    logger.error('Issues fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch issues' });
-  }
+    const records = await dashboardService.readResource({ homeId: req.params.id, actorId: req.user.id,
+      kind: 'issues', status: req.query.status, severity: req.query.severity });
+    return res.json({ issues: records });
+  } catch (error) { return dashboardService.sendError(res, error); }
 });
 
 /**
@@ -3800,33 +3780,14 @@ router.delete('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
  * GET /api/homes/:id/packages
  */
 router.get('/:id/packages', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  const dashboardService = require('../services/homeDashboardService');
   try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-    const { status } = req.query;
-
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    let query = supabaseAdmin
-      .from('HomePackage')
-      .select('*')
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false });
-
-    if (status) query = query.eq('status', status);
-
-    const { data, error } = await query;
-    if (error) {
-      logger.error('Error fetching home packages', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch packages' });
-    }
-
-    res.json({ packages: data || [] });
-  } catch (err) {
-    logger.error('Packages fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch packages' });
-  }
+    const records = await dashboardService.readResource({ homeId: req.params.id, actorId: req.user.id,
+      kind: 'packages', status: req.query.status, severity: req.query.severity });
+    return res.json({ packages: records });
+  } catch (error) { return dashboardService.sendError(res, error); }
 });
 
 /**

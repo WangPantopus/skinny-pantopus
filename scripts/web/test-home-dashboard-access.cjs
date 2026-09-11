@@ -15,7 +15,8 @@ const { actor, home, sql, q } = f;
 let server, browser, context, page, initialized = false, currentActor = actor, hold = null;
 let privateReads = 0;
 let listFailure = false, dashboardFailure = false, auxiliaryVersion = 'Current', accessFailure = false;
-const holds = [], errors = [], diagnostics = [], mutations = [], checks = [];
+const holds = [], errors = [], diagnostics = [], mutations = [], checks = [], recordReads = [];
+let resourceFailure = null, malformedResource = null;
 const household = `${base}/app/homes/${home}/dashboard?tab=members`;
 const title = () => page.getByRole('heading', { name: 'Private dashboard fixture', exact: true });
 const reload = () => page.getByRole('button', { name: 'Reload current home access', exact: true });
@@ -40,11 +41,25 @@ async function main() {
     f.setup(); initialized = true;
     sql(`UPDATE public."Home" SET name='Private dashboard fixture' WHERE id=${q(home)};
       UPDATE public."HomeOccupancy" SET verification_status='verified' WHERE home_id=${q(home)} AND user_id=${q(f.users[4])};
-      UPDATE public."User" SET username='current_household_member',name='Private legal fixture name' WHERE id=${q(f.users[4])};`);
+      UPDATE public."User" SET username='current_household_member',name='Private legal fixture name' WHERE id=${q(f.users[4])};
+      INSERT INTO public."HomeTask"(id,home_id,created_by,task_type,title,due_at) VALUES(${q(f.id(901))},${q(home)},${q(actor)},'chore','Check the smoke alarm',now()-interval '1 hour');
+      INSERT INTO public."HomeCalendarEvent"(id,home_id,created_by,event_type,title,start_at) VALUES(${q(f.id(902))},${q(home)},${q(actor)},'other','Quarterly Home check',now()+interval '10 minutes');
+      INSERT INTO public."HomeBill"(id,home_id,created_by,bill_type,provider_name,amount,currency,status,due_date) VALUES
+        (${q(f.id(903))},${q(home)},${q(actor)},'electric','House electricity USD',142.50,'USD','overdue',CURRENT_DATE-1),
+        (${q(f.id(904))},${q(home)},${q(actor)},'water','Water CAD',999.99,'CAD','due',CURRENT_DATE+1);
+      INSERT INTO public."HomeIssue"(id,home_id,reported_by,title,status) VALUES(${q(f.id(905))},${q(home)},${q(actor)},'Loose kitchen handle','scheduled');
+      INSERT INTO public."HomeIssue"(id,home_id,reported_by,title,status) VALUES
+        (${q(f.id(910))},${q(home)},${q(actor)},'Dripping faucet','open'),
+        (${q(f.id(911))},${q(home)},${q(actor)},'Repairing gate','in_progress');
+      INSERT INTO public."HomePackage"(id,home_id,created_by,status,vendor_name,expected_at) VALUES
+        (${q(f.id(906))},${q(home)},${q(actor)},'expected','Package fixture',now()+interval '2 days'),
+        (${q(f.id(907))},${q(home)},${q(actor)},'out_for_delivery','Arriving fixture',now());
+      INSERT INTO public."HomeDocument"(id,home_id,created_by,title,doc_type) VALUES(${q(f.id(908))},${q(home)},${q(actor)},'Appliance manual','manual');
+      INSERT INTO public."HomePet"(id,home_id,created_by,name,species) VALUES(${q(f.id(909))},${q(home)},${q(actor)},'Maple','cat');`);
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const apiBase = `http://127.0.0.1:${server.address().port}`;
     browser = await chromium.launch({ channel: 'chrome', headless: true });
-    context = await browser.newContext({ viewport: { width: 1100, height: 950 } });
+    context = await browser.newContext({ viewport: { width: 1100, height: 950 }, timezoneId: 'America/Los_Angeles' });
     await context.addCookies([{ name: 'pantopus_session', value: '1', url: base }, { name: 'pantopus_access', value: 'synthetic-local-session', url: base, httpOnly: true }]);
     await context.route('**/*', async route => {
       const request = route.request(), parsed = new URL(request.url()), endpoint = parsed.pathname;
@@ -64,6 +79,15 @@ async function main() {
           const response = await fetch(apiBase + endpoint, { headers: { 'x-fixture-actor': currentActor }, signal: AbortSignal.timeout(20000) });
           body = await response.json(); status = response.status;
           assert.match(response.headers.get('cache-control') || '', /private, no-store/);
+        } else if (new RegExp(`/api/homes/${home}/(tasks|issues|bills|packages|documents|events|pets)$`).test(endpoint)) {
+          const kind = endpoint.split('/').at(-1); recordReads.push(kind);
+          if (resourceFailure === kind) {
+            if (kind === 'tasks' || kind === 'events') f.failNextRpc('get_home_records');
+            else f.failNextQuery(({ issues: 'HomeIssue', bills: 'HomeBill', packages: 'HomePackage', documents: 'HomeDocument', pets: 'HomePet' })[kind]);
+          }
+          const response = await fetch(apiBase + endpoint, { headers: { 'x-fixture-actor': currentActor }, signal: AbortSignal.timeout(20000) });
+          body = await response.json(); status = response.status;
+          if (malformedResource === kind && status === 200) body = { [kind]: null };
         } else if (endpoint === `/api/homes/${home}/claims`) {
           if (listFailure) { status = 503; body = { error: 'Claim list temporarily unavailable' }; } else body = { claims: [] };
         } else if (endpoint === `/api/homes/${home}`) body = { home: { id: home, name: 'Private dashboard fixture', owner_id: actor } };
@@ -84,6 +108,56 @@ async function main() {
     await page.goto(household, { waitUntil: 'domcontentloaded', timeout: 120000 }); await restored();
     await expect(page.getByText('Private legal fixture name', { exact: true })).toHaveCount(0);
     pass('Actual dashboard SQL renders the permitted member handle without forwarding the raw legal name');
+    await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await page.getByText('Check the smoke alarm', { exact: true }).first().waitFor();
+    await page.getByText('Quarterly Home check', { exact: true }).first().waitFor();
+    await page.getByText('USD 142.50', { exact: true }).first().waitFor();
+    await expect(page.getByText('All clear!', { exact: true })).toHaveCount(0);
+    const dueCard = page.getByRole('button', { name: /Bills due$/ }); await expect(dueCard).toContainText('2');
+    await expect(page.getByRole('button', { name: 'Deliveries', exact: true })).toContainText('2 pending');
+    await expect(page.getByLabel('Property Details', { exact: true })).not.toContainText('ATTOM');
+    await screenshot('00-real-populated-overview');
+    await page.getByRole('button', { name: /Open issues$/ }).click();
+    await page.getByRole('heading', { name: 'Maintenance', exact: true }).waitFor();
+    await page.getByText('Loose kitchen handle', { exact: true }).first().waitFor();
+    await page.getByText('Dripping faucet', { exact: true }).first().waitFor();
+    await page.getByText('Repairing gate', { exact: true }).first().waitFor();
+    await screenshot('00-real-active-maintenance');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('button', { name: /Pending packages$/ }).click();
+    await page.getByRole('heading', { name: 'Deliveries', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    const calendarCard = page.getByRole('button', { name: 'Calendar', exact: true });
+    await calendarCard.focus(); await page.keyboard.press('Space');
+    await page.getByRole('heading', { name: 'Calendar', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    const billsCard = page.getByRole('button', { name: 'Bills & Budget', exact: true });
+    await billsCard.focus(); await page.keyboard.press('Enter');
+    await page.getByText('CAD 999.99', { exact: true }).first().waitFor();
+    await page.getByText('USD 142.50', { exact: true }).first().waitFor();
+    await expect(page.getByText(/1,142.49|1142.49/)).toHaveCount(0);
+    const billDate = sql(`SELECT to_char(due_date,'Mon FMDD') FROM public."HomeBill" WHERE id=${q(f.id(903))};`);
+    await expect(page.getByText(`Due ${billDate}`, { exact: true }).first()).toBeVisible();
+    await screenshot('00-real-separate-bill-currencies');
+    sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(actor)},'finance.manage',false);`);
+    await focus(); await title().waitFor(); await page.getByText('Bills & Budget', { exact: true }).click();
+    await page.getByText('CAD 999.99', { exact: true }).first().waitFor();
+    await expect(page.getByRole('button', { name: 'Mark Paid', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Add Bill', exact: true })).toHaveCount(0);
+    sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)} AND user_id=${q(actor)} AND permission='finance.manage';`);
+    const deniedCollections = ['tasks.view', 'maintenance.view', 'finance.view', 'packages.view', 'docs.view', 'calendar.view', 'members.view'];
+    sql(deniedCollections.map(permission => `INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(actor)},${q(permission)},false);`).join('\n'));
+    const beforeDenied = recordReads.length;
+    await focus(); await title().waitFor();
+    assert(!recordReads.slice(beforeDenied).some(kind => ['tasks', 'issues', 'bills', 'packages', 'documents', 'events'].includes(kind)));
+    for (const label of ['Tasks', 'Maintenance', 'Bills & Budget', 'Deliveries', 'Documents', 'Calendar']) {
+      await expect(page.locator('[role="button"][aria-label]').filter({ has: page.getByRole('heading', { name: label, exact: true }) })).toHaveCount(0);
+    }
+    await expect(row()).toHaveCount(0);
+    sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
+    await focus(); await title().waitFor();
+    await page.getByRole('button', { name: 'Members & Security', exact: true }).click(); await restored();
+    pass('Real populated overview has working issue/package shortcuts and keyboard cards; USD/CAD keep exact fractions and calendar dates; finance viewers have no bill-write controls');
     await invite().click(); await page.getByRole('heading', { name: 'Invite Member', exact: true }).waitFor();
     changeAccess(false); await focus(); await reload().waitFor(); await absent();
     await expect(page.getByRole('heading', { name: 'Invite Member', exact: true })).toHaveCount(0);
@@ -123,10 +197,28 @@ async function main() {
     await page.getByRole('button', { name: 'Reload residency claims', exact: true }).click(); await page.getByText('No pending residency claims', { exact: true }).waitFor();
     pass('Authority outage clears private UI; an isolated claim-list outage remains an honest reloadable panel error');
 
-    dashboardFailure = true; await focus(); await restored();
+    const readsBeforeFailure = recordReads.length;
+    dashboardFailure = true; await focus(); await reload().waitFor(); await absent();
+    assert.equal(recordReads.length, readsBeforeFailure);
+    await expect(page.getByText('All clear!', { exact: true })).toHaveCount(0);
+    await screenshot('05-aggregate-unavailable-without-fallback');
+    dashboardFailure = false; await reload().click(); await restored();
+    resourceFailure = 'packages'; await focus(); await reload().waitFor(); await absent();
+    resourceFailure = null; await reload().click(); await restored();
+    malformedResource = 'documents'; await focus(); await reload().waitFor(); await absent();
+    malformedResource = null; await reload().click(); await restored();
     const entity = holdNext('/tasks'); await focus(); await entity.wait(); changeAccess(false); await focus(); await reload().waitFor(); entity.release(); await absent();
-    dashboardFailure = false; changeAccess(true); await reload().click(); await restored();
-    pass('Individual endpoint fallback works and a stale entity response cannot revive denied data');
+    changeAccess(true); await reload().click(); await restored();
+    pass('Aggregate failure makes no fallback collection reads; required SQL failure and malformed collection stay unavailable; held entity cannot revive denied data');
+    resourceFailure = 'pets'; await focus(); await restored();
+    await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Current pets could not be loaded' }).waitFor();
+    await expect(page.getByText('Maple', { exact: true })).toHaveCount(0);
+    await screenshot('05-pets-unavailable-with-current-summary'); resourceFailure = null;
+    await page.getByRole('button', { name: 'Retry pets', exact: true }).click();
+    await page.getByText('Maple', { exact: true }).first().waitFor();
+    await page.getByRole('button', { name: 'Members & Security', exact: true }).click(); await restored();
+    pass('An optional real pet read failure is an explicit card error, and Retry restores the current pet');
 
     const readsBeforePending = privateReads;
     currentActor = f.users[1]; await page.evaluate(() => { localStorage.setItem('pantopus_auth_session_change', 'pending-member'); window.dispatchEvent(new Event('focus')); });
@@ -141,10 +233,12 @@ async function main() {
     sql(`UPDATE public."HomeOccupancy" SET start_at=now()-interval '1 day' WHERE home_id=${q(home)} AND user_id=${q(currentActor)};`);
     await reload().click(); await page.getByRole('heading', { name: 'Your residency request is under review', exact: true }).waitFor();
     sql(`UPDATE public."HomeOccupancy" SET verification_status='verified' WHERE home_id=${q(home)} AND user_id=${q(currentActor)};`);
-    await page.getByRole('button', { name: 'Check for updates', exact: true }).click(); await title().waitFor();
+    await page.getByRole('button', { name: 'Check for updates', exact: true }).click(); await reload().waitFor(); await absent();
+    sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(currentActor)},'home.view',true);`);
+    await reload().click(); await title().waitFor();
     await expect(invite()).toHaveCount(0); await expect(page.getByText('Owner', { exact: true })).toHaveCount(0);
     currentActor = actor; await focus(); await restored();
-    pass('Revoked and future-start pending occupancies cannot enter verification; a legitimate pending membership retains its verification flow without owner controls');
+    pass('Revoked and future-start pending occupancies cannot enter verification; pending verification remains separate; verified membership without home.view stays denied, and an explicit grant restores its Home without owner controls');
 
     auxiliaryVersion = 'Retired'; const summary = holdNext('/timeline');
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click(); await summary.wait();
@@ -160,7 +254,7 @@ async function main() {
     changeAccess(true); await reload().focus(); await page.keyboard.press('Enter'); await restored(); await screenshot('09-narrow-restored');
     pass('Narrow denied/restored states and keyboard reload remain usable');
     assert.deepEqual(mutations, []); assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations: 0, pageErrors: errors, limits: 'Actual Chrome, production dashboard/IAM HTTP/helpers/services and PostgreSQL; synthetic auth, ancillary/fallback entities and deterministic lifecycle events. Standalone entity fallback and overview totals remain a separate contract repair.' }, null, 2));
+    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations: 0, pageErrors: errors, limits: 'Actual Chrome, production dashboard/IAM HTTP/helpers/services and PostgreSQL; synthetic auth/ancillary endpoints and deterministic lifecycle events; core dashboard and tasks/issues/bills/packages/documents/events/pets use production HTTP/services/SQL. No provider, full entity-write or native acceptance.' }, null, 2));
   } catch (error) {
     if (page) { await page.screenshot({ path: path.join(evidence, 'failure.png'), fullPage: true }).catch(() => {}); fs.writeFileSync(path.join(evidence, 'failure.txt'), await page.locator('body').innerText().catch(() => '')); }
     throw error;

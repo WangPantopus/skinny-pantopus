@@ -1,29 +1,23 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
-## Current dashboard aggregate checkpoint — September 11
+## Current populated dashboard checkpoint — September 11
 
-Start with the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
-[dashboard report](home-dashboard-current-summary-2026-09-11.md). Real production
-HTTP/SQL and SDK/PostgREST r6 pass, as does the real-aggregate Chrome r1 journey;
-all fixtures are cleaned. Full backend/web regression, web types/lint and privacy
-pass. Backend aggregate no longer hides failed reads or uses the nonexistent
-HomeMail table/wrong package states, and enforces current resource authority,
-visibility, member windows and safe identity projection.
+Read the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
+[dashboard report](home-dashboard-current-summary-2026-09-11.md). Actual HTTP/SQL/
+SDK r7 and Chrome r6 pass with exact cleanup: populated records, currency/date
+amounts, issue/package shortcuts, active maintenance, keyboard cards, denied
+collections, truthful failures/retry and account/lifecycle/held responses. Backend
+regression, final web r3 and final types/lint/privacy pass. Initial failures and
+limits are retained.
 
-Dashboard milestone `60228da3d` is pushed. Predecessor `983c93a919` failed three
-HomeDashboard screenshot baselines while iOS/instrumentation passed. Local
-Android quality/compile and r1 reproduced only the intended reserved-footer
-changes; three reviewed baselines were updated and targeted r2 passes. Original
-images/deltas/failure evidence remain private. Check the new pushed CI separately.
-Native identity-reader edits remain a working draft without new installed proof.
-
-Next fix the web overview's missing aggregate arrays and
-failure fallback with actual populated UI, then native Home lifecycle/access,
-identity and remaining UI/workflow priorities. The new report preserves all
-new resource/privacy/layout findings; the full original backlog is still open.
-Both PRs stay drafts (#34 conflicted), combined migrations remain unreconciled,
-and paid providers stay one final launch bundle. Owner source/devices/data remain
-untouched. Earlier sections below are historical checkpoints.
+Next: native whole-Home current access/lifecycle, strict aggregate/identity,
+applicant/private-first-use entry and captured UI findings, then the full backlog.
+Verified-member home.view defaults need real onboarding reconciliation; the browser
+no longer bypasses denial. Native identity edits remain an uncommitted draft.
+`60228da3d`/`9d603c68c` are pushed; completed CI on the latter passes, two jobs
+were still running. Refresh each head. #32/#34 stay drafts (#34 conflicted),
+combined migrations remain unresolved and paid providers stay one final launch
+bundle. Owner source/devices/data remain untouched. Older checkpoints are historical.
 
 ## Most recent native bill checkpoint
 

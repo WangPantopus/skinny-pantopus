@@ -14,46 +14,40 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Current dashboard aggregate and browser contract — September 11
+### Current populated dashboard milestone — September 11
 
 The [dashboard report](home-dashboard-current-summary-2026-09-11.md) records the
-new backend/browser milestone and every remaining finding. Real production
-HTTP/SQL r6 and actual Supabase SDK/PostgREST pass, including populated records,
-private Mail, current permission/visibility gates, unavailable versus empty,
-five held-reply authority changes and fresh recovery. Exact fixture cleanup
-passes. Actual Chrome production-aggregate r1 passes identity, revocation,
-background/return, pending-residency and keyboard/narrow recovery; reviewed
-screenshots and zero page errors. Full backend/web regression, final web types,
-affected lint and privacy gates pass. No migration, provider or hosted change.
+browser/list repair and every remaining finding. Real HTTP/SQL and SDK/PostgREST
+r7 pass; Chrome r6 passes all 13 journey groups, zero page errors and exact cleanup:
+populated records, bill currencies/dates, issue/package shortcuts, active issues,
+keyboard cards, denied collections, unavailable/Retry states and the previous
+account/lifecycle/applicant/held-reply matrix. Current screenshots are reviewed.
+Backend regression, final web r3, final types/lint/privacy pass. No new migration
+or hosted change. Paid services remain one final launch-preparation bundle.
 
-**Next:** repair the
-web overview's aggregate/entity mismatch and permissive failure fallback with
-real populated UI acceptance. Continue native whole-Home access/lifecycle/held
-read/account retirement, safe identity readers and captured UI issues, preserving
-exact private-creator first use and ownership/residency applicant entry. The
-report lists standalone issue/package/mailbox/pet, guest redemption, timezone,
-pagination and narrow-layout findings; none are implicitly closed by this work.
-All remaining Home/Place/Pulse/Beacon/account/payment/release priorities below
-remain. Paid services stay one final launch-preparation bundle.
+**Next: native Home dashboard current access and lifecycle.** Finish strict
+aggregate/identity readers, gate core/intelligence reads and controls on explicit
+grants, clear private data while suspended/unconfirmed, and retire held responses
+after account/access/lifecycle changes. Preserve exact task-collection private
+creator first use and separate current ownership/residency applicants; native
+403 verification handling needs attention. Fix checklist truncation, property
+verification copy and sample attention-count mismatch during installed acceptance.
+The report retains all remaining entity writes/media/receipts, sharing/member/
+provider errors and the full Home/Place/Pulse/Beacon/account/payment/release scope.
 
-The dashboard aggregate/browser milestone is pushed as `60228da3d`. Its new CI
-must be checked independently. Predecessor `983c93a919` passed all iOS jobs and
-Android instrumentation but failed three HomeDashboard Paparazzi images. Local
-quality/compile and snapshot r1 reproduced only the intended reserved-footer
-changes. All three pixel comparisons were reviewed; only those three baselines
-were updated, and targeted snapshot r2 passes. The original failing output,
-previous images and deltas are retained privately. Native safe-identity DTO/
-projection edits remain an uncommitted draft until built and actually accepted;
-Android main/test compilation passed during snapshot verification, but no new
-native installed acceptance is claimed. The sample attention banner's existing
-3-versus-4 count mismatch is retained as a native UI finding.
+The real baseline permits verified membership without home.view; the old browser
+fallback hid that denial. Current UI stays denied until an explicit grant exists.
+Reconcile this with actual residency/invitation role defaults without inferring grants.
 
-#32/#34 remain unfinished drafts. #34 is conflicted at `e9ef2decb`. Master is
-still `6a1013784`; the combined 47-version migration dependency/replay gate is
-unresolved. Owned Gig SQL and web 18080 remain; fixture listeners have stopped
-with exact cleanup, and owned native devices remain shut down. Owner checkout
-still has only its handoff edit and two design artifacts, untouched. Preserve all
-source, device data, databases, products and private evidence during resource work.
+Aggregate `60228da3d` and reviewed Android footer baselines `9d603c68c` are pushed.
+All completed checks on the latter pass; iPhone 16 and Android lint/test/assemble
+were still running at last check. Verify each new pushed head independently.
+Native identity DTO/projection edits remain uncommitted without installed proof.
+#32/#34 stay unfinished drafts; #34 is conflicted at `e9ef2decb`. Master remains
+`6a1013784`; combined 47-version migration dependencies/replay are unreconciled.
+Owned SQL/web 18080 remain; completed fixtures are exactly cleaned and owned native
+devices are shut down. Owner checkout's handoff edit/two design artifacts and
+source/devices/data remain untouched. Preserve products and private evidence.
 
 The dated checkpoints below describe earlier milestones; their old "next" and
 runtime statements are historical, superseded by this current section.
