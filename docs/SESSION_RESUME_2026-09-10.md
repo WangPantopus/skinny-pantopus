@@ -3,7 +3,30 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [iOS conversion report](home-ios-task-gig-publication-2026-09-10.md)
+The newest [Android conversion report](home-android-task-gig-publication-2026-09-10.md)
+completes core native public review and encrypted original/receipt recovery with
+installed app → production HTTP/service → SQL acceptance. Final r5 passes stale
+review, lost replies, cold recovery, ciphertext corruption/restoration, exact
+current Gig navigation, ten V1/V2 status screens and current revocation/recovery.
+It preserves one Gig/receipt after three POSTs and a later cancellation/$30 price.
+Visual and accessibility review verified the shared disabled-dock repair. Final
+local build/quality and affected checks pass. Core task-to-Gig now has browser,
+iOS and Android implementation and local workflow evidence, with advanced modes,
+physical/provider and release-level acceptance still explicitly open.
+
+Next is claimant relationship decline/flag transaction/recovery and residency
+receipts, then ownership transfer/challenge and lease/resource cleanup. The current
+relationship route still separates authority, mutation and audit; preserve the
+completed invitation/evidence transactions while repairing it. Predecessor iOS
+`f0230fe29` is fully green in CI, including SE. Refresh the next exact head.
+Both PRs remain drafts; paid #34 `e9ef2decb` stays green but unfinished, combined
+migrations stay open, and paid services remain one final launch bundle. Preserve
+native GigDetail/web CompletionFlow changes from both branches at integration.
+Exact SQL fixtures are cleaned; the owned listener and emulator are stopped; the
+owned Gig database is stopped with its local backup retained. Owner files
+and runtimes are unchanged. Older next actions below are historical.
+
+The preceding [iOS conversion report](home-ios-task-gig-publication-2026-09-10.md)
 completes core native public review and Keychain original/receipt recovery with
 installed app → production HTTP/service → SQL acceptance. It also repairs false
 Open/bidding/verified-address states discovered during visual review. Ten V1/V2

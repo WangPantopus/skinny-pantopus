@@ -3738,6 +3738,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     HouseholdTaskDetailScreen(
                         onBack = { navController.popBackStack() },
                         onEdit = { navController.navigate(ChildRoutes.editHouseholdTask(homeId, taskId)) },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                     )
                 }
                 composable(

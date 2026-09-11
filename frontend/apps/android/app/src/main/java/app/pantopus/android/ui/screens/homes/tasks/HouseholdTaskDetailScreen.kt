@@ -40,13 +40,16 @@ import app.pantopus.android.data.api.models.homes.HomeTaskDto
 fun HouseholdTaskDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onOpenGig: (String) -> Unit,
     viewModel: HouseholdTaskDetailViewModel = hiltViewModel(),
     mediaViewModel: HomeTaskMediaViewModel = hiltViewModel(),
     recurrenceViewModel: HomeTaskRecurrenceViewModel = hiltViewModel(),
+    gigViewModel: HomeTaskGigViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val mediaState by mediaViewModel.controller.state.collectAsStateWithLifecycle()
     val recurrenceState by recurrenceViewModel.controller.state.collectAsStateWithLifecycle()
+    val gigState by gigViewModel.controller.state.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     HomeTaskResumeEffect(viewModel::resume, viewModel::pause)
     DisposableEffect(viewModel) { onDispose { viewModel.finishArrival() } }
@@ -70,12 +73,16 @@ fun HouseholdTaskDetailScreen(
                 HouseholdTaskReadOnlyContent(task)
                 TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
                 TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
+                if (task.capabilities?.canEdit == true) {
+                    TextButton(onClick = gigViewModel.controller::show, enabled = !state.busy) { Text("Review Gig publication") }
+                }
                 TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }
             }
         }
     }
     if (mediaState.visible) HomeTaskMediaDialog(mediaViewModel.controller)
     if (recurrenceState.visible) HomeTaskRecurrenceDialog(recurrenceViewModel.controller, viewModel::reload)
+    if (gigState.visible) HomeTaskGigDialog(gigViewModel.controller, viewModel::reload, onOpenGig)
     if (confirmDelete && state.task?.capabilities?.canDelete == true) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

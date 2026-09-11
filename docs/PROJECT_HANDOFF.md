@@ -14,6 +14,35 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android task-to-Gig publication and installed recovery — September 10
+
+The [Android conversion report](home-android-task-gig-publication-2026-09-10.md)
+completes core native public review and actual Keystore original/confirmation
+recovery. Final installed app → production HTTP/service → local SQL acceptance
+passes stale review, lost replies, two process deaths, exact replay, corrupted
+storage/restoration, current destination and revoked/restored access. One receipt
+and one Gig remain after three POSTs, preserving later cancellation and $30 price.
+Ten V1/V2 lifecycle screens pass status/price/action checks and visual review.
+The shared dock now exposes disabled controls correctly to accessibility. Final
+build, format/Detekt, lint and affected regressions pass; the report distinguishes
+actual publication SQL from synthetic identity/geo/detail-layout/provider limits.
+
+**Next:** claimant relationship decline/flag decisions and residency receipts,
+then ownership transfer/challenge and lease/resource cleanup. The relationship
+route still separates its authority checks, claim/resolution updates and audit;
+finish its current-authority transaction/recovery without replacing completed
+invitation/evidence work. Core task-to-Gig is now implemented and locally exercised
+on web/iOS/Android; advanced composer modes and full provider/release acceptance
+remain open. Predecessor `f0230fe29` passes all required CI, including iPhone SE;
+refresh the new Android head separately. Both PRs remain drafts. Paid #34 stays
+`e9ef2decb`, green but unfinished. Preserve both branches' native GigDetail and web
+CompletionFlow edits. Final combined migration dependencies/replay remain open
+(42 distinct versions). All paid dependencies stay in one final launch bundle.
+The exact SQL fixture is cleaned; owned 18083 listener and emulator 5556 are
+stopped. The Gig replay database is stopped with its local backup retained.
+Owner files and runtimes remain untouched. Continue prioritizing actual behavior,
+UI, transitions and recovery over unit-coverage percentages.
+
 ### iOS task-to-Gig publication and current detail states — September 10
 
 The [iOS conversion report](home-ios-task-gig-publication-2026-09-10.md) records
