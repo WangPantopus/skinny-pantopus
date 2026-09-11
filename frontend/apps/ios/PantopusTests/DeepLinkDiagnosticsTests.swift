@@ -5,12 +5,12 @@ import XCTest
 final class DeepLinkDiagnosticsTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "diagnostics-user" }
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         PendingDeepLinkStore.clear()
         super.tearDown()
     }
@@ -68,7 +68,7 @@ final class DeepLinkDiagnosticsTests: XCTestCase {
     }
 
     func testSignedOutPostRetainsDeferredNavigationWithoutLoggingItsID() {
-        DeepLinkRouter.bindSignedInProvider { false }
+        DeepLinkRouter.bindSignedInUserIDProvider { nil }
         var diagnostics: [String] = []
         let router = DeepLinkRouter { diagnostics.append($0) }
         router.handle(path: "/post/deferred-private-post")
