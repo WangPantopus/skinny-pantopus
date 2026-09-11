@@ -6102,11 +6102,16 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
     const canFinance = perms.has('finance.view');
     if (!canFinance) return res.status(403).json({ error: 'No finance access' });
 
-    const { getHomeBillComparison, asBillTrendData } = require('../services/homeBillComparisonService');
+    const { currencyCode, getHomeBillComparison, asBillTrendData, asLegacyBillTrendData } = require('../services/homeBillComparisonService');
+    const format = req.query.format ?? '1';
+    if (!['1', '2'].includes(format)) return res.status(400).json({ error: 'Unsupported bill comparison format.' });
+    if (format === '1' && currencyCode(req.query.currency) !== 'USD') {
+      return res.status(400).json({ error: 'Update the app to choose a bill comparison currency.' });
+    }
     const snapshot = await getHomeBillComparison(homeId, userId, req.query.currency);
     if (!snapshot.can_view_finance) return res.status(403).json({ error: 'No finance access' });
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json(asBillTrendData(snapshot));
+    res.json(format === '2' ? asBillTrendData(snapshot) : asLegacyBillTrendData(snapshot));
   } catch (err) {
     logger.error('Bill trends error', { error: err.message, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.statusCode ? err.message : 'Current bill trends could not be loaded.', code: err.code || 'HOME_BILLS_UNAVAILABLE' });

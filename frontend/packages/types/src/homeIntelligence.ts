@@ -78,6 +78,7 @@ export interface BillTrendData {
   available_currencies?: string[];
   as_of?: string;
   calculation_version?: number;
+  format_version?: number;
   period_basis?: string;
   bills_by_type: Record<string, { months: string[]; amounts: number[] }>;
   benchmarks: Record<string, BillBenchmark | BillBenchmarkInsufficient>;

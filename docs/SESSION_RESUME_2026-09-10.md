@@ -1,5 +1,14 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+## Most recent format/native checkpoint
+
+The [current handoff](PROJECT_HANDOFF.md) records pushed calculation milestone
+`6465da29c`, the verified explicit legacy/current bill format follow-up, and
+uncommitted iOS/Android presentation candidates. Inspect the active iOS build
+before proceeding; do not confuse full backend/browser passes with native
+installed acceptance. Both feature PRs and the full remaining launch gates stay
+open. No paid activation or hosted migration occurred.
+
 ## Latest continuation — September 11, live bill comparisons
 
 Read the current top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the

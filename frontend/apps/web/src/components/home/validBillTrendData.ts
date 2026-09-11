@@ -12,7 +12,7 @@ const series = (periods: unknown, amounts: unknown) => months(periods) && Array.
 
 /** Reject malformed or wrong-currency success before any financial UI renders. */
 export function validBillTrendData(value: unknown, currency: string): value is BillTrendData {
-  if (!record(value) || value.currency !== currency || value.calculation_version !== 2
+  if (!record(value) || value.currency !== currency || value.calculation_version !== 2 || value.format_version !== 2
     || typeof value.bill_benchmark_opt_in !== 'boolean'
     || !Array.isArray(value.available_currencies)
     || !value.available_currencies.every(code => typeof code === 'string' && /^[A-Z]{3}$/.test(code))

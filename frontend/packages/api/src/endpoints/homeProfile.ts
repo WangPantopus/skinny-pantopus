@@ -485,7 +485,7 @@ export async function getSeasonalChecklistHistory(homeId: string) {
 }
 
 export async function getBillTrends(homeId: string, currency = 'USD') {
-  return get<BillTrendData>(`/api/homes/${homeId}/bill-trends`, { currency });
+  return get<BillTrendData>(`/api/homes/${homeId}/bill-trends`, { currency, format: '2' });
 }
 
 export async function setBillBenchmarkOptIn(homeId: string, optedIn: boolean) {

@@ -10,6 +10,7 @@ async function main() {
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const base = `http://127.0.0.1:${server.address().port}/api/homes/${home}`;
     const request = async (suffix, method = 'GET', body) => {
+      if (suffix.startsWith('/bill-trends') && !suffix.includes('format=')) suffix += (suffix.includes('?') ? '&' : '?')+'format=2';
       const response = await fetch(base+suffix, { method, headers: { 'content-type': 'application/json', 'x-fixture-actor': actor },
         ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000) });
       return { status: response.status, body: await response.json(), headers: response.headers };
@@ -22,6 +23,13 @@ async function main() {
     r = await request('/bill-trends?currency=CAD'); assert.equal(r.status, 200);
     assert.deepEqual(r.body.bills_by_type.electric, { months: [current], amounts: [999.99] }); assert.deepEqual(r.body.benchmarks, {});
     r = await request('/bill-trends?currency=invalid'); assert.equal(r.status, 400);
+    const legacyResponse = await fetch(base+'/bill-trends', { headers: { 'x-fixture-actor': actor }, signal: AbortSignal.timeout(20000) });
+    assert.equal(legacyResponse.status,200); const legacy = await legacyResponse.json();
+    assert.equal(legacy.format_version,1); assert.deepEqual(legacy.bills_by_type.electric, { months: [current,previous], amounts: [142.50,210.25] });
+    assert.deepEqual(legacy.benchmarks,{}); assert.equal(legacy.currency,'USD');
+    r = await request('/bill-trends?format=1&currency=CAD'); assert.equal(r.status,400);
+    r = await request('/bill-trends?format=unknown'); assert.equal(r.status,400);
+    console.log('PASS: clients without a format opt-in receive newest-first personal USD totals and no misleading peer units; invalid formats/legacy currencies reject');
     console.log('PASS: same-currency fractional household/month totals, chronological periods, thresholds and explicit invalid currency');
     r = await request('/intelligence?sections=bill_benchmark'); assert.equal(r.status, 200);
     const section = body => body.groups.flatMap(g => g.sections).find(s => s.id === 'bill_benchmark');

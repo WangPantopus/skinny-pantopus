@@ -14,6 +14,35 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Bill format compatibility and native draft — September 11
+
+Calculation/browser milestone is pushed as `6465da29c`; its current remote CI
+has no failures but native jobs are still running. The subsequent explicit
+format compatibility repair passes production HTTP r3, actual complete Chrome
+r4, all backend/web regression cases and types. `format=2` opts current clients
+into chronological major-unit peer comparisons; older requests get newest-first
+personal USD totals and no peer values that old native cents conversion could
+misread. Non-USD legacy requests and unsupported formats reject. No migration
+or cache fallback is added. This is compatibility for the identified amount/order
+contract, not acceptance of all old-client UI or a production release.
+
+**Uncommitted native draft:** iOS/Android DTOs, endpoint format opt-in and new
+HomeBillPresentation helpers validate versioned data, use the latest month,
+match peer month keys and retain decimal amounts. iOS formatting ran; signed
+build-for-testing is still running under session 78732 with log
+`/private/tmp/pantopus-native-bill-ios-build-r1.log`. Inspect its outcome before
+claiming a pass. Android has not been formatted/compiled. Neither has new installed
+acceptance. Currency choice, full monthly presentation and native summary
+lifecycle/access retirement remain. Keep these draft files out of the verified
+compatibility commit until completed. The fixture listener/installed drivers
+for this new native journey have not been created or started.
+
+Next complete native build/quality and actual installed Home bill flows, then
+Place financial detail/overview, remaining native residency and the ordered
+backlog. Owned web 18080/Gig SQL remain; fresh 38 replay is stopped with backup.
+Both PRs stay drafts; #34 remains conflicted/unfinished. Preserve owner work and
+all private evidence; paid services stay one final launch bundle.
+
 ### Current bill comparison milestone — September 11
 
 The [bill comparison report](home-bill-comparison-continuation-2026-09-11.md)

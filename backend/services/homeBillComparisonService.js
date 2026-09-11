@@ -67,7 +67,18 @@ function asBillTrendData(snapshot) {
   }
   return { bills_by_type: billsByType, benchmarks, bill_benchmark_opt_in: snapshot.bill_benchmark_opt_in,
     currency: snapshot.currency, available_currencies: snapshot.available_currencies,
-    as_of: snapshot.as_of, calculation_version: snapshot.calculation_version, period_basis: snapshot.period_basis };
+    as_of: snapshot.as_of, calculation_version: snapshot.calculation_version, format_version: 2, period_basis: snapshot.period_basis };
 }
 
-module.exports = { currencyCode, getHomeBillComparison, getPeerBillMonths, asBillTrendData };
+// Older native clients take the first month as newest and interpret peer
+// amounts as cents. Give them current personal USD totals, newest first,
+// without a comparison they could misinterpret. Never revive the old cache.
+function asLegacyBillTrendData(snapshot) {
+  const data = asBillTrendData(snapshot);
+  for (const series of Object.values(data.bills_by_type)) {
+    series.months.reverse(); series.amounts.reverse();
+  }
+  return { ...data, benchmarks: {}, format_version: 1, comparison_unavailable_reason: 'client_update_required' };
+}
+
+module.exports = { currencyCode, getHomeBillComparison, getPeerBillMonths, asBillTrendData, asLegacyBillTrendData };

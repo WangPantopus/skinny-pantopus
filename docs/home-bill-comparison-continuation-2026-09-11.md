@@ -5,6 +5,31 @@ draft; full cross-client financial acceptance remains unfinished. No provider or
 service activation, source-bill rewrite or hosted database action is authorized
 by this report. Existing user authorization governs the continuing local work.
 
+## Explicit legacy/current client format follow-up
+
+After pushed `6465da29c`, current web requests `format=2` and requires
+`format_version:2` before rendering. No-format/format-1 requests receive current
+personal USD monthly totals newest first, with no peer amounts and an explicit
+`client_update_required` comparison reason. This prevents older native code from
+dividing new major-unit peers by 100 or treating the oldest month as newest.
+Legacy non-USD requests and unknown format versions reject. Canonical SQL,
+source data and historical cache rows are unchanged; no cache fallback exists.
+Old browser month-label and broader client-lifecycle limitations still require
+current releases and actual acceptance. This is not blanket legacy-client proof.
+
+Production HTTP r3 verifies both formats and the complete current numerical,
+permission/error/settings cases. Full Chrome r4 passes the complete actual UI
+journey after explicit opt-in, two PATCHes, zero page errors and exact cleanup.
+All 317 backend suites/5,169 cases, 92 web suites/1,178 cases and types pass; known
+skips remain. Logs use `pantopus-home-bill-format-*`,
+`pantopus-home-bill-comparison-http-r3.log` and `pantopus-web-bill-comparison-r4/`.
+No new SQL migration or paid/provider call is introduced.
+
+Native DTO/endpoint/presentation candidates are uncommitted and not covered by
+those passes. iOS signed build-for-testing is in progress; Android is uncompiled.
+Neither current native app has installed financial acceptance or currency-choice
+parity. See the handoff for the exact runtime and remaining work.
+
 ## Current SQL and browser calculation milestone
 
 Work after `a74102c92` replaces the ambiguous derived cache with indexed,
