@@ -1,11 +1,20 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+September 11 next milestone: [Place bill access/error boundaries](home-bill-comparison-continuation-2026-09-11.md)
+requires current Home view, prevents personal bill reads without finance.view,
+keeps read errors explicit and preserves missing coordinates. Real production
+HTTP/SQL and full backend/privacy pass. This does not fix the still-confirmed
+currency, monthly aggregation, stale contribution and derived rebuild findings;
+those are next, followed by all existing native/Home/Pulse/Beacon/release work.
+No new migration; 37/46 dependency reconciliation and final paid bundle remain.
+
+
 Newest September 11 continuation: [Home summaries and preferences](home-summary-boundary-continuation-2026-09-11.md)
 repairs summary failure/empty states, current permission gates, exact checklist
 changes and an actual HomePreference schema mismatch. Settings/typed preferences/
 audit commit together. Real Chrome r3 (pointer/keyboard and visible switch state), HTTP/SQL r5, eight checklist/seven settings
 lock races, 37-version fresh replay, all 42 SQL/pgTAP, SDK/lint and preserved-data
-upgrades pass. Final color-state browser r3 passes; commit/push and exact-head CI follow. Next reconcile
+upgrades pass. Final color-state browser r3 passes; pushed as `a6d879664`, with exact-head CI started. Next reconcile
 bill currency/monthly comparisons/stale cohorts, then native summaries/residency
 and every existing backlog item. PRs #32/#34 remain unfinished drafts; combined
 46-version dependency/replay work remains. All paid services stay one final

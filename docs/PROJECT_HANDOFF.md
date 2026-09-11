@@ -14,6 +14,17 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Active bill comparison continuation — September 11
+
+After pushed `a6d879664`, [bill comparison continuation](home-bill-comparison-continuation-2026-09-11.md)
+records an additional Place home.view/finance.view boundary, honest source errors
+and missing-coordinate repair. Actual production HTTP/SQL r3 and 25 affected
+cases pass; full backend (5,169 cases) and privacy gates pass. Currency, monthly aggregation,
+current contribution removal, derived-row rebuild and browser/native acceptance
+remain unfinished. Complete the financial producer/consumer reconciliation next,
+then the full native residency and ordered backlog. No new migration or paid
+activation in this continuation yet. Both feature PRs remain drafts.
+
 ### Home summary and preference workflows — September 11
 
 The [summary report](home-summary-boundary-continuation-2026-09-11.md) records
@@ -32,7 +43,7 @@ Actual summary Chrome r3 passes four PATCHes/zero page errors, pointer/keyboard,
 error/recovery, permission and narrow states. Visual review repaired desktop
 floating-button overlap and limited-reader layout. Final distinct switch on/off colors pass and the final screens were reviewed.
 
-**Next:** push this milestone and verify its exact-head CI; then reconcile
+**Current:** pushed `a6d879664`; exact-head CI has started. Next reconcile
 bill comparison currency/monthly aggregation/period alignment, stale cohorts
 after opt-outs/deletions and derived-row version/rebuild. This is a confirmed
 source finding, not completed financial acceptance. Continue native summary and

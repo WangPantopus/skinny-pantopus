@@ -161,6 +161,7 @@ describe('GET /api/homes/:id/intelligence', () => {
 
   beforeEach(() => {
     resetTables();
+    seedTable('HomeRolePermission', [{ role_base: 'member', permission: 'home.view', allowed: true }]);
     delete process.env.ATTOM_API_KEY; // default: no ATTOM
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());

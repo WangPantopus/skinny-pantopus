@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container, { summary = false } = {}) {
+module.exports = function(container, { summary = false, place = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -34,9 +34,9 @@ module.exports = function(container, { summary = false } = {}) {
   // Supabase query adapter for production reads and isolated summary preference/audit writes.
   db.from = table => {
     assert(['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride',
-      'HomePostcardCode', 'HomeOwnershipClaim', ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark'] : [])].includes(table));
+      'HomePostcardCode', 'HomeOwnershipClaim', ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark', 'HomePrivacy'] : [])].includes(table));
     const filters = []; let columns = '*', order = '', limit = '', single = false, count = false, head = false, writes = null, conflict = null;
-    const column = name => { assert.match(name, /^[a-z_]+$/); return `"${name}"`; };
+    const column = name => { assert.match(name, /^[a-z_][a-z0-9_]*$/); return `"${name}"`; };
     const query = {
       select(value, options = {}) {
         count = options.count === 'exact'; head = options.head === true;
@@ -89,6 +89,13 @@ module.exports = function(container, { summary = false } = {}) {
       if (request === '../services/notificationService') return transport;
       if (request === '../utils/logger') return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
     }
+    if (place && parent?.filename.endsWith('/services/placeIntelligenceService.js')) {
+      if (!['../utils/geohash', '../serializers/placeIntelligenceSerializer', './homePrivacyService'].includes(request)) return {};
+    }
+    if (place && parent?.filename.endsWith('/routes/placeIntelligence.js')) {
+      if (request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+      if (request === '../services/homeSystemsService') return {};
+    }
     if (parent?.filename.endsWith('/routes/homeIam.js') && ['../services/homeAuthorityService', '../services/homeExternalShareService'].includes(request)) return {};
     if (parent?.filename.endsWith('/routes/homeIam.js') && request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
     if (summary && parent?.filename.endsWith('/routes/home.js') && request === '../services/ai/propertyIntelligenceService') return { getProfile: async () => propertyResult };
@@ -105,7 +112,9 @@ module.exports = function(container, { summary = false } = {}) {
     return load.call(this, request, parent, isMain);
   };
   const router = require(path.join(root, 'backend/routes/home'));
-  const app = express(); app.use(express.json()); app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
+  const app = express(); app.use(express.json());
+  if (place) app.use('/api/homes', require(path.join(root, 'backend/routes/placeIntelligence')));
+  app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
   function setup() {
     assert.equal(sql(`SELECT (SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}))+(SELECT count(*) FROM public."Home" WHERE id=${q(home)});`), '0');
     sql(`BEGIN;

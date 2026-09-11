@@ -75,9 +75,11 @@ function bandAccess(band, tier) {
 
 // ── Location → geohash-6 (matches NeighborhoodPreview / BillBenchmark) ──
 function homeLatLng(home) {
+  if (home.map_center_lat == null || home.map_center_lng == null
+    || String(home.map_center_lat).trim() === '' || String(home.map_center_lng).trim() === '') return null;
   const lat = Number(home.map_center_lat);
   const lng = Number(home.map_center_lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
   return null;
 }
 
@@ -669,7 +671,7 @@ function pickBillType(benchmarkRows, ownBillTypes) {
   return { type, rows: entry.rows };
 }
 
-async function composeBillBenchmark(home) {
+async function composeBillBenchmark(home, access) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
 
@@ -678,11 +680,12 @@ async function composeBillBenchmark(home) {
     const geohash = encodeGeohash(ll.lat, ll.lng, 6);
     // Privacy floor: only household_count >= 10 may be shown (matches the
     // existing bill-trends read). Smaller cohorts stay unavailable.
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('BillBenchmark')
       .select('bill_type, avg_amount_cents, household_count')
       .eq('geohash', geohash)
       .gte('household_count', 10);
+    if (error) throw error;
     benchmarkRows = data || [];
   } catch (err) {
     logger.warn('placeIntelligence: billBenchmark failed', { homeId: home.id, error: err.message });
@@ -692,21 +695,26 @@ async function composeBillBenchmark(home) {
   // The resident's own bills (Band C input) — read first so the picker can
   // prefer a type they can actually be compared on.
   const ownByType = new Map();
+  const canReadOwnBills = access?.hasAccess === true && access.permissions?.includes('finance.view') === true;
   try {
-    const { data: bills } = await supabaseAdmin
-      .from('HomeBill')
-      .select('amount, bill_type')
-      .eq('home_id', home.id);
-    for (const b of bills || []) {
-      const amount = Number(b && b.amount);
-      if (!b || !Number.isFinite(amount)) continue;
-      if (!BENCHMARKABLE_BILL_TYPES.includes(b.bill_type)) continue;
-      const list = ownByType.get(b.bill_type) || [];
-      list.push(amount);
-      ownByType.set(b.bill_type, list);
+    if (canReadOwnBills) {
+      const { data: bills, error: billsError } = await supabaseAdmin
+        .from('HomeBill')
+        .select('amount, bill_type')
+        .eq('home_id', home.id);
+      if (billsError) throw billsError;
+      for (const b of bills || []) {
+        const amount = Number(b && b.amount);
+        if (!b || !Number.isFinite(amount)) continue;
+        if (!BENCHMARKABLE_BILL_TYPES.includes(b.bill_type)) continue;
+        const list = ownByType.get(b.bill_type) || [];
+        list.push(amount);
+        ownByType.set(b.bill_type, list);
+      }
     }
   } catch (err) {
     logger.warn('placeIntelligence: own bills read failed', { homeId: home.id, error: err.message });
+    return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'error' })];
   }
 
   const picked = pickBillType(benchmarkRows, new Set(ownByType.keys()));
@@ -933,7 +941,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
   { ids: ['your_home'], run: ({ home, tier }) => composeYourHome(home, tier) },
   { ids: ['home_systems'], run: ({ home, tier }) => composeHomeSystems(home, tier) },
-  { ids: ['bill_benchmark'], run: ({ home }) => composeBillBenchmark(home) },
+  { ids: ['bill_benchmark'], run: ({ home, access }) => composeBillBenchmark(home, access) },
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId }) => composeRealRent(home, tier, userId) },
@@ -1030,7 +1038,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
 
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise })),
+    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
   ]);
 
   const composed = {};
