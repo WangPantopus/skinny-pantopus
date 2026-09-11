@@ -10,14 +10,14 @@ pass. Backend aggregate no longer hides failed reads or uses the nonexistent
 HomeMail table/wrong package states, and enforces current resource authority,
 visibility, member windows and safe identity projection.
 
-Latest pushed `983c93a919` has a real Android CI failure: three HomeDashboard
-snapshot baselines after the Create footer changed. iOS and instrumentation pass.
-Targeted local Android quality/snapshot verification is running as session 13270,
-log `/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r1.log`; inspect
-and review the image changes before updating baselines. Native identity-reader
-edits are still a working draft, not new installed acceptance.
+Dashboard milestone `60228da3d` is pushed. Predecessor `983c93a919` failed three
+HomeDashboard screenshot baselines while iOS/instrumentation passed. Local
+Android quality/compile and r1 reproduced only the intended reserved-footer
+changes; three reviewed baselines were updated and targeted r2 passes. Original
+images/deltas/failure evidence remain private. Check the new pushed CI separately.
+Native identity-reader edits remain a working draft without new installed proof.
 
-Next finish that CI repair, fix the web overview's missing aggregate arrays and
+Next fix the web overview's missing aggregate arrays and
 failure fallback with actual populated UI, then native Home lifecycle/access,
 identity and remaining UI/workflow priorities. The new report preserves all
 new resource/privacy/layout findings; the full original backlog is still open.

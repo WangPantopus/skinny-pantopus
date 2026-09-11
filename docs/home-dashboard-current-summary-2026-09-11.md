@@ -133,12 +133,21 @@ combined dependency and replay reconciliation is still a merge gate.
 All iOS jobs and Android instrumentation on `983c93a919` passed. Android's
 lint/test/assemble job failed on the three HomeDashboard Paparazzi images (each
 retried), after the intentional Create-footer change; 4,597 checks ran, nine
-retry failures and 80 skips. The images have not yet been accepted. Reproduce,
-inspect the pixel differences, repair any actual layout defect, then update only
-reviewed intentional baselines and verify again. Do not waive the failing gate.
+retry failures and 80 skips. All three differences were reproduced locally and visually reviewed: the last
+viewport rows now scroll above the reserved Create footer instead of lying under
+the floating action button. No other pixels changed. Only these three images
+were copied from the reviewed renderer output to their baselines. Targeted r2
+passes all three; quality, main compilation and test compilation passed in r1.
+The failed run was not waived. Private original images, current images, deltas
+and failure XML are under `/private/tmp/pantopus-home-dashboard-android-snapshot-r1/`;
+final verification is `/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r2.log`.
+The old sample attention text says three items while listing four; retain that
+existing sample/presentation mismatch for the native UI pass, independently of
+this footer-only pixel repair.
 
-The native safe-identity reader/projection drafts are formatted on iOS. Android's
-first formatter run found an overlong new expression; it was wrapped. The owned
-targeted Android quality/snapshot build is running as session 13270, log
-`/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r1.log`. Inspect its
-result before any pass claim. No new native installed acceptance is claimed.
+Backend/browser milestone is pushed as `60228da3d`. Its newly running CI must be
+checked independently; the baseline follow-up will also need its own checks.
+Native safe-identity DTO/projection changes remain an uncommitted working draft.
+iOS formatting passes; Android's initial formatter found a long new expression,
+which was wrapped and passes final quality/compilation. No new native installed
+acceptance or whole-Home lifecycle completion is claimed.

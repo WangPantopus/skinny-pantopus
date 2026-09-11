@@ -26,7 +26,7 @@ background/return, pending-residency and keyboard/narrow recovery; reviewed
 screenshots and zero page errors. Full backend/web regression, final web types,
 affected lint and privacy gates pass. No migration, provider or hosted change.
 
-**Next:** finish the known Android screenshot check failure, then repair the
+**Next:** repair the
 web overview's aggregate/entity mismatch and permissive failure fallback with
 real populated UI acceptance. Continue native whole-Home access/lifecycle/held
 read/account retirement, safe identity readers and captured UI issues, preserving
@@ -36,13 +36,17 @@ pagination and narrow-layout findings; none are implicitly closed by this work.
 All remaining Home/Place/Pulse/Beacon/account/payment/release priorities below
 remain. Paid services stay one final launch-preparation bundle.
 
-Latest remote head `983c93a919`: all iOS jobs and Android instrumentation pass;
-Android lint/test/assemble fails on three HomeDashboard Paparazzi baselines
-(each retried) after the Create-footer change. Do not waive it or merge. Targeted
-local Android quality/snapshot verification is running as session 13270; log
-`/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r1.log`. Native
-safe-identity DTO/projection edits remain an uncommitted draft until built and
-actually accepted. Inspect the current build and pixels before recording images.
+The dashboard aggregate/browser milestone is pushed as `60228da3d`. Its new CI
+must be checked independently. Predecessor `983c93a919` passed all iOS jobs and
+Android instrumentation but failed three HomeDashboard Paparazzi images. Local
+quality/compile and snapshot r1 reproduced only the intended reserved-footer
+changes. All three pixel comparisons were reviewed; only those three baselines
+were updated, and targeted snapshot r2 passes. The original failing output,
+previous images and deltas are retained privately. Native safe-identity DTO/
+projection edits remain an uncommitted draft until built and actually accepted;
+Android main/test compilation passed during snapshot verification, but no new
+native installed acceptance is claimed. The sample attention banner's existing
+3-versus-4 count mismatch is retained as a native UI finding.
 
 #32/#34 remain unfinished drafts. #34 is conflicted at `e9ef2decb`. Master is
 still `6a1013784`; the combined 47-version migration dependency/replay gate is
