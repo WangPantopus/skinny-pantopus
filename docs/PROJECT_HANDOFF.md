@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 9, 2026. This is the continuing-work entry point. Detailed
+Updated September 10, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -13,6 +13,24 @@ the ordered backlog below. The owner now requests autonomous continuation and
 authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
+
+### Design collection integration refresh — September 10
+
+PR #24 preserves the [existing product proposals and archive](pantopus-product-design-index-2026-09-09.md).
+It is refreshed against master `390091cdb`: 34 artifact hashes, 142 relative
+Markdown links and documentation-only scope pass. Required checks on its exact
+refreshed head remain the merge gate. This is preservation, not implementation
+approval or new app/provider acceptance; the operational backlog stays in place.
+The owner checkout's uncommitted originals remain untouched.
+
+Primary Home work continues in `/private/tmp/pantopus-home-permission-boundaries`;
+its newer handoff/resume contains the detailed current record. Home #32
+`3393baa18` passes required CI, with Android relationship recovery being exercised
+locally. Paid #34 remains `e9ef2decb`, green but unfinished. Both feature PRs stay
+drafts with remaining scope and combined 43-version migration dependencies open.
+The separate diagnostics privacy PR #7 is refreshed at `c858d743a`, with current
+CI pending. Keep all paid dependencies in one final launch bundle. Earlier
+progress below is historical.
 
 ### Payment integration and next checkpoints — September 9
 

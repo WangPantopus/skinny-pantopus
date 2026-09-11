@@ -32,3 +32,13 @@ The archive includes the initial Home/Nearby concept, standalone bill explanatio
 - The historical nationwide reader report records 10 passing checks; the nationwide experience report records 34 passing checks. These reports describe their original prototype runs. They do not validate the later place-page concept or application behavior. The latest place concept has not received browser, native, backend, or scale acceptance testing.
 
 The next product action is to review the nationwide work packages and the place proposal's phased sequence, choose the first implementation slice, and refresh its code assumptions against the release branch. Existing reliability and release work remains in the [project handoff](PROJECT_HANDOFF.md); this collection does not alter that operational backlog.
+
+## September 10 integration refresh
+
+Refreshed against master `390091cdb` without conflicts. All 34 manifest artifact
+hashes match, all 142 relative Markdown links in the 38-file documentation delta
+resolve, and the diff remains documentation-only. The first link scan treated
+parentheses in source paths as terminators; balanced/angle-bracket parsing
+confirmed those links exist. No archived scripts were rerun or prototype assets
+changed. Final-head required CI remains the integration gate. Collection does
+not approve new application scope or establish additional workflow acceptance.
