@@ -16,12 +16,13 @@ Do not repeat completed physical iPhone Beacon preference acceptance.
 
 ### Requested pause checkpoint — Home detail authority and full inventory
 
-The owner requests a pause and a copyable handoff for a fresh session. Finish
-committing/pushing this verified checkpoint, then stop; do not start the next
-Home-list implementation in this session. Worktree:
+This session is paused at the owner’s request for a fresh-session handoff.
+The next session should continue from this checkpoint after refreshing Git/CI.
+Worktree:
 `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/home-permission-boundaries`. Previous pushed milestone is
-`42accb7325de9a5e0ea4604094a61dd89d78e182`; the new checkpoint contains the
+`codex/home-permission-boundaries`. Verified source milestone is
+`53ce8200d42c75728764dfc37e7c544b2e989eda`, followed only by this documentation
+checkpoint. Both are pushed together on the same branch. The milestone contains the
 [Home-detail repair](home-detail-authority-2026-09-11.md) and consolidated
 [remaining-work inventory](REMAINING_WORK_2026-09-11.md): 80 tracked entries,
 one now locally verified, 79 still open. Counts are not an effort percentage.
@@ -34,9 +35,11 @@ fixture cleaned exactly. Privacy gates pass. Final backend r3 passes all 317 sui
 70.326 seconds on the already-installed supported Node 20 runtime.
 The report preserves the earlier fixture mismatch and aborted wrong-directory
 rerun. Native iOS/Android card/receipt and health work was already pushed in
-`42accb732`; its CI is running with completed checks green, native jobs pending.
-Android parent `892c2f51d` was superseded/cancelled by that push; do not claim
-its aggregate as a passing final run. Recheck the newest pushed head next session.
+`42accb732`; its earlier CI had completed checks green and native jobs pending before this
+push. The paused head’s CI is not certified here; inspect the
+[latest PR checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
+Superseded runs can be cancelled by workflow concurrency; their aggregate is
+not final passing evidence. Recheck the newest pushed head next session.
 
 **Next:** H02-H08 — fix actual Home lists/primary/root stale access, truthful
 roles/deletion eligibility and safe identity projections; separate saved Home,

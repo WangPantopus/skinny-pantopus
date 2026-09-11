@@ -6,12 +6,13 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Current Home source: `42accb7325de9a5e0ea4604094a61dd89d78e182`, pushed;
-[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34629121117)
-is running. PR #32 is draft. PR #34 is draft at `e9ef2decb`, conflicts with master,
-and contains an unwired durable-tip draft. The preceding Android CI was cancelled
-when this newer push superseded it under the existing workflow concurrency rule;
-its aggregate failure is not a completed native validation result.
+Verified Home source: `53ce8200d42c75728764dfc37e7c544b2e989eda`, followed
+by the pause documentation checkpoint and pushed together. Final paused-head
+[PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks)
+must be refreshed; they are not certified here. #32 remains draft. #34 is draft
+at `e9ef2decb`, conflicts with master, and contains an unwired durable-tip draft.
+Superseded native runs may be cancelled by the existing concurrency rule; a
+cancelled run/aggregate is not final passing evidence.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
