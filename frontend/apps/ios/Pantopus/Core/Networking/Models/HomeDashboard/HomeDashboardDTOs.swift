@@ -305,9 +305,9 @@ public struct HomeHealthDimensionDTO: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
-        max = try container.decodeIfPresent(Int.self, forKey: .max) ?? 0
-        issues = try container.decodeIfPresent([String].self, forKey: .issues) ?? []
+        score = try container.decode(Int.self, forKey: .score)
+        max = try container.decode(Int.self, forKey: .max)
+        issues = try container.decode([String].self, forKey: .issues)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -390,6 +390,7 @@ public struct SeasonalChecklistCarryoverDTO: Decodable, Sendable, Hashable {
 /// `PATCH /api/homes/:id/seasonal-checklist/:itemId`.
 public struct SeasonalChecklistItemDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let homeId: String?
     public let seasonKey: String?
     public let year: Int?
     public let itemKey: String?
@@ -405,6 +406,7 @@ public struct SeasonalChecklistItemDTO: Decodable, Sendable, Hashable, Identifia
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case homeId = "home_id"
         case seasonKey = "season_key"
         case year
         case itemKey = "item_key"
@@ -421,21 +423,23 @@ public struct SeasonalChecklistItemDTO: Decodable, Sendable, Hashable, Identifia
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
+        homeId = try container.decode(String.self, forKey: .homeId)
         seasonKey = try container.decodeIfPresent(String.self, forKey: .seasonKey)
         year = try container.decodeIfPresent(Int.self, forKey: .year)
         itemKey = try container.decodeIfPresent(String.self, forKey: .itemKey)
-        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        title = try container.decode(String.self, forKey: .title)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         gigCategory = try container.decodeIfPresent(String.self, forKey: .gigCategory)
         gigTitleSuggestion = try container.decodeIfPresent(String.self, forKey: .gigTitleSuggestion)
-        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "pending"
+        status = try container.decode(String.self, forKey: .status)
         completedAt = try container.decodeIfPresent(String.self, forKey: .completedAt)
         gigId = try container.decodeIfPresent(String.self, forKey: .gigId)
-        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
     }
 
     public init(
         id: String,
+        homeId: String? = nil,
         seasonKey: String? = nil,
         year: Int? = nil,
         itemKey: String? = nil,
@@ -449,6 +453,7 @@ public struct SeasonalChecklistItemDTO: Decodable, Sendable, Hashable, Identifia
         sortOrder: Int = 0
     ) {
         self.id = id
+        self.homeId = homeId
         self.seasonKey = seasonKey
         self.year = year
         self.itemKey = itemKey

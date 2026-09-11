@@ -440,10 +440,12 @@ final class HomeDashboardViewModel {
         guard let result = await authorizedCard(
             permissions: ["home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"],
             {
-                try await self.api.request(
+                let value = try await self.api.request(
                     HomeDashboardEndpoints.healthScore(homeId: self.homeId, force: true),
                     as: HomeHealthScoreDTO.self
                 )
+                guard HomeIntelligenceValidation.health(value, homeId: self.homeId) else { throw APIError.invalidResponse }
+                return value
             }
         ) else { return }
         healthScore = result
@@ -453,20 +455,24 @@ final class HomeDashboardViewModel {
 
     private func loadChecklist() async {
         guard let result = await authorizedCard(permissions: ["home.view"], {
-            try await self.api.request(
+            let value = try await self.api.request(
                 HomeDashboardEndpoints.seasonalChecklist(homeId: self.homeId),
                 as: SeasonalChecklistDTO.self
             )
+            guard HomeIntelligenceValidation.checklist(value, homeId: self.homeId) else { throw APIError.invalidResponse }
+            return value
         }) else { return }
         checklist = result
     }
 
     private func loadPropertyValue() async {
         guard let result = await authorizedCard(permissions: ["home.view"], {
-            try await self.api.request(
+            let value = try await self.api.request(
                 HomeDashboardEndpoints.propertyValue(homeId: self.homeId),
                 as: HomePropertyValueDTO.self
             )
+            guard HomeIntelligenceValidation.property(value) else { throw APIError.invalidResponse }
+            return value
         }) else { return }
         propertyValue = result
     }
@@ -496,6 +502,12 @@ final class HomeDashboardViewModel {
             return .loaded(value)
         } catch APIError.forbidden {
             return .forbidden
+        } catch APIError.invalidResponse {
+            return .failed(message: "Current Home information is unavailable. Reload this card.")
+        } catch APIError.decoding {
+            return .failed(message: "Current Home information is unavailable. Reload this card.")
+        } catch APIError.server {
+            return .failed(message: "This Home information couldn't be loaded. Please retry.")
         } catch {
             return .failed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't load this card."
@@ -562,7 +574,8 @@ final class HomeDashboardViewModel {
                 )
             )
             try await authorize(revision)
-            guard updated.id == itemId, updated.status == status else { throw APIError.invalidResponse }
+            guard HomeIntelligenceValidation.item(updated, homeId: homeId),
+                  updated.id == itemId, updated.status == status else { throw APIError.invalidResponse }
             // Reflect exactly what the server returned, then re-read the
             // score (seasonal progress is one of its six dimensions).
             applyChecklistItem(updated)
@@ -571,10 +584,11 @@ final class HomeDashboardViewModel {
             retireAccess(revision)
         } catch {
             guard current(revision) else { return }
-            checklist = .failed(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't update that task. Try again."
-            )
+            let detail = (error as? APIError).flatMap { failure -> String? in
+                if case .clientError = failure { return failure.errorDescription }
+                return nil
+            }
+            checklist = .failed(message: detail ?? "Couldn't confirm the checklist change. Reload to check its current state.")
         }
     }
 

@@ -76,7 +76,7 @@ class Journey(bill.Journey):
         self.current()
 
         for mode, error, recovered in (
-            ('health_error', "Couldn't load home health", 'Home health score 45 out of 100'),
+            ('health_error', "Couldn't load home health", 'Home health score 35 out of 100'),
             ('checklist_error', "Couldn't load the seasonal checklist", 'Mark Install or replace HEPA air filter complete'),
             ('property_error', "Couldn't load the property value", 'No estimate available'),
         ):

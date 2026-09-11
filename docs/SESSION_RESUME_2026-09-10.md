@@ -1,60 +1,44 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
-### Native intelligence validation — ongoing
+### iOS and server intelligence acceptance complete — next: Home identity
 
-Pushed milestone `611032282d3bf348aa116e01269494e9be283ba0` closes the reproduced
-frozen-Home intelligence-read bypass and records both native account/held-reply
-journeys plus stronger Android bill evidence. [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34622136951)
-passes every check. #32/#34 stay unfinished drafts; #34 remains
-conflicted, and combined 47-version migration reconciliation is still open.
+Android milestone `892c2f51dde5034d54aac2efe53adf6e41fb4935` is pushed. Its
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34627675231)
+has no failed checks; native build/device jobs are still running at this
+checkpoint. All checks on parent `611032282` pass. Refreshed origin is master
+`6a1013784`; #32/#34 remain unfinished drafts, #34 conflicted. No merge is due.
+The 38 Home / 21 payment / 47 combined migration dependencies remain a merge gate.
 
-Strengthened iOS bill-denial r2 passes its full installed recovery journey
-(361.944 seconds, 21 bill reads, zero fixture errors) against the repaired server.
-Finished denial and restored 104.70/142.50 bill pixels are reviewed; exact SQL
-cleanup passes. Its test change is included in the current uncommitted candidate.
+This checkpoint includes verified iOS card/receipt validation, stronger bill-
+denial acceptance, and the server health-data repair. Installed iOS r2 passes
+both journeys in 765.238 seconds: ten malformed-card rejection/Retry cases and
+four committed-but-unconfirmed checklist saves, each exactly one PATCH, actual
+SQL completion, Retry and cold return. HTTP evidence has zero fixture errors;
+finished error, completion, property recovery and corrected 35/100 score pixels
+are reviewed. Signed build r3, strict lint/format and 13 affected model checks
+pass. The separate full iOS bill-denial/recovery r2 also passes.
 
-**Current work:** both native apps reject incomplete/inconsistent health,
-malformed/wrong-Home/duplicate checklist rows and progress, and invalid property
-values/source data. Checklist confirmations validate Home/item/status and row
-metadata; unknown committed outcomes require current reload. Android build r3,
-quality/lint and affected model checks pass. Installed r1 completes all ten
-malformed-card recoveries, then fails before PATCH because the form scroll
-helper misses its final viewport. With the bounded viewport helper, focused
-receipt r2 passes all four cases: each commits exactly one PATCH, then restores
-1/2 done through Retry and cold return, zero fixture errors. Error and completed
-screens are reviewed. The earlier ten-card group records 459 events, no writes
-or fixture errors. Android app is stopped.
-Signed iOS build r3, strict lint/format r3 and all 13 affected model checks pass;
-installed r2 is running against repaired server fixture r10.
-iOS r1 completed all ten malformed-card recoveries but failed teardown's screenshot
-of the terminated app. Its receipt case failed because the fixture altered current
-access before PATCH. Both harness issues are repaired, with the latter proven by
-actual authority equality across all four fault modes; no app gate was weakened.
-See the report for failed attempts and private evidence. No new installed acceptance
-is claimed until the final reruns finish.
+Server HTTP/SQL/SDK r2 passes overdue/multiple/paid/past/future bills, cleared
+optional text, malformed dimension/count/coordinate data, uncached failures and
+recovery. Existing summary and twelve held-authority regressions, privacy gates,
+and the final supported Node 20 full backend run pass (317 suites / 5,169 checks;
+16 existing skips). Two earlier local Node 24 transport failures are retained in
+the detailed report; no established cause or default-runtime change is claimed.
+Native fixture r10 and all server replays completed exact SQL cleanup; 18083 is
+free. Owned devices/SQL/products and restored Sentry artifact remain available.
+Owner source work and devices are untouched. No new migration, hosted action,
+merge or paid activation. See the [dashboard report](home-dashboard-current-summary-2026-09-11.md)
+for private evidence and earlier failed harness attempts.
 
-Native fixtures r7/r8/r9 completed exact SQL cleanup; 18083 is free. Health
-data and sequential server regressions also cleaned exactly. Native fixture r10
-now owns 18083/SQL for final iOS replay. Android overdue-score r1 passes with reviewed 35/100 pixels. Owned iOS F9BBAB33 and Android 5556, SQL and web remain;
-preserve owner work/devices, Sentry artifact, products and evidence. No new migration,
-hosted action or paid activation. Finish candidate acceptance, then real Home
-identity/residency and the remaining data/write/provider/platform/payment/upgrade
-workflows. Paid services remain one final launch-preparation bundle.
-
-A separate uncommitted server follow-up is drafted in homeHealthService and
-`test-home-health-data-http.cjs`: actual API/SQL reproduced full bill-health points
-with one explicit overdue bill. The draft counts overdue rows and rejects missing/
-malformed dimension data and Home coordinates. Backend r1 hit an unrelated notification HTTP parse failure; the focused 18 checks
-pass unchanged in r2, and full backend r2 passes 317 suites/5,169 checks. Direct health data HTTP/SQL/SDK r1 passes every case and exact cleanup.
-Existing summary/checklist/settings and twelve held-authority HTTP/SQL/SDK
-regressions also pass with exact cleanup; privacy gates pass. Keep this unverified
-server draft out of the native acceptance milestone until its own checks pass.
-The server draft additionally preserves cleared optional provider/avatar text;
-that small compatibility follow-up still needs its SQL replay. Full backend r3
-hits an unchanged payment-test socket hang-up (r2 passed before this addition),
-so retain this unresolved local transport result. Android source is independently
-verified by build/quality/lint, 15 affected model checks, the ten-card group and
-four receipt journeys; iOS and server changes remain separate local candidates.
+**Next:** verify the next pushed head, then actual Home-list/detail/Verified
+identity, current access, private first use and real onboarding role defaults;
+continue native residency and the entire ordered backlog below. The controlled
+Home shell above does not prove those routes. Receipt screenshots also expose a
+health score lag after checklist creation/recovery (30 while the checklist is
+populated); reconcile generation, cache invalidation and cross-card reloads in
+the checklist follow-up. Home-local bill dates, deeper history/write/provider,
+platform/payment and upgrade/release work remain. Paid services stay one final
+launch-preparation bundle. No overall completion percentage is established.
 
 ### Native account and delayed-response acceptance — September 11
 

@@ -17,7 +17,8 @@ final class HomeDashboardJourneyUITests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        if let app {
+        if app != nil { try? await recordEvidence() }
+        if let app, app.state != .notRunning {
             keepScreen("Final native Home state")
             let attachment = XCTAttachment(string: app.debugDescription)
             attachment.name = "Native Home hierarchy"
@@ -333,5 +334,71 @@ extension HomeDashboardJourneyUITests {
         let (data, response) = try await URLSession.shared.data(for: request)
         try require((response as? HTTPURLResponse)?.statusCode == 200)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+}
+
+extension HomeDashboardJourneyUITests {
+    func testMalformedIntelligenceCardsStayRetryableAndRecover() async throws {
+        let cases = [
+            ("malformed_health", "healthScore"), ("inconsistent_health", "healthScore"), ("wrong_home_action", "healthScore"),
+            ("malformed_checklist", "seasonalChecklist"), ("wrong_home_checklist", "seasonalChecklist"),
+            ("incorrect_progress", "seasonalChecklist"), ("duplicate_checklist", "seasonalChecklist"),
+            ("malformed_property", "propertyValue"), ("invalid_property", "propertyValue"), ("property_error_payload", "propertyValue")
+        ]
+        for (mode, card) in cases {
+            _ = try await fixture("mode", method: "POST", body: ["mode": mode])
+            try await openDashboard()
+            let retry = element("homeDashboard_" + card + "Retry")
+            try reveal(retry)
+            try reveal(label(containing: "Current Home information is unavailable"))
+            keepScreen(mode + " rejected with Retry")
+            _ = try await fixture("mode", method: "POST", body: ["mode": "current"])
+            try press(retry)
+            if card == "healthScore" {
+                try reveal(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Home health score "))
+                    .firstMatch)
+            } else if card == "seasonalChecklist" {
+                try reveal(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "homeDashboard_seasonalItemToggle_"))
+                    .firstMatch)
+            } else {
+                try reveal(label(containing: "No property estimate is available"))
+            }
+            keepScreen(mode + " completed current recovery")
+            app.terminate()
+        }
+        let state = try await fixture("state")
+        let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+        XCTAssertFalse(events.contains { $0["method"] as? String == "PATCH" || $0["event"] as? String == "fixture_error" })
+        try await recordEvidence()
+    }
+
+    func testChecklistCommittedButUnconfirmedRepliesRequireCurrentReload() async throws {
+        for mode in ["receipt_wrong_home", "receipt_wrong_item", "receipt_missing_status", "receipt_lost_reply"] {
+            _ = try await fixture("reset", method: "POST")
+            try await openDashboard()
+            let toggle = app.buttons["Mark Install or replace HEPA air filter complete"].firstMatch
+            try reveal(toggle)
+            _ = try await fixture("mode", method: "POST", body: ["mode": mode])
+            try press(toggle)
+            let retry = element("homeDashboard_seasonalChecklistRetry")
+            try reveal(retry)
+            keepScreen(mode + " requires reload before another action")
+            let records = try await fixture("checklist")
+            let items = try XCTUnwrap(records["items"] as? [[String: Any]])
+            XCTAssertEqual(items.filter { $0["status"] as? String == "completed" }.count, 1)
+            _ = try await fixture("mode", method: "POST", body: ["mode": "current"])
+            try press(retry)
+            try reveal(label(containing: "1/2 done"))
+            keepScreen(mode + " reload reflects the committed change")
+            app.terminate()
+            try await openDashboard()
+            try reveal(label(containing: "1/2 done"))
+            let state = try await fixture("state")
+            let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+            XCTAssertEqual(events.filter { $0["event"] as? String == "home_read" && $0["method"] as? String == "PATCH" }.count, 1)
+            XCTAssertFalse(events.contains { $0["event"] as? String == "fixture_error" })
+            try await recordEvidence()
+            app.terminate()
+        }
     }
 }

@@ -4,6 +4,68 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## iOS and server intelligence milestone — final acceptance
+
+The final iOS installed r2 run passes both journeys in 765.238 seconds: receipt
+cases 334.259 seconds and ten malformed-card cases 430.980 seconds. Each receipt
+fault (wrong Home, wrong item, missing status, lost reply after commit) produces
+exactly one PATCH, one actual completed row, 1/2 done after Retry and cold return,
+and zero fixture errors. Per-case evidence has 82/82/78/80 events; the ten-card
+group has 420 events, no writes or fixture errors. Signed build r3, strict lint/
+format r3 and all 13 affected model checks pass. Native fixture r10 completed
+exact SQL cleanup and is stopped. This supersedes the pending r2 status and
+failed r1 attempts retained below.
+
+Private evidence: `/private/tmp/pantopus-home-intelligence-ios-installed-r2.log`,
+matching `.xcresult`, and `-attachments/manifest.json`. Reviewed attachments:
+`4C7091A6-B285-464C-9B8C-319643C944DD.png` (unknown receipt/Retry),
+`68D8678C-83C9-49FB-AF5C-4E3F832DC7E7.png` (actual completed checklist),
+`64314A40-7AAA-4A29-9B5C-77CECC26A7E7.png` (corrected 35/100 health),
+`069E527E-742B-4A23-95FA-BBD1A88492A6.png` (malformed property/Retry), and
+`A3026BA6-41CE-415E-9793-1C4D8CB83841.png` (finished property recovery).
+HTTP attachments confirm all four one-PATCH journeys and 420-event read group.
+The receipt screens also show a separate health lag: a 30-point/no-checklist
+snapshot persists beside a populated/recovered checklist. Do not call that
+cross-card behavior complete; reproduce and repair generation/cache/reload
+coordination in the checklist follow-up. Recovery of the checklist itself passes.
+
+Final server HTTP/SQL/SDK r2 passes all r1 cases plus cleared optional provider/
+avatar text, and exact SQL cleanup. `/private/tmp/pantopus-home-health-data-http-r2.log`
+records explicit/multiple overdue bills, paid restoration, past/future due dates,
+20 malformed row replies, four malformed counts and six coordinate/query/transport
+failures; invalid computations remain uncached and ordinary reads recover.
+The real SDK/PostgREST path also passes. Existing summary/checklist/settings and
+twelve held-authority regressions pass with exact cleanup; privacy gates pass.
+The final backend run on already-installed supported Node 20 passes 317 suites /
+5,169 checks, with 16 pre-existing skips:
+`/private/tmp/pantopus-home-health-data-backend-node20-r4.log`. Earlier Node 24
+notification parse and payment socket failures remain historical evidence without
+an established cause. No global runtime change was made. Home-local due-date
+semantics and deeper server checklist/provider work remain open.
+
+The stronger full iOS bill-denial recovery r2 (361.944 seconds, 21 reads, zero
+fixture errors) and its reviewed denial/restoration are included in this milestone.
+Android's score expectation follows the server correction from 45 to 35; its
+separate actual installed score r1 and reviewed pixels pass. Android `892c2f51d`
+is pushed; all completed checks are green, native jobs still running. Recheck
+that and the next pushed head. #32/#34 remain unfinished drafts; #34 is conflicted.
+No new migration, hosted change, merge or paid activation. Next is actual Home
+identity/onboarding/residency, then the full handoff backlog and final paid bundle.
+
+## Earlier checkpoints (superseded where the final acceptance above applies)
+
+## Android intelligence milestone — September 11
+
+Android `892c2f51dde5034d54aac2efe53adf6e41fb4935` is committed/pushed;
+[its CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34627675231)
+is queued. All parent `611032282` checks pass. This commit includes Android
+validation/recovery, repeatable installed journeys and the shared controlled
+fixture. iOS/server candidates below remain uncommitted. iOS installed r2 is
+running against fixture r10; the latest backend optional-text change still
+needs its final SQL replay. The existing Node 20 full comparison run passes 317 suites/5,169 checks after
+two different transient Node 24 loopback-test failures; no global
+runtime change or established cause is claimed.
+
 ## Native intelligence validation — current candidate
 
 Milestone `611032282` is pushed; [its CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34622136951)
@@ -110,8 +172,11 @@ owner. The generic Home detail route returns wildcard Home/nested occupants afte
 only generic IAM access; property-details has the same generic gate. `/my-homes`
 ignores owner-status query failures and omits access_start_at/access_end_at from
 its occupancy projection; the older root list includes inactive occupancies.
-These require actual SDK/SQL identity, current-access, applicant/private first-use
-and native acceptance. The controlled Home-list/detail shell used above cannot
+Further source findings: `/primary` ignores query errors and current time/trust
+bounds; `/my-homes` derives can_delete_home from legacy owner pointers instead
+of guarded deletion eligibility. Home detail maps query failures to 404; the list
+can expose raw database error messages. These require actual SDK/SQL identity,
+current-access, applicant/private first-use and native acceptance. The controlled Home-list/detail shell used above cannot
 close them.
 
 ## Native account and stronger bill proof — September 11
@@ -649,3 +714,11 @@ Native safe-identity DTO/projection changes remain an uncommitted working draft.
 iOS formatting passes; Android's initial formatter found a long new expression,
 which was wrapped and passes final quality/compilation. No new native installed
 acceptance or whole-Home lifecycle completion is claimed.
+
+### Continuing verification checkpoint
+
+iOS installed r2 passes its four committed-but-unconfirmed receipt cases in
+334.259 seconds; the ten malformed-card cases continue against r10. Node 20
+full backend r4 passes 317 suites/5,169 checks with the optional-text compatibility
+change. Private log: `pantopus-home-health-data-backend-node20-r4.log`. Final
+SQL replay of that addition still waits for exact native fixture cleanup.

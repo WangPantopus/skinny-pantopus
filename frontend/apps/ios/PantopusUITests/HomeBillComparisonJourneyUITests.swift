@@ -70,8 +70,7 @@ final class HomeBillComparisonJourneyUITests: XCTestCase {
 
         try await setMode("denied")
         try await reopenDashboard()
-        app.swipeUp()
-        app.swipeUp()
+        try reveal(label(containing: "No property estimate is available"))
         XCTAssertFalse(element("homeDashboard_billTrendsCard").exists)
         XCTAssertFalse(label(containing: "142.50").exists)
         keepScreen("Current financial permission hides bills")
