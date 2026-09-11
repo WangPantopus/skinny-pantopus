@@ -1,5 +1,16 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+Newest September 11 milestone: [browser residency review/recovery](home-web-residency-review-recovery-2026-09-11.md)
+passes both entries and continuous actual Chrome/HTTP/SQL acceptance: 8 POSTs,
+4 receipts, Cancel, current/historical separation, storage/lifecycle/authority
+failures, role ceilings and empty-list recovery. Types/lint and 1,178 web checks
+pass. Next resolve stale surrounding dashboard access state found during visual
+review, then iOS/Android residency parity and submission/cold-start/resubmission.
+Owned web/Gig DB runtimes remain; exact fixtures are cleaned. Native jobs on
+backend `e0ea36284` were still running; refresh the new exact head. Both feature
+PRs stay drafts and paid services stay one final bundle. Older next steps below
+are history; preserve the full linked findings and remaining backlog.
+
 Latest September 11 milestone: [residency review receipts](home-residency-review-receipts-2026-09-11.md)
 now pass actual HTTP/service/SQL, 13 observed lock races, 35-version pinned fresh
 replay, all 40 SQL/pgTAP contracts, function lint, six SDK/PostgREST cases and a

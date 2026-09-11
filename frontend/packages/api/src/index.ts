@@ -78,6 +78,7 @@ export * as location from './endpoints/location';           // Viewing Location
 export * as listings from './endpoints/listings';           // Marketplace Listings
 export * as savedPlaces from './endpoints/savedPlaces';    // Saved Places
 export type { RelationshipAction, RelationshipCommand, RelationshipReceipt, RelationshipReview, RelationshipResponse } from './endpoints/homeOwnership';
+export type { ResidencyReviewAction, ResidencyReviewRole, ResidencyReviewCommand, ResidencyReviewReceipt, ResidencyReview, ResidencyReviewResponse } from './endpoints/homes';
 export * as homeOwnership from './endpoints/homeOwnership'; // Home Ownership (claims, owners, quorum, disputes)
 export * as homeGuest from './endpoints/homeGuest';         // Public guest pass & shared resource views
 export * as admin from './endpoints/admin';                 // Platform admin

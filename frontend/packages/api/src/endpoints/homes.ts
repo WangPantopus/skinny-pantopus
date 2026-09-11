@@ -440,6 +440,43 @@ export async function getHomeClaims(homeId: string): Promise<{ claims: Residency
   return get(`/api/homes/${homeId}/claims`);
 }
 
+export type ResidencyReviewAction = 'approve' | 'reject';
+export type ResidencyReviewRole = 'lease_resident' | 'member' | 'restricted_member' | 'guest' | 'service_provider';
+export interface ResidencyReviewCommand {
+  action: ResidencyReviewAction; role: ResidencyReviewRole | null; reason: string | null;
+  request_id: string; review_token: string;
+}
+export interface ResidencyReviewReceipt {
+  id: string; home_id: string; claim_id: string; actor_id: string; request_id: string;
+  action: ResidencyReviewAction; legacy_request: boolean; request_hash: string; review_token: string;
+  created_at: string; result: { status: 'verified' | 'rejected'; reviewed_at: string; occupancy_id: string | null; role_base: string | null };
+}
+export interface ResidencyReview {
+  ok: true; home_id: string;
+  residency_session: { actor_id: string; home_id: string; session_scope: string };
+  claim: { id: string; home_id: string; user_id: string; status: string; claimed_role: string | null;
+    claimed_address: string | null; reviewed_by: string | null; reviewed_at: string | null; review_note: string | null;
+    created_at: string; updated_at: string; review_token: string };
+  occupancy: { id: string; user_id: string; role: string | null; role_base: string | null; age_band: string | null;
+    is_active: boolean; verification_status: string | null; start_at: string | null; end_at: string | null;
+    access_start_at: string | null; access_end_at: string | null; verified_at: string | null; verification_expires_at: string | null } | null;
+}
+export interface ResidencyReviewResponse extends ResidencyReview {
+  claim_id: string; target_id: string; action: ResidencyReviewAction; replayed: boolean;
+  receipt: ResidencyReviewReceipt; message: string;
+}
+export async function getResidencyReview(homeId: string, claimId: string, sessionScope?: string): Promise<ResidencyReview> {
+  return get(`/api/homes/${homeId}/claim/${claimId}/review`, undefined,
+    sessionScope ? { headers: { 'X-Pantopus-Session-Scope': sessionScope } } : undefined);
+}
+export async function decideResidencyReview(homeId: string, claimId: string, command: ResidencyReviewCommand,
+  sessionScope: string): Promise<ResidencyReviewResponse> {
+  return post(`/api/homes/${homeId}/claim/${claimId}/${command.action}`, {
+    request_id: command.request_id, review_token: command.review_token,
+    ...(command.action === 'approve' ? { proposed_role: command.role } : { reason: command.reason }),
+  }, { headers: { 'X-Pantopus-Session-Scope': sessionScope } });
+}
+
 /**
  * Approve a residency claim
  */

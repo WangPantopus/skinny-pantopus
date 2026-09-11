@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser residency review and recovery — September 11
+
+The [browser residency report](home-web-residency-review-recovery-2026-09-11.md)
+records both owners/household entries, explicit review, encrypted originals and
+confirmed/current separation. Final actual Chrome → production HTTP/service →
+SQL passes 8 POSTs / 4 receipts, Cancel, lost replies, later move-out/resubmission,
+stale review, competing tabs, key/draft failures, corruption/restoration, revoked
+and changed-account state, held preflight, role ceilings, keyboard/narrow UI and
+permanent empty-list recovery. Eight distinct screen states were visually reviewed.
+Types, focused lint and all 1,178 existing web checks pass. Exact fixtures cleaned.
+
+**Next:** the same visual pass found stale surrounding dashboard Owner/Invite/
+security controls after the residency panel denied current access. Fix
+`useHomeData` / `HomePermissionsProvider` retirement and current refresh, with
+actual stale-load/denial/restoration UI acceptance, then installed iOS/Android
+residency parity. Submission/cold-start/resubmission, ownership transfer/challenge,
+lease/resources and the full ordered backlog remain. Keep paid services one final
+launch bundle. PRs #32/#34 stay drafts; paid `e9ef2decb` is green but unfinished.
+Combined 44-version dependency/replay reconciliation is still required.
+Backend predecessor `e0ea36284` has remote backend/web/schema/Swift quality green;
+native jobs were still running. Verify the new exact head. PRs #7/#24 are merged.
+Owned web/Gig DB runtimes remain for immediate dashboard continuation; fresh
+residency replay is stopped with backup. Owner files/emulator/data remain intact.
+
 ### Recoverable residency review backend — September 11
 
 The [residency receipt report](home-residency-review-receipts-2026-09-11.md) records

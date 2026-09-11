@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle, Check, Flag, Shield, User, UserPlus, X } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -25,7 +25,8 @@ function ReviewClaimContent() {
   const [residencyClaims, setResidencyClaims] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ClaimTab>('ownership');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ClaimTab>(searchParams.get('tab') === 'residency' ? 'residency' : 'ownership');
   const [loadError, setLoadError] = useState({ ownership: '', residency: '' });
   const [reload, setReload] = useState(0);
   const generation = useRef(0);
@@ -125,28 +126,9 @@ function ReviewClaimContent() {
     }
   }, [homeId, fetchClaims, router]);
 
-  const handleResidencyReview = useCallback(async (claimId: string, action: 'approve' | 'reject') => {
-    const labels = { approve: 'Approve', reject: 'Deny' };
-    const yes = await confirmStore.open({
-      title: labels[action],
-      description: `Are you sure you want to ${action} this residency claim?`,
-      confirmLabel: labels[action],
-      variant: action === 'approve' ? 'primary' : 'destructive',
-    });
-    if (!yes) return;
-
-    setActionLoading(claimId);
-    try {
-      if (action === 'approve') {
-        await api.homes.approveResidencyClaim(homeId!, claimId);
-      } else {
-        await api.homes.rejectResidencyClaim(homeId!, claimId);
-      }
-      toast.success(`Claim ${action === 'approve' ? 'approved' : 'denied'}`);
-      await fetchClaims();
-    } catch (err: any) { toast.error(err?.message || `Failed to ${action} claim`); }
-    finally { setActionLoading(null); }
-  }, [homeId, fetchClaims]);
+  const handleResidencyReview = useCallback((claimId: string, action: 'approve' | 'reject') => {
+    router.push(`/app/homes/${homeId}/owners/review-claim/residency?claimId=${encodeURIComponent(claimId)}&action=${action}`);
+  }, [homeId, router]);
 
   const pendingClaims = comparison?.claims?.length
     ? comparison.claims.filter((claim: any) =>
@@ -170,6 +152,8 @@ function ReviewClaimContent() {
 
       <Link href={`/app/homes/${homeId}/owners/review-claim/relationship`} prefetch={false}
         className="mb-5 inline-block text-sm underline">Relationship decisions and recovery</Link>
+      <Link href={`/app/homes/${homeId}/owners/review-claim/residency`} prefetch={false}
+        className="mb-5 ml-4 inline-block text-sm underline">Residency decisions and recovery</Link>
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5">
