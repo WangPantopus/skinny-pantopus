@@ -20,8 +20,9 @@ milestone. Committed migrations remain 34 Home/43 combined; it would make 35/44.
 Both feature PRs stay drafts. Paid #34 stays `e9ef2decb`, green but unfinished.
 Preceding iOS `3393baa18` passes required CI; refresh the new exact head. Design
 PR #24 merged as `cd764458f`; diagnostics PR #7 at `8c2eaa110` has fresh CI pending
-after its old test-hook repair. Integrate master after the Android commit and
-preserve both current handoff and design history. Paid services stay one final
+after its old test-hook repair. Android is committed/pushed at `ca2d6e378`; master `cd764458f` is now integrated
+with current handoff and design history preserved. Verify this integration head
+and integrate #7 after its required checks and merge. Paid services stay one final
 launch bundle. Exact native fixture cleanup passes; owned emulator/listener are
 stopped; the owned Gig database remains for residency. Owner files/runtimes are
 preserved. Earlier next-action and CI notes below are historical.

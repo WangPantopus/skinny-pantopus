@@ -33,13 +33,23 @@ A candidate residency migration, service and SQL contract are local/unverified,
 not applied or included in the Android milestone. The committed Home set remains
 34 migrations (43 combined with paid); the candidate would make 35/44. Both
 feature PRs stay drafts. Paid #34 remains `e9ef2decb`, green but unfinished.
-Preceding iOS `3393baa18` passes required CI; verify the new Android exact head.
+Android source is committed/pushed at `ca2d6e378`; verify the current integration
+head separately. Preceding iOS `3393baa18` passes required CI.
 PR #24's documentation-only archive merged as `cd764458f`; PR #7 is refreshed at
-`8c2eaa110` with new CI pending after updating its obsolete test hook. Integrate
-current master after committing this checkpoint, preserving both handoff/design
-history and private-routing changes. All paid services remain one final launch
+`8c2eaa110` with new CI pending after updating its obsolete test hook. Master
+`cd764458f` is integrated here with both current handoff and design history
+preserved. Integrate the privacy fix after its own required checks and merge. All paid services remain one final launch
 bundle. Exact native fixtures are cleaned and owned emulator/listener stopped;
 the owned Gig database remains for residency work. Owner work/runtimes stay intact.
+
+### Design archive integrated — September 10
+
+PR #24 merged as `cd764458f` after all required final `054f4dcd1` checks passed.
+The [collection](pantopus-product-design-index-2026-09-09.md) retains its verified
+34 artifact hashes and 142 relative Markdown links. This is documentation-only
+preservation, not approval of new application scope. The owner checkout's
+original uncommitted designs and handoff remain intact. Merged-master CI remains
+a separate verification; no deployment or paid service activation occurred.
 
 ### iOS claimant relationship review and recovery — September 10
 
@@ -1710,17 +1720,45 @@ production gap audit; the historical migration ledger was not altered.
 | 6. Complete v1 journeys and reachable features | Run Home/Pulse/Beacon acceptance on release candidates; inventory adjacent mailbox, tasks, marketplace, payments and household actions. | Address-free paths, private-address boundaries, correct calendar outcomes, exact-content returns, error/retry/accessibility and real provider coverage pass. Finish or honestly constrain unfinished reachable operations; preserve records, balances and entitlements. |
 | 7. Release/pilot | Tie exact web/iOS/Android builds, backend, migrations, flags and rollback together; configure deployment only after its prerequisites. | Approved production cutover and post-deploy checks pass; small consenting pilot measures actual first value and voluntary returns. Passing engineering tests alone is not product-market fit or proof every feature is finished. |
 
-The owner has a separate, uncommitted proposal at
-`docs/pantopus-next-stage-design-2026-09-08.md` in the main Mac checkout. It
+The owner's [original product proposal](pantopus-next-stage-design-2026-09-08.md)
+is preserved in the [product design collection](pantopus-product-design-index-2026-09-09.md). It
 explores coherent Home/Nearby/Following/Inbox destinations, a private note →
 public question → private bookmark journey, and reviewed personal calendar
 saves from Beacon events. It explicitly describes new work, not a release.
 Preserve it and review it with the owner before treating its label choices,
 personal-record contracts or implementation packages as approved scope. Do not
-copy it into this recovery PR incidentally. The current v1 gates above remain
+import its implementation into unrelated recovery work incidentally. The current v1 gates above remain
 the immediate direction unless the owner changes priorities.
 
 ## Evidence index and local continuation
+
+September 8–9 product-design collection: the [nationwide design](pantopus-nationwide-product-design-2026-09-08.md),
+[formatted reader](pantopus-nationwide-product-design-2026-09-08.html), and
+[experience companion](designs/pantopus-nationwide-experience-2026-09-08.html)
+develop the owner's useful-without-neighbors direction while preserving existing
+features. [Places and social conversations](pantopus-place-social-design-2026-09-09.md)
+adds canonical public places, original-post/reply continuity, quiet/viral-place
+behavior, and sensitive-location safeguards. Its [expanded place concept](designs/pantopus-place-page-concept-2026-09-09.html)
+includes Recent conditions, Offers, and Visit info; sections 6, 10.6 and 12.1
+specify the interface, backend contracts and acceptance cases. Its code audit
+flags platform tag/precision parity and alternate-coordinate privacy checks to
+resolve before broader map exposure.
+
+At the owner's request these designs, the [bill concept](designs/pantopus-bill-insight-concept-2026-09-08.html),
+and relevant temporary drafts, editable fragments and historical QA evidence
+are collected on `codex/product-and-place-design`, based on freshly fetched
+master `6fbdcce1203780b475bd209ed4f6fc5e03bfb487`. That base's
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34378389968)
+was verified successful. See the [index](pantopus-product-design-index-2026-09-09.md)
+and [source manifest](designs/archive/2026-09-08-09/manifest.json). Publication
+checks cover collected bytes, links, HTML structure and documentation-only
+scope. The historical nationwide reports do not validate the later place
+concept; all prototypes use fictional session-only examples. No application,
+native-device, backend, provider or scale acceptance is claimed by this milestone.
+Next: review the proposed work packages and choose an implementation slice;
+refresh the code audit against that implementation's base. The operational
+backlog above continues. The original main checkout, unrelated code work and
+private operator evidence remain intact.
 
 Public, versioned reports contain sanitized findings rather than raw secrets:
 
