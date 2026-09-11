@@ -50,7 +50,7 @@ class HomeTabHostViewModel
                 _landing.value =
                     when (val result = homesRepository.myHomes()) {
                         is NetworkResult.Success -> {
-                            val homes = result.data.homes
+                            val homes = result.data.sharedHomes
                             val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
                             if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
                         }

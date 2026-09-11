@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import XCTest
 
 /// Installed native navigation with production dashboard/IAM/record services and owned SQL.
@@ -257,7 +258,7 @@ extension HomeDashboardJourneyUITests {
         add(attachment)
     }
 
-    private func openDashboard(email: String = "bill-ui@example.com") async throws {
+    private func openHomeList(email: String = "bill-ui@example.com") async throws {
         app.launch()
         if !element("tab.place").waitForExistence(timeout: 3) {
             if !element("loginEmailField").exists { try press(element("placeLaunchSignIn")) }
@@ -276,6 +277,10 @@ extension HomeDashboardJourneyUITests {
         if !element("hubAvatarButton").waitForExistence(timeout: 2) { try press(element("place.back")) }
         try press(element("hubAvatarButton"))
         try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "My homes")).firstMatch)
+    }
+
+    private func openDashboard(email: String = "bill-ui@example.com") async throws {
+        try await openHomeList(email: email)
         try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dashboard UI Fixture")).firstMatch)
         try require(element("homeDashboard").waitForExistence(timeout: 20))
     }
@@ -400,5 +405,127 @@ extension HomeDashboardJourneyUITests {
             try await recordEvidence()
             app.terminate()
         }
+    }
+}
+
+extension HomeDashboardJourneyUITests {
+    /// Run only with the fixture's real SDK list/detail mode enabled.
+    func testRealListModesRecoveryAndPrivateTasks() async throws {
+        try await checkListIdentities()
+        try await checkListApplicantRoutes()
+        try await checkListRecoveryAndPrivateTasks()
+    }
+
+    private func checkListIdentities() async throws {
+        try await openHomeList()
+        try require(label(containing: "1 saved Home").waitForExistence(timeout: 30))
+        try require(label(containing: "Owner role").exists)
+        try require(label(containing: "Ownership verified").exists)
+        try require(label(containing: "Residency verified").exists)
+        keepScreen("Current list separates authority and verification")
+        try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dashboard UI Fixture")).firstMatch)
+        try reveal(label(containing: "Smoke alarm check"))
+        keepScreen("Actual Home list to production dashboard")
+
+        for mode in ["role_owner_unverified_ownership", "verified_owner_no_occupancy", "minor_owner"] {
+            _ = try await fixture("reset", method: "POST")
+            _ = try await fixture("mode", method: "POST", body: ["mode": mode])
+            app.terminate()
+            try await openHomeList()
+            try require(label(containing: "1 saved Home").waitForExistence(timeout: 30))
+            if mode == "minor_owner" {
+                try require(label(containing: "Member").exists)
+                XCTAssertFalse(label(containing: "Owner role").exists)
+                XCTAssertFalse(app.buttons["More actions for Dashboard UI Fixture"].exists)
+            } else {
+                try require(label(containing: "Owner role").exists)
+            }
+            if mode == "role_owner_unverified_ownership" {
+                XCTAssertFalse(label(containing: "Ownership verified").exists)
+                keepScreen("Owner role without ownership proof")
+                try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dashboard UI Fixture")).firstMatch)
+                try reveal(label(containing: "Smoke alarm check"))
+                try require(label(containing: "Shared Home").exists)
+                XCTAssertFalse(label(containing: "Ownership verified").exists)
+            } else if mode == "verified_owner_no_occupancy" {
+                try require(label(containing: "Ownership verified").exists)
+                XCTAssertFalse(label(containing: "Residency verified").exists)
+            }
+            keepScreen("Actual list case " + mode)
+        }
+    }
+
+    private func checkListApplicantRoutes() async throws {
+        for (mode, title) in [
+            ("pending_ownership", "Continue ownership verification"),
+            ("pending_residency", "Continue residency verification")
+        ] {
+            _ = try await fixture("reset", method: "POST")
+            _ = try await fixture("mode", method: "POST", body: ["mode": mode])
+            app.terminate()
+            try await openHomeList()
+            try require(app.buttons[title].waitForExistence(timeout: 30))
+            XCTAssertFalse(label(containing: "Ownership verified").exists)
+            XCTAssertFalse(label(containing: "Residency verified").exists)
+            assertPrivateSummaryAbsent()
+            keepScreen("Personal list continuation " + mode)
+            try press(app.buttons[title])
+            try require(!element("myHomesList").exists)
+            keepScreen("Verification destination " + mode)
+        }
+    }
+
+    private func checkListRecoveryAndPrivateTasks() async throws {
+        for mode in ["list_error", "malformed_list"] {
+            _ = try await fixture("reset", method: "POST")
+            _ = try await fixture("mode", method: "POST", body: ["mode": mode])
+            app.terminate()
+            try await openHomeList()
+            try require(app.buttons["Try again"].waitForExistence(timeout: 30))
+            XCTAssertFalse(label(containing: "Dashboard UI Fixture").exists)
+            XCTAssertFalse(label(containing: "No saved Homes yet").exists)
+            keepScreen("List unavailable " + mode)
+            _ = try await fixture("mode", method: "POST", body: ["mode": "current"])
+            try press(app.buttons["Try again"])
+            try require(label(containing: "1 saved Home").waitForExistence(timeout: 30))
+            keepScreen("List recovered " + mode)
+        }
+
+        XCUIDevice.shared.press(.home)
+        _ = try await fixture("hold", method: "POST", body: ["suffix": "/my-homes"])
+        app.activate()
+        var held = false
+        for _ in 0..<100 {
+            if try await fixture("state")["held"] as? Bool == true { held = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        try require(held, "Expected a produced real list reply")
+        XCUIDevice.shared.press(.home)
+        _ = try await fixture("mode", method: "POST", body: ["mode": "denied"])
+        app.activate()
+        try require(label(containing: "No saved Homes yet").waitForExistence(timeout: 30))
+        _ = try await fixture("release", method: "POST")
+        let stale = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
+            label(containing: "Dashboard UI Fixture").exists
+        }, object: app)
+        stale.isInverted = true
+        try await require(XCTWaiter.fulfillment(of: [stale], timeout: 2) == .completed)
+        keepScreen("Foreground denial retires the held list")
+
+        _ = try await fixture("reset", method: "POST")
+        _ = try await fixture("mode", method: "POST", body: ["mode": "private_creator"])
+        app.terminate()
+        try await openHomeList()
+        try require(app.buttons["My tasks"].waitForExistence(timeout: 30))
+        try require(label(containing: "Your private Home").exists)
+        XCTAssertFalse(label(containing: "Ownership verified").exists)
+        XCTAssertFalse(label(containing: "Residency verified").exists)
+        keepScreen("Private setup list")
+        try press(app.buttons["My tasks"])
+        try require(element("householdTasksList").waitForExistence(timeout: 30))
+        keepScreen("Private list to real Tasks")
+        try await recordEvidence()
     }
 }

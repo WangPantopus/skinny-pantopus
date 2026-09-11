@@ -11,6 +11,8 @@ import SwiftUI
 /// Rows whose `can_delete_home` flag is set expose a kebab that opens the
 /// destructive "Delete home" confirm (`DELETE /api/homes/:id`).
 struct MyHomesListView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
     @State private var viewModel: MyHomesListViewModel
     @State private var deleteTarget: DeleteTarget?
 
@@ -22,7 +24,27 @@ struct MyHomesListView: View {
         ListOfRowsView(dataSource: viewModel)
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("myHomesList")
-            .onAppear { Analytics.track(.screenMyHomesViewed) }
+            .onAppear { isVisible = true
+                Analytics.track(.screenMyHomesViewed)
+            }
+            .onDisappear { isVisible = false
+                deleteTarget = nil
+                viewModel.suspend()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard isVisible else { return }
+                deleteTarget = nil
+                if phase == .active {
+                    Task { await viewModel.refresh() }
+                } else {
+                    viewModel.suspend()
+                }
+            }
+            .onChange(of: viewModel.isCurrent) { _, current in
+                if !current { deleteTarget = nil
+                    viewModel.retireSession()
+                }
+            }
             .onChange(of: viewModel.pendingEvent) { _, event in
                 handle(event)
             }

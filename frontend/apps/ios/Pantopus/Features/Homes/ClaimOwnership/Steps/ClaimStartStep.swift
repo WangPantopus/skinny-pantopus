@@ -258,7 +258,7 @@ private struct WhyWeAskSection: View {
                         Text("Why we ask")
                             .pantopusTextStyle(.body)
                             .foregroundStyle(Theme.Color.primary700)
-                        Text("Address proof keeps Pantopus real-people only.")
+                        Text("Documents help a reviewer check your connection to this Home.")
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
@@ -278,8 +278,8 @@ private struct WhyWeAskSection: View {
 
             if isExpanded {
                 Text(
-                    "A reviewer checks that your ID and address documents match this home, " +
-                        "then compares ownership records. Your files stay private and are only used for verification."
+                    "A reviewer checks the ownership document for this Home. Uploading does not verify your identity " +
+                        "or residency. Evidence access is limited to the claimant and authorized reviewers."
                 )
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextStrong)

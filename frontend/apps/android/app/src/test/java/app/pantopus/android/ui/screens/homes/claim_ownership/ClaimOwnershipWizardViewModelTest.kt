@@ -3,6 +3,8 @@
 package app.pantopus.android.ui.screens.homes.claim_ownership
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homediscovery.HomePublicPreviewDto
+import app.pantopus.android.data.api.models.homediscovery.HomePublicPreviewResponse
 import app.pantopus.android.data.api.models.homes.HomeClaimUploadSessionDto
 import app.pantopus.android.data.api.models.homes.HomeEvidenceSessionDto
 import app.pantopus.android.data.api.models.homes.HomePrivateEvidenceDto
@@ -68,6 +70,8 @@ class ClaimOwnershipWizardViewModelTest {
         coEvery { access.upload(any(), any(), any(), any(), any()) } answers { document.copy(id = firstArg()) }
         coEvery { repo.myOwnershipClaims() } returns
             NetworkResult.Success(MyOwnershipClaimsResponse(emptyList(), HomeClaimUploadSessionDto("actor", scope.sessionScope)))
+        coEvery { discovery.publicPreview("home-1") } returns
+            NetworkResult.Success(HomePublicPreviewResponse(HomePublicPreviewDto("home-1", name = "Home verification")))
         coEvery {
             repo.submitClaim(any(), any(), any())
         } returns NetworkResult.Success(SubmitClaimResponse("ok", SubmitClaimEnvelope(id = "claim-1", status = "under_review")))
@@ -92,6 +96,48 @@ class ClaimOwnershipWizardViewModelTest {
         model.onPrimary()
         model.picked(ClaimEvidenceSlot.Ownership, file())
     }
+
+    @Test fun unavailable_context_has_no_sample_identity_or_document_picker_and_retries() =
+        runTest {
+            coEvery { repo.myOwnershipClaims() } returns NetworkResult.Failure(NetworkError.Server(503, null))
+            val model = vm()
+            assertEquals("This home", model.state.value.startContent.homeLabel)
+            assertFalse(model.chrome.primaryCtaEnabled)
+            assertNull(model.beginPick(ClaimEvidenceSlot.Ownership))
+            assertNotNull(model.state.value.contextError)
+            model.onPrimary()
+            assertEquals(ClaimOwnershipStep.Start, model.state.value.currentStep)
+            coEvery { repo.myOwnershipClaims() } returns
+                NetworkResult.Success(MyOwnershipClaimsResponse(emptyList(), HomeClaimUploadSessionDto("actor", scope.sessionScope)))
+            model.retryContext()
+            assertTrue(model.chrome.primaryCtaEnabled)
+            assertEquals("Home verification", model.state.value.startContent.homeLabel)
+            assertNull(model.state.value.contextError)
+        }
+
+    @Test fun wrong_home_preview_cannot_enable_verification() =
+        runTest {
+            coEvery { discovery.publicPreview("home-1") } returns
+                NetworkResult.Success(HomePublicPreviewResponse(HomePublicPreviewDto("other", address = "Foreign address")))
+            val model = vm("residency")
+            assertFalse(model.state.value.contextReady)
+            assertEquals("This home", model.state.value.startContent.homeLabel)
+            assertNull(model.beginPick(ClaimEvidenceSlot.Residency))
+        }
+
+    @Test fun delayed_preview_after_account_change_cannot_restore_identity_or_actions() =
+        runTest {
+            val reply = CompletableDeferred<NetworkResult<HomePublicPreviewResponse>>()
+            coEvery { discovery.publicPreview("home-1") } coAnswers { reply.await() }
+            val model = vm()
+            assertFalse(model.chrome.primaryCtaEnabled)
+            current = false
+            invalidated.value = true
+            reply.complete(NetworkResult.Success(HomePublicPreviewResponse(HomePublicPreviewDto("home-1", address = "Old address"))))
+            assertFalse(model.state.value.contextReady)
+            assertEquals("This home", model.state.value.startContent.homeLabel)
+            assertNull(model.beginPick(ClaimEvidenceSlot.Ownership))
+        }
 
     @Test fun owner_requires_only_supported_manual_document() {
         val model = vm()

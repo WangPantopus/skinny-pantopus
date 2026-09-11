@@ -746,7 +746,7 @@ private fun BrandNewHomeSection(
                         color = PantopusColors.appText,
                     )
                     Text(
-                        text = "Set up the essentials for this verified address.",
+                        text = "Set up the essentials for your Home.",
                         style = PantopusTextStyle.caption,
                         color = PantopusColors.appTextSecondary,
                     )

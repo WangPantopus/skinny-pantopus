@@ -1,5 +1,38 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Native Home identity and private first use — September 11
+
+The [native list milestone](home-native-list-first-use-2026-09-11.md) completes
+H05's separation of saved Home, private setup, current role, residency and
+ownership. Installed Android r9 and final iOS r4 pass the production SDK/SQL
+list → dashboard/private Tasks journeys, applicant destinations, unavailable/
+malformed retry and retirement of delayed replies after current denial. Reviewed
+screens show the distinct identities. The fixture's complete history has zero
+errors, and all exact synthetic SQL cleaned up on graceful shutdown.
+
+Full Android regression/style/lint/snapshot checks pass (4,514 passed, 80 skips);
+iOS full regression passes (4,345 passed, 168 skips), final signed build and
+installed journey pass. Detailed failed attempts and limits are in the report.
+A partly clipped iOS list floating action remains U01/U02; final Tasks controls
+are fully visible. Verification destinations safely report unavailable in this
+bounded fixture; completed native verification remains R01/R02.
+
+H01–H06 are locally verified; 74 of 80 inventory entries remain open, not an
+effort percentage. H07/H08 remain partial. **Continue now:** the
+[onboarding repair](home-onboarding-recovery-2026-09-11.md): native clients expect
+coordinates from a lookup that never supplies them, and creation/admission still
+needs atomic original-command recovery. The lookup's failed-read/archived-Home
+repair is locally in progress, separate from this native commit. Then finish
+native residency and the full backlog without a routine milestone stop.
+
+Predecessor `69eaebea1` passes CI safeguards and complete schema replay; its
+other checks were still running at this checkpoint. Verify the next pushed
+head's own checks. #32/#34 remain unfinished drafts; #34 conflicts with master.
+The full source inventory remains 39 Home / 21 paid / 48 distinct migrations.
+No merge, permanent database adoption, hosted mutation or paid activation.
+Owned devices, prior products, databases, owner changes and private evidence
+are preserved. Port 18083 is free after native fixture r4's exact cleanup.
+
 ### Ordinary invitation defaults — September 11
 
 The [member overview default repair](home-member-view-defaults-2026-09-11.md)

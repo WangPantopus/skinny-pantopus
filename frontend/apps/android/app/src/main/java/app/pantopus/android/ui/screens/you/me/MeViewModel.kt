@@ -110,7 +110,7 @@ class MeViewModel
                             return@launch
                         }
                 val homes: List<MyHome> =
-                    (homesResult as? NetworkResult.Success)?.data?.homes.orEmpty()
+                    (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
 
                 val stats =
                     (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
@@ -280,11 +280,11 @@ class MeViewModel
             if (primary == null) {
                 return MeIdentityContent(
                     identity = MeIdentity.Home,
-                    displayName = "Claim a home",
+                    displayName = "Your Homes",
                     initials = "H",
-                    handle = "No home yet",
+                    handle = "No shared Home",
                     locality = profileLocality,
-                    tagline = "Add a home from the Hub to unlock household tools.",
+                    tagline = "Open My homes for private tasks, invitations and verification progress.",
                     verified = false,
                     stats =
                         listOf(
@@ -304,7 +304,6 @@ class MeViewModel
                     .filter { it.isNotEmpty() }
                     .joinToString(", ")
                     .takeIf { it.isNotEmpty() }
-            val memberCount = homes.size
             // Only surface the address as a tagline when the display name
             // is a separate household name (e.g. "Cozy Hideout") —
             // otherwise the tagline would just repeat the title.
@@ -313,15 +312,15 @@ class MeViewModel
                 identity = MeIdentity.Home,
                 displayName = displayName,
                 initials = initials(displayName),
-                handle = "Household · $memberCount member${if (memberCount == 1) "" else "s"}",
+                handle = if (primary.ownershipStatus == "verified") "Ownership verified" else "Shared Home",
                 locality = locality ?: profileLocality,
                 tagline = homeTagline,
-                verified = primary.ownershipStatus == "verified",
+                verified = false,
                 stats =
                     listOf(
                         MeStat("bills", "—", "Bills due"),
                         MeStat("tasks", "—", "Open tasks"),
-                        MeStat("members", "$memberCount", "Members"),
+                        MeStat("members", "—", "Members"),
                     ),
                 actionTiles = homeActionTiles(homeId = primary.id),
                 sections =

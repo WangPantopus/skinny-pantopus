@@ -625,8 +625,8 @@ final class HomeDashboardViewModel {
             state = .loaded(content(
                 address: detailData.base.address ?? detailData.base.name ?? "Home",
                 // Header badge / summary row: home has any verified owner.
-                verified: detailData.isOwner || detailData.owners.contains { $0.ownerStatus == "verified" },
-                isVerifiedOwner: access?.isOwner == true,
+                verified: detailData.ownershipStatus == "verified" || detailData.owners.contains { $0.ownerStatus == "verified" },
+                isVerifiedOwner: detailData.ownershipStatus == "verified",
                 securityBanner: Self.securityBanner(
                     state: detailData.securityState,
                     claimWindowEndsAt: detailData.claimWindowEndsAt

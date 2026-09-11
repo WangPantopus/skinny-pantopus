@@ -9,17 +9,22 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
-import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowChip
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -37,9 +42,16 @@ class MyHomesListViewModelTest {
     private val repo: HomesRepository = mockk()
     private val adminRepo: HomeAdminRepository = mockk()
 
+    private val sessions: HomeClaimSessionScopeFactory = mockk()
+    private val session: HomeClaimSessionScope = mockk()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { sessions.create(any()) } returns session
+        every { session.isCurrent } returns true
+        every { session.invalidated } returns MutableStateFlow(false)
+        coEvery { session.requireCurrent() } just Runs
     }
 
     @After
@@ -54,7 +66,7 @@ class MyHomesListViewModelTest {
         ownership: String? = "verified",
         roleBase: String? = null,
         isPrimary: Boolean? = true,
-        canDeleteHome: Boolean? = null,
+        canDeleteHome: Boolean? = false,
     ) = MyHome(
         id = id,
         name = name,
@@ -84,6 +96,7 @@ class MyHomesListViewModelTest {
         isPrimaryOwner = isPrimary,
         pendingClaimId = null,
         canDeleteHome = canDeleteHome,
+        accessKind = "shared", hasHomeAccess = true, roleBase = roleBase ?: "owner",
     )
 
     @Test
@@ -94,9 +107,12 @@ class MyHomesListViewModelTest {
                     MyHomesResponse(
                         homes =
                             listOf(
-                                makeHome("h1", name = "Birch Lane", city = "Elm Park", ownership = "verified", isPrimary = true),
                                 makeHome(
-                                    "h2",
+                                    "00000000-0000-4000-8000-000000000001",
+                                    name = "Birch Lane", city = "Elm Park", ownership = "verified", isPrimary = true,
+                                ),
+                                makeHome(
+                                    "00000000-0000-4000-8000-000000000002",
                                     name = null,
                                     city = "Sellwood",
                                     ownership = null,
@@ -107,31 +123,27 @@ class MyHomesListViewModelTest {
                         message = null,
                     ),
                 )
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.load()
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             val rows = loaded.sections.first().rows
             assertEquals(2, rows.size)
-            // Primary-owner row has the Active-home chip and verified ring.
+            // Ownership is explicit; this owner fixture has no residency row.
             assertEquals("Birch Lane", rows[0].title)
-            assertEquals("Owner · Elm Park, CA", rows[0].subtitle)
+            assertEquals("Owner role · Elm Park, CA", rows[0].subtitle)
             val chips = rows[0].chips
             assertNotNull(chips)
-            assertEquals("Active home", chips!!.first().text)
-            assertTrue(chips.first().tint is RowChip.Tint.Custom)
-            val leading = rows[0].leading as RowLeading.Avatar
-            assertEquals(IdentityPillar.Home, leading.identity)
-            assertEquals(1.0f, leading.ringProgress, 0.001f)
-            // Tenant row has no chip, address-only title, and the lower
-            // 0.3 ring progress.
+            assertEquals("Ownership verified", chips!!.first().text)
+            assertTrue(chips.first().tint is RowChip.Tint.Status)
+            assertTrue(rows[0].leading is RowLeading.TypeIcon)
             assertEquals("1 Main", rows[1].title)
             assertEquals("Tenant · Sellwood, CA", rows[1].subtitle)
-            assertNull(rows[1].chips)
-            assertEquals(0.3f, (rows[1].leading as RowLeading.Avatar).ringProgress, 0.001f)
+            assertEquals(listOf("Residency verified"), rows[1].chips?.map { it.text })
+            assertTrue(rows[1].leading is RowLeading.TypeIcon)
             // Banner shows count + home tint when populated.
             val banner = vm.banner.value
             assertNotNull(banner)
-            assertEquals("2 homes you belong to", banner!!.title)
+            assertEquals("2 saved Homes", banner!!.title)
             assertEquals(BannerCtaTint.Home, banner.tint)
         }
 
@@ -139,13 +151,13 @@ class MyHomesListViewModelTest {
     fun empty_response_surfaces_empty_state_and_clears_banner() =
         runTest {
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = emptyList(), message = null))
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.state.test {
                 awaitItem() // Loading
                 vm.load()
                 val empty = awaitItem() as ListOfRowsUiState.Empty
-                assertEquals("You don’t belong to any homes yet", empty.headline)
-                assertEquals("Claim a home", empty.ctaTitle)
+                assertEquals("No saved Homes yet", empty.headline)
+                assertEquals("Add a home", empty.ctaTitle)
                 cancelAndConsumeRemainingEvents()
             }
             assertNull(vm.banner.value)
@@ -155,7 +167,7 @@ class MyHomesListViewModelTest {
     fun failure_surfaces_error_state() =
         runTest {
             coEvery { repo.myHomes() } returns NetworkResult.Failure(NetworkError.NotFound)
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.state.test {
                 awaitItem()
                 vm.load()
@@ -170,8 +182,8 @@ class MyHomesListViewModelTest {
     fun rows_without_can_delete_home_keep_the_plain_chevron() =
         runTest {
             coEvery { repo.myHomes() } returns
-                NetworkResult.Success(MyHomesResponse(homes = listOf(makeHome("h1")), message = null))
-            val vm = MyHomesListViewModel(repo, adminRepo)
+                NetworkResult.Success(MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001")), message = null))
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.load()
             val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first()
             assertEquals(RowTrailing.Chevron, row.trailing)
@@ -183,15 +195,15 @@ class MyHomesListViewModelTest {
         runTest {
             coEvery { repo.myHomes() } returns
                 NetworkResult.Success(
-                    MyHomesResponse(homes = listOf(makeHome("h1", canDeleteHome = true)), message = null),
+                    MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001", canDeleteHome = true)), message = null),
                 )
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.load()
             val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first()
             assertEquals(RowTrailing.Kebab, row.trailing)
             assertNotNull(row.onSecondary)
             row.onSecondary!!.invoke()
-            assertEquals(MyHomesListEvent.ConfirmDelete("h1", "Main"), vm.pendingEvent.value)
+            assertEquals(MyHomesListEvent.ConfirmDelete("00000000-0000-4000-8000-000000000001", "Main"), vm.pendingEvent.value)
         }
 
     @Test
@@ -199,14 +211,14 @@ class MyHomesListViewModelTest {
         runTest {
             coEvery { repo.myHomes() } returns
                 NetworkResult.Success(
-                    MyHomesResponse(homes = listOf(makeHome("h1", canDeleteHome = true)), message = null),
+                    MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001", canDeleteHome = true)), message = null),
                 )
-            coEvery { adminRepo.deleteHome("h1") } returns
+            coEvery { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") } returns
                 NetworkResult.Success(DeleteHomeResponse(message = "Home deleted successfully"))
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.load()
-            vm.deleteHome("h1")
-            coVerify { adminRepo.deleteHome("h1") }
+            vm.deleteHome("00000000-0000-4000-8000-000000000001")
+            coVerify { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") }
             assertNull(vm.actionError.value)
         }
 
@@ -215,13 +227,13 @@ class MyHomesListViewModelTest {
         runTest {
             coEvery { repo.myHomes() } returns
                 NetworkResult.Success(
-                    MyHomesResponse(homes = listOf(makeHome("h1", canDeleteHome = true)), message = null),
+                    MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001", canDeleteHome = true)), message = null),
                 )
-            coEvery { adminRepo.deleteHome("h1") } returns
+            coEvery { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") } returns
                 NetworkResult.Failure(NetworkError.Server(403, "Only the primary owner can delete this home."))
-            val vm = MyHomesListViewModel(repo, adminRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions)
             vm.load()
-            vm.deleteHome("h1")
+            vm.deleteHome("00000000-0000-4000-8000-000000000001")
             assertNotNull(vm.actionError.value)
             // The row survives — the delete was awaited, not optimistic.
             assertEquals(1, (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.size)
@@ -233,7 +245,7 @@ class MyHomesListViewModelTest {
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = emptyList(), message = null))
             var added = false
             val vm =
-                MyHomesListViewModel(repo, adminRepo).apply {
+                MyHomesListViewModel(repo, adminRepo, sessions).apply {
                     configureNavigation(onOpenHome = {}, onAddHome = { added = true })
                 }
             vm.load()

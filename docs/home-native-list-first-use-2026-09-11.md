@@ -1,8 +1,8 @@
 # Native Home list identity and first use
 
-Candidate on `codex/home-permission-boundaries`, based on `b0097a41a`.
-Implementation and installed acceptance are in progress; H05/H08 are not yet
-closed by this report. No migration or hosted data changes belong to this
+Verified source milestone on `codex/home-permission-boundaries`, following
+`69eaebea1`. H05 is locally complete. H08 remains partial: real onboarding,
+ordinary-member UI and completed verification remain open. No migration or hosted data changes belong to this
 native milestone.
 
 Both native Home lists consume the explicit list authority contract. Shared
@@ -108,6 +108,46 @@ manual document types and distinguish residency. The focused claim-context regre
 passes (`/private/tmp/pantopus-home-first-use-android-claim-context-r1.log`);
 the installed replay and updated screenshots are pending.
 
-All current-head checks on pushed `b0097a41a` pass in
+All checks on pushed predecessor `b0097a41a` pass in
 [run 34638384517](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34638384517).
 The uncommitted native candidate needs its own pushed-head checks.
+
+Final Android checks pass: 510 suites, 4,594 tests, zero failures/errors,
+80 skips (4,514 passed). Ktlint, Detekt, Android lint and full Paparazzi
+verification pass together in 1m15s; evidence is
+`/private/tmp/pantopus-home-first-use-android-final-checks-r3.log` and its
+`-summary.json`. Seven affected golden images were reviewed and updated for
+the separate ownership label, truthful welcome text and supported ownership
+document instructions. Earlier final-check r1 found two style violations;
+r2 found the expected old-label image differences. Those attempts are retained.
+
+Android signed debug build r9 and iOS signed build r8 pass. The iOS final build
+also removes the remaining welcome-text implication that every shared Home is
+a verified address. iOS ownership instruction checks pass (two tests,
+`/private/tmp/pantopus-home-first-use-ios-claim-copy-r1.xcresult`), and final
+changed-copy SwiftFormat/strict SwiftLint pass. Full native regressions above
+remain the behavior evidence; the final installed journeys are checked separately.
+
+Android installed r8 reached both applicant destinations with a neutral label,
+unavailable/retry and disabled verification submission. Reviewed screenshots
+show no sample address or unsupported ID requirement. It stopped at the list
+error because the driver expected “Retry” instead of the rendered “Try again”.
+The driver now uses the observed control; r9 is the complete rerun. The active
+native fixture is r4; r3 stopped gracefully and cleaned its exact synthetic SQL.
+
+Final installed acceptance passes on both owned devices. Android r9 completes
+the complete bounded journey; evidence is
+`/private/tmp/pantopus-home-list-first-use-android-r9/result.json` and its
+reviewed screenshots/hierarchies/HTTP records. Its complete preserved history
+has zero fixture errors. Final iOS r4 passes in 203.348 seconds, with zero
+failures (`/private/tmp/pantopus-home-list-first-use-ios-r4.xcresult`); exported
+attachments are in the matching `-attachments/` directory. The complete native
+fixture r4 history contains 526 events and zero fixture errors. It stopped
+gracefully with exact SQL cleanup; port 18083 is free.
+
+Final iOS screenshots show fully visible Tasks creation controls, while the
+Home list's floating Add control remains partly clipped. That layout finding
+is U01/U02. This milestone certifies the bounded identity/access/recovery
+journey, not the complete screen or accessibility inventory. No claim of real
+provider authentication, admission, evidence submission or notification delivery
+is made by the controlled shell.

@@ -111,16 +111,27 @@ fun ClaimOwnershipWizardScreen(
         model = viewModel,
         modifier = Modifier.testTag(CLAIM_OWNERSHIP_SCREEN_TAG),
     ) {
-        when (state.currentStep) {
-            ClaimOwnershipStep.Start ->
-                StartStep(
-                    content = state.startContent,
-                    showsAskVerifiedOwner = state.showsAskVerifiedOwner,
-                    selectedMethod = state.selectedStartMethod,
-                    onSelectMethod = viewModel::selectStartMethod,
-                )
-            ClaimOwnershipStep.Upload -> UploadStep(state, viewModel)
-            ClaimOwnershipStep.Success -> SuccessStep(outcomeNote = state.submissionOutcomeNote)
+        if (!state.contextReady) {
+            ClaimHomeChip(label = "This home")
+            HeadlineBlock(state.verificationType.wizardTitle)
+            if (state.isLoadingContext) {
+                SubcopyBlock("Loading verification…")
+            } else {
+                ErrorBanner(state.contextError ?: "Could not load verification. Try again.")
+                TextButton(onClick = viewModel::retryContext) { Text("Try again") }
+            }
+        } else {
+            when (state.currentStep) {
+                ClaimOwnershipStep.Start ->
+                    StartStep(
+                        content = state.startContent,
+                        showsAskVerifiedOwner = state.showsAskVerifiedOwner,
+                        selectedMethod = state.selectedStartMethod,
+                        onSelectMethod = viewModel::selectStartMethod,
+                    )
+                ClaimOwnershipStep.Upload -> UploadStep(state, viewModel)
+                ClaimOwnershipStep.Success -> SuccessStep(outcomeNote = state.submissionOutcomeNote)
+            }
         }
     }
 
@@ -205,7 +216,7 @@ private fun ClaimAlertDialog(
 
 @Composable
 internal fun StartStep(
-    content: ClaimOwnershipStartContent = ClaimOwnershipSampleData.canonicalStart,
+    content: ClaimOwnershipStartContent = ClaimOwnershipStartContent("This home"),
     showsAskVerifiedOwner: Boolean = false,
     selectedMethod: ClaimStartMethod = ClaimStartMethod.VerifyOwnership,
     onSelectMethod: (ClaimStartMethod) -> Unit = {},
@@ -217,8 +228,8 @@ internal fun StartStep(
         if (content.isContested) {
             "Same process, but the reviewer compares both submissions side-by-side. Bring your strongest documents."
         } else {
-            "Claiming ownership lets you invite residents, receive mail, post packages, and run the household's " +
-                "command center. Verification is a one-time step."
+            "Submit an ownership document for review. Uploading does not verify identity or grant Home access. " +
+                "Residency is verified separately."
         },
     )
     if (showsAskVerifiedOwner) {
@@ -350,50 +361,15 @@ private fun ClaimMethodRow(
 }
 
 private fun requirementsRows(isContested: Boolean): List<RequirementsRow> =
-    if (isContested) {
-        listOf(
-            RequirementsRow(
-                id = "strongest-doc",
-                icon = PantopusIcon.Zap,
-                title = "Strongest property record or deed",
-                subcopy = "A deed or county property record gets prioritized in contested reviews.",
-                emphasized = true,
-            ),
-            RequirementsRow(
-                id = "id",
-                icon = PantopusIcon.Check,
-                title = "Government-issued ID",
-                subcopy = "Driver's license, state ID, or passport.",
-            ),
-            RequirementsRow(
-                id = "utility-bill",
-                icon = PantopusIcon.Check,
-                title = "Utility bill for this address",
-                subcopy = "A recent bill helps match your name to 412 Elm St.",
-            ),
-        )
-    } else {
-        listOf(
-            RequirementsRow(
-                id = "id",
-                icon = PantopusIcon.Check,
-                title = "Government-issued ID",
-                subcopy = "Driver's license, state ID, or passport.",
-            ),
-            RequirementsRow(
-                id = "utility-bill",
-                icon = PantopusIcon.Check,
-                title = "Utility bill",
-                subcopy = "A recent bill showing your name and this address.",
-            ),
-            RequirementsRow(
-                id = "property-record",
-                icon = PantopusIcon.Check,
-                title = "Property record or deed",
-                subcopy = "Deed, tax record, or mortgage statement.",
-            ),
-        )
-    }
+    listOf(
+        RequirementsRow(
+            id = "ownership-document",
+            icon = PantopusIcon.FileText,
+            title = if (isContested) "Strongest ownership document" else "Ownership document",
+            subcopy = "Choose a deed, tax bill, or closing disclosure for this Home.",
+            emphasized = isContested,
+        ),
+    )
 
 @Composable
 private fun ContestedClaimNotice(claim: ClaimOwnershipContestedClaim) {
@@ -542,7 +518,7 @@ private fun WhyWeAskSection() {
                     color = PantopusColors.primary700,
                 )
                 Text(
-                    text = "Address proof keeps Pantopus real-people only.",
+                    text = "Documents help a reviewer check your connection to this Home.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -557,8 +533,8 @@ private fun WhyWeAskSection() {
         if (expanded) {
             Text(
                 text =
-                    "A reviewer checks that your ID and address documents match this home, then compares " +
-                        "ownership records. Your files stay private and are only used for verification.",
+                    "A reviewer checks the ownership document for this Home. Uploading does not verify your identity " +
+                        "or residency. Evidence access is limited to the claimant and authorized reviewers.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextStrong,
                 modifier =

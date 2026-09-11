@@ -204,7 +204,7 @@ struct BrandNewHomeSection: View {
                             Text("Welcome home")
                                 .pantopusTextStyle(.h3)
                                 .foregroundStyle(Theme.Color.appText)
-                            Text("Set up the essentials for this verified address.")
+                            Text("Set up the essentials for your Home.")
                                 .pantopusTextStyle(.caption)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }

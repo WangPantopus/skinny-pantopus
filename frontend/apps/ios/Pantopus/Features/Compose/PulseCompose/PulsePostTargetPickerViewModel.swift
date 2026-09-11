@@ -56,7 +56,7 @@ public final class PulsePostTargetPickerViewModel {
             async let businessesTask: MyBusinessesResponse = api.request(BusinessesEndpoints.myBusinesses())
             let (homesResponse, businessesResponse) = try await (homesTask, businessesTask)
 
-            homes = homesResponse.homes.compactMap { row in
+            homes = homesResponse.sharedHomes.compactMap { row in
                 guard let loc = row.location else { return nil }
                 return PulseHomeTargetOption(
                     id: row.id,

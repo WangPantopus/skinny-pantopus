@@ -2541,6 +2541,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.MY_HOMES) {
                     MyHomesListScreen(
                         onOpenHome = { homeId -> navController.navigate(ChildRoutes.homeDashboard(homeId)) },
+                        onOpenTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
                         onAddHome = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onFindHome = { navController.navigate(ChildRoutes.FIND_HOME) },
                         onBack = { navController.popBackStack() },

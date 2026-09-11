@@ -2137,6 +2137,7 @@ public struct YouTabRoot: View {
                     onOpenHome: { homeId in
                         Task { @MainActor in path.append(.homeDashboard(homeId: homeId)) }
                     },
+                    onOpenTasks: { homeId in Task { @MainActor in path.append(.homeTasks(homeId: homeId)) } },
                     onAddHome: {
                         Task { @MainActor in path.append(.addHome) }
                     },

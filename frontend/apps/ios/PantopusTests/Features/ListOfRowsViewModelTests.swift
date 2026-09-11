@@ -30,13 +30,14 @@ final class ListOfRowsViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
             {"homes":[
-              {"id":"h1","name":"Main","address":"1 Main","city":"X","state":"CA","zipcode":"90000",
+              {"id":"00000000-0000-4000-8000-000000000001","name":"Main","address":"1 Main","city":"X","state":"CA","zipcode":"90000",
                "ownership_status":"verified","is_primary_owner":true,
+               "access_kind":"shared","has_home_access":true,"role_base":"owner","can_delete_home":true,
                "verification_tier":"attom","occupancy":null,"pending_claim_id":null}
             ]}
             """)
         ]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .loaded(sections, _) = vm.state else {
             XCTFail("Expected loaded state, got \(vm.state)")
@@ -48,19 +49,19 @@ final class ListOfRowsViewModelTests: XCTestCase {
 
     func testMyHomesEmptyState() async {
         SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}")]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .empty(content) = vm.state else {
             XCTFail("Expected empty state, got \(vm.state)")
             return
         }
         XCTAssertEqual(content.icon, .home)
-        XCTAssertEqual(content.ctaTitle, "Claim a home")
+        XCTAssertEqual(content.ctaTitle, "Add a home")
     }
 
     func testMyHomesServerError() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{}")]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case .error = vm.state else {
             XCTFail("Expected error state, got \(vm.state)")

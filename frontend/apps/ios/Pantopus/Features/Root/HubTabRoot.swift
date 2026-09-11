@@ -1214,6 +1214,7 @@ public struct HubTabRoot: View {
             MyHomesListView(
                 viewModel: MyHomesListViewModel(
                     onOpenHome: { homeId in Task { @MainActor in push(.homeDashboard(homeId: homeId)) } },
+                    onOpenTasks: { homeId in Task { @MainActor in push(.homeTasks(homeId: homeId)) } },
                     onAddHome: { Task { @MainActor in push(.addHome) } },
                     onFindHome: { Task { @MainActor in push(.findHome) } },
                     onUploadOwnershipEvidence: { homeId in
@@ -3096,8 +3097,8 @@ public struct HubTabRoot: View {
         guard let response: MyHomesResponse = try? await APIClient.shared.request(
             HomesEndpoints.myHomes()
         ) else { return nil }
-        return response.homes.first { $0.isPrimaryOwner == true }?.id
-            ?? response.homes.first?.id
+        return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
+            ?? response.sharedHomes.first?.id
     }
 
     private static func billsListViewModel(

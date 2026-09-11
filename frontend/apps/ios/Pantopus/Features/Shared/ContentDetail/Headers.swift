@@ -40,7 +40,7 @@ public struct HomeHeroHeader: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: Spacing.s2) {
                 Icon(.shieldCheck, size: 14, color: Theme.Color.home)
-                Text(verified ? "Verified home" : "Unverified home", style: .overline)
+                Text(verified ? "Ownership verified" : "Shared Home", style: .overline)
                     .foregroundStyle(Theme.Color.home)
             }
             Text(address)
@@ -83,7 +83,7 @@ public struct HomeHeroHeader: View {
         )
         .padding(.horizontal, Spacing.s4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(verified ? "Verified home" : "Unverified home"), \(address)")
+        .accessibilityLabel("\(verified ? "Ownership verified" : "Shared Home"), \(address)")
     }
 }
 

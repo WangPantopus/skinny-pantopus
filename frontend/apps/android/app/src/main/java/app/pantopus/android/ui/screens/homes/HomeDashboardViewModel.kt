@@ -679,8 +679,8 @@ class HomeDashboardViewModel
                 HomeDashboardUiState.Loaded(
                     content(
                         address = detail.address ?: detail.name ?: "Home",
-                        verified = detail.isOwner || detail.owners.any { it.ownerStatus == "verified" },
-                        isVerifiedOwner = accessData?.isOwner == true,
+                        verified = detail.ownershipStatus == "verified" || detail.owners.any { it.ownerStatus == "verified" },
+                        isVerifiedOwner = detail.ownershipStatus == "verified",
                         securityBanner = securityBanner(detail.securityState, detail.claimWindowEndsAt),
                     ),
                 )

@@ -32,7 +32,7 @@ data class HomeDto(
 data class HomeOccupancy(
     val id: String,
     val role: String,
-    @Json(name = "role_base") val roleBase: String,
+    @Json(name = "role_base") val roleBase: String?,
     @Json(name = "is_active") val isActive: Boolean,
     @Json(name = "start_at") val startAt: String?,
     @Json(name = "end_at") val endAt: String?,
@@ -65,13 +65,25 @@ data class MyHome(
     @Json(name = "pending_claim_id") val pendingClaimId: String?,
     val location: HomeLocation? = null,
     /**
-     * Server-computed predicate — true when the viewer owns the Home row
-     * outright or is a verified *primary* owner. Gates the destructive
-     * "Delete home" affordance; everyone else must leave instead.
-     * Computed at `backend/routes/home.js:1653`.
+     * Current deletion eligibility, including private setup, explicit denies
+     * and minor restrictions. Rechecked by the delete endpoint.
      */
     @Json(name = "can_delete_home") val canDeleteHome: Boolean? = null,
-)
+    @Json(name = "access_kind") val accessKind: String? = null,
+    @Json(name = "has_home_access") val hasHomeAccess: Boolean? = null,
+    @Json(name = "role_base") val roleBase: String? = null,
+) {
+    val hasSharedAccess: Boolean get() = accessKind == "shared" && hasHomeAccess == true
+    val hasValidListContext: Boolean get() =
+        runCatching { java.util.UUID.fromString(id).toString() == id }.getOrDefault(false) &&
+            accessKind in setOf("shared", "private_setup", "verification") &&
+            hasHomeAccess == (accessKind == "shared") && canDeleteHome != null &&
+            if (hasSharedAccess) {
+                roleBase in setOf("owner", "admin", "manager", "lease_resident", "member", "restricted_member", "guest", "service_provider")
+            } else {
+                roleBase == null
+            }
+}
 
 /** Human-readable area label for the compose target picker. */
 fun MyHome.areaLabel(): String {
@@ -85,7 +97,9 @@ fun MyHome.areaLabel(): String {
 data class MyHomesResponse(
     val homes: List<MyHome>,
     val message: String?,
-)
+) {
+    val sharedHomes: List<MyHome> get() = homes.filter { it.hasValidListContext && it.hasSharedAccess }
+}
 
 /** `GET /api/homes/:id` envelope — route `backend/routes/home.js:2891`. */
 @JsonClass(generateAdapter = true)
@@ -111,6 +125,9 @@ data class HomeDetail(
     val occupants: List<HomeOccupant> = emptyList(),
     val location: HomeLocation?,
     val isOwner: Boolean = false,
+    @Json(name = "ownership_status") val ownershipStatus: String? = null,
+    @Json(name = "residency_status") val residencyStatus: String? = null,
+    @Json(name = "role_base") val roleBase: String? = null,
     val isPendingOwner: Boolean = false,
     val pendingClaimId: String?,
     val isOccupant: Boolean = false,
@@ -132,7 +149,7 @@ data class HomeDetail(
 data class HomeUserRef(
     val id: String,
     val username: String,
-    /** Raw `users.name`; null for accounts created by slim sign-up. */
+    /** Compatibility field; current Home projections return null, never a legal name. */
     val name: String?,
 )
 

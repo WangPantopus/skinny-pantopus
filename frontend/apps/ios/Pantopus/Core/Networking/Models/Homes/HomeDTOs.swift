@@ -45,7 +45,7 @@ public struct HomeDTO: Decodable, Sendable, Hashable, Identifiable {
 public struct HomeOccupancy: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let role: String
-    public let roleBase: String
+    public let roleBase: String?
     public let isActive: Bool
     public let startAt: String?
     public let endAt: String?
@@ -67,19 +67,41 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
     public let home: HomeDTO
     public let occupancy: HomeOccupancy?
     public let ownershipStatus: String?
+    public let accessKind: String?
+    public let hasHomeAccess: Bool?
+    public let roleBase: String?
     public let verificationTier: String?
     public let isPrimaryOwner: Bool?
     public let pendingClaimId: String?
     /// Parsed PostGIS point from `GET /api/homes/my-homes`.
     public let location: HomeLocation?
-    /// Server-computed predicate — true when the viewer owns the Home row
-    /// outright or is a verified *primary* owner. Gates the destructive
-    /// "Delete home" affordance; everyone else must leave instead.
-    /// Computed at `backend/routes/home.js:1653`.
+    /// Current server-computed deletion eligibility, including explicit denies,
+    /// private setup and minor restrictions. Rechecked by the delete endpoint.
     public let canDeleteHome: Bool?
 
     public var id: String {
         home.id
+    }
+
+    public var hasSharedAccess: Bool {
+        accessKind == "shared" && hasHomeAccess == true
+    }
+
+    public var hasValidListContext: Bool {
+        guard UUID(uuidString: id) != nil, let accessKind,
+              ["shared", "private_setup", "verification"].contains(accessKind),
+              hasHomeAccess == (accessKind == "shared"), canDeleteHome != nil else { return false }
+        if hasSharedAccess { return [
+            "owner",
+            "admin",
+            "manager",
+            "lease_resident",
+            "member",
+            "restricted_member",
+            "guest",
+            "service_provider"
+        ].contains(roleBase ?? "") }
+        return roleBase == nil
     }
 
     /// Human-readable area label for the target picker.
@@ -98,6 +120,9 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
         let container = try decoder.container(keyedBy: FlatKeys.self)
         occupancy = try container.decodeIfPresent(HomeOccupancy.self, forKey: .occupancy)
         ownershipStatus = try container.decodeIfPresent(String.self, forKey: .ownershipStatus)
+        accessKind = try container.decodeIfPresent(String.self, forKey: .accessKind)
+        hasHomeAccess = try container.decodeIfPresent(Bool.self, forKey: .hasHomeAccess)
+        roleBase = try container.decodeIfPresent(String.self, forKey: .roleBase)
         verificationTier = try container.decodeIfPresent(String.self, forKey: .verificationTier)
         isPrimaryOwner = try container.decodeIfPresent(Bool.self, forKey: .isPrimaryOwner)
         pendingClaimId = try container.decodeIfPresent(String.self, forKey: .pendingClaimId)
@@ -107,6 +132,7 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
 
     private enum FlatKeys: String, CodingKey {
         case occupancy
+        case accessKind = "access_kind", hasHomeAccess = "has_home_access", roleBase = "role_base"
         case ownershipStatus = "ownership_status"
         case verificationTier = "verification_tier"
         case isPrimaryOwner = "is_primary_owner"
@@ -119,6 +145,10 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
 /// `GET /api/homes/my-homes` envelope — route `backend/routes/home.js:1464`.
 public struct MyHomesResponse: Decodable, Sendable, Hashable {
     public let homes: [MyHome]
+    public var sharedHomes: [MyHome] {
+        homes.filter { $0.hasValidListContext && $0.hasSharedAccess }
+    }
+
     public let message: String?
 }
 
@@ -134,6 +164,9 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
     public let occupants: [HomeOccupant]
     public let location: HomeLocation?
     public let isOwner: Bool
+    public let ownershipStatus: String?
+    public let residencyStatus: String?
+    public let roleBase: String?
     public let isPendingOwner: Bool
     public let pendingClaimId: String?
     public let isOccupant: Bool
@@ -153,6 +186,9 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
         occupants = try c.decodeIfPresent([HomeOccupant].self, forKey: .occupants) ?? []
         location = try c.decodeIfPresent(HomeLocation.self, forKey: .location)
         isOwner = try c.decodeIfPresent(Bool.self, forKey: .isOwner) ?? false
+        ownershipStatus = try c.decodeIfPresent(String.self, forKey: .ownershipStatus)
+        residencyStatus = try c.decodeIfPresent(String.self, forKey: .residencyStatus)
+        roleBase = try c.decodeIfPresent(String.self, forKey: .roleBase)
         isPendingOwner = try c.decodeIfPresent(Bool.self, forKey: .isPendingOwner) ?? false
         pendingClaimId = try c.decodeIfPresent(String.self, forKey: .pendingClaimId)
         isOccupant = try c.decodeIfPresent(Bool.self, forKey: .isOccupant) ?? false
@@ -167,6 +203,7 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
 
     private enum FlatKeys: String, CodingKey {
         case owner, occupants, location
+        case ownershipStatus = "ownership_status", residencyStatus = "residency_status", roleBase = "role_base"
         case isOwner, isPendingOwner, pendingClaimId, isOccupant, owners
         case canDeleteHome = "can_delete_home"
         case securityState = "security_state"
@@ -178,7 +215,7 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
 public struct HomeUserRef: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let username: String
-    /// Raw `users.name`; nil for accounts created by slim sign-up.
+    /// Compatibility field; current private Home projections return nil, never a legal name.
     public let name: String?
 }
 

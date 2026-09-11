@@ -115,6 +115,7 @@ class HomeDashboardViewModelTest {
                     occupants = emptyList(),
                     location = null,
                     isOwner = isOwner,
+                    ownershipStatus = if (isOwner) "verified" else null,
                     isPendingOwner = false,
                     pendingClaimId = null,
                     isOccupant = !isOwner,

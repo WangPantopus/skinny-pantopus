@@ -68,14 +68,15 @@ final class MeViewModelTests: XCTestCase {
     {
       "homes": [
         {
-          "id": "h1",
+          "id": "00000000-0000-4000-8000-000000000001",
           "name": "412 Birch Ln",
           "address": "412 Birch Ln",
           "city": "Cambridge",
           "state": "MA",
           "zipcode": "02139",
           "is_primary_owner": true,
-          "ownership_status": "verified"
+          "ownership_status": "verified",
+          "access_kind": "shared", "has_home_access": true, "role_base": "owner", "can_delete_home": true
         }
       ]
     }
@@ -136,6 +137,9 @@ final class MeViewModelTests: XCTestCase {
         XCTAssertEqual(home.identity, .home)
         XCTAssertEqual(home.displayName, "412 Birch Ln")
         XCTAssertFalse(home.isUnbound)
+        XCTAssertFalse(home.verified)
+        XCTAssertEqual(home.handle, "Ownership verified")
+        XCTAssertEqual(home.stats.first { $0.id == "members" }?.value, "—")
         // T6.2b/T6.3b home action grid adds maintenance after bills;
         // Calendarly appended a scheduling tile.
         XCTAssertEqual(home.actionTiles.count, 8)
@@ -145,7 +149,7 @@ final class MeViewModelTests: XCTestCase {
         )
         // Home tiles carry the primary home id so the host can build
         // BillsListView / PetsListView without re-introspecting the VM.
-        XCTAssertEqual(home.actionTiles.first?.routeArgs["homeId"], "h1")
+        XCTAssertEqual(home.actionTiles.first?.routeArgs["homeId"], "00000000-0000-4000-8000-000000000001")
         // Stats reflect home context.
         XCTAssertEqual(home.stats.map(\.id), ["bills", "tasks", "members"])
 
@@ -162,7 +166,7 @@ final class MeViewModelTests: XCTestCase {
             return
         }
         XCTAssertTrue(home.isUnbound)
-        XCTAssertEqual(home.displayName, "Claim a home")
+        XCTAssertEqual(home.displayName, "Your Homes")
     }
 
     func testSelectIdentityFlipsActiveWithoutRefetch() async {

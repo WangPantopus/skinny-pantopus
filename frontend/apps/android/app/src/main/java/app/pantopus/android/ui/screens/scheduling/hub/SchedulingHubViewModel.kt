@@ -134,7 +134,7 @@ class SchedulingHubViewModel
                 SchedulingPillar.Personal -> SchedulingOwner.Personal
                 SchedulingPillar.Home ->
                     when (val r = homes.myHomes()) {
-                        is NetworkResult.Success -> r.data.homes.firstOrNull()?.id?.let { SchedulingOwner.Home(it) }
+                        is NetworkResult.Success -> r.data.sharedHomes.firstOrNull()?.id?.let { SchedulingOwner.Home(it) }
                         is NetworkResult.Failure -> null
                     }
                 SchedulingPillar.Business ->

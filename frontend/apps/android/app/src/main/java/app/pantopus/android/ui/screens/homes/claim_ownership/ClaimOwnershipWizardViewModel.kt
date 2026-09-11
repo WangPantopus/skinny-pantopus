@@ -71,7 +71,10 @@ data class ClaimOwnershipUiState(
      * picks one on the residency path.
      */
     val selectedDocumentType: String? = null,
-    val startContent: ClaimOwnershipStartContent = ClaimOwnershipSampleData.canonicalStart,
+    val startContent: ClaimOwnershipStartContent = ClaimOwnershipStartContent("This home"),
+    val contextReady: Boolean = false,
+    val isLoadingContext: Boolean = true,
+    val contextError: String? = null,
     val slots: Map<ClaimEvidenceSlot, ClaimSlotState> =
         ClaimEvidenceSlot.entries.associateWith { ClaimSlotState.Empty },
     /**
@@ -146,7 +149,7 @@ data class ClaimOwnershipUiState(
 
     /** Submit gate — every required file plus an explicit doc-kind pick. */
     val canSubmit: Boolean
-        get() = bothSlotsHaveFiles && !needsDocumentTypeSelection
+        get() = contextReady && bothSlotsHaveFiles && !needsDocumentTypeSelection
 
     /** `evidence_type` sent for [slot]: fixed, or the user's pick. */
     fun evidenceTypeFor(slot: ClaimEvidenceSlot): String = slot.fixedBackendType ?: selectedDocumentType ?: slot.backendType
@@ -207,7 +210,7 @@ open class ClaimOwnershipWizardViewModel
                     // switch to any other ownership document kind.
                     selectedDocumentType =
                         if (verificationType == ClaimVerificationType.Owner) "deed" else null,
-                    startContent = ClaimOwnershipSampleData.startContent(homeId),
+                    startContent = ClaimOwnershipStartContent("This home"),
                 ),
             )
         val state: StateFlow<ClaimOwnershipUiState> = _state.asStateFlow()
@@ -278,7 +281,13 @@ open class ClaimOwnershipWizardViewModel
             _state.value.slots.values.forEach { it.pickedFile?.bytes?.fill(0) }
             pickerTickets.clear()
             pendingEvent.value = null
-            _state.update { it.copy(slots = emptyMap(), isSubmitting = false, submitError = CLAIM_SESSION_CHANGED) }
+            _state.update {
+                it.copy(
+                    slots = emptyMap(), isSubmitting = false, submitError = CLAIM_SESSION_CHANGED,
+                    contextReady = false, isLoadingContext = false, contextError = CLAIM_SESSION_CHANGED,
+                    startContent = ClaimOwnershipStartContent("This home"), hasVerifiedOwner = false, isMember = false,
+                )
+            }
         }
 
         // MARK: - WizardModel
@@ -306,7 +315,7 @@ open class ClaimOwnershipWizardViewModel
         }
 
         override fun onPrimary() {
-            if (!isOpeningCurrent) return
+            if (!isOpeningCurrent || !_state.value.contextReady) return
             when (_state.value.currentStep) {
                 ClaimOwnershipStep.Start ->
                     if (_state.value.selectedStartMethod == ClaimStartMethod.AskVerifiedOwner) {
@@ -324,7 +333,7 @@ open class ClaimOwnershipWizardViewModel
 
         init {
             viewModelScope.launch { session.invalidated.collect { if (it) sessionExpired() } }
-            viewModelScope.launch { loadPublicPreview() }
+            viewModelScope.launch { loadContext() }
         }
 
         fun selectStartMethod(method: ClaimStartMethod) {
@@ -332,38 +341,58 @@ open class ClaimOwnershipWizardViewModel
             _state.update { it.copy(selectedStartMethod = method) }
         }
 
-        /**
-         * Resolve `has_verified_owner` / `is_member` so the start step
-         * can decide whether to render the "ask a verified owner"
-         * option, and replace the sample home label with the real one.
-         */
-        private suspend fun loadPublicPreview() {
-            // The picker degrades to the ownership-verification path when
-            // the preview can't be read — never invent the flag.
-            val preview =
-                runCatching { discoveryRepository.publicPreview(homeId) }
-                    .getOrNull()
-                    .let { it as? NetworkResult.Success }
-                    ?.data ?: return
-            val label = preview.home.displayAddress
-            _state.update { current ->
-                val next =
-                    current.copy(
+        fun retryContext() {
+            if (!isOpeningCurrent || _state.value.isLoadingContext) return
+            _state.update { it.copy(isLoadingContext = true, contextError = null) }
+            viewModelScope.launch { loadContext() }
+        }
+
+        /** Bind the claim session and exact permitted preview before accepting documents. */
+        private suspend fun loadContext() {
+            try {
+                currentClaimSession()
+                val response = discoveryRepository.publicPreview(homeId)
+                requireOpening()
+                val preview =
+                    when (response) {
+                        is NetworkResult.Success -> response.data
+                        is NetworkResult.Failure -> throw response.error
+                    }
+                check(preview.home.id == homeId) { "Verification Home changed" }
+                _state.update {
+                    it.copy(
+                        contextReady = true,
+                        isLoadingContext = false,
+                        contextError = null,
+                        submitError = null,
                         hasVerifiedOwner = preview.hasVerifiedOwner,
                         isMember = preview.isMember,
-                        startContent =
-                            if (label.isNotEmpty()) {
-                                current.startContent.copy(homeLabel = label)
-                            } else {
-                                current.startContent
-                            },
+                        startContent = ClaimOwnershipStartContent(preview.home.displayAddress.ifBlank { "This home" }),
+                        selectedStartMethod = ClaimStartMethod.VerifyOwnership,
                     )
-                if (!next.showsAskVerifiedOwner &&
-                    next.selectedStartMethod == ClaimStartMethod.AskVerifiedOwner
-                ) {
-                    next.copy(selectedStartMethod = ClaimStartMethod.VerifyOwnership)
-                } else {
-                    next
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: NetworkError) {
+                contextUnavailable()
+            } catch (_: IOException) {
+                contextUnavailable()
+            } catch (_: IllegalStateException) {
+                contextUnavailable()
+            }
+        }
+
+        private fun contextUnavailable() {
+            if (!isOpeningCurrent) {
+                sessionExpired()
+            } else {
+                _state.update {
+                    it.copy(
+                        contextReady = false,
+                        isLoadingContext = false,
+                        contextError = "Could not load verification. Try again.",
+                        submitError = "Could not load verification. Try again.",
+                    )
                 }
             }
         }
@@ -373,7 +402,7 @@ open class ClaimOwnershipWizardViewModel
          * the home's verified owner(s) that a non-member wants in.
          */
         suspend fun sendHouseholdRequest() {
-            if (_state.value.isSendingAskRequest) return
+            if (!isOpeningCurrent || !_state.value.contextReady || _state.value.isSendingAskRequest) return
             if (!networkMonitor.isOnline.value) {
                 _state.update {
                     it.copy(askRequestError = "You're offline. Try again when you're back online.")
@@ -431,7 +460,7 @@ open class ClaimOwnershipWizardViewModel
         // MARK: - Slot management
 
         private fun canSelect(slot: ClaimEvidenceSlot): Boolean {
-            if (!isOpeningCurrent || _state.value.isSubmitting) return false
+            if (!isOpeningCurrent || !_state.value.contextReady || _state.value.isSubmitting) return false
             return slot in _state.value.activeSlots && !uploadIds.containsKey(slot)
         }
 
@@ -759,7 +788,7 @@ open class ClaimOwnershipWizardViewModel
                             } else {
                                 "Start claim"
                             },
-                        primaryCtaEnabled = !state.isSendingAskRequest,
+                        primaryCtaEnabled = state.contextReady && !state.isSendingAskRequest,
                         secondaryCta = null,
                         isSubmitting = state.isSendingAskRequest,
                         // Once the user has touched Upload (picked a file or

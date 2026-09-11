@@ -50,7 +50,7 @@ class PlaceSwitcherViewModel
                 _state.value =
                     when (val result = homesRepository.myHomes()) {
                         is NetworkResult.Success ->
-                            PlaceSwitcherUiState.Loaded(result.data.homes.map(::rowFor))
+                            PlaceSwitcherUiState.Loaded(result.data.sharedHomes.map(::rowFor))
                         is NetworkResult.Failure -> PlaceSwitcherUiState.Error(result.error.displayMessage("Couldn't load homes."))
                     }
             }
