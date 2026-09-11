@@ -629,6 +629,7 @@ struct BillTrendsCard: View {
                 DashboardCard(title: "Bill trends", accent: Theme.Color.warning) {
                     content
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("homeDashboard_billTrendsCard")
             }
         }
@@ -667,8 +668,16 @@ struct BillTrendsCard: View {
             }
             .padding(.vertical, Spacing.s2)
         case let .loaded(trends):
-            if trends.billsByType.isEmpty {
-                Text("Mark a bill as paid to start tracking your monthly trend.")
+            if !HomeBillPresentation.isCurrent(trends) {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text("Current bill information is unavailable. Retry to check the current format and amounts.")
+                        .pantopusTextStyle(.caption)
+                    Button("Retry", action: onRetry)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("homeDashboard_billTrendsRetry")
+                }
+            } else if trends.billsByType.isEmpty {
+                Text("No paid USD bills with a period start in the last 24 months.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -680,7 +689,8 @@ struct BillTrendsCard: View {
                             BillTrendRow(
                                 billType: key,
                                 series: series,
-                                benchmark: trends.benchmarks[key]
+                                benchmark: trends.benchmarks[key],
+                                currency: trends.currency ?? "USD"
                             )
                         }
                     }
@@ -694,6 +704,7 @@ private struct BillTrendRow: View {
     let billType: String
     let series: HomeBillTrendSeriesDTO
     let benchmark: HomeBillBenchmarkDTO?
+    let currency: String
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
@@ -706,13 +717,12 @@ private struct BillTrendRow: View {
                     Text(note)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let latest = series.amounts.first {
-                Text(HomeDashboardProjection.fullCurrency(latest))
+            if let latest = series.amounts.last {
+                Text(HomeBillPresentation.amount(latest, currency: currency))
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.Color.appText)
@@ -723,19 +733,6 @@ private struct BillTrendRow: View {
     }
 
     private var benchmarkNote: String? {
-        guard let benchmark else {
-            return series.months.first
-        }
-        if benchmark.insufficientData {
-            return benchmark.message ?? "Not enough neighbors for comparison yet"
-        }
-        guard let neighborCents = benchmark.avgAmounts.first, let mine = series.amounts.first else {
-            return series.months.first
-        }
-        let neighbors = neighborCents / 100
-        let label = HomeDashboardProjection.fullCurrency(neighbors)
-        if mine > neighbors { return "Above the \(label) neighborhood average" }
-        if mine < neighbors { return "Below the \(label) neighborhood average" }
-        return "In line with the \(label) neighborhood average"
+        HomeBillPresentation.note(series: series, benchmark: benchmark, currency: currency)
     }
 }

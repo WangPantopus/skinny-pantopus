@@ -1,13 +1,18 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
-## Most recent format/native checkpoint
+## Most recent native bill checkpoint
 
-The [current handoff](PROJECT_HANDOFF.md) records pushed calculation milestone
-`6465da29c`, the verified explicit legacy/current bill format follow-up, and
-uncommitted iOS/Android presentation candidates. Inspect the active iOS build
-before proceeding; do not confuse full backend/browser passes with native
-installed acceptance. Both feature PRs and the full remaining launch gates stay
-open. No paid activation or hosted migration occurred.
+Read the current top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
+[native bill report](home-native-bill-comparison-2026-09-11.md). iOS final signed
+build / complete installed r2 journey pass, including all failed-read/retry,
+format/currency/cohort/empty/permission states and 22 production bill reads.
+The first-run Retry identifier failure is repaired and the full rerun passes.
+Android quality/build r2 pass; actual installed r1 is in progress, with Android
+source/driver still uncommitted. Finish that journey and exact fixture cleanup,
+then currency/monthly presentation and native Home current-access/lifecycle/UI
+findings. No whole-app completion or release is implied. PRs #32/#34 remain
+drafts; compatibility predecessor ca49d5ba4 now passes all required remote CI.
+Keep paid services as one final launch bundle; preserve owner files and data.
 
 ## Latest continuation — September 11, live bill comparisons
 

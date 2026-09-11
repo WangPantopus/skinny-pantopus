@@ -74,7 +74,7 @@ public enum HomeDashboardEndpoints {
     ///
     /// 403s for members without `finance.view` / `finance.manage`.
     public static func billTrends(homeId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/homes/\(homeId)/bill-trends")
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/bill-trends", query: ["format": "2", "currency": "USD"])
     }
 }
 

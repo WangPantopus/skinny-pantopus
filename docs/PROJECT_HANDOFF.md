@@ -14,6 +14,35 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS bill comparison installed milestone — September 11
+
+The [native bill report](home-native-bill-comparison-2026-09-11.md) records final
+signed iOS r4 / full installed r2 acceptance: current fractional USD amounts,
+matching months, cohort withdrawal, repeated 503 and Retry, malformed/legacy/
+wrong-currency rejection, confirmed empty, current finance denial and cold
+restoration. All 22 bill reads request current format 2. The first run exposed
+an overwritten child Retry identifier; the containing accessibility group fix
+passes the full rerun. Final screens and hierarchy were reviewed. Full Swift
+quality and affected final quality pass. No new migration or paid/hosted action.
+
+**Next: finish Android installed acceptance.** Android format/Detekt/compile/
+assemble/lint r2 pass; its source and driver are uncommitted pending actual
+journey r1 (session 94131, `/private/tmp/pantopus-native-bill-android-ui-r1`).
+Shared production HTTP/SQL fixture runs at 18083 (session 62197) and the owned
+recurrence AVD is emulator-5556. Never run platform modes concurrently. The
+owned iOS simulator F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8 is shut down. Preserve
+owner files/devices/data. Finish exact fixture cleanup and retain private proof.
+
+Then add native currency/monthly presentation and current summary lifecycle/
+access retirement, fix captured duplicate Back/FAB overlap, checklist truncation
+and unsupported property-estimate verification copy, and continue native Place,
+residency/submission/ownership/lease/resources/settings/privacy and the full
+ordered backlog. The report preserves all limits. Paid services stay one final
+launch bundle. Compatibility predecessor ca49d5ba4 now passes every required
+remote check; each new pushed head must pass separately. #32 stays draft and
+#34 stays conflicted/unfinished. The 38 Home / 47 combined migrations still need
+combined dependency/replay reconciliation before any merge/release.
+
 ### Bill format compatibility and native draft — September 11
 
 Calculation/browser milestone is pushed as `6465da29c`; its current remote CI

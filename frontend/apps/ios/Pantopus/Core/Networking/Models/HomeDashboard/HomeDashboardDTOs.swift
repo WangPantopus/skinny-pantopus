@@ -524,10 +524,16 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
     /// `bill_type` → neighbourhood benchmark (or an insufficient-data flag).
     public let benchmarks: [String: HomeBillBenchmarkDTO]
     public let billBenchmarkOptIn: Bool
+    public let currency: String?
+    public let formatVersion: Int?
+    public let calculationVersion: Int?
 
     private enum CodingKeys: String, CodingKey {
         case billsByType = "bills_by_type"
         case benchmarks
+        case currency
+        case formatVersion = "format_version"
+        case calculationVersion = "calculation_version"
         case billBenchmarkOptIn = "bill_benchmark_opt_in"
     }
 
@@ -542,21 +548,29 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
             forKey: .benchmarks
         ) ?? [:]
         billBenchmarkOptIn = try container.decodeIfPresent(Bool.self, forKey: .billBenchmarkOptIn) ?? false
+        currency = try container.decodeIfPresent(String.self, forKey: .currency)
+        formatVersion = try container.decodeIfPresent(Int.self, forKey: .formatVersion)
+        calculationVersion = try container.decodeIfPresent(Int.self, forKey: .calculationVersion)
     }
 
     public init(
         billsByType: [String: HomeBillTrendSeriesDTO],
         benchmarks: [String: HomeBillBenchmarkDTO],
-        billBenchmarkOptIn: Bool
+        billBenchmarkOptIn: Bool,
+        currency: String? = "USD",
+        formatVersion: Int? = 2,
+        calculationVersion: Int? = 2
     ) {
         self.billsByType = billsByType
         self.benchmarks = benchmarks
         self.billBenchmarkOptIn = billBenchmarkOptIn
+        self.currency = currency
+        self.formatVersion = formatVersion
+        self.calculationVersion = calculationVersion
     }
 }
 
-/// One `bills_by_type` series. `months` are `YYYY-MM` keys, newest first
-/// (the query orders `period_start` descending).
+/// Format 2 uses unique chronological `YYYY-MM` keys and decimal major units.
 public struct HomeBillTrendSeriesDTO: Decodable, Sendable, Hashable {
     public let months: [String]
     public let amounts: [Double]
@@ -583,7 +597,7 @@ public struct HomeBillTrendSeriesDTO: Decodable, Sendable, Hashable {
 /// (3..9 households) — see `home.js:7665`.
 public struct HomeBillBenchmarkDTO: Decodable, Sendable, Hashable {
     public let months: [String]
-    /// Neighbourhood average in **cents** (`BillBenchmark.avg_amount_cents`).
+    /// Format 2 neighbourhood average in decimal major units, in the response currency.
     public let avgAmounts: [Double]
     public let householdCount: Int?
     public let insufficientData: Bool
