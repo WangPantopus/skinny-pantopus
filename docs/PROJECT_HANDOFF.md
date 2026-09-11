@@ -14,23 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Design collection integration refresh — September 10
+### Deep-link privacy integration refresh — September 10
 
-PR #24 preserves the [existing product proposals and archive](pantopus-product-design-index-2026-09-09.md).
-It is refreshed against master `390091cdb`: 34 artifact hashes, 142 relative
-Markdown links and documentation-only scope pass. Required checks on its exact
-refreshed head remain the merge gate. This is preservation, not implementation
-approval or new app/provider acceptance; the operational backlog stays in place.
-The owner checkout's uncommitted originals remain untouched.
+The [diagnostics report](deep-link-diagnostics-privacy-2026-09-07.md) records
+PR #7's fixed-category router events and omission of notification link payloads.
+The refresh at `c858d743a` failed compilation because its tests used the older
+Boolean session hook. They now use master's account-ID hook; current source
+review and strict Swift quality pass. Final-head build/routing/required CI remain
+necessary before merge. No application routing policy, migration or provider
+configuration changes as part of this privacy fix.
 
-Primary Home work continues in `/private/tmp/pantopus-home-permission-boundaries`;
-its newer handoff/resume contains the detailed current record. Home #32
-`3393baa18` passes required CI, with Android relationship recovery being exercised
-locally. Paid #34 remains `e9ef2decb`, green but unfinished. Both feature PRs stay
-drafts with remaining scope and combined 43-version migration dependencies open.
-The separate diagnostics privacy PR #7 is refreshed at `c858d743a`, with current
-CI pending. Keep all paid dependencies in one final launch bundle. Earlier
-progress below is historical.
+Continue primary work in `/private/tmp/pantopus-home-permission-boundaries`;
+its newer handoff/resume is the detailed continuation record. Home #32
+`3393baa18` passes required CI and Android installed relationship recovery is
+in progress. Paid #34 remains `e9ef2decb`, green but unfinished. Both feature PRs
+stay drafts until remaining scope and combined migrations are reconciled. The
+committed set has 43 distinct versions; an unapplied residency receipt candidate
+is being developed locally. Keep paid services one final launch bundle.
+
+### Design collection integrated — September 10
+
+PR #24 merged as `cd764458f` after its final `054f4dcd1` required checks passed.
+The [design collection](pantopus-product-design-index-2026-09-09.md) preserves 34
+verified archive artifacts; all 142 relative Markdown links resolve. Its scope
+is documentation only. This preserves proposals without approving new app
+implementation or claiming new provider/workflow acceptance. Original owner
+files and private operator evidence remain untouched. Merged-master CI is a
+separate post-merge check; no deployment ran.
+
 
 ### Payment integration and next checkpoints — September 9
 

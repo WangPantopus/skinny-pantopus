@@ -147,7 +147,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             // Briefing / monthly-receipt pushes carry no `link` — compose one
             // from `type` + `briefingKind` + `briefingDeliveryId`.
             ?? DeepLinkRouter.pushFallbackPath(userInfo: userInfo)
-        logger.info("Notification tapped", metadata: ["deepLink": .string(deepLink ?? "")])
+        logger.info("Notification tapped")
         if let deepLink, !deepLink.isEmpty {
             // `link` is a path like `/chat/42`; handle(path:) normalises it
             // to the pantopus:// scheme, matching the Android dispatcher.
