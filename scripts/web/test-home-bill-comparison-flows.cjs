@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Actual Chrome UI, production IAM HTTP/helper and PostgreSQL authority. Identity, dashboard entities,
-// ancillary endpoints and lifecycle events are deterministic local fixture adapters.
+// Actual Chrome financial UI -> production API/services -> current SQL snapshot.
+// Identity, dashboard shell, unrelated providers and fault timing are local fixture adapters.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -10,10 +10,10 @@ const [base, container, evidence] = process.argv.slice(2);
 assert.match(base || '', /^http:\/\/127\.0\.0\.1:\d+$/);
 assert(path.isAbsolute(evidence || '') && !evidence.startsWith(root + '/'));
 fs.mkdirSync(evidence, { recursive: true, mode: 0o700 });
-const f = require('../db/home-residency-review-http-fixture.cjs')(container, { summary: true });
+const f = require('../db/home-bill-comparison-http-fixture.cjs')(container);
 const { actor, home, sql, q } = f;
 let server, browser, context, page, initialized = false, currentActor = actor, hold = null;
-let privateReads = 0;
+let privateReads = 0, billFault = null;
 const item = f.id(801), secondItem = f.id(802);
 let listFailure = false, dashboardFailure = false, auxiliaryVersion = 'Current', accessFailure = false;
 const failures = new Set(), malformed = new Set();
@@ -46,17 +46,17 @@ function holdNext(suffix) {
   hold = { suffix, arrival, released, release }; holds.push(hold);
   return { wait: async () => { let timer; try { await Promise.race([reached, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Held response not reached: ' + suffix)), 30000); })]); } finally { clearTimeout(timer); } }, release };
 }
-async function screenshot(name) { await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: true }); }
+async function screenshot(name) { await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: true }); }
 function pass(message) { checks.push(message); console.log('PASS:', message); }
 async function main() {
   try {
-    f.setup(); initialized = true;
+    const { current, previous } = f.setup(); initialized = true;
     const season = require(path.join(root, 'backend/services/ai/seasonalEngine')).getSeasonalContext({}).primary_season;
     sql(`INSERT INTO public."HomeSeasonalChecklistItem"(id,home_id,season_key,year,item_key,title) VALUES (${q(item)},${q(home)},${q(season)},extract(year FROM now()),'first','Check smoke alarms'), (${q(secondItem)},${q(home)},${q(season)},extract(year FROM now()),'second','Clean dryer vent');`);
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const apiBase = `http://127.0.0.1:${server.address().port}`;
     browser = await chromium.launch({ channel: 'chrome', headless: true });
-    context = await browser.newContext({ viewport: { width: 1100, height: 950 } });
+    context = await browser.newContext({ viewport: { width: 1100, height: 950 }, timezoneId: 'America/Los_Angeles' });
     await context.addCookies([{ name: 'pantopus_session', value: '1', url: base }, { name: 'pantopus_access', value: 'synthetic-local-session', url: base, httpOnly: true }]);
     await context.route('**/*', async route => {
       const request = route.request(), parsed = new URL(request.url()), endpoint = parsed.pathname;
@@ -70,6 +70,12 @@ async function main() {
           const response = await fetch(apiBase + endpoint + parsed.search, { method: request.method(), headers: { 'content-type': 'application/json', 'x-fixture-actor': currentActor }, ...(request.postData() ? { body: request.postData() } : {}), signal: AbortSignal.timeout(20000) });
           body = await response.json(); status = response.status;
           if (failures.has(endpoint.split('/').at(-1))) { status = 503; body = { error: 'Synthetic unavailable response after production read' }; }
+          if (endpoint.endsWith('/bill-trends') && billFault) {
+            if (billFault === 'currency') body.currency = 'EUR';
+            if (billFault === 'nested') body.bills_by_type = { electric: { months: [current], amounts: [] } };
+            if (billFault === 'empty-series') body.bills_by_type = { electric: { months: [], amounts: [] } };
+            if (billFault === 'floor') body.benchmarks = { electric: { months: [current], avg_amounts: [12], household_count: 3 } };
+          }
           if (malformed.has(endpoint.split('/').at(-1))) body = {};
         }
         else if (/\/api\/homes\/[^/]+\/(me|iam\/me)$/.test(endpoint)) {
@@ -98,72 +104,83 @@ async function main() {
     });
     page = await context.newPage(); page.setDefaultTimeout(30000);
     page.on('pageerror', e => errors.push(e.message)); page.on('console', message => { if (['error', 'warning'].includes(message.type())) diagnostics.push(message.text()); });
-    for (const key of ['health-score','seasonal-checklist','bill-trends','property-value','timeline']) failures.add(key);
+    const currency = () => page.getByRole('combobox', { name: 'Bill comparison currency', exact: true });
+    const chart = () => page.getByLabel('Monthly bill chart', { exact: true });
+    const bill = () => page.getByLabel('Bill trends', { exact: true });
+    const currentBar = () => page.getByRole('img', { name: `${current}: your total $142.50 · Comparison $104.70`, exact: true });
     await page.goto(household, { waitUntil: 'domcontentloaded', timeout: 120000 }); await title().waitFor();
-    for (const name of ['home health','seasonal checklist','bill trends','property information','home activity']) await retry(name).waitFor();
-    await expect(page.getByText('No paid USD bill history yet', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('No seasonal tasks right now', { exact: true })).toHaveCount(0);
-    await screenshot('01-unavailable-summaries');
-    failures.clear();
-    for (const name of ['home health','seasonal checklist','bill trends','property information','home activity']) await retry(name).click();
-    await page.getByRole('button', { name: 'Mark complete: Check smoke alarms', exact: true }).waitFor();
-    await page.getByText('No paid USD bill history yet', { exact: true }).waitFor();
-    await share().waitFor(); await expect(share()).not.toBeChecked();
-    await page.getByText('Property value information is not available for this home yet.', { exact: true }).waitFor();
-    await screenshot('02-current-and-confirmed-empty');
-    pass('All five errors have separate retry; actual current checklist, confirmed empty bills/property and current sharing return');
+    await currentBar().waitFor();
+    await page.getByRole('img', { name: `${previous}: your total $210.25 · No comparison for this month`, exact: true }).waitFor();
+    await expect(bill()).toContainText('Across 1 matching month: your electric bill: $142.50/mo avg. Neighborhood: $104.70/mo avg.');
+    await expect(bill()).toContainText('36% above neighborhood average');
+    const monthLabel = date => new Date(date+'-15T12:00:00Z').toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+    await expect(chart()).toContainText(monthLabel(current)); await expect(chart()).toContainText(monthLabel(previous));
+    assert.equal(await currentBar().locator('div > div').count(), 2);
+    await screenshot('01-fractional-matching-months');
+    pass('Actual chart preserves decimal major units, combines household/month bills, matches month keys and labels correctly in Los Angeles');
+
+    const change = holdNext('/bill-trends'); await currency().selectOption('CAD'); await change.wait();
+    await expect(currentBar()).toHaveCount(0); await expect(currency()).toHaveCount(0);
+    change.release(); await expect(currency()).toHaveValue('CAD');
+    await page.getByRole('img', { name: `${current}: your total CA$999.99 · No comparison for this month`, exact: true }).waitFor();
+    await expect(bill()).not.toContainText('neighborhood average');
+    await expect(bill()).toContainText('Your recorded average: CA$999.99/month across 1 month.');
+    await bill().getByText('View monthly amounts', { exact: true }).click();
+    await expect(bill().getByRole('table')).toContainText('CA$999.99');
+    await screenshot('02-cad-separate');
+    await currency().selectOption('USD'); await currentBar().waitFor();
+    pass('Held currency change retires the old chart; CAD has its own exact amount and no USD comparison');
 
     const saving = holdNext('/settings'); await share().locator('..').click(); await saving.wait();
-    await expect(share()).toBeDisabled(); await page.getByText('Saving sharing preference…', { exact: true }).waitFor();
-    assert.equal(sql(`SELECT settings->>'bill_benchmark_opt_in' FROM public."HomePreference" WHERE home_id=${q(home)};`),'true');
-    saving.release(); await expect(share()).toBeEnabled(); await expect(share()).toBeChecked();
-    const onColor = await share().locator('..').locator('div').evaluate(el => getComputedStyle(el).backgroundColor);
-    await screenshot('03-persisted-sharing-with-no-bills');
-    f.loseNextReply(); await share().focus(); await page.keyboard.press('Space'); await retry('bill trends').waitFor();
-    await expect(share()).toHaveCount(0); await screenshot('04-sharing-unknown-reload');
-    await retry('bill trends').click(); await expect(share()).not.toBeChecked();
-    assert.notEqual(await share().locator('..').locator('div').evaluate(el => getComputedStyle(el).backgroundColor), onColor);
-    assert.equal(sql(`SELECT settings->>'bill_benchmark_opt_in' FROM public."HomePreference" WHERE home_id=${q(home)};`),'false');
-    pass('Pointer and keyboard sharing work even without bill history; save is held/disabled and a lost committed opt-out requires read recovery');
+    await expect(share()).toBeDisabled(); await expect(currency()).toBeDisabled();
+    saving.release(); await expect(share()).not.toBeChecked();
+    await expect(bill()).toContainText('1 more neighbor needed for comparison'); await expect(currentBar()).toHaveCount(0);
+    await page.getByRole('img', { name: `${current}: your total $142.50 · No comparison for this month`, exact: true }).waitFor();
+    await screenshot('03-opt-out-removes-comparison');
+    await share().focus(); await page.keyboard.press('Space'); await expect(share()).toBeChecked(); await currentBar().waitFor();
+    pass('Real pointer opt-out removes the tenth contributor and all peer amounts; keyboard opt-in restores the current cohort');
 
-    f.loseNextReply(); await page.getByRole('button', { name: 'Mark complete: Check smoke alarms', exact: true }).click();
-    await retry('seasonal checklist').waitFor(); await expect(page.getByRole('button', { name: 'Mark complete: Check smoke alarms', exact: true })).toHaveCount(0);
-    assert.equal(sql(`SELECT status FROM public."HomeSeasonalChecklistItem" WHERE id=${q(item)};`),'completed');
-    await screenshot('05-checklist-unknown-reload'); await retry('seasonal checklist').click();
-    await page.getByText('Check smoke alarms', { exact: true }).waitFor();
-    const completing = holdNext('/' + secondItem); await page.getByRole('button', { name: 'Skip: Clean dryer vent', exact: true }).click(); await completing.wait();
-    await expect(page.getByRole('button', { name: 'Mark complete: Clean dryer vent', exact: true })).toBeDisabled();
-    completing.release(); await expect(page.getByRole('button', { name: 'Mark complete: Clean dryer vent', exact: true })).toHaveCount(0);
-    assert.equal(sql(`SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=${q(home)} AND action='home_checklist_updated';`),'2');
-    pass('A lost committed completion recovers current state; skipped item and busy duplicate prevention reach real SQL once per change');
-
-    malformed.add('bill-trends'); await focus(); await retry('bill trends').waitFor(); await expect(share()).toHaveCount(0);
-    malformed.clear(); await retry('bill trends').click(); await share().waitFor();
-    const stale = holdNext('/bill-trends'); await focus(); await stale.wait();
+    failures.add('bill-trends'); await focus(); await retry('bill trends').waitFor(); await expect(chart()).toHaveCount(0);
+    await screenshot('04-source-error'); failures.clear(); await retry('bill trends').focus(); await page.keyboard.press('Enter'); await currentBar().waitFor();
+    malformed.add('bill-trends'); await focus(); await retry('bill trends').waitFor(); await expect(chart()).toHaveCount(0);
+    malformed.clear(); await retry('bill trends').click(); await currentBar().waitFor();
+    for (const mode of ['currency','nested','empty-series','floor']) {
+      billFault = mode; await focus(); await retry('bill trends').waitFor(); await expect(chart()).toHaveCount(0);
+      billFault = null; await retry('bill trends').click(); await currentBar().waitFor();
+    }
+    const stale = holdNext('/bill-trends'); await currency().selectOption('CAD'); await stale.wait();
     await visibility(true); await expect(title()).toHaveCount(0); stale.release();
-    await visibility(false); await share().waitFor(); await expect(share()).not.toBeChecked();
-    pass('Malformed success remains unavailable and a held summary cannot survive background retirement');
+    await visibility(false); await currentBar().waitFor(); await expect(currency()).toHaveValue('USD');
+    pass('Read failures, wrong currency, malformed/empty nested series and sub-threshold amounts have explicit recovery; a held currency read cannot survive background retirement');
 
-    const denied = ['home.edit','finance.view','finance.manage','members.manage','tasks.edit','tasks.manage','maintenance.edit','maintenance.manage','packages.edit','packages.manage'];
-    sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES ${denied.map(permission => `(${q(home)},${q(actor)},${q(permission)},false)`).join(',')};`);
-    const beforeReads = f.queryCalls.filter(t => t === 'HomeBill' || t === 'HomeAuditLog').length;
-    await focus(); await title().waitFor();
-    await expect(page.locator('[aria-label="Home health"]')).toHaveCount(0);
-    await expect(page.locator('[aria-label="Bill trends"]')).toHaveCount(0);
-    await expect(page.locator('[aria-label="Home activity"]')).toHaveCount(0);
-    await expect(invite()).toHaveCount(0); await expect(share()).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add a bill', exact: true })).toHaveCount(0);
-    assert.equal(f.queryCalls.filter(t => t === 'HomeBill' || t === 'HomeAuditLog').length, beforeReads);
-    await screenshot('06-limited-member-overview');
-    sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)};`); await focus(); await share().waitFor();
-    pass('Current effective restrictions hide health/bills/audit, sharing and create/invite controls before restricted summary reads');
+    sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(actor)},'finance.view',false);`);
+    await focus(); await title().waitFor(); await expect(bill()).toHaveCount(0); await expect(share()).toHaveCount(0);
+    sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)};`); await focus(); await currentBar().waitFor();
+    pass('Current finance denial retires all private bill values and controls; restored authority can read again');
 
-    await page.setViewportSize({ width: 390, height: 844 }); failures.add('bill-trends'); await focus(); await retry('bill trends').waitFor();
-    await screenshot('07-narrow-error'); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    failures.clear(); await retry('bill trends').focus(); await page.keyboard.press('Enter'); await share().waitFor();
-    await screenshot('08-narrow-current'); assert.deepEqual(errors, []);
-    pass('Narrow error/current screens and keyboard retry remain usable without page errors');
-    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations, pageErrors: errors, limits: 'Actual Chrome/production HTTP/helper/services/SQL; synthetic auth/dashboard entities/property provider and deliberate response/lifecycle faults; no paid providers' }, null, 2));
+    sql(`UPDATE public."HomeBill" SET status='due' WHERE home_id=${q(home)};`);
+    await focus(); await page.getByText('No paid USD bill history yet', { exact: true }).waitFor(); await expect(share()).toBeChecked();
+    await screenshot('05-confirmed-empty');
+    sql(`UPDATE public."HomeBill" SET status='paid' WHERE id IN (${f.bills.slice(0,13).map(q)});`);
+    // 24 actual monthly rows exercise overflow without substituting synthetic chart data.
+    sql(`INSERT INTO public."HomeBill"(home_id,created_by,bill_type,amount,currency,status,period_start)
+      SELECT ${q(home)},${q(actor)},'electric',12.34,'USD','paid',(date_trunc('month',CURRENT_DATE)-make_interval(months=>n))::date
+      FROM generate_series(0,23)n WHERE n NOT IN(1,2);`);
+    await page.setViewportSize({ width: 390, height: 844 }); await focus(); await chart().waitFor();
+    await expect(chart().getByRole('img')).toHaveCount(24);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert(await chart().evaluate(el => el.scrollWidth > el.clientWidth));
+    await chart().focus(); await page.keyboard.press('End');
+    await chart().evaluate(el => { el.scrollLeft = el.scrollWidth; });
+    await bill().getByText('View monthly amounts', { exact: true }).click();
+    await expect(bill().getByRole('table').getByRole('row')).toHaveCount(25);
+    await expect(bill().getByRole('table')).toContainText('$142.50');
+    await screenshot('06-narrow-24-month-scroll');
+    await bill().scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(evidence, '07-narrow-visible-amounts.png') });
+    assert.deepEqual(errors, []);
+    pass('Confirmed empty state retains sharing; 24 real SQL months fit a narrow viewport with a scrollable keyboard-focusable chart');
+    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations, pageErrors: errors,
+      limits: 'Actual Chrome/production HTTP/helper/services/SQL; synthetic identity/dashboard entities/property provider and deliberate response/lifecycle faults; no paid providers or native acceptance' }, null, 2));
   } catch (error) {
     if (page) { await page.screenshot({ path: path.join(evidence, 'failure.png'), fullPage: true }).catch(() => {}); fs.writeFileSync(path.join(evidence, 'failure.txt'), await page.locator('body').innerText().catch(() => '')); }
     throw error;
@@ -172,7 +189,7 @@ async function main() {
     if (context) await context.close(); if (browser) await browser.close();
     fs.writeFileSync(path.join(evidence, 'console-diagnostics.json'), JSON.stringify(diagnostics));
     if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
-    if (initialized) { sql(`DELETE FROM public."HomeSeasonalChecklistItem" WHERE home_id=${q(home)};`); f.cleanup(); console.log('PASS: exact browser summary fixtures cleaned'); }
+    if (initialized) { sql(`DELETE FROM public."HomeSeasonalChecklistItem" WHERE home_id=${q(home)};`); f.cleanup(); console.log('PASS: exact browser bill fixtures cleaned'); }
     f.restoreModules();
   }
 }

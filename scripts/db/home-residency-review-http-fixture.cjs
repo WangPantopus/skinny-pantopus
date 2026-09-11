@@ -15,11 +15,16 @@ module.exports = function(container, { summary = false, place = false } = {}) {
     return execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
       { input: query, encoding: 'utf8', timeout: 20000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   }
+  let rpcFailure = null; const rpcCalls = [];
   let loseReply = false, notificationFailure = false, calls = 0;
   const notifications = [], queryCalls = [], diagnostics = []; let queryFailure = null;
   let propertyResult = { profile: null, source: 'fallback' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(summary ? ['update_home_seasonal_item', 'update_home_settings'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(summary ? ['update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    rpcCalls.push(name);
+    if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
+      if (failure.reject) throw new Error('Synthetic unavailable RPC transport');
+      return { data: null, error: { message: 'Synthetic unavailable RPC' } }; }
     const params = Object.entries(args).map(([key, value]) => {
       assert.match(key, /^p_[a-z_]+$/); return `${key} => ${value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value)}`;
     });
@@ -90,7 +95,7 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       if (request === '../utils/logger') return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
     }
     if (place && parent?.filename.endsWith('/services/placeIntelligenceService.js')) {
-      if (!['../utils/geohash', '../serializers/placeIntelligenceSerializer', './homePrivacyService'].includes(request)) return {};
+      if (!['../utils/geohash', '../serializers/placeIntelligenceSerializer', './homePrivacyService', './homeBillComparisonService'].includes(request)) return {};
     }
     if (place && parent?.filename.endsWith('/routes/placeIntelligence.js')) {
       if (request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
@@ -107,7 +112,7 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
       if (request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
@@ -147,6 +152,7 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
   }
   return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications,
+    rpcCalls, failNextRpc: (name, reject = false) => { rpcFailure = { name, reject }; },
     queryCalls, diagnostics, failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },
     setPropertyResult: value => { propertyResult = value; },
     get calls() { return calls; }, loseNextReply: () => { loseReply = true; },

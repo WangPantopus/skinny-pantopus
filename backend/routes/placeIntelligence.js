@@ -61,6 +61,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Home not found' });
     }
 
+    res.setHeader('Cache-Control', 'private, no-store');
     return res.json(intelligence);
   } catch (err) {
     logger.error('Place intelligence error', { error: err.message, homeId: id });

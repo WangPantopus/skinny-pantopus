@@ -755,7 +755,7 @@ function DashboardTab({
         {intelligence.canReadBills && <HomeSummaryBoundary title="Bill trends" error={intelligence.errors.bills} loading={intelligence.billTrendsLoading} onRetry={() => void intelligence.reloadSummary('bills')}>
           <BillTrendChart data={intelligence.billTrends} selectedType={selectedBillType} onTypeChange={onBillTypeChange}
             loading={intelligence.billTrendsLoading} onAddBill={can('finance.manage') ? onAddBill : undefined}
-            savingPreference={intelligence.benchmarkBusy} onOptInChange={can('home.edit') ? (optedIn) => void intelligence.setBillBenchmarkOptIn(optedIn) : undefined} />
+            savingPreference={intelligence.benchmarkBusy} onCurrencyChange={intelligence.setBillCurrency} onOptInChange={can('home.edit') ? (optedIn) => void intelligence.setBillBenchmarkOptIn(optedIn) : undefined} />
         </HomeSummaryBoundary>}
       </div>
       {intelligence.canReadTimeline && <HomeSummaryBoundary title="Home activity" error={intelligence.errors.timeline} loading={intelligence.timelineLoading} onRetry={() => void intelligence.reloadSummary('timeline')}>

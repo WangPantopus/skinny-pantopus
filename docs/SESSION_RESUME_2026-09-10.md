@@ -1,5 +1,18 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+## Latest continuation — September 11, live bill comparisons
+
+Read the current top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
+[bill report](home-bill-comparison-continuation-2026-09-11.md). They supersede old
+bill-cache and migration counts below. Current candidate source has 38 Home /
+47 combined migrations, with real SQL/HTTP, fresh replay, populated preservation
+and browser work. Native amount/order/currency and old-client compatibility
+remain explicit next gates; PRs #32/#34 remain unfinished drafts. Final browser
+r3 passes; the next pushed exact-head CI must be checked separately.
+The owner asks for ongoing work and practical workflow evidence, not unit
+coverage. Docker recovery remains authorized; paid services stay one final bundle.
+
+
 September 11 next milestone: [Place bill access/error boundaries](home-bill-comparison-continuation-2026-09-11.md)
 requires current Home view, prevents personal bill reads without finance.view,
 keeps read errors explicit and preserves missing coordinates. Real production

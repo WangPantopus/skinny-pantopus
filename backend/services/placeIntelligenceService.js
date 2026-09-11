@@ -11,7 +11,7 @@
 //   Your Home (Band B) propertyIntelligenceService.getProfile (ATTOM) —
 //                      only when ATTOM_API_KEY is configured, else
 //                      `unavailable` (never a 500)
-//   Money Signals      BillBenchmark table (peer comparison)
+//   Money Signals      Current household/month SQL snapshot (peer comparison)
 //
 // Every section degrades INDEPENDENTLY: a thrown/failed source yields
 // that section's `error`/`unavailable` status — it never fails the
@@ -671,74 +671,40 @@ function pickBillType(benchmarkRows, ownBillTypes) {
   return { type, rows: entry.rows };
 }
 
-async function composeBillBenchmark(home, access) {
-  const ll = homeLatLng(home);
-  if (!ll) return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
-
-  let benchmarkRows = [];
+async function composeBillBenchmark(home, access, userId) {
+  // SQL resolves the authoritative geometry, with map-center fallback only
+  // when geometry is absent. Missing coordinates yield no peer cohort.
+  let snapshot;
   try {
-    const geohash = encodeGeohash(ll.lat, ll.lng, 6);
-    // Privacy floor: only household_count >= 10 may be shown (matches the
-    // existing bill-trends read). Smaller cohorts stay unavailable.
-    const { data, error } = await supabaseAdmin
-      .from('BillBenchmark')
-      .select('bill_type, avg_amount_cents, household_count')
-      .eq('geohash', geohash)
-      .gte('household_count', 10);
-    if (error) throw error;
-    benchmarkRows = data || [];
+    const { getHomeBillComparison } = require('./homeBillComparisonService');
+    snapshot = await getHomeBillComparison(home.id, userId, 'USD');
   } catch (err) {
-    logger.warn('placeIntelligence: billBenchmark failed', { homeId: home.id, error: err.message });
+    logger.warn('placeIntelligence: current bill comparison failed', { homeId: home.id, code: err.code });
     return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'error' })];
   }
-
-  // The resident's own bills (Band C input) — read first so the picker can
-  // prefer a type they can actually be compared on.
+  const peers = snapshot.peer_months.filter(row => row.household_count >= 10);
+  const canReadOwnBills = access?.hasAccess === true && access.permissions?.includes('finance.view') === true && snapshot.can_view_finance;
   const ownByType = new Map();
-  const canReadOwnBills = access?.hasAccess === true && access.permissions?.includes('finance.view') === true;
-  try {
-    if (canReadOwnBills) {
-      const { data: bills, error: billsError } = await supabaseAdmin
-        .from('HomeBill')
-        .select('amount, bill_type')
-        .eq('home_id', home.id);
-      if (billsError) throw billsError;
-      for (const b of bills || []) {
-        const amount = Number(b && b.amount);
-        if (!b || !Number.isFinite(amount)) continue;
-        if (!BENCHMARKABLE_BILL_TYPES.includes(b.bill_type)) continue;
-        const list = ownByType.get(b.bill_type) || [];
-        list.push(amount);
-        ownByType.set(b.bill_type, list);
-      }
+  if (canReadOwnBills) {
+    for (const row of snapshot.own_months) {
+      if (!BENCHMARKABLE_BILL_TYPES.includes(row.bill_type)) continue;
+      const months = ownByType.get(row.bill_type) || new Map();
+      months.set(row.month, row.amount); ownByType.set(row.bill_type, months);
     }
-  } catch (err) {
-    logger.warn('placeIntelligence: own bills read failed', { homeId: home.id, error: err.message });
-    return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'error' })];
   }
-
-  const picked = pickBillType(benchmarkRows, new Set(ownByType.keys()));
-  if (!picked) {
-    return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
-  }
-
-  const amounts = picked.rows
-    .map((r) => Number(r.avg_amount_cents) / 100)
-    .filter((n) => Number.isFinite(n));
-  if (!amounts.length) {
-    return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
-  }
-
-  const bandLow = Math.round(Math.min(...amounts));
-  const bandHigh = Math.round(Math.max(...amounts));
-  const bandMid = (bandLow + bandHigh) / 2;
-
-  // HomeBill.amount is stored in cents (the benchmark job averages it
-  // straight into avg_amount_cents); convert to dollars to match the band.
-  const ownVals = ownByType.get(picked.type) || [];
-  const yourAmount = ownVals.length
-    ? Math.round(ownVals.reduce((a, b) => a + b, 0) / ownVals.length / 100)
-    : null;
+  const comparableTypes = new Set(peers.filter(row => ownByType.get(row.bill_type)?.has(row.month)).map(row => row.bill_type));
+  const picked = pickBillType(peers, comparableTypes);
+  if (!picked) return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
+  const own = ownByType.get(picked.type);
+  const common = own ? picked.rows.filter(row => own.has(row.month)) : [];
+  const selected = common.length ? common : picked.rows;
+  const amounts = selected.map(row => row.avg_amount);
+  const rounded = amount => Math.round((amount + Number.EPSILON) * 100) / 100;
+  const bandLow = Math.min(...amounts), bandHigh = Math.max(...amounts);
+  const bandMid = amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length;
+  const yourAmount = common.length ? rounded(common.reduce((sum, row) => sum + own.get(row.month), 0) / common.length) : null;
+  const periods = selected.map(row => row.month).sort();
+  const periodLabel = `${selected.length} ${common.length ? 'matching ' : ''}month${selected.length === 1 ? '' : 's'} · ${periods[0]}${periods.length > 1 ? ' to ' + periods.at(-1) : ''} · USD`;
 
   const label = BILL_LABELS[picked.type] || picked.type;
   let comparison = 'typical';
@@ -748,7 +714,7 @@ async function composeBillBenchmark(home, access) {
     comparisonPct = Math.round(((yourAmount - bandMid) / bandMid) * 100);
     comparison = comparisonPct > 5 ? 'higher' : comparisonPct < -5 ? 'lower' : 'typical';
     const dir = comparison === 'higher' ? 'above' : comparison === 'lower' ? 'below' : 'in line with';
-    summary = `Your ${label} bill is ${Math.abs(comparisonPct)}% ${dir} neighbors`;
+    summary = comparison === 'typical' ? `Your ${label} bills are in line with the comparison average` : `Your ${label} bills average ${Math.abs(comparisonPct)}% ${dir} the comparison average`;
   } else {
     summary = `Neighborhood ${label} bills average about $${Math.round(bandMid).toLocaleString('en-US')}/mo`;
   }
@@ -762,7 +728,7 @@ async function composeBillBenchmark(home, access) {
       band_high: bandHigh,
       comparison,
       comparison_pct: comparisonPct,
-      period: '12-month average',
+      period: periodLabel,
       summary,
     },
   })];
@@ -941,7 +907,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
   { ids: ['your_home'], run: ({ home, tier }) => composeYourHome(home, tier) },
   { ids: ['home_systems'], run: ({ home, tier }) => composeHomeSystems(home, tier) },
-  { ids: ['bill_benchmark'], run: ({ home, access }) => composeBillBenchmark(home, access) },
+  { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId }) => composeRealRent(home, tier, userId) },

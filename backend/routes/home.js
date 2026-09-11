@@ -6102,95 +6102,14 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
     const canFinance = perms.has('finance.view');
     if (!canFinance) return res.status(403).json({ error: 'No finance access' });
 
-    // Fetch paid bills (last 24 months)
-    const { data: bills, error: billsError } = await supabaseAdmin
-      .from('HomeBill')
-      .select('bill_type, amount, period_start')
-      .eq('home_id', homeId)
-      .eq('status', 'paid')
-      .gt('amount', 0)
-      .not('period_start', 'is', null)
-      .order('period_start', { ascending: false })
-      .limit(200);
-
-    if (billsError) {
-      logger.error('Bill trends query error', { error: billsError.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch bill data' });
-    }
-
-    // Group by bill_type → month series
-    const billsByType = {};
-    for (const bill of (bills || [])) {
-      const d = new Date(bill.period_start);
-      const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-
-      if (!billsByType[bill.bill_type]) {
-        billsByType[bill.bill_type] = { months: [], amounts: [] };
-      }
-      billsByType[bill.bill_type].months.push(monthKey);
-      billsByType[bill.bill_type].amounts.push(bill.amount);
-    }
-
-    // Fetch neighborhood benchmarks via home geohash
-    let benchmarks = {};
-    const { data: home, error: homeReadError } = await supabaseAdmin
-      .from('Home')
-      .select('location')
-      .eq('id', homeId)
-      .maybeSingle();
-
-    if (homeReadError || !home) return res.status(503).json({ error: 'Current bill comparison context could not be loaded.' });
-    if (home?.location) {
-      const parsed = parsePostGISPoint(home.location);
-      if (parsed) {
-        const hash = encodeGeohash(parsed.latitude, parsed.longitude, 6);
-
-        // Fetch benchmarks with household_count >= 3 (the write floor).
-        // Rows with 3-9 produce an insufficient_data flag; >= 10 are shown.
-        const { data: benchmarkRows, error: benchmarkError } = await supabaseAdmin
-          .from('BillBenchmark')
-          .select('bill_type, month, year, avg_amount_cents, household_count')
-          .eq('geohash', hash)
-          .gte('household_count', 3);
-
-        if (benchmarkError) return res.status(503).json({ error: 'Current bill comparisons could not be loaded.' });
-        for (const row of (benchmarkRows || [])) {
-          const monthKey = `${row.year}-${String(row.month).padStart(2, '0')}`;
-
-          if (row.household_count >= 10) {
-            // Full benchmark — safe to display aggregates
-            if (!benchmarks[row.bill_type] || benchmarks[row.bill_type].insufficient_data) {
-              benchmarks[row.bill_type] = { months: [], avg_amounts: [], household_count: row.household_count };
-            }
-            benchmarks[row.bill_type].months.push(monthKey);
-            benchmarks[row.bill_type].avg_amounts.push(row.avg_amount_cents);
-          } else if (row.household_count >= 3 && !benchmarks[row.bill_type]) {
-            // Insufficient data — signal to frontend without revealing amounts.
-            // Only set this flag if we haven't already found >= 10 rows for this type.
-            benchmarks[row.bill_type] = {
-              insufficient_data: true,
-              needed: 10 - row.household_count,
-              message: 'Not enough neighbors for comparison yet',
-            };
-          }
-        }
-      }
-    }
-
-    // Fetch opt-in status for this home
-    const { data: optInPref, error: preferenceError } = await supabaseAdmin
-      .from('HomePreference')
-      .select('settings')
-      .eq('home_id', homeId)
-      .maybeSingle();
-
-    if (preferenceError) return res.status(503).json({ error: 'Current bill sharing preference could not be confirmed.' });
-    const billBenchmarkOptIn = optInPref?.settings?.bill_benchmark_opt_in === true;
-
-    res.json({ bills_by_type: billsByType, benchmarks, bill_benchmark_opt_in: billBenchmarkOptIn });
+    const { getHomeBillComparison, asBillTrendData } = require('../services/homeBillComparisonService');
+    const snapshot = await getHomeBillComparison(homeId, userId, req.query.currency);
+    if (!snapshot.can_view_finance) return res.status(403).json({ error: 'No finance access' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(asBillTrendData(snapshot));
   } catch (err) {
     logger.error('Bill trends error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch bill trends' });
+    res.status(err.statusCode || 503).json({ error: err.statusCode ? err.message : 'Current bill trends could not be loaded.', code: err.code || 'HOME_BILLS_UNAVAILABLE' });
   }
 });
 

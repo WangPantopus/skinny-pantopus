@@ -14,16 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Active bill comparison continuation — September 11
+### Current bill comparison milestone — September 11
 
-After pushed `a6d879664`, [bill comparison continuation](home-bill-comparison-continuation-2026-09-11.md)
-records an additional Place home.view/finance.view boundary, honest source errors
-and missing-coordinate repair. Actual production HTTP/SQL r3 and 25 affected
-cases pass; full backend (5,169 cases) and privacy gates pass. Currency, monthly aggregation,
-current contribution removal, derived-row rebuild and browser/native acceptance
-remain unfinished. Complete the financial producer/consumer reconciliation next,
-then the full native residency and ordered backlog. No new migration or paid
-activation in this continuation yet. Both feature PRs remain drafts.
+The [bill comparison report](home-bill-comparison-continuation-2026-09-11.md)
+records live, single-currency household/month SQL snapshots; immediate next-read
+contribution removal; matching-month Place values; retirement of the ambiguous
+cache writer; and browser currency/table/recovery work. Production HTTP/SQL,
+three observed snapshot/cancellation cases, extended cohort/delete contracts,
+38-version fresh replay / 43 pgTAP / six SDK cases and populated preservation
+pass. The report preserves test-order/fixture limits and native gaps. Full backend,
+web, types, lint/privacy and existing browser-summary regression pass. Browser
+financial r3 passes the complete journey, including malformed/currency/cohort
+shape rejection, two settings PATCHes, zero page errors and exact cleanup.
+
+**Next:** reconcile iOS/Android amount units, latest/matching months,
+currency/state presentation and installed acceptance. Verify actual Place
+financial overview/detail across clients. Old-client version compatibility is
+an explicit release gate. Continue native residency, submission/recovery,
+ownership/leases/resources, settings/privacy/entity flows and all ordered
+Home/Pulse/Beacon/payment/account/vendor/release backlog below. Keep paid services
+one final launch bundle. Do not equate a code checkpoint with complete acceptance.
+
+PR #32 stays draft; preceding `a74102c92` now passes all required CI, and each new
+pushed head needs its own checks. #34 stays draft `e9ef2decb`, green but conflicted
+and unfinished. Source is **38 Home / 47 combined**; no timestamp/content
+collisions, but combined dependency/replay reconciliation remains. Owned Docker,
+web/Gig DB remain running; the fresh bill replay is stopped with its backup. Owner files/devices/data remain
+untouched. No hosted database or paid-provider action occurred.
 
 ### Home summary and preference workflows — September 11
 

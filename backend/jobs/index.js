@@ -15,7 +15,6 @@
 //   - earnRiskReview             → every 15 minutes (Phase 2)
 //   - vaultWeeklyDigest          → Mondays at 9:00 AM (Phase 2)
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
-//   - billBenchmarkRefresh       → every 6 hours at :05 (Home Intelligence)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
 // ============================================================
@@ -78,7 +77,6 @@ const draftBusinessReminder = require('./draftBusinessReminder');
 // Mail escrow expiry
 const mailEscrowExpiry = require('./mailEscrowExpiry');
 // Home intelligence jobs
-const billBenchmarkRefresh = require('./billBenchmarkRefresh');
 const nfipTractWarm = require('./nfipTractWarm');
 const rateWatchEvaluate = require('./rateWatchEvaluate');
 // Monthly receipt
@@ -547,14 +545,7 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
-  // ─── Bill Benchmark Refresh (Home Intelligence) ───
-  // Runs every 6 hours at :05.
-  // Pre-computes anonymous neighborhood bill averages from paid HomeBill
-  // records. Groups by geohash-6, bill_type, month/year. Privacy: min 3 households.
-  scheduleCron('5 */6 * * *', wrapJob('billBenchmarkRefresh', billBenchmarkRefresh), {
-    scheduled: true,
-    timezone: 'UTC',
-  });
+  // Bill comparisons use current SQL snapshots; the legacy cache writer is retired.
 
   // ─── NFIP Tract Warm (Home Intelligence) ───
   // Runs every 15 minutes at :08/:23/:38/:53.

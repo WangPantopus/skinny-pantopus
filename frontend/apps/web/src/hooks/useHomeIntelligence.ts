@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { HomeHealthScore, SeasonalChecklist, BillTrendData, PropertyValueData, HomeTimelineItem } from '@pantopus/types';
+import { validBillTrendData } from '@/components/home/validBillTrendData';
 
 type SummaryKey = 'health' | 'checklist' | 'bills' | 'property' | 'timeline';
 const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
@@ -45,6 +46,7 @@ function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>
 }
 
 export function useHomeIntelligence(homeId: string | undefined, can: (permission: string) => boolean, onDenied: () => void) {
+  const [billCurrency, setBillCurrency] = useState('USD');
   const readHealth = useCallback(async () => {
     const result = await api.homeProfile.getHomeHealthScore(homeId!, { force: true });
     if (!result || !Number.isFinite(result.score) || !result.breakdown) throw new Error('Invalid health response');
@@ -56,10 +58,10 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
     return result;
   }, [homeId]);
   const readBills = useCallback(async () => {
-    const result = await api.homeProfile.getBillTrends(homeId!);
-    if (!result || !result.bills_by_type || !result.benchmarks || typeof result.bill_benchmark_opt_in !== 'boolean') throw new Error('Invalid bill response');
+    const result = await api.homeProfile.getBillTrends(homeId!, billCurrency);
+    if (!validBillTrendData(result, billCurrency)) throw new Error('Invalid bill response');
     return result;
-  }, [homeId]);
+  }, [homeId, billCurrency]);
   const readProperty = useCallback(async () => {
     const result = await api.homeProfile.getPropertyValue(homeId!);
     if (!result || !Object.hasOwn(result, 'estimated_value') || result.source === 'error') throw new Error('Invalid property response');
@@ -85,6 +87,7 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
   const [seasonTransition, setSeasonTransition] = useState<{ from: string; toKey: string; toLabel: string } | null>(null);
 
   useEffect(() => { deferred.current = { bills: false, property: false, timeline: false }; }, [homeId]);
+  useEffect(() => { if (canReadBills && deferred.current.bills) void loadBills(); }, [canReadBills, loadBills]);
   useEffect(() => { if (canReadHealth) void loadHealth(); void loadChecklist(); }, [canReadHealth, loadHealth, loadChecklist]);
   useEffect(() => {
     const season = checklist.data?.season;
@@ -152,6 +155,7 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
   return {
     healthScore: health.data, healthLoading: health.loading,
     checklist: checklist.data, checklistLoading: checklist.loading, checklistBusy,
+    billCurrency, setBillCurrency,
     billTrends: bills.data, billTrendsLoading: bills.loading, benchmarkBusy,
     propertyValue: property.data, propertyValueLoading: property.loading,
     timeline: timeline.data?.items || [], timelinePage: timeline.data?.page || 1,

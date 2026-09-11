@@ -11,6 +11,7 @@ interface BillTrendChartProps {
   onTypeChange: (type: string) => void;
   loading: boolean;
   savingPreference?: boolean;
+  onCurrencyChange?: (currency: string) => void;
   /** Called when user clicks "Add a bill" in the empty state. */
   onAddBill?: () => void;
   /** Called when the user toggles the benchmark opt-in switch. */
@@ -29,12 +30,11 @@ const MONTH_SHORT = [
 ];
 
 function monthLabel(iso: string): string {
-  const d = new Date(iso);
-  return MONTH_SHORT[d.getMonth()] ?? iso.slice(5, 7);
+  return `${MONTH_SHORT[Number(iso.slice(5, 7)) - 1] ?? iso.slice(5, 7)} ${iso.slice(2, 4)}`;
 }
 
-function fmtAmount(value: number): string {
-  return `$${Math.round(value).toLocaleString()}`;
+function fmtAmount(value: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 
 function capitalize(s: string): string {
@@ -51,13 +51,14 @@ export default function BillTrendChart({
   onTypeChange,
   loading,
   savingPreference = false,
+  onCurrencyChange,
   onAddBill,
   onOptInChange,
 }: BillTrendChartProps) {
   // ── Loading skeleton ───────────────────────────────────────
   if (loading) {
     return (
-      <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+      <div className="min-w-0 rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
         <div className="flex flex-wrap gap-2 mb-4">
           {[80, 60, 70].map((w, i) => (
             <div
@@ -80,6 +81,16 @@ export default function BillTrendChart({
     );
   }
 
+  const currency = data?.currency || 'USD';
+  const currencies = [...new Set(['USD', currency, ...(data?.available_currencies || [])])];
+  const currencyControl = <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-app-text-secondary">
+    <span>Paid bills by period-start month</span>
+    {onCurrencyChange ? <label className="flex items-center gap-2">Currency
+      <select aria-label="Bill comparison currency" value={currency} disabled={savingPreference} onChange={e => onCurrencyChange(e.target.value)} className="rounded border border-app-border bg-app-surface p-1 text-app-text">
+        {currencies.map(code => <option key={code} value={code}>{code}</option>)}
+      </select>
+    </label> : <span>{currency}</span>}
+  </div>;
   const sharingControl = data ? <>
       {savingPreference && <p role="status" className="mt-2 text-sm text-app-text-secondary">Saving sharing preference…</p>}
       {onOptInChange ? (
@@ -109,14 +120,15 @@ export default function BillTrendChart({
   const types = data ? Object.keys(data.bills_by_type) : [];
   if (!data || types.length === 0) {
     return (
-      <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+      <div className="min-w-0 rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+        {currencyControl}
         <div className="flex flex-col items-center gap-1 py-6">
           <Receipt className="h-8 w-8 text-primary" />
           <p className="mt-1 text-sm font-medium text-app-text">
-            Track your household bills
+            No paid {currency} bill history yet
           </p>
           <p className="text-xs text-app-text-secondary text-center">
-            Bills from your mailbox will appear here automatically. You can also add bills manually.
+            Paid bills with a period start in the last 24 months appear here. You can also add a bill.
           </p>
           {onAddBill && (
             <button
@@ -143,43 +155,19 @@ export default function BillTrendChart({
   const benchmark = !benchmarkInsufficient ? rawBenchmark : null;
   const showBenchmark = !!(benchmark && benchmark.household_count >= 10);
 
-  // ── Compute max value for bar scaling ──────────────────────
-  const allAmounts = [
-    ...typeData.amounts,
-    ...(showBenchmark ? benchmark.avg_amounts : []),
-  ];
-  const maxAmount = Math.max(...allAmounts, 1);
-
-  // ── User average ───────────────────────────────────────────
-  const userTotal = typeData.amounts.reduce((a, b) => a + b, 0);
-  const userAvg =
-    typeData.amounts.length > 0 ? userTotal / typeData.amounts.length : 0;
-
-  // ── Benchmark average & comparison ─────────────────────────
-  let benchAvg = 0;
-  let pctDiff = 0;
-  let diffDir: 'above' | 'below' | 'same' = 'same';
-
-  if (showBenchmark) {
-    const bTotal = benchmark.avg_amounts.reduce(
-      (a: number, b: number) => a + b,
-      0,
-    );
-    benchAvg =
-      benchmark.avg_amounts.length > 0
-        ? bTotal / benchmark.avg_amounts.length
-        : 0;
-    if (benchAvg > 0) {
-      pctDiff = Math.round(
-        (Math.abs(userAvg - benchAvg) / benchAvg) * 100,
-      );
-      diffDir =
-        userAvg > benchAvg ? 'above' : userAvg < benchAvg ? 'below' : 'same';
-    }
-  }
+  // Match actual calendar months; array positions are not comparison periods.
+  const peerByMonth = new Map(showBenchmark ? benchmark.months.map((month, i) => [month, benchmark.avg_amounts[i]]) : []);
+  const matches = typeData.months.flatMap((month, i) => peerByMonth.has(month) ? [{ own: typeData.amounts[i], peer: peerByMonth.get(month)! }] : []);
+  const maxAmount = Math.max(...typeData.amounts, ...matches.map(row => row.peer), 1);
+  const userAvg = matches.length ? matches.reduce((sum, row) => sum + row.own, 0) / matches.length : 0;
+  const benchAvg = matches.length ? matches.reduce((sum, row) => sum + row.peer, 0) / matches.length : 0;
+  const pctDiff = benchAvg > 0 ? Math.round(Math.abs(userAvg-benchAvg) / benchAvg * 100) : 0;
+  const diffDir = userAvg > benchAvg ? 'above' : userAvg < benchAvg ? 'below' : 'same';
+  const recordedAvg = typeData.amounts.reduce((sum, amount) => sum + amount, 0) / typeData.amounts.length;
 
   return (
-    <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+    <div className="min-w-0 rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+      {currencyControl}
       {/* Type selector pills */}
       <div className="flex flex-wrap gap-2 mb-4">
         {types.map((t) => (
@@ -189,7 +177,7 @@ export default function BillTrendChart({
             onClick={() => onTypeChange(t)}
             className={
               t === activeType
-                ? 'rounded-full px-3 py-1.5 text-xs font-semibold bg-primary text-white transition-colors'
+                ? 'rounded-full px-3 py-1.5 text-xs font-semibold bg-primary-600 text-white transition-colors'
                 : 'rounded-full px-3 py-1.5 text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-secondary hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors'
             }
           >
@@ -199,33 +187,33 @@ export default function BillTrendChart({
       </div>
 
       {/* Bar chart */}
-      <div className="flex items-end gap-1" style={{ height: BAR_MAX_HEIGHT + 20 }}>
+      <div className="flex items-end gap-1 overflow-x-auto pb-2" style={{ height: BAR_MAX_HEIGHT + 38 }} tabIndex={0} aria-label="Monthly bill chart">
         {typeData.months.map((month, i) => {
           const userH = (typeData.amounts[i] / maxAmount) * BAR_MAX_HEIGHT;
-          const benchH = showBenchmark
-            ? (benchmark.avg_amounts[i] / maxAmount) * BAR_MAX_HEIGHT
-            : 0;
+          const peerAmount = peerByMonth.get(month);
+          const benchH = peerAmount == null ? 0 : (peerAmount / maxAmount) * BAR_MAX_HEIGHT;
+          const label = `${month}: your total ${fmtAmount(typeData.amounts[i], currency)}${peerAmount == null ? ' · No comparison for this month' : ` · Comparison ${fmtAmount(peerAmount, currency)}`}`;
 
           return (
-            <div key={month} className="flex-1 flex flex-col items-center">
+            <div key={month} role="img" aria-label={label} title={label} className="min-w-12 flex-1 flex flex-col items-center">
               <div
                 className="flex items-end justify-center gap-px w-full"
                 style={{ height: BAR_MAX_HEIGHT }}
               >
                 {/* User bar */}
                 <div
-                  className="flex-1 max-w-[20px] rounded-sm bg-primary"
+                  className="flex-1 max-w-[20px] rounded-sm bg-primary-600"
                   style={{ height: Math.max(userH, 2) }}
                 />
                 {/* Benchmark bar */}
-                {showBenchmark && (
+                {peerAmount != null && (
                   <div
                     className="flex-1 max-w-[20px] rounded-sm bg-gray-300 dark:bg-gray-600"
                     style={{ height: Math.max(benchH, 2) }}
                   />
                 )}
               </div>
-              <span className="text-[9px] text-secondary mt-1 leading-none">
+              <span className="whitespace-nowrap text-[10px] text-secondary mt-1 leading-none">
                 {monthLabel(month)}
               </span>
             </div>
@@ -233,11 +221,29 @@ export default function BillTrendChart({
         })}
       </div>
 
+      <p className="mt-3 text-xs text-app-text-secondary">
+        Your recorded average: {fmtAmount(recordedAvg, currency)}/month across {typeData.months.length} month{typeData.months.length === 1 ? '' : 's'}.
+      </p>
+      <details className="mt-2 text-xs text-app-text-secondary">
+        <summary className="cursor-pointer rounded py-1 font-medium text-app-text focus-visible:outline-primary-600">View monthly amounts</summary>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-left tabular-nums">
+            <caption className="sr-only">{capitalize(activeType)} monthly totals in {currency}</caption>
+            <thead><tr><th className="py-1 pr-2">Month</th><th className="py-1 pr-2">Your total</th><th className="py-1">Comparison</th></tr></thead>
+            <tbody>{typeData.months.map((month, i) => <tr key={month} className="border-t border-app-border">
+              <th scope="row" className="whitespace-nowrap py-2 pr-2 font-normal">{monthLabel(month)}</th>
+              <td className="whitespace-nowrap py-2 pr-2">{fmtAmount(typeData.amounts[i], currency)}</td>
+              <td className="whitespace-nowrap py-2">{peerByMonth.has(month) ? fmtAmount(peerByMonth.get(month)!, currency) : 'Unavailable'}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </details>
+
       {/* Legend */}
       {showBenchmark && (
         <div className="flex gap-4 mt-3">
           <div className="flex items-center gap-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-primary" />
+            <span className="inline-block w-2 h-2 rounded-full bg-primary-600" />
             <span className="text-[10px] text-secondary">You</span>
           </div>
           <div className="flex items-center gap-1">
@@ -248,11 +254,11 @@ export default function BillTrendChart({
       )}
 
       {/* Summary + comparison */}
-      {showBenchmark && (
+      {matches.length > 0 && (
         <div className="mt-3 pt-3 border-t border-app-border">
           <p className="text-xs text-secondary leading-snug">
-            Your {activeType} bill: {fmtAmount(userAvg)}/mo avg. Neighborhood:{' '}
-            {fmtAmount(benchAvg)}/mo avg.
+            Across {matches.length} matching month{matches.length === 1 ? '' : 's'}: your {activeType} bill: {fmtAmount(userAvg, currency)}/mo avg. Neighborhood:{' '}
+            {fmtAmount(benchAvg, currency)}/mo avg.
           </p>
           {diffDir !== 'same' && pctDiff > 0 && (
             <span
@@ -267,6 +273,8 @@ export default function BillTrendChart({
           )}
         </div>
       )}
+
+      {showBenchmark && matches.length === 0 && <p className="mt-3 text-xs text-app-text-secondary">No comparison covers the same months as these bills.</p>}
 
       {/* Insufficient data message (3-9 households) */}
       {!showBenchmark && benchmarkInsufficient && rawBenchmark && (

@@ -14,5 +14,5 @@ export default function HomeSummaryBoundary({ title, error, loading, onRetry, ch
       </button>
     </section>
   );
-  return <div aria-label={title} aria-busy={loading}>{children}</div>;
+  return <div className="min-w-0" aria-label={title} aria-busy={loading}>{children}</div>;
 }

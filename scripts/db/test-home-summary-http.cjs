@@ -66,8 +66,8 @@ async function main() {
     console.log('PASS: timeline follows audit authority, query failure stays unavailable, property error differs from absence without provider calls');
 
     r = await request('/bill-trends'); assert.equal(r.status, 200, JSON.stringify(f.diagnostics)); assert.equal(r.body.bill_benchmark_opt_in, false);
-    f.failNextQuery('HomePreference'); r = await request('/bill-trends'); assert.equal(r.status, 503); assert(!('bill_benchmark_opt_in' in r.body));
-    f.failNextQuery('HomeBill', true); r = await request('/bill-trends'); assert.equal(r.status, 500); assert(!('bills_by_type' in r.body));
+    f.failNextRpc('get_home_bill_comparison'); r = await request('/bill-trends'); assert.equal(r.status, 503); assert(!('bill_benchmark_opt_in' in r.body));
+    f.failNextRpc('get_home_bill_comparison', true); r = await request('/bill-trends'); assert.equal(r.status, 503); assert(!('bills_by_type' in r.body));
     r = await request('/settings', 'PATCH', { preferences: { bill_benchmark_opt_in: true } }); assert.equal(r.status, 200);
     r = await request('/bill-trends'); assert.equal(r.body.bill_benchmark_opt_in, true);
     r = await request('/settings', 'PATCH', { preferences: { bill_benchmark_opt_in: 'invalid' } }); assert.equal(r.status, 400);
@@ -91,9 +91,9 @@ async function main() {
       INSERT INTO public."BillBenchmark"(id,geohash,bill_type,month,year,avg_amount_cents,household_count) VALUES
         (${q(id(804))},'s00000','fixture_summary',1,1901,100,4),(${q(id(805))},'s00000','fixture_summary',2,1901,200,12); COMMIT;`);
     r = await request('/bill-trends'); assert.equal(r.status, 200, JSON.stringify(f.diagnostics));
-    assert.deepEqual(r.body.benchmarks.fixture_summary.months, ['1901-02']);
-    f.failNextQuery('BillBenchmark'); r = await request('/bill-trends'); assert.equal(r.status, 503); assert(!('benchmarks' in r.body));
-    console.log('PASS: actual mixed cohort comparison keeps only displayable months and benchmark failure remains unavailable; currency contract is separately unresolved');
+    assert.deepEqual(r.body.benchmarks, {});
+    f.failNextRpc('get_home_bill_comparison'); r = await request('/bill-trends'); assert.equal(r.status, 503); assert(!('benchmarks' in r.body));
+    console.log('PASS: legacy cached rows remain stored but never enter current comparisons; snapshot failure remains unavailable');
   } finally {
     if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
     if (extra) sql(`BEGIN; DELETE FROM public."BillBenchmark" WHERE id IN (${[id(804),id(805)].map(q)}); DELETE FROM public."HomeSeasonalChecklistItem" WHERE home_id IN (${[home, second].map(q)}); DELETE FROM public."Home" WHERE id=${q(second)}; COMMIT;`);
