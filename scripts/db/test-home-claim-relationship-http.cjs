@@ -42,11 +42,11 @@ const flags = { inviteMerge: true };
 Module._load = function(request, parent, isMain) {
   if (parent?.filename.endsWith('/services/homeClaimRelationshipService.js') && request === '../config/supabaseAdmin') return db;
   if (parent?.filename.endsWith('/routes/homeOwnership.js')) {
-    if (request === '../middleware/verifyToken') return (req, res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+    if (request === '../middleware/verifyToken') return (req, res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; req.session = { id: 'relationship-http' }; next(); };
     if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
     if (request === '../config/householdClaims') return { flags };
     if (request === '../utils/logger') return { info() {}, warn() {}, error() {} };
-    if (!['express', 'joi', '../middleware/validate', '../services/homeClaimRelationshipService'].includes(request)) return {};
+    if (!['express', 'joi', '../middleware/validate', '../services/homeClaimRelationshipService', '../utils/requestSessionScope'].includes(request)) return {};
   }
   return load.call(this, request, parent, isMain);
 };

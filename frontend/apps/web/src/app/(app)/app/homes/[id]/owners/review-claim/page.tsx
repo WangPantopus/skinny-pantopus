@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, CheckCircle, Check, Flag, Shield, User, UserPlus, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
@@ -25,22 +26,46 @@ function ReviewClaimContent() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ClaimTab>('ownership');
+  const [loadError, setLoadError] = useState({ ownership: '', residency: '' });
+  const [reload, setReload] = useState(0);
+  const generation = useRef(0);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchClaims = useCallback(async () => {
     if (!homeId) return;
+    const request = ++generation.current;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const [ownershipRes, residencyRes, comparisonRes] = await Promise.allSettled([
       api.homeOwnership.getHomeOwnershipClaims(homeId),
       api.homes.getHomeClaims(homeId),
       api.homeOwnership.getOwnershipClaimComparison(homeId),
     ]);
-    if (ownershipRes.status === 'fulfilled') setClaims(ownershipRes.value.claims || []);
-    if (residencyRes.status === 'fulfilled') setResidencyClaims(residencyRes.value.claims || []);
+    if (request !== generation.current || token !== getAuthToken() || marker !== localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)) return;
+    setClaims(ownershipRes.status === 'fulfilled' ? ownershipRes.value.claims || [] : []);
+    setResidencyClaims(residencyRes.status === 'fulfilled' ? residencyRes.value.claims || [] : []);
+    setLoadError({ ownership: ownershipRes.status === 'rejected' ? 'Current ownership claims could not be loaded. Reload to check access.' : '',
+      residency: residencyRes.status === 'rejected' ? 'Current residency claims could not be loaded. Reload to check access.' : '' });
     setComparison(comparisonRes.status === 'fulfilled' ? comparisonRes.value : null);
   }, [homeId]);
 
-  useEffect(() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }, [fetchClaims]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setClaims([]); setResidencyClaims([]); setComparison(null); setLoadError({ ownership: '', residency: '' });
+    void fetchClaims().catch(() => { if (active) setLoadError({ ownership: 'Current claims could not be loaded.', residency: 'Current claims could not be loaded.' }); })
+      .finally(() => { if (active) setLoading(false); });
+    const retireGeneration = () => { generation.current++; };
+    const invalidate = () => { retireGeneration(); setClaims([]); setResidencyClaims([]); setComparison(null); setActionLoading(null); };
+    const changed = () => { invalidate(); setReload(n => n + 1); };
+    const visibility = () => { if (document.visibilityState === 'hidden') { invalidate(); setLoading(true); } else changed(); };
+    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage); window.addEventListener('focus', focus); document.addEventListener('visibilitychange', visibility);
+    return () => { active = false; retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+  }, [fetchClaims, reload]);
 
   const handleOwnershipReview = useCallback(async (claimId: string, action: 'approve' | 'reject' | 'flag') => {
     setActionLoading(claimId);
@@ -67,6 +92,11 @@ function ReviewClaimContent() {
     claim: any,
     action: 'invite_to_household' | 'decline_relationship' | 'flag_unknown_person',
   ) => {
+    if (action !== 'invite_to_household') {
+      router.push(`/app/homes/${homeId}/owners/review-claim/relationship?claimId=${encodeURIComponent(claim.id)}&action=${action}`);
+      return;
+    }
+    const opening = generation.current;
     const claimId = claim.id;
     const isOwnerClaim = (claim.claim_type || 'owner') === 'owner';
     const actionMeta = {
@@ -78,34 +108,22 @@ function ReviewClaimContent() {
         confirmLabel: isOwnerClaim ? 'Invite as owner' : 'Send invite',
         variant: 'primary' as const,
       },
-      decline_relationship: {
-        title: 'Let review continue',
-        description: 'This keeps the claimant on the normal review path without changing their evidence.',
-        confirmLabel: 'Continue review',
-        variant: 'primary' as const,
-      },
-      flag_unknown_person: {
-        title: 'Flag unknown claimant',
-        description: 'This marks the claimant for admin review.',
-        confirmLabel: 'Flag claimant',
-        variant: 'destructive' as const,
-      },
     };
 
     const yes = await confirmStore.open(actionMeta[action]);
-    if (!yes) return;
+    if (!yes || opening !== generation.current) return;
 
     setActionLoading(claimId);
     try {
       await api.homeOwnership.resolveOwnershipClaimRelationship(homeId!, claimId, { action });
-      toast.success(action === 'invite_to_household' ? 'Invitation sent.' : 'Claim updated.');
+      toast.success('Invitation sent.');
       await fetchClaims();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update claimant relationship');
     } finally {
       setActionLoading(null);
     }
-  }, [homeId, fetchClaims]);
+  }, [homeId, fetchClaims, router]);
 
   const handleResidencyReview = useCallback(async (claimId: string, action: 'approve' | 'reject') => {
     const labels = { approve: 'Approve', reject: 'Deny' };
@@ -150,6 +168,9 @@ function ReviewClaimContent() {
         <h1 className="text-xl font-bold text-app-text">Review Claims</h1>
       </div>
 
+      <Link href={`/app/homes/${homeId}/owners/review-claim/relationship`} prefetch={false}
+        className="mb-5 inline-block text-sm underline">Relationship decisions and recovery</Link>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-5">
         {(['ownership', 'residency'] as ClaimTab[]).map((tab) => {
@@ -165,8 +186,12 @@ function ReviewClaimContent() {
         })}
       </div>
 
+      {loadError[activeTab] && <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <p>{loadError[activeTab]}</p><button className="underline" onClick={() => setReload(n => n + 1)}>Reload claims</button>
+      </div>}
+
       {/* Ownership Claims */}
-      {activeTab === 'ownership' && (
+      {activeTab === 'ownership' && !loadError.ownership && (
         pendingClaims.length === 0 ? (
           <div className="text-center py-16">
             <CheckCircle className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
@@ -273,7 +298,7 @@ function ReviewClaimContent() {
       )}
 
       {/* Residency Claims */}
-      {activeTab === 'residency' && (
+      {activeTab === 'residency' && !loadError.residency && (
         pendingResidency.length === 0 ? (
           <div className="text-center py-16">
             <CheckCircle className="w-10 h-10 mx-auto text-app-text-muted mb-3" />

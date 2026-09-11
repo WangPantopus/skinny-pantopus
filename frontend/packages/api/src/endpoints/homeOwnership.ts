@@ -282,6 +282,33 @@ export async function uploadClaimEvidence(homeId: string, claimId: string, data:
   return post(`/api/homes/${homeId}/ownership-claims/${claimId}/evidence`, data);
 }
 
+export type RelationshipAction = 'decline_relationship' | 'flag_unknown_person';
+export interface RelationshipCommand { action: RelationshipAction; note: string; request_id: string; review_token: string }
+export interface RelationshipReceipt {
+  id: string; home_id: string; claim_id: string; actor_id: string; request_id: string;
+  action: RelationshipAction; legacy_request: boolean; request_hash: string; review_token: string;
+  created_at: string; result: { state: string; claim_phase_v2: string | null; routing_classification: string | null;
+    challenge_state: string | null; claim_strength: string | null; qualifies_for_dispute: boolean };
+}
+export interface RelationshipResponse {
+  ok: true; homeId: string; claimId: string; claimantId: string; action: RelationshipAction;
+  replayed: boolean; receipt: RelationshipReceipt; message: string;
+  claim: { id: string; state: string; claim_phase_v2: string | null; review_token: string };
+  home_resolution_state: HouseholdResolutionState;
+}
+export interface RelationshipReview {
+  claim: OwnershipClaimDetail & { claimant_user_id: string; terminal_reason: string; merged_into_claim_id: string | null; expires_at: string | null };
+  relationship_session: { actor_id: string; home_id: string; session_scope: string };
+}
+export async function getRelationshipReview(homeId: string, claimId: string, sessionScope?: string): Promise<RelationshipReview> {
+  return get(`/api/homes/${homeId}/ownership-claims/${claimId}/relationship-decision`, undefined,
+    { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
+}
+export async function decideClaimRelationship(homeId: string, claimId: string, command: RelationshipCommand, sessionScope: string): Promise<RelationshipResponse> {
+  return post(`/api/homes/${homeId}/ownership-claims/${claimId}/resolve-relationship`, command,
+    { headers: { 'x-pantopus-session-scope': sessionScope } });
+}
+
 export async function resolveOwnershipClaimRelationship(homeId: string, claimId: string, data: {
   action: 'invite_to_household' | 'decline_relationship' | 'flag_unknown_person';
   note?: string;

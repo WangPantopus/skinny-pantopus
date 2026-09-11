@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser claimant relationship review and recovery — September 10
+
+The [browser relationship report](home-web-claim-relationship-recovery-2026-09-10.md)
+records explicit current review, encrypted original/confirmation recovery and a
+permanent recovery link after claims leave the pending queue. Actual Chrome →
+production GET/POST/service → SQL passes six submissions yielding three receipts,
+current later rejection, stale review, competing tabs, key/draft write failures,
+corruption/restoration, current access/account changes, held preflight lifecycle
+changes and keyboard/narrow layouts. Pending evidence flags go to admin review;
+qualifying evidence can enter dispute review without freezing the Home. The
+claims list now clears stale rows and reports refresh denial honestly. Final
+web types/lint and 1,178 checks pass; full backend/privacy pass on CI's Node 22
+line. The report retains the separate Node 24 logout socket observation and
+all synthetic/provider limits. Seven screen captures were visually reviewed.
+
+**Next:** iOS prepared relationship review and Keychain original/confirmation
+recovery with installed HTTP/SQL acceptance, then Android parity. Continue
+residency receipts, ownership transfer/challenge and lease/resource cleanup.
+Backend `3e421b5c3` has three iOS device jobs and Android lint/test/assemble still
+running; other reported jobs pass. The older Android run was superseded/cancelled,
+not fully green. Refresh the new exact head before relying on CI. PRs #32/#34
+stay drafts; paid #34 `e9ef2decb` stays green but unfinished. Combined 43-version
+migration dependencies/replay remain open. Keep all paid dependencies in one
+final launch bundle. Exact browser/SQL fixtures are cleaned; owned web and Gig
+database runtimes are stopped, retaining the local backup. Owner files/runtimes
+are preserved. Actual workflows and visible behavior remain the completion test.
+
 ### Recoverable claimant relationship decisions — September 10
 
 The [relationship decision report](home-claim-relationship-decisions-2026-09-10.md)

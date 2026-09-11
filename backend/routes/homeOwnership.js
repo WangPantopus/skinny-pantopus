@@ -528,6 +528,21 @@ router.post('/:id/ownership-claims/:claimId/evidence', verifyToken, validate(upl
   } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
+/** Current ordinary relationship review, bound to the opening authenticated session. */
+router.get('/:id/ownership-claims/:claimId/relationship-decision', verifyToken, async (req, res) => {
+  try {
+    if (!householdClaimConfig.flags.inviteMerge) return res.status(404).json({ error: 'Relationship resolution not enabled' });
+    if (!requireExpectedSessionScope(req, res)) return;
+    const session = getRequestSessionScope(req);
+    const result = await homeClaimReviewService.read({ homeId: req.params.id, claimId: req.params.claimId, actorId: req.user.id });
+    if (['frozen', 'frozen_silent', 'disputed'].includes(result.home?.security_state)) {
+      return res.status(403).json({ code: 'CLAIM_REVIEW_DENIED', error: 'Current Home access does not allow relationship review.' });
+    }
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ claim: result.claim, relationship_session: { ...session, home_id: req.params.id } });
+  } catch (error) { homeClaimReviewService.sendError(res, error); }
+});
+
 /**
  * POST /:id/ownership-claims/:claimId/resolve-relationship
  * Verified household authority resolves another claimant by invite, decline, or dispute flag.
@@ -538,6 +553,8 @@ router.post('/:id/ownership-claims/:claimId/resolve-relationship', verifyToken, 
       return res.status(404).json({ error: 'Relationship resolution not enabled' });
     }
 
+    if (!requireExpectedSessionScope(req, res)) return;
+    res.set('Cache-Control', 'private, no-store');
     const { id: homeId, claimId } = req.params;
     const userId = req.user.id;
     const { action, note } = req.body;

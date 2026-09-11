@@ -3,7 +3,29 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [relationship decision report](home-claim-relationship-decisions-2026-09-10.md)
+The newest [browser relationship report](home-web-claim-relationship-recovery-2026-09-10.md)
+completes explicit browser review and encrypted original/confirmation recovery,
+including access through a permanent link after the claim leaves pending review.
+Actual Chrome → production HTTP/service → SQL passes six submissions/three
+receipts, lost replies, later rejection, stale review, competing tabs, key/draft
+write failures, ciphertext corruption/restoration, current revocation/account
+changes and held preflight/background recovery. Keyboard/narrow acceptance and
+seven visual captures pass. Stale claims-list retention/false empty states are
+fixed. Types/lint and all web checks pass; full backend/privacy pass on CI's
+Node 22 line. The separate Node 24 socket observation remains documented.
+
+Next is iOS relationship review with Keychain original/confirmation recovery and
+installed HTTP/SQL acceptance, then Android, residency receipts and remaining
+ownership/lease/resource work. Backend `3e421b5c3` still has three iOS device jobs
+and Android lint/test/assemble running; other reported jobs pass. Refresh the
+new exact head. Older Android CI was superseded/cancelled, not fully green.
+Both PRs stay draft, paid #34 stays `e9ef2decb` and unfinished, combined 43-version
+dependencies/replay remain open, and paid services stay one final launch bundle.
+Exact fixtures/listeners are cleaned; the owned web and Gig database are stopped
+with the local backup retained. Owner files and runtimes remain untouched.
+Older next actions below are historical.
+
+The preceding [relationship decision report](home-claim-relationship-decisions-2026-09-10.md)
 records atomic decline/flag decisions, current authority and original/current
 receipt recovery. Actual production HTTP/service/SQL and 12 observed races pass.
 Pending/untrusted evidence no longer creates a property dispute. Final fresh

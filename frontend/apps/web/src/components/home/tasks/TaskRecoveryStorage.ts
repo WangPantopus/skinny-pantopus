@@ -9,8 +9,8 @@ export function openTaskRecoveryDatabase(): Promise<IDBDatabase> {
       request.result.createObjectStore('keys');
       request.result.createObjectStore('drafts');
     };
-    request.onerror = () => reject(new Error('Protected task recovery storage could not be opened.'));
-    request.onblocked = () => reject(new Error('Close older Pantopus tabs, then reopen task recovery.'));
+    request.onerror = () => reject(new Error('Protected recovery storage could not be opened.'));
+    request.onblocked = () => reject(new Error('Close older Pantopus tabs, then reopen recovery.'));
     request.onsuccess = () => {
       const db = request.result;
       db.onversionchange = () => { db.close(); database = undefined; };
@@ -27,7 +27,7 @@ export function readTaskRecoveryValue<T>(db: IDBDatabase, store: string, key: st
     const request = transaction.objectStore(store).get(key);
     request.onsuccess = () => { value = request.result as T | undefined; };
     transaction.oncomplete = () => resolve(value);
-    transaction.onabort = transaction.onerror = () => reject(new Error('Protected task recovery could not be read.'));
+    transaction.onabort = transaction.onerror = () => reject(new Error('Protected recovery could not be read.'));
   });
 }
 
@@ -44,9 +44,11 @@ export async function taskRecoveryEncryptionKey(db: IDBDatabase, keyId: string):
     let selected: CryptoKey;
     request.onsuccess = () => {
       selected = request.result || candidate;
-      if (!request.result) keys.put(selected, keyId);
+      // A synchronous quota/security failure must reject the protected write,
+      // not escape this callback or leave the caller waiting on initialization.
+      try { if (!request.result) keys.put(selected, keyId); } catch { transaction.abort(); }
     };
     transaction.oncomplete = () => resolve(selected);
-    transaction.onabort = transaction.onerror = () => reject(new Error('Protected task recovery could not be initialized.'));
+    transaction.onabort = transaction.onerror = () => reject(new Error('Protected recovery could not be initialized.'));
   });
 }
