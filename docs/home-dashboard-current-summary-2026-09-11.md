@@ -32,15 +32,92 @@ was running; its downstream CI OK failure is not a completed pass. Both feature
 PRs remain unfinished drafts; #34 still conflicts. No migration or paid/hosted
 change; combined 47-version dependency/replay work remains.
 
-Native iOS access/lifecycle, strict aggregate, safe identity, truthful empty/
-property copy and checklist layout are still an uncommitted candidate. Signed
-build r2/r3 pass; installed r2 is running on owned simulator F9BBAB33. Installed
-r1 had missing opt-in environment in the v1 xctestrun and skipped; it provides no
-workflow acceptance. Final Swift quality and affected auth/model verification
-remain. Android safe identity edits remain a draft without installed proof.
-The owned native fixture r2 on 18083 uses actual dashboard/record/intelligence
-services and SQL; identity and Home list/detail shell are synthetic. Finish and
-clean it exactly. Owner source/devices/data remain untouched.
+## iOS current-Home read milestone
+
+The native Home now requires the production authority envelope before detail and
+aggregate reads, validates their Home identities and permission agreement, and
+rechecks authority before publication. There is no public-profile fallback or
+successful zero summary for a missing/malformed aggregate. Explicit grants gate
+cards, summary sections and actions. Own pending residency and ownership contexts
+have different entry copy; a non-owner is not automatically offered ownership.
+An exact independently authorized task collection preserves private creator
+first use. These read checks do not substitute for record mutation capabilities.
+
+Suspension/disappearance clears private summaries, cards, permissions and pending
+controls. Foreground/return rereads authority; generation and captured account/
+session checks retire earlier responses. Each intelligence card checks current
+authority before and after its read. Ordinary service failure offers Retry;
+unexpected denial or changed/unreadable authority retires the shared Home.
+Checklist editing requires home.edit and confirms returned item/status; returned
+Home identity and the broader mutation/recovery matrix remain next work.
+
+Aggregate decoding requires the actual counts/today/roster/activity structure and
+rejects negative counts. Safe display identity is preferred; date-only values
+retain the local calendar day. Missing emergency data is unconfirmed rather than
+silently unconfigured. Empty lists no longer claim everything is clear; dead
+See all labels are removed. Checklist titles/descriptions wrap, unavailable
+property estimates no longer promise verification will provide a value, and the
+sample attention total matches its four listed items.
+
+Verification:
+
+- Signed iOS build r8 passes. Changed-file SwiftFormat r8 and full SwiftLint r8
+  pass. Final affected model/API/auth step-up r3 passes 33 checks, including 401,
+  opt-in typed 403 versus normal denial, and password step-up/retry/header behavior.
+- Installed dashboard r3 passes all three journeys: populated real SQL summaries,
+  safe identity, summary outage/malformed/wrong-Home recovery, explicit finance
+  denial, both applicants, revoked/frozen/denied Home entry, restoration, foreground
+  revocation, an already-produced obsolete aggregate, card Retry and private Tasks.
+- Screen review found r3's card Retry predicate could pass while loading. Focused
+  installed r4 now positively waits for a health score, an actual checklist item
+  and completed unavailable-estimate copy. It passes all three recoveries plus
+  private creator entry and the actual Tasks destination. Its evidence records
+  71 production Home reads/responses, zero fixture errors. Final pixels reviewed.
+- The bill fixture now uses production dashboard-access, aggregate and task reads.
+  Both installed bill-authority r1 journeys pass (546.5 seconds): USD/CAD separation,
+  matching monthly totals, held CAD retirement, 24-month cold history, reachable
+  latest month/Back, comparison opt-out/unmatched, malformed/legacy/wrong-currency/
+  service failure and retry, confirmed empty, denial and restoration. Recovery
+  evidence records 21 format-2 USD reads. Final restored amounts and history pixels
+  are reviewed. Its denial capture is still a loading skeleton; it is not finished
+  visual denial proof. Dashboard r3 separately positively confirms loaded finance
+  denial. Strengthen that bill-specific capture on its next native replay.
+- Native dashboard r3 and bill-authority r1 exact SQL cleanup pass. Both listeners
+  are stopped and owned iOS F9BBAB33 is shut down. Owner devices are untouched.
+
+Initial failures are retained: installed r1 skipped due to a missing opt-in in the
+v1 xctestrun; r2 exposed accessibility-container identifiers overriding Retry and
+limited-entry child controls. Explicit containment repaired them before full r3.
+Early builds exposed a missing limited-state switch and lint/format findings;
+final r8 passes. Model/auth r1 had one bad reused URLProtocol route; r2 was stopped
+because the replacement test invoked a real interactive shared-auth step-up
+prompt. Final r3 uses isolated auth/password-prompt fixtures and passes. None of
+those initial runs counts as completed acceptance.
+
+Private proof: `/private/tmp/pantopus-home-dashboard-ios-installed-{r3,r4}.xcresult`,
+matching attachment directories, `pantopus-home-dashboard-ios-lifecycle-{build,
+format,lint}-r8.log`, `pantopus-home-dashboard-ios-model-auth-r3.{log,xcresult}`,
+`/private/tmp/pantopus-native-bill-ios-authority-r1.{log,xcresult}` and attachments,
+`pantopus-native-home-dashboard-ui-fixture-r3.{log,json}` and
+`pantopus-native-bill-ui-authority-fixture-r1.{log,json}` under `/private/tmp/`.
+Generated iOS intermediates/module cache/index were removed after test completion
+to recover space; signed products, sources, logs, results and SQL remain.
+
+Limits and next work: login, Home list/detail shell and unrelated provider replies
+are controlled fixtures; production IAM/aggregate/tasks/intelligence use owned SQL.
+Actual account-switch UI, held intelligence/authority replies, network timeout,
+broader malformed nested data, generic-member role defaults, real Home detail and
+Verified header identity, full residency submission/review/recovery, record writes,
+small screens/Dynamic Type, physical devices and providers remain unfinished.
+Android now has an uncommitted current-access/lifecycle/strict-aggregate/UI candidate;
+quality/build/installed proof remain. Preserve the full Home/Place/Pulse/Beacon/
+account/payment/release backlog below and the final paid-service bundle.
+
+Backend `1341aea5e` now passes every required check in
+[its CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34606114320).
+The next iOS commit requires independent checks. No migration or hosted change;
+#32/#34 stay unfinished drafts, #34 conflicted, and 47-version combined replay/
+dependencies remain unreconciled.
 
 ## Populated browser and standalone list milestone
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Installed native UI -> production Home/Place HTTP/services -> owned SQL.
-// Identity, list/dashboard shell and unrelated provider responses are synthetic.
+// Identity, Home list/detail shell and unrelated provider responses are synthetic.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,11 +20,6 @@ const homeRow={id:home,owner_id:actor,name:'Bill UI Fixture',address:'1 Syntheti
 let initialized=false,server,mode='current',events=[],periods,holdCurrency=null,pendingBillReply=null;
 const state=()=>({home_id:home,mode,periods,events,held:!!pendingBillReply});
 function reset(){ pendingBillReply?.cancel();pendingBillReply=null;holdCurrency=null;if(initialized)f.cleanup(); periods=f.setup(); initialized=true;mode='current';events=[]; }
-const access=()=>{
-  const a=JSON.parse(sql(`SELECT public.home_effective_access(${q(home)},${q(actor)});`));
-  return {hasAccess:a.has_access,is_owner:a.is_owner,isOwner:a.is_owner,role_base:a.role_base,
-    effective_role_base:a.effective_role_base,permissions:a.permissions};
-};
 app.use(async(req,res,next)=>{
   const p=req.path,m=req.method; res.set('Cache-Control','private, no-store');
   try{
@@ -74,7 +69,7 @@ app.use(async(req,res,next)=>{
         return json(body);
       };return next();
     }
-    if(m==='GET' && ['/me','/iam/me','/health-score','/seasonal-checklist','/property-value'].some(s=>p===`/api/homes/${home}`+s))return next();
+    if(m==='GET' && ['/me','/iam/me','/dashboard-access','/dashboard','/tasks','/health-score','/seasonal-checklist','/property-value'].some(s=>p===`/api/homes/${home}`+s))return next();
     if(m==='GET'){
       if(['/api/users/profile','/api/users/me'].includes(p))return res.json({user,...user});
       if(p==='/api/hub')return res.json({user,context:{activeHomeId:home,activePersona:{type:'personal'}},
@@ -84,7 +79,6 @@ app.use(async(req,res,next)=>{
       if(p==='/api/homes'||p.endsWith('/my-homes'))return res.json({homes:[homeRow]});
       if(p==='/api/homes/primary')return res.json({home:homeRow});
       if(p===`/api/homes/${home}`)return res.json({home:homeRow});
-      if(p===`/api/homes/${home}/dashboard`)return res.json({home:homeRow,myAccess:access(),members:[],tasks:[],bills:[],issues:[],packages:[],events:[],documents:[]});
       if(p.endsWith('/unread-count'))return res.json({count:0,unread_count:0,unreadCount:0});
       if(p==='/api/notifications')return res.json({notifications:[],unreadCount:0,pagination:{page:1,totalPages:0,total:0}});
       if(p.includes('/claims'))return res.json({claims:[]});

@@ -1,6 +1,6 @@
 // Current household/currency/month comparison fixture on the owned local DB.
 module.exports = function(container) {
-  const f = require('./home-residency-review-http-fixture.cjs')(container, { summary: true, place: true });
+  const f = require('./home-residency-review-http-fixture.cjs')(container, { summary: true, place: true, dashboard: true });
   const { sql, q, id, home, actor } = f;
   const homes = [home, ...Array.from({ length: 9 }, (_, i) => id(830+i))];
   const bills = Array.from({ length: 15 }, (_, i) => id(850+i));

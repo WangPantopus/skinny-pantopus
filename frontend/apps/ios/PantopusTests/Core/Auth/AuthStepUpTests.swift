@@ -75,9 +75,12 @@ final class AuthStepUpTests: XCTestCase {
             .status(200, body: "{\"stepUpToken\":\"su-token\",\"expiresAt\":\"2026-08-18T10:05:00Z\",\"purpose\":\"revoke_sessions\"}")
         ]
 
-        let response: RevokeOthersResponse = try await manager.apiClient.request(
-            Endpoint(method: .post, path: "/api/auth/sessions/revoke-others")
+        let received = try await manager.apiClient.requestDataResponse(
+            Endpoint(method: .post, path: "/api/auth/sessions/revoke-others"),
+            includingForbidden: true
         )
+        XCTAssertEqual(received.response.statusCode, 200)
+        let response = try JSONDecoder().decode(RevokeOthersResponse.self, from: received.data)
 
         XCTAssertEqual(response.revoked, 2)
         XCTAssertEqual(promptedPurposes, [.revokeSessions])

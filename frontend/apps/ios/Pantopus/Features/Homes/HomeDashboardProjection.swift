@@ -225,7 +225,8 @@ extension HomeDashboardProjection {
         let namesByUserId = Dictionary(
             dashboard.members.compactMap { member -> (String, String)? in
                 guard let id = member.user?.id ?? member.userId else { return nil }
-                guard let name = firstNonEmpty(member.user?.name, member.user?.username) else { return nil }
+                guard let name = firstNonEmpty(member.user?.displayName, member.user?.handle, member.user?.name, member.user?.username)
+                else { return nil }
                 return (id, name)
             }
         ) { first, _ in first }
@@ -249,7 +250,14 @@ extension HomeDashboardProjection {
     /// (`backend/services/homeHealthService.js:83` — score 0 means "no
     /// emergency contacts set").
     static func emergency(health: HomeHealthScoreDTO?) -> HomeDashboardEmergencyInfo {
-        let configured = (health?.breakdown["emergency"]?.score ?? 0) > 0
+        guard let dimension = health?.breakdown["emergency"] else {
+            return HomeDashboardEmergencyInfo(
+                title: "Emergency info",
+                body: "Current emergency information could not be confirmed.",
+                isConfigured: false
+            )
+        }
+        let configured = dimension.score > 0
         return HomeDashboardEmergencyInfo(
             title: "Emergency info",
             body: configured
@@ -306,6 +314,7 @@ extension HomeDashboardProjection {
         let now = Date()
         if date < now, !calendar.isDateInToday(date) { return "Overdue" }
         if calendar.isDateInToday(date) {
+            if iso?.count == 10 { return "Today" }
             let formatter = DateFormatter()
             formatter.dateFormat = "h a"
             return "Today \(formatter.string(from: date))"
@@ -336,9 +345,13 @@ extension HomeDashboardProjection {
         if let date = fractional.date(from: iso) { return date }
         if let date = ISO8601DateFormatter().date(from: iso) { return date }
         let dayOnly = DateFormatter()
+        dayOnly.locale = Locale(identifier: "en_US_POSIX")
+        dayOnly.calendar = Calendar(identifier: .gregorian)
         dayOnly.dateFormat = "yyyy-MM-dd"
-        dayOnly.timeZone = TimeZone(secondsFromGMT: 0)
-        return dayOnly.date(from: iso)
+        dayOnly.timeZone = .current
+        dayOnly.isLenient = false
+        guard iso.count == 10, let date = dayOnly.date(from: iso), dayOnly.string(from: date) == iso else { return nil }
+        return date
     }
 
     /// `guest_pass_created` / `pet.create` → "Guest pass created".

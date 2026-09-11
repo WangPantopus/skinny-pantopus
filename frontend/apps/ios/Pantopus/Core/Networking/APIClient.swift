@@ -165,8 +165,8 @@ final class APIClient: @unchecked Sendable {
 
     /// Binary artifacts may carry a receipt in their response headers. Keep
     /// the same authentication, refresh and cache handling as typed requests.
-    func requestDataResponse(_ endpoint: Endpoint) async throws -> DataResponse {
-        try await executeWithRetry(endpoint)
+    func requestDataResponse(_ endpoint: Endpoint, includingForbidden: Bool = false) async throws -> DataResponse {
+        try await executeWithRetry(endpoint, includingForbidden: includingForbidden)
     }
 
     struct DataResponse {
@@ -257,7 +257,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Retry loop
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func executeWithRetry(_ endpoint: Endpoint) async throws -> DataResponse {
+    private func executeWithRetry(_ endpoint: Endpoint, includingForbidden: Bool = false) async throws -> DataResponse {
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
         // One silent token refresh per request. On a 401 for an authenticated
@@ -290,7 +290,7 @@ final class APIClient: @unchecked Sendable {
                 extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
             )
             do {
-                return try await executeOnce(request, endpoint: endpoint)
+                return try await executeOnce(request, endpoint: endpoint, includingForbidden: includingForbidden)
             } catch let signal as StepUpRequiredSignal {
                 guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden }
                 didAttemptStepUp = true
@@ -352,7 +352,7 @@ final class APIClient: @unchecked Sendable {
         let methods: [String]
     }
 
-    private func executeOnce(_ request: URLRequest, endpoint: Endpoint) async throws -> DataResponse {
+    private func executeOnce(_ request: URLRequest, endpoint: Endpoint, includingForbidden: Bool) async throws -> DataResponse {
         let data: Data
         let response: URLResponse
         do {
@@ -390,6 +390,10 @@ final class APIClient: @unchecked Sendable {
             if let body = AuthErrorBody.decode(data), body.code == "STEP_UP_REQUIRED" {
                 throw StepUpRequiredSignal(purpose: body.purpose, methods: body.methods ?? [])
             }
+            // An explicit caller may inspect a denied application's context
+            // (e.g. pending residency). Authentication/step-up still run above;
+            // callers must inspect the status before interpreting any payload.
+            if includingForbidden { return DataResponse(data: data, response: http) }
             throw APIError.forbidden
         case 404: throw APIError.notFound
         case 400..<500:

@@ -46,17 +46,12 @@ public struct HomeDashboardResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        home = try container.decodeIfPresent(HomeDashboardHomeDTO.self, forKey: .home)
-        myAccess = try container.decodeIfPresent(HomeDashboardAccessDTO.self, forKey: .myAccess)
-        today = try container.decodeIfPresent(HomeDashboardTodayDTO.self, forKey: .today)
-            ?? HomeDashboardTodayDTO()
-        counts = try container.decodeIfPresent(HomeDashboardCountsDTO.self, forKey: .counts)
-            ?? HomeDashboardCountsDTO()
-        members = try container.decodeIfPresent([HomeDashboardMemberDTO].self, forKey: .members) ?? []
-        recentActivity = try container.decodeIfPresent(
-            [HomeAuditLogEntryDTO].self,
-            forKey: .recentActivity
-        ) ?? []
+        home = try container.decode(HomeDashboardHomeDTO.self, forKey: .home)
+        myAccess = try container.decode(HomeDashboardAccessDTO.self, forKey: .myAccess)
+        today = try container.decode(HomeDashboardTodayDTO.self, forKey: .today)
+        counts = try container.decode(HomeDashboardCountsDTO.self, forKey: .counts)
+        members = try container.decode([HomeDashboardMemberDTO].self, forKey: .members)
+        recentActivity = try container.decode([HomeAuditLogEntryDTO].self, forKey: .recentActivity)
         healthScore = try container.decodeIfPresent(HomeHealthScoreDTO.self, forKey: .healthScore)
     }
 }
@@ -93,11 +88,9 @@ public struct HomeDashboardAccessDTO: Decodable, Sendable, Hashable {
         case isOwner
     }
 
-    /// Mirrors the backend's `canFinance` gate (`home.js:6238`).
+    /// Only the effective view grant admits financial data.
     public var canViewFinance: Bool {
-        if isOwner == true { return true }
-        let perms = Set(permissions ?? [])
-        return perms.contains("finance.view") || perms.contains("finance.manage")
+        permissions?.contains("finance.view") == true
     }
 }
 
@@ -137,12 +130,15 @@ public struct HomeDashboardTodayDTO: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        nextEvents = try container.decodeIfPresent([CalendarEventDTO].self, forKey: .nextEvents) ?? []
-        tasksDue = try container.decodeIfPresent([HomeTaskDTO].self, forKey: .tasksDue) ?? []
+        nextEvents = try container.decode([CalendarEventDTO].self, forKey: .nextEvents)
+        tasksDue = try container.decode([HomeTaskDTO].self, forKey: .tasksDue)
         nextBill = try container.decodeIfPresent(BillDTO.self, forKey: .nextBill)
-        unreadMailCount = try container.decodeIfPresent(Int.self, forKey: .unreadMailCount) ?? 0
-        activeGuestPasses = try container.decodeIfPresent(Int.self, forKey: .activeGuestPasses) ?? 0
-        deliveriesArriving = try container.decodeIfPresent(Int.self, forKey: .deliveriesArriving) ?? 0
+        unreadMailCount = try container.decode(Int.self, forKey: .unreadMailCount)
+        activeGuestPasses = try container.decode(Int.self, forKey: .activeGuestPasses)
+        deliveriesArriving = try container.decode(Int.self, forKey: .deliveriesArriving)
+        guard [unreadMailCount, activeGuestPasses, deliveriesArriving].allSatisfy({ $0 >= 0 }) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid Home counts"))
+        }
     }
 }
 
@@ -190,14 +186,18 @@ public struct HomeDashboardCountsDTO: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        tasksOpen = try container.decodeIfPresent(Int.self, forKey: .tasksOpen) ?? 0
-        issuesOpen = try container.decodeIfPresent(Int.self, forKey: .issuesOpen) ?? 0
-        billsDue = try container.decodeIfPresent(Int.self, forKey: .billsDue) ?? 0
-        packagesExpected = try container.decodeIfPresent(Int.self, forKey: .packagesExpected) ?? 0
-        documents = try container.decodeIfPresent(Int.self, forKey: .documents) ?? 0
-        eventsUpcoming = try container.decodeIfPresent(Int.self, forKey: .eventsUpcoming) ?? 0
-        membersActive = try container.decodeIfPresent(Int.self, forKey: .membersActive) ?? 0
-        pets = try container.decodeIfPresent(Int.self, forKey: .pets) ?? 0
+        tasksOpen = try container.decode(Int.self, forKey: .tasksOpen)
+        issuesOpen = try container.decode(Int.self, forKey: .issuesOpen)
+        billsDue = try container.decode(Int.self, forKey: .billsDue)
+        packagesExpected = try container.decode(Int.self, forKey: .packagesExpected)
+        documents = try container.decode(Int.self, forKey: .documents)
+        eventsUpcoming = try container.decode(Int.self, forKey: .eventsUpcoming)
+        membersActive = try container.decode(Int.self, forKey: .membersActive)
+        pets = try container.decode(Int.self, forKey: .pets)
+        guard [tasksOpen, issuesOpen, billsDue, packagesExpected, documents, eventsUpcoming, membersActive, pets].allSatisfy({ $0 >= 0 })
+        else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid Home counts"))
+        }
     }
 }
 
@@ -219,12 +219,16 @@ public struct HomeDashboardMemberDTO: Decodable, Sendable, Hashable {
 
 /// Nested `user` join on a dashboard member row.
 public struct HomeDashboardMemberUserDTO: Decodable, Sendable, Hashable {
+    public let displayName: String?
+    public let handle: String?
+    public let avatarUrl: String?
     public let id: String?
     public let username: String?
     public let name: String?
     public let profilePictureUrl: String?
 
     private enum CodingKeys: String, CodingKey {
+        case displayName, handle, avatarUrl
         case id
         case username
         case name

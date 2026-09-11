@@ -82,6 +82,28 @@ final class APIClientTests: XCTestCase {
         }
     }
 
+    func testExplicitForbiddenBodyRetainsStatusAndDefaultDenial() async throws {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/current/dashboard-access")
+        let body = "{\"hasAccess\":false,\"verification_required\":true}"
+        URLProtocolStub.stub(path: endpoint.path, response: .json(body, status: 403))
+        let response = try await client.requestDataResponse(endpoint, includingForbidden: true)
+        XCTAssertEqual(response.response.statusCode, 403)
+        XCTAssertEqual(String(data: response.data, encoding: .utf8), body)
+        do {
+            _ = try await client.requestDataResponse(endpoint)
+            XCTFail("Ordinary callers must still receive a forbidden error")
+        } catch APIError.forbidden {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testForbiddenBodyOptInDoesNotBypassUnauthorizedResponse() async {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/current/dashboard-access")
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{}", status: 401))
+        do {
+            _ = try await client.requestDataResponse(endpoint, includingForbidden: true)
+            XCTFail("Authentication failure cannot be treated as applicant context")
+        } catch APIError.unauthorized {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
     func testDecodeFailureSurfacesDecodingError() async {
         URLProtocolStub.stub(
             path: "/api/users/me",

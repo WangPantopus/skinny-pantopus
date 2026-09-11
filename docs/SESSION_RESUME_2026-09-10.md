@@ -1,25 +1,35 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
-## Native current-authority checkpoint — September 11
+## iOS current-Home read milestone — September 11
 
-The [dashboard report](home-dashboard-current-summary-2026-09-11.md) now records
-production `/dashboard-access` HTTP/SQL/SDK authority r1 and full backend regression
-passing, with exact SQL cleanup. Current/shared access fences frozen/archived Homes
-and ownership disputes; denied applicants get only current own verification kind.
-Three held SQL replies and membership windows pass. No new migration or hosted work.
+The iOS current-Home milestone now passes signed build r8, full SwiftLint and
+changed-file SwiftFormat r8, and 33 affected model/auth checks r3. Installed Home
+r3 passes all three journeys; focused r4 strengthens card recovery with positive
+finished-content assertions and passes. Applicants, explicit finance denial,
+private creator Tasks, foreground revocation and an already-produced obsolete
+aggregate are covered. Both bill currency/history/recovery journeys also pass
+against the adapted production-authority fixture. See the
+[dashboard report](home-dashboard-current-summary-2026-09-11.md) for evidence and limits.
 
-Every required CI check on pushed web milestone `b926f74e2` passes. The prior
-`9d603c68c` run was cancelled, not independently all green. Refresh the next pushed
-head. #32/#34 remain unfinished drafts; #34 is conflicted, and combined migration
-dependencies/replay remain. All paid services stay one final launch-preparation bundle.
+Backend authority `1341aea5e` passes every required check in
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34606114320).
+The next pushed iOS milestone needs its own CI. #32/#34 remain unfinished drafts;
+#34 is conflicted and combined 47-version migration dependencies/replay remain.
+No new migration, hosted change or paid activation. Paid services stay one final
+launch-preparation bundle.
 
-Next finish the uncommitted iOS whole-Home access/lifecycle candidate in the installed
-app, including applicants/private first-use, late replies, account changes and card
-errors/recovery. Signed r2/r3 builds pass; installed r2 is running on owned F9BBAB33
-against native fixture r2/18083. Installed r1 skipped because its xctestrun lacked
-the opt-in environment. Native acceptance and final quality remain unverified.
-Android identity changes are also an unfinished draft. Preserve owner work and devices.
-Continue the full ordered backlog after this milestone; earlier checkpoints are historical.
+**Next: finish the Android current-Home candidate.** Access DTO/reader, session/
+lifecycle retirement, strict aggregate and UI repairs are now uncommitted drafts;
+build, quality and installed acceptance are still required. Then finish actual
+account switching, held intelligence, broader first-use/identity and native
+residency recovery, followed by the entire ordered backlog. Do not mistake this
+bounded read milestone for every Home write, provider or launch workflow passing.
+
+Owned native dashboard r3 and bill-authority r1 fixtures completed exact SQL
+cleanup and are stopped; owned iOS F9BBAB33 is shut down, owned Android remains
+off. Docker/owned Gig SQL and web 18080 remain. Resource cleanup removed only
+owned generated iOS intermediates/module cache/index; products, source, private
+evidence and databases remain. Owner checkout/files/devices stay untouched.
 
 ## Current populated dashboard checkpoint — September 11
 

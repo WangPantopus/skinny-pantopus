@@ -217,6 +217,7 @@ struct HealthScoreRingCard: View {
 struct SeasonalChecklistCard: View {
     let state: HomeIntelligenceCardState<SeasonalChecklistDTO>
     let pendingItemIds: Set<String>
+    var canEdit = true
     let onComplete: (String) -> Void
     let onSkip: (String) -> Void
     let onHireHelp: (SeasonalChecklistItemDTO) -> Void
@@ -381,7 +382,7 @@ struct SeasonalChecklistCard: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .disabled(done || pending)
+            .disabled(done || pending || !canEdit)
             .accessibilityIdentifier("homeDashboard_seasonalItemToggle_\(item.id)")
             .accessibilityLabel("Mark \(item.title) complete")
 
@@ -390,17 +391,17 @@ struct SeasonalChecklistCard: View {
                     .pantopusTextStyle(.small)
                     .foregroundStyle(done ? Theme.Color.appTextSecondary : Theme.Color.appText)
                     .strikethrough(done)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let description = item.description, !done, !description.isEmpty {
                     Text(description)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if item.status == "pending" {
+            if item.status == "pending", canEdit {
                 Button { onSkip(item.id) } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
@@ -541,11 +542,11 @@ struct PropertyValueCard: View {
     private var unavailableBody: some View {
         VStack(spacing: Spacing.s2) {
             Icon(.trendingUp, size: 26, color: Theme.Color.primary600)
-            Text("Property insights coming soon")
+            Text("No estimate available")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.appText)
-            Text("We'll show your home's estimated value once your address is fully verified.")
+            Text("No property estimate is available for this Home right now.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
