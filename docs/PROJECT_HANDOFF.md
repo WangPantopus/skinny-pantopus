@@ -14,6 +14,62 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Native intelligence validation — ongoing
+
+Pushed milestone `611032282d3bf348aa116e01269494e9be283ba0` closes the reproduced
+frozen-Home intelligence-read bypass and records both native account/held-reply
+journeys plus stronger Android bill evidence. [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34622136951)
+passes every check. #32/#34 stay unfinished drafts; #34 remains
+conflicted, and combined 47-version migration reconciliation is still open.
+
+Strengthened iOS bill-denial r2 passes its full installed recovery journey
+(361.944 seconds, 21 bill reads, zero fixture errors) against the repaired server.
+Finished denial and restored 104.70/142.50 bill pixels are reviewed; exact SQL
+cleanup passes. Its test change is included in the current uncommitted candidate.
+
+**Current work:** both native apps reject incomplete/inconsistent health,
+malformed/wrong-Home/duplicate checklist rows and progress, and invalid property
+values/source data. Checklist confirmations validate Home/item/status and row
+metadata; unknown committed outcomes require current reload. Android build r3,
+quality/lint and affected model checks pass. Installed r1 completes all ten
+malformed-card recoveries, then fails before PATCH because the form scroll
+helper misses its final viewport. With the bounded viewport helper, focused
+receipt r2 passes all four cases: each commits exactly one PATCH, then restores
+1/2 done through Retry and cold return, zero fixture errors. Error and completed
+screens are reviewed. The earlier ten-card group records 459 events, no writes
+or fixture errors. Android app is stopped.
+Signed iOS build r3, strict lint/format r3 and all 13 affected model checks pass;
+installed r2 is running against repaired server fixture r10.
+iOS r1 completed all ten malformed-card recoveries but failed teardown's screenshot
+of the terminated app. Its receipt case failed because the fixture altered current
+access before PATCH. Both harness issues are repaired, with the latter proven by
+actual authority equality across all four fault modes; no app gate was weakened.
+See the report for failed attempts and private evidence. No new installed acceptance
+is claimed until the final reruns finish.
+
+Native fixtures r7/r8/r9 completed exact SQL cleanup; 18083 is free. Health
+data and sequential server regressions also cleaned exactly. Native fixture r10
+now owns 18083/SQL for final iOS replay. Android overdue-score r1 passes with reviewed 35/100 pixels. Owned iOS F9BBAB33 and Android 5556, SQL and web remain;
+preserve owner work/devices, Sentry artifact, products and evidence. No new migration,
+hosted action or paid activation. Finish candidate acceptance, then real Home
+identity/residency and the remaining data/write/provider/platform/payment/upgrade
+workflows. Paid services remain one final launch-preparation bundle.
+
+A separate uncommitted server follow-up is drafted in homeHealthService and
+`test-home-health-data-http.cjs`: actual API/SQL reproduced full bill-health points
+with one explicit overdue bill. The draft counts overdue rows and rejects missing/
+malformed dimension data and Home coordinates. Backend r1 hit an unrelated notification HTTP parse failure; the focused 18 checks
+pass unchanged in r2, and full backend r2 passes 317 suites/5,169 checks. Direct health data HTTP/SQL/SDK r1 passes every case and exact cleanup.
+Existing summary/checklist/settings and twelve held-authority HTTP/SQL/SDK
+regressions also pass with exact cleanup; privacy gates pass. Keep this unverified
+server draft out of the native acceptance milestone until its own checks pass.
+The server draft additionally preserves cleared optional provider/avatar text;
+that small compatibility follow-up still needs its SQL replay. Full backend r3
+hits an unchanged payment-test socket hang-up (r2 passed before this addition),
+so retain this unresolved local transport result. Android source is independently
+verified by build/quality/lint, 15 affected model checks, the ten-card group and
+four receipt journeys; iOS and server changes remain separate local candidates.
+
 ### Native account and delayed-response acceptance — September 11
 
 Android account r1 passes normal A → B → A login/logout, cold B denial and

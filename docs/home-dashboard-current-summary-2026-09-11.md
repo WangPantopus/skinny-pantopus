@@ -4,6 +4,116 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## Native intelligence validation — current candidate
+
+Milestone `611032282` is pushed; [its CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34622136951)
+passes every check. iOS
+finished-denial r2 passes the complete recovery journey in 361.944 seconds,
+21 bill reads, zero fixture errors. Its finished denial and restored
+104.70/142.50 card are visually reviewed. Evidence:
+`/private/tmp/pantopus-native-bill-ios-finished-denial-r2.{log,xcresult}` and
+`-attachments/`. Exact SQL cleanup passes in `-fixture-r2.log`.
+
+The next uncommitted candidate requires complete health dimensions/consistent
+scores and Home action routes, explicit checklist fields, exact Home identity,
+valid statuses/progress/unique rows, and valid property sources/numbers/ranges.
+Missing data cannot become a successful zero or empty card. Checklist mutation
+responses require matching Home/item/status and valid row metadata. Errors keep
+Retry available; unknown committed replies require reload before another action.
+
+Signed iOS intelligence build r3, strict lint r3 and changed-file format r3 pass.
+Android build/quality/lint/affected models r3 passes; iOS affected model r1 passes
+all 13 checks (1.033 seconds). Earlier Android r1 stopped
+at three ReturnCount findings (split without weakening validation); r2 then found
+one existing property fixture missing its real source field. The fixture now
+supplies `source=cache`, and the final affected checks pass.
+
+iOS installed r1 completed all ten malformed-card rejection/Retry recoveries
+(420 recorded events, zero fixture errors, no PATCH) but **the suite failed**:
+teardown attempted to screenshot the already-terminated app. The checklist receipt
+case failed earlier because switching from freshly reset current mode changed the
+actor's access revision: verified_at was initially null and access_end_at was
+initially two days away. The app correctly retired access before PATCH; the
+finished denial pixels and hierarchy confirm it. Reset now normalizes those fields
+before any initial read; actual HTTP authority stays identical across all four
+receipt fault modes and current. Teardown now records HTTP evidence even on failure
+and only captures a running app. No production authority check was weakened.
+Fixture r8's intermediate verified_at-only repair still failed equality because
+access_end_at changed; retain that failed probe. r7/r8 exact SQL cleanup passes.
+
+Android installed r1 completes all ten malformed-card rejection/Retry recoveries
+and records `malformed-cards-fixture.json`, then fails before any PATCH: the
+inherited form navigator times out before examining its last swipe's newly
+visible HEPA control. Failure XML/pixels confirm a reachable enabled pending item,
+zero PATCH and zero fixture errors. A bounded observed-viewport helper now checks
+after each move; focused receipt r2 passes all four cases on owned 5556: one
+PATCH each, real committed row, Retry and cold return show 1/2 done, zero fixture
+errors. Error and completed pixels are reviewed. The earlier ten-card group has
+459 recorded events, zero PATCH/errors. Evidence prefix:
+`pantopus-home-intelligence-android-receipts-r2`. Android app is stopped; fixture
+r9 completes exact SQL cleanup. iOS installed r2 is running on F9BBAB33 against repaired server fixture r10.
+Existing native candidate app builds remain unchanged.
+Private evidence prefixes: `pantopus-home-intelligence-ios-{project,build,format,lint}`,
+`pantopus-home-intelligence-ios-installed-r1.{log,xcresult}` and `-attachments/`,
+`pantopus-home-intelligence-ios-malformed-r1-fixture.json`,
+`pantopus-home-intelligence-fixture-authority-baseline-r{1,2}.json`,
+`pantopus-home-intelligence-fixture-authority-fixed-r3.json`,
+`pantopus-home-intelligence-android-{format,build,installed}`, and
+`/private/tmp/pantopus-home-intelligence-native-fixture-r9.{json,log}`.
+Do not run another fixture with these SQL identities concurrently. Owner source/
+devices stay untouched; no new migration, hosted change or paid activation.
+
+Additional source finding for the next server follow-up: health scoreBills only
+queries status `due` and ignores explicit `overdue` rows, including the current
+fixture bill. Actual API/SQL baseline confirms one overdue row but 20/20 bill
+points and no issue (`/private/tmp/pantopus-home-health-overdue-baseline-r1.json`).
+A separate uncommitted server draft counts explicit overdue rows and rejects
+missing/malformed dimension arrays/rows/document counts and Home coordinates.
+Full backend r1 passes 316 suites but hits one notification test HTTP parse
+error. The unchanged focused notification rerun passes all 18 checks; full
+backend r2 passes 317 suites/5,169 checks. Preserve this transient failure without claiming a known
+root cause. Actual SQL/HTTP/SDK r1 passes all cases and exact cleanup: explicit/multiple
+overdue, paid restoration, past/future due dates; 20 malformed row-source cases,
+four malformed counts, six missing/malformed/error/transport Home-coordinate
+cases; each failure stays uncached and recovers through an ordinary read.
+Actual Supabase SDK/PostgREST verifies dimension data, overdue and paid recovery.
+Evidence: `/private/tmp/pantopus-home-health-data-http-r1.log`,
+`pantopus-home-health-data-backend-r{1,2}.log`,
+`pantopus-home-health-data-notification-regression-r2.log`, and
+`pantopus-home-health-data-privacy-r1.log` (all privacy gates pass).
+Existing summary/checklist/settings regression r1 and authority regression r1
+also pass, including twelve held reads, actual SDK/PostgREST, current restoration
+and exact cleanup. Private logs: `pantopus-home-health-summary-regression-r1.log`
+and `pantopus-home-health-authority-regression-r1.log`. Native fixture r10 now
+runs the repaired server for final iOS replay. Android overdue-score r1 passes
+and its 35/100 pixels are reviewed (`pantopus-home-health-android-current-r1/`).
+The known Android dashboard recovery expectation is updated from 45 to 35 in
+the separate server candidate. No new app build is needed for that server value.
+
+A final compatibility adjustment accepts cleared optional provider/avatar text
+while still rejecting absent fields and wrong types; blank avatars do not earn
+household-photo points. Its additional real SQL case remains pending until native
+fixture cleanup. Full backend r3 hits an unchanged payment test socket hang-up;
+preserve `/private/tmp/pantopus-home-health-data-backend-r3.log`. r2 passed before
+this small addition. This is not evidence of a Home regression, nor proof the
+transport failure is resolved. Android's 15 affected model checks and installed
+acceptance are independent; its milestone can proceed while iOS/server candidates
+finish. Do not include this draft in the native milestone
+before its own verification. Due-date comparison still needs Home-local date
+semantics; no timezone repair is claimed. Existing nested-row/checklist creation,
+mutation, history and provider validation backlog remains. Do not treat native
+wire rejection as proof of every server data calculation.
+
+Next Home identity audit confirms the exact remaining sources: both native
+ViewModels derive a Verified Home label from `detail.isOwner` or any verified
+owner. The generic Home detail route returns wildcard Home/nested occupants after
+only generic IAM access; property-details has the same generic gate. `/my-homes`
+ignores owner-status query failures and omits access_start_at/access_end_at from
+its occupancy projection; the older root list includes inactive occupancies.
+These require actual SDK/SQL identity, current-access, applicant/private first-use
+and native acceptance. The controlled Home-list/detail shell used above cannot
+close them.
+
 ## Native account and stronger bill proof — September 11
 
 Android account r1 passes real installed A → B → A navigation: three normal

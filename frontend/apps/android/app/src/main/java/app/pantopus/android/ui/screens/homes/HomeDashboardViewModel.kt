@@ -510,18 +510,29 @@ class HomeDashboardViewModel
         private suspend fun loadHealthScore() {
             _healthScore.value = authorizedCard(
                 listOf("home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"),
-            ) { intelligenceRepo.healthScore(homeId, force = true) } ?: return
+            ) { intelligenceRepo.healthScore(homeId, force = true).validated { HomeIntelligenceValidation.health(it, homeId) } } ?: return
             // The Overview's emergency row reads the health breakdown.
             rebuild()
         }
 
         private suspend fun loadChecklist() {
-            _checklist.value = authorizedCard(listOf("home.view")) { intelligenceRepo.seasonalChecklist(homeId) } ?: return
+            _checklist.value = authorizedCard(listOf("home.view")) {
+                intelligenceRepo.seasonalChecklist(homeId).validated { HomeIntelligenceValidation.checklist(it, homeId) }
+            } ?: return
         }
 
         private suspend fun loadPropertyValue() {
-            _propertyValue.value = authorizedCard(listOf("home.view")) { intelligenceRepo.propertyValue(homeId) } ?: return
+            _propertyValue.value = authorizedCard(listOf("home.view")) {
+                intelligenceRepo.propertyValue(homeId).validated(HomeIntelligenceValidation::property)
+            } ?: return
         }
+
+        private fun <T> NetworkResult<T>.validated(valid: (T) -> Boolean): NetworkResult<T> =
+            if (this is NetworkResult.Success && !valid(data)) {
+                NetworkResult.Failure(NetworkError.Decoding(IllegalArgumentException("Invalid current Home information")))
+            } else {
+                this
+            }
 
         private suspend fun loadBillTrends() {
             val readId = ++billReadId
@@ -544,7 +555,11 @@ class HomeDashboardViewModel
                         HomeIntelligenceCardState.Forbidden
                     } else {
                         HomeIntelligenceCardState.Failed(
-                            error.displayMessage("Couldn't load this card."),
+                            when (error) {
+                                is NetworkError.Decoding -> "Current Home information is unavailable. Reload this card."
+                                is NetworkError.Server -> "This Home information couldn't be loaded. Please retry."
+                                else -> error.displayMessage("Couldn't load this card.")
+                            },
                         )
                     }
             }
@@ -606,7 +621,9 @@ class HomeDashboardViewModel
                 authorize(revision)
                 val updated = intelligenceRepo.updateSeasonalChecklistItem(homeId, itemId, status).homeValue()
                 authorize(revision)
-                check(updated.id == itemId && updated.status == status) { "The checklist update was not confirmed." }
+                check(HomeIntelligenceValidation.item(updated, homeId) && updated.id == itemId && updated.status == status) {
+                    "The checklist update was not confirmed."
+                }
                 applyChecklistItem(updated)
                 loadHealthScore()
             } catch (cancelled: CancellationException) {

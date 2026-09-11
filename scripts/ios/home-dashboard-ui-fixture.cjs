@@ -32,6 +32,7 @@ function reset(clearEvents = true) {
   if (initialized) f.cleanup();
   f.setup(); initialized = true; mode = 'current'; if (clearEvents) events = [];
   sql(`UPDATE public."Home" SET name='Dashboard UI Fixture',address='1 Synthetic Street' WHERE id=${q(home)};
+    UPDATE public."HomeOccupancy" SET verified_at=now(),access_start_at=NULL,access_end_at=NULL WHERE home_id=${q(home)} AND user_id=${q(actor)};
     UPDATE public."HomeOccupancy" SET verification_status='verified' WHERE home_id=${q(home)} AND user_id=${q(f.users[4])};
     UPDATE public."User" SET username='current_household_member',name='Private legal fixture name' WHERE id=${q(f.users[4])};
     INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(f.users[4])},'home.view',false);
@@ -44,7 +45,10 @@ function reset(clearEvents = true) {
 }
 function setMode(next) {
   assert(['current', 'denied', 'revoked', 'frozen', 'pending_residency', 'pending_ownership', 'private_creator', 'member', 'finance_denied',
-    'summary_error', 'malformed_summary', 'wrong_home', 'health_error', 'checklist_error', 'property_error'].includes(next));
+    'summary_error', 'malformed_summary', 'wrong_home', 'health_error', 'checklist_error', 'property_error',
+    'malformed_health', 'inconsistent_health', 'wrong_home_action', 'malformed_checklist', 'wrong_home_checklist', 'incorrect_progress',
+    'duplicate_checklist', 'malformed_property', 'invalid_property', 'property_error_payload',
+    'receipt_wrong_home', 'receipt_wrong_item', 'receipt_missing_status', 'receipt_lost_reply'].includes(next));
   if (mode === 'private_creator') reset(false);
   sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)} AND user_id=${q(actor)};
     UPDATE public."Home" SET security_state='normal',owner_id=${q(actor)} WHERE id=${q(home)};
@@ -69,6 +73,7 @@ app.use(async (req, res, next) => {
   const p = req.path, method = req.method; res.set('Cache-Control', 'private, no-store');
   try {
     if (p === '/fixture/state' && method === 'GET') return res.json(state());
+    if (p === '/fixture/checklist' && method === 'GET') return res.json({ items: JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT id,home_id,status,title,completed_at FROM public."HomeSeasonalChecklistItem" WHERE home_id=${q(home)} ORDER BY sort_order) r;`)) });
     if (p === '/fixture/reset' && method === 'POST') { reset(); return res.json(state()); }
     if (p === '/fixture/mode' && method === 'POST') { setMode(req.body.mode); return res.json(state()); }
     if (p === '/fixture/hold' && method === 'POST') {
@@ -102,9 +107,37 @@ app.use(async (req, res, next) => {
             if (requestMode === 'malformed_summary') body = { ...body, counts: undefined };
             if (requestMode === 'wrong_home') body = { ...body, home: { ...body.home, id: id(999) } };
           }
+          if (res.statusCode === 200 && p.endsWith('/health-score')) {
+            if (requestMode === 'malformed_health') body = { ...body, breakdown: { ...body.breakdown, emergency: {} } };
+            if (requestMode === 'inconsistent_health') body = { ...body, score: 100 };
+            if (requestMode === 'wrong_home_action') body = { ...body, topAction: { type: 'navigate', label: 'View bills', route: `/homes/${id(999)}/bills` } };
+          }
+          if (res.statusCode === 200 && p.endsWith('/seasonal-checklist')) {
+            if (requestMode === 'malformed_checklist') body = { ...body, items: body.items.map((item, index) => index ? item : { ...item, status: undefined }) };
+            if (requestMode === 'wrong_home_checklist') body = { ...body, items: body.items.map(item => ({ ...item, home_id: id(999) })) };
+            if (requestMode === 'incorrect_progress') body = { ...body, progress: { total: body.items.length, completed: body.items.length, percentage: 100 } };
+            if (requestMode === 'duplicate_checklist') body = { ...body, items: [body.items[0], body.items[0]], progress: { total: 2, completed: 0, percentage: 0 } };
+          }
+          if (res.statusCode === 200 && p.endsWith('/property-value')) {
+            if (requestMode === 'malformed_property') body = {};
+            if (requestMode === 'invalid_property') body = { ...body, source: 'cache', estimated_value: -100, value_range_low: 200, value_range_high: 100 };
+            if (requestMode === 'property_error_payload') body = { ...body, source: 'error' };
+          }
           if (holdSuffix && p.endsWith(holdSuffix)) {
             holdSuffix = null; const pending = { send: () => json(body), cancel: () => res.destroy() }; pendingReply = pending;
             events.push({ event: 'held', path: p }); res.once('close', () => { if (pendingReply === pending) pendingReply = null; }); return res;
+          }
+          return json(body);
+        };
+      }
+      if (method === 'PATCH' && p.includes('/seasonal-checklist/')) {
+        const json = res.json.bind(res);
+        res.json = body => {
+          if (res.statusCode === 200) {
+            if (requestMode === 'receipt_wrong_home') body = { ...body, home_id: id(999) };
+            if (requestMode === 'receipt_wrong_item') body = { ...body, id: id(999) };
+            if (requestMode === 'receipt_missing_status') body = { ...body, status: undefined };
+            if (requestMode === 'receipt_lost_reply') { res.status(503); body = { error: 'Controlled lost committed checklist reply' }; }
           }
           return json(body);
         };

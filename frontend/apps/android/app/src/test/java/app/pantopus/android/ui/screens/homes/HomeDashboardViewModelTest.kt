@@ -189,7 +189,7 @@ class HomeDashboardViewModelTest {
 
     private fun health(emergencyScore: Int = 15) =
         HomeHealthScoreDto(
-            score = 62,
+            score = 47 + emergencyScore,
             breakdown =
                 mapOf(
                     "maintenance" to HomeHealthDimensionDto(25, 25, emptyList()),
@@ -209,6 +209,10 @@ class HomeDashboardViewModelTest {
                 listOf(
                     SeasonalChecklistItemDto(
                         id = "i1",
+                        homeId = fixtureHomeId,
+                        seasonKey = "fall_prep",
+                        year = 2026,
+                        itemKey = "i1",
                         title = "Clean gutters before rain season",
                         gigCategory = "Cleaning",
                         status = "pending",
@@ -216,6 +220,10 @@ class HomeDashboardViewModelTest {
                     ),
                     SeasonalChecklistItemDto(
                         id = "i2",
+                        homeId = fixtureHomeId,
+                        seasonKey = "fall_prep",
+                        year = 2026,
+                        itemKey = "i2",
                         title = "Inspect and service furnace",
                         gigCategory = "Handyman",
                         status = "completed",
@@ -363,7 +371,7 @@ class HomeDashboardViewModelTest {
             coEvery { intelligenceRepo.seasonalChecklist(fixtureHomeId) } returns NetworkResult.Success(checklist())
             coEvery {
                 intelligenceRepo.propertyValue(fixtureHomeId)
-            } returns NetworkResult.Success(HomePropertyValueDto(estimatedValue = 812_000.0))
+            } returns NetworkResult.Success(HomePropertyValueDto(estimatedValue = 812_000.0, source = "cache"))
             coEvery {
                 intelligenceRepo.billTrends(fixtureHomeId)
             } returns NetworkResult.Success(HomeBillTrendsDto())
@@ -407,6 +415,10 @@ class HomeDashboardViewModelTest {
                 NetworkResult.Success(
                     SeasonalChecklistItemDto(
                         id = "i1",
+                        homeId = fixtureHomeId,
+                        seasonKey = "fall_prep",
+                        year = 2026,
+                        itemKey = "i1",
                         title = "Clean gutters before rain season",
                         gigCategory = "Cleaning",
                         status = "completed",
@@ -441,6 +453,10 @@ class HomeDashboardViewModelTest {
                 NetworkResult.Success(
                     SeasonalChecklistItemDto(
                         id = "i1",
+                        homeId = fixtureHomeId,
+                        seasonKey = "fall_prep",
+                        year = 2026,
+                        itemKey = "i1",
                         title = "Clean gutters before rain season",
                         gigCategory = "Cleaning",
                         status = "skipped",

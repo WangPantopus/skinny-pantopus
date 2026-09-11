@@ -147,8 +147,8 @@ data class HomeAuditLogEntryDto(
  */
 @JsonClass(generateAdapter = true)
 data class HomeHealthScoreDto(
-    val score: Int = 0,
-    val breakdown: Map<String, HomeHealthDimensionDto> = emptyMap(),
+    val score: Int,
+    val breakdown: Map<String, HomeHealthDimensionDto>,
     val topIssue: String? = null,
     val topAction: HomeHealthActionDto? = null,
 ) {
@@ -163,18 +163,18 @@ data class HomeHealthScoreDto(
 /** One dimension of the health-score breakdown. */
 @JsonClass(generateAdapter = true)
 data class HomeHealthDimensionDto(
-    val score: Int = 0,
-    val max: Int = 0,
-    val issues: List<String> = emptyList(),
+    val score: Int,
+    val max: Int,
+    val issues: List<String>,
 )
 
 /** `topAction` — the single highest-leverage next step. */
 @JsonClass(generateAdapter = true)
 data class HomeHealthActionDto(
-    val type: String = "navigate",
-    val label: String = "",
+    val type: String,
+    val label: String,
     /** App route such as `/homes/<id>/maintenance`. */
-    val route: String = "",
+    val route: String,
 )
 
 // ── Seasonal checklist ──────────────────────────────────────────────
@@ -182,29 +182,29 @@ data class HomeHealthActionDto(
 /** Response of `GET /api/homes/:id/seasonal-checklist`. */
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistDto(
-    val season: SeasonalChecklistSeasonDto = SeasonalChecklistSeasonDto(),
-    val items: List<SeasonalChecklistItemDto> = emptyList(),
-    val progress: SeasonalChecklistProgressDto = SeasonalChecklistProgressDto(),
+    val season: SeasonalChecklistSeasonDto,
+    val items: List<SeasonalChecklistItemDto>,
+    val progress: SeasonalChecklistProgressDto,
     val carryover: SeasonalChecklistCarryoverDto? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistSeasonDto(
-    val key: String = "",
-    val label: String = "",
+    val key: String,
+    val label: String,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistProgressDto(
-    val total: Int = 0,
-    val completed: Int = 0,
-    val percentage: Int = 0,
+    val total: Int,
+    val completed: Int,
+    val percentage: Int,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistCarryoverDto(
-    val season: SeasonalChecklistSeasonDto = SeasonalChecklistSeasonDto(),
-    val items: List<SeasonalChecklistItemDto> = emptyList(),
+    val season: SeasonalChecklistSeasonDto,
+    val items: List<SeasonalChecklistItemDto>,
 )
 
 /**
@@ -214,18 +214,19 @@ data class SeasonalChecklistCarryoverDto(
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistItemDto(
     val id: String,
+    @Json(name = "home_id") val homeId: String? = null,
     @Json(name = "season_key") val seasonKey: String? = null,
     val year: Int? = null,
     @Json(name = "item_key") val itemKey: String? = null,
-    val title: String = "",
+    val title: String,
     val description: String? = null,
     @Json(name = "gig_category") val gigCategory: String? = null,
     @Json(name = "gig_title_suggestion") val gigTitleSuggestion: String? = null,
     /** `pending` / `completed` / `skipped` / `hired`. */
-    val status: String = "pending",
+    val status: String,
     @Json(name = "completed_at") val completedAt: String? = null,
     @Json(name = "gig_id") val gigId: String? = null,
-    @Json(name = "sort_order") val sortOrder: Int = 0,
+    @Json(name = "sort_order") val sortOrder: Int,
 ) {
     /** Items that are done in any sense — completed, skipped, or hired out. */
     val isResolved: Boolean
