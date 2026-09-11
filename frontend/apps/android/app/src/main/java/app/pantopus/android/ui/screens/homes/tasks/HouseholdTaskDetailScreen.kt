@@ -42,9 +42,11 @@ fun HouseholdTaskDetailScreen(
     onEdit: () -> Unit,
     viewModel: HouseholdTaskDetailViewModel = hiltViewModel(),
     mediaViewModel: HomeTaskMediaViewModel = hiltViewModel(),
+    recurrenceViewModel: HomeTaskRecurrenceViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val mediaState by mediaViewModel.controller.state.collectAsStateWithLifecycle()
+    val recurrenceState by recurrenceViewModel.controller.state.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     HomeTaskResumeEffect(viewModel::resume, viewModel::pause)
     DisposableEffect(viewModel) { onDispose { viewModel.finishArrival() } }
@@ -66,12 +68,14 @@ fun HouseholdTaskDetailScreen(
             }
             state.task?.let { task ->
                 HouseholdTaskReadOnlyContent(task)
+                TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
                 TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
                 TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }
             }
         }
     }
     if (mediaState.visible) HomeTaskMediaDialog(mediaViewModel.controller)
+    if (recurrenceState.visible) HomeTaskRecurrenceDialog(recurrenceViewModel.controller, viewModel::reload)
     if (confirmDelete && state.task?.capabilities?.canDelete == true) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -97,7 +101,13 @@ internal fun HouseholdTaskReadOnlyContent(task: HomeTaskDto) {
     task.dueAt?.let { Text("Due: $it") }
     task.priority?.let { Text("Priority: $it") }
     HouseholdTasksListViewModel.assigneeDisplay(task.assignedTo)?.let { Text("Assigned to $it") }
-    HouseholdTasksListViewModel.humanRecurrence(task.recurrenceRule)?.let { Text("Recurrence: $it") }
+    if (task.automaticRecurrence != null) {
+        Text(task.automaticRecurrence.label())
+    } else {
+        HouseholdTasksListViewModel.humanRecurrence(
+            task.recurrenceRule,
+        )?.let { Text("Saved repeat preference: $it. Automatic repeats are off.") }
+    }
     task.visibility?.let { Text("Visibility: ${it.replace('_', ' ')}") }
 }
 

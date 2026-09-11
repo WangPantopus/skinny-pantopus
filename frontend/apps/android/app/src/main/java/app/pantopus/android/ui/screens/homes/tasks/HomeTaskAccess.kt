@@ -144,6 +144,7 @@ class HomeTaskAccess(
         taskId: String,
     ): HomeTaskDto {
         check(task.id == taskId && task.id.isNotBlank() && task.homeId == homeId) { TASK_ACCESS_CHANGED }
+        check(task.automaticRecurrence?.valid() != false) { TASK_ACCESS_CHANGED }
         return task
     }
 }

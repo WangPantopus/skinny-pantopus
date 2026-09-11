@@ -133,7 +133,7 @@ const val HOUSEHOLD_TASKS_HOME_ID_KEY = "homeId"
  *  - Three tabs with live counts:
  *      - Active    = status in {open, in_progress}
  *      - Done      = status == 'done' (rolling 30-day window)
- *      - Recurring = recurrence_rule != null
+ *      - Recurring = automatic schedule or saved repeat preference
  *  - Active rows render a home-tinted summary banner (`N due today`
  *    + overdue count) above the list when there's anything to say.
  *  - 52dp `SecondaryCreate` FAB tinted [FabTint.Home] per the brief.
@@ -147,12 +147,8 @@ const val HOUSEHOLD_TASKS_HOME_ID_KEY = "homeId"
  *  - Recurring trailing = kebab; recurrence cadence surfaces in the
  *    inline chip.
  *
- * Backend deviation from prompt: the prompt specifies
- * `template_id != null` for the Recurring filter, but the live
- * `HomeTask` schema (`backend/database/schema.sql:6833`) has no
- * `template_id` column — recurrence is captured in the
- * `recurrence_rule` RRULE text field. The Recurring filter therefore
- * uses `recurrence_rule != null`, which is the canonical signal today.
+ * The Recurring filter includes current automatic schedules and saved legacy
+ * preferences. Their chips distinguish active/paused/review from saved-only.
  */
 @HiltViewModel
 class HouseholdTasksListViewModel
@@ -444,7 +440,7 @@ class HouseholdTasksListViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.ArrowsRepeat,
                         headline = "No recurring chores",
-                        subcopy = "Tasks with a saved recurrence will appear here.",
+                        subcopy = "Tasks with repeat schedules or saved preferences will appear here.",
                         ctaTitle = "Add a recurring task".takeIf { canCreate },
                         onCta = if (canCreate) ::requestCreate else null,
                     )
@@ -621,7 +617,7 @@ class HouseholdTasksListViewModel
                 val category = HouseholdTaskCategory.from(task.title, task.taskType)
                 val assigneeLabel = assigneeDisplay(task.assignedTo)
                 val isAssigned = assigneeLabel != null
-                val recurrenceChip = humanRecurrence(task.recurrenceRule)
+                val recurrenceChip = task.automaticRecurrence?.label() ?: humanRecurrence(task.recurrenceRule)?.let { "Saved: $it" }
                 return when (task.status) {
                     "done" -> {
                         val doneTime = humanRelativeTime(task.completedAt ?: task.updatedAt, now)
@@ -718,7 +714,7 @@ class HouseholdTasksListViewModel
              * Tab membership per the brief:
              *   - Active    = status in {open, in_progress}
              *   - Done      = status == done within the last 30 days
-             *   - Recurring = recurrence_rule != null
+             *   - Recurring = automatic schedule or saved repeat preference
              */
             @JvmStatic
             fun passes(
@@ -737,7 +733,7 @@ class HouseholdTasksListViewModel
                             date == null || Duration.between(date, now).toDays() <= 30
                         }
                     }
-                    HouseholdTasksTab.Recurring -> !task.recurrenceRule.isNullOrBlank()
+                    HouseholdTasksTab.Recurring -> task.automaticRecurrence != null || !task.recurrenceRule.isNullOrBlank()
                 }
 
             /** Pure summary projection. Public-static for tests. */

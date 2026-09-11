@@ -3,6 +3,8 @@ package app.pantopus.android.data.homes
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -23,6 +25,19 @@ open class HomeTasksRepository
     constructor(
         private val api: HomeTasksApi,
     ) {
+        open suspend fun getRecurrence(
+            homeId: String,
+            taskId: String,
+            session: String,
+        ): NetworkResult<HomeTaskRecurrenceState> = safeApiCall { api.getRecurrence(homeId, taskId, session) }
+
+        open suspend fun changeRecurrence(
+            homeId: String,
+            taskId: String,
+            request: HomeTaskRecurrenceRequest,
+            session: String,
+        ): NetworkResult<HomeTaskRecurrenceState> = safeApiCall { api.changeRecurrence(homeId, taskId, request, session) }
+
         /** `GET /api/homes/:id/tasks`. */
         open suspend fun getHomeTasks(
             homeId: String,

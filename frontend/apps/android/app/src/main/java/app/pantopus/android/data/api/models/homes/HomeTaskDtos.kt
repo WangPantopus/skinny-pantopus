@@ -37,6 +37,7 @@ data class HomeTaskDto(
     @Json(name = "updated_at") val updatedAt: String? = null,
     val visibility: String? = null,
     val capabilities: HomeTaskCapabilitiesDto? = null,
+    @Json(name = "automatic_recurrence") val automaticRecurrence: HomeTaskAutomaticRecurrence? = null,
 )
 
 /** Missing capabilities never enable an action. */

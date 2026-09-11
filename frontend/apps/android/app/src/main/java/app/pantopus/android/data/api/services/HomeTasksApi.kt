@@ -4,6 +4,8 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDeleteResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import okhttp3.RequestBody
@@ -11,6 +13,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -25,6 +28,23 @@ import retrofit2.http.Path
  * via `me.gigs`.
  */
 interface HomeTasksApi {
+    @GET("api/homes/{id}/tasks/{taskId}/recurrence")
+    @Headers("Cache-Control: no-store")
+    suspend fun getRecurrence(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskRecurrenceState
+
+    @POST("api/homes/{id}/tasks/{taskId}/recurrence")
+    @Headers("Cache-Control: no-store")
+    suspend fun changeRecurrence(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Body request: HomeTaskRecurrenceRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskRecurrenceState
+
     /** `GET /api/homes/:id/tasks` — route `backend/routes/home.js:4170`. */
     @GET("api/homes/{id}/tasks")
     suspend fun getHomeTasks(

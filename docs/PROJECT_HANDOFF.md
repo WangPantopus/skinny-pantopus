@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android automatic task recurrence — September 10
+
+The [Android recurrence checkpoint](home-android-task-recurrence-2026-09-10.md)
+completes explicit native controls, actual schedule projections/Recurring filters
+and encrypted original-command/confirmation recovery. The installed API 34 journey
+passes normal login, exact OS routing, cold/background recovery, later-pause
+preservation and access revocation. It exposed and verified the repair for a
+Material text-field/theme crash. Current credentials are also rechecked after
+protected IO. Full Debug/quality/snapshot/build gates pass: 4,511 checks with 80
+existing skips, zero lint errors, and two additional installed theme/storage
+regressions. The report records reviewed form snapshots and installed hierarchies,
+with synthetic HTTP distinguished from earlier real SQL/service generation.
+
+**Next:** task-to-Gig, then relationships/residency, ownership, lease/resource
+cleanup and the remaining ordered Home/payment scope. Browser/iOS/Android
+recurrence is complete within the linked local limits. Predecessor `8eacea7c8`
+now passes all required CI; refresh the new Android milestone's exact head.
+Both PRs remain drafts; paid-gig `e9ef2decb` remains green but unfinished. Combined
+migration dependencies and fresh/populated replay remain required before any
+integration. The owned 18083 fixture and recurrence emulator on 5556 are stopped;
+existing owner runtimes/files remain untouched. No hosted migration, deployment
+or paid service changed. Keep paid dependencies in the final launch bundle.
+
 ### iOS automatic task recurrence — September 10
 
 The [iOS recurrence checkpoint](home-ios-task-recurrence-2026-09-10.md) adds

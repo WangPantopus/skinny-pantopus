@@ -3,6 +3,17 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The latest [Android recurrence report](home-android-task-recurrence-2026-09-10.md)
+completes native controls, schedule projections and encrypted original recovery.
+The installed workflow passes cold/background replay, later-pause preservation
+and current denial. A rendering crash found by that journey is repaired and
+verified under the actual theme. Full local gates pass (4,511 Debug checks, 80
+existing skips), plus two installed theme/Keystore checks. Browser/iOS/Android
+recurrence is now complete within the linked local/synthetic-provider limits.
+Next is task-to-Gig, followed by the remaining ordered Home/payment scope.
+Predecessor `8eacea7c8` is green in required CI; check the new milestone separately.
+The dedicated recurrence HTTP fixture and emulator are stopped. Both PRs remain
+unfinished drafts; combined migrations and final paid dependencies remain open.
 The latest [iOS recurrence report](home-ios-task-recurrence-2026-09-10.md)
 records explicit native controls, actual schedule status, protected original
 recovery and passing installed simulator acceptance. The account-change cleanup

@@ -474,7 +474,7 @@ private fun RecurrencePicker(
             color = PantopusColors.appTextSecondary,
         )
         Text(
-            text = "This records the schedule. It does not automatically create tasks or notifications.",
+            text = "This saves a preference. To start or change automatic repeats, open Repeat schedule on the saved task.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
