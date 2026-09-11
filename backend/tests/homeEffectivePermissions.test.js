@@ -145,7 +145,7 @@ test('/me advertises effective rights rather than stale navigation flags', async
   seed({ role_base: 'lease_resident', can_manage_tasks: false, can_view_sensitive: true, can_manage_home: true });
   const router = require('../routes/homeIam');
   const handler = router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle;
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
   await handler({ params: { id: HOME }, user: { id: USER } }, response);
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
     hasAccess: true, can_manage_tasks: true, can_manage_home: false, can_view_sensitive: false,
@@ -166,7 +166,7 @@ test('pending mailbox nudge never queries or returns stored household postal val
   const from = jest.spyOn(db, 'from');
   const router = require('../routes/mailboxCheck');
   const handler = router.stack.find(layer => layer.route?.path === '/:id/mailbox-check').route.stack.at(-1).handle;
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
   await handler({ params: { id: HOME }, user: { id: USER } }, response);
   expect(response.json).toHaveBeenCalledWith({ check: {
     verdict: 'unknown', findings: [], checked_at: null,
@@ -179,7 +179,7 @@ test('/me reports a minor owner as limited and keeps explicit denial errors retr
   seed({ role_base: 'owner', age_band: 'child', can_manage_home: true });
   const router = require('../routes/homeIam');
   const handler = router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle;
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
   await handler({ params: { id: HOME }, user: { id: USER } }, response);
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
     isOwner: false, is_owner: false, can_manage_home: false, can_manage_tasks: false, can_view_sensitive: false,
@@ -196,7 +196,7 @@ test('/me reports a minor owner as limited and keeps explicit denial errors retr
 async function homeRoute(path, method = 'get', params = {}, body = {}) {
   const router = require('../routes/home');
   const handler = router.stack.find(layer => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
   await handler({ params: { id: HOME, ...params }, user: { id: USER },
     headers: { authorization: 'Bearer synthetic-effective-access-session' }, query: {}, body }, response);
   return response;
@@ -215,7 +215,7 @@ test('finance.view permits reading bills but never legacy finance mutation or it
   }
   expect(db.getTable('HomeBill')[0].amount).toBe(42);
   const router = require('../routes/homeIam');
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
   await router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle(
     { params: { id: HOME }, user: { id: USER } }, response);
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ can_manage_finance: false, permissions: ['finance.view'] }));

@@ -14,6 +14,31 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser dashboard current access — September 11
+
+The [dashboard report](home-web-dashboard-access-retirement-2026-09-11.md) records
+current data/navigation agreement, retirement of stale reads/open panels/deferred
+summaries, explicit access recovery and distinct claim-list errors. Final Chrome →
+production IAM/helper → SQL r5 passes current revocation/restoration, held reads,
+account/lifecycle changes, mid-load permission denial, fallback, pending-member
+verification with no private dashboard request, revoked/future-start denial,
+approved-member Check for updates, current timeline and narrow/keyboard UI.
+Pending residents no longer receive ownership-proof or mailed-code actions.
+Final full residency rerun passes 8 POSTs / 4 receipts. Types/lint, all 1,178 web
+cases, 5,169 backend cases and privacy gates pass; the report retains initial
+adapter failures and existing skips. Exact fixtures are cleaned.
+
+**Next:** repair the ancillary intelligence loading/error/retry finding from the
+same deliberate-outage screen: failed health/checklist reads must not imply setup
+or ready data. Then continue installed iOS/Android residency prepared decisions
+and protected recovery, transactional submission/cold-start/resubmission,
+ownership transfer/challenge, lease/resources and the full backlog below. Keep
+all paid services one final launch bundle. PRs #32/#34 remain drafts, with no new
+migration: 35 Home / 44 combined versions still require dependency reconciliation
+and replay. Verify the new exact head; preceding `d93a7f6ac` still had iPhone 16
+and Android lint/test/assemble running. Owned web/Gig DB remain for continuation;
+owner files/emulator/data stay intact. See the report for final checks and limits.
+
 ### Browser residency review and recovery — September 11
 
 The [browser residency report](home-web-residency-review-recovery-2026-09-11.md)

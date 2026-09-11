@@ -106,6 +106,11 @@ committed.
 
 ## New wider finding and next work
 
+September 11 follow-up: the surrounding dashboard finding below is resolved by
+[dashboard current-access retirement](home-web-dashboard-access-retirement-2026-09-11.md),
+which records current IAM/SQL/browser acceptance and the full residency rerun.
+The original observation is retained here as historical evidence.
+
 The narrow household denial capture shows that the surrounding dashboard can
 retain its earlier Owner label, Invite and security controls after the residency
 panel has independently denied current access. Source review confirms

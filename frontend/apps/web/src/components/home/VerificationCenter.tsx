@@ -11,11 +11,13 @@ import { confirmStore } from '@/components/ui/confirm-store';
 
 interface VerificationCenterProps {
   homeId: string;
+  onRefresh?: () => Promise<void>;
 }
 
-export default function VerificationCenter({ homeId }: VerificationCenterProps) {
+export default function VerificationCenter({ homeId, onRefresh }: VerificationCenterProps) {
   const router = useRouter();
-  const { access, reload } = useHomePermissions();
+  const { access, reload: reloadPermissions } = useHomePermissions();
+  const reload = onRefresh ?? reloadPermissions;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // ── Landlord check ──────────────────────────────────────
@@ -90,7 +92,11 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
     : access?.ownership_claim_state === 'needs_more_info'
       ? 'claim_needs_more_info'
       : status;
-  const config = getStatusConfig(effectiveStatus, access);
+  const isResidency = access?.verification_kind === 'residency';
+  const config = isResidency ? {
+    icon: '\u23F3', iconBg: 'bg-blue-100', title: 'Your residency request is under review',
+    body: 'A household reviewer must confirm your request before you can open this home. Check for updates below.',
+  } : getStatusConfig(effectiveStatus, access);
 
   return (
     <div className="max-w-lg mx-auto px-4 py-12">
@@ -161,7 +167,7 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
       )}
 
       {/* Action buttons */}
-      <div className="space-y-3">
+      {!isResidency && <div className="space-y-3">
         {/* Enter postcard code */}
         {status === 'pending_postcard' && (
           <>
@@ -210,7 +216,7 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
             onClick={() => router.push(`/app/homes/${homeId}/verify-postcard`)}
           />
         )}
-      </div>
+      </div>}
 
       {/* Always-visible actions */}
       <div className="mt-8 space-y-2">

@@ -17,7 +17,11 @@ import {
 // ── Mock @pantopus/api ──────────────────────────────────────
 const mockGet = jest.fn();
 jest.mock('@pantopus/api', () => ({
-  get: (...args: unknown[]) => mockGet(...args),
+  getAuthToken: () => 'token',
+  getApiBaseUrl: () => 'http://localhost',
+  AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
+  onTokenChange: () => () => {},
+  homeIam: { getMyHomeAccess: (...args: unknown[]) => mockGet(...args) },
 }));
 
 // ── Helpers ─────────────────────────────────────────────────

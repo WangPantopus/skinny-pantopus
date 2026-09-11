@@ -84,6 +84,7 @@ function mockRes() {
   const res = {
     statusCode: 200,
     _json: null,
+    setHeader: jest.fn(),
     status(code) { res.statusCode = code; return res; },
     json(data) { res._json = data; return res; },
   };
@@ -310,5 +311,20 @@ describe.each([
     expect(res.statusCode).toBe(503);
     expect(res._json.code).toBe('HOME_AUTHORITY_UNAVAILABLE');
     expect(JSON.stringify(res._json)).not.toContain('private SQL');
+  });
+});
+
+
+describe('GET /:id/me current verification return', () => {
+  test.each([true, false])('denied access exposes only the current verificationRequired=%s decision', async verificationRequired => {
+    require('../../utils/homePermissions').getUserAccess.mockResolvedValueOnce({
+      hasAccess: false, verificationRequired, occupancy: { verification_status: 'pending_doc' },
+    });
+    const res = mockRes();
+    await findHandler('GET', '/:id/me')(mockReq(), res);
+    expect(res.statusCode).toBe(403);
+    expect(res._json).toEqual({ hasAccess: false, role_base: null, permissions: [],
+      verification_status: 'pending_doc', verification_required: verificationRequired,
+      verification_kind: verificationRequired ? 'residency' : null });
   });
 });

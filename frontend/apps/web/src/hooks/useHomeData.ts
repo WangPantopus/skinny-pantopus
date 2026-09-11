@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { homeAccessFingerprint, readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
 
 // ── Types ──
 
@@ -36,6 +37,7 @@ export interface UseHomeDataReturn extends HomeDataEntities {
   currentUserId: string | null;
   taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
+  accessFingerprint: string | null;
   can: (perm: string) => boolean;
   refresh: () => Promise<void>;
   refreshEntity: (entity: keyof HomeDataEntities) => Promise<void>;
@@ -56,6 +58,7 @@ type State = HomeDataEntities & {
   currentUserId: string | null;
   taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
+  accessFingerprint: string | null;
 };
 
 type Action =
@@ -90,15 +93,16 @@ const initialState: State = {
   error: null,
   currentUserId: null,
   taskSession: null,
+  accessFingerprint: null,
   myAccess: { permissions: [], role_base: null, isOwner: false },
 };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'LOAD_START':
-      return { ...state, loading: true, error: null };
+      return { ...initialState, loading: true, error: null };
     case 'LOAD_ERROR':
-      return { ...state, loading: false, error: action.error };
+      return { ...initialState, loading: false, error: action.error };
     case 'LOAD_COMPLETE':
       return { ...state, ...action.data, loading: false, error: null };
     case 'SET_ENTITY':
@@ -185,11 +189,21 @@ const ENTITY_FETCHERS: Record<
 export function useHomeData(homeId: string): UseHomeDataReturn {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialState);
+  const generation = useRef(0);
+  const scopeHome = useRef(homeId);
+  const ready = useRef<(() => boolean) | null>(null);
+  const retireGeneration = useCallback(() => { generation.current++; ready.current = null; }, []);
 
   const loadDashboard = useCallback(async () => {
+    const revision = ++generation.current;
+    scopeHome.current = homeId; ready.current = null;
+    const token = getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => revision === generation.current && token === getAuthToken()
+      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
+      && document.visibilityState !== 'hidden';
     dispatch({ type: 'LOAD_START' });
     try {
-      const token = getAuthToken();
       if (!token) {
         router.push('/login');
         return;
@@ -201,29 +215,36 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         const userData = await api.users.getMyProfile() as Record<string, any>;
         const u = userData?.user ?? userData;
         userId = u?.id || null;
+        if (!current()) return;
         dispatch({ type: 'SET_CURRENT_USER', userId });
       } catch {
         // Non-critical
       }
 
-      // Load IAM permissions
-      let access: HomeAccessState = { permissions: [], role_base: null, isOwner: false };
-      try {
-        const accessRes = await api.homeIam.getMyHomeAccess(homeId);
-        access = {
-          permissions: accessRes.permissions || [],
-          role_base: accessRes.role_base || null,
-          isOwner: accessRes.isOwner || false,
-        };
-      } catch {
-        // IAM endpoint not deployed yet — gracefully default
+      if (!current()) return;
+      // An unavailable authority read cannot authorize stale dashboard data.
+      const accessRes = await readCurrentHomeAccess(homeId);
+      if (!current()) return;
+      if (accessRes.verification_required === true && !accessRes.hasAccess) {
+        ready.current = current;
+        dispatch({ type: 'LOAD_COMPLETE', data: { accessFingerprint: homeAccessFingerprint(accessRes) } });
+        return;
       }
+      if (accessRes.hasAccess !== true || !Array.isArray(accessRes.permissions)) {
+        throw new Error('Current access to this home could not be confirmed. Reload to check access.');
+      }
+      const access: HomeAccessState = {
+        permissions: accessRes.permissions, role_base: accessRes.effective_role_base ?? accessRes.role_base ?? null, isOwner: accessRes.isOwner === true,
+      };
+
 
       // Try the aggregate endpoint first, fall back to individual calls
-      const result: Partial<State> = { myAccess: access };
+      const result: Partial<State> = { myAccess: access, accessFingerprint: homeAccessFingerprint(accessRes) };
       try {
         const dash = await api.homeProfile.getHomeDashboard(homeId) as Record<string, any>;
+        if (!current()) return;
         result.home = dash.home;
+        if (result.home?.id !== homeId) throw new Error('The requested home could not be confirmed.');
         result.members = dash.members || [];
         result.tasks = dash.tasks || [];
         result.taskSession = dash.task_session?.home_id === homeId ? dash.task_session : null;
@@ -242,14 +263,15 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
             role_base?: string | null;
             isOwner?: boolean;
           };
-          const mergedRole = dm.role_base ?? access.role_base ?? null;
+          const mergedRole = access.role_base;
           result.myAccess = {
-            permissions: dm.permissions || access.permissions || [],
+            permissions: access.permissions.filter(permission => !dm.permissions || dm.permissions.includes(permission)),
             role_base: mergedRole,
-            isOwner: dm.isOwner ?? access.isOwner,
+            isOwner: access.isOwner && dm.isOwner !== false,
           };
         }
       } catch {
+        if (!current()) return;
         // Fallback: load individually
         const [homeRes, membersRes] = await Promise.allSettled([
           api.homes.getHome(homeId),
@@ -262,6 +284,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
           result.members = [...((membersData.occupants as Record<string, any>[]) || []), ...((membersData.pendingInvites as Record<string, any>[]) || [])];
         }
 
+        if (!current()) return;
         const [tasksRes, issuesRes, billsRes, pkgRes, docsRes] = await Promise.allSettled([
           api.homeProfile.getHomeTasks(homeId),
           api.homeProfile.getHomeIssues(homeId),
@@ -279,6 +302,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         if (pkgRes.status === 'fulfilled') result.packages = (pkgRes.value as Record<string, any>).packages as Record<string, any>[] || [];
         if (docsRes.status === 'fulfilled') result.documents = (docsRes.value as Record<string, any>).documents as Record<string, any>[] || [];
 
+        if (!current()) return;
         try {
           const [nearbyRes, homeGigsRes] = await Promise.allSettled([
             api.homeProfile.getNearbyGigs(homeId, { limit: 10 }),
@@ -292,6 +316,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         }
       }
 
+      if (!current()) return;
       // Load sensitive data separately
       try {
         const [secretsRes, emergRes] = await Promise.allSettled([
@@ -304,6 +329,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         // permission denied — fine
       }
 
+      if (!current()) return;
       // Load pets and polls
       try {
         const [petsRes, pollsRes] = await Promise.allSettled([
@@ -316,74 +342,105 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         // endpoints not available yet
       }
 
+      if (!current()) return;
+      const finalAccess = await readCurrentHomeAccess(homeId);
+      if (!current()) return;
+      if (finalAccess.hasAccess !== true || homeAccessFingerprint(finalAccess) !== result.accessFingerprint) {
+        throw new Error('Home access changed while loading. Reload to check current access.');
+      }
+      if (result.home?.id !== homeId) throw new Error('The requested home could not be confirmed.');
+      ready.current = current;
       dispatch({ type: 'LOAD_COMPLETE', data: result });
     } catch (e: unknown) {
+      if (!current()) return;
+      ready.current = null;
       dispatch({
         type: 'LOAD_ERROR',
-        error: e instanceof Error ? e.message : 'Failed to load home dashboard',
+        error: e instanceof Error ? e.message : 'Current home access could not be confirmed. Reload to try again.',
       });
     }
   }, [homeId, router]);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    void loadDashboard();
+    const invalidate = () => { retireGeneration(); dispatch({ type: 'LOAD_START' }); };
+    const changed = () => { invalidate(); if (document.visibilityState !== 'hidden') void loadDashboard(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') invalidate(); else changed(); };
+    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+  }, [loadDashboard, retireGeneration]);
 
   const refreshEntity = useCallback(
     async (entity: keyof HomeDataEntities) => {
+      const opening = ready.current;
+      const current = () => opening !== null && opening === ready.current && opening();
+      if (!current()) return;
       const fetcher = ENTITY_FETCHERS[entity];
       if (!fetcher) return;
       try {
         if (entity === 'tasks') {
           const result = await api.homeProfile.getHomeTasks(homeId);
+          if (!current()) return;
           dispatch({ type: 'LOAD_COMPLETE', data: { tasks: result.tasks, taskSession: result.task_session?.home_id === homeId ? result.task_session : null } });
           return;
         }
         const { data } = await fetcher(homeId);
+        if (!current()) return;
         dispatch({ type: 'SET_ENTITY', entity, data });
       } catch {
-        // silently fail for individual refresh
+        if (current()) await loadDashboard();
       }
     },
-    [homeId]
+    [homeId, loadDashboard]
   );
 
+  const openingAccess = ready.current;
   const can = useCallback(
     (perm: string): boolean => {
-      return state.myAccess.permissions.includes(perm);
+      return openingAccess !== null && openingAccess === ready.current && openingAccess() && state.myAccess.permissions.includes(perm);
     },
-    [state.myAccess]
+    [state.myAccess, openingAccess]
   );
 
   const makeEntityUpdater = useCallback(
-    (entity: keyof HomeDataEntities) => (updater: (prev: Record<string, any>[]) => Record<string, any>[]) => {
-      dispatch({ type: 'UPDATE_ENTITY', entity, updater });
+    (entity: keyof HomeDataEntities) => {
+      const opening = ready.current;
+      return (updater: (prev: Record<string, any>[]) => Record<string, any>[]) => {
+        if (opening && ready.current === opening && opening()) dispatch({ type: 'UPDATE_ENTITY', entity, updater });
+      };
     },
     []
   );
 
+  const visibleState = scopeHome.current === homeId ? state : initialState;
   return {
     // Entities
-    home: state.home,
-    members: state.members,
-    tasks: state.tasks,
-    issues: state.issues,
-    bills: state.bills,
-    packages: state.packages,
-    documents: state.documents,
-    events: state.events,
-    secrets: state.secrets,
-    emergencies: state.emergencies,
-    nearbyGigs: state.nearbyGigs,
-    homeGigs: state.homeGigs,
-    pets: state.pets,
-    polls: state.polls,
+    home: visibleState.home,
+    members: visibleState.members,
+    tasks: visibleState.tasks,
+    issues: visibleState.issues,
+    bills: visibleState.bills,
+    packages: visibleState.packages,
+    documents: visibleState.documents,
+    events: visibleState.events,
+    secrets: visibleState.secrets,
+    emergencies: visibleState.emergencies,
+    nearbyGigs: visibleState.nearbyGigs,
+    homeGigs: visibleState.homeGigs,
+    pets: visibleState.pets,
+    polls: visibleState.polls,
     // Meta
-    loading: state.loading,
-    error: state.error,
-    currentUserId: state.currentUserId,
-    taskSession: state.taskSession,
-    myAccess: state.myAccess,
+    loading: visibleState.loading,
+    error: visibleState.error,
+    currentUserId: visibleState.currentUserId,
+    taskSession: visibleState.taskSession,
+    myAccess: visibleState.myAccess,
+    accessFingerprint: visibleState.accessFingerprint,
     can,
     refresh: loadDashboard,
     refreshEntity,

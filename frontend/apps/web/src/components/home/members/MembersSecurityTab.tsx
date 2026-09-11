@@ -8,6 +8,7 @@ import type { HomeMember } from '@pantopus/types';
 import ResidencyClaimsPanel from '../ResidencyClaimsPanel';
 import MemberDetail from './MemberDetail';
 import InviteFlow from './InviteFlow';
+import { useHomePermissions } from '../useHomePermissions';
 import LockdownPanel from './LockdownPanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import Image from 'next/image';
@@ -76,7 +77,6 @@ export default function MembersSecurityTab({
   home,
   members,
   can,
-  currentUserId,
   onInvite,
   onMembersChange,
 }: {
@@ -88,7 +88,8 @@ export default function MembersSecurityTab({
   onInvite: (data: Record<string, any>) => Promise<api.homes.HomeInvitationCreated>;
   onMembersChange: () => void;
 }) {
-  const isOwner = home?.owner_id === currentUserId;
+  const { access } = useHomePermissions();
+  const isOwner = access?.isOwner === true;
 
   // Detail panel
   const [detailMember, setDetailMember] = useState<HomeMember | null>(null);
@@ -362,7 +363,7 @@ export default function MembersSecurityTab({
       </div>
 
       {/* ===== Section 3: Audit Log ===== */}
-      {(isOwner || can('security.manage')) && (
+      {can('security.manage') && (
         <div>
           <button
             onClick={handleShowAudit}

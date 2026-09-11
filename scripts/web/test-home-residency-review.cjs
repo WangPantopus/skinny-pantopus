@@ -81,7 +81,7 @@ async function main() {
         } else if (endpoint === `/api/homes/${home}/claims`) {
           if (!access().hasAccess) { status = 403; body = { error: 'Current residency access denied' }; }
           else body = { claims: JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(c)||jsonb_build_object('claimant',jsonb_build_object('id',c.user_id,'name','Applicant '||right(c.user_id::text,1),'username','residency_http_'||right(c.user_id::text,2))) ORDER BY c.id),'[]')::text FROM public."HomeResidencyClaim" c WHERE home_id=${q(home)};`)) };
-        } else if (endpoint.endsWith('/me') || endpoint.endsWith('/iam/me')) body = access();
+        } else if (endpoint.endsWith('/me') || endpoint.endsWith('/iam/me')) { body = access(); if (!body.hasAccess) { status = 403; body = { error: 'Current home access denied' }; } }
         else if (endpoint.endsWith('/dashboard')) body = { home: { id: home, name: 'Residency review Home', address: 'Private residency fixture', owner_id: actor, verification_status: 'verified' }, members: [], myAccess: access() };
         else if (endpoint.includes('ownership-claims')) body = { claims: [], incumbent: {} };
         else if (endpoint.includes('conversations')) body = { conversations: [], hasMore: false };
@@ -224,12 +224,12 @@ async function main() {
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
     sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await page.getByRole('alert').filter({ hasText: 'Current residency claims could not be loaded' }).waitFor();
+    await page.getByRole('button', { name: 'Reload current home access', exact: true }).waitFor();
     assert.equal(await page.getByText('No pending residency claims', { exact: true }).count(), 0);
     assert.equal(await page.getByRole('link', { name: 'Review approval', exact: true }).count(), 0);
     await screenshot('07-household-denied-list');
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
-    await page.getByRole('button', { name: 'Reload residency claims', exact: true }).click();
+    await page.getByRole('button', { name: 'Reload current home access', exact: true }).click();
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
     await page.goto(base + listPath + '?tab=residency', { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();

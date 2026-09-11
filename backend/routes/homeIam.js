@@ -45,6 +45,7 @@ const {
 // ============================================================
 
 router.get('/:id/me', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -57,6 +58,9 @@ router.get('/:id/me', verifyToken, async (req, res) => {
         role_base: null,
         permissions: [],
         verification_status: access.occupancy?.verification_status || null,
+        verification_required: access.verificationRequired === true,
+        verification_kind: access.verificationRequired === true
+          ? (access.role_base === 'owner' ? 'ownership' : 'residency') : null,
       });
     }
 

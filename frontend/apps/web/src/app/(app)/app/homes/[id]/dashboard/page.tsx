@@ -43,7 +43,8 @@ import {
   PollsCard, PollsCardPreview,
 } from '@/components/home/cards';
 
-import { useHomeData } from '@/hooks/useHomeData';
+import { useHomeData, type UseHomeDataReturn } from '@/hooks/useHomeData';
+import { homeAccessFingerprint } from '@/components/home/homeAccessFingerprint';
 import { useHomePanels } from '@/hooks/useHomePanels';
 import { useHomeIntelligence } from '@/hooks/useHomeIntelligence';
 
@@ -72,7 +73,7 @@ export default function HomeDashboardPage() {
   const homeId = params.id as string;
 
   return (
-    <HomePermissionsProvider homeId={homeId}>
+    <HomePermissionsProvider key={homeId} homeId={homeId}>
       <HomeDashboardContent />
     </HomePermissionsProvider>
   );
@@ -80,18 +81,60 @@ export default function HomeDashboardPage() {
 
 function HomeDashboardContent() {
   const router = useRouter();
-  const params = useParams();
+  const homeId = useParams().id as string;
+  const { access, error: permissionsError, needsVerification, loading: permissionsLoading, reload: reloadPermissions } = useHomePermissions();
+  const data = useHomeData(homeId);
+  const { loading, error } = data;
+  const accessError = error || permissionsError || (!loading && !permissionsLoading &&
+    (!access || (!access.hasAccess && !access.verification_required) || homeAccessFingerprint(access) !== data.accessFingerprint)
+    ? 'Home access changed while loading. Reload to check current access.' : null);
+
+  if (loading || permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
+          <p className="mt-4 text-app-secondary">Loading home dashboard…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessError) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="mb-3 flex justify-center"><AlertCircle className="w-10 h-10 text-red-500" /></div>
+          <p role="alert" className="text-red-600 font-medium">{accessError}</p>
+          <button onClick={() => void Promise.all([data.refresh(), reloadPermissions()])} className="mt-4 mr-3 rounded-lg border border-app-border px-4 py-2 text-sm">Reload current home access</button>
+          <button
+            onClick={() => router.push('/app')}
+            className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!permissionsLoading && needsVerification) {
+    return <VerificationCenter homeId={homeId} onRefresh={async () => { await Promise.all([data.refresh(), reloadPermissions()]); }} />;
+  }
+
+  // Unmount private panels, deferred summaries and local edits whenever authority retires.
+  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} />;
+}
+
+function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDataReturn }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const homeId = params.id as string;
-
-  const { needsVerification, loading: permissionsLoading } = useHomePermissions();
-
   const {
     home, members, tasks, issues, bills, packages, documents, events,
     secrets, emergencies, nearbyGigs, homeGigs, pets, polls,
-    loading, error, currentUserId, taskSession, myAccess, can, refresh,
+    currentUserId, taskSession, myAccess, can, refresh,
     setTasks, setIssues, setBills, setPackages, setMembers, setSecrets,
-  } = useHomeData(homeId);
+  } = data;
 
   const intelligence = useHomeIntelligence(homeId);
   const [selectedBillType, setSelectedBillType] = useState<string | null>(null);
@@ -321,39 +364,6 @@ function HomeDashboardContent() {
     setExpandedCard(null);
   };
 
-  // ── Render ──
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
-          <p className="mt-4 text-app-secondary">Loading home dashboard…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="mb-3 flex justify-center"><AlertCircle className="w-10 h-10 text-red-500" /></div>
-          <p className="text-red-600 font-medium">{error}</p>
-          <button
-            onClick={() => router.push('/app')}
-            className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!permissionsLoading && needsVerification) {
-    return <VerificationCenter homeId={homeId} />;
-  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -399,7 +409,7 @@ function HomeDashboardContent() {
         homeName={home?.name || home?.address_line1 || 'Home Dashboard'}
         homeAddress={home?.address_line1 && home?.name ? home.address_line1 : undefined}
         roleBadge={myAccess.role_base}
-        isOwner={myAccess.isOwner || home?.owner_id === currentUserId}
+        isOwner={myAccess.isOwner}
         homeId={homeId}
         activeTab={tab}
         onTabChange={setHighLevelTab}

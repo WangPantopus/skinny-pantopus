@@ -29,6 +29,26 @@ module.exports = function(container) {
     }
     return { data, error: null };
   } };
+  // Read-only Supabase query adapter for the production IAM router/helper.
+  db.from = table => {
+    assert(['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride',
+      'HomePostcardCode', 'HomeOwnershipClaim'].includes(table));
+    const filters = []; let columns = '*', order = '', limit = '', single = false;
+    const column = name => { assert.match(name, /^[a-z_]+$/); return `"${name}"`; };
+    const query = {
+      select(value) { columns = value === '*' ? '*' : value.split(',').map(v => column(v.trim())).join(','); return query; },
+      eq(key, value) { filters.push(`${column(key)}=${q(value)}`); return query; },
+      order(key, options) { order = ` ORDER BY ${column(key)} ${options?.ascending === false ? 'DESC' : 'ASC'}`; return query; },
+      limit(value) { assert(Number.isInteger(value) && value > 0); limit = ` LIMIT ${value}`; return query; },
+      maybeSingle() { single = true; return query; }, single() { single = true; return query; },
+      then(resolve, reject) { return Promise.resolve().then(() => {
+        const rows = JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT ${columns} FROM public."${table}"${filters.length ? ' WHERE ' + filters.join(' AND ') : ''}${order}${limit}) r;`));
+        if (single && rows.length > 1) throw new Error('Fixture expected a single IAM record');
+        return { data: single ? rows[0] || null : rows, error: null };
+      }).then(resolve, reject); },
+    };
+    return query;
+  };
   const transport = { createNotification: async value => {
     notifications.push(value);
     if (notificationFailure) { notificationFailure = false; throw new Error('Synthetic unavailable notification transport'); }
@@ -42,6 +62,8 @@ module.exports = function(container) {
       if (request === '../services/notificationService') return transport;
       if (request === '../utils/logger') return { info() {}, warn() {}, error() {} };
     }
+    if (parent?.filename.endsWith('/routes/homeIam.js') && ['../services/homeAuthorityService', '../services/homeExternalShareService'].includes(request)) return {};
+    if (parent?.filename.endsWith('/routes/homeIam.js') && request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
     if (parent?.filename.endsWith('/routes/home.js')) {
       if (request === '../middleware/verifyToken') return (req, _res, next) => {
         req.user = { id: req.headers['x-fixture-actor'] || actor };
@@ -55,7 +77,7 @@ module.exports = function(container) {
     return load.call(this, request, parent, isMain);
   };
   const router = require(path.join(root, 'backend/routes/home'));
-  const app = express(); app.use(express.json()); app.use('/api/homes', router);
+  const app = express(); app.use(express.json()); app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
   function setup() {
     assert.equal(sql(`SELECT (SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}))+(SELECT count(*) FROM public."Home" WHERE id=${q(home)});`), '0');
     sql(`BEGIN;

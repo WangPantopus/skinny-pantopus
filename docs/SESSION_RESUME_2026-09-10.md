@@ -1,5 +1,16 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+Newest September 11 continuation: [dashboard current access](home-web-dashboard-access-retirement-2026-09-11.md)
+repairs stale private data/Owner/Invite/security controls and open panels. Final
+actual Chrome/production IAM/helper/SQL passes revocation, stale reads, account
+and lifecycle changes, current permission denial, fallback, pending verification
+without private data, later approval/update, current timeline and narrow keyboard
+recovery. Residency-specific pending copy does not offer ownership actions. Next
+fix ancillary intelligence outage/empty/retry states exposed by the same UI pass,
+then native residency and the full existing backlog. Both feature PRs stay drafts;
+35/44 migration dependencies remain and paid services stay one final bundle.
+Older next steps below are historical; preserve their linked unresolved findings.
+
 Newest September 11 milestone: [browser residency review/recovery](home-web-residency-review-recovery-2026-09-11.md)
 passes both entries and continuous actual Chrome/HTTP/SQL acceptance: 8 POSTs,
 4 receipts, Cancel, current/historical separation, storage/lifecycle/authority
