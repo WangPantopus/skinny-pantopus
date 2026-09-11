@@ -2229,90 +2229,91 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
  * Get home details with occupants
  */
 router.get('/:id', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const { id } = req.params;
     const userId = req.user.id;
-
-    // Get home with occupants
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .select(`
-        *,
-        owner:owner_id (
-          id,
-          username,
-          name
-        ),
-        occupants:HomeOccupancy (
-          user_id,
-          created_at,
-          user:user_id (
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId: id, actorId: userId }, async (access) => {
+      // Get home with occupants
+      const { data: home, error } = await supabaseAdmin
+        .from('Home')
+        .select(`
+          *,
+          owner:owner_id (
             id,
             username,
             name
+          ),
+          occupants:HomeOccupancy (
+            user_id,
+            created_at,
+            user:user_id (
+              id,
+              username,
+              name
+            )
           )
-        )
-      `)
-      .eq('id', id)
-      .single();
+        `)
+        .eq('id', id)
+        .maybeSingle();
 
-    if (error || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
+      if (error || !home || home.id !== id) throw new Error('Home detail data unavailable');
 
-    // Check access via IAM (not owner_id — that can be null for renter-created homes)
-    const access = await checkHomePermission(id, userId);
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this home' });
-    }
-    const isOwner = access.isOwner;
-    const isOccupant = !!access.occupancy;
+      const isOwner = access.isOwner;
+      const isOccupant = !!access.occupancy;
 
-    // Parse location
-    if (home.location) {
-      const coords = parsePostGISPoint(home.location);
-      home.location = coords;
-    }
-
-    // Fetch ownership data
-    const { data: owners } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('id, subject_type, subject_id, owner_status, is_primary_owner, verification_tier')
-      .eq('home_id', id)
-      .neq('owner_status', 'revoked');
-
-    // Check if user has a pending ownership claim (for verification banner)
-    const userOwnerRow = (owners || []).find(o => o.subject_id === userId);
-    const isPendingOwner = userOwnerRow?.owner_status === 'pending';
-    let pendingClaimId = null;
-    if (isPendingOwner) {
-      const { data: pendingClaims } = await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .select('id, state, claim_phase_v2, merged_into_claim_id')
-        .eq('home_id', id)
-        .eq('claimant_user_id', userId)
-        .order('created_at', { ascending: false });
-      pendingClaimId = findLatestPendingOwnershipClaim(pendingClaims)?.id || null;
-    }
-
-    const can_delete_home = await canUserDeleteHomeRecord(id, userId);
-
-    res.json({
-      home: {
-        ...home,
-        isOwner,
-        isPendingOwner,
-        pendingClaimId,
-        isOccupant,
-        owners: owners || [],
-        can_delete_home,
+      // Parse location
+      if (home.location) {
+        const coords = parsePostGISPoint(home.location);
+        home.location = coords;
       }
-    });
 
+      // Fetch ownership data
+      const { data: owners, error: ownersError } = await supabaseAdmin
+        .from('HomeOwner')
+        .select('id, subject_type, subject_id, owner_status, is_primary_owner, verification_tier')
+        .eq('home_id', id)
+        .neq('owner_status', 'revoked');
+
+      if (ownersError || !Array.isArray(owners) || owners.some(owner => !owner || typeof owner.id !== 'string')) {
+        throw new Error('Home ownership data unavailable');
+      }
+
+      // Check if user has a pending ownership claim (for verification banner)
+      const userOwnerRow = (owners || []).find(o => o.subject_id === userId);
+      const isPendingOwner = userOwnerRow?.owner_status === 'pending';
+      let pendingClaimId = null;
+      if (isPendingOwner) {
+        const { data: pendingClaims, error: claimsError } = await supabaseAdmin
+          .from('HomeOwnershipClaim')
+          .select('id, state, claim_phase_v2, merged_into_claim_id')
+          .eq('home_id', id)
+          .eq('claimant_user_id', userId)
+          .order('created_at', { ascending: false });
+        if (claimsError || !Array.isArray(pendingClaims)) throw new Error('Home claim data unavailable');
+        pendingClaimId = findLatestPendingOwnershipClaim(pendingClaims)?.id || null;
+      }
+
+      const can_delete_home = await canUserDeleteHomeRecord(id, userId);
+
+      return {
+        home: {
+          ...home,
+          isOwner,
+          isPendingOwner,
+          pendingClaimId,
+          isOccupant,
+          owners: owners || [],
+          can_delete_home,
+        }
+      };
+    });
+    res.json(result);
   } catch (err) {
-    logger.error('Home fetch error', { error: err.message, homeId: req.params.id });
-    if (err.statusCode === 503) return res.status(503).json({ error: err.message, code: err.code });
-    res.status(500).json({ error: 'Failed to fetch home' });
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
+    logger.error('Home detail read unavailable', { code: err.code, homeId: req.params.id });
+    res.status(503).json({ error: 'Could not load this Home. Please retry.', code: 'HOME_DETAIL_UNAVAILABLE' });
   }
 });
 
@@ -2322,47 +2323,51 @@ router.get('/:id', verifyToken, async (req, res) => {
  * raw ATTOM cache, or live ATTOM fetches as needed.
  */
 router.get('/:id/property-details', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const { id } = req.params;
     const userId = req.user.id;
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId: id, actorId: userId }, async () => {
+      const { data: home, error } = await supabaseAdmin
+        .from('Home')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
 
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .select('*')
-      .eq('id', id)
-      .single();
+      if (error || !home || home.id !== id) throw new Error('Home property data unavailable');
 
-    if (error || !home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
+      if (home.location) {
+        home.location = parsePostGISPoint(home.location);
+      }
 
-    const access = await checkHomePermission(id, userId);
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this home' });
-    }
+      const detailResult = await propertyIntelligenceService.getHomeAttomPropertyDetail(home);
 
-    if (home.location) {
-      home.location = parsePostGISPoint(home.location);
-    }
+      if (!detailResult || !['home', 'cache', 'attom', 'unavailable'].includes(detailResult.source)
+        || !(detailResult.attomPayload === null || (typeof detailResult.attomPayload === 'object' && !Array.isArray(detailResult.attomPayload)))
+        || (detailResult.source === 'unavailable' && detailResult.attomPayload !== null)) {
+        throw new Error('Home property result unavailable');
+      }
 
-    const detailResult = await propertyIntelligenceService.getHomeAttomPropertyDetail(home);
+      if (detailResult.attomPayload) {
+        home.niche_data = {
+          ...(home.niche_data && typeof home.niche_data === 'object' ? home.niche_data : {}),
+          attom_property_detail: detailResult.attomPayload,
+        };
+      }
 
-    if (detailResult.attomPayload) {
-      home.niche_data = {
-        ...(home.niche_data && typeof home.niche_data === 'object' ? home.niche_data : {}),
+      return {
+        home,
         attom_property_detail: detailResult.attomPayload,
+        source: detailResult.source,
+        unavailable_reason: detailResult.unavailableReason || null,
       };
-    }
-
-    res.json({
-      home,
-      attom_property_detail: detailResult.attomPayload,
-      source: detailResult.source,
-      unavailable_reason: detailResult.unavailableReason || null,
     });
+    res.json(result);
   } catch (err) {
-    logger.error('Home property details error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch home property details' });
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
+    logger.error('Home property detail read unavailable', { code: err.code, homeId: req.params.id });
+    res.status(503).json({ error: 'Could not load these property details. Please retry.', code: 'HOME_PROPERTY_DETAIL_UNAVAILABLE' });
   }
 });
 

@@ -13,6 +13,11 @@ jest.mock('../../utils/homePermissions', () => ({
   writeAuditLog: jest.fn(),
   applyOccupancyTemplate: jest.fn(),
 }));
+// These tests isolate legacy/v2 claim selection after current Home admission.
+// Production admission and held-query denial are exercised against actual SQL.
+jest.mock('../../services/homeDashboardService', () => ({
+  withCurrentAccess: jest.fn(async (_context, read) => read({ hasAccess: true, isOwner: false, occupancy: null })),
+}));
 jest.mock('../../utils/homeSecurityPolicy', () => ({
   getClaimRiskScore: jest.fn(async () => 0),
 }));
@@ -63,7 +68,7 @@ describe('home claim read path flags', () => {
     });
 
     seedTable('Home', [{
-      id: 'home-1',
+      id: 'ddc23700-0000-4000-8000-000000000100',
       address: '123 Test St',
       city: 'Testville',
       state: 'CA',
@@ -73,7 +78,7 @@ describe('home claim read path flags', () => {
     }]);
     seedTable('HomeOwner', [{
       id: 'owner-1',
-      home_id: 'home-1',
+      home_id: 'ddc23700-0000-4000-8000-000000000100',
       subject_id: 'user-1',
       owner_status: 'pending',
       is_primary_owner: false,
@@ -81,7 +86,7 @@ describe('home claim read path flags', () => {
     }]);
     seedTable('HomeOwnershipClaim', [{
       id: 'claim-1',
-      home_id: 'home-1',
+      home_id: 'ddc23700-0000-4000-8000-000000000100',
       claimant_user_id: 'user-1',
       state: 'approved',
       claim_phase_v2: 'challenged',
@@ -93,7 +98,7 @@ describe('home claim read path flags', () => {
 
   test('flag-off home detail lookup stays on legacy pending-claim states', async () => {
     const res = await request(app)
-      .get('/api/homes/home-1')
+      .get('/api/homes/ddc23700-0000-4000-8000-000000000100')
       .set('x-test-user-id', 'user-1');
 
     expect(res.status).toBe(200);
@@ -105,7 +110,7 @@ describe('home claim read path flags', () => {
     householdClaimConfig.flags.v2ReadPaths = true;
 
     const res = await request(app)
-      .get('/api/homes/home-1')
+      .get('/api/homes/ddc23700-0000-4000-8000-000000000100')
       .set('x-test-user-id', 'user-1');
 
     expect(res.status).toBe(200);

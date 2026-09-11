@@ -14,6 +14,53 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Requested pause checkpoint — Home detail authority and full inventory
+
+The owner requests a pause and a copyable handoff for a fresh session. Finish
+committing/pushing this verified checkpoint, then stop; do not start the next
+Home-list implementation in this session. Worktree:
+`/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`. Previous pushed milestone is
+`42accb7325de9a5e0ea4604094a61dd89d78e182`; the new checkpoint contains the
+[Home-detail repair](home-detail-authority-2026-09-11.md) and consolidated
+[remaining-work inventory](REMAINING_WORK_2026-09-11.md): 80 tracked entries,
+one now locally verified, 79 still open. Counts are not an effort percentage.
+
+Detail and property-detail current authority, safe errors and delayed-result
+retirement pass real production HTTP/IAM/SQL through the actual Supabase SDK:
+thirteen authority changes on both routes, nine held replies, minor-owner limits,
+legacy/v2 claim selection and unavailable-data/provider recovery. Every SQL
+fixture cleaned exactly. Privacy gates pass. Final backend r3 passes all 317 suites / 5,169 checks (16 existing skips),
+70.326 seconds on the already-installed supported Node 20 runtime.
+The report preserves the earlier fixture mismatch and aborted wrong-directory
+rerun. Native iOS/Android card/receipt and health work was already pushed in
+`42accb732`; its CI is running with completed checks green, native jobs pending.
+Android parent `892c2f51d` was superseded/cancelled by that push; do not claim
+its aggregate as a passing final run. Recheck the newest pushed head next session.
+
+**Next:** H02-H08 — fix actual Home lists/primary/root stale access, truthful
+roles/deletion eligibility and safe identity projections; separate saved Home,
+property/address verification, residency and ownership; verify real onboarding/
+invites/private first use. Then native residency and the full inventory, including
+health/checklist lag, writes/settings/privacy/sharing, Place finance, Mail/guests,
+UI/accessibility, payment recovery, provider/device and upgrade/release gates.
+The detail repair does not close list/identity/raw occupant exposure findings.
+
+#32/#34 remain unfinished drafts; #34 conflicts with master. Master last fetched
+is `6a1013784`; combined 38 Home / 21 payment / 47 migration dependencies/replay
+remain open. The reserved tip migration is not implemented. No PR merge, hosted
+change, production deployment, new migration or paid activation occurred.
+All paid services stay one final launch-preparation bundle.
+
+Preserve owner checkout on `939878b4` with its modified handoff and two untracked
+Place-design files. Paid worktree is clean at `e9ef2decb`; do not copy/reset it.
+Docker/owned Supabase project `pantopus-home-gig-replay` is healthy (API 64521,
+DB 64522); all ddc236 fixtures are cleaned and port 18083 is free. Existing owned
+web PID 63192 listens on 18080. Owned Android 5556 and iOS F9BBAB33 remain booted;
+owner iOS EB5AD759 remains untouched. Preserve SQL, private logs/screens, derived
+products and the restored signed Sentry artifact. Disk has about 22 GiB free;
+no cleanup of owner files or database copies is authorized by this checkpoint.
+
 ### iOS and server intelligence acceptance complete — next: Home identity
 
 Android milestone `892c2f51dde5034d54aac2efe53adf6e41fb4935` is pushed. Its

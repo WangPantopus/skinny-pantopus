@@ -284,7 +284,16 @@ test.each([
 
 test('Home detail does not reconstruct owner authority for a minor from HomeOwner', async () => {
   seed({ role_base: 'owner', age_band: 'teen' }, { owner_id: USER });
-  db.seedTable('HomeOwner', [{ home_id: HOME, subject_id: USER, subject_type: 'user', owner_status: 'verified' }]);
+  db.seedTable('HomeOwner', [{ id: 'owner-row', home_id: HOME, subject_id: USER, subject_type: 'user', owner_status: 'verified' }]);
+  db.setRpcMock(async name => {
+    if (name === 'home_record_context') {
+      const access = await getUserAccess(HOME, USER);
+      return { data: { allowed: true, private: false, user_id: USER,
+        role: access.effective_role_base, permissions: access.permissions }, error: null };
+    }
+    if (name === 'home_delete_eligibility') return { data: { allowed: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null };
+    return { data: null, error: { message: 'Unexpected RPC' } };
+  });
   const response = await homeRoute('/:id');
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ home: expect.objectContaining({ isOwner: false }) }));
 });
