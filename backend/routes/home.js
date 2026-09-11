@@ -4686,6 +4686,16 @@ router.post('/:id/assets', verifyToken, async (req, res) => {
 
 // ============ DASHBOARD AGGREGATE ============
 
+router.get('/:id/dashboard-access', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  const dashboardService = require('../services/homeDashboardService');
+  try {
+    const access = await dashboardService.readAuthority({ homeId: req.params.id, actorId: req.user.id });
+    return res.status(access.hasAccess ? 200 : 403).json(access);
+  } catch (error) { return dashboardService.sendError(res, error); }
+});
+
 /**
  * GET /api/homes/:id/dashboard
  * Returns card-based dashboard data in a single request

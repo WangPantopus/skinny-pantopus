@@ -4,6 +4,44 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## Current native authority checkpoint
+
+`GET /api/homes/:id/dashboard-access` now provides a minimal no-store current
+permission envelope and an opaque revision. Shared access uses the same production
+IAM and SQL context as the aggregate, including frozen/archived Homes and disputed
+ownership. The general navigation `/me` alone did not fence these states. Denied
+responses expose no Home header, member data or permissions. Only a current own
+pending occupancy can expose ownership/residency verification guidance; expired,
+future, revoked and blocked contexts do not receive those controls. This response
+is a read check, not a mutation capability or a globally atomic snapshot.
+
+Production HTTP/SQL authority r1 passes current/changed grants, all membership
+windows, frozen/frozen-silent/archived/merged Homes, disputed/revoked owners, both
+applicant kinds and invalid/malformed/query/transport failures. Three held SQL
+responses cannot restore obsolete authority or applicant controls. Actual
+Supabase SDK/PostgREST success, frozen denial and both applicant envelopes pass.
+Exact SQL cleanup passes. Full backend regression passes 317 suites / 5,169 checks
+with the existing one suite / 16 skips. Private proof is
+`/private/tmp/pantopus-home-dashboard-authority-http-r1.log` and
+`/private/tmp/pantopus-home-dashboard-native-authority-backend-r1.log`.
+
+The populated web milestone is pushed as `b926f74e2`; every required check on
+[its CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34602544932)
+passes. The predecessor `9d603c68c` run was cancelled by that push while Android
+was running; its downstream CI OK failure is not a completed pass. Both feature
+PRs remain unfinished drafts; #34 still conflicts. No migration or paid/hosted
+change; combined 47-version dependency/replay work remains.
+
+Native iOS access/lifecycle, strict aggregate, safe identity, truthful empty/
+property copy and checklist layout are still an uncommitted candidate. Signed
+build r2/r3 pass; installed r2 is running on owned simulator F9BBAB33. Installed
+r1 had missing opt-in environment in the v1 xctestrun and skipped; it provides no
+workflow acceptance. Final Swift quality and affected auth/model verification
+remain. Android safe identity edits remain a draft without installed proof.
+The owned native fixture r2 on 18083 uses actual dashboard/record/intelligence
+services and SQL; identity and Home list/detail shell are synthetic. Finish and
+clean it exactly. Owner source/devices/data remain untouched.
+
 ## Populated browser and standalone list milestone
 
 The browser now uses the aggregate's actual counts/today contract and reads

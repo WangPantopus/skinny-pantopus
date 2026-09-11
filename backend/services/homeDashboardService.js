@@ -1,4 +1,5 @@
 const db = require('../config/supabaseAdmin');
+const { createHash } = require('node:crypto');
 const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../serializers/identitySerializers');
 const { getUserAccess } = require('../utils/homePermissions');
 const { ROLE_RANK, currentOccupancy, resolveHomeRole } = require('../utils/homeAccessPolicy');
@@ -63,6 +64,55 @@ function visibleScopes(access) {
   if ((ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager) visibility.push('managers');
   if (access.permissions.includes('sensitive.view')) visibility.push('sensitive');
   return visibility;
+}
+
+// A lightweight reauthorization boundary for mounted native summaries. The
+// general IAM navigation record alone does not fence frozen/archived Homes.
+async function readAuthority({ homeId, actorId }) {
+  const opening = await getUserAccess(homeId, actorId);
+  const revision = access => createHash('sha256').update(fingerprint(access)).digest('hex');
+  const denied = access => ({ hasAccess: false, permissions: [], verification_required: false,
+    verification_kind: null, verification_status: null, access_revision: revision(access), home_id: homeId });
+  if (opening.hasAccess && opening.permissions.includes('home.view')) {
+    try {
+      const current = await readAccess(homeId, actorId);
+      if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+      return { hasAccess: true, home_id: homeId, permissions: current.permissions, is_owner: current.isOwner,
+        role_base: current.effective_role_base, access_revision: revision(current) };
+    } catch (error) {
+      if (error.code === 'HOME_DASHBOARD_DENIED') return denied(opening);
+      throw error;
+    }
+  }
+  async function personalContext() {
+    const [{ data: home }, owners] = await Promise.all([
+      checked(db.from('Home').select('id, security_state, home_status').eq('id', homeId).maybeSingle()),
+      rows(db.from('HomeOwner').select('id, owner_status').eq('home_id', homeId)
+        .eq('subject_id', actorId).eq('subject_type', 'user').order('id')),
+    ]);
+    if (home && (home.id !== homeId || typeof home.security_state !== 'string'
+      || typeof home.home_status !== 'string')) throw failure();
+    if (owners.some(owner => !owner || typeof owner.id !== 'string'
+      || !['pending', 'verified', 'disputed', 'revoked'].includes(owner.owner_status))) throw failure();
+    return { home, owners };
+  }
+  const context = await personalContext();
+  const current = await getUserAccess(homeId, actorId);
+  if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+  const finalContext = await personalContext();
+  if (JSON.stringify(context) !== JSON.stringify(finalContext)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+  const { home, owners } = finalContext;
+  const result = denied(current);
+  const ownershipBlocked = owners.some(owner => owner.owner_status === 'disputed')
+    || (owners.some(owner => owner.owner_status === 'revoked') && !owners.some(owner => owner.owner_status === 'verified'));
+  if (home?.id === homeId && !['frozen', 'frozen_silent', 'disputed'].includes(home.security_state)
+    && !['archived', 'merged'].includes(home.home_status) && !ownershipBlocked
+    && current.verificationRequired === true && currentOccupancy(current.occupancy)) {
+    result.verification_required = true;
+    result.verification_kind = current.role_base === 'owner' ? 'ownership' : 'residency';
+    result.verification_status = current.occupancy.verification_status;
+  }
+  return result;
 }
 // Lists used by the dashboard must share its current resource/visibility gate.
 // The legacy generic-membership lists bypassed these record boundaries.
@@ -185,4 +235,4 @@ function sendError(res, error) {
   const safe = error && Object.hasOwn(MESSAGES, error.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, readResource, sendError };
+module.exports = { read, readResource, readAuthority, sendError };

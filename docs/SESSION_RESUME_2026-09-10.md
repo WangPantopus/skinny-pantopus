@@ -1,5 +1,26 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+## Native current-authority checkpoint — September 11
+
+The [dashboard report](home-dashboard-current-summary-2026-09-11.md) now records
+production `/dashboard-access` HTTP/SQL/SDK authority r1 and full backend regression
+passing, with exact SQL cleanup. Current/shared access fences frozen/archived Homes
+and ownership disputes; denied applicants get only current own verification kind.
+Three held SQL replies and membership windows pass. No new migration or hosted work.
+
+Every required CI check on pushed web milestone `b926f74e2` passes. The prior
+`9d603c68c` run was cancelled, not independently all green. Refresh the next pushed
+head. #32/#34 remain unfinished drafts; #34 is conflicted, and combined migration
+dependencies/replay remain. All paid services stay one final launch-preparation bundle.
+
+Next finish the uncommitted iOS whole-Home access/lifecycle candidate in the installed
+app, including applicants/private first-use, late replies, account changes and card
+errors/recovery. Signed r2/r3 builds pass; installed r2 is running on owned F9BBAB33
+against native fixture r2/18083. Installed r1 skipped because its xctestrun lacked
+the opt-in environment. Native acceptance and final quality remain unverified.
+Android identity changes are also an unfinished draft. Preserve owner work and devices.
+Continue the full ordered backlog after this milestone; earlier checkpoints are historical.
+
 ## Current populated dashboard checkpoint — September 11
 
 Read the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
