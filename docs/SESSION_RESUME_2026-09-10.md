@@ -1,5 +1,14 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+September 11 continuation: PR #7 at `8c2eaa110` passed all required checks and
+merged as `6a1013784`; integrated into the Home branch with current routing and
+handoff preserved. Verify this new integration head. Residency HTTP/session
+adapters now pass 42 affected checks; candidate SQL remains unapplied/unverified.
+Docker stopped under local resource pressure; the owner authorized restoring the
+existing engine. Recover it without deleting containers, volumes or owner work,
+then execute actual SQL/HTTP/races/fresh and populated verification. No paid
+service activation. The older status below is a historical checkpoint.
+
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.

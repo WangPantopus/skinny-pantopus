@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 10, 2026. This is the continuing-work entry point. Detailed
+Updated September 11, 2026. This is the continuing-work entry point. Detailed
 reports below retain their original dates; their historical blockers must not
 be mistaken for current status. Refresh Git, CI and infrastructure observations
 before changing anything. A merged branch is not a production release.
@@ -13,6 +13,21 @@ the ordered backlog below. The owner now requests autonomous continuation and
 authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
+
+### Diagnostics privacy merged and residency continued — September 11
+
+The [diagnostics report](deep-link-diagnostics-privacy-2026-09-07.md) records PR #7.
+Its final `8c2eaa110` passes build, strict Swift quality, three iOS device jobs,
+schema safeguards and CI OK. It merged as `6a1013784`; no migration or provider
+dependency is introduced. Home task routes and all other current routing are
+preserved during integration. The local rebuild was interrupted for resource
+pressure and is not claimed as a pass; remote final-head acceptance is recorded.
+
+Residency candidate HTTP routes now expose prepared current review, require the
+opening session for explicit decisions and retain original/current separation.
+The 42 affected route/admission checks pass, but SQL execution, real HTTP/SQL,
+races, complete contracts, fresh replay/populated upgrade and clients remain
+unverified. Those local candidate files are excluded from this integration commit.
 
 ### Android claimant relationship review and recovery — September 10
 
@@ -35,12 +50,14 @@ not applied or included in the Android milestone. The committed Home set remains
 feature PRs stay drafts. Paid #34 remains `e9ef2decb`, green but unfinished.
 Android source is committed/pushed at `ca2d6e378`; verify the current integration
 head separately. Preceding iOS `3393baa18` passes required CI.
-PR #24's documentation-only archive merged as `cd764458f`; PR #7 is refreshed at
-`8c2eaa110` with new CI pending after updating its obsolete test hook. Master
-`cd764458f` is integrated here with both current handoff and design history
-preserved. Integrate the privacy fix after its own required checks and merge. All paid services remain one final launch
-bundle. Exact native fixtures are cleaned and owned emulator/listener stopped;
-the owned Gig database remains for residency work. Owner work/runtimes stay intact.
+PR #24's documentation-only archive merged as `cd764458f`. PR #7 passes all
+required checks at `8c2eaa110`, including three iOS devices, and merged as
+`6a1013784`. That master is now integrated here with current Home routing and
+handoff preserved; verify the new integration head separately. Exact native
+fixtures are cleaned and owned emulator/listener stopped. Docker stopped during
+local resource pressure; the owner explicitly authorized bringing the existing
+engine back. SQL verification is pending engine recovery. Owner work/runtimes
+and persistent databases stay intact. All paid services remain one final bundle.
 
 ### Design archive integrated — September 10
 
