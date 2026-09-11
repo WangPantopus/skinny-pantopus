@@ -83,6 +83,13 @@ class HomeClaimSessionScope(
 
     val actorId: String? get() = openingAccount.takeIf { isCurrent }
 
+    /** Draft restoration metadata never contains raw tokens or session IDs. */
+    val storageIdentityHash: String?
+        get() =
+            openingIdentity?.takeIf { isCurrent }?.let {
+                MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { byte -> "%02x".format(byte) }
+            }
+
     suspend fun requireCurrent() {
         check(isCurrent) { CLAIM_SESSION_CHANGED }
         val stored =

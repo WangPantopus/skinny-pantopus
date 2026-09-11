@@ -165,7 +165,7 @@ struct ZipMismatchBanner: View {
             .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text("We couldn't pinpoint this address")
+                    Text("Confirm the ZIP code")
                         .pantopusTextStyle(.body)
                         .fontWeight(.semibold)
                         .foregroundStyle(Theme.Color.warning)

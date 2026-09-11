@@ -21,16 +21,19 @@ public struct WizardShell<Content: View>: View {
     private let model: any WizardModel
     private let identity: WizardIdentity
     private let content: Content
+    private let scrollResetID: AnyHashable?
 
     @State private var showsDiscard = false
 
     public init(
         model: any WizardModel,
         identity: WizardIdentity = .personal,
+        scrollResetID: AnyHashable? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.model = model
         self.identity = identity
+        self.scrollResetID = scrollResetID
         self.content = content()
     }
 
@@ -56,9 +59,11 @@ public struct WizardShell<Content: View>: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
+            .id(scrollResetID)
             stickyCTA(chrome: chrome)
         }
         .background(Theme.Color.appBg)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("wizardShell")
         .wizardCloseConfirm(
             isPresented: $showsDiscard,

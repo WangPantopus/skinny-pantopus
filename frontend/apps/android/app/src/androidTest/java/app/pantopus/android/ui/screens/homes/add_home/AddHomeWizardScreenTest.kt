@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.add_home
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,12 +14,17 @@ import app.pantopus.android.data.api.models.homes.CheckAddressRequest
 import app.pantopus.android.data.api.models.homes.CheckAddressResponse
 import app.pantopus.android.data.api.models.homes.CreateHomeRequest
 import app.pantopus.android.data.api.models.homes.CreateHomeResponse
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationResponse
+import app.pantopus.android.data.api.models.homes.HomeAddressVerdict
 import app.pantopus.android.data.api.models.homes.HomeDto
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
+import app.pantopus.android.data.api.models.homes.ValidatedHomeAddress
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardShellTags
 import io.mockk.coEvery
 import io.mockk.every
@@ -54,7 +60,7 @@ class AddHomeWizardScreenTest {
             message = "ok",
             home =
                 HomeDto(
-                    id = "home_42",
+                    id = "ddc23800-0000-4000-8000-000000000042",
                     name = "412 Elm St",
                     address = "412 Elm St",
                     city = "Portland",
@@ -72,6 +78,13 @@ class AddHomeWizardScreenTest {
         )
 
     private fun makeViewModel(): AddHomeWizardViewModel {
+        coEvery { repo.validateAddress(any()) } returns
+            NetworkResult.Success(
+                HomeAddressValidationResponse(
+                    "ddc23800-0000-4000-8000-000000000010",
+                    HomeAddressVerdict("OK", ValidatedHomeAddress("412 Elm St", "Apt 3B", "Brooklyn", "NY", "11211", 40.7138, -73.9527)),
+                ),
+            )
         coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns NetworkResult.Success(checkAddressOk)
         coEvery { repo.create(any<CreateHomeRequest>()) } returns NetworkResult.Success(createHomeResponse)
         // `runCheckAddress` also fans out to the ATTOM public-records lookup.
@@ -84,7 +97,22 @@ class AddHomeWizardScreenTest {
             mockk<NetworkMonitor>(relaxed = true).also {
                 every { it.isOnline } returns MutableStateFlow(true)
             }
-        return AddHomeWizardViewModel(repo, mockk(relaxed = true), SavedStateHandle(), networkMonitor)
+        val session = mockk<HomeClaimSessionScope>(relaxed = true)
+        every { session.isCurrent } returns true
+        every { session.invalidated } returns MutableStateFlow(false)
+        every { session.storageIdentityHash } returns "a".repeat(64)
+        coEvery { session.confirmCurrent() } returns true
+        val sessions = mockk<HomeClaimSessionScopeFactory>()
+        every { sessions.create(any()) } returns session
+        return AddHomeWizardViewModel(
+            repo,
+            mockk(relaxed = true),
+            SavedStateHandle(),
+            networkMonitor,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            sessions,
+        )
     }
 
     private fun AddHomeWizardViewModel.fillAddress() {
@@ -110,25 +138,13 @@ class AddHomeWizardScreenTest {
         }
         compose.runOnIdle { vm.fillAddress() }
         compose.waitForIdle()
-        // Assert on the VM directly — chrome.primaryCtaEnabled is a pure
-        // function of the form's current step + address completeness, so
-        // it doesn't depend on Compose recomposition timing.
-        assert(vm.chrome.primaryCtaEnabled) {
-            "After selecting a home, Continue must be enabled."
-        }
+        compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).assertIsEnabled()
     }
 
     @Test
     fun close_on_dirty_form_shows_discard_confirm() {
         val vm = makeViewModel()
         var dismissed = false
-        // Mutate the form BEFORE setContent so the initial composition
-        // sees `chrome.dirty == true` on first render. Mutating after
-        // setContent has been racy on the macos-15 emulator: the
-        // StateFlow → collectAsStateWithLifecycle hop sometimes lands
-        // after WizardShell's onLeading closure has already captured a
-        // stale chrome.
-        vm.updateSearchQuery("412 Elm")
         compose.setContent {
             AddHomeWizardScreen(
                 onDismiss = { dismissed = true },
@@ -136,6 +152,8 @@ class AddHomeWizardScreenTest {
                 viewModel = vm,
             )
         }
+        compose.runOnIdle { vm.updateField(AddressField.City, "Test") }
+        compose.waitForIdle()
         compose.onNodeWithTag(WizardShellTags.LEADING).performClick()
         // Material 3 AlertDialog renders inside its own Popup window —
         // reach the visible surface by title text rather than testTag.
@@ -198,7 +216,7 @@ class AddHomeWizardScreenTest {
         assert(vm.state.value.form.currentStep == AddHomeStep.Success) {
             "Wizard must reach Success after submit completes."
         }
-        assert(vm.state.value.createdHomeId == "home_42") {
+        assert(vm.state.value.createdHomeId == "ddc23800-0000-4000-8000-000000000042") {
             "createdHomeId must capture the response's home id."
         }
     }

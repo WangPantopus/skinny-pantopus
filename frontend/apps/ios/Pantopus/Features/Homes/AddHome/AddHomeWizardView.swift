@@ -17,7 +17,10 @@ import SwiftUI
 public struct AddHomeWizardView: View {
     @State private var viewModel: AddHomeWizardViewModel
     @SceneStorage("addHomeWizardForm") private var storedForm: String = ""
+    @SceneStorage("addHomeWizardFormScope") private var storedFormScope: String = ""
     @State private var hasRestored = false
+    @State private var keyboardVisible = false
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
     private let onOpenHomeDashboard: (String) -> Void
@@ -53,11 +56,38 @@ public struct AddHomeWizardView: View {
     }
 
     public var body: some View {
-        WizardShell(model: viewModel) {
-            stepContent
+        WizardShell(model: viewModel, scrollResetID: "\(viewModel.currentStep.rawValue):\(viewModel.errorMessage != nil)") {
             if let error = viewModel.errorMessage {
                 AddHomeErrorBanner(message: error)
+                if viewModel.currentStep == .confirm {
+                    Button("Try again", action: viewModel.retryCheckAddress)
+                        .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)
+                    Button("Edit address", action: viewModel.leadingTapped)
+                }
             }
+            stepContent
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if keyboardVisible {
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                    .frame(minWidth: 60, minHeight: 44)
+                    .accessibilityIdentifier("addHomeKeyboardDone")
+                }
+                .padding(.horizontal, Spacing.s4)
+                .background(Theme.Color.appSurface)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
         }
         .onAppear {
             restoreIfNeeded()
@@ -70,6 +100,18 @@ public struct AddHomeWizardView: View {
                         stepName: String(describing: viewModel.currentStep)
                     )
                 )
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { viewModel.suspendAddressEntry() }
+        }
+        .onDisappear {
+            keyboardVisible = false
+            if viewModel.scannerTargetItemID == nil { viewModel.suspendAddressEntry() }
+        }
+        .onChange(of: viewModel.isCurrent) { _, current in
+            if !current { storedForm = ""
+                viewModel.retireSession()
             }
         }
         .onChange(of: viewModel.form) { _, _ in persist() }
@@ -103,6 +145,7 @@ public struct AddHomeWizardView: View {
         } message: {
             Text(viewModel.accessSecretWarning ?? "")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeWizard")
     }
 
@@ -120,6 +163,11 @@ public struct AddHomeWizardView: View {
     private func restoreIfNeeded() {
         guard !hasRestored else { return }
         hasRestored = true
+        guard let scope = viewModel.draftIdentityHash, storedFormScope == scope else {
+            storedForm = ""
+            storedFormScope = ""
+            return
+        }
         guard let data = storedForm.data(using: .utf8),
               let snapshot = try? JSONDecoder().decode(AddHomeFormState.self, from: data)
         else { return }
@@ -127,14 +175,22 @@ public struct AddHomeWizardView: View {
     }
 
     private func persist() {
+        guard let scope = viewModel.draftIdentityHash else {
+            storedForm = ""
+            storedFormScope = ""
+            return
+        }
         guard let data = try? JSONEncoder().encode(viewModel.form),
               let json = String(data: data, encoding: .utf8)
         else { return }
         storedForm = json
+        storedFormScope = scope
     }
 
     private func handle(_ event: AddHomeOutboundEvent?) {
         guard let event else { return }
+        viewModel.finishDraft()
+        storedFormScope = ""
         switch event {
         case .dismiss:
             storedForm = ""
@@ -280,7 +336,7 @@ private struct AddHomeConfirmStep: View {
     var body: some View {
         HeadlineBlock("Confirm the property")
         SubcopyBlock(
-            "We checked this address against our property records. Review the details before continuing."
+            "Review the address and Home details. Property information may be unavailable."
         )
         VStack(alignment: .leading, spacing: Spacing.s3) {
             if let mismatch = viewModel.zipMismatch {
@@ -295,17 +351,19 @@ private struct AddHomeConfirmStep: View {
                 isGeocodeResolved: viewModel.isGeocodeResolved,
                 mismatch: viewModel.zipMismatch
             )
-            if let check = viewModel.addressCheck {
+            if let check = viewModel.addressCheck, viewModel.isGeocodeResolved {
                 AddressVerdictRow(check: check)
             }
-            PrimaryHomeToggle(isPrimary: viewModel.form.isPrimary) {
-                viewModel.setPrimaryHome($0)
+            if viewModel.isGeocodeResolved {
+                PrimaryHomeToggle(isPrimary: viewModel.form.isPrimary) {
+                    viewModel.setPrimaryHome($0)
+                }
             }
             // A12.2 Details — nickname / type / beds / baths / sizes /
             // year / description, pre-filled from public records. Hidden
             // on the join-an-existing-home path, which RN skips too
             // (`useHomeForm.ts:619-623, :700-705`).
-            if !viewModel.isClaimingExistingHome {
+            if !viewModel.isClaimingExistingHome && viewModel.isGeocodeResolved {
                 Divider().background(Theme.Color.appBorderSubtle)
                 AddHomeDetailsSection(viewModel: viewModel)
             }
@@ -508,14 +566,14 @@ private struct AddressVerdictRow: View {
     private var verdictHeadline: String {
         check.exists
             ? "Already on Pantopus"
-            : "Looks good"
+            : "Ready for Home setup"
     }
 
     private var verdictSubcopy: String {
         if check.exists {
-            return "Another household already has this address. We'll route you to a join flow next."
+            return "This address has a Home. Your role determines how to request access."
         }
-        return "We'll create a new household for this address."
+        return "Continue to choose your role. This address check does not verify residency or ownership."
     }
 }
 

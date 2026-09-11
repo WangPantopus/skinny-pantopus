@@ -13,6 +13,8 @@ import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import io.mockk.every
@@ -103,11 +105,20 @@ class AddHomeWizardSnapshotTest {
             mockk<NetworkMonitor>(relaxed = true).also {
                 every { it.isOnline } returns MutableStateFlow(true)
             }
+        val session = mockk<HomeClaimSessionScope>(relaxed = true)
+        every { session.isCurrent } returns true
+        every { session.invalidated } returns MutableStateFlow(false)
+        every { session.storageIdentityHash } returns "a".repeat(64)
+        val sessions = mockk<HomeClaimSessionScopeFactory>()
+        every { sessions.create(any()) } returns session
         return AddHomeWizardViewModel(
             repository = mockk<HomesRepository>(relaxed = true),
             discoveryRepository = mockk<HomeDiscoveryRepository>(relaxed = true),
             savedStateHandle = SavedStateHandle(),
             networkMonitor = networkMonitor,
+            geoApi = mockk(relaxed = true),
+            locationProvider = mockk(relaxed = true),
+            sessions = sessions,
         )
     }
 

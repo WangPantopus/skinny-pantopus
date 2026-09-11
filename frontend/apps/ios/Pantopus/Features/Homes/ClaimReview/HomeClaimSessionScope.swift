@@ -29,6 +29,13 @@ final class HomeClaimSessionScope {
         openingIdentity != nil && identity() == openingIdentity
     }
 
+    /// A draft may restore only inside the session that wrote it. No raw token
+    /// or session identifier belongs in scene restoration metadata.
+    var storageIdentityHash: String? {
+        guard isCurrent, let openingIdentity else { return nil }
+        return SHA256.hash(data: Data(openingIdentity.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     func requireCurrent() throws {
         guard isCurrent else { throw HomeClaimReviewError.sessionChanged }
     }

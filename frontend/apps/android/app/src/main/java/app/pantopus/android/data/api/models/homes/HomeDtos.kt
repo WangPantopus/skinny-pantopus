@@ -258,6 +258,7 @@ data class CreateHomeRequest(
      */
     val role: String? = null,
     @Json(name = "attom_property_detail") val attomPropertyDetail: JsonValue? = null,
+    @Json(name = "address_id") val addressId: String? = null,
 )
 
 /** `POST /api/homes` response — route `backend/routes/home.js:677`. */

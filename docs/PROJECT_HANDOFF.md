@@ -14,6 +14,28 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Native Home address entry — September 11
+
+The [native address-entry milestone](home-native-address-entry-2026-09-11.md)
+replaces sample search with real search/resolve, editable manual input, canonical
+validation and explicit ZIP correction. Both installed platforms pass search,
+partial-draft keep/discard, validation/refusal/retry, unit editing and background
+retirement through production HTTP/SDK/SQL. Keyboard reachability, Android system
+Back/current chrome and the iPhone confirmation's missing safe action are fixed.
+Final Android Debug/Release/style/lint/snapshot checks pass; iPhone regression,
+final signed build, affected installed flows and changed-file style pass. Exact
+fixture SQL cleanup is confirmed. Private evidence and owner resources are preserved.
+
+H07/H08/R02 remain open: finish actual device-location acquisition/cancellation,
+atomic retained create/join with lost-reply/restart recovery, primary eligibility
+and truthful first use, then native residency and the full inventory (74 entries
+remain; not an effort percentage). Creation is still multi-write and is not
+accepted by address-entry evidence. No migration or paid activation. Source
+migrations remain 39 Home / 21 paid / 48 combined; #32/#34 remain unfinished drafts
+and #34 conflicts. Fetch and verify the next pushed head's own CI. Predecessor
+`4b2b9a0e2` has all checks green in
+[CI run 34647390851](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34647390851).
+
 ### Address lookup failure and recovery — September 11
 
 Following native milestone `f66c0b3a8`, the [onboarding lookup repair](home-onboarding-recovery-2026-09-11.md)

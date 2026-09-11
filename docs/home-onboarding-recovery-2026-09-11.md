@@ -70,3 +70,12 @@ The native search itself is also unfinished: production Add Home models use
 manual fields only enable Continue when matching a sample candidate. Replace
 that path with real search, manual entry and location recovery. The complete
 creation/admission and native onboarding exit criteria remain open.
+
+## Native entry milestone
+
+The sample-entry/missing-coordinate defects above are repaired in the
+[native address-entry milestone](home-native-address-entry-2026-09-11.md). Both
+installed clients pass real search/manual/validation, explicit ZIP correction,
+missing-unit editing, refusal/retry and background recovery through SDK/SQL.
+Device location acquisition, atomic retained creation/admission, primary
+eligibility and first-use destinations remain open.

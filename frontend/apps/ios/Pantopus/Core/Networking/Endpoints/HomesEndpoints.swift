@@ -8,6 +8,10 @@ import Foundation
 
 /// Endpoint builders for `backend/routes/home.js`.
 public enum HomesEndpoints {
+    public static func validateAddress(_ request: HomeAddressValidationRequest) -> Endpoint {
+        Endpoint(method: .post, path: "/api/v1/address/validate", body: request)
+    }
+
     /// `GET /api/homes/my-homes` — route `backend/routes/home.js:1464`.
     public static func myHomes() -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/my-homes")

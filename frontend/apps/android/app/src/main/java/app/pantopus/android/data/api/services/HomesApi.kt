@@ -28,6 +28,8 @@ import app.pantopus.android.data.api.models.homes.GetHomePackagesResponse
 import app.pantopus.android.data.api.models.homes.GetHomePollsResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationRequest
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationResponse
 import app.pantopus.android.data.api.models.homes.HomeBillResponse
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeEventDetailResponse
@@ -116,6 +118,11 @@ interface HomesApi {
     suspend fun propertySuggestions(
         @Body body: PropertySuggestionsRequest,
     ): PropertySuggestionsResponse
+
+    @POST("api/v1/address/validate")
+    suspend fun validateAddress(
+        @Body body: HomeAddressValidationRequest,
+    ): HomeAddressValidationResponse
 
     /** `POST /api/homes/check-address` — route `backend/routes/home.js:555`. */
     @POST("api/homes/check-address")

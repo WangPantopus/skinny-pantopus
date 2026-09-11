@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.shared.wizard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,11 +81,24 @@ fun WizardShell(
     model: WizardModel,
     modifier: Modifier = Modifier,
     identity: WizardIdentity = WizardIdentity.Personal,
+    handleSystemBack: Boolean = false,
+    chrome: WizardChrome = model.chrome,
+    scrollResetKey: Any? = null,
     content: @Composable () -> Unit,
 ) {
     var showDiscard by remember { mutableStateOf(false) }
-    val chrome = model.chrome
     val focusManager = LocalFocusManager.current
+    val scrollState = rememberScrollState()
+    LaunchedEffect(scrollResetKey) { scrollState.scrollTo(0) }
+
+    BackHandler(enabled = handleSystemBack && !showDiscard) {
+        focusManager.clearFocus()
+        if (chrome.leading == WizardLeadingControl.Close && chrome.dirty) {
+            showDiscard = true
+        } else {
+            model.onLeading()
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize().testTag(WizardShellTags.SHELL),
@@ -152,7 +167,7 @@ fun WizardShell(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scrollState)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

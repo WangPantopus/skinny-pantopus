@@ -324,6 +324,7 @@ public struct HomePublicProfileResponse: Decodable, Sendable, Hashable {
 /// additional ATTOM hints via `attomPropertyDetail` as a pre-built payload.
 /// Route: `backend/routes/home.js:677`.
 public struct CreateHomeRequest: Encodable, Sendable {
+    public let addressId: String?
     public let address: String
     public let unitNumber: String?
     public let city: String
@@ -375,8 +376,10 @@ public struct CreateHomeRequest: Encodable, Sendable {
         isOwner: Bool? = nil,
         role: String? = nil,
         moveInDate: String? = nil,
-        attomPropertyDetail: JSONEncodable? = nil
+        attomPropertyDetail: JSONEncodable? = nil,
+        addressId: String? = nil
     ) {
+        self.addressId = addressId
         self.address = address
         self.unitNumber = unitNumber
         self.city = city
@@ -400,6 +403,7 @@ public struct CreateHomeRequest: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case addressId = "address_id"
         case address
         case unitNumber = "unit_number"
         case city, state

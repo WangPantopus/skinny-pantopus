@@ -2,6 +2,11 @@
 
 package app.pantopus.android.ui.screens.homes.add_home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,12 +25,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,20 +43,22 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -90,6 +100,19 @@ fun AddHomeWizardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
 
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) viewModel.suspendAddressEntry()
+            }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.suspendAddressEntry()
+        }
+    }
+
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
             AddHomeOutboundEvent.Dismiss -> {
@@ -128,8 +151,12 @@ fun AddHomeWizardScreen(
 
     WizardShell(
         model = viewModel,
+        handleSystemBack = true,
+        chrome = viewModel.chromeFor(state),
+        scrollResetKey = state.form.currentStep to (state.errorMessage != null),
         modifier = Modifier.testTag(ADD_HOME_SCREEN_TAG),
     ) {
+        AddressEntryError(state, viewModel)
         when (state.form.currentStep) {
             AddHomeStep.Address -> AddressStep(state, viewModel)
             AddHomeStep.Confirm ->
@@ -143,7 +170,6 @@ fun AddHomeWizardScreen(
             AddHomeStep.Review -> ReviewStep(state)
             AddHomeStep.Success -> SuccessStep()
         }
-        state.errorMessage?.let { ErrorBanner(it) }
     }
 
     if (state.showsClaimedModal) {
@@ -193,6 +219,22 @@ fun AddHomeWizardScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun AddressEntryError(
+    state: AddHomeUiState,
+    viewModel: AddHomeWizardViewModel,
+) {
+    state.errorMessage?.let {
+        ErrorBanner(it)
+        if (state.form.currentStep == AddHomeStep.Confirm) {
+            TextButton(onClick = viewModel::retryCheckAddress, enabled = !state.isCheckingAddress && state.isSessionCurrent) {
+                Text("Try again")
+            }
+            TextButton(onClick = viewModel::onLeading) { Text("Edit address") }
+        }
     }
 }
 
@@ -333,31 +375,70 @@ private fun AddressStep(
     state: AddHomeUiState,
     vm: AddHomeWizardViewModel,
 ) {
-    HeadlineBlock("Where do you live?")
-    SubcopyBlock("Pick your address to start. You'll verify it next.")
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        AddHomeSearchField(
-            query = state.homeSearchQuery,
-            onQueryChange = vm::updateSearchQuery,
-            onClear = vm::clearSearchQuery,
-        )
-        if (vm.showsAutocomplete) {
-            AddHomeAutocompleteDropdown(
-                query = state.homeSearchQuery,
-                results = vm.autocompleteResults,
-                onSelect = vm::selectAddressCandidate,
-                onAddManually = vm::addManuallyTapped,
-            )
+    val context = LocalContext.current
+    val locationPermission =
+        if (LocalActivityResultRegistryOwner.current != null) {
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+                if (grants.values.any { it }) vm.useCurrentLocation() else vm.locationPermissionDenied()
+            }
         } else {
-            UseCurrentLocationPill(onClick = vm::useCurrentLocation)
-            NearbyHomesSection(
-                homes = vm.nearbyHomes,
-                selectedHomeId = state.selectedHomeId,
-                onSelect = vm::selectAddressCandidate,
-            )
-            ManualAddressButton(onClick = vm::addManuallyTapped)
+            null
+        }
+    HeadlineBlock("Where do you live?")
+    SubcopyBlock("Enter your address. We'll check the address before you choose how to join or set up your Home.")
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        AddHomeSearchField(query = state.homeSearchQuery, onQueryChange = vm::updateSearchQuery, onClear = vm::clearSearchQuery)
+        if (state.isFindingAddress) CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = "Finding your address" })
+        state.addressSearchError?.let {
+            Text(it, style = PantopusTextStyle.small)
+            if (state.homeSearchQuery.isNotBlank()) TextButton(onClick = vm::retryAddressSearch) { Text("Try search again") }
+        }
+        state.searchResults.forEach { suggestion ->
+            TextButton(onClick = { vm.selectSearchResult(suggestion) }, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(suggestion.primaryText, style = PantopusTextStyle.body)
+                    Text(suggestion.secondaryText ?: suggestion.label, style = PantopusTextStyle.small)
+                }
+            }
+        }
+        UseCurrentLocationPill(onClick = {
+            if (!state.isFindingAddress && state.isSessionCurrent) {
+                val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
+                    vm.useCurrentLocation()
+                } else {
+                    locationPermission?.launch(
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                    )
+                        ?: vm.locationPermissionDenied()
+                }
+            }
+        })
+        ManualAddressButton(onClick = vm::addManuallyTapped)
+        if (state.isManualEntry) {
+            ManualAddressField("Street address", state.form.address.street) { vm.updateField(AddressField.Street, it) }
+            ManualAddressField("Unit or apartment (optional)", state.form.address.unit) { vm.updateField(AddressField.Unit, it) }
+            ManualAddressField("City", state.form.address.city) { vm.updateField(AddressField.City, it) }
+            ManualAddressField("State", state.form.address.state) { vm.updateField(AddressField.State, it) }
+            ManualAddressField("ZIP code", state.form.address.zipCode) { vm.updateField(AddressField.Zip, it) }
         }
     }
+}
+
+@Composable
+private fun ManualAddressField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+    )
 }
 
 // MARK: - Step 2
@@ -376,7 +457,7 @@ private fun ConfirmStep(
 ) {
     HeadlineBlock("Confirm the property")
     SubcopyBlock(
-        "We checked this address against our property records. Review the details before continuing.",
+        "Review the address and Home details. Property information may be unavailable.",
     )
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         state.zipMismatch?.let { mismatch ->
@@ -387,18 +468,17 @@ private fun ConfirmStep(
             }
         }
         AddressConfirmationFields(state)
-        state.addressCheck?.let { check ->
+        state.addressCheck?.takeIf { state.isGeocodeResolved }?.let { check ->
             AddressVerdictRow(check)
         }
-        PrimaryHomeToggle(
-            isPrimary = state.form.isPrimary,
-            onChange = onPrimaryHomeChange,
-        )
+        if (state.isGeocodeResolved) {
+            PrimaryHomeToggle(isPrimary = state.form.isPrimary, onChange = onPrimaryHomeChange)
+        }
         // A12.2 Details — nickname / type / beds / baths / sizes / year /
         // description, pre-filled from public records. Hidden on the
         // join-an-existing-home path, which RN skips too
         // (`useHomeForm.ts:619-623, :700-705`).
-        if (detailsSection != null && !state.isClaimingExistingHome) {
+        if (detailsSection != null && !state.isClaimingExistingHome && state.isGeocodeResolved) {
             HorizontalDivider(color = PantopusColors.appBorderSubtle)
             detailsSection()
         }
@@ -757,7 +837,7 @@ private fun ZipMismatchBanner(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
                 Text(
-                    text = "We couldn't pinpoint this address",
+                    text = "Confirm the ZIP code",
                     style = PantopusTextStyle.body,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.warning,
@@ -1107,366 +1187,6 @@ private fun UseCurrentLocationPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun NearbyHomesSection(
-    homes: List<AddHomeAddressCandidate>,
-    selectedHomeId: String?,
-    onSelect: (AddHomeAddressCandidate) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.MapPin,
-                contentDescription = null,
-                size = Radii.lg,
-                tint = PantopusColors.appTextSecondary,
-            )
-            Text(
-                text = "Nearby · Brooklyn, NY",
-                style = PantopusTextStyle.overline,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            homes.forEach { home ->
-                NearbyHomeRow(
-                    home = home,
-                    isSelected = selectedHomeId == home.id,
-                    onSelect = { onSelect(home) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun NearbyHomeRow(
-    home: AddHomeAddressCandidate,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .clip(RoundedCornerShape(Radii.xl))
-                .background(if (isSelected) PantopusColors.primary50 else PantopusColors.appSurface)
-                .border(
-                    width = if (isSelected) 2.dp else 1.dp,
-                    color = if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder,
-                    shape = RoundedCornerShape(Radii.xl),
-                ).clickable(enabled = !home.isClaimed, role = Role.Button, onClick = onSelect)
-                .padding(Spacing.s3)
-                .testTag("addHome_nearby_${home.id}")
-                .semantics {
-                    contentDescription = "${home.line1}, ${home.secondaryLine}, ${home.status.label}"
-                },
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(Radii.lg))
-                    .background(if (isSelected) PantopusColors.primary600 else PantopusColors.appSurfaceSunken),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Home,
-                contentDescription = null,
-                size = 18.dp,
-                tint = if (isSelected) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = home.line1,
-                style = PantopusTextStyle.body,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                Text(
-                    text = home.line2,
-                    style = PantopusTextStyle.caption,
-                    color = PantopusColors.appTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                home.distance?.let { distance ->
-                    Text(
-                        text = "·",
-                        style = PantopusTextStyle.caption,
-                        color = PantopusColors.appTextSecondary,
-                    )
-                    Text(
-                        text = distance,
-                        style = PantopusTextStyle.caption,
-                        color = PantopusColors.appTextSecondary,
-                    )
-                }
-            }
-        }
-        StatusPill(status = home.status)
-        if (isSelected) {
-            PantopusIconImage(
-                icon = PantopusIcon.Check,
-                contentDescription = null,
-                size = Radii.xl,
-                tint = PantopusColors.primary600,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusPill(status: AddHomeAddressStatus) {
-    Text(
-        text = status.label,
-        style = PantopusTextStyle.caption,
-        fontWeight = FontWeight.SemiBold,
-        color = if (status == AddHomeAddressStatus.Available) PantopusColors.success else PantopusColors.appTextSecondary,
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(
-                    if (status == AddHomeAddressStatus.Available) {
-                        PantopusColors.successBg
-                    } else {
-                        PantopusColors.appSurfaceSunken
-                    },
-                ).padding(horizontal = Spacing.s2, vertical = Spacing.s1),
-    )
-}
-
-@Composable
-private fun AddHomeAutocompleteDropdown(
-    query: String,
-    results: List<AddHomeAddressCandidate>,
-    onSelect: (AddHomeAddressCandidate) -> Unit,
-    onAddManually: () -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.xl))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl)),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(PantopusColors.appSurfaceMuted)
-                    .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Search,
-                contentDescription = null,
-                size = 10.dp,
-                tint = PantopusColors.appTextMuted,
-            )
-            Text(
-                text = "${results.size} matches",
-                style = PantopusTextStyle.overline,
-                color = PantopusColors.appTextMuted,
-            )
-        }
-        results.forEachIndexed { index, candidate ->
-            AutocompleteRow(
-                candidate = candidate,
-                query = query,
-                onSelect = { onSelect(candidate) },
-                modifier = Modifier.testTag("addHome_autocomplete_$index"),
-            )
-            HorizontalDivider(thickness = 1.dp, color = PantopusColors.appBorderSubtle)
-        }
-        ManualFallbackRow(onClick = onAddManually)
-    }
-}
-
-@Composable
-private fun AutocompleteRow(
-    candidate: AddHomeAddressCandidate,
-    query: String,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .clickable(role = Role.Button, onClick = onSelect)
-                .padding(horizontal = Spacing.s3, vertical = Spacing.s3)
-                .semantics {
-                    contentDescription = "${candidate.line1}, ${candidate.secondaryLine}"
-                },
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.appSurfaceSunken),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.MapPin,
-                contentDescription = null,
-                size = 15.dp,
-                tint = PantopusColors.appTextSecondary,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            HighlightedAddressText(value = candidate.line1, query = query)
-            Text(
-                text = candidate.secondaryLine,
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = 14.dp,
-            tint = PantopusColors.appTextMuted,
-        )
-    }
-}
-
-@Composable
-private fun HighlightedAddressText(
-    value: String,
-    query: String,
-) {
-    val ranges = highlightRanges(value = value, query = query)
-    val text =
-        buildAnnotatedString {
-            var cursor = 0
-            ranges.forEach { range ->
-                if (cursor < range.first) {
-                    append(value.substring(cursor, range.first))
-                }
-                withStyle(SpanStyle(color = PantopusColors.appText, fontWeight = FontWeight.Bold)) {
-                    append(value.substring(range.first, range.second))
-                }
-                cursor = range.second
-            }
-            if (cursor < value.length) {
-                append(value.substring(cursor))
-            }
-        }
-    Text(
-        text = text,
-        style = PantopusTextStyle.body,
-        color = PantopusColors.appTextStrong,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-private fun highlightRanges(
-    value: String,
-    query: String,
-): List<Pair<Int, Int>> {
-    val needle = query.trim()
-    if (needle.isEmpty()) return emptyList()
-
-    val normalizedValue = value.lowercase()
-    val normalizedNeedle = needle.lowercase()
-    val phraseIndex = normalizedValue.indexOf(normalizedNeedle)
-    if (phraseIndex >= 0) {
-        return listOf(phraseIndex to phraseIndex + needle.length)
-    }
-
-    val ranges = mutableListOf<Pair<Int, Int>>()
-    normalizedNeedle
-        .split(" ")
-        .filter { it.isNotBlank() }
-        .forEach { token ->
-            var searchStart = 0
-            while (searchStart < normalizedValue.length) {
-                val index = normalizedValue.indexOf(token, searchStart)
-                if (index < 0) break
-                val range = index to index + token.length
-                if (ranges.none { it.overlaps(range) }) {
-                    ranges += range
-                }
-                searchStart = range.second
-            }
-        }
-    return ranges.sortedBy { it.first }
-}
-
-private fun Pair<Int, Int>.overlaps(other: Pair<Int, Int>): Boolean = first < other.second && other.first < second
-
-@Composable
-private fun ManualFallbackRow(onClick: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .background(PantopusColors.primary50)
-                .clickable(role = Role.Button, onClick = onClick)
-                .padding(horizontal = Spacing.s3, vertical = Spacing.s3)
-                .testTag("addHome_manualFallback")
-                .semantics { contentDescription = "Add address manually" },
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.appSurface),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Plus,
-                contentDescription = null,
-                size = Radii.xl,
-                tint = PantopusColors.primary600,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Add manually",
-                style = PantopusTextStyle.body,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.primary700,
-            )
-            Text(
-                text = "We'll geocode it and mail a verification code.",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = Radii.xl,
-            tint = PantopusColors.primary600,
-        )
-    }
-}
-
-@Composable
 private fun ManualAddressButton(onClick: () -> Unit) {
     Row(
         modifier =
@@ -1501,14 +1221,14 @@ private fun AddressVerdictRow(check: app.pantopus.android.data.api.models.homes.
                 icon = PantopusIcon.AlertCircle,
                 color = PantopusColors.warning,
                 headline = "Already on Pantopus",
-                subcopy = "Another household already has this address. We'll route you to a join flow next.",
+                subcopy = "This address has a Home. Your role determines how to request access.",
             )
         } else {
             Verdict(
                 icon = PantopusIcon.CheckCircle,
                 color = PantopusColors.success,
-                headline = "Looks good",
-                subcopy = "We'll create a new household for this address.",
+                headline = "Ready for Home setup",
+                subcopy = "Continue to choose your role. This address check does not verify residency or ownership.",
             )
         }
     Row(

@@ -3,7 +3,7 @@
 //  Pantopus
 //
 //  Wizard view model. Drives the 4-step + success state machine, keeps
-//  step 1 search-first with deterministic address fixtures, and exposes
+//  address entry bound to live search and canonical validation, and exposes
 //  the small `WizardChrome` shape the shared `WizardShell` consumes.
 //
 //  Step 2 (Confirm) also owns the A12.2 Details block — the
@@ -75,6 +75,14 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var homeSearchQuery: String = ""
     /// Candidate id selected from nearby results or autocomplete.
     private(set) var selectedHomeID: String?
+    private(set) var searchResults: [GeoSuggestion] = []
+    private(set) var isFindingAddress = false
+    private(set) var addressSearchError: String?
+    private(set) var isManualEntry = false
+    private(set) var validatedAddressId: String?
+    private var addressRevision = 0
+    private var addressTask: Task<Void, Never>?
+    private var retired = false
 
     /// Result of `POST /api/homes/property-suggestions`, fetched right
     /// after `check-address` clears — the same order RN uses
@@ -94,7 +102,7 @@ final class AddHomeWizardViewModel: WizardModel {
     /// Result of `POST /api/homes/check-address`, populated when entering
     /// step 2.
     private(set) var addressCheck: CheckAddressResponse?
-    /// Canonical address returned by check-address, used for the
+    /// Canonical address returned by address validation, used for the
     /// confirmation map and one-tap ZIP correction.
     private(set) var geocodedAddress: AddHomeGeocodedAddress?
     /// True while the check-address call is in flight.
@@ -170,6 +178,8 @@ final class AddHomeWizardViewModel: WizardModel {
     // MARK: - Private dependencies
 
     private let api: APIClient
+    private let scope: HomeClaimSessionScope
+    private let locationProvider: any LocationProviding
     private let isOnlineProvider: @MainActor () -> Bool
 
     // MARK: - Init
@@ -177,6 +187,8 @@ final class AddHomeWizardViewModel: WizardModel {
     init(
         api: APIClient = .shared,
         initialState: AddHomeFormState = .empty,
+        identity: (() -> String?)? = nil,
+        locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         // Defaults to the live NetworkMonitor in production. Tests inject
         // a closure returning a fixed value so the simulator's
         // NWPathMonitor (which can transiently report `.unsatisfied` on
@@ -184,12 +196,12 @@ final class AddHomeWizardViewModel: WizardModel {
         isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline }
     ) {
         self.api = api
+        scope = HomeClaimSessionScope(api: api, identity: identity)
+        self.locationProvider = locationProvider
         self.isOnlineProvider = isOnlineProvider
         form = initialState
-        selectedHomeID = AddHomeSampleData.candidate(for: initialState.address)?.id
-        homeSearchQuery = AddHomeSampleData
-            .candidate(for: initialState.address)?
-            .line1 ?? ""
+        isManualEntry = initialState.address != AddHomeAddressFields()
+        homeSearchQuery = initialState.address.street
     }
 
     /// Replace the in-memory form state from scene storage on first
@@ -197,9 +209,10 @@ final class AddHomeWizardViewModel: WizardModel {
     func restore(from snapshot: AddHomeFormState) {
         guard form == .empty else { return }
         form = snapshot
-        let candidate = AddHomeSampleData.candidate(for: snapshot.address)
-        selectedHomeID = candidate?.id
-        homeSearchQuery = candidate?.line1 ?? ""
+        // A restored form has no validated canonical receipt. Recheck its address.
+        form.step = AddHomeStep.address.rawValue
+        isManualEntry = snapshot.address != AddHomeAddressFields()
+        homeSearchQuery = snapshot.address.street
     }
 
     // MARK: - WizardModel
@@ -212,7 +225,7 @@ final class AddHomeWizardViewModel: WizardModel {
             progressFraction: progressFraction(for: step),
             leading: leadingControl(for: step),
             primaryCTALabel: primaryCTALabel(for: step),
-            primaryCTAEnabled: primaryEnabled(for: step)
+            primaryCTAEnabled: isCurrent && !isFindingAddress && primaryEnabled(for: step)
                 && !isSubmitting
                 && !isCheckingAddress
                 && !isLoadingPropertySuggestions,
@@ -231,6 +244,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func discardConfirmed() {
+        finishDraft()
         pendingEvent = .dismiss
     }
 
@@ -249,65 +263,199 @@ final class AddHomeWizardViewModel: WizardModel {
         if currentStep == .success { pendingEvent = .dismiss }
     }
 
-    // MARK: - Search updates (step 1)
+    // MARK: - Actual address entry
+
+    var isCurrent: Bool {
+        !retired && scope.isCurrent
+    }
+
+    private var retainsDraft = true
+    var draftIdentityHash: String? {
+        isCurrent && retainsDraft ? scope.storageIdentityHash : nil
+    }
+
+    func finishDraft() {
+        retainsDraft = false
+        invalidateAddress()
+        form = .empty
+        accessItems = []
+    }
 
     var nearbyHomes: [AddHomeAddressCandidate] {
-        AddHomeSampleData.nearbyHomes
+        []
     }
 
     var autocompleteResults: [AddHomeAddressCandidate] {
-        guard selectedHomeID == nil else { return [] }
-        return AddHomeSampleData.autocompleteResults(matching: homeSearchQuery)
+        []
     }
 
     var showsAutocomplete: Bool {
-        selectedHomeID == nil
-            && !homeSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !searchResults.isEmpty && !isManualEntry
+    }
+
+    func retireSession() {
+        retired = true
+        invalidateAddress()
+        form = .empty
+        homeSearchQuery = ""
+        searchResults = []
+        accessItems = []
+        pendingEvent = nil
+        createdHomeId = nil
+        errorMessage = "Your session changed. Reopen Add Home to continue."
+    }
+
+    func suspendAddressEntry() {
+        guard !isSubmitting, currentStep != .success else { return }
+        invalidateAddress()
+        searchResults = []
+        form.step = AddHomeStep.address.rawValue
+    }
+
+    private func invalidateAddress() {
+        addressRevision += 1
+        addressTask?.cancel()
+        addressTask = nil
+        validatedAddressId = nil
+        addressCheck = nil
+        geocodedAddress = nil
+        existingHomeId = nil
+        isClaimingExistingHome = false
+        showsClaimedModal = false
+        showsConfirmAddressSheet = false
+        isCheckingAddress = false
+        isFindingAddress = false
+        propertySuggestions = nil
+        propertyLookupComplete = false
+        isLoadingPropertySuggestions = false
+        addressSearchError = nil
+        errorMessage = nil
+    }
+
+    private func addressIsCurrent(_ revision: Int) -> Bool {
+        isCurrent && addressRevision == revision && !Task.isCancelled
     }
 
     func updateSearchQuery(_ query: String) {
+        invalidateAddress()
         homeSearchQuery = query
         selectedHomeID = nil
         form.address = .init()
-        addressCheck = nil
-        geocodedAddress = nil
+        searchResults = []
+        isManualEntry = false
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 3, isCurrent else { return }
+        let revision = addressRevision
+        isFindingAddress = true
+        addressTask = Task {
+            defer { if addressRevision == revision { isFindingAddress = false } }
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+                try scope.requireCurrent()
+                let response: GeoAutocompleteResponse = try await api.request(GeoEndpoints.autocomplete(query: text))
+                guard addressIsCurrent(revision) else { return }
+                guard response.suggestions.allSatisfy({ !$0.suggestionId.isEmpty && !$0.label.isEmpty }),
+                      Set(response.suggestions.map(\.suggestionId)).count == response.suggestions.count else {
+                    throw APIError.invalidResponse
+                }
+                searchResults = response.suggestions
+                if searchResults.isEmpty { addressSearchError = "No matching addresses. Enter your address manually." }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard addressIsCurrent(revision) else { return }
+                addressSearchError = "Address search is unavailable. Try again or enter your address manually."
+            }
+        }
+    }
+
+    func retryAddressSearch() {
+        updateSearchQuery(homeSearchQuery)
     }
 
     func clearSearchQuery() {
-        homeSearchQuery = ""
-        selectedHomeID = nil
-        form.address = .init()
-        addressCheck = nil
-        geocodedAddress = nil
+        updateSearchQuery("")
+    }
+
+    func selectSearchResult(_ suggestion: GeoSuggestion) {
+        guard searchResults.contains(where: { $0.suggestionId == suggestion.suggestionId }), isCurrent else { return }
+        invalidateAddress()
+        let revision = addressRevision
+        isFindingAddress = true
+        addressTask = Task {
+            defer { if addressRevision == revision { isFindingAddress = false } }
+            do {
+                try scope.requireCurrent()
+                let response: GeoResolveResponse = try await api.request(GeoEndpoints.resolve(suggestionId: suggestion.suggestionId))
+                guard addressIsCurrent(revision) else { return }
+                try applyResolvedAddress(response.normalized)
+                selectedHomeID = suggestion.suggestionId
+            } catch {
+                guard addressIsCurrent(revision) else { return }
+                addressSearchError = "Could not load that address. Try again or enter it manually."
+            }
+        }
     }
 
     func useCurrentLocation() {
-        homeSearchQuery = ""
-        selectedHomeID = nil
-        form.address = .init()
-        addressCheck = nil
-        geocodedAddress = nil
+        guard isCurrent else { return }
+        invalidateAddress()
+        let revision = addressRevision
+        isFindingAddress = true
+        addressTask = Task {
+            defer { if addressRevision == revision { isFindingAddress = false } }
+            do {
+                try scope.requireCurrent()
+                guard let coordinate = await locationProvider.requestCurrent(timeoutSeconds: 5),
+                      addressIsCurrent(revision) else {
+                    if addressIsCurrent(revision) {
+                        addressSearchError = "Location is unavailable. Allow location access or enter your address manually."
+                    }
+                    return
+                }
+                let response: GeoReverseResponse = try await api.request(
+                    GeoEndpoints.reverse(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                )
+                guard addressIsCurrent(revision) else { return }
+                try applyResolvedAddress(response.normalized)
+            } catch {
+                guard addressIsCurrent(revision) else { return }
+                addressSearchError = "Could not find your address here. Try again or enter it manually."
+            }
+        }
+    }
+
+    private func applyResolvedAddress(_ address: NormalizedAddress) throws {
+        let fields = AddHomeAddressFields(
+            street: address.address ?? "",
+            city: address.city ?? "",
+            state: address.state ?? "",
+            zipCode: address.zipcode ?? ""
+        )
+        guard fields.isComplete else { throw APIError.invalidResponse }
+        form.address = fields
+        homeSearchQuery = fields.street
+        searchResults = []
+        isManualEntry = true
     }
 
     func selectAddressCandidate(_ candidate: AddHomeAddressCandidate) {
-        guard !candidate.isClaimed else { return }
+        invalidateAddress()
         selectedHomeID = candidate.id
         homeSearchQuery = candidate.line1
         form.address = candidate.addressFields
-        addressCheck = nil
-        geocodedAddress = nil
+        isManualEntry = true
     }
 
     func addManuallyTapped() {
+        invalidateAddress()
         selectedHomeID = nil
-        form.address = .init()
-        addressCheck = nil
-        geocodedAddress = nil
+        searchResults = []
+        isManualEntry = true
     }
 
-    // MARK: - Legacy field updates (step 1)
-
     func update(_ field: AddressField, to value: String) {
+        invalidateAddress()
         switch field {
         case .street: form.address.street = value
         case .unit: form.address.unit = value
@@ -315,12 +463,9 @@ final class AddHomeWizardViewModel: WizardModel {
         case .state: form.address.state = value
         case .zip: form.address.zipCode = value
         }
-        selectedHomeID = AddHomeSampleData.candidate(for: form.address)?.id
-        homeSearchQuery = selectedHomeID == nil
-            ? form.address.street
-            : AddHomeSampleData.candidate(for: form.address)?.line1 ?? form.address.street
-        addressCheck = nil
-        geocodedAddress = nil
+        selectedHomeID = nil
+        homeSearchQuery = form.address.street
+        isManualEntry = true
     }
 
     var zipMismatch: AddHomeZipMismatch? {
@@ -545,6 +690,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     private func advance() async {
+        guard isCurrent, !isSubmitting, !isFindingAddress, primaryEnabled(for: currentStep) else { return }
         switch currentStep {
         case .address:
             // Move to confirm and kick off check-address.
@@ -552,6 +698,14 @@ final class AddHomeWizardViewModel: WizardModel {
             await runCheckAddress()
         case .confirm:
             guard !isCheckingAddress, zipMismatch == nil, !showsClaimedModal else { return }
+            guard let address = geocodedAddress, validatedAddressId != nil else { return }
+            form.address = .init(
+                street: address.street,
+                unit: address.unit,
+                city: address.city,
+                state: address.state,
+                zipCode: address.zipCode
+            )
             transition(to: .role)
         case .role:
             transition(to: .review)
@@ -571,6 +725,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     private func transition(to step: AddHomeStep) {
+        if step == .address { invalidateAddress() }
         form.step = step.rawValue
         errorMessage = nil
         if let stepNumber = step.stepNumber {
@@ -586,47 +741,91 @@ final class AddHomeWizardViewModel: WizardModel {
     // MARK: - API calls
 
     private func runCheckAddress() async {
+        guard isCurrent, form.address.isComplete, !isCheckingAddress else { return }
+        invalidateAddress()
+        let revision = addressRevision
+        let fields = form.address
         isCheckingAddress = true
-        defer { isCheckingAddress = false }
-        addressCheck = nil
-        geocodedAddress = nil
-        showsClaimedModal = false
-        showsConfirmAddressSheet = false
-        isClaimingExistingHome = false
-        existingHomeId = nil
-        let request = CheckAddressRequest(
-            address: form.address.street,
-            unitNumber: form.address.unit.isEmpty ? nil : form.address.unit,
-            city: form.address.city,
-            state: form.address.state,
-            zipCode: form.address.zipCode
-        )
+        defer { if addressRevision == revision { isCheckingAddress = false } }
         do {
-            let response: CheckAddressResponse = try await api.request(
-                HomesEndpoints.checkAddress(request)
-            )
+            try scope.requireCurrent()
+            let validation: HomeAddressValidationResponse = try await api.request(HomesEndpoints.validateAddress(
+                HomeAddressValidationRequest(
+                    line1: fields.street,
+                    line2: fields.unit.isEmpty ? nil : fields.unit,
+                    city: fields.city,
+                    state: fields.state.uppercased(),
+                    zip: fields.zipCode
+                )
+            ))
+            guard addressIsCurrent(revision) else { return }
+            guard ["OK", "MIXED_USE", "CONFLICT"].contains(validation.verdict.status) else {
+                errorMessage = Self.addressValidationMessage(validation.verdict.status)
+                return
+            }
+            guard let addressId = validation.addressId, UUID(uuidString: addressId) != nil,
+                  let address = validation.verdict.normalized, address.isValid else { throw APIError.invalidResponse }
+            let response: CheckAddressResponse = try await api.request(HomesEndpoints.checkAddress(
+                CheckAddressRequest(
+                    addressId: addressId,
+                    address: address.line1,
+                    unitNumber: address.line2,
+                    city: address.city,
+                    state: address.state,
+                    zipCode: address.zip
+                )
+            ))
+            guard addressIsCurrent(revision) else { return }
+            try Self.validateLookup(response, verdictStatus: validation.verdict.status)
             addressCheck = response
-            geocodedAddress = makeAddHomeGeocodedAddress(from: response, fallback: form.address)
+            validatedAddressId = addressId
+            geocodedAddress = AddHomeGeocodedAddress(
+                street: address.line1,
+                unit: address.line2 ?? "",
+                city: address.city,
+                state: address.state,
+                zipCode: address.zip,
+                latitude: address.lat,
+                longitude: address.lng,
+                isMultiUnit: response.isMultiUnit
+            )
             existingHomeId = response.homeId
             if response.isAlreadyClaimed {
-                // RN `useHomeForm.ts:611` — never advance; the modal
-                // owns the next action.
                 showsClaimedModal = true
             } else if response.isFoundUnclaimed {
-                // A home row exists with no active occupants — RN
-                // (`useHomeForm.ts:616`) claims it instead of creating
-                // a duplicate.
-                isClaimingExistingHome = response.homeId != nil
+                isClaimingExistingHome = true
             }
-            // RN runs the property lookup right after check-address and
-            // only for the create-a-new-home path (`useHomeForm.ts:625`);
-            // the claim paths skip straight to role selection.
-            if !showsClaimedModal, !isClaimingExistingHome {
-                await loadPropertySuggestions()
-            }
+            if !showsClaimedModal, !isClaimingExistingHome { await loadPropertySuggestions() }
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription
-                ?? "Couldn't verify that address. Try again."
+            guard addressIsCurrent(revision) else { return }
+            validatedAddressId = nil
+            geocodedAddress = nil
+            errorMessage = "Could not check this address. Try again."
+        }
+    }
+
+    private static func validateLookup(_ response: CheckAddressResponse, verdictStatus: String) throws {
+        guard let status = response.status,
+              [
+                  CheckAddressResponse.statusNotFound,
+                  CheckAddressResponse.statusFoundClaimed,
+                  CheckAddressResponse.statusFoundUnclaimed
+              ].contains(status),
+              status == CheckAddressResponse.statusNotFound ? response.homeId == nil : UUID(uuidString: response.homeId ?? "") != nil
+        else { throw APIError.invalidResponse }
+        // A validation conflict must never turn into a create-a-new-Home offer.
+        guard verdictStatus != "CONFLICT" || response.homeId != nil else { throw APIError.invalidResponse }
+    }
+
+    private static func addressValidationMessage(_ status: String) -> String {
+        switch status {
+        case "MISSING_UNIT": "Enter your unit or apartment number, then check this address again."
+        case "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER": "Check the street number and try again."
+        case "PO_BOX": "Enter a street address. A PO Box cannot be used as a Home."
+        case "BUSINESS": "This appears to be a business address. Check your residential address."
+        case "MULTIPLE_MATCHES": "More than one address matched. Enter the complete street and unit."
+        case "UNDELIVERABLE", "LOW_CONFIDENCE": "We could not verify this address. Check the details and try again."
+        default: "Address verification is unavailable. Try again."
         }
     }
 
@@ -636,8 +835,10 @@ final class AddHomeWizardViewModel: WizardModel {
     /// fatal: the fields stay editable and the card says the lookup was
     /// unavailable, exactly as RN does (`useHomeForm.ts:657-662`).
     func loadPropertySuggestions() async {
+        guard isCurrent, let validatedAddressId else { return }
+        let revision = addressRevision
         isLoadingPropertySuggestions = true
-        defer { isLoadingPropertySuggestions = false }
+        defer { if addressRevision == revision { isLoadingPropertySuggestions = false } }
         let source = geocodedAddress
         let request = PropertySuggestionsRequest(
             address: source?.street ?? form.address.street,
@@ -647,18 +848,20 @@ final class AddHomeWizardViewModel: WizardModel {
             city: source?.city ?? form.address.city,
             state: (source?.state ?? form.address.state).uppercased(),
             zipCode: source?.zipCode ?? form.address.zipCode,
-            addressId: nil,
+            addressId: validatedAddressId,
             classification: nil
         )
         do {
             let response: PropertySuggestionsResponse = try await api.request(
                 HomesEndpoints.propertySuggestions(request)
             )
+            guard addressIsCurrent(revision) else { return }
             propertySuggestions = response
             propertyLookupComplete = true
             propertyLookupMessage = Self.lookupMessage(for: response)
             apply(suggestions: response.suggestions)
         } catch {
+            guard addressIsCurrent(revision) else { return }
             propertySuggestions = nil
             propertyLookupComplete = true
             propertyLookupMessage =
@@ -727,6 +930,7 @@ final class AddHomeWizardViewModel: WizardModel {
 
     /// "This address is correct" → show the confirm page of the modal.
     func showConfirmAddressStep() {
+        guard isCurrent, validatedAddressId != nil, existingHomeId != nil else { return }
         showsConfirmAddressSheet = true
     }
 
@@ -734,6 +938,7 @@ final class AddHomeWizardViewModel: WizardModel {
     /// the details step and lands on role selection
     /// (`useHomeForm.ts:700-705`).
     func confirmClaimedAddress() {
+        guard isCurrent, validatedAddressId != nil, existingHomeId != nil else { return }
         showsClaimedModal = false
         showsConfirmAddressSheet = false
         isClaimingExistingHome = true
@@ -741,6 +946,9 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     private func submitExistingHomeClaim(role: AddHomeRole) async {
+        guard isCurrent else { retireSession()
+            return
+        }
         guard let homeId = existingHomeId else {
             errorMessage = "We could not find the existing home record. Please try that address again."
             transition(to: .address)
@@ -754,21 +962,28 @@ final class AddHomeWizardViewModel: WizardModel {
         isSubmitting = true
         defer { isSubmitting = false }
         do {
+            try scope.requireCurrent()
             _ = try await api.request(
                 HomeDiscoveryEndpoints.submitResidencyClaim(
                     homeId: homeId,
                     request: SubmitResidencyClaimRequest(claimedRole: role.claimedRole)
                 )
             ) as SubmitResidencyClaimResponse
+            guard isCurrent else { retireSession()
+                return
+            }
             pendingEvent = .openWaitingRoom(homeId: homeId)
         } catch {
+            guard isCurrent else { retireSession()
+                return
+            }
             errorMessage = (error as? APIError)?.errorDescription
                 ?? "Failed to submit claim"
         }
     }
 
     private func submit() async {
-        guard let role = form.role else { return }
+        guard isCurrent, !isSubmitting, let role = form.role, validatedAddressId != nil else { return }
         Analytics.track(.ctaAddHomeSubmit)
         if !isOnlineProvider() {
             // P15: surface offline state inline; never silent-queue.
@@ -797,8 +1012,8 @@ final class AddHomeWizardViewModel: WizardModel {
             state: form.address.state,
             zipCode: form.address.zipCode,
             // `createHomeSchema` requires coordinates
-            // (`backend/routes/home.js:120-124`); check-address already
-            // resolved them.
+            // (`backend/routes/home.js:120-124`); canonical validation
+            // supplied them.
             latitude: geocodedAddress?.latitude,
             longitude: geocodedAddress?.longitude,
             homeType: details.homeType.rawValue,
@@ -814,16 +1029,28 @@ final class AddHomeWizardViewModel: WizardModel {
             isOwner: role == .owner,
             role: role.claimedRole,
             moveInDate: details.justMoved ? Self.isoToday() : nil,
-            attomPropertyDetail: propertySuggestions?.attomPropertyDetail.map { JSONEncodable($0) }
+            attomPropertyDetail: propertySuggestions?.attomPropertyDetail.map { JSONEncodable($0) },
+            addressId: validatedAddressId
         )
         do {
+            try scope.requireCurrent()
             let response: CreateHomeResponse = try await api.request(
                 HomesEndpoints.create(request)
             )
+            guard isCurrent else { retireSession()
+                return
+            }
+            guard UUID(uuidString: response.home.id) != nil else { throw APIError.invalidResponse }
             createdHomeId = response.home.id
             await persistAccessSecrets(homeId: response.home.id)
+            guard isCurrent else { retireSession()
+                return
+            }
             transition(to: .success)
         } catch {
+            guard isCurrent else { retireSession()
+                return
+            }
             // UX-06: a 422 from address verification carries a `code` saying
             // exactly what is wrong. Without this the user completed every step
             // and got a generic networking string, with no idea what to change.
@@ -856,9 +1083,13 @@ final class AddHomeWizardViewModel: WizardModel {
     private func persistAccessSecrets(homeId: String) async {
         var failedLabels: [String] = []
         for item in accessItems where item.isComplete {
+            guard isCurrent else { retireSession()
+                return
+            }
             let label = item.label.trimmingCharacters(in: .whitespacesAndNewlines)
             let secret = item.secretValue.trimmingCharacters(in: .whitespacesAndNewlines)
             do {
+                try scope.requireCurrent()
                 _ = try await api.request(
                     HomesEndpoints.createAccessSecret(
                         homeId: homeId,
@@ -872,6 +1103,9 @@ final class AddHomeWizardViewModel: WizardModel {
             } catch {
                 failedLabels.append(label)
             }
+        }
+        guard isCurrent else { retireSession()
+            return
         }
         guard !failedLabels.isEmpty else { return }
         accessSecretWarning = "Your home was created, but we couldn't save "
@@ -922,11 +1156,11 @@ final class AddHomeWizardViewModel: WizardModel {
 
     private func primaryEnabled(for step: AddHomeStep) -> Bool {
         switch step {
-        case .address: selectedHomeID != nil
+        case .address: form.address.isComplete
         case .confirm:
-            !isCheckingAddress && errorMessage == nil && zipMismatch == nil && !showsClaimedModal
-        case .role: form.role != nil
-        case .review: form.role != nil
+            !isCheckingAddress && errorMessage == nil && isGeocodeResolved && validatedAddressId != nil && !showsClaimedModal
+        case .role: form.role != nil && validatedAddressId != nil
+        case .review: form.role != nil && validatedAddressId != nil
         case .success: createdHomeId != nil
         }
     }
@@ -938,33 +1172,10 @@ final class AddHomeWizardViewModel: WizardModel {
             && (
                 selectedHomeID != nil
                     || !homeSearchQuery.isEmpty
-                    || !form.address.street.isEmpty
+                    || [form.address.street, form.address.unit, form.address.city, form.address.state, form.address.zipCode]
+                    .contains { !$0.isEmpty }
             )
     }
-}
-
-private func makeAddHomeGeocodedAddress(
-    from response: CheckAddressResponse,
-    fallback: AddHomeAddressFields
-) -> AddHomeGeocodedAddress? {
-    guard let normalized = response.normalizedAddress else { return nil }
-    return AddHomeGeocodedAddress(
-        street: cleanAddHomeGeocodeValue(normalized.street) ?? fallback.street,
-        unit: cleanAddHomeGeocodeValue(normalized.unit) ?? fallback.unit,
-        city: cleanAddHomeGeocodeValue(normalized.city) ?? fallback.city,
-        state: cleanAddHomeGeocodeValue(normalized.state) ?? fallback.state,
-        zipCode: cleanAddHomeGeocodeValue(normalized.zipCode) ?? fallback.zipCode,
-        latitude: normalized.latitude,
-        longitude: normalized.longitude,
-        isMultiUnit: normalized.isMultiUnit ?? !fallback.unit.isEmpty
-    )
-}
-
-private func cleanAddHomeGeocodeValue(_ value: String?) -> String? {
-    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !trimmed.isEmpty
-    else { return nil }
-    return trimmed
 }
 
 private func normalizedAddHomeZip(_ value: String) -> String {
