@@ -2,9 +2,11 @@ import Foundation
 
 /// Format 2 is explicit: chronological months and one currency in major units.
 enum HomeBillPresentation {
-    static func isCurrent(_ data: HomeBillTrendsDTO) -> Bool {
+    static func isCurrent(_ data: HomeBillTrendsDTO, currency: String = "USD") -> Bool {
         guard data.formatVersion == 2, data.calculationVersion == 2,
-              data.currency == "USD" else { return false }
+              data.currency == currency,
+              Set(data.availableCurrencies).count == data.availableCurrencies.count,
+              data.availableCurrencies.allSatisfy({ $0.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil }) else { return false }
         guard data.billsByType.values.allSatisfy({ valid(months: $0.months, amounts: $0.amounts) }) else { return false }
         return data.benchmarks.values.allSatisfy { row in
             if row.insufficientData {

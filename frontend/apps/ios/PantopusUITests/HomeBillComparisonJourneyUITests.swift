@@ -95,6 +95,63 @@ final class HomeBillComparisonJourneyUITests: XCTestCase {
         try await openDashboard()
     }
 
+    func testCurrencyMonthlyTotalsAndEarlierResponseRetirement() async throws {
+        try await openDashboard()
+        try reveal(element("homeDashboard_billCurrency"))
+        try require(label(containing: "142.50").waitForExistence(timeout: 20))
+        try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Monthly totals")).firstMatch)
+        try reveal(label(containing: "210.25"))
+        try require(label(containing: "104.70").exists)
+        keepScreen("USD monthly totals retain unmatched previous month")
+        try selectCurrency("CAD")
+        try require(label(containing: "999.99").waitForExistence(timeout: 20))
+        XCTAssertFalse(label(containing: "142.50").exists)
+        XCTAssertFalse(label(containing: "104.70").exists)
+        keepScreen("CAD paid totals never mix USD neighbors")
+        try selectCurrency("USD")
+        try require(label(containing: "142.50").waitForExistence(timeout: 20))
+        _ = try await fixture("hold-currency", method: "POST", body: ["currency": "CAD"])
+        try selectCurrency("CAD")
+        let held = try await fixture("state")
+        try require(held["held"] as? Bool == true)
+        XCTAssertFalse(label(containing: "142.50").exists)
+        XCTAssertFalse(label(containing: "999.99").exists)
+        try selectCurrency("USD")
+        try require(label(containing: "142.50").waitForExistence(timeout: 20))
+        _ = try await fixture("release-read", method: "POST")
+        // UI remains on the current USD selection after the earlier CAD reply.
+        let unexpected = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
+            label(containing: "999.99").exists
+        }, object: app)
+        unexpected.isInverted = true
+        try await require(XCTWaiter.fulfillment(of: [unexpected], timeout: 3) == .completed)
+        try require(label(containing: "142.50").exists)
+        keepScreen("Earlier CAD reply cannot replace current USD selection")
+        let history = try await fixture("history", method: "POST")
+        let periods = try XCTUnwrap(history["periods"] as? [String: String])
+        try await reopenDashboard()
+        try reveal(label(containing: "137.25"))
+        try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Monthly totals")).firstMatch)
+        try reveal(label(containing: "Monthly total for " + XCTUnwrap(periods["oldest"])))
+        keepScreen("Oldest paid month in full 24-month history")
+        try reveal(label(containing: "Monthly total for " + XCTUnwrap(periods["latest"])))
+        app.swipeUp()
+        let latest = try label(containing: "Monthly total for " + XCTUnwrap(periods["latest"]))
+        try require(latest.isHittable)
+        XCTAssertFalse(latest.frame.intersects(element("homeDashboardFab").frame))
+        keepScreen("Latest paid month remains reachable after scrolling full history")
+        let back = app.buttons.matching(NSPredicate(format: "label == 'Back'"))
+            .allElementsBoundByIndex.filter(\.isHittable)
+        XCTAssertEqual(back.count, 1)
+        try press(XCTUnwrap(back.first))
+        try require(element("myHomesList").waitForExistence(timeout: 20))
+    }
+
+    private func selectCurrency(_ currency: String) throws {
+        try press(element("homeDashboard_billCurrency"))
+        try press(app.buttons.matching(NSPredicate(format: "label == %@", currency)).firstMatch)
+    }
+
     private func openDashboard() async throws {
         app.launch()
         if !element("tab.place").waitForExistence(timeout: 3) {

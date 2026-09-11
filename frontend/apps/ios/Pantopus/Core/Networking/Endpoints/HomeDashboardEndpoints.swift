@@ -73,8 +73,8 @@ public enum HomeDashboardEndpoints {
     /// `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.
     ///
     /// 403s for members without `finance.view` / `finance.manage`.
-    public static func billTrends(homeId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/homes/\(homeId)/bill-trends", query: ["format": "2", "currency": "USD"])
+    public static func billTrends(homeId: String, currency: String = "USD") -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/bill-trends", query: ["format": "2", "currency": currency])
     }
 }
 

@@ -206,6 +206,9 @@ final class HomeDashboardViewModel {
     private(set) var checklist: HomeIntelligenceCardState<SeasonalChecklistDTO> = .loading
     private(set) var propertyValue: HomeIntelligenceCardState<HomePropertyValueDTO> = .loading
     private(set) var billTrends: HomeIntelligenceCardState<HomeBillTrendsDTO> = .loading
+    private(set) var billCurrency = "USD"
+    private(set) var billCurrencies = ["USD"]
+    private var billReadID = UUID()
     /// Checklist item ids with an in-flight PATCH — the row disables while
     /// its mutation is awaiting the server's returned item state.
     private(set) var pendingChecklistItemIds: Set<String> = []
@@ -398,12 +401,20 @@ final class HomeDashboardViewModel {
     }
 
     private func loadBillTrends() async {
-        billTrends = await fetchCard {
+        let readID = UUID()
+        billReadID = readID
+        let currency = billCurrency
+        let result = await fetchCard {
             try await self.api.request(
-                HomeDashboardEndpoints.billTrends(homeId: self.homeId),
+                HomeDashboardEndpoints.billTrends(homeId: self.homeId, currency: currency),
                 as: HomeBillTrendsDTO.self
             )
         }
+        guard readID == billReadID, currency == billCurrency else { return }
+        if let data = result.value, HomeBillPresentation.isCurrent(data, currency: currency) {
+            billCurrencies = Array(Set(data.availableCurrencies + ["USD", currency])).sorted()
+        }
+        billTrends = result
     }
 
     private func fetchCard<Value: Sendable>(
@@ -453,6 +464,13 @@ final class HomeDashboardViewModel {
     }
 
     func retryBillTrends() async {
+        billTrends = .loading
+        await loadBillTrends()
+    }
+
+    func selectBillCurrency(_ currency: String) async {
+        guard currency != billCurrency, billCurrencies.contains(currency) else { return }
+        billCurrency = currency
         billTrends = .loading
         await loadBillTrends()
     }

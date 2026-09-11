@@ -25,21 +25,42 @@ compile, assemble and lint r2 pass. The first UI run's uppercase-heading locator
 failure is documented; the full corrected run passes. Both completed platform
 fixtures have exact cleanup proof. Android's owned recurrence AVD is shut down.
 
-**Next: finish the uncommitted iOS currency/monthly-history work.** Signed currency
-build r2 and affected quality pass; full two-journey installed run r1 is active
-(session 57193, `/private/tmp/pantopus-native-bill-ios-currency-ui-r1.xcresult`).
-The new fixture (session 61295, port 18083) can hold/release an earlier currency
-response. These iOS/fixture changes are not part of the verified Android commit.
-Owned iOS simulator F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8 is booted for this work.
-Inspect actual results, repair findings, then add Android parity and continue
-native Home access/lifecycle/UI, Place, residency, submission, ownership/leases/
-resources, settings/privacy and the full ordered backlog. Do not omit the prior
-captured UI/copy findings or confuse hierarchy evidence with full visual/device
-acceptance. Keep paid services in one final launch bundle.
+**Current currency/history continuation:** iOS signed currency build r5,
+affected final Swift quality and both installed UI r5 journeys pass. The final
+run covers currency switching, a deliberately delayed CAD reply, 24 months,
+amount/footer overlap, one Back control and the complete 22-read recovery
+regression. Visual review confirms readable USD/CAD values and reserved Create
+space. The earlier r4 recovery failure coincided with Docker stopping; direct
+HTTP/SQL also hung. It remains recorded as a failure, with successful recovery
+and full rerun, rather than being omitted.
 
-No new migration; #32/#34 remain unfinished drafts and combined 47-version
-migration reconciliation/replay remains. iOS predecessor d17947d0b is pushed;
-its new remote CI needs verification. Preserve owner work, data and devices.
+Android currency source is still uncommitted. Build r2 passes formatting,
+Detekt, compile, assemble and lint. Installed currency/history r1 passed USD/CAD
+and delayed replies but failed to find the oldest row with the disclosure still
+collapsed. Two focused normal-UI probes, including a cold return, successfully
+expanded it. The complete r2 journey now records before/after expansion and
+asserts its visible reaction (session 89109,
+`/private/tmp/pantopus-native-bill-android-currency-ui-r2`). Do not call it passed
+until it finishes; full Android recovery rerun remains next. The shared fixture
+is r5, session 33500 at 18083. Owned iOS simulator
+F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8 is shut down. Owned Android recurrence AVD
+is emulator-5556. No concurrent shared fixture mutation is allowed.
+
+After this milestone, continue native Home access/lifecycle/UI, Place, residency,
+submission, ownership/leases/resources, settings/privacy and the full ordered
+backlog. Checklist truncation and unsupported property-estimate copy remain;
+general foreground/account/access retirement is not completed by currency read
+ordering. Keep physical-device and broader accessibility limits explicit. Paid
+services remain one final launch bundle.
+
+Origin was fetched; master remains `6a1013784`. All required checks on pushed
+`3fb62d564` now pass. #32/#34 remain unfinished drafts; #34 is still conflicted.
+No new migration; combined 47-version dependencies/replay remain. Docker 29.1.3
+and the owned Gig database are healthy after authorized recovery; 23 automatically
+restarted older replay containers were stopped with data retained. Disk cleanup
+removed only identified generated build caches/intermediates; source, products,
+test evidence, DB backups and owner device data remain. Read the detailed
+[native report](home-native-bill-comparison-2026-09-11.md) for exact limits.
 
 ### iOS bill comparison installed milestone — September 11
 

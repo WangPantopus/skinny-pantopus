@@ -181,9 +181,11 @@ struct HomeDashboardView: View {
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeDashboard")
         .onAppear { Analytics.track(.screenHomeDashboardViewed) }
         .task { await viewModel.load() }
+        .toolbar(onBack == nil ? .automatic : .hidden, for: .navigationBar)
     }
 
     private func dashboardBody(
@@ -252,11 +254,11 @@ struct HomeDashboardView: View {
                         }
                     )
                 }
-            },
-            cta: {
-                // Six one-tap creates, matching RN's `homeFabActions`
-                // (`src/app/homes/[id]/index.tsx:154-161`). Every entry
-                // routes to a real create surface — no placeholders.
+            }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack {
+                Spacer()
                 FABCreateCTA(
                     actions: [
                         FABSheetAction(id: "add_task", title: "Add Task", icon: .listChecks),
@@ -268,7 +270,9 @@ struct HomeDashboardView: View {
                     ]
                 ) { handleFabAction($0) }
             }
-        )
+            .padding(Spacing.s4)
+            .background(Theme.Color.appBg)
+        }
         .sheet(isPresented: $showsInviteOwner) {
             InviteOwnerFormView(
                 homeId: homeId,
@@ -302,8 +306,12 @@ struct HomeDashboardView: View {
             state: viewModel.propertyValue
         ) { Task { await viewModel.retryPropertyValue() } }
         BillTrendsCard(
-            state: viewModel.billTrends
-        ) { Task { await viewModel.retryBillTrends() } }
+            state: viewModel.billTrends,
+            currency: viewModel.billCurrency,
+            currencies: viewModel.billCurrencies,
+            onCurrencyChange: { currency in Task { await viewModel.selectBillCurrency(currency) } },
+            onRetry: { Task { await viewModel.retryBillTrends() } }
+        )
     }
 
     /// Security-banner CTA routing. Mirrors RN's

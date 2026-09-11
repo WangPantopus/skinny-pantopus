@@ -525,6 +525,7 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
     public let benchmarks: [String: HomeBillBenchmarkDTO]
     public let billBenchmarkOptIn: Bool
     public let currency: String?
+    public let availableCurrencies: [String]
     public let formatVersion: Int?
     public let calculationVersion: Int?
 
@@ -532,6 +533,7 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
         case billsByType = "bills_by_type"
         case benchmarks
         case currency
+        case availableCurrencies = "available_currencies"
         case formatVersion = "format_version"
         case calculationVersion = "calculation_version"
         case billBenchmarkOptIn = "bill_benchmark_opt_in"
@@ -549,6 +551,7 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
         ) ?? [:]
         billBenchmarkOptIn = try container.decodeIfPresent(Bool.self, forKey: .billBenchmarkOptIn) ?? false
         currency = try container.decodeIfPresent(String.self, forKey: .currency)
+        availableCurrencies = try container.decodeIfPresent([String].self, forKey: .availableCurrencies) ?? []
         formatVersion = try container.decodeIfPresent(Int.self, forKey: .formatVersion)
         calculationVersion = try container.decodeIfPresent(Int.self, forKey: .calculationVersion)
     }
@@ -558,6 +561,7 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
         benchmarks: [String: HomeBillBenchmarkDTO],
         billBenchmarkOptIn: Bool,
         currency: String? = "USD",
+        availableCurrencies: [String] = ["USD"],
         formatVersion: Int? = 2,
         calculationVersion: Int? = 2
     ) {
@@ -565,6 +569,7 @@ public struct HomeBillTrendsDTO: Decodable, Sendable, Hashable {
         self.benchmarks = benchmarks
         self.billBenchmarkOptIn = billBenchmarkOptIn
         self.currency = currency
+        self.availableCurrencies = availableCurrencies
         self.formatVersion = formatVersion
         self.calculationVersion = calculationVersion
     }

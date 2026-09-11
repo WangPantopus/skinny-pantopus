@@ -3,16 +3,20 @@
 ## Most recent native bill checkpoint
 
 Read the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
-[native bill report](home-native-bill-comparison-2026-09-11.md). Both iOS and
-Android initial bill comparison/recovery journeys pass, 22 production reads
-each; quality/builds and exact fixture cleanup pass. Initial iOS accessibility
-and Android locator failures are retained with full successful reruns. Android
-is shut down. iOS currency choice/monthly totals/read-order protection are now
-uncommitted: currency build r2 passes and two installed journeys are running
-under session 57193 with updated fixture session 61295 at 18083. Inspect the
-outcome before claiming acceptance. Then continue Android parity, native Home
-access/lifecycle/UI and every remaining backlog item. Both PRs stay drafts;
-combined migrations and the final paid-services launch bundle remain open.
+[native report](home-native-bill-comparison-2026-09-11.md). Initial USD journeys
+pass on both clients. Uncommitted currency/history now passes both iOS installed
+r5 journeys, including full 22-read recovery. Android currency build r2 passes;
+installed currency r1 missed the history disclosure expansion; two focused
+probes pass. Complete currency r2 is now running under session 89109, with explicit
+expansion evidence and assertions, against fixture r5/session
+33500 at 18083. Finish currency/pixel acceptance and full Android recovery,
+then exact fixture cleanup and commit/push. iOS owned simulator is shut down;
+Android owned recurrence AVD is emulator-5556. Docker is recovered and active
+Gig SQL healthy; older replay containers are stopped with data retained. Owner
+files/devices are untouched. Current pushed 3fb62d564 has all required CI green.
+Both PRs remain drafts; #34 conflicted, combined migrations and full native/Home/
+Pulse/Beacon/account/payment/release backlog open. Paid services stay one final
+launch bundle. Do not mistake the currency read guard for whole-Home lifecycle.
 
 ## Latest continuation — September 11, live bill comparisons
 
