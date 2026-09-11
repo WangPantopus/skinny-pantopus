@@ -61,11 +61,13 @@ function fingerprint(access) {
 }
 // Intelligence can involve several SQL reads or a slow provider. Recheck the
 // same current Home authority after that work before returning private data.
-async function withCurrentAccess({ homeId, actorId }, read) {
-  const opening = await readAccess(homeId, actorId);
-  const result = await read(opening);
-  const current = await readAccess(homeId, actorId);
+async function withCurrentAccess({ homeId, actorId, permission = 'home.view' }, read) {
+  const opening = await readAccess(homeId, actorId, permission);
+  let result, readError;
+  try { result = await read(opening); } catch (error) { readError = error; }
+  const current = await readAccess(homeId, actorId, permission);
   if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+  if (readError) throw readError;
   return result;
 }
 function visibleScopes(access) {

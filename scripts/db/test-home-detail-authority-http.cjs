@@ -38,8 +38,8 @@ async function request(suffix = '', homeId = home) {
   assert.match(response.headers.get('cache-control'), /no-store/);
   return { status: response.status, body: await response.json() };
 }
-const detailQuery = d => d.table === 'Home' && d.columns.includes('occupants:');
-const propertyQuery = d => d.table === 'Home' && d.columns === '*';
+const detailQuery = d => d.table === 'Home' && d.columns.startsWith('id, name, address, address2') && !d.columns.includes('niche_data');
+const propertyQuery = d => d.table === 'Home' && d.columns.includes('niche_data');
 const ownerQuery = d => d.table === 'HomeOwner' && d.columns.includes('is_primary_owner');
 function denied(result, status = 403) {
   assert.equal(result.status, status, JSON.stringify(result));
@@ -135,6 +135,86 @@ async function main() {
       await held('', detailQuery, change); await held('', ownerQuery, change); await held('/property-details', null, change);
     }
     console.log('PASS: nine already-produced SDK Home/owner or provider replies cannot return data after revocation, freeze or explicit denial');
+
+    // Exercise the successful payload, not just admission. Raw legal names,
+    // unrelated Home caches and private file references must never escape.
+    updateHome(`entry_instructions='PRIVATE_ENTRY_SENTINEL',parking_instructions='PRIVATE_PARKING_SENTINEL',
+      niche_data='{"private_internal":"PRIVATE_CACHE_SENTINEL"}'::jsonb`);
+    sql(`UPDATE public."User" SET name='LEGAL_NAME_SENTINEL' WHERE id=ANY(ARRAY[${f.users.map(q).join(',')}]::uuid[]);`);
+    let detail = (await current()).home;
+    assert.equal(detail.entry_instructions, 'PRIVATE_ENTRY_SENTINEL');
+    assert.deepEqual(detail.occupants.map(row => row.user_id), [actor]);
+    assert.equal(detail.owner.name, null); assert.equal(detail.owner.username.length > 0, true);
+    const forbidden = ['owner_id','created_by_user_id','niche_data','wifi_qr_file_id','house_rules_file_id','address_hash','geocode_provider'];
+    for (const suffix of ['', '/property-details']) {
+      const body = await current(suffix);
+      for (const key of forbidden) assert.equal(Object.hasOwn(body.home, key), false, key);
+      assert(!JSON.stringify(body).includes('LEGAL_NAME_SENTINEL'));
+      assert(!JSON.stringify(body).includes('PRIVATE_CACHE_SENTINEL'));
+    }
+    const deny = permission => sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed)
+      VALUES(${q(home)},${q(actor)},${q(permission)},false);`);
+    deny('access.view_codes');
+    for (const suffix of ['', '/property-details']) {
+      const body = await current(suffix); assert(!JSON.stringify(body).includes('PRIVATE_ENTRY_SENTINEL'));
+      assert(!JSON.stringify(body).includes('PRIVATE_PARKING_SENTINEL'));
+    }
+    deny('members.view'); deny('ownership.view');
+    detail = (await current()).home;
+    assert.deepEqual(detail.occupants, []); assert.deepEqual(detail.owners, []); assert.equal(detail.owner, null);
+    assert.equal(detail.ownership_status, 'verified'); assert.equal(detail.isOwner, true);
+    denied(await request('/occupants'));
+    restore();
+    let roster = await request('/occupants'); assert.equal(roster.status, 200, JSON.stringify(roster));
+    assert.deepEqual(roster.body.occupants.map(row => row.user_id), [actor]); assert.deepEqual(roster.body.pendingInvites, []);
+    roster = await request('/occupants?include_inactive=1'); assert.equal(roster.status, 200, JSON.stringify(roster));
+    assert.equal(roster.body.occupants.length, 5); assert(!JSON.stringify(roster.body).includes('LEGAL_NAME_SENTINEL'));
+    deny('members.manage'); denied(await request('/occupants?include_inactive=1'));
+    assert.equal((await request('/occupants')).status, 200);
+    assert.equal((await request('/occupants?include_inactive=unexpected')).status, 400);
+    deny('home.view'); denied(await request()); assert.equal((await request('/occupants')).status, 200);
+    restore();
+    console.log('PASS: explicit fields and per-field grants; safe native-compatible identity; own status without peer ownership; separate current/history roster permissions');
+
+    const peer = f.users[1];
+    const updatePeer = change => sql(`UPDATE public."HomeOccupancy" SET ${change} WHERE home_id=${q(home)} AND user_id=${q(peer)};`);
+    updatePeer("verification_status='verified',verified_at=now(),start_at=NULL,end_at=NULL,access_start_at=NULL,access_end_at=NULL");
+    for (const suffix of ['', '/occupants']) {
+      const result = await request(suffix); assert.equal(result.status, 200, JSON.stringify(result));
+      assert.equal((suffix ? result.body.occupants : result.body.home.occupants).length, 2);
+    }
+    for (const change of ["is_active=false", "start_at=now()+interval '1 day'", "end_at=now()-interval '1 day'",
+      "access_start_at=now()+interval '1 day'", "access_end_at=now()-interval '1 day'", "verification_status='pending_doc'"]) {
+      updatePeer(change);
+      for (const suffix of ['', '/occupants']) {
+        const result = await request(suffix); assert.equal(result.status, 200, JSON.stringify(result));
+        assert.deepEqual((suffix ? result.body.occupants : result.body.home.occupants).map(row => row.user_id), [actor]);
+      }
+      updatePeer("is_active=true,verification_status='verified',start_at=NULL,end_at=NULL,access_start_at=NULL,access_end_at=NULL");
+    }
+    updatePeer("role='owner',role_base='owner',age_band='teen'");
+    assert.equal((await current()).home.occupants.find(row => row.user_id === peer).role_base, 'member');
+    updatePeer("role='member',role_base='member',age_band='adult'");
+    const memberQuery = d => d.table === 'HomeOccupancy' && d.columns.includes('user:user_id');
+    for (const suffix of ['', '/occupants']) {
+      let captured, release;
+      const observed = new Promise(resolve => { captured = resolve; });
+      hook = { matches: memberQuery, handle: async result => { captured(); await new Promise(resolve => { release = resolve; }); return result; } };
+      const pending = request(suffix); await observed; updatePeer('is_active=false'); release();
+      const heldResult = await pending;
+      if (heldResult.status === 200) assert.deepEqual((suffix ? heldResult.body.occupants : heldResult.body.home.occupants).map(row => row.user_id), [actor]);
+      else denied(heldResult, 503);
+      const fresh = await request(suffix); assert.equal(fresh.status, 200);
+      assert.deepEqual((suffix ? fresh.body.occupants : fresh.body.home.occupants).map(row => row.user_id), [actor]);
+      updatePeer('is_active=true');
+    }
+    for (const [suffix, matches] of [['', detailQuery], ['', ownerQuery], ['', memberQuery], ['/occupants', memberQuery]]) {
+      hook = { matches, handle: result => ({ ...result, data: Array.isArray(result.data) ? [{}] : {} }) };
+      denied(await request(suffix), 503); assert.equal(hook, null);
+      assert.equal((await request(suffix)).status, 200);
+    }
+    console.log('PASS: active/pending/expired/future/removed member projections and minor roles; held removed-member results retire; malformed detail/owner/member data fails safely and recovers');
+
   } finally {
     if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
     if (initialized) { sql(`DELETE FROM public."HomeOwnershipClaim" WHERE id=${q(f.id(942))} AND home_id=${q(home)};`); f.cleanup(); console.log('PASS: exact Home detail authority SQL fixture cleanup'); }

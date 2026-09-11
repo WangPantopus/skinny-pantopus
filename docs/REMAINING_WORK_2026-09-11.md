@@ -6,8 +6,8 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [current lists and browser private first use](home-list-authority-2026-09-11.md),
-continuing `943b08cc4`. All paused-head checks now pass in
+Latest local Home milestone: [safe detail projections and browser property recovery](home-detail-projection-2026-09-11.md),
+continuing `c4a22858f`. All paused-head checks now pass in
 [run 34630614602](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34630614602).
 Verify the next pushed head separately through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
 #32 remains draft. #34 is draft at `e9ef2decb`, conflicts with master, and contains
@@ -17,17 +17,17 @@ existing concurrency rule; a cancelled aggregate is not final passing evidence.
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
 broken; **Integrate** = source/schema/version gate; **Launch** = release prerequisite.
-There are 80 tracked items below, with H01/H02/H06 locally verified and 77 remaining.
+There are 80 tracked items below, with H01–H04/H06 locally verified and 75 remaining.
 No task is weighted equally, so the number of unchecked entries is not a percent
 of engineering effort or a reliable release date. Unit-test coverage is not an
 exit criterion. Actual records, UI states, retries and current access are.
 
 ## 1. Home identity and current access — active work
 
-- [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03-H05/H07-H08 remain open.
+- [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05/H07/H08 remain open.
 - [x] H02 **Implemented and locally verified:** All three lists share current authority, safe errors and held-result retirement. Real SDK/SQL/HTTP authority and recovery matrix passes; see [the list repair](home-list-authority-2026-09-11.md). Final-head CI remains G05.
-- [ ] H03 **Fix (partial):** Detail/list read failures now produce safe retryable errors. Finish malformed/per-field detail/ownership identity projections with H04; do not infer overall closure from the bounded list matrix.
-- [ ] H04 **Fix:** Replace wildcard/raw owner/occupant exposure with appropriate fields and current per-field/member/ownership permissions; exclude inactive or pending occupants from active household projections.
+- [x] H03 **Implemented and locally verified:** Detail/list/occupants use explicit validated projections and safe retryable errors, with real SDK/SQL/HTTP and browser property recovery. See [the read repair and limits](home-detail-projection-2026-09-11.md); broader UI/settings/vendor checks remain D05/D07/I05.
+- [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [ ] H05 **Fix:** Separate saved address, private Home, verified address/property, residency, ownership and administrative role. Native “Verified Home” currently infers verification from owner authority or an owner's row.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
 - [ ] H07 **Verify:** Real create/save/join/invite onboarding must produce the intended role defaults. Reconcile the verified-member `home.view` gap without overriding explicit denies or granting membership from an address.
@@ -165,7 +165,6 @@ its own scope decisions; it is not silently counted as a missing v1 implementati
 - [Payment branch handoff](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/PROJECT_HANDOFF.md) and [durable-tip draft](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/paid-gig-tip-draft-checkpoint-2026-09-10.md).
 - Private real SDK/SQL identity baseline: `/private/tmp/pantopus-home-identity-baseline-r1.log` (exact fixture cleanup passed). No credentials or raw operator logs are committed.
 
-Next implementation: verify the newest pushed head’s CI, then finish safe detail
-identity, native Home list/verification and real onboarding/residency. Paused
+Next implementation: verify the newest pushed head’s CI, then finish native Home list/verification and real onboarding/residency. Paused
 `943b08cc4` now has all checks passing. Keep this
 inventory updated as evidence closes or adds individual items.

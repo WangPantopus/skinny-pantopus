@@ -206,15 +206,38 @@ export async function leaveHome(homeId: string): Promise<ApiResponse> {
 /**
  * Get home occupants
  */
-export async function getHomeOccupants(homeId: string): Promise<{ 
-  occupants: (HomeOccupancy & { 
-    user: { 
-      id: string; 
-      username: string; 
-      name: string; 
-      profile_picture_url?: string; 
-    } 
-  })[] 
+export interface HomeMemberReference {
+  id: string;
+  home_id: string;
+  user_id: string;
+  role: string;
+  role_base: string | null;
+  is_active: boolean;
+  verification_status: string;
+  start_at: string | null;
+  end_at: string | null;
+  access_start_at: string | null;
+  access_end_at: string | null;
+  created_at: string;
+  user: { id: string; username: string; name: null; profile_picture_url: string | null };
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+  joined_at: string;
+}
+export interface HomePendingInviteReference {
+  id: string;
+  user_id: string | null;
+  role: string;
+  is_active: false;
+  email: string | null;
+  name: string;
+  invited_by: string | null;
+  created_at: string;
+}
+export async function getHomeOccupants(homeId: string): Promise<{
+  occupants: HomeMemberReference[];
+  pendingInvites: HomePendingInviteReference[];
 }> {
   return get(`/api/homes/${homeId}/occupants`);
 }

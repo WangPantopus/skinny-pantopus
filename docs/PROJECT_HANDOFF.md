@@ -14,6 +14,37 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home detail projection and browser property recovery — September 11
+
+Continued from pushed `c4a22858f` on `codex/home-permission-boundaries` in
+`/private/tmp/pantopus-home-permission-boundaries`. The [detail projection report](home-detail-projection-2026-09-11.md)
+records H03/H04: explicit per-field Home/owner/occupant responses, safe native-shaped
+household identity, current roster versus managed history, held-subject retirement,
+and actual browser property error/retry/session/lifecycle recovery. Edit controls
+omit unreadable instructions; contact navigation uses the permitted verified owner.
+
+Actual SDK/HTTP/SQL r5 and Chrome r3 pass with exact fixture cleanup. Backend r2
+passes 317 suites / 5,169 checks (16 existing skips); web regression passes
+92 / 1,178. Privacy gates and strict web types pass. Affected lint retains eight
+existing warnings, no errors. The report preserves failed attempts and verification
+limits. No native or real provider acceptance is inferred from these checks.
+
+**Continue without a routine milestone stop:** H05 native Home identity and
+verification, H07 real create/save/join/invite defaults (verified-member home.view
+gap), H08 native useful first use; then native residency and the full backlog.
+H01–H04/H06 are locally verified: 75 of 80 tracked entries remain open, not an
+effort percentage. Broader mutation/settings/member-page privacy and failure
+behavior remain D01/D05/D07; vendor validation is I05; live invalidation is I07.
+
+Prior head `c4a22858f` CI [34634628047](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34634628047)
+has green backend/web/schema, Android instrumented checks and iOS bundle build;
+iOS simulator tests and Android assemble were still running. Check the new pushed
+head separately. #32/#34 remain drafts, #34 conflicted. Reconcile 38 Home / 21
+payment / 47 distinct combined migration dependencies before merging. No migration,
+merge, deployment, paid activation or real message. Preserve owner checkout, paid
+worktree, databases, devices, artifacts and private evidence. Paid services stay
+in one final launch bundle.
+
 ### Home list authority and browser private first use — September 11
 
 Resumed from `943b08cc4` in `/private/tmp/pantopus-home-permission-boundaries`,

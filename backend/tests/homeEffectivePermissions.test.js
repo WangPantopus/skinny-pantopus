@@ -284,7 +284,17 @@ test.each([
 
 test('Home detail does not reconstruct owner authority for a minor from HomeOwner', async () => {
   seed({ role_base: 'owner', age_band: 'teen' }, { owner_id: USER });
-  db.seedTable('HomeOwner', [{ id: 'owner-row', home_id: HOME, subject_id: USER, subject_type: 'user', owner_status: 'verified' }]);
+  Object.assign(db.getTable('Home')[0], {
+    name: null, address: '123 Test St', address2: null, city: 'Testville', state: 'CA', zipcode: '90210',
+    country: 'US', is_owner: false, location: null, home_type: null, description: null, visibility: 'private',
+    bedrooms: null, bathrooms: null, sq_ft: null, lot_sq_ft: null, year_built: null, move_in_date: null,
+    primary_photo_url: null, cover_photo_url: null, created_at: null, updated_at: null,
+    home_status: 'active', security_state: 'normal', claim_window_ends_at: null, tenure_mode: null,
+  });
+  Object.assign(db.getTable('HomeOccupancy')[0], { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+    created_at: '2026-09-10T00:00:00Z', user: { id: USER, username: 'household-handle' } });
+  db.seedTable('HomeOwner', [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', home_id: HOME,
+    subject_id: USER, subject_type: 'user', owner_status: 'verified', is_primary_owner: true, verification_tier: 'strong' }]);
   db.setRpcMock(async name => {
     if (name === 'home_record_context') {
       const access = await getUserAccess(HOME, USER);

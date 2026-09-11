@@ -14,6 +14,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
+const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
 const homeInvitationService = require('../services/homeInvitationService');
@@ -34,10 +35,9 @@ const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
-const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const { shouldBlockCoordinateOverwrite, stripCoordinateFields } = require('../utils/verifiedCoordinateGuard');
 const { encodeGeohash } = require('../utils/geohash');
-const { HOME_DETAIL, HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
+const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const {
   pipelineService,
   AddressVerdictStatus,
@@ -48,28 +48,6 @@ const {
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
-
-function isPendingOwnershipClaimForReadPath(claim) {
-  if (!claim) return false;
-
-  if (householdClaimConfig.flags.v2ReadPaths) {
-    return homeClaimRoutingService.isClaimActiveRecord(claim);
-  }
-
-  return homeClaimRoutingService.isLegacyStateActive(claim.state);
-}
-
-function findLatestPendingOwnershipClaim(claims) {
-  return (claims || []).find(isPendingOwnershipClaimForReadPath) || null;
-}
-
-/**
- * Advisory projection of the same guarded primary-owner/private-creator deletion
- * transaction. The delete RPC locks and rechecks current authority and history.
- */
-async function canUserDeleteHomeRecord(homeId, userId) {
-  return (await homeAuthorityService.deleteEligibility(homeId, userId)).allowed;
-}
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1974,90 +1952,8 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
 router.get('/:id', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const result = await intelligenceAuthority.withCurrentAccess({ homeId: id, actorId: userId }, async (access) => {
-      // Get home with occupants
-      const { data: home, error } = await supabaseAdmin
-        .from('Home')
-        .select(`
-          *,
-          owner:owner_id (
-            id,
-            username,
-            name
-          ),
-          occupants:HomeOccupancy (
-            user_id,
-            created_at,
-            user:user_id (
-              id,
-              username,
-              name
-            )
-          )
-        `)
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error || !home || home.id !== id) throw new Error('Home detail data unavailable');
-
-      const isOwner = access.isOwner;
-      const isOccupant = !!access.occupancy;
-
-      // Parse location
-      if (home.location) {
-        const coords = parsePostGISPoint(home.location);
-        home.location = coords;
-      }
-
-      // Fetch ownership data
-      const { data: owners, error: ownersError } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('id, subject_type, subject_id, owner_status, is_primary_owner, verification_tier')
-        .eq('home_id', id)
-        .neq('owner_status', 'revoked');
-
-      if (ownersError || !Array.isArray(owners) || owners.some(owner => !owner || typeof owner.id !== 'string')) {
-        throw new Error('Home ownership data unavailable');
-      }
-
-      // Check if user has a pending ownership claim (for verification banner)
-      const userOwnerRow = (owners || []).find(o => o.subject_id === userId);
-      const isPendingOwner = userOwnerRow?.owner_status === 'pending';
-      let pendingClaimId = null;
-      if (isPendingOwner) {
-        const { data: pendingClaims, error: claimsError } = await supabaseAdmin
-          .from('HomeOwnershipClaim')
-          .select('id, state, claim_phase_v2, merged_into_claim_id')
-          .eq('home_id', id)
-          .eq('claimant_user_id', userId)
-          .order('created_at', { ascending: false });
-        if (claimsError || !Array.isArray(pendingClaims)) throw new Error('Home claim data unavailable');
-        pendingClaimId = findLatestPendingOwnershipClaim(pendingClaims)?.id || null;
-      }
-
-      const can_delete_home = await canUserDeleteHomeRecord(id, userId);
-
-      return {
-        home: {
-          ...home,
-          isOwner,
-          isPendingOwner,
-          pendingClaimId,
-          isOccupant,
-          owners: owners || [],
-          can_delete_home,
-        }
-      };
-    });
-    res.json(result);
-  } catch (err) {
-    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
-    logger.error('Home detail read unavailable', { code: err.code, homeId: req.params.id });
-    res.status(503).json({ error: 'Could not load this Home. Please retry.', code: 'HOME_DETAIL_UNAVAILABLE' });
-  }
+  try { res.json(await homeDetailService.detail(req.params.id, req.user.id)); }
+  catch (err) { homeDetailService.sendError(res, err); }
 });
 
 /**
@@ -2068,50 +1964,8 @@ router.get('/:id', verifyToken, async (req, res) => {
 router.get('/:id/property-details', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const result = await intelligenceAuthority.withCurrentAccess({ homeId: id, actorId: userId }, async () => {
-      const { data: home, error } = await supabaseAdmin
-        .from('Home')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error || !home || home.id !== id) throw new Error('Home property data unavailable');
-
-      if (home.location) {
-        home.location = parsePostGISPoint(home.location);
-      }
-
-      const detailResult = await propertyIntelligenceService.getHomeAttomPropertyDetail(home);
-
-      if (!detailResult || !['home', 'cache', 'attom', 'unavailable'].includes(detailResult.source)
-        || !(detailResult.attomPayload === null || (typeof detailResult.attomPayload === 'object' && !Array.isArray(detailResult.attomPayload)))
-        || (detailResult.source === 'unavailable' && detailResult.attomPayload !== null)) {
-        throw new Error('Home property result unavailable');
-      }
-
-      if (detailResult.attomPayload) {
-        home.niche_data = {
-          ...(home.niche_data && typeof home.niche_data === 'object' ? home.niche_data : {}),
-          attom_property_detail: detailResult.attomPayload,
-        };
-      }
-
-      return {
-        home,
-        attom_property_detail: detailResult.attomPayload,
-        source: detailResult.source,
-        unavailable_reason: detailResult.unavailableReason || null,
-      };
-    });
-    res.json(result);
-  } catch (err) {
-    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
-    logger.error('Home property detail read unavailable', { code: err.code, homeId: req.params.id });
-    res.status(503).json({ error: 'Could not load these property details. Please retry.', code: 'HOME_PROPERTY_DETAIL_UNAVAILABLE' });
-  }
+  try { res.json(await homeDetailService.propertyDetail(req.params.id, req.user.id)); }
+  catch (err) { homeDetailService.sendError(res, err); }
 });
 
 /**
@@ -2448,100 +2302,13 @@ router.post('/:id/challenge-member/:occupancyId', verifyToken, async (req, res) 
  * Pass ?include_inactive=1 to include moved-out / inactive occupancies (audit-style consumers).
  */
 router.get('/:id/occupants', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId } = req.params;
-    const userId = req.user.id;
-    const includeInactive = String(req.query.include_inactive || '') === '1';
-
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this home' });
-    }
-
-    let occQuery = supabaseAdmin
-      .from('HomeOccupancy')
-      .select(`
-        id,
-        user_id,
-        role,
-        is_active,
-        start_at,
-        can_manage_home,
-        can_manage_finance,
-        can_manage_access,
-        can_manage_tasks,
-        can_view_sensitive,
-        created_at,
-        user:user_id (
-          id,
-          username,
-          name,
-          first_name,
-          last_name,
-          profile_picture_url,
-          city,
-          state
-        )
-      `)
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: true });
-
-    if (!includeInactive) {
-      occQuery = occQuery.eq('is_active', true);
-    }
-
-    const { data: occupants, error } = await occQuery;
-
-    if (error) {
-      logger.error('Error fetching occupants', { error: error.message, homeId });
-      return res.status(500).json({ error: 'Failed to fetch occupants' });
-    }
-
-    // Invitations reveal recipient identity only to current member managers.
-    // Ordinary members keep the occupants view without invitation metadata.
-    let pendingInvites;
-    try { pendingInvites = await homeInvitationService.list(userId, homeId); }
-    catch (err) {
-      if (err.code !== 'MEMBERS_MANAGE_REQUIRED') throw err;
-      pendingInvites = [];
-    }
-
-    // Map pending invites to a member-like shape for the UI
-    const pendingMembers = (pendingInvites || []).map(inv => ({
-      id: inv.id,
-      user_id: inv.invitee_user_id,
-      role: inv.proposed_role,
-      is_active: false, // pending flag
-      email: inv.invitee_email,
-      name: inv.invitee_email || 'Invited user',
-      invited_by: inv.inviter?.name || inv.inviter?.username,
-      created_at: inv.created_at,
-    }));
-
-    // Flatten nested user data so the UI can read display_name, email, etc. directly
-    const flatOccupants = (occupants || []).map(occ => {
-      const u = occ.user || {};
-      return {
-        ...occ,
-        user_id: occ.user_id,
-        display_name: u.name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || null,
-        username: u.username || null,
-        email: u.email || null,
-        avatar_url: u.profile_picture_url || null,
-        joined_at: occ.created_at,
-      };
-    });
-
-    res.json({
-      occupants: flatOccupants,
-      pendingInvites: pendingMembers,
-    });
-
-  } catch (err) {
-    logger.error('Occupants fetch error', { error: err.message, homeId: req.params.id });
-    res.status(err.statusCode || 500).json({ error: 'Failed to fetch occupants', ...(err.code ? { code: err.code } : {}) });
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  if (req.query.include_inactive !== undefined && !['0', '1'].includes(req.query.include_inactive)) {
+    return res.status(400).json({ error: 'Invalid household history filter' });
   }
+  try { res.json(await homeDetailService.members(req.params.id, req.user.id, { history: req.query.include_inactive === '1' })); }
+  catch (err) { homeDetailService.sendError(res, err); }
 });
 
 /**

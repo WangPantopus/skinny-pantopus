@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
@@ -123,32 +123,50 @@ export default function HomePropertyDetailsPage() {
   const [attomPayload, setAttomPayload] = useState<AttomPropertyDetailPayload | null>(null);
   const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      if (!homeId) return;
-      setLoading(true);
-      setError('');
-      try {
-        const res = await api.homes.getHomePropertyDetail(homeId);
-        if (cancelled) return;
-        setHome((res as any)?.home || null);
-        setAttomPayload((res as any)?.attom_property_detail ?? null);
-        setUnavailableReason((res as any)?.unavailable_reason ?? null);
-      } catch (err: unknown) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load property details');
-      } finally {
-        if (!cancelled) setLoading(false);
+  const generation = useRef(0);
+  const retire = useCallback(() => {
+    generation.current++; setHome(null); setAttomPayload(null); setUnavailableReason(null); setError(''); setLoading(true);
+  }, []);
+  const load = useCallback(async () => {
+    const revision = ++generation.current;
+    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => revision === generation.current && token === api.getAuthToken()
+      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
+      && document.visibilityState !== 'hidden';
+    setHome(null); setAttomPayload(null); setUnavailableReason(null); setLoading(true); setError('');
+    try {
+      if (!token) throw new Error('Sign in to view this Home.');
+      const res = await api.homes.getHomePropertyDetail(homeId);
+      if (!current()) return;
+      if (!res || res.home?.id !== homeId || !['home', 'cache', 'attom', 'unavailable'].includes(res.source)
+        || !(res.attom_property_detail === null || (typeof res.attom_property_detail === 'object'
+          && !Array.isArray(res.attom_property_detail)))
+        || (res.source === 'unavailable' && res.attom_property_detail !== null)) {
+        throw new Error('Property details could not be verified. Please retry.');
       }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+      setHome(res.home); setAttomPayload(res.attom_property_detail); setUnavailableReason(res.unavailable_reason ?? null);
+    } catch (err: unknown) {
+      if (!current()) return;
+      setError(err instanceof Error ? err.message : 'Failed to load property details. Please retry.');
+    } finally {
+      if (current()) setLoading(false);
+    }
   }, [homeId]);
+  useEffect(() => {
+    const refresh = () => { retire(); if (document.visibilityState !== 'hidden') void load(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else refresh(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
+    void load();
+    const unsubscribe = api.onTokenChange(refresh);
+    window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      retire(); unsubscribe();
+      window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, [load, retire]);
 
   const property = getAttomPropertyFromPayload(attomPayload);
   const stats = buildHeroStats(property);
@@ -195,8 +213,9 @@ export default function HomePropertyDetailsPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Home
         </button>
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {error}
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          <p>{error}</p>
+          <button type="button" onClick={() => void load()} className="mt-3 rounded-lg border border-red-200 px-3 py-2 font-semibold">Retry</button>
         </div>
       </div>
     );
@@ -229,6 +248,7 @@ export default function HomePropertyDetailsPage() {
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-app-text-secondary">
               {emptyDescription}
             </p>
+            <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
           </div>
         ) : (
           <div className="space-y-6">
@@ -291,9 +311,9 @@ export default function HomePropertyDetailsPage() {
               </section>
             ) : null}
 
-            <div className="flex items-center justify-center gap-2 text-sm font-semibold text-violet-600">
-              <ShieldCheck className="h-4 w-4" />
-              Data from public records via ATTOM
+            <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              <span>Data from public records via ATTOM</span>
             </div>
 
             <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
