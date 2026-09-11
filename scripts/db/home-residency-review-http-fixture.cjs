@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container, { summary = false, place = false } = {}) {
+module.exports = function(container, { summary = false, place = false, dashboard = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -15,13 +15,15 @@ module.exports = function(container, { summary = false, place = false } = {}) {
     return execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
       { input: query, encoding: 'utf8', timeout: 20000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   }
+  let databaseClient = null;
   let rpcFailure = null; const rpcCalls = [];
   let loseReply = false, notificationFailure = false, calls = 0;
-  const notifications = [], queryCalls = [], diagnostics = []; let queryFailure = null;
+  const notifications = [], queryCalls = [], queryDetails = [], queryHooks = [], diagnostics = []; let queryFailure = null;
   let propertyResult = { profile: null, source: 'fallback' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(summary ? ['update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility'] : []), ...(summary ? ['update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
+    if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
       if (failure.reject) throw new Error('Synthetic unavailable RPC transport');
       return { data: null, error: { message: 'Synthetic unavailable RPC' } }; }
@@ -38,21 +40,50 @@ module.exports = function(container, { summary = false, place = false } = {}) {
   } };
   // Supabase query adapter for production reads and isolated summary preference/audit writes.
   db.from = table => {
+    if (databaseClient) return databaseClient.from(table);
     assert(['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride',
-      'HomePostcardCode', 'HomeOwnershipClaim', ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark', 'HomePrivacy'] : [])].includes(table));
+      'HomePostcardCode', 'HomeOwnershipClaim', ...(dashboard ? ['Mail', 'HomeGuestPass', 'HomePackage', 'HomePet'] : []), ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark', 'HomePrivacy'] : [])].includes(table));
     const filters = []; let columns = '*', order = '', limit = '', single = false, count = false, head = false, writes = null, conflict = null;
     const column = name => { assert.match(name, /^[a-z_][a-z0-9_]*$/); return `"${name}"`; };
     const query = {
       select(value, options = {}) {
         count = options.count === 'exact'; head = options.head === true;
         if (table === 'HomeOccupancy' && value.includes('user:user_id')) {
-          columns = `user_id, jsonb_build_object('id',user_id,'profile_picture_url',(SELECT profile_picture_url FROM public."User" WHERE id=user_id)) AS "user"`;
+          columns = dashboard
+            ? value.split('user:user_id')[0].split(',').map(v => v.trim()).filter(Boolean).map(column).join(',') + `, (SELECT jsonb_build_object(${value.split('user:user_id')[1].replace(/[()]/g, '').split(',').map(v => v.trim()).map(name => q(name) + ',' + column(name)).join(',')}) FROM public."User" WHERE id=user_id) AS "user"`
+            : `user_id, jsonb_build_object('id',user_id,'profile_picture_url',(SELECT profile_picture_url FROM public."User" WHERE id=user_id)) AS "user"`;
         } else columns = value === '*' ? '*' : value.split(',').map(v => column(v.trim())).join(',');
         return query;
       },
       insert(value) { assert(summary && ['HomeAuditLog', 'HomeSeasonalChecklistItem'].includes(table)); writes = Array.isArray(value) ? value : [value]; return query; },
       upsert(value, options) { assert(summary && table === 'HomePreference' && options.onConflict === 'home_id,key'); writes = value; conflict = ['home_id', 'key']; return query; },
       gt(key, value) { filters.push(`${column(key)}>${q(value)}`); return query; },
+      lte(key, value) { filters.push(`${column(key)}<=${q(value)}`); return query; },
+      neq(key, value) { filters.push(`${column(key)}<>${q(value)}`); return query; },
+      is(key, value) { assert.equal(value, null); filters.push(`${column(key)} IS NULL`); return query; },
+      or(expression) {
+        assert(dashboard);
+        function split(value) {
+          let depth = 0, start = 0; const parts = [];
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] === '(') depth++;
+            if (value[i] === ')') depth--;
+            assert(depth >= 0);
+            if (value[i] === ',' && depth === 0) { parts.push(value.slice(start, i)); start = i + 1; }
+          }
+          assert.equal(depth, 0); return [...parts, value.slice(start)];
+        }
+        function predicate(value) {
+          const group = /^(and|or)\((.*)\)$/.exec(value);
+          if (group) return '(' + split(group[2]).map(predicate).join(group[1] === 'and' ? ' AND ' : ' OR ') + ')';
+          const match = /^([a-z_]+)\.(eq|neq|gt|gte|lte|is|in)\.(.+)$/.exec(value); assert(match);
+          const [, key, op, operand] = match;
+          if (op === 'is') { assert.equal(operand, 'null'); return column(key) + ' IS NULL'; }
+          if (op === 'in') { assert(operand.startsWith('(') && operand.endsWith(')')); return column(key) + ' IN (' + split(operand.slice(1, -1)).map(q).join(',') + ')'; }
+          return column(key) + ({ eq: '=', neq: '<>', gt: '>', gte: '>=', lte: '<=' })[op] + q(operand);
+        }
+        filters.push('(' + split(expression).map(predicate).join(' OR ') + ')'); return query;
+      },
       gte(key, value) { filters.push(`${column(key)}>=${q(value)}`); return query; },
       not(key, operator, value) { assert(operator === 'is' && value === null); filters.push(`${column(key)} IS NOT NULL`); return query; },
       eq(key, value) { filters.push(`${column(key)}=${q(value)}`); return query; },
@@ -61,8 +92,9 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       order(key, options) { order += `${order ? ',' : ' ORDER BY'} ${column(key)} ${options?.ascending === false ? 'DESC' : 'ASC'}`; return query; },
       limit(value) { assert(Number.isInteger(value) && value > 0); limit = ` LIMIT ${value}`; return query; },
       maybeSingle() { single = true; return query; }, single() { single = true; return query; },
-      then(resolve, reject) { return Promise.resolve().then(() => {
+      then(resolve, reject) { return Promise.resolve().then(async () => {
         queryCalls.push(table);
+        const detail = { table, columns, head, filters: [...filters] }; queryDetails.push(detail);
         if (queryFailure?.table === table) { const failure = queryFailure; queryFailure = null;
           if (failure.reject) throw new Error('Synthetic summary database transport failure');
           return { data: null, count: null, error: { message: 'Synthetic summary database failure' } }; }
@@ -76,7 +108,10 @@ module.exports = function(container, { summary = false, place = false } = {}) {
         }
         const rows = JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT ${columns} FROM public."${table}"${filters.length ? ' WHERE ' + filters.join(' AND ') : ''}${order}${limit}) r;`));
         if (single && rows.length > 1) throw new Error('Fixture expected a single IAM record');
-        return { data: head ? null : single ? rows[0] || null : rows, ...(count ? { count: rows.length } : {}), error: null };
+        const result = { data: head ? null : single ? rows[0] || null : rows, ...(count ? { count: rows.length } : {}), error: null };
+        const hookIndex = queryHooks.findIndex(hook => hook.table === table && hook.match(detail));
+        if (hookIndex >= 0) { const [hook] = queryHooks.splice(hookIndex, 1); return (await hook.handler(result, detail)) ?? result; }
+        return result;
       }).then(resolve, reject); },
     };
     return query;
@@ -111,8 +146,8 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       };
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
-      if (request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(dashboard ? ['../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
@@ -152,8 +187,9 @@ module.exports = function(container, { summary = false, place = false } = {}) {
       (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
   }
   return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications,
+    useDatabaseClient(client) { const url = new URL(client.supabaseUrl); assert.equal(url.hostname, '127.0.0.1'); assert.equal(url.protocol, 'http:'); assert.equal(url.port, '64521'); databaseClient = client; },
     rpcCalls, failNextRpc: (name, reject = false) => { rpcFailure = { name, reject }; },
-    queryCalls, diagnostics, failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },
+    queryCalls, queryDetails, diagnostics, interceptNextQuery: (table, handler, match = () => true) => queryHooks.push({ table, handler, match }), failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },
     setPropertyResult: value => { propertyResult = value; },
     get calls() { return calls; }, loseNextReply: () => { loseReply = true; },
     failNextNotification: () => { notificationFailure = true; }, restoreModules: () => { Module._load = load; } };

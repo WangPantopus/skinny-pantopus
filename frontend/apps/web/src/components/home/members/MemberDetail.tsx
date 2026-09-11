@@ -95,6 +95,9 @@ interface MemberData {
     id?: string;
     name?: string;
     username?: string;
+    displayName?: string;
+    handle?: string;
+    avatarUrl?: string | null;
     profile_picture_url?: string | null;
     avatar_url?: string;
   };
@@ -129,9 +132,9 @@ export default function MemberDetail({
   const [transferConfirmText, setTransferConfirmText] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
 
-  const memberName = member?.user?.name || member?.user?.username || member?.name || 'Member';
-  const memberUsername = member?.user?.username;
-  const profilePic = member?.user?.profile_picture_url || member?.user?.avatar_url;
+  const memberName = member?.user?.displayName || member?.user?.handle || member?.user?.name || member?.user?.username || member?.name || 'Member';
+  const memberUsername = member?.user?.handle || member?.user?.username;
+  const profilePic = member?.user?.avatarUrl || member?.user?.profile_picture_url || member?.user?.avatar_url;
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';
   const joinedDate = member?.created_at || member?.start_at;
 

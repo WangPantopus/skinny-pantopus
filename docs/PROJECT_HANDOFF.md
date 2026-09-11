@@ -14,6 +14,46 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Current dashboard aggregate and browser contract — September 11
+
+The [dashboard report](home-dashboard-current-summary-2026-09-11.md) records the
+new backend/browser milestone and every remaining finding. Real production
+HTTP/SQL r6 and actual Supabase SDK/PostgREST pass, including populated records,
+private Mail, current permission/visibility gates, unavailable versus empty,
+five held-reply authority changes and fresh recovery. Exact fixture cleanup
+passes. Actual Chrome production-aggregate r1 passes identity, revocation,
+background/return, pending-residency and keyboard/narrow recovery; reviewed
+screenshots and zero page errors. Full backend/web regression, final web types,
+affected lint and privacy gates pass. No migration, provider or hosted change.
+
+**Next:** finish the known Android screenshot check failure, then repair the
+web overview's aggregate/entity mismatch and permissive failure fallback with
+real populated UI acceptance. Continue native whole-Home access/lifecycle/held
+read/account retirement, safe identity readers and captured UI issues, preserving
+exact private-creator first use and ownership/residency applicant entry. The
+report lists standalone issue/package/mailbox/pet, guest redemption, timezone,
+pagination and narrow-layout findings; none are implicitly closed by this work.
+All remaining Home/Place/Pulse/Beacon/account/payment/release priorities below
+remain. Paid services stay one final launch-preparation bundle.
+
+Latest remote head `983c93a919`: all iOS jobs and Android instrumentation pass;
+Android lint/test/assemble fails on three HomeDashboard Paparazzi baselines
+(each retried) after the Create-footer change. Do not waive it or merge. Targeted
+local Android quality/snapshot verification is running as session 13270; log
+`/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r1.log`. Native
+safe-identity DTO/projection edits remain an uncommitted draft until built and
+actually accepted. Inspect the current build and pixels before recording images.
+
+#32/#34 remain unfinished drafts. #34 is conflicted at `e9ef2decb`. Master is
+still `6a1013784`; the combined 47-version migration dependency/replay gate is
+unresolved. Owned Gig SQL and web 18080 remain; fixture listeners have stopped
+with exact cleanup, and owned native devices remain shut down. Owner checkout
+still has only its handoff edit and two design artifacts, untouched. Preserve all
+source, device data, databases, products and private evidence during resource work.
+
+The dated checkpoints below describe earlier milestones; their old "next" and
+runtime statements are historical, superseded by this current section.
+
 ### Native bill currencies and monthly history — September 11
 
 The [native bill report](home-native-bill-comparison-2026-09-11.md) records both

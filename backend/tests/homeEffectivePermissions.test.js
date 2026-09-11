@@ -196,7 +196,7 @@ test('/me reports a minor owner as limited and keeps explicit denial errors retr
 async function homeRoute(path, method = 'get', params = {}, body = {}) {
   const router = require('../routes/home');
   const handler = router.stack.find(layer => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn(), set: jest.fn() };
   await handler({ params: { id: HOME, ...params }, user: { id: USER },
     headers: { authorization: 'Bearer synthetic-effective-access-session' }, query: {}, body }, response);
   return response;
@@ -215,7 +215,7 @@ test('finance.view permits reading bills but never legacy finance mutation or it
   }
   expect(db.getTable('HomeBill')[0].amount).toBe(42);
   const router = require('../routes/homeIam');
-  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn() };
+  const response = { status: jest.fn().mockReturnThis(), json: jest.fn(), setHeader: jest.fn(), set: jest.fn() };
   await router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle(
     { params: { id: HOME }, user: { id: USER } }, response);
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ can_manage_finance: false, permissions: ['finance.view'] }));
@@ -225,7 +225,9 @@ test('an owner denied finance/docs view cannot use management rights or the dash
   seed({ role_base: 'owner' });
   override('finance.view', false);
   override('docs.view', false);
-  db.setRpcMock(async name => name === 'get_home_records'
+  db.setRpcMock(async name => name === 'home_record_context'
+    ? { data: { allowed: true, private: false, user_id: USER, role: 'owner', permissions: (await getUserAccess(HOME, USER)).permissions }, error: null }
+    : name === 'get_home_records'
     ? { data: { ok: true, records: [], attendees: [] }, error: null }
     : name === 'home_delete_eligibility'
       ? { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }

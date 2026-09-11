@@ -1,5 +1,30 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+## Current dashboard aggregate checkpoint — September 11
+
+Start with the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
+[dashboard report](home-dashboard-current-summary-2026-09-11.md). Real production
+HTTP/SQL and SDK/PostgREST r6 pass, as does the real-aggregate Chrome r1 journey;
+all fixtures are cleaned. Full backend/web regression, web types/lint and privacy
+pass. Backend aggregate no longer hides failed reads or uses the nonexistent
+HomeMail table/wrong package states, and enforces current resource authority,
+visibility, member windows and safe identity projection.
+
+Latest pushed `983c93a919` has a real Android CI failure: three HomeDashboard
+snapshot baselines after the Create footer changed. iOS and instrumentation pass.
+Targeted local Android quality/snapshot verification is running as session 13270,
+log `/private/tmp/pantopus-home-dashboard-android-snapshot-verify-r1.log`; inspect
+and review the image changes before updating baselines. Native identity-reader
+edits are still a working draft, not new installed acceptance.
+
+Next finish that CI repair, fix the web overview's missing aggregate arrays and
+failure fallback with actual populated UI, then native Home lifecycle/access,
+identity and remaining UI/workflow priorities. The new report preserves all
+new resource/privacy/layout findings; the full original backlog is still open.
+Both PRs stay drafts (#34 conflicted), combined migrations remain unreconciled,
+and paid providers stay one final launch bundle. Owner source/devices/data remain
+untouched. Earlier sections below are historical checkpoints.
+
 ## Most recent native bill checkpoint
 
 Read the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the

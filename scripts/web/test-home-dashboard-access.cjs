@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Actual Chrome UI, production IAM HTTP/helper and PostgreSQL authority. Identity, dashboard entities,
-// ancillary endpoints and lifecycle events are deterministic local fixture adapters.
+// Actual Chrome UI, production dashboard/IAM HTTP/helpers/services and PostgreSQL.
+// Identity, ancillary/fallback endpoints and lifecycle events are local fixture adapters.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -10,7 +10,7 @@ const [base, container, evidence] = process.argv.slice(2);
 assert.match(base || '', /^http:\/\/127\.0\.0\.1:\d+$/);
 assert(path.isAbsolute(evidence || '') && !evidence.startsWith(root + '/'));
 fs.mkdirSync(evidence, { recursive: true, mode: 0o700 });
-const f = require('../db/home-residency-review-http-fixture.cjs')(container);
+const f = require('../db/home-residency-review-http-fixture.cjs')(container, { summary: true, dashboard: true });
 const { actor, home, sql, q } = f;
 let server, browser, context, page, initialized = false, currentActor = actor, hold = null;
 let privateReads = 0;
@@ -20,18 +20,7 @@ const household = `${base}/app/homes/${home}/dashboard?tab=members`;
 const title = () => page.getByRole('heading', { name: 'Private dashboard fixture', exact: true });
 const reload = () => page.getByRole('button', { name: 'Reload current home access', exact: true });
 const invite = () => page.getByRole('button', { name: '+ Invite', exact: true });
-const row = () => page.getByText('Current household member', { exact: true });
-const access = requested => {
-  const a = JSON.parse(sql(`SELECT public.home_effective_access(${q(requested)},${q(currentActor)});`));
-  const occ = JSON.parse(sql(`SELECT coalesce((SELECT jsonb_build_object('id',id,'role',role,'role_base',role_base,'age_band',age_band,'verification_status',verification_status,'start_at',start_at,'end_at',end_at) FROM public."HomeOccupancy" WHERE home_id=${q(requested)} AND user_id=${q(currentActor)} AND is_active LIMIT 1),'null'::jsonb);`));
-  return { hasAccess: a.has_access, isOwner: a.is_owner, is_owner: a.is_owner,
-    role_base: a.role_base, effective_role_base: a.effective_role_base, permissions: a.permissions, occupancy: occ,
-    verification_required: !!occ && ['pending_doc','pending_approval'].includes(occ.verification_status),
-    verification_status: occ?.verification_status || 'unverified', age_band: occ?.age_band || null,
-    can_manage_home: a.permissions.includes('home.edit'), can_manage_access: a.permissions.includes('members.manage'),
-    can_manage_finance: a.permissions.includes('finance.manage'), can_manage_tasks: a.permissions.includes('tasks.manage'),
-    can_view_sensitive: a.permissions.includes('access.view'), is_in_challenge_window: false, is_in_claim_window: false };
-};
+const row = () => page.getByText('current_household_member', { exact: true });
 const changeAccess = active => sql(`UPDATE public."HomeOccupancy" SET is_active=${active} WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
 const focus = () => page.evaluate(() => window.dispatchEvent(new Event('focus')));
 const visibility = hidden => page.evaluate(value => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: value ? 'hidden' : 'visible' }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
@@ -49,6 +38,9 @@ function pass(message) { checks.push(message); console.log('PASS:', message); }
 async function main() {
   try {
     f.setup(); initialized = true;
+    sql(`UPDATE public."Home" SET name='Private dashboard fixture' WHERE id=${q(home)};
+      UPDATE public."HomeOccupancy" SET verification_status='verified' WHERE home_id=${q(home)} AND user_id=${q(f.users[4])};
+      UPDATE public."User" SET username='current_household_member',name='Private legal fixture name' WHERE id=${q(f.users[4])};`);
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const apiBase = `http://127.0.0.1:${server.address().port}`;
     browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -68,13 +60,14 @@ async function main() {
           if (accessFailure) { status = 503; body = { error: 'Current access service unavailable' }; }
         } else if (endpoint.endsWith('/dashboard')) {
           privateReads++;
-          if (dashboardFailure) { status = 503; body = { error: 'Aggregate temporarily unavailable' }; }
-          else body = { home: { id: home, name: 'Private dashboard fixture', address_line1: 'Private fixture address', owner_id: actor }, myAccess: access(home),
-            members: [{ id: f.id(900), user_id: f.users[1], role: 'member', role_base: 'member', is_active: true, user: { name: 'Current household member' } }], tasks: [], issues: [], bills: [], packages: [], documents: [], events: [] };
+          if (dashboardFailure) f.failNextQuery('HomePet');
+          const response = await fetch(apiBase + endpoint, { headers: { 'x-fixture-actor': currentActor }, signal: AbortSignal.timeout(20000) });
+          body = await response.json(); status = response.status;
+          assert.match(response.headers.get('cache-control') || '', /private, no-store/);
         } else if (endpoint === `/api/homes/${home}/claims`) {
           if (listFailure) { status = 503; body = { error: 'Claim list temporarily unavailable' }; } else body = { claims: [] };
         } else if (endpoint === `/api/homes/${home}`) body = { home: { id: home, name: 'Private dashboard fixture', owner_id: actor } };
-        else if (endpoint.endsWith('/occupants')) body = { occupants: [{ id: f.id(900), user_id: f.users[1], role: 'member', role_base: 'member', is_active: true, user: { name: 'Current household member' } }], pendingInvites: [] };
+        else if (endpoint.endsWith('/occupants')) body = { occupants: [{ id: f.id(900), user_id: f.users[1], role: 'member', role_base: 'member', is_active: true, user: { name: 'current_household_member' } }], pendingInvites: [] };
         else if (endpoint.endsWith('/timeline')) body = { items: [{ id: f.id(980), action: 'task_completed', description: auxiliaryVersion + ' timeline item', created_at: '2026-09-10T12:00:00Z' }], hasMore: false };
         else if (/\/(health-score|seasonal-checklist|bill-trends|property-value)$/.test(endpoint)) { status = 404; body = { error: 'Ancillary fixture unavailable' }; }
         else if (endpoint.includes('conversations')) body = { conversations: [], hasMore: false };
@@ -89,6 +82,8 @@ async function main() {
     page = await context.newPage(); page.setDefaultTimeout(30000);
     page.on('pageerror', e => errors.push(e.message)); page.on('console', message => { if (['error', 'warning'].includes(message.type())) diagnostics.push(message.text()); });
     await page.goto(household, { waitUntil: 'domcontentloaded', timeout: 120000 }); await restored();
+    await expect(page.getByText('Private legal fixture name', { exact: true })).toHaveCount(0);
+    pass('Actual dashboard SQL renders the permitted member handle without forwarding the raw legal name');
     await invite().click(); await page.getByRole('heading', { name: 'Invite Member', exact: true }).waitFor();
     changeAccess(false); await focus(); await reload().waitFor(); await absent();
     await expect(page.getByRole('heading', { name: 'Invite Member', exact: true })).toHaveCount(0);
@@ -165,7 +160,7 @@ async function main() {
     changeAccess(true); await reload().focus(); await page.keyboard.press('Enter'); await restored(); await screenshot('09-narrow-restored');
     pass('Narrow denied/restored states and keyboard reload remain usable');
     assert.deepEqual(mutations, []); assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations: 0, pageErrors: errors, limits: 'Actual Chrome, production IAM HTTP/helper and SQL permission function; synthetic auth/entities and deterministic lifecycle events' }, null, 2));
+    fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', checks, mutations: 0, pageErrors: errors, limits: 'Actual Chrome, production dashboard/IAM HTTP/helpers/services and PostgreSQL; synthetic auth, ancillary/fallback entities and deterministic lifecycle events. Standalone entity fallback and overview totals remain a separate contract repair.' }, null, 2));
   } catch (error) {
     if (page) { await page.screenshot({ path: path.join(evidence, 'failure.png'), fullPage: true }).catch(() => {}); fs.writeFileSync(path.join(evidence, 'failure.txt'), await page.locator('body').innerText().catch(() => '')); }
     throw error;
