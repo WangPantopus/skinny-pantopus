@@ -1,0 +1,142 @@
+{
+  "mode": "concept",
+  "checks": [
+    {
+      "label": "concept desktop document fits",
+      "pass": true
+    },
+    {
+      "label": "destination nearby document fits",
+      "pass": true
+    },
+    {
+      "label": "destination following document fits",
+      "pass": true
+    },
+    {
+      "label": "destination inbox document fits",
+      "pass": true
+    },
+    {
+      "label": "destination home document fits",
+      "pass": true
+    },
+    {
+      "label": "opportunity eligibility and availability separated",
+      "pass": true
+    },
+    {
+      "label": "opportunity saved",
+      "pass": true
+    },
+    {
+      "label": "provider handoff explicitly simulated",
+      "pass": true
+    },
+    {
+      "label": "bill actual total",
+      "pass": true
+    },
+    {
+      "label": "bill prior-rate total",
+      "pass": true
+    },
+    {
+      "label": "event baseline stays 6",
+      "pass": true
+    },
+    {
+      "label": "decline preserves event",
+      "pass": true
+    },
+    {
+      "label": "accept updates event",
+      "pass": true
+    },
+    {
+      "label": "private save review",
+      "pass": true
+    },
+    {
+      "label": "saved note retrieved",
+      "pass": true
+    },
+    {
+      "label": "area change preserves private records",
+      "pass": true
+    },
+    {
+      "label": "notifications initially off",
+      "pass": true
+    },
+    {
+      "label": "change reachable with notifications off",
+      "pass": true
+    },
+    {
+      "label": "concept 390 document fits",
+      "pass": true
+    },
+    {
+      "label": "concept 360 document fits",
+      "pass": true
+    },
+    {
+      "label": "bill mobile document fits",
+      "pass": true
+    },
+    {
+      "label": "bill mobile dialog fits",
+      "pass": true
+    },
+    {
+      "label": "event mobile document fits",
+      "pass": true
+    },
+    {
+      "label": "event mobile dialog fits",
+      "pass": true
+    },
+    {
+      "label": "reduced-motion environment",
+      "pass": true
+    },
+    {
+      "label": "screen animation disabled for reduced motion",
+      "pass": true
+    },
+    {
+      "label": "concept 320 document fits",
+      "pass": true
+    },
+    {
+      "label": "keyboard enters dialog",
+      "pass": true
+    },
+    {
+      "label": "dialog review retains focus",
+      "pass": true
+    },
+    {
+      "label": "Escape closes dialog",
+      "pass": true
+    },
+    {
+      "label": "dialog returns focus to invoker",
+      "pass": true
+    },
+    {
+      "label": "opportunity mobile dark document fits",
+      "pass": true
+    },
+    {
+      "label": "opportunity mobile dark dialog fits",
+      "pass": true
+    },
+    {
+      "label": "no browser script errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}
