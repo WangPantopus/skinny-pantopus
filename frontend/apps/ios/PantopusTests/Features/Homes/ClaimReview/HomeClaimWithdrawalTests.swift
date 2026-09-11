@@ -38,9 +38,10 @@ final class HomeClaimWithdrawalTests: XCTestCase {
     }
 
     private func waitFor(_ condition: () -> Bool) async {
-        for _ in 0..<100 {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while ContinuousClock.now < deadline {
             if condition() { return }
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .milliseconds(10))
         }
         XCTFail("Timed out waiting for the injected withdrawal request")
     }

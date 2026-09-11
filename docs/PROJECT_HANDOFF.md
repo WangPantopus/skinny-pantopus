@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Recoverable task-to-Gig publication backend — September 10
+
+The [publication report](home-task-gig-publication-2026-09-10.md) records the
+ordinary Gig route's atomic private source link/receipt/audit, current authority
+and exact source-version checks. Actual HTTP + production service + PostgreSQL
+passes publication/lost-reply recovery, duplicate prevention, later cancellation,
+revocation, stale source and retirement. Eight observed competing SQL races and
+all 38 SQL/pgTAP contracts pass. A real workflow found and repaired the missing
+canonical `Gig.task_format` contract and timestamp precision loss. Final pinned
+33-migration replay and reviewed function lint pass; populated upgrade preserves
+15,111 original rows across 362 tables. See the report for the full-backend HTTP
+flake and passing unchanged affected-suite recheck; final-head CI is required.
+
+**Next:** browser task-to-Gig composer and protected original recovery, then
+installed native parity and complete conversion acceptance. No conversion UI
+completion is claimed by this backend milestone. Preserve public/private source
+boundaries and ordinary downstream payment gates. Predecessor `4ff1277dd` has two
+iOS CI timing failures; bounded observable-state waits now pass local build,
+format/lint and 17 affected cases repeated three times. Remote 18.5 verification
+remains required. PRs #32/#34 remain drafts; paid `e9ef2decb` is unchanged/green.
+Home 33 + paid 21 gives 42 collision-free migration versions, but combined replay
+and final dependencies are unfinished. The owned simulator is stopped; the
+owned local Gig replay database remains for browser acceptance. No hosted service,
+owner data, production runtime or paid dependency changed. Keep one final paid
+launch bundle. The owner prioritizes complete actual workflows and states over
+unit coverage; use consequential checks as supporting evidence.
+
 ### Android automatic task recurrence — September 10
 
 The [Android recurrence checkpoint](home-android-task-recurrence-2026-09-10.md)

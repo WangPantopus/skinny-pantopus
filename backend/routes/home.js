@@ -3299,6 +3299,16 @@ function registerHomeRecordRoutes(path, kind) {
 }
 registerHomeRecordRoutes('tasks', 'task');
 
+const homeTaskGig = require('../services/homeTaskGigService');
+router.get('/:id/tasks/:taskId/gig-publication', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!requireExpectedSessionScope(req, res)) return;
+  try {
+    const result = await homeTaskGig.read({ homeId: req.params.id, actorId: req.user.id, taskId: req.params.taskId });
+    res.json({ ...result, task_session: { ...getRequestSessionScope(req), home_id: req.params.id } });
+  } catch (error) { homeTaskGig.sendError(res, error); }
+});
+
 const homeTaskRecurrence = require('../services/homeTaskRecurrenceService');
 router.get('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');

@@ -180,8 +180,14 @@ final class NewMessageViewModelTests: XCTestCase {
         let viewModel = makeVM()
         await viewModel.load()
         viewModel.updateSearch("Reyes")
-        // Wait past the 280ms debounce + network completion.
-        try await Task.sleep(nanoseconds: 600_000_000)
+        // Observe debounce and HTTP completion. A fixed sleep can expire
+        // before either operation gets CPU time on a busy simulator.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while ContinuousClock.now < deadline {
+            if case let .loaded(sections) = viewModel.state,
+               sections.contains(where: { $0.id == .allVerified }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         guard case let .loaded(sections) = viewModel.state else {
             XCTFail("expected loaded after debounced search, got \(viewModel.state)")
             return

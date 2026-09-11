@@ -3,6 +3,21 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
+The newest [task-to-Gig publication report](home-task-gig-publication-2026-09-10.md)
+records the verified atomic backend and exact HTTP/SQL recovery. The next action
+is browser composer/recovery and actual Chrome acceptance, followed by native
+conversion controls and installed journeys. Those UI workflows are unfinished.
+The real rehearsal also repaired the missing Gig task-format schema contract and
+source timestamp precision. Final 33-migration replay, 38 SQL/pgTAP contracts,
+eight observed races and original-row preservation pass. Two predecessor iOS CI
+wait failures have locally verified synchronization repairs (17 cases repeated
+three times); final remote CI and the documented backend HTTP flake remain gates.
+The dedicated simulator is stopped; the owned Gig replay project remains ready
+for browser work. Both PRs remain drafts, combined dependencies are unreconciled,
+and all paid services remain one final launch bundle. The owner explicitly wants
+actual features, UI, transitions and failures verified, not unit-coverage targets.
+Older next-action/CI notes below are historical where this checkpoint supersedes them.
+
 The latest [Android recurrence report](home-android-task-recurrence-2026-09-10.md)
 completes native controls, schedule projections and encrypted original recovery.
 The installed workflow passes cold/background replay, later-pause preservation
