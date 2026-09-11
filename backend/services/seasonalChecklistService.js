@@ -339,7 +339,8 @@ async function getChecklistHistory(homeId) {
     throw new Error('Seasonal checklist history could not be loaded.');
   }
 
-  if (!data || data.length === 0) return [];
+  if (!Array.isArray(data)) throw new Error('Seasonal checklist history could not be loaded.');
+  if (data.length === 0) return [];
 
   // Group by season_key + year
   const groups = {};

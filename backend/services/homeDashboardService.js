@@ -59,6 +59,15 @@ function fingerprint(access) {
     o && ['id', 'is_active', 'role', 'role_base', 'age_band', 'verification_status', 'verified_at',
       'start_at', 'end_at', 'access_start_at', 'access_end_at'].map(key => o[key] ?? null)]);
 }
+// Intelligence can involve several SQL reads or a slow provider. Recheck the
+// same current Home authority after that work before returning private data.
+async function withCurrentAccess({ homeId, actorId }, read) {
+  const opening = await readAccess(homeId, actorId);
+  const result = await read(opening);
+  const current = await readAccess(homeId, actorId);
+  if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+  return result;
+}
 function visibleScopes(access) {
   const visibility = ['public', 'members'];
   if ((ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager) visibility.push('managers');
@@ -235,4 +244,4 @@ function sendError(res, error) {
   const safe = error && Object.hasOwn(MESSAGES, error.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, readResource, readAuthority, sendError };
+module.exports = { read, readResource, readAuthority, withCurrentAccess, sendError };

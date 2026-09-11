@@ -108,6 +108,45 @@ final class HomeDashboardJourneyUITests: XCTestCase {
         try await recordEvidence()
     }
 
+    func testAuthorityAndIntelligenceRepliesRetireAfterForegroundRevocation() async throws {
+        try await openDashboard()
+        for suffix in ["/dashboard-access", "/health-score", "/seasonal-checklist", "/property-value"] {
+            try reveal(label(containing: "Smoke alarm check"))
+            XCUIDevice.shared.press(.home)
+            _ = try await fixture("hold", method: "POST", body: ["suffix": suffix])
+            app.activate()
+            var held = false
+            for _ in 0..<100 {
+                if try await fixture("state")["held"] as? Bool == true {
+                    held = true
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(200))
+            }
+            try require(held, "Expected a produced production reply for " + suffix)
+            XCUIDevice.shared.press(.home)
+            _ = try await fixture("mode", method: "POST", body: ["mode": "revoked"])
+            app.activate()
+            try require(element("homeDashboard_accessRetry").waitForExistence(timeout: 30))
+            _ = try await fixture("release", method: "POST")
+            let stale = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
+                label(containing: "Smoke alarm check").exists
+            }, object: app)
+            stale.isInverted = true
+            try await require(XCTWaiter.fulfillment(of: [stale], timeout: 2) == .completed)
+            assertPrivateSummaryAbsent()
+            keepScreen("Current denial retires " + suffix)
+            _ = try await fixture("mode", method: "POST", body: ["mode": "current"])
+            try press(element("homeDashboard_accessRetry"))
+        }
+        try reveal(label(containing: "Smoke alarm check"))
+        let state = try await fixture("state")
+        let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+        XCTAssertEqual(events.filter { $0["event"] as? String == "held" }.count, 4)
+        XCTAssertFalse(events.contains { $0["event"] as? String == "fixture_error" })
+        try await recordEvidence()
+    }
+
     func testIntelligenceRetryAndPrivateCreatorEntry() async throws {
         for (mode, retry) in [
             ("health_error", "homeDashboard_healthScoreRetry"),
@@ -149,6 +188,59 @@ final class HomeDashboardJourneyUITests: XCTestCase {
         try await recordEvidence()
     }
 
+    func testActualAccountSwitchColdDenialAndOriginalAccountReturn() async throws {
+        try await openDashboard()
+        try reveal(label(containing: "Smoke alarm check"))
+        keepScreen("Original account has current Home access")
+        try signOutThroughSettings()
+        try await openDashboard(email: "dashboard-other@example.com")
+        try require(element("homeDashboard_accessRetry").waitForExistence(timeout: 30))
+        assertPrivateSummaryAbsent()
+        XCTAssertFalse(element("homeDashboard_verifyOwnership").exists)
+        keepScreen("Second account cannot revive the original Home summary")
+        app.terminate()
+        try await openDashboard(email: "dashboard-other@example.com")
+        try require(element("homeDashboard_accessRetry").waitForExistence(timeout: 30))
+        assertPrivateSummaryAbsent()
+        keepScreen("Second account remains denied after a cold return")
+        try signOutThroughSettings()
+        try await openDashboard()
+        try reveal(label(containing: "Smoke alarm check"))
+        keepScreen("Original account has freshly restored Home authority")
+        let state = try await fixture("state")
+        let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+        let logins = events.filter { $0["event"] as? String == "signed_in" }.compactMap { $0["actor_id"] as? String }
+        try require(logins.count >= 2)
+        let original = try XCTUnwrap(logins.last)
+        let second = logins[logins.count - 2]
+        XCTAssertNotEqual(original, second)
+        XCTAssertEqual(events.first { $0["event"] as? String == "home_read" }?["actor_id"] as? String, original)
+        XCTAssertEqual(events.filter { $0["event"] as? String == "signed_out" }.count, 2)
+        XCTAssertFalse(events.contains {
+            $0["event"] as? String == "home_read" && $0["actor_id"] as? String == second &&
+                ($0["path"] as? String)?.hasSuffix("/dashboard") == true
+        })
+        XCTAssertGreaterThanOrEqual(events.filter {
+            $0["event"] as? String == "home_response" && $0["actor_id"] as? String == second &&
+                ($0["path"] as? String)?.hasSuffix("/dashboard-access") == true && $0["status"] as? Int == 403
+        }.count, 2)
+        XCTAssertFalse(events.contains { $0["event"] as? String == "fixture_error" })
+        try await recordEvidence()
+    }
+}
+
+extension HomeDashboardJourneyUITests {
+    private func signOutThroughSettings() throws {
+        app.terminate()
+        app.launch()
+        try require(element("tab.place").waitForExistence(timeout: 30))
+        if !element("hubMenuButton").waitForExistence(timeout: 3) { try press(element("place.back")) }
+        try press(element("hubMenuButton"))
+        try press(element("navDrawer.item.settings"))
+        try press(app.buttons["Log out"].firstMatch)
+        try require(element("placeLaunchSignIn").waitForExistence(timeout: 30))
+    }
+
     private func assertPrivateSummaryAbsent() {
         XCTAssertFalse(label(containing: "Smoke alarm check").exists)
         XCTAssertFalse(label(containing: "Quarterly Home check").exists)
@@ -164,12 +256,12 @@ final class HomeDashboardJourneyUITests: XCTestCase {
         add(attachment)
     }
 
-    private func openDashboard() async throws {
+    private func openDashboard(email: String = "bill-ui@example.com") async throws {
         app.launch()
         if !element("tab.place").waitForExistence(timeout: 3) {
             if !element("loginEmailField").exists { try press(element("placeLaunchSignIn")) }
             try press(element("loginEmailField"))
-            element("loginEmailField").typeText("bill-ui@example.com")
+            element("loginEmailField").typeText(email)
             try press(element("loginPasswordField"))
             element("loginPasswordField").typeText("synthetic-loopback-only")
             try press(element("loginSubmitButton"))

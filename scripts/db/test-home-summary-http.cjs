@@ -36,8 +36,8 @@ async function main() {
     console.log('PASS: current health, database/transport failure, and denied finance before score/cache access');
 
     r = await request('/seasonal-checklist'); assert.equal(r.status, 200); assert.equal(r.body.items.length, 2);
-    f.failNextQuery('HomeSeasonalChecklistItem'); r = await request('/seasonal-checklist'); assert.equal(r.status, 500); assert(!('items' in r.body));
-    f.failNextQuery('HomeSeasonalChecklistItem'); r = await request('/seasonal-checklist/history'); assert.equal(r.status, 500);
+    f.failNextQuery('HomeSeasonalChecklistItem'); r = await request('/seasonal-checklist'); assert.equal(r.status, 503); assert(!('items' in r.body));
+    f.failNextQuery('HomeSeasonalChecklistItem'); r = await request('/seasonal-checklist/history'); assert.equal(r.status, 503);
     r = await request(`/seasonal-checklist/${foreignItem}`, 'PATCH', { status: 'completed' }); assert.equal(r.status, 404);
     assert.equal(sql(`SELECT status FROM public."HomeSeasonalChecklistItem" WHERE id=${q(foreignItem)};`), 'pending');
     r = await request(`/seasonal-checklist/${item}`, 'PATCH', { status: 'hired' }); assert.equal(r.status, 400);
@@ -81,7 +81,7 @@ async function main() {
     r = await request('/settings', 'PATCH', { trash_day: 'Friday', preferences: { bill_benchmark_opt_in: 'yes' } }); assert.equal(r.status, 400);
     r = await request('/settings'); assert.equal(r.body.home.trash_day, 'Monday');
     sql(`DELETE FROM public."HomeSeasonalChecklistItem" WHERE home_id=${q(home)};`);
-    f.failNextQuery('PropertyIntelligenceCache'); r = await request('/seasonal-checklist'); assert.equal(r.status, 500); assert(!('items' in r.body));
+    f.failNextQuery('PropertyIntelligenceCache'); r = await request('/seasonal-checklist'); assert.equal(r.status, 503); assert(!('items' in r.body));
     r = await request('/seasonal-checklist'); assert.equal(r.status, 200, JSON.stringify(f.diagnostics)); assert(r.body.items.length > 0);
     const generated = r.body.items.map(item => item.id);
     r = await request('/seasonal-checklist'); assert.deepEqual(r.body.items.map(item => item.id), generated);

@@ -5660,27 +5660,30 @@ const { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadH
 const { getOrCreateChecklist, updateChecklistItem, getChecklistHistory } = require('../services/seasonalChecklistService');
 const { getSeasonalContext, SEASONS } = require('../services/ai/seasonalEngine');
 const { getProfile: getPropertyProfile } = require('../services/ai/propertyIntelligenceService');
+const intelligenceAuthority = require('../services/homeDashboardService');
 
 /**
  * GET /api/homes/:id/health-score
  * Returns composite 0-100 health score with per-dimension breakdown.
  */
 router.get('/:id/health-score', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    if (!canReadHealthScore(access.permissions)) return res.status(403).json({
-      error: 'Home health requires access to the household records used in this score.', code: 'HOME_HEALTH_PERMISSION_REQUIRED',
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async (access) => {
+      if (!canReadHealthScore(access.permissions)) throw Object.assign(
+        new Error('Home health requires access to the household records used in this score.'),
+        { statusCode: 403, code: 'HOME_HEALTH_PERMISSION_REQUIRED' },
+      );
+      const force = req.query.force === 'true';
+      return getHealthScore(homeId, { force });
     });
-    const force = req.query.force === 'true';
-    const result = await getHealthScore(homeId, { force });
-    res.set('Cache-Control', force ? 'no-store' : 'private, max-age=300');
     res.json(result);
   } catch (err) {
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
+    if (err.code === 'HOME_HEALTH_PERMISSION_REQUIRED') return res.status(403).json({ error: err.message, code: err.code });
     logger.error('Health score error', { error: err.message, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: 'Current home health could not be computed.', code: 'HOME_HEALTH_UNAVAILABLE' });
   }
@@ -5691,61 +5694,64 @@ router.get('/:id/health-score', verifyToken, async (req, res) => {
  * Returns checklist items for the current season, creating them if needed.
  */
 router.get('/:id/seasonal-checklist', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async () => {
+      // Pass the home's coordinates so the engine can tell whether its
+      // region-specific copy applies. Calling without them satisfied the old
+      // `!hasCoords ||` gate, which served Portland-specific tips to every
+      // home in the country. The season itself is month-based and resolves
+      // nationally, so the checklist below works either way.
+      const { data: seasonHome, error: seasonError } = await supabaseAdmin
+        .from('Home')
+        .select('map_center_lat, map_center_lng')
+        .eq('id', homeId)
+        .maybeSingle();
+      if (seasonError || !seasonHome) throw new Error('Current Home season could not be loaded.');
+      const seasonalCtx = getSeasonalContext(
+        seasonHome && seasonHome.map_center_lat != null && seasonHome.map_center_lng != null
+          ? { latitude: Number(seasonHome.map_center_lat), longitude: Number(seasonHome.map_center_lng) }
+          : {},
+      );
+      const seasonKey = seasonalCtx.primary_season;
+      const year = new Date().getFullYear();
+      const seasonDef = SEASONS[seasonKey] || {};
 
-    // Pass the home's coordinates so the engine can tell whether its
-    // region-specific copy applies. Calling without them satisfied the old
-    // `!hasCoords ||` gate, which served Portland-specific tips to every
-    // home in the country. The season itself is month-based and resolves
-    // nationally, so the checklist below works either way.
-    const { data: seasonHome } = await supabaseAdmin
-      .from('Home')
-      .select('map_center_lat, map_center_lng')
-      .eq('id', homeId)
-      .maybeSingle();
-    const seasonalCtx = getSeasonalContext(
-      seasonHome && seasonHome.map_center_lat != null && seasonHome.map_center_lng != null
-        ? { latitude: Number(seasonHome.map_center_lat), longitude: Number(seasonHome.map_center_lng) }
-        : {},
-    );
-    const seasonKey = seasonalCtx.primary_season;
-    const year = new Date().getFullYear();
-    const seasonDef = SEASONS[seasonKey] || {};
+      const result = await getOrCreateChecklist(homeId, seasonKey, year, { includePrevious: true });
+      const items = result.items || result; // backward compat if includePrevious wasn't used
+      const carryover = result.carryover || [];
+      const completed = items.filter(i => i.status === 'completed' || i.status === 'skipped' || i.status === 'hired').length;
 
-    const result = await getOrCreateChecklist(homeId, seasonKey, year, { includePrevious: true });
-    const items = result.items || result; // backward compat if includePrevious wasn't used
-    const carryover = result.carryover || [];
-    const completed = items.filter(i => i.status === 'completed' || i.status === 'skipped' || i.status === 'hired').length;
-
-    const response = {
-      season: { key: seasonKey, label: seasonDef.label || seasonKey },
-      items,
-      progress: {
-        total: items.length,
-        completed,
-        percentage: items.length > 0 ? Math.round((completed / items.length) * 100) : 0,
-      },
-    };
-
-    // Include carryover from previous season (incomplete items only)
-    if (carryover.length > 0) {
-      const prevSeasonKey = carryover[0].season_key;
-      const prevSeasonDef = SEASONS[prevSeasonKey] || {};
-      response.carryover = {
-        season: { key: prevSeasonKey, label: prevSeasonDef.label || prevSeasonKey },
-        items: carryover,
+      const response = {
+        season: { key: seasonKey, label: seasonDef.label || seasonKey },
+        items,
+        progress: {
+          total: items.length,
+          completed,
+          percentage: items.length > 0 ? Math.round((completed / items.length) * 100) : 0,
+        },
       };
-    }
 
-    res.json(response);
+      // Include carryover from previous season (incomplete items only)
+      if (carryover.length > 0) {
+        const prevSeasonKey = carryover[0].season_key;
+        const prevSeasonDef = SEASONS[prevSeasonKey] || {};
+        response.carryover = {
+          season: { key: prevSeasonKey, label: prevSeasonDef.label || prevSeasonKey },
+          items: carryover,
+        };
+      }
+
+      return response;
+    });
+    res.json(result);
   } catch (err) {
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
     logger.error('Seasonal checklist error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch seasonal checklist' });
+    res.status(503).json({ error: 'Current seasonal checklist could not be loaded. Please retry.', code: 'HOME_CHECKLIST_UNAVAILABLE' });
   }
 });
 
@@ -5754,18 +5760,20 @@ router.get('/:id/seasonal-checklist', verifyToken, async (req, res) => {
  * Returns all past checklists grouped by season_key + year.
  */
 router.get('/:id/seasonal-checklist/history', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
-
-    const history = await getChecklistHistory(homeId);
-    res.json({ checklists: history });
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async () => {
+      const history = await getChecklistHistory(homeId);
+      return { checklists: history };
+    });
+    res.json(result);
   } catch (err) {
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
     logger.error('Checklist history error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch checklist history' });
+    res.status(503).json({ error: 'Current checklist history could not be loaded. Please retry.', code: 'HOME_CHECKLIST_UNAVAILABLE' });
   }
 });
 
@@ -5884,46 +5892,47 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
  * Returns property valuation data from ATTOM/cache.
  */
 router.get('/:id/property-value', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async () => {
+      const { profile, source } = await getPropertyProfile(homeId);
 
-    const { profile, source } = await getPropertyProfile(homeId);
+      if (source === 'error') throw Object.assign(new Error('Current property information could not be loaded.'),
+        { statusCode: 503, code: 'HOME_PROPERTY_UNAVAILABLE' });
+      if (!profile) {
+        return {
+          estimated_value: null,
+          value_range_low: null,
+          value_range_high: null,
+          value_confidence: null,
+          zip_median_sale_price_trend: null,
+          year_built: null,
+          sqft: null,
+          last_updated: null,
+          source: 'unavailable',
+        };
+      }
 
-    if (source === 'error') return res.status(503).json({
-      error: 'Current property information could not be loaded.', code: 'HOME_PROPERTY_UNAVAILABLE',
+      return {
+        estimated_value: profile.estimated_value || null,
+        value_range_low: profile.value_range_low || null,
+        value_range_high: profile.value_range_high || null,
+        value_confidence: profile.value_confidence || null,
+        zip_median_sale_price_trend: profile.zip_median_sale_price_trend || null,
+        year_built: profile.year_built || null,
+        sqft: profile.sqft || null,
+        last_updated: profile.cached_at || null,
+        source,
+      };
     });
-    if (!profile) {
-      return res.json({
-        estimated_value: null,
-        value_range_low: null,
-        value_range_high: null,
-        value_confidence: null,
-        zip_median_sale_price_trend: null,
-        year_built: null,
-        sqft: null,
-        last_updated: null,
-        source: 'unavailable',
-      });
-    }
-
-    res.json({
-      estimated_value: profile.estimated_value || null,
-      value_range_low: profile.value_range_low || null,
-      value_range_high: profile.value_range_high || null,
-      value_confidence: profile.value_confidence || null,
-      zip_median_sale_price_trend: profile.zip_median_sale_price_trend || null,
-      year_built: profile.year_built || null,
-      sqft: profile.sqft || null,
-      last_updated: profile.cached_at || null,
-      source,
-    });
+    res.json(result);
   } catch (err) {
+    if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
     logger.error('Property value error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch property value' });
+    res.status(503).json({ error: 'Current property information could not be loaded. Please retry.', code: 'HOME_PROPERTY_UNAVAILABLE' });
   }
 });
 

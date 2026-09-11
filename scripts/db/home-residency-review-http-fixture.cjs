@@ -21,7 +21,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   const notifications = [], queryCalls = [], queryDetails = [], queryHooks = [], diagnostics = []; let queryFailure = null;
   let propertyResult = { profile: null, source: 'fallback' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility'] : []), ...(summary ? ['update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -138,7 +138,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
     }
     if (parent?.filename.endsWith('/routes/homeIam.js') && ['../services/homeAuthorityService', '../services/homeExternalShareService'].includes(request)) return {};
     if (parent?.filename.endsWith('/routes/homeIam.js') && request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
-    if (summary && parent?.filename.endsWith('/routes/home.js') && request === '../services/ai/propertyIntelligenceService') return { getProfile: async () => propertyResult };
+    if (summary && parent?.filename.endsWith('/routes/home.js') && request === '../services/ai/propertyIntelligenceService') return { getProfile: async homeId => typeof propertyResult === 'function' ? propertyResult(homeId) : propertyResult };
     if (parent?.filename.endsWith('/routes/home.js')) {
       if (request === '../middleware/verifyToken') return (req, _res, next) => {
         req.user = { id: req.headers['x-fixture-actor'] || actor };
@@ -147,7 +147,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(dashboard ? ['../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(dashboard ? ['../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };

@@ -18,6 +18,12 @@ base = relationship.base
 
 class Journey(relationship.Journey):
     def evidence(self, name):
+        if name.startswith('failure'):
+            try:
+                (self.output / 'fixture-at-failure.json').write_text(json.dumps(self.fixture('state'), indent=2))
+            except Exception:
+                # Diagnostics must not replace the original failed assertion.
+                pass
         super().evidence(name)
         # Normal Home has no app-lock session here. Never remove FLAG_SECURE.
         (self.output / (name + '.png')).write_bytes(self.adb('exec-out', 'screencap', '-p'))
@@ -48,18 +54,48 @@ class Journey(relationship.Journey):
 
     def contains(self, text, scroll=False, seconds=30):
         end = time.monotonic() + seconds
+        previous = None
+        down = True
         while time.monotonic() < end:
             nodes = self.nodes()
             if any(text.casefold() in node.get('text', '').casefold() or text.casefold() in node.get('content-desc', '').casefold() for node in nodes):
                 return
             if scroll:
-                self.adb('shell', 'input', 'swipe', '530', '1660', '530', '780', '250')
+                # A card can finish loading above us after a layout change.
+                # Reverse at an observed scroll boundary instead of staying there.
+                signature = tuple((n.get('text'), n.get('content-desc'), n.get('bounds')) for n in nodes)
+                if signature == previous:
+                    down = not down
+                previous = signature
+                start, finish = ('1660', '780') if down else ('780', '1660')
+                self.adb('shell', 'input', 'swipe', '530', start, '530', finish, '250')
         raise RuntimeError('Missing bill content: ' + text)
 
     def absent(self, *texts):
         nodes = self.nodes()
         for text in texts:
             assert not any(text.casefold() in node.get('text', '').casefold() or text.casefold() in node.get('content-desc', '').casefold() for node in nodes), text
+
+    def retry_bill(self):
+        import re
+        deadline = time.monotonic() + 30
+        while True:
+            node = self.wait('Retry', scroll=True)
+            _, top, _, bottom = map(int, re.findall(r'\d+', node.get('bounds')))
+            if top >= 300 and bottom <= 1750:
+                break
+            if time.monotonic() > deadline:
+                raise RuntimeError('Bill Retry did not become fully reachable')
+            start, finish = ('780', '1220') if top < 300 else ('1660', '1000')
+            self.adb('shell', 'input', 'swipe', '530', start, '530', finish, '250')
+        responses = lambda: len([e for e in self.fixture('state')['events'] if e['event'] == 'bill_response'])
+        before = responses()
+        self.tap('Retry')
+        deadline = time.monotonic() + 20
+        while responses() <= before:
+            if time.monotonic() > deadline:
+                raise RuntimeError('Bill Retry did not produce a new HTTP response')
+            time.sleep(0.2)
 
     def run(self):
         self.adb('shell', 'pm', 'clear', base.PACKAGE)
@@ -80,12 +116,12 @@ class Journey(relationship.Journey):
             self.reopen(mode)
             self.contains("Couldn't load bill trends" if mode == 'error' else 'Current bill information is unavailable', scroll=True)
             self.absent('142.50', 'No paid USD bills')
-            self.tap('Retry')
-            self.wait('Retry')
+            self.retry_bill()
+            self.contains("Couldn't load bill trends" if mode == 'error' else 'Current bill information is unavailable', scroll=True)
             self.evidence(mode + '-retryable')
             self.fixture('mode', 'POST', {'mode': 'current'})
-            self.tap('Retry')
-            self.contains('104.70')
+            self.retry_bill()
+            self.contains('104.70', scroll=True)
             self.contains('142.50')
         self.reopen('empty')
         self.contains('No paid USD bills', scroll=True)

@@ -44,7 +44,14 @@ class Journey(bill.Journey):
             nodes = self.nodes()
             row = next((n for n in nodes if n.get('content-desc', '').startswith('Monthly total for ' + month)), None)
             if row is not None:
-                return row
+                _, top, _, bottom = map(int, re.findall(r'\d+', row.get('bounds')))
+                # UIAutomator also includes clipped rows. On this guarded AVD,
+                # place both lines inside the viewport, clear of header/footer.
+                if top >= 300 and bottom <= 1750:
+                    return row
+                if top < 300:
+                    self.adb('shell', 'input', 'swipe', '530', '780', '530', '1220', '250')
+                    continue
             self.adb('shell', 'input', 'swipe', '530', '1660', '530', '780', '250')
         raise RuntimeError('Missing reachable monthly row: ' + month)
 

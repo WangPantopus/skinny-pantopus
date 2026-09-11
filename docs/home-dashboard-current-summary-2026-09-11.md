@@ -4,6 +4,67 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## Native account and stronger bill proof — September 11
+
+Android account r1 passes real installed A → B → A navigation: three normal
+sign-ins, two sign-outs, four current B denials, no B aggregate read, cold B
+return and restored A summary. Zero fixture errors. The fully denied cold screen
+and restored original-account summary are reviewed. Private evidence:
+`/private/tmp/pantopus-home-dashboard-android-account-r1/` and matching log.
+
+Android bill currency r2 passes all six format-2 reads, USD/CAD separation,
+held CAD retirement, Back and 24-month history. Full oldest/latest monthly rows
+and amounts are now reviewed within the viewport. Recovery r4 passes 21 reads,
+real response-per-Retry, finished denial and restored 104.70/142.50. These supersede
+the incomplete visual/harness attempts retained below. Private evidence:
+`/private/tmp/pantopus-native-bill-android-authority-currency-r2/` and
+`/private/tmp/pantopus-native-bill-android-authority-recovery-r4/` plus logs.
+
+Signed iOS account build r3 succeeds after the pinned Sentry artifact recovery;
+changed SwiftFormat/full strict SwiftLint r2 pass. Installed account/retirement
+r1 passes both tests in 315.454 seconds. Account A was already signed in; two
+normal additional sign-ins and two sign-outs exercise B denial, cold B return
+and restored A. Four held production authority/health/checklist/property replies
+cannot restore private data after foreground revocation. Zero fixture errors.
+The denied screenshots are reviewed. The original-account capture shows current
+aggregate bill data while ancillary cards are still loading; do not count it as
+new finished-card visual proof. Private evidence:
+`/private/tmp/pantopus-home-dashboard-ios-account-retirement-r1.{log,xcresult}`
+and `-attachments/`, including both production event attachments.
+
+Synthetic identity/login, Home-list/detail shell and provider responses remain
+explicit limits; Home authority, services and SQL are production paths. Generic
+verified-member home.view defaults and actual auth-provider/session revocation
+are not closed. Finished iOS bill-denial recovery still needs replay. Both prior
+bill-authority r1 and native account fixture r6 completed exact SQL cleanup.
+Owned iOS F9BBAB33/Android 5556 remain booted with apps stopped; owner work/devices
+remain untouched. Source, database, signed products and private evidence remain.
+
+The server repair closes a reproduced gap: an actual frozen-Home probe
+returned dashboard-access 403 but health/checklist/history/property 200. Evidence
+is `/private/tmp/pantopus-home-intelligence-authority-baseline-r1.json`. Before/
+after current SQL authority and no-store responses now gate those four reads;
+missing season/history data no longer masquerades as success. Full backend
+regression (317 suites/5,169 passes, existing 16 skips) and privacy gates pass.
+Direct HTTP/SQL/SDK r1 now passes all four reads: current and cached health,
+frozen/frozen-silent/archived/merged Homes, revoked/future/expired/unverified
+membership, disputed/revoked ownership, explicit home/finance grants, SQL and
+transport errors, and missing current season/history data. Twelve held SQL/provider
+results reject frozen/revoked/changed authority. Actual SDK/PostgREST success,
+frozen/revoked denial and restoration pass. Existing summary regression r1 also
+passes checklist foreign-item/lost-reply/exact-repeat/revoked writes, history,
+atomic settings, bill opt-in/out recovery, provider absence/error and stable first
+checklist creation. Both fixtures complete exact SQL cleanup. Private logs:
+`/private/tmp/pantopus-home-intelligence-authority-http-r1.log`,
+`/private/tmp/pantopus-home-intelligence-summary-regression-r1.log`,
+`/private/tmp/pantopus-home-intelligence-authority-backend-r1.log`, and
+`/private/tmp/pantopus-home-intelligence-authority-privacy-r1.log`.
+The native account/held-response journeys above ran against the earlier loaded
+server, proving client retirement independently; the new server boundary has
+separate direct HTTP/SQL proof. The strengthened iOS bill replay will use it.
+This remains a bounded read repair; checklist creation/mutation receipts, nested
+data, real identity/residency and the entire later backlog are still required.
+
 ## Android current-Home read milestone
 
 The Android candidate now uses the same production current-authority envelope,
@@ -79,6 +140,62 @@ Reconcile these routes alongside malformed nested intelligence and checklist
 mutation receipts; retain actual account-switch UI, real Home identity, residency,
 all other Home/Place/Pulse/Beacon/account/payment/release work and the 47-version
 migration dependency/replay work. Paid providers remain one final launch bundle.
+
+## Android bill replay and account follow-up — ongoing
+
+Android read milestone `6a2a1d38049d75e86e09ddfd4e0c88ce0ae42751` is committed
+and pushed. Every required check passes in [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34616978020).
+Bill-authority currency r1 passes six format-2 reads, USD/CAD separation, held
+CAD retirement, 24-month amounts/order and Back. Pixel review found its latest
+monthly row only 19 pixels high at the viewport edge, although the original
+visibility predicate passed. This is not full latest-row visual proof. The
+script now scrolls the target into the unobscured viewport; full currency r2 is
+still required. Private evidence remains at
+`/private/tmp/pantopus-native-bill-android-authority-currency-r1/`.
+
+Bill-authority recovery r1 passed through legacy-format recovery, then its
+one-way scroll missed the wrong-currency error heading above the viewport.
+A single reverse gesture and focused capture confirmed the existing rejected
+currency state was reachable; no app repair was needed for that observation.
+The driver now reverses at an observed scroll boundary without weakening the
+content assertions. Recovery r2 timed out before login while Activity Manager
+showed app=null/INITIALIZING, no app PID and only a splash window. The crash log
+was empty. A force-stop and clean relaunch succeeded (cold startup report 1,870
+ms); the underlying cause is not established. Recovery r3 is currently running.
+Retain r1/r2 logs, r1-followup screenshot and r2 startup diagnostics outside Git.
+Failure capture now attempts to preserve fixture state before UI evidence.
+
+Recovery r3 also exposed a clipped Retry control: the coordinate tap produced
+no new bill HTTP request. A focused follow-up moved Retry fully into view and
+confirmed both a new response and restored 104.70/142.50 values. The full r4
+now checks a real new response for each Retry and searches for finished content
+after layout changes. Full r4 now passes, recording 21 format-2 USD reads. Finished denial and
+restored current-comparison screens are reviewed; currency r2 is now running
+with the stronger full-row visibility condition. Preserve
+r3 failure state/screens and `recovery-r3-followup/` alongside earlier evidence.
+
+Matching iOS account-switch and four held-intelligence/authority tests are now
+uncommitted candidates. Bill denial now positively waits for completed unavailable
+estimate copy. Changed-file SwiftFormat r2 and full strict SwiftLint r2 pass;
+lint r1 required moving helper methods out of the oversized test class. Build
+r1 failed because the previously cleaned Sentry artifact was absent. The exact
+pinned 8.58.4 archive was downloaded and SHA-256 verified. An initial Python
+extraction lost its framework symlinks, so build r2 failed signature validation;
+that generated artifact alone was replaced by a ditto extraction. All 12 internal
+links and the framework's deep strict signature now verify. Build r3 is running;
+no iOS UI acceptance of these new cases is claimed yet. No Sentry activation,
+DSN, package-version change or paid service was introduced.
+
+The next uncommitted fixture supports two explicitly synthetic identities and
+per-account production Home authority/HTTP evidence. The second verified member
+has an explicit home.view denial; this does not resolve generic role defaults.
+The prepared Android account driver uses actual logout/login, cold second-account
+return and original-account restoration. Its source parses, but it has not run.
+The active bill fixture is unchanged; do not start a second fixture over its SQL.
+After both bill replays, clean the bill fixture exactly, then run the account
+journey before publishing this follow-up. iOS actual account/held-intelligence
+acceptance, server/nested-contract gaps and the full backlog remain. No new paid
+service, migration or hosted action.
 
 ## Current native authority checkpoint
 

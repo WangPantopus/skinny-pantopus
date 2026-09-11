@@ -14,6 +14,43 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Native account and delayed-response acceptance — September 11
+
+Android account r1 passes normal A → B → A login/logout, cold B denial and
+original-account restoration: three sign-ins, two sign-outs, four current B
+403s, no B aggregate request and zero fixture errors. iOS account/retirement r1
+passes both installed journeys (315.454 seconds), including normal account
+switching, cold denial, restoration and all four held authority/health/checklist/
+property replies after foreground revocation. Denied screens and restored Android
+summary pixels are reviewed. iOS restoration proves current aggregate data; its
+capture still includes ancillary loading, so it is not new full-card visual proof.
+Signed iOS account build r3, strict lint/format r2 pass. Android bill currency r2
+passes six format-2 reads and fully visible oldest/latest rows across 24 months;
+full recovery r4 passes 21 reads with actual Retry responses and finished denial.
+See the [dashboard report](home-dashboard-current-summary-2026-09-11.md) for
+private evidence, earlier failures and verification limits.
+
+Both accounts use controlled login/provider/Home-shell responses with production
+Home HTTP/IAM/SQL. This does not prove real OAuth/revocation, Home-list identity,
+role defaults, or the remaining residency/write/provider/release workflows.
+#32 and #34 remain unfinished drafts; #34 is conflicted. All required checks on
+pushed Android `6a2a1d380` and iOS `661e5fea1` pass. Verify each new pushed head.
+Master remains `6a1013784`; combined 47-version dependencies/replay remain.
+
+Bill-authority fixture r1 and dashboard fixture r6 completed exact SQL cleanup.
+Owned iOS F9BBAB33 and Android 5556 are on; bill-denial fixture r2 now owns
+18083 for the pending iOS replay. The standalone intelligence and summary HTTP
+fixtures completed exact cleanup. Owned SQL and web remain. Preserve restored Sentry artifact/products/evidence and all owner work.
+
+**Next:** finish strengthened iOS bill-denial recovery, then malformed nested
+intelligence, checklist receipts, real Home identity and native residency, followed
+by the full ordered backlog. The reproduced frozen-Home intelligence bypass is
+repaired with before/after authority and no-store responses. Full backend, privacy,
+direct HTTP/SQL/SDK (twelve held results) and existing summary/checklist/settings/
+bill recovery checks pass. No new
+migration, hosted action or paid activation. Paid services stay one final launch
+preparation bundle.
+
 ### Android current-Home acceptance — September 11
 
 Installed Android dashboard r3 passes the full current/denied/applicant,
@@ -24,8 +61,14 @@ affected validation/lint r2 and all three reviewed Home snapshots/quality r2 pas
 The Documents shortcut split mid-word on the real screen; it now says Docs.
 Final build/quality/lint r6 passes and is installed. Retirement r1 passes all
 four held authority/health/checklist/property cases and restoration; the Docs
-shortcut pixels are reviewed. Both Android bill replays are the next regression
-step; currency/history r1 is running. See the [dashboard report](home-dashboard-current-summary-2026-09-11.md)
+shortcut pixels are reviewed. Android `6a2a1d380` is committed/pushed; all required checks now pass in
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34616978020). Bill currency/history r1 passes amounts/order
+and six format-2 reads, but its latest-row screenshot is clipped. The stronger
+viewport check still needs full currency r2. Full bill recovery r4 passes 21 format-2 reads with real-response/visible-Retry
+checks and finished denial/restoration, after two harness findings and a separate
+pre-app startup timeout. Stronger currency/history r2 is now running; see the report. iOS account/held-intelligence/finished
+bill-denial test candidates pass formatting/strict lint; build r3 is running.
+The pinned Sentry artifact has been restored with checksum/signature/links verified. A two-account fixture/journey draft is prepared, not yet run. See the [dashboard report](home-dashboard-current-summary-2026-09-11.md)
 for earlier failures, capacity/Docker recovery, private evidence and limits.
 
 All required checks on pushed iOS `661e5fea1` pass. #32/#34 are the only open PRs,
@@ -33,7 +76,7 @@ both unfinished drafts; #34 remains conflicted. No new migration, hosted action
 or paid activation. Combined 47-version dependencies/replay remain. Owner source
 and devices remain untouched. Owned Android 5556, bill-authority fixture r1/18083, owned
 Gig SQL and web 18080 remain; owned iOS F9BBAB33 is off. Native dashboard fixtures
-r4/r5 completed exact SQL cleanup and are stopped. The next iOS build must resolve its generated Sentry artifact again.
+r4/r5 completed exact SQL cleanup and are stopped. The generated Sentry artifact is restored; preserve it for the pending iOS run.
 
 **Next:** finish both Android bill replays and verify the new pushed head. Then
 close actual account switching, remaining iOS held intelligence and malformed
