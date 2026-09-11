@@ -68,3 +68,7 @@ Both are added before database replay; the permission insert is unchanged. The
 local migration policy gate now passes. Preserve the failed job at
 `/private/tmp/pantopus-home-member-defaults-ci-failed-9c758865e.log` and verify the
 corrected pushed head separately.
+
+The corrected migration also passes populated/idempotent local rehearsal r2
+(`/private/tmp/pantopus-home-member-defaults-upgrade-r2.log`); all changes roll
+back. Corrective head `69eaebea1` passed CI safeguards and complete schema replay.

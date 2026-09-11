@@ -171,7 +171,8 @@ describe('POST /api/homes/check-address', () => {
     }]);
 
     seedTable('Home', [{
-      id: 'home-1',
+      home_status: 'active',
+      id: 'dddd3100-0000-4000-8000-000000000001',
       address_id: '11111111-1111-4111-8111-111111111111',
       address_hash: 'legacy-hash',
       address: '4020 NE Tacoma Ct',
@@ -184,7 +185,7 @@ describe('POST /api/homes/check-address', () => {
 
     seedTable('HomeOccupancy', [{
       id: 'occ-1',
-      home_id: 'home-1',
+      home_id: 'dddd3100-0000-4000-8000-000000000001',
       user_id: 'user-1',
       role_base: 'owner',
       is_active: true,
@@ -203,7 +204,7 @@ describe('POST /api/homes/check-address', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('HOME_FOUND_CLAIMED');
-    expect(res.body.home_id).toBe('home-1');
+    expect(res.body.home_id).toBe('dddd3100-0000-4000-8000-000000000001');
   });
 
   test('finds a legacy claimed home via normalized raw address fields', async () => {
@@ -216,7 +217,8 @@ describe('POST /api/homes/check-address', () => {
     }]);
 
     seedTable('Home', [{
-      id: 'home-legacy',
+      home_status: 'active',
+      id: 'dddd3100-0000-4000-8000-000000000002',
       address_id: null,
       address_hash: null,
       address: '4020 NE Tacoma Ct',
@@ -229,7 +231,7 @@ describe('POST /api/homes/check-address', () => {
 
     seedTable('HomeOccupancy', [{
       id: 'occ-legacy',
-      home_id: 'home-legacy',
+      home_id: 'dddd3100-0000-4000-8000-000000000002',
       user_id: 'user-2',
       role_base: 'owner',
       is_active: true,
@@ -248,7 +250,7 @@ describe('POST /api/homes/check-address', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('HOME_FOUND_CLAIMED');
-    expect(res.body.home_id).toBe('home-legacy');
+    expect(res.body.home_id).toBe('dddd3100-0000-4000-8000-000000000002');
   });
 });
 

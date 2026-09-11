@@ -482,6 +482,20 @@ function homeMatchesAddressByFields(home, addressHash, country = 'US') {
   ) === addressHash;
 }
 
+// A failed lookup must never invite someone to create a duplicate Home.
+async function readHomeAddressLookup(query, validateData) {
+  const result = await query;
+  if (!result || result.error || !validateData(result.data)) {
+    throw new Error('HOME_ADDRESS_LOOKUP_UNAVAILABLE');
+  }
+  return result.data;
+}
+
+const lookupId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const lookupAddress = row => row === null || (row && lookupId(row.id) && typeof row.address_hash === 'string');
+const lookupHomes = rows => Array.isArray(rows) && rows.every(row => row && lookupId(row.id)
+  && ['address', 'city', 'state', 'zipcode'].every(key => typeof row[key] === 'string' && row[key].trim()));
+
 /**
  * Check if user is owner or occupant
  */
@@ -535,6 +549,7 @@ router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(
  * Returns status only — never reveals member identities, counts, or roles.
  */
 router.post('/check-address', verifyToken, validate(checkAddressSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { address_id, address, unit_number, city, state, zip_code, country } = req.body;
     const countryVal = country || 'US';
@@ -544,21 +559,21 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     let addressHash = requestedAddressHash;
 
     if (address_id) {
-      const { data } = await supabaseAdmin
+      const data = await readHomeAddressLookup(supabaseAdmin
         .from('HomeAddress')
         .select('id, address_hash, place_type, building_type, missing_secondary_flag')
         .eq('id', address_id)
-        .maybeSingle();
+        .maybeSingle(), lookupAddress);
       existingAddress = data || null;
       addressHash = existingAddress?.address_hash || requestedAddressHash;
     }
 
     if (!existingAddress) {
-      const { data } = await supabaseAdmin
+      const data = await readHomeAddressLookup(supabaseAdmin
         .from('HomeAddress')
         .select('id, address_hash, place_type, building_type, missing_secondary_flag')
         .eq('address_hash', addressHash)
-        .maybeSingle();
+        .maybeSingle(), lookupAddress);
       existingAddress = data || null;
     }
 
@@ -570,40 +585,44 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     };
 
     if (existingAddress?.id) {
-      const { data: homesByAddressId } = await supabaseAdmin
+      const homesByAddressId = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
         .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
         .eq('address_id', existingAddress.id)
-        .limit(20);
+        .eq('home_status', 'active')
+        .limit(20), lookupHomes);
       rememberHomes(homesByAddressId || []);
     }
 
     // Search homes by canonical hash
-    const { data: homesByHash } = await supabaseAdmin
+    const homesByHash = await readHomeAddressLookup(supabaseAdmin
       .from('Home')
       .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
       .eq('address_hash', addressHash)
-      .limit(20);
+      .eq('home_status', 'active')
+      .limit(20), lookupHomes);
     rememberHomes(homesByHash || []);
 
     // Also search by the original user-input hash when it differs from the
     // canonical (Google-normalized) hash.  Homes created before the address-
     // validation pipeline was added may have been hashed from raw user input.
     if (requestedAddressHash !== addressHash) {
-      const { data: homesByRequestedHash } = await supabaseAdmin
+      const homesByRequestedHash = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
         .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
         .eq('address_hash', requestedAddressHash)
-        .limit(20);
+        .eq('home_status', 'active')
+        .limit(20), lookupHomes);
       rememberHomes(homesByRequestedHash || []);
     }
 
     if (matchedHomeMap.size === 0) {
-      const { data: nearbyHomes } = await supabaseAdmin
+      const nearbyHomes = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
         .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
         .eq('zipcode', zip_code.trim())
-        .limit(100);
+        .eq('home_status', 'active')
+        .limit(100), lookupHomes);
 
       const normalizedMatches = (nearbyHomes || []).filter((home) =>
         homeMatchesAddressByFields(home, addressHash, countryVal) ||
@@ -623,12 +642,12 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
 
     // Check if any of these homes have active occupants
     const homeIds = matchedHomes.map(h => h.id);
-    const { data: activeOccupancies } = await supabaseAdmin
+    const activeOccupancies = await readHomeAddressLookup(supabaseAdmin
       .from('HomeOccupancy')
       .select('home_id')
       .in('home_id', homeIds)
       .eq('is_active', true)
-      .limit(1);
+      .limit(1), rows => Array.isArray(rows) && rows.every(row => row && lookupId(row.home_id)));
 
     const isClaimed = activeOccupancies && activeOccupancies.length > 0;
     const firstHome = matchedHomes[0];
@@ -647,8 +666,12 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
       formatted_address: formattedAddress,
     });
   } catch (err) {
-    logger.error('Address check error', { error: err.message });
-    res.status(500).json({ error: 'Failed to check address' });
+    logger.error('Address check unavailable', { code: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE' });
+    res.status(503).json({
+      error: 'Could not check this Home. Please try again.',
+      code: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE',
+      retryable: true,
+    });
   }
 });
 

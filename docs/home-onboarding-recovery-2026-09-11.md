@@ -41,3 +41,32 @@ acceptance.
 
 The baseline performs no provider activation, hosted mutation, real message or
 migration adoption. Paid services remain the final launch bundle.
+
+## Verified lookup milestone
+
+The production lookup now validates each query's result, returns safe typed
+retryable HTTP 503 on failed/interrupted/missing/malformed data, limits Home
+queries to active rows and sends private/no-store responses. It still grants
+no membership and returns no household identities or counts.
+
+Actual HTTP/SDK/SQL acceptance passes 101 real queries: canonical address ID,
+hash and legacy normalized-field lookup; claimed/unclaimed Homes; archived
+duplicate exclusion and reactivation; twelve read-fault cases with positive
+recovery; and exact fixture cleanup. Evidence:
+`/private/tmp/pantopus-home-address-lookup-http-r1.log`. The fixture uses its
+own ddc237 namespace and never contacts a provider.
+
+All 22 focused existing address checks pass after their mock Homes were updated
+to valid UUIDs and active records. Full backend regression passes 317 suites /
+5,169 checks, with 16 skips, in 70.874 seconds. Privacy gates pass. Evidence:
+`/private/tmp/pantopus-home-onboarding-lookup-focused-r2.log`,
+`/private/tmp/pantopus-home-onboarding-lookup-backend-r1.log`, and
+`/private/tmp/pantopus-home-onboarding-lookup-privacy-r1.log`. Focused r1 was
+launched from the repository root, where its express mock could not resolve
+the backend dependency; the corrected backend-directory run passed.
+
+The native search itself is also unfinished: production Add Home models use
+`AddHomeSampleData`, current-location/manual actions merely reset state, and
+manual fields only enable Continue when matching a sample candidate. Replace
+that path with real search, manual entry and location recovery. The complete
+creation/admission and native onboarding exit criteria remain open.

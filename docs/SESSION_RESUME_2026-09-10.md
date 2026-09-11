@@ -1,5 +1,31 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Address lookup failure and recovery — September 11
+
+Following native milestone `f66c0b3a8`, the [onboarding lookup repair](home-onboarding-recovery-2026-09-11.md)
+returns retryable failure when a canonical address, Home or occupancy read is
+failed, interrupted, missing or malformed. It considers active Homes and keeps
+private/no-store responses. Actual HTTP/SDK/SQL acceptance passes canonical,
+hash and legacy-field matches, archived duplicates, twelve fault/recovery cases
+and exact cleanup. Full backend regression passes 317 suites / 5,169 checks
+(16 skips), and privacy gates pass.
+
+H07/H08 are still open. Native Add Home currently uses sample search results,
+manual/current-location actions do not finish the promised flow, and the wizard
+expects coordinates from a lookup endpoint that never returns them. Continue
+real search/manual/location entry and canonical validation, then atomic retained
+create/join commands and useful first-use navigation. Preserve correct roles,
+private Tasks, explicit denies and the distinction from verified membership.
+Then continue native residency and the full inventory without stopping here.
+
+The member-view migration's final bounded-lock version also passes a fresh
+populated/idempotent local upgrade rehearsal, with every change rolled back.
+No permanent migration adoption, provider activation or real message. Verify
+this new head's CI; `f66c0b3a8` had no failed checks when inspected, with native
+jobs still running. #32/#34 remain drafts; #34 is conflicted. Source migrations
+remain 39 Home / 21 paid / 48 combined. Owner work and private evidence remain
+preserved; paid services remain one final launch bundle.
+
 ### Native Home identity and private first use — September 11
 
 The [native list milestone](home-native-list-first-use-2026-09-11.md) completes
