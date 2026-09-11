@@ -128,7 +128,7 @@ final class ContentDetailProjectionTests: XCTestCase {
         XCTAssertEqual(content.dock.secondary?.label, "Message")
     }
 
-    func testTaskV2WithoutWorkerKeepsBidDock() {
+    func testTaskV2WithoutWorkerClosesBiddingDuringWork() {
         let gig = makeGig(GigSpec(
             title: "Move a mattress",
             price: 85,
@@ -138,9 +138,10 @@ final class ContentDetailProjectionTests: XCTestCase {
             acceptedBy: "me",
             bidCount: 1
         ))
-        // canMarkDelivered defaults false — the bidder dock holds.
+        // A viewer who cannot deliver must not be offered another bid after assignment.
         let content = GigDetailViewModel.project(gig: gig, bids: [])
-        XCTAssertEqual(content.dock.primary.label, "Place bid")
+        XCTAssertEqual(content.dock.primary.label, "Bidding closed")
+        XCTAssertFalse(content.dock.primary.enabled)
     }
 
     func testViewerCanMarkDeliveredGate() {
@@ -167,7 +168,7 @@ final class ContentDetailProjectionTests: XCTestCase {
         let content = GigDetailViewModel.project(gig: gig, bids: [])
         XCTAssertEqual(content.statusPill?.label, "Open · No bids yet")
         XCTAssertNotNil(content.hero.categoryChip)
-        XCTAssertEqual(content.hero.priceCaption, "budget · cash or transfer")
+        XCTAssertEqual(content.hero.priceCaption, "budget")
         XCTAssertFalse(content.statStrip.isEmpty)
         XCTAssertTrue(content.modules.contains {
             if case let .description(m) = $0 { m.title == "What needs doing" } else { false }

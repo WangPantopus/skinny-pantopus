@@ -164,6 +164,47 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         let message: String
     }
 
+    func gigPublication(taskId: String) async throws -> HomeTaskGigState {
+        let revision = generation
+        try requireCurrent(revision)
+        guard UUID(uuidString: taskId) != nil else { throw APIError.invalidResponse }
+        let result: HomeTaskGigState = try await api.request(Endpoint(
+            method: .get,
+            path: "/api/homes/\(homeId)/tasks/\(taskId)/gig-publication",
+            headers: currentHeaders,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        ))
+        try requireCurrent(revision)
+        try bind(result.taskSession)
+        guard result.matches(home: homeId, task: taskId) else { throw APIError.invalidResponse }
+        return result
+    }
+
+    func publishGig(_ draft: HomeTaskGigDraft, beforeDispatch: @MainActor () throws -> Void) async throws -> HomeTaskGigResponse {
+        let revision = generation
+        guard !mutating else { throw AccessError.busy }
+        mutating = true
+        defer { mutating = false }
+        // Recovery must allow an already-linked task after a lost committed reply.
+        _ = try await gigPublication(taskId: draft.taskId)
+        guard let actorId, draft.matches(origin: api.apiBaseURL.absoluteString, home: homeId, task: draft.taskId, actor: actorId) else {
+            throw APIError.invalidResponse
+        }
+        try beforeDispatch()
+        try requireCurrent(revision)
+        let result: HomeTaskGigResponse = try await api.request(Endpoint(
+            method: .post,
+            path: "/api/gigs",
+            body: HomeTaskGigDraft.Request(draft: draft),
+            headers: currentHeaders,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        ))
+        try requireCurrent(revision)
+        try bind(result.taskSession)
+        guard result.matches(draft) else { throw APIError.invalidResponse }
+        return result
+    }
+
     func recurrence(taskId: String) async throws -> HomeTaskRecurrenceState {
         let revision = generation
         try requireCurrent(revision)

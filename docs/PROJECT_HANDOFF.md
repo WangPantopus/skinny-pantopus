@@ -14,6 +14,31 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS task-to-Gig publication and current detail states — September 10
+
+The [iOS conversion report](home-ios-task-gig-publication-2026-09-10.md) records
+explicit native public review, actual Keychain original/confirmation recovery,
+and an installed app → production HTTP/service → local SQL journey. Final
+acceptance passes stale review, lost replies, two process deaths, exact replay,
+later cancellation/price preservation, current destination and access revocation.
+Visual review found and repaired false Open/bidding/verified-address states in
+Gig detail. Ten installed V1/V2 lifecycle screens now pass visible status, price
+and action checks. Final signed build, full Swift quality and affected regression
+checks pass; see the report for exact evidence and synthetic/provider limits.
+
+**Next:** finish Android conversion and installed acceptance (its API/models and
+encrypted-store implementation have started), then relationships/residency,
+ownership and lease/resource cleanup. Browser `b9062fb03` passed all required jobs
+except the SE filter timing check; the observable-result repair passes locally,
+and the new head's remote CI remains required. Both PRs stay drafts. Paid #34 at
+`e9ef2decb` is unchanged/green but unfinished. Reconcile its native GigDetail and
+web CompletionFlow edits with the current lifecycle guards. Final combined
+migration dependencies/replay remain open (42 distinct versions). Keep every
+paid dependency in one final launch bundle. Exact native fixtures are cleaned;
+the owned web/native listeners and simulator are stopped. The owned Gig database
+remains for immediate Android work; owner files/runtimes are preserved. Actual
+user-visible workflows, not unit-coverage percentages, remain the priority.
+
 ### Browser task-to-Gig publication — September 10
 
 The [browser conversion report](home-web-task-gig-publication-2026-09-10.md)

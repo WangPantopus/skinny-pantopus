@@ -3,7 +3,23 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [browser conversion report](home-web-task-gig-publication-2026-09-10.md)
+The newest [iOS conversion report](home-ios-task-gig-publication-2026-09-10.md)
+completes core native public review and Keychain original/receipt recovery with
+installed app → production HTTP/service → SQL acceptance. It also repairs false
+Open/bidding/verified-address states discovered during visual review. Ten V1/V2
+status screens and the full stale/relaunch/replay/revocation journey pass. Final
+Swift build/quality and affected checks pass. Next is Android conversion (initial
+API/models/encrypted-store work is in progress), then remaining ordered scope.
+The browser head's only failed job was the SE filter timing check; its repair is
+locally verified, while final-head remote CI remains required. Paid #34 is
+unchanged/green but unfinished. Preserve native GigDetail and web CompletionFlow
+lifecycle fixes alongside paid changes during eventual integration. Both PRs
+stay draft, combined migrations remain open and paid services stay one final
+launch bundle. Owned web/native listeners and simulator are stopped, exact SQL
+fixtures are cleaned, and the owned Gig database remains for Android work.
+Owner files/runtimes are unchanged. Older next-action notes below are historical.
+
+The preceding [browser conversion report](home-web-task-gig-publication-2026-09-10.md)
 completes core public review and encrypted original/receipt recovery in Chrome
 against production HTTP/service/local SQL. Actual recovery, stale/cancelled states,
 storage failure, competing tabs, current access/account changes and narrow/keyboard

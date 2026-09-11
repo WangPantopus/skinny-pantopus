@@ -435,8 +435,10 @@ final class DiscoverHubViewModelTests: XCTestCase {
         XCTAssertEqual(vm.selectedChip, DiscoverHubChip.nearby)
 
         vm.selectChip(DiscoverHubChip.verified)
-        // Allow the refetch task to run.
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        await waitForFilterResult {
+            guard case .empty = vm.state else { return false }
+            return SequencedURLProtocol.capturedRequests.count == 8
+        }
         XCTAssertEqual(vm.selectedChip, DiscoverHubChip.verified)
         // Eight requests captured (four per fetchAll * two fetchAll calls).
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 8)
@@ -524,7 +526,10 @@ final class DiscoverHubViewModelTests: XCTestCase {
         vm.applyFilters(DiscoverHubFilters(
             contentTypes: [DiscoverHubSection.people, DiscoverHubSection.gigs]
         ))
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForFilterResult {
+            guard case let .loaded(sections, _) = vm.state else { return false }
+            return sections.map(\.id) == [DiscoverHubSection.people, DiscoverHubSection.gigs]
+        }
 
         guard case let .loaded(sections, _) = vm.state else {
             XCTFail("Expected .loaded, got \(vm.state)")
@@ -549,7 +554,10 @@ final class DiscoverHubViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load()
         vm.applyFilters(DiscoverHubFilters(verifiedOnly: true))
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForFilterResult {
+            guard case let .loaded(sections, _) = vm.state else { return false }
+            return sections.map(\.id) == [DiscoverHubSection.people]
+        }
 
         guard case let .loaded(sections, _) = vm.state else {
             XCTFail("Expected .loaded after verified filter, got \(vm.state)")
@@ -575,7 +583,11 @@ final class DiscoverHubViewModelTests: XCTestCase {
         await vm.load()
         // g1 (08:00) then g2 (09:00) in fixture order.
         vm.applyFilters(DiscoverHubFilters(newestFirst: true))
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForFilterResult {
+            guard case let .loaded(sections, _) = vm.state,
+                  let gigs = sections.first(where: { $0.id == DiscoverHubSection.gigs }) else { return false }
+            return gigs.rows.map(\.id) == ["gig-g2", "gig-g1"]
+        }
 
         guard case let .loaded(sections, _) = vm.state,
               let gigs = sections.first(where: { $0.id == DiscoverHubSection.gigs }) else {
@@ -584,5 +596,14 @@ final class DiscoverHubViewModelTests: XCTestCase {
         }
         // Newest-first: g2 (09:00) ahead of g1 (08:00).
         XCTAssertEqual(gigs.rows.map(\.id), ["gig-g2", "gig-g1"])
+    }
+
+    private func waitForFilterResult(_ condition: @MainActor () -> Bool) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(10))
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(condition(), "Filter results did not settle before the deadline")
     }
 }

@@ -8,6 +8,7 @@ struct HouseholdTaskDetailView: View {
     @State private var mediaModel: HomeTaskMediaViewModel?
     @State private var attachmentPresentation: AttachmentPresentation?
     @State private var recurrencePresentation: RecurrencePresentation?
+    @State private var gigPresentation: GigPresentation?
     private let homeId: String
     private let taskId: String
     private let onEdit: @MainActor () -> Void
@@ -66,6 +67,10 @@ struct HouseholdTaskDetailView: View {
                     }
                     if task.capabilities?.canEdit == true {
                         Section {
+                            Button("Review Gig publication") {
+                                guard viewModel.isCurrent, isVisible else { return }
+                                gigPresentation = GigPresentation(model: HomeTaskGigViewModel(homeId: homeId, taskId: taskId))
+                            }.disabled(viewModel.acting).accessibilityIdentifier("householdTaskDetail.gig")
                             Button("Edit task") { Task { await viewModel.edit(onAllowed: onEdit) } }
                                 .disabled(viewModel.acting)
                         }
@@ -93,6 +98,9 @@ struct HouseholdTaskDetailView: View {
         .sheet(item: $recurrencePresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
             HomeTaskRecurrenceView(model: presentation.model)
         })
+        .sheet(item: $gigPresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
+            HomeTaskGigView(model: presentation.model)
+        })
         .onAppear { isVisible = true }
         .task { await viewModel.load() }
         .onChange(of: scenePhase) { _, phase in
@@ -111,6 +119,8 @@ struct HouseholdTaskDetailView: View {
                 attachmentPresentation = nil
                 recurrencePresentation?.model.retire()
                 recurrencePresentation = nil
+                gigPresentation?.model.retire()
+                gigPresentation = nil
             }
         }
         .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
@@ -127,6 +137,11 @@ struct HouseholdTaskDetailView: View {
     private struct AttachmentPresentation: Identifiable {
         let id = UUID()
         let model: HomeTaskMediaViewModel
+    }
+
+    private struct GigPresentation: Identifiable {
+        let id = UUID()
+        let model: HomeTaskGigViewModel
     }
 
     private struct RecurrencePresentation: Identifiable {
