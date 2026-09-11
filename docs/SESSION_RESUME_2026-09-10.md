@@ -1,5 +1,25 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### CI follow-up for the detail milestone
+
+The pushed `afd231655` run [34636714349](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34636714349)
+caught a redacted-public-preview regression: a helper removed during cleanup
+still had a caller. That cleanup occurred after the earlier local full regression.
+The flag-aware personal-claim predicate is restored; it grants only the existing
+redacted preview, never shared Home data. All 18 focused address/claim checks and
+full backend regression (317 suites / 5,169 passed, 16 skips, 90.682 seconds) now
+pass. Evidence: `/private/tmp/pantopus-home-detail-projection-preview-fix-r2.log`,
+`/private/tmp/pantopus-home-detail-projection-backend-r3.log`; failed CI log remains
+private at `/private/tmp/pantopus-home-detail-projection-ci-backend-afd231655.log`.
+A first focused invocation used the repository root instead of backend and could
+not resolve its test mock's express import; the backend invocation passed.
+
+The native H05/H08 candidate is now in progress, not yet accepted. Previous
+native products are preserved with filesystem clones under
+`/private/tmp/pantopus-home-native-artifacts-before-h05/`. Actual SDK list/detail
+native-fixture mode is being prepared; no new migration or paid activation.
+Verify the repair's new pushed head independently; the failed head is not green.
+
 ### Home detail projection and browser property recovery — September 11
 
 Continued from pushed `c4a22858f` on `codex/home-permission-boundaries` in

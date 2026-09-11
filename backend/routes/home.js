@@ -49,6 +49,15 @@ const addressVerificationObservability = require('../services/addressValidation/
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 
+// Public previews still use this flag-aware personal claim predicate. It does
+// not grant shared detail access or expose an owner/occupant identity.
+function isPendingOwnershipClaimForReadPath(claim) {
+  if (!claim) return false;
+  return householdClaimConfig.flags.v2ReadPaths
+    ? homeClaimRoutingService.isClaimActiveRecord(claim)
+    : homeClaimRoutingService.isLegacyStateActive(claim.state);
+}
+
 // ============ VALIDATION SCHEMAS ============
 
 const HOME_TYPES = ['house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 'mobile_home', 'trailer', 'multi_unit', 'other'];
