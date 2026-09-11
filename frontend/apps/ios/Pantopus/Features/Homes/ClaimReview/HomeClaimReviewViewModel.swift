@@ -100,6 +100,8 @@ public struct HomeClaimReviewData: Sendable, Equatable, Hashable {
     public let ownership: [HomeClaimReviewOwnershipItem]
     public let residency: [HomeClaimReviewResidencyItem]
     public let comparison: HomeClaimReviewComparison?
+    public var ownershipUnavailable = false
+    public var residencyUnavailable = false
 }
 
 /// Screen state. Four-state rule: loading / empty / loaded / error.
@@ -387,6 +389,9 @@ public final class HomeClaimReviewViewModel {
         guard scope.isCurrent else { return }
         readGeneration += 1
         let revision = readGeneration
+        // A refresh must not leave old claim actions available while current
+        // authority and the two independent collections are being checked.
+        contentState = .loading
         async let ownershipTask: HomeOwnershipClaimsResponse? = optional {
             try await self.api.request(
                 HomeClaimReviewEndpoints.ownershipClaims(homeId: self.homeId)
@@ -422,7 +427,9 @@ public final class HomeClaimReviewViewModel {
         let residency = Self.residencyItems(from: residencyResponse?.claims ?? [])
         let comparison = comparisonResponse.map { Self.comparison(from: $0) }
 
-        if ownership.isEmpty, residency.isEmpty, comparison == nil {
+        let ownershipUnavailable = ownershipResponse == nil && comparisonResponse == nil
+        let residencyUnavailable = residencyResponse == nil
+        if ownership.isEmpty, residency.isEmpty, comparison == nil, !ownershipUnavailable, !residencyUnavailable {
             contentState = .empty
             selectedTab = .ownership
             return
@@ -434,7 +441,9 @@ public final class HomeClaimReviewViewModel {
             HomeClaimReviewData(
                 ownership: ownership,
                 residency: residency,
-                comparison: comparison
+                comparison: comparison,
+                ownershipUnavailable: ownershipUnavailable,
+                residencyUnavailable: residencyUnavailable
             )
         )
     }

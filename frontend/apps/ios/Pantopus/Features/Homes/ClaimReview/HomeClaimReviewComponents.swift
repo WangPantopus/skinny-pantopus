@@ -144,6 +144,7 @@ struct HomeClaimActionButton: View {
     let icon: PantopusIcon
     let tone: HomeClaimActionTone
     let identifier: String
+    var voiceLabel: String = "Flag claim for review"
     let action: () -> Void
 
     var body: some View {
@@ -168,7 +169,7 @@ struct HomeClaimActionButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
-        .accessibilityLabel(title ?? identifier)
+        .accessibilityLabel(title ?? voiceLabel)
     }
 
     private var foreground: Color {
@@ -260,6 +261,7 @@ struct HomeClaimOwnershipCard: View {
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeClaimReview_ownershipCard")
     }
 
@@ -299,7 +301,8 @@ struct HomeClaimOwnershipCard: View {
                     title: nil,
                     icon: .flag,
                     tone: .flag,
-                    identifier: "homeClaimReview_flagUnknown"
+                    identifier: "homeClaimReview_flagUnknown",
+                    voiceLabel: "Flag unknown claimant"
                 ) { onRelationship(.flagUnknownPerson) }
             }
         case .adminReviewRequired:
@@ -406,6 +409,7 @@ struct HomeClaimResidencyCard: View {
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeClaimReview_residencyCard")
     }
 }
@@ -460,6 +464,7 @@ struct HomeClaimComparePanel: View {
                 )
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeClaimReview_comparePanel")
     }
 

@@ -3,7 +3,28 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [browser relationship report](home-web-claim-relationship-recovery-2026-09-10.md)
+The newest [iOS relationship report](home-ios-claim-relationship-recovery-2026-09-10.md)
+completes prepared review and actual Keychain original/confirmation recovery.
+Installed normal navigation → production HTTP/service → SQL passes five POSTs,
+three receipts, two restarts, later rejection, stale review, revocation/restoration,
+background preflight interruption and permanent recovery after the queue empties.
+Six final screens were reviewed; navigation, accessibility and current-phase
+status findings are repaired. Signed build, full Swift quality and 27 affected
+checks pass. The report retains physical/provider and native fault-matrix limits.
+
+Next is Android relationship integration and installed acceptance; its new
+API/models/store/controller/dialog and backup exclusions are local work in
+progress, not yet compiled or part of the iOS commit. Then continue residency
+receipts and ownership/lease/resource work. Browser `330254adf` passes every
+required job except iPhone 16's fixed 500 ms media wait; the bounded observable
+repair passes three local repetitions. New-head remote CI is still required.
+Both PRs stay drafts, #34 remains `e9ef2decb` and unfinished, combined 43-version
+migration dependencies/replay stay open, and paid services remain one final
+launch bundle. Exact iOS fixtures are cleaned; listener and owned simulators are
+stopped. The owned Gig database stays running for Android. Owner files and
+runtimes are preserved. Older next-action/CI notes below are historical.
+
+The preceding [browser relationship report](home-web-claim-relationship-recovery-2026-09-10.md)
 completes explicit browser review and encrypted original/confirmation recovery,
 including access through a permanent link after the claim leaves pending review.
 Actual Chrome → production HTTP/service → SQL passes six submissions/three

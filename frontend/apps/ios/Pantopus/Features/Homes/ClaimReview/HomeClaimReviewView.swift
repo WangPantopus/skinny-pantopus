@@ -25,6 +25,7 @@ public struct HomeClaimReviewView: View {
     @State private var relationshipConfirm: RelationshipConfirm?
     @State private var residencyConfirm: ResidencyConfirm?
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
+    @State private var relationshipTarget: HomeRelationshipViewModel?
 
     private let onBack: @MainActor () -> Void
 
@@ -36,6 +37,11 @@ public struct HomeClaimReviewView: View {
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             topBar
+            Button("Relationship decisions and recovery") {
+                relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
+            }
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
             if case .loaded = viewModel.state {
                 HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             }
@@ -43,11 +49,15 @@ public struct HomeClaimReviewView: View {
         }
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeClaimReview")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
             PrivateClaimEvidenceView(model: target)
+        })
+        .sheet(item: $relationshipTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            HomeRelationshipView(model: target)
         })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -208,11 +218,21 @@ public struct HomeClaimReviewView: View {
             .accessibilityIdentifier("homeClaimReview_error")
         case let .loaded(data):
             switch viewModel.selectedTab {
-            case .ownership: ownershipTab(data.ownership)
-            case .residency: residencyTab(data.residency)
+            case .ownership:
+                if data.ownershipUnavailable { unavailableCollection("ownership") } else { ownershipTab(data.ownership) }
+            case .residency:
+                if data.residencyUnavailable { unavailableCollection("residency") } else { residencyTab(data.residency) }
             case .compare: compareTab(data.comparison)
             }
         }
+    }
+
+    private func unavailableCollection(_ collection: String) -> some View {
+        ErrorState(
+            headline: "Couldn't load \(collection) claims",
+            message: "Current access or claim data could not be verified. Reload to try again."
+        ) { await viewModel.refresh() }
+            .accessibilityIdentifier("homeClaimReview_\(collection)Unavailable")
     }
 
     @ViewBuilder
@@ -243,11 +263,17 @@ public struct HomeClaimReviewView: View {
                                 }
                             },
                             onRelationship: { action in
-                                relationshipConfirm = RelationshipConfirm(
-                                    claimId: item.id,
-                                    action: action,
-                                    isOwnerClaim: item.claimType == "owner"
-                                )
+                                if action == .inviteToHousehold {
+                                    relationshipConfirm = RelationshipConfirm(
+                                        claimId: item.id, action: action, isOwnerClaim: item.claimType == "owner"
+                                    )
+                                } else {
+                                    relationshipTarget = HomeRelationshipViewModel(
+                                        homeId: viewModel.homeId,
+                                        claimId: item.id,
+                                        action: action == .flagUnknownPerson ? .flag : .decline
+                                    )
+                                }
                             }
                         )
                         Button("Review private documents") {

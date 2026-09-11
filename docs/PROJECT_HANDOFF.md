@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### iOS claimant relationship review and recovery — September 10
+
+The [iOS relationship report](home-ios-claim-relationship-recovery-2026-09-10.md)
+records prepared review and actual Keychain original/confirmation recovery.
+Final installed app → production HTTP/service → SQL passes five POSTs/three
+receipts, two app restarts, current later rejection, stale review, revoked/restored
+authority, held preflight/background return and recovery after the queue empties.
+Six distinct final screens were visually reviewed. Ordinary navigation exposed
+and repaired a Place error dead end, a debug overlay intercepting Profile taps,
+Owners toolbar visibility and claim-control accessibility grouping/labels. The
+UI now prefers current claim phase over the older state column and explains
+unqualified flags as admin review. Final signed build, full Swift quality and
+27 affected checks pass. See the report for explicit native/provider limits.
+
+**Next:** finish Android relationship integration and installed Keystore/HTTP/SQL
+acceptance; new API/models/store/controller/dialog source and backup exclusions
+are in progress locally, not yet compiled or included in the iOS milestone.
+Then continue residency receipts, ownership transfer/challenge and lease/resource
+cleanup. Browser `330254adf` passes all required jobs except iPhone 16: its only
+failure was a 500 ms media-recovery wait. The observable-result repair passes
+three local repetitions; the new exact head's remote CI remains required.
+PRs #32/#34 stay drafts; paid #34 `e9ef2decb` remains green but unfinished.
+Combined 43-version dependencies/replay remain open, and paid services stay one
+final launch bundle. Exact iOS SQL fixtures are cleaned, listener and owned
+simulators are stopped; the owned Gig database remains for Android. Owner
+files/runtimes are preserved. Actual workflows remain the completion test.
+
 ### Browser claimant relationship review and recovery — September 10
 
 The [browser relationship report](home-web-claim-relationship-recovery-2026-09-10.md)

@@ -153,9 +153,23 @@ final class HomeClaimReviewViewModelTests: XCTestCase {
             return
         }
         XCTAssertTrue(data.ownership.isEmpty)
+        XCTAssertTrue(data.ownershipUnavailable)
+        XCTAssertFalse(data.residencyUnavailable)
         XCTAssertEqual(data.residency.map(\.id), ["rc_1"])
         XCTAssertEqual(data.residency.first?.roleLabel, "Requesting: Renter")
         XCTAssertNil(data.comparison)
+    }
+
+    func testDeniedOwnershipWithEmptyResidencyNeverClaimsAnEmptyOwnershipQueue() async {
+        let vm = makeVM(
+            ownership: .status(403, body: "{}"),
+            residency: .status(200, body: Self.emptyClaimsJSON),
+            comparison: .status(403, body: "{}")
+        )
+        await vm.load()
+        guard case let .loaded(data) = vm.state else { return XCTFail("Expected separate collection states") }
+        XCTAssertTrue(data.ownershipUnavailable)
+        XCTAssertFalse(data.residencyUnavailable)
     }
 
     func testComparisonUnavailableFallsBackToMaskedList() async {

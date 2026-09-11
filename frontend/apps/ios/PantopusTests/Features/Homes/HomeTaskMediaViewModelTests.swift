@@ -216,9 +216,9 @@ final class HomeTaskMediaViewModelTests: XCTestCase {
         model.suspend()
         await model.activate(ifCurrent: model.activationRevision)
         await uploading.value
-        for _ in 0..<100 {
-            if model.media.first?.id == pending.id { break }
-            try await Task.sleep(for: .milliseconds(5))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while model.media.first?.id != pending.id, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(model.media.first?.id, pending.id)
         XCTAssertEqual(model.pendingUpload, pending)

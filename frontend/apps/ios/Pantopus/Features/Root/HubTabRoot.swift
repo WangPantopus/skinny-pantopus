@@ -1097,7 +1097,9 @@ public struct HubTabRoot: View {
             case .openRecentActivity: path.append(.recentActivity)
             }
         }
-        .overlay(alignment: .topLeading) { debugTapTarget }
+        #if DEBUG
+        .simultaneousGesture(debugTapGesture)
+        #endif
     }
 
     /// Project an `InboxConversationDestination.Mode` onto the
@@ -1190,22 +1192,17 @@ public struct HubTabRoot: View {
         return segment?.isEmpty == false ? segment : nil
     }
 
-    /// 44pt invisible 5-tap target in the top-leading safe area — the
-    /// production hub hides its nav bar so there's no visible title to
-    /// tap. Hidden from accessibility so VoiceOver users can't trip
-    /// the debug menu by accident. No-op in release.
-    @ViewBuilder
-    private var debugTapTarget: some View {
-        #if DEBUG
-        Color.clear
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 5) { debugSheet = .tokenGallery }
-            .accessibilityHidden(true)
-        #else
-        EmptyView()
-        #endif
+    #if DEBUG
+    /// Observe the developer gesture without covering the Profile button.
+    /// An invisible overlay here consumed ordinary avatar taps.
+    private var debugTapGesture: some Gesture {
+        SpatialTapGesture(count: 5).onEnded { value in
+            if value.location.x < 44, value.location.y < 44 {
+                debugSheet = .tokenGallery
+            }
+        }
     }
+    #endif
 
     @ViewBuilder
     private func destination(
