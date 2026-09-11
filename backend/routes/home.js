@@ -13,6 +13,7 @@ const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
+const homeListService = require('../services/homeListService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
 const homeInvitationService = require('../services/homeInvitationService');
@@ -1500,277 +1501,19 @@ router.post('/', verifyToken, (req, res, next) => {
  * Get current user's homes (owned + occupied)
  */
 router.get('/my-homes', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // Owned homes
-    const { data: ownedHomes, error: ownedError } = await supabaseAdmin
-      .from('Home')
-      .select('*')
-      .eq('owner_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (ownedError) {
-      return res.status(500).json({ error: 'Failed to load homes' });
-    }
-
-    // Occupied homes (HomeOccupancy) — only rows the user is still active on.
-    // Inactive rows (e.g. challenged detach: suspended_challenged) are excluded here;
-    // POST /:id/move-out can still normalize those to moved_out if the UI surfaces leave.
-    const { data: occRows, error: occError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select(`
-        id,
-        role,
-        role_base,
-        is_active,
-        start_at,
-        end_at,
-        verification_status,
-        home:home_id ( * )
-      `)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .neq('verification_status', 'moved_out')
-      .order('created_at', { ascending: false });
-
-    if (occError) {
-      return res.status(500).json({ error: 'Failed to load home occupancies' });
-    }
-
-    const occupiedHomes = (occRows || [])
-      .map((r) => {
-        const h = r.home;
-        if (!h) return null;
-        return {
-          ...h,
-          occupancy: {
-            id: r.id,
-            role: r.role,
-            role_base: r.role_base,
-            is_active: r.is_active,
-            start_at: r.start_at,
-            end_at: r.end_at,
-            verification_status: r.verification_status,
-          },
-        };
-      })
-      .filter(Boolean);
-
-    // Check HomeOwner verification status for ALL user homes (owned + occupied)
-    // to distinguish between verified owners and pending owners.
-    const ownedHomeIds = (ownedHomes || []).map(h => h.id);
-    const allHomeIds = [...new Set([...ownedHomeIds, ...occupiedHomes.map(h => h.id)])];
-    let ownerStatusMap = {};
-    if (allHomeIds.length > 0) {
-      const { data: ownerRows } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('home_id, owner_status, verification_tier, is_primary_owner')
-        .eq('subject_id', userId)
-        .in('home_id', allHomeIds)
-        .neq('owner_status', 'revoked');
-
-      for (const row of (ownerRows || [])) {
-        ownerStatusMap[row.home_id] = row;
-      }
-    }
-
-    // Fetch pending claim IDs so frontend can deep-link to evidence upload.
-    // Check homes with pending HomeOwner status AND homes with active claims (even without HomeOwner).
-    let pendingClaimMap = {};
-    const pendingOwnerHomeIds = Object.entries(ownerStatusMap)
-      .filter(([, row]) => row.owner_status === 'pending')
-      .map(([homeId]) => homeId);
-    // Also fetch any active claims for all homes (covers non-owner creators who submitted claims)
-    const claimSearchHomeIds = allHomeIds.length > 0 ? allHomeIds : [];
-    if (claimSearchHomeIds.length > 0) {
-      const { data: pendingClaims } = await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .select('id, home_id, state, claim_phase_v2, merged_into_claim_id')
-        .eq('claimant_user_id', userId)
-        .in('home_id', claimSearchHomeIds)
-        .order('created_at', { ascending: false });
-      for (const claim of (pendingClaims || [])) {
-        if (!isPendingOwnershipClaimForReadPath(claim)) {
-          continue;
-        }
-        if (!pendingClaimMap[claim.home_id]) {
-          pendingClaimMap[claim.home_id] = claim.id;
-        }
-      }
-    }
-
-    // Build a lookup from home ID → occupancy record for role merging
-    const occByHomeId = {};
-    for (const h of occupiedHomes) {
-      occByHomeId[h.id] = h.occupancy;
-    }
-
-    // Mark owned homes with accurate ownership status
-    const ownedWithOcc = (ownedHomes || []).map((h) => {
-      const ownerRow = ownerStatusMap[h.id];
-      const isVerifiedOwner = ownerRow && ownerRow.owner_status === 'verified';
-      const isPendingOwner = ownerRow && ownerRow.owner_status === 'pending';
-      const actualOcc = occByHomeId[h.id]; // real occupancy from HomeOccupancy
-
-      // Use ownership role if user is an owner; otherwise use actual occupancy role
-      let displayRole = 'admin';
-      let isActive = true;
-      if (isVerifiedOwner) {
-        displayRole = 'owner';
-      } else if (isPendingOwner) {
-        displayRole = 'pending_owner';
-      } else if (actualOcc?.role) {
-        // Non-owner creator: use the actual occupancy role (lease_resident, member, etc.)
-        displayRole = actualOcc.role;
-        isActive = actualOcc.is_active !== false;
-      }
-
-      return {
-        ...h,
-        occupancy: {
-          ...(actualOcc || {}),
-          role: displayRole,
-          is_active: isActive,
-        },
-        ownership_status: ownerRow?.owner_status || null,
-        verification_tier: ownerRow?.verification_tier || null,
-        pending_claim_id: (isPendingOwner || pendingClaimMap[h.id]) ? (pendingClaimMap[h.id] || null) : null,
-      };
-    });
-
-    // Include homes where user is a verified owner only (no owner_id, no occupancy) — e.g. after claim approval
-    const existingHomeIds = new Set([
-      ...(ownedHomes || []).map((h) => h.id),
-      ...occupiedHomes.map((h) => h.id),
-    ]);
-    const { data: verifiedOwnerRows } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id, owner_status, verification_tier, is_primary_owner')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified');
-    const verifiedOnlyHomeIds = [...new Set((verifiedOwnerRows || []).map((r) => r.home_id).filter((id) => id && !existingHomeIds.has(id)))];
-    let verifiedOnlyHomes = [];
-    if (verifiedOnlyHomeIds.length > 0) {
-      const { data: verifiedHomes } = await supabaseAdmin
-        .from('Home')
-        .select('*')
-        .in('id', verifiedOnlyHomeIds);
-      const ownerRowByHome = (verifiedOwnerRows || []).reduce((acc, r) => { acc[r.home_id] = r; return acc; }, {});
-      verifiedOnlyHomes = (verifiedHomes || []).map((h) => ({
-        ...h,
-        occupancy: { id: null, role: 'owner', is_active: true, start_at: null, end_at: null },
-        ownership_status: 'verified',
-        verification_tier: ownerRowByHome[h.id]?.verification_tier || null,
-        pending_claim_id: null,
-      }));
-    }
-
-    // Enrich occupancy-only homes with ownership status and pending claim data
-    const enrichedOccupied = occupiedHomes.map((h) => {
-      const ownerRow = ownerStatusMap[h.id];
-      const hasPendingClaim = !!pendingClaimMap[h.id];
-      return {
-        ...h,
-        ownership_status: ownerRow?.owner_status || (hasPendingClaim ? 'pending' : null),
-        verification_tier: ownerRow?.verification_tier || null,
-        pending_claim_id: (ownerRow?.owner_status === 'pending' || hasPendingClaim) ? (pendingClaimMap[h.id] || null) : null,
-      };
-    });
-
-    // Deduplicate: owned homes (with ownership metadata) take priority over pure occupancy entries
-    const byId = new Map();
-    for (const h of enrichedOccupied) byId.set(h.id, h);
-    for (const h of ownedWithOcc) byId.set(h.id, h);
-    for (const h of verifiedOnlyHomes) byId.set(h.id, h);
-
-    const homes = Array.from(byId.values());
-
-    const out = homes.map((h) => {
-      const row = ownerStatusMap[h.id];
-      const can_delete_home =
-        h.owner_id === userId
-        || (row?.owner_status === 'verified' && row?.is_primary_owner === true);
-      return {
-        ...h,
-        location: h.location ? parsePostGISPoint(h.location) : null,
-        can_delete_home,
-      };
-    });
-
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.json({ homes: out });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
-  }
+  res.set('Cache-Control', 'private, no-store');
+  try { res.json(await homeListService.read(req.user.id)); }
+  catch (err) { homeListService.sendError(res, err); }
 });
 
 /**
  * GET /api/homes/primary
- * Get the current user's primary home (for feed, location picker, etc.).
- * Resolves: active HomeOccupancy first, then verified HomeOwner, then legacy owner_id.
+ * Oldest currently authorized shared Home; personal setup is not residency.
  */
 router.get('/primary', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // 1. Active occupancy (oldest first = primary)
-    const { data: occ } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    let primaryHomeId = occ?.home_id || null;
-
-    if (!primaryHomeId) {
-      // 2. Verified owner without occupancy
-      const { data: ownerRow } = await supabaseAdmin
-        .from('HomeOwner')
-        .select('home_id')
-        .eq('subject_id', userId)
-        .eq('owner_status', 'verified')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      primaryHomeId = ownerRow?.home_id || null;
-    }
-
-    if (!primaryHomeId) {
-      // 3. Legacy: home where user is owner_id
-      const { data: owned } = await supabaseAdmin
-        .from('Home')
-        .select('id')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      primaryHomeId = owned?.id || null;
-    }
-
-    if (!primaryHomeId) {
-      return res.status(200).json({ home: null });
-    }
-
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .select('*')
-      .eq('id', primaryHomeId)
-      .single();
-
-    if (error || !home) {
-      return res.status(200).json({ home: null });
-    }
-
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.status(200).json({ home });
-  } catch (err) {
-    logger.error('Primary home fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to load primary home' });
-  }
+  res.set('Cache-Control', 'private, no-store');
+  try { res.json(await homeListService.read(req.user.id, { primary: true })); }
+  catch (err) { homeListService.sendError(res, err); }
 });
 
 /**
@@ -2376,56 +2119,9 @@ router.get('/:id/property-details', verifyToken, async (req, res) => {
  * Get all homes for current user (owned + occupied)
  */
 router.get('/', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // Get homes owned by user
-    const { data: ownedHomes, error: ownedError } = await supabaseAdmin
-      .from('Home')
-      .select('*, occupants:HomeOccupancy(count)')
-      .eq('owner_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (ownedError) {
-      logger.error('Error fetching owned homes', { error: ownedError.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch homes' });
-    }
-
-    // Get homes occupied by user
-    const { data: occupancies, error: occupiedError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select(`
-        home_id,
-        created_at,
-        home:home_id (
-          *,
-          owner:owner_id (
-            username,
-            name
-          )
-        )
-      `)
-      .eq('user_id', userId);
-
-    if (occupiedError) {
-      logger.error('Error fetching occupied homes', { error: occupiedError.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch homes' });
-    }
-
-    const occupiedHomes = occupancies.map(occ => ({
-      ...occ.home,
-      occupiedSince: occ.created_at
-    }));
-
-    res.json({
-      ownedHomes: ownedHomes || [],
-      occupiedHomes: occupiedHomes || []
-    });
-
-  } catch (err) {
-    logger.error('Homes fetch error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to fetch homes' });
-  }
+  res.set('Cache-Control', 'private, no-store');
+  try { res.json(await homeListService.read(req.user.id, { legacy: true })); }
+  catch (err) { homeListService.sendError(res, err); }
 });
 
 /**

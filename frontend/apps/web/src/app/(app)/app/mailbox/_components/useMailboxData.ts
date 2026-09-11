@@ -119,9 +119,9 @@ export default function useMailboxData() {
     const fetchHomes = async () => {
       try {
         const homesRes = await api.homes.getMyHomes();
-        const homes = homesRes?.homes || [];
+        const homes = (homesRes?.homes || []).filter(home => home.has_home_access === true);
         const mapped = homes.map((home) => {
-          const addressParts = [home.address, home.city, home.state, home.zip_code].filter(Boolean).join(', ');
+          const addressParts = [home.address, home.city, home.state, home.zipcode].filter(Boolean).join(', ');
           const homeName = (home as unknown as Record<string, string>).name || '';
           return {
             id: home.id,

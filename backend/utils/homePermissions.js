@@ -65,6 +65,10 @@ async function getUserAccess(homeId, userId) {
     checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
       .eq('home_id', homeId).eq('user_id', userId)),
   ]);
+  if (![roleRows, overrides].every(rows => Array.isArray(rows)
+    && rows.every(row => row && typeof row.permission === 'string' && typeof row.allowed === 'boolean'))) {
+    throw accessUnavailable();
+  }
   const allowed = new Set(ownerEntitlement ? HOME_PERMISSIONS : []);
   for (const row of (roleRows || [])) {
     if (row.allowed === true) allowed.add(row.permission);

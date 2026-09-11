@@ -6,32 +6,32 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Verified Home source: `53ce8200d42c75728764dfc37e7c544b2e989eda`, followed
-by the pause documentation checkpoint and pushed together. Final paused-head
-[PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks)
-must be refreshed; they are not certified here. #32 remains draft. #34 is draft
-at `e9ef2decb`, conflicts with master, and contains an unwired durable-tip draft.
-Superseded native runs may be cancelled by the existing concurrency rule; a
-cancelled run/aggregate is not final passing evidence.
+Latest local Home milestone: [current lists and browser private first use](home-list-authority-2026-09-11.md),
+continuing `943b08cc4`. All paused-head checks now pass in
+[run 34630614602](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34630614602).
+Verify the next pushed head separately through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
+#32 remains draft. #34 is draft at `e9ef2decb`, conflicts with master, and contains
+an unwired durable-tip draft. Superseded native runs may be cancelled by the
+existing concurrency rule; a cancelled aggregate is not final passing evidence.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
 broken; **Integrate** = source/schema/version gate; **Launch** = release prerequisite.
-There are 80 tracked items below, with H01 locally verified and 79 remaining.
+There are 80 tracked items below, with H01/H02/H06 locally verified and 77 remaining.
 No task is weighted equally, so the number of unchecked entries is not a percent
 of engineering effort or a reliable release date. Unit-test coverage is not an
 exit criterion. Actual records, UI states, retries and current access are.
 
 ## 1. Home identity and current access — active work
 
-- [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02-H08 are still open.
-- [ ] H02 **Fix:** Reconcile `/my-homes`, `/primary` and legacy root Home lists with expired/future/inactive memberships, frozen/archived Homes, revoked/disputed ownership and explicit denies. Real SDK/SQL reproduced stale exposure in the list/primary routes.
-- [ ] H03 **Fix:** Missing/failed Home, ownership and claim queries must produce safe, retryable errors, rather than empty results, false 404s, fabricated roles or raw database messages.
+- [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03-H05/H07-H08 remain open.
+- [x] H02 **Implemented and locally verified:** All three lists share current authority, safe errors and held-result retirement. Real SDK/SQL/HTTP authority and recovery matrix passes; see [the list repair](home-list-authority-2026-09-11.md). Final-head CI remains G05.
+- [ ] H03 **Fix (partial):** Detail/list read failures now produce safe retryable errors. Finish malformed/per-field detail/ownership identity projections with H04; do not infer overall closure from the bounded list matrix.
 - [ ] H04 **Fix:** Replace wildcard/raw owner/occupant exposure with appropriate fields and current per-field/member/ownership permissions; exclude inactive or pending occupants from active household projections.
 - [ ] H05 **Fix:** Separate saved address, private Home, verified address/property, residency, ownership and administrative role. Native “Verified Home” currently infers verification from owner authority or an owner's row.
-- [ ] H06 **Fix:** Home lists must use guarded deletion eligibility and truthful occupancy metadata, including verified owners without an occupancy and private creators; do not invent active admin membership.
+- [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
 - [ ] H07 **Verify:** Real create/save/join/invite onboarding must produce the intended role defaults. Reconcile the verified-member `home.view` gap without overriding explicit denies or granting membership from an address.
-- [ ] H08 **Verify:** Private first use, applicants, owners and ordinary members must reach the right useful/recovery screen through real Home-list/detail responses on web, iOS and Android. The completed native dashboard tests used a controlled Home shell.
+- [ ] H08 **Verify (partial):** Browser current owner, applicant privacy/destination and private setup list → real Tasks pass. Finish real onboarding and native list/detail useful/recovery screens for applicants, owners and ordinary members. Earlier native dashboard tests used a controlled Home shell.
 
 ## 2. Residency, ownership and leases
 
@@ -165,6 +165,7 @@ its own scope decisions; it is not silently counted as a missing v1 implementati
 - [Payment branch handoff](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/PROJECT_HANDOFF.md) and [durable-tip draft](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/paid-gig-tip-draft-checkpoint-2026-09-10.md).
 - Private real SDK/SQL identity baseline: `/private/tmp/pantopus-home-identity-baseline-r1.log` (exact fixture cleanup passed). No credentials or raw operator logs are committed.
 
-Next implementation: verify the paused checkpoint’s remote CI, then reconcile
-Home lists, safe identity and real onboarding/residency. Keep this
+Next implementation: verify the newest pushed head’s CI, then finish safe detail
+identity, native Home list/verification and real onboarding/residency. Paused
+`943b08cc4` now has all checks passing. Keep this
 inventory updated as evidence closes or adds individual items.

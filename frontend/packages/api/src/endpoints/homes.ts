@@ -237,12 +237,24 @@ export interface MyHomeOccupancy {
 }
 
 /** One of the current user's places (GET /api/homes/my-homes). */
-export interface MyHome extends Omit<Home, 'location'> {
+export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'state' | 'zip_code' | 'country' | 'created_at' | 'updated_at'> {
+  /** Shared fields are absent from personal verification entries. */
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zipcode: string | null;
+  created_at?: string;
+  updated_at?: string;
   /** PostGIS point parsed by the endpoint; null when unset. */
   location: Home['location'] | null;
   /** Optional display name (Home column not in the base Home type). */
   name?: string | null;
-  occupancy: MyHomeOccupancy;
+  occupancy: MyHomeOccupancy | null;
+  /** Shared household access, exact private setup, or personal verification progress. */
+  access_kind?: 'shared' | 'private_setup' | 'verification';
+  has_home_access?: boolean;
+  /** Effective authority; independent from the caller's residency/ownership record. */
+  role_base?: string | null;
   /** HomeOwner status — distinguishes verified owners from pending. */
   ownership_status?: 'verified' | 'pending' | 'rejected' | null;
   verification_tier?: string | null;

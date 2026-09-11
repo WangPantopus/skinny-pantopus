@@ -1,5 +1,47 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Home list authority and browser private first use — September 11
+
+Resumed from `943b08cc4` in `/private/tmp/pantopus-home-permission-boundaries`,
+branch `codex/home-permission-boundaries`. The paused head now passes every check,
+including CI OK, in [run 34630614602](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34630614602).
+Origin master remains `6a1013784`. #32/#34 are unfinished drafts; #34 is conflicted
+and its existing head checks pass. Verify the next pushed milestone's own CI.
+
+The [Home-list repair](home-list-authority-2026-09-11.md) replaces three divergent
+list readers with current JavaScript/SQL admission, safe card fields, actual
+occupancy or null, effective role, separate personal/private setup entries and
+guarded deletion eligibility. Frozen/archived/revoked/expired/future/denied Homes
+cannot return shared cards. Applicants receive only personal progress; exact
+private creators can enter Tasks without invented household membership or primary
+residency. Read errors remain retryable, and held cards/claims/eligibility retire
+when authority or personal claim state changes.
+
+HTTP/SQL/SDK r4 passes the authority/failure/recovery matrix and exact cleanup.
+Browser r3 verifies current roles/deletion, unavailable and malformed Retry,
+revocation, held account changes, lifecycle retirement, applicant privacy and
+real private setup list → Tasks with creation controls, including settled narrow
+layout. Login, ancillary APIs and lifecycle signals remain controlled. This does
+not prove native lists, real signup/join/invites or a new provider journey.
+The report preserves the invalid-enum fixture attempt, earlier incomplete resize
+capture, and backend logout transport failure/recheck. Final backend r3 passes 317 suites / 5,169 checks (16 existing skips); web r3
+passes 92 / 1,178. Strict types/lint and privacy gates pass. Detailed evidence
+and limitations are recorded there.
+
+**Next:** H03/H04 remaining detail/identity projections, H05/H07 real native
+verification and onboarding defaults (including the verified-member home.view
+gap), and H08 native list/detail/private-first-use acceptance; then native
+residency and the full remaining inventory. H02/H06 are locally verified; 77 of
+80 tracked entries remain open. Counts are not effort percentages. Reconcile the
+38 Home / 21 payment / 47 combined migration stream and final-head checks before
+merging. Paid services remain one final launch-preparation bundle.
+
+No migration, hosted mutation, merge, deployment or paid activation. Owner
+checkout remains on `939878b4` with its modified handoff and two untracked Place
+design files; paid worktree is clean at `e9ef2decb`. Owned SQL/API, web 18080,
+Android/iOS devices, signed products and private evidence are preserved. Both
+list fixtures clean their exact SQL; no persistent new listener is needed.
+
 ### Requested pause checkpoint — Home detail authority and full inventory
 
 This session is paused at the owner’s request for a fresh-session handoff.
