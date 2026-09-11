@@ -174,8 +174,9 @@ router.get('/:homeId/documents/:documentId/content', verifyToken, gate('docs.vie
       throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
     }
     const sha256 = file.metadata.upload_sha256;
-    if (file.file_path !== storage.documentKey(homeId, documentId, sha256)) throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
-    const bytes = await storage.download({ homeId, documentId, sha256, bucketName: file.metadata.storage_bucket });
+    const keyId = file.metadata.storage_key_id || documentId;
+    if (file.file_path !== storage.documentKey(homeId, keyId, sha256)) throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
+    const bytes = await storage.download({ homeId, documentId: keyId, sha256, bucketName: file.metadata.storage_bucket });
     res.set({
       'Cache-Control': 'private, no-store',
       'Pragma': 'no-cache',
@@ -200,7 +201,7 @@ router.delete('/:homeId/documents/:documentId', verifyToken, gate('docs.manage')
       throw fail('DOCUMENT_NOT_FOUND', 'Document not found.', 404);
     }
     if (!req.documentVisibilities.includes(visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this document.', 403);
-    if (file.file_path !== storage.documentKey(homeId, documentId, file.metadata.upload_sha256)) {
+    if (file.file_path !== storage.documentKey(homeId, file.metadata.storage_key_id || documentId, file.metadata.upload_sha256)) {
       throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
     }
     const result = await db.rpc('delete_home_document_file', {
@@ -217,7 +218,7 @@ router.delete('/:homeId/documents/:documentId', verifyToken, gate('docs.manage')
     let cleanupPending = deleted.metadata.storage_cleanup_pending !== false;
     if (cleanupPending) {
       try {
-        await storage.remove({ homeId, documentId, sha256: deleted.metadata.upload_sha256, bucketName: deleted.metadata.storage_bucket });
+        await storage.remove({ homeId, documentId: deleted.metadata.storage_key_id || documentId, sha256: deleted.metadata.upload_sha256, bucketName: deleted.metadata.storage_bucket });
         const saved = await db.from('File').update({ metadata: { ...deleted.metadata, storage_cleanup_pending: false } }).eq('id', documentId).eq('is_deleted', true);
         cleanupPending = Boolean(saved.error);
       } catch (error) {
@@ -227,6 +228,8 @@ router.delete('/:homeId/documents/:documentId', verifyToken, gate('docs.manage')
     res.status(cleanupPending ? 202 : 200).json({ deleted: true, cleanup_pending: cleanupPending });
   } catch (error) { next(error); }
 });
+
+router.use(require('./homeDocumentReplacement'));
 
 router.use((error, _req, res, _next) => {
   const status = error instanceof multer.MulterError ? (error.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : error.status || 503;

@@ -1631,12 +1631,8 @@ public struct HubTabRoot: View {
             DocumentDetailView(
                 homeId: homeId,
                 documentId: documentId,
-                onBack: { Task { @MainActor in pop() } },
-                onReplace: {
-                    Task { @MainActor in
-                        push(.uploadDocument(homeId: homeId))
-                    }
-                }
+                // swiftlint:disable:next trailing_closure
+                onBack: { Task { @MainActor in pop() } }
             )
         case let .documentSearch(homeId):
             DocumentSearchView(
@@ -3047,7 +3043,7 @@ public struct HubTabRoot: View {
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
                     onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
                 )
-            )
+            ) { showNavDrawer = true }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
                 viewModel: PlaceDetailViewModel(homeId: homeId, group: group)

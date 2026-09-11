@@ -2,16 +2,12 @@
 //  PostcardDTOs.swift
 //  Pantopus
 //
-//  DTOs for the postcard ownership-verification flow in
+//  DTOs for the postcard residency-verification flow in
 //  `backend/routes/homeOwnership.js`:
 //    - POST /api/homes/:id/request-postcard (line 2452)
 //    - POST /api/homes/:id/verify-postcard  (line 2548)
 //
-//  Note: the backend has no postcard *delivery-tracking* surface — the
-//  request response carries only `id` / `requested_at` / `expires_at`,
-//  not a USPS mailed/in-transit/delivered status. The A12.7 timeline is
-//  therefore driven by `PostcardVerificationSampleData`. Field-for-field
-//  parity with the Android `PostcardDtos.kt`.
+//  Live status exposes saved requests and receipt uncertainty, not USPS tracking.
 //
 
 import Foundation
@@ -33,6 +29,12 @@ public struct PostcardInfoDTO: Decodable, Sendable, Hashable {
 public struct RequestPostcardResponse: Decodable, Sendable, Hashable {
     public let message: String
     public let postcard: PostcardInfoDTO
+    public let deliveryUnknown: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case message, postcard
+        case deliveryUnknown = "delivery_unknown"
+    }
 }
 
 /// Body for `POST /api/homes/:id/verify-postcard`. Mirrors

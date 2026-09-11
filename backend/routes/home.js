@@ -11,11 +11,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
-const {
-  generatePostcardCode,
-  hashPostcardCode,
-  dispatchPostcardCode,
-} = require('../utils/postcardDispatch');
+const homePostcardService = require('../services/homePostcardService');
 const {
   checkHomePermission,
   isVerifiedOwner,
@@ -6984,13 +6980,14 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
     // Determine how to route this claim based on authority count.
 
     // 1. Count active authorities
-    const { data: authorities } = await supabaseAdmin
+    const { data: authorities, error: authoritiesError } = await supabaseAdmin
       .from('HomeOccupancy')
       .select('user_id')
       .eq('home_id', homeId)
       .eq('is_active', true)
       .in('role_base', ['owner', 'admin', 'manager']);
-    const authorityCount = authorities?.length || 0;
+    if (authoritiesError || !authorities) throw new Error('Could not check household authorities');
+    const authorityCount = authorities.length;
 
     // 2. Get home creator
     const { data: homeForCreator } = await supabaseAdmin
@@ -7018,42 +7015,9 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
 
     } else if (authorityCount === 0) {
       // PATH 2 — External cold-start: no authorities, not the creator
-      const code = generatePostcardCode();
-      const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
-
-      const { data: postcard, error: pcError } = await supabaseAdmin
-        .from('HomePostcardCode')
-        .insert({
-          home_id: homeId,
-          user_id: userId,
-          code_hash: hashPostcardCode(code),
-          status: 'pending',
-          expires_at: expiresAt,
-        })
-        .select('id')
-        .single();
-
-      if (pcError) {
-        logger.error('Failed to create postcard code for cold-start', { error: pcError.message });
-      }
-
-      // UX-01: actually mail it. This branch used to return "a verification
-      // code will be mailed to this address" while nothing dispatched.
-      const coldStartMail = await dispatchPostcardCode(home, code);
-      if (!coldStartMail.success) {
-        if (postcard?.id) {
-          await supabaseAdmin
-            .from('HomePostcardCode')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', postcard.id);
-        }
-        logger.error('Cold-start postcard dispatch failed', {
-          homeId, userId, error: coldStartMail.error,
-        });
-        return res.status(502).json({
-          error: 'We could not send mail to this address right now. Please try again later.',
-        });
-      }
+      const coldStartMail = await homePostcardService.request(homeId, userId);
+      if (coldStartMail.status >= 400) return res.status(coldStartMail.status).json(coldStartMail.body);
+      const postcard = coldStartMail.body.postcard;
 
       await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
       await supabaseAdmin
@@ -7067,9 +7031,10 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
         .eq('id', claim.id);
 
       return res.status(201).json({
-        message: 'A verification code will be mailed to this address. Enter it to gain access.',
+        message: coldStartMail.body.message,
         claim,
         postcard_requested: true,
+        delivery_unknown: coldStartMail.body.delivery_unknown,
       });
 
     } else {
@@ -7091,42 +7056,11 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
 
       if (authoritiesStale) {
         // All authorities are stale — treat as cold-start (PATH 2 fallback)
-        const code = generatePostcardCode();
-        const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
+        const staleMail = await homePostcardService.request(homeId, userId);
+        if (staleMail.status >= 400) return res.status(staleMail.status).json(staleMail.body);
+        const postcard = staleMail.body.postcard;
 
-        const { data: postcard, error: pcError } = await supabaseAdmin
-          .from('HomePostcardCode')
-          .insert({
-            home_id: homeId,
-            user_id: userId,
-            code_hash: hashPostcardCode(code),
-            status: 'pending',
-            expires_at: expiresAt,
-          })
-          .select('id')
-          .single();
-
-        if (pcError) {
-          logger.error('Failed to create postcard code for stale-authority cold-start', { error: pcError.message });
-        }
-
-        const staleMail = await dispatchPostcardCode(home, code);
-        if (!staleMail.success) {
-          if (postcard?.id) {
-            await supabaseAdmin
-              .from('HomePostcardCode')
-              .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-              .eq('id', postcard.id);
-          }
-          logger.error('Stale-authority postcard dispatch failed', {
-            homeId, userId, error: staleMail.error,
-          });
-          return res.status(502).json({
-            error: 'We could not send mail to this address right now. Please try again later.',
-          });
-        }
-
-        await applyOccupancyTemplate(homeId, userId, effectiveRole, 'pending_postcard');
+        await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
         await supabaseAdmin
           .from('HomeResidencyClaim')
           .update({
@@ -7138,9 +7072,10 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
           .eq('id', claim.id);
 
         return res.status(201).json({
-          message: 'A verification code will be mailed to this address. Enter it to gain access.',
+          message: staleMail.body.message,
           claim,
           postcard_requested: true,
+          delivery_unknown: staleMail.body.delivery_unknown,
         });
       }
 

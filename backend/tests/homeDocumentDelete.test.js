@@ -83,6 +83,12 @@ test('retains a private cleanup tombstone after storage failure and reconciles t
   expect((await request(app).delete(endpoint)).body).toEqual({ deleted: true, cleanup_pending: false });
   expect(bucket.remove).toHaveBeenCalledTimes(2);
 });
+test('deletes the current replacement key while keeping the stable document identity', async () => {
+  db.getTable('File')[0].metadata.storage_key_id = homeId;
+  db.getTable('File')[0].file_path = `${homeId}/${homeId}/${sha}`;
+  expect((await request(app).delete(endpoint)).status).toBe(200);
+  expect(bucket.remove).toHaveBeenCalledWith([`${homeId}/${homeId}/${sha}`]);
+});
 
 test('a database failure cannot delete the only stored copy', async () => {
   rpc.mockResolvedValue({ data: null, error: { message: 'offline' } });

@@ -314,24 +314,13 @@ open class VerifyLandlordWizardViewModel
                     pendingEvent.value = VerifyLandlordOutboundEvent.OpenPostcardVerification(homeId)
                 }
                 is NetworkResult.Failure -> {
-                    // A pending/duplicate code (400) or address cap (429)
-                    // means a postcard is already on its way — proceed to
-                    // enter it. Other failures surface inline so the user
-                    // can retry.
-                    if (result.error.code == HTTP_BAD_REQUEST || result.error.code == HTTP_TOO_MANY_REQUESTS) {
-                        _state.update { it.copy(submitState = VerifyLandlordSubmitState.Submitted) }
-                        pendingEvent.value = VerifyLandlordOutboundEvent.OpenPostcardVerification(homeId)
-                    } else {
-                        _state.update {
-                            it.copy(
-                                submitState =
-                                    VerifyLandlordSubmitState.Error(
-                                        result.error.message.ifEmpty {
-                                            "Couldn't request the verification postcard. Try again."
-                                        },
-                                    ),
-                            )
-                        }
+                    _state.update {
+                        it.copy(
+                            submitState =
+                                VerifyLandlordSubmitState.Error(
+                                    result.error.message.ifEmpty { "Couldn't request the verification postcard. Try again." },
+                                ),
+                        )
                     }
                 }
             }
@@ -416,6 +405,5 @@ open class VerifyLandlordWizardViewModel
             private const val HTTP_BAD_REQUEST = 400
             private const val HTTP_NOT_FOUND = 404
             private const val HTTP_CONFLICT = 409
-            private const val HTTP_TOO_MANY_REQUESTS = 429
         }
     }

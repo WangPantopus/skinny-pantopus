@@ -373,4 +373,16 @@ class VerifyLandlordWizardViewModelTest {
         vm.setEmail("typing@")
         assertNull(vm.state.value.errors)
     }
+
+    @Test fun postcard_request_failure_does_not_claim_mail_was_sent() =
+        runTest {
+            for (status in listOf(400, 429)) {
+                coEvery { verificationRepository.requestPostcard(any()) } returns
+                    NetworkResult.Failure(NetworkError.Server(status, "Request rejected"))
+                val vm = makeVm()
+                vm.startPostcardFallback()
+                assertNull(vm.pendingEvent.value)
+                assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+            }
+        }
 }

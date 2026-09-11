@@ -189,7 +189,7 @@ class PostcardVerificationViewModelTest {
             val repo: HomeVerificationRepository = mockk()
             coEvery { repo.verifyPostcard(any(), any()) } returns
                 NetworkResult.Failure(
-                    NetworkError.ClientError(429, """{"error":"Too many attempts. Request a new code."}"""),
+                    NetworkError.ClientError(429, """{"error":"Too many attempts. Request a new code.","code":"LOCKED"}"""),
                 )
             val vm = liveVm(repo)
             vm.markHasCode()
@@ -251,4 +251,60 @@ class PostcardVerificationViewModelTest {
         assertNotNull(vm.pendingEvent.value)
         assertEquals(PostcardVerificationOutboundEvent.Dismiss, vm.pendingEvent.value)
     }
+
+    @Test fun live_status_reports_uncertainty_without_requesting_mail() =
+        runTest {
+            val repo = mockk<HomeVerificationRepository>()
+            coEvery { repo.postcardStatus("home-1") } returns
+                NetworkResult.Success(
+                    RequestPostcardResponse("Mail delivery is not confirmed.", PostcardInfoDto("pc-1"), true),
+                )
+            val vm =
+                PostcardVerificationViewModel(
+                    SavedStateHandle(mapOf(POSTCARD_VERIFICATION_HOME_ID_KEY to "home-1")),
+                    repo,
+                )
+            assertFalse(vm.usesSamplePresentation)
+            vm.loadStatus()
+            assertTrue(vm.state.value.deliveryUnknown)
+            assertFalse(vm.state.value.needsNewCode)
+            assertEquals("Mail delivery is not confirmed.", vm.state.value.notice?.text)
+            io.mockk.coVerify(exactly = 0) { repo.requestPostcard(any()) }
+        }
+
+    @Test fun missing_status_allows_request_but_read_failure_does_not_invent_mail() =
+        runTest {
+            val repo = mockk<HomeVerificationRepository>()
+            coEvery { repo.postcardStatus("home-1") } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(404, "No postcard")),
+                    NetworkResult.Failure(NetworkError.Server(503, "Unavailable")),
+                )
+            val vm =
+                PostcardVerificationViewModel(
+                    SavedStateHandle(mapOf(POSTCARD_VERIFICATION_HOME_ID_KEY to "home-1")),
+                    repo,
+                )
+            vm.loadStatus()
+            assertTrue(vm.state.value.needsNewCode)
+            vm.loadStatus()
+            assertTrue(vm.state.value.needsNewCode)
+            assertEquals(true, vm.state.value.notice?.isError)
+            assertFalse(vm.state.value.isLoadingStatus)
+        }
+
+    @Test fun temporary_throttle_preserves_code_without_requesting_more_mail() =
+        runTest {
+            val repo = mockk<HomeVerificationRepository>()
+            coEvery { repo.verifyPostcard(any(), any()) } returns
+                NetworkResult.Failure(
+                    NetworkError.ClientError(429, """{"error":"Too many verification attempts. Please try again later."}"""),
+                )
+            val vm = liveVm(repo)
+            vm.updateCode("123456")
+            vm.verifyTapped()
+            assertFalse(vm.state.value.needsNewCode)
+            assertEquals("123456", vm.state.value.codeInput)
+            io.mockk.coVerify(exactly = 0) { repo.requestPostcard(any()) }
+        }
 }

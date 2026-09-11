@@ -18,7 +18,10 @@ struct PlaceDashboardView: View {
     @State private var showSwitcher = false
     @State private var showVerify = false
 
-    init(viewModel: PlaceDashboardViewModel) {
+    private let onOpenMenu: () -> Void
+
+    init(viewModel: PlaceDashboardViewModel, onOpenMenu: @escaping () -> Void = {}) {
+        self.onOpenMenu = onOpenMenu
         _viewModel = State(initialValue: viewModel)
     }
 
@@ -179,6 +182,15 @@ struct PlaceDashboardView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Switch place")
+
+            Button(action: onOpenMenu) {
+                Icon(.menu, size: 20, color: Theme.Color.appText)
+                    .frame(width: Spacing.s12, height: Spacing.s12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Menu")
+            .accessibilityIdentifier("place.menu")
         }
     }
 

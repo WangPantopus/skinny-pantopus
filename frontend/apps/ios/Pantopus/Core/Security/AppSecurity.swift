@@ -93,7 +93,9 @@ public final class AppLockManager {
     /// fields (`setupPrompt`, `lockAfterMs`, `backgroundAt`, `unlockedAt`)
     /// stay in `UserDefaults`.
     private let secureStore: any SecureStore
+    private let makeContext: () -> LAContext
     private var userID: String?
+    private var identityGeneration: UInt = 0
     private var attemptedCurrentLock = false
 
     /// RN's `SENSITIVE_AUTH_GRACE_MS` (`contexts/AppLockContext.tsx:32`) —
@@ -120,18 +122,24 @@ public final class AppLockManager {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         secureStore = KeychainStore()
+        makeContext = { LAContext() }
         refreshCapability()
     }
 
     /// Test / preview initialiser with an injectable secure store.
-    init(defaults: UserDefaults, secureStore: any SecureStore) {
+    init(defaults: UserDefaults, secureStore: any SecureStore, makeContext: @escaping () -> LAContext = { LAContext() }) {
         self.defaults = defaults
         self.secureStore = secureStore
+        self.makeContext = makeContext
         refreshCapability()
     }
 
     public func configure(userID: String?) {
         guard self.userID != userID else { return }
+        identityGeneration &+= 1
+        lastSensitiveAuthAt = nil
+        isPrompting = false
+        backgroundedWhilePrompting = false
         self.userID = userID
         attemptedCurrentLock = false
         lastError = nil
@@ -238,7 +246,9 @@ public final class AppLockManager {
             if source == .postLoginPrompt { persistSetupPromptState(.declined) }
             return false
         }
+        let generation = identityGeneration
         let succeeded = await authenticate(reason: "Turn on app lock for Pantopus")
+        guard generation == identityGeneration else { return false }
         guard succeeded else {
             if source == .postLoginPrompt { persistSetupPromptState(.declined) }
             return false
@@ -275,15 +285,20 @@ public final class AppLockManager {
     public func verifySensitiveAction(reason: String) async -> SensitiveActionOutcome {
         refreshCapability()
         switch capability {
-        case .notAvailable, .notEnrolled, .passcodeNotSet:
+        case .passcodeNotSet:
             return .verified
-        case .invalidContext:
+        case .notAvailable, .notEnrolled, .invalidContext:
             return .failed(message: capability.statusText)
         case .available:
             break
         }
         lastError = nil
-        if await authenticate(reason: reason) {
+        let generation = identityGeneration
+        let verified = await authenticate(reason: reason)
+        guard generation == identityGeneration else {
+            return .failed(message: "Your account changed. Please verify again.")
+        }
+        if verified {
             lastSensitiveAuthAt = Date()
             return .verified
         }
@@ -291,20 +306,12 @@ public final class AppLockManager {
         return message == Self.cancelledMessage ? .cancelled : .failed(message: message)
     }
 
-    /// `true` when a successful sensitive-action check happened inside the
-    /// grace window. Mirrors RN `AppLockContext.isWithinGracePeriod`.
-    public func isWithinSensitiveGracePeriod(
-        _ grace: TimeInterval = AppLockManager.sensitiveAuthGrace
-    ) -> Bool {
-        guard let lastSensitiveAuthAt else { return false }
-        return Date().timeIntervalSince(lastSensitiveAuthAt) < grace
-    }
-
     /// The single string `message(for:)` produces for every user- /
     /// system-initiated cancel, matched by `verifySensitiveAction`.
     static let cancelledMessage = "Authentication was cancelled."
 
     public func clearTransientState() {
+        identityGeneration &+= 1
         isLocked = false
         isPrompting = false
         attemptedCurrentLock = false
@@ -318,7 +325,7 @@ public final class AppLockManager {
     }
 
     public func refreshCapability() {
-        let context = LAContext()
+        let context = makeContext()
         var error: NSError?
         let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
@@ -335,9 +342,11 @@ public final class AppLockManager {
     }
 
     private func authenticate(reason: String) async -> Bool {
+        let generation = identityGeneration
         isPrompting = true
         backgroundedWhilePrompting = false
         let succeeded = await evaluate(reason: reason)
+        guard generation == identityGeneration else { return false }
         isPrompting = false
         // A background arrived mid-prompt. If the prompt then *succeeded*, the
         // cover was the OS auth sheet itself and the unlock stands. Any other
@@ -352,7 +361,8 @@ public final class AppLockManager {
     }
 
     private func evaluate(reason: String) async -> Bool {
-        let context = LAContext()
+        let generation = identityGeneration
+        let context = makeContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
             capability = Self.capability(for: error)
@@ -362,9 +372,11 @@ public final class AppLockManager {
         }
         do {
             let success = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
+            guard generation == identityGeneration else { return false }
             if !success { lastError = "Authentication failed. Try again." }
             return success
         } catch let error as LAError {
+            guard generation == identityGeneration else { return false }
             if [.biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet, .invalidContext].contains(error.code) {
                 capability = Self.capability(for: error as NSError)
                 autoDisableForUnavailableCapability()
@@ -372,13 +384,14 @@ public final class AppLockManager {
             lastError = Self.message(for: error)
             return false
         } catch {
+            guard generation == identityGeneration else { return false }
             lastError = error.localizedDescription
             return false
         }
     }
 
     private func autoDisableForUnavailableCapability() {
-        guard capability != .available, let userID else { return }
+        guard capability == .passcodeNotSet, let userID else { return }
         writeEnabledPreference(false, userID: userID)
         preferenceEnabled = false
         isLocked = false
@@ -431,44 +444,13 @@ public final class AppLockManager {
         defaults.removeObject(forKey: key("enabled", userID))
     }
 
-    // MARK: - Presence (persistent login L2 gate)
-
-    /// One-shot `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` in
-    /// front of "Continue as X" (design §3 / CONTRACT "L2 gate"). Unlike
-    /// `verifySensitiveAction`, a device with no passcode and no biometrics
-    /// does **not** pass through — it reports `.unavailable` so the caller
-    /// falls back to the login screen (no OS lock ⇒ L3). Independent of the
-    /// app-lock preference and of the signed-in user.
-    public func verifyPresence(reason: String) async -> PresenceOutcome {
-        refreshCapability()
-        switch capability {
-        case .notAvailable, .notEnrolled, .passcodeNotSet:
-            return .unavailable
-        case .invalidContext:
-            return .failed(capability.statusText)
-        case .available:
-            break
-        }
-        lastError = nil
-        if await authenticate(reason: reason) {
-            lastSensitiveAuthAt = Date()
-            return .verified
-        }
-        let message = lastError ?? "We couldn't verify your identity. Please try again."
-        if message == Self.cancelledMessage { return .cancelled }
-        // The prompt itself discovered the OS lock is gone (passcode removed
-        // while the app was suspended) — same fallback as up front.
-        if capability != .available { return .unavailable }
-        return .failed(message)
-    }
-
     private static func capability(for error: NSError?) -> AppLockCapability {
-        guard let code = (error as? LAError)?.code else { return .notAvailable }
+        guard let code = (error as? LAError)?.code else { return .invalidContext }
         switch code {
         case .biometryNotEnrolled: return .notEnrolled
         case .passcodeNotSet: return .passcodeNotSet
         case .invalidContext: return .invalidContext
-        default: return .notAvailable
+        default: return .invalidContext
         }
     }
 
@@ -690,5 +672,66 @@ public extension View {
         onSignOut: @escaping @MainActor () async -> Void
     ) -> some View {
         modifier(AppLockSealModifier(isLocked: isLocked, manager: manager, onSignOut: onSignOut))
+    }
+}
+
+@MainActor
+public extension AppLockManager {
+    // MARK: - Presence (persistent login L2 gate)
+
+    /// One-shot `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` in
+    /// front of "Continue as X" (design §3 / CONTRACT "L2 gate"). Unlike
+    /// `verifySensitiveAction`, a device with no passcode and no biometrics
+    /// does **not** pass through — it reports `.unavailable` so the caller
+    /// falls back to the login screen (no OS lock ⇒ L3). Independent of the
+    /// app-lock preference and of the signed-in user.
+    func verifyPresence(reason: String) async -> PresenceOutcome {
+        refreshCapability()
+        switch capability {
+        case .notAvailable, .notEnrolled, .passcodeNotSet:
+            return .unavailable
+        case .invalidContext:
+            return .failed(capability.statusText)
+        case .available:
+            break
+        }
+        lastError = nil
+        let generation = identityGeneration
+        let succeeded = await authenticate(reason: reason)
+        guard generation == identityGeneration else {
+            return .failed("Your account changed. Please verify again.")
+        }
+        if succeeded {
+            lastSensitiveAuthAt = Date()
+            return .verified
+        }
+        let message = lastError ?? "We couldn't verify your identity. Please try again."
+        if message == Self.cancelledMessage { return .cancelled }
+        // The prompt itself discovered the OS lock is gone (passcode removed
+        // while the app was suspended) — same fallback as up front.
+        if capability != .available { return .unavailable }
+        return .failed(message)
+    }
+
+    /// Grace applies only while device authentication is available. An OS
+    /// failure is never evidence that the device has no credential.
+    func verifySensitiveScreen(
+        reason: String,
+        gracePeriod: TimeInterval = AppLockManager.sensitiveAuthGrace
+    ) async -> SensitiveActionOutcome {
+        refreshCapability()
+        if capability == .available, isWithinSensitiveGracePeriod(gracePeriod) {
+            return .verified
+        }
+        return await verifySensitiveAction(reason: reason)
+    }
+
+    /// `true` when a successful sensitive-action check happened inside the
+    /// grace window. Mirrors RN `AppLockContext.isWithinGracePeriod`.
+    func isWithinSensitiveGracePeriod(
+        _ grace: TimeInterval = AppLockManager.sensitiveAuthGrace
+    ) -> Bool {
+        guard let lastSensitiveAuthAt else { return false }
+        return Date().timeIntervalSince(lastSensitiveAuthAt) < grace
     }
 }

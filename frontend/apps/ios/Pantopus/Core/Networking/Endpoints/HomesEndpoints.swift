@@ -384,7 +384,7 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/documents/\(documentId)/content")
     }
 
-    /// `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:190`.
+    /// `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:191`.
     public static func deleteDocument(homeId: String, documentId: String) -> Endpoint {
         Endpoint(method: .delete, path: "/api/homes/\(homeId)/documents/\(documentId)")
     }
@@ -630,9 +630,15 @@ public enum HomesEndpoints {
     /// `POST /api/homes/:id/request-postcard` — route
     /// `backend/routes/homeOwnership.js:2452`. Mails a verification code
     /// to the home address; takes no request body. Rate-limited; returns
-    /// 400 when a code is already pending and 429 at the address cap.
+    /// 200 on reuse, 202 when delivery is uncertain, and 429 at the address cap.
     public static func requestPostcard(homeId: String) -> Endpoint {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/request-postcard")
+    }
+
+    /// `GET /api/homes/:id/postcard` — route `backend/routes/homeOwnership.js:2553`.
+    /// Read the caller's pending postcard without requesting more mail.
+    public static func postcardStatus(homeId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/postcard")
     }
 
     /// `POST /api/homes/:id/verify-postcard` — route

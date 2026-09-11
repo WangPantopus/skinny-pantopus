@@ -21,6 +21,7 @@ const logger = require('../utils/logger');
 const lobMailProvider = require('../services/addressValidation/lobMailProvider');
 const mailVendorService = require('../services/addressValidation/mailVendorService');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homePostcardService = require('../services/homePostcardService');
 
 /** How far a webhook timestamp may be from now before it is treated as a replay. */
 const MAX_SIGNATURE_AGE_MS = 5 * 60 * 1000;
@@ -72,7 +73,7 @@ router.post('/', async (req, res) => {
   const postcardId = event.body?.id || event.reference_id;
 
   if (!eventType || !postcardId) {
-    logger.warn('Lob webhook: missing event_type or postcard ID', { event });
+    logger.warn('Lob webhook: missing event_type or postcard ID');
     return res.status(400).json({ error: 'Missing event_type or postcard ID' });
   }
 
@@ -111,13 +112,18 @@ router.post('/', async (req, res) => {
 
   // ── 5. Process the event ──────────────────────────────────
   try {
-    const result = await mailVendorService.processWebhookEvent(
+    const handler = event.body?.metadata?.pantopus_home_postcard_id ? homePostcardService : mailVendorService;
+    const result = await handler.processWebhookEvent(
       postcardId,
       eventType,
       event,
     );
 
     if (!result.success) {
+      if (result.retryable) {
+        if (event.id) await supabaseAdmin.from('LobWebhookEvent').delete().eq('lob_event_id', event.id);
+        return res.status(503).json({ error: 'Mail status could not be saved. Please retry.' });
+      }
       // Still return 200 to prevent Lob from retrying for "not found" cases
       logger.warn('Lob webhook: event processing issue', {
         postcardId,
@@ -135,8 +141,10 @@ router.post('/', async (req, res) => {
       stack: err.stack,
     });
 
-    // Return 200 to prevent infinite retries
-    return res.json({ received: true, error: err.message });
+    // Release this event's claim so Lob can retry a transient processing
+    // failure instead of permanently acknowledging a lost receipt.
+    if (event.id) await supabaseAdmin.from('LobWebhookEvent').delete().eq('lob_event_id', event.id);
+    return res.status(503).json({ error: 'Mail status could not be saved. Please retry.' });
   }
 });
 

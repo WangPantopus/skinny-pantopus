@@ -203,6 +203,34 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// Replace private bytes — route `backend/routes/homeDocumentReplacement.js:62`.
+    public func replaceHomeDocument(
+        homeId: String,
+        documentId: String,
+        uploadId: String,
+        expectedVersion: String,
+        file: MultipartFile
+    ) async throws -> CreateDocumentResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/homes/\(homeId)/documents/\(documentId)/replace")
+        let fields = ["upload_id": uploadId, "expected_version": expectedVersion]
+        let filename = file.filename.replacingOccurrences(of: "[\\\"\\\\\\r\\n]", with: "_", options: .regularExpression)
+        let part = MultipartFile(fieldName: "file", filename: filename, mimeType: file.mimeType, data: file.data)
+        let body = Self.buildBody(boundary: boundary, file: part, fields: fields)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(CreateDocumentResponse.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            let payload = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+            throw APIError.clientError(status: http.statusCode, message: payload?["error"] ?? "Couldn't replace this file.")
+        default:
+            throw APIError.server(status: http.statusCode, body: "Couldn't replace this file. Try again.")
+        }
+    }
+
     /// Upload one or more files to `POST /api/upload/post-media/:postId`.
     /// Each part uses the field name `files`, matching the web client.
     public func uploadPostMedia(

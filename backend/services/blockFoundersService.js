@@ -561,6 +561,7 @@ async function sendInvite({ home, userId, recipient }) {
   try {
     lob = await provider.sendCustomPostcard(address, {
       description: 'Pantopus block invite',
+      useType: 'marketing',
       frontHtml: inviteFrontHtml(),
       backHtml: inviteBackHtml({ street: await streetOnly(home), verifiedCount, optOutCode }),
     });

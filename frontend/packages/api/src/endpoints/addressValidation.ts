@@ -142,6 +142,8 @@ export type MailVerifyStartResponse = {
   verification_id: string;
   address_id: string;
   status: MailVerificationStatus;
+  /** Request retained, but the mail provider has not confirmed acceptance. */
+  delivery_unknown?: boolean;
   expires_at: string;
   cooldown_until: string;
   max_resends: number;
@@ -164,6 +166,7 @@ export type MailVerifyConfirmResponse = {
 export type MailVerifyStatusResponse = {
   verification_id: string;
   status: MailVerificationStatus;
+  delivery_unknown?: boolean;
   expires_at: string;
   cooldown_until: string;
   resends_remaining: number;

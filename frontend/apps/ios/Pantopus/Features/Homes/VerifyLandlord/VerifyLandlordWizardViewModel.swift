@@ -314,18 +314,10 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             submitState = .submitted
             pendingEvent = .openPostcardVerification(homeId: homeId)
         case let .failure(error):
-            // A pending/duplicate code (400) or address cap (429) means a
-            // postcard is already on its way — proceed to enter it. Other
-            // failures surface inline so the user can retry.
-            if case let .clientError(status, _) = (error as? APIError), status == 400 || status == 429 {
-                submitState = .submitted
-                pendingEvent = .openPostcardVerification(homeId: homeId)
-            } else {
-                submitState = .error(
-                    message: (error as? APIError)?.errorDescription
-                        ?? "Couldn't request the verification postcard. Try again."
-                )
-            }
+            submitState = .error(
+                message: (error as? APIError)?.errorDescription
+                    ?? "Couldn't request the verification postcard. Try again."
+            )
         }
     }
 

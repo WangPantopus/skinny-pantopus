@@ -216,6 +216,7 @@ describe('invites', () => {
     expect(send).toHaveBeenCalledTimes(1);
     const [addr, card] = send.mock.calls[0];
     expect(addr.line1).toBe('1425 SE Oak St');
+    expect(card.useType).toBe('marketing');
     // Sender anonymity: the card names the street, never the house.
     expect(card.backHtml).toContain('SE Oak St');
     expect(card.backHtml).not.toContain('1421');
