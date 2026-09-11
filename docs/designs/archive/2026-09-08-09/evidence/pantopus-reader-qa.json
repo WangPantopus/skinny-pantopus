@@ -1,0 +1,46 @@
+{
+  "mode": "reader",
+  "checks": [
+    {
+      "label": "reader one title",
+      "pass": true
+    },
+    {
+      "label": "reader sections present",
+      "pass": true
+    },
+    {
+      "label": "appendices integrated",
+      "pass": true
+    },
+    {
+      "label": "reader local anchors resolve",
+      "pass": true
+    },
+    {
+      "label": "reader desktop document fits",
+      "pass": true
+    },
+    {
+      "label": "reader theme toggles",
+      "pass": true
+    },
+    {
+      "label": "reader mobile document fits",
+      "pass": true
+    },
+    {
+      "label": "reader mobile contents navigate",
+      "pass": true
+    },
+    {
+      "label": "reader print document fits",
+      "pass": true
+    },
+    {
+      "label": "no browser script errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

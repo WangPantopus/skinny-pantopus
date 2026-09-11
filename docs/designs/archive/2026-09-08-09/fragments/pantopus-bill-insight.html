@@ -1,0 +1,134 @@
+<div id="pantopus-bill-insight" aria-label="Pantopus bill explanation concept">
+  <style>
+    #pantopus-bill-insight {
+      --pp-surface: light-dark(#ffffff, #15202d);
+      --pp-text: light-dark(#16283a, #edf3f8);
+      --pp-muted: light-dark(#546779, #b6c7d6);
+      --pp-line: light-dark(#dce5ed, #3a4d60);
+      --pp-track: light-dark(#e9f0f5, #2d3c4c);
+      --pp-accent: light-dark(#0077a5, #73cef3);
+      --pp-on-accent: light-dark(#ffffff, #102331);
+      --pp-soft: light-dark(#eff8fc, #1b3443);
+      --pp-usage: light-dark(#4b859e, #75b2cb);
+      --pp-rate: light-dark(#bc6b31, #e8ab77);
+      --pp-fees: light-dark(#786a9c, #b3a3d4);
+      color: var(--pp-text);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    #pantopus-bill-insight * { box-sizing: border-box; }
+    #pantopus-bill-insight .pp-window { background: var(--pp-surface); border: 1px solid var(--pp-line); border-radius: 20px; padding: 24px; }
+    #pantopus-bill-insight .pp-top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+    #pantopus-bill-insight .pp-brand { color:var(--pp-accent); font-weight:500; }
+    #pantopus-bill-insight .pp-muted { color:var(--pp-muted); }
+    #pantopus-bill-insight h3 { margin:0 0 8px; font-weight:500; }
+    #pantopus-bill-insight p { margin:0; }
+    #pantopus-bill-insight .pp-summary { margin:0 0 22px; }
+    #pantopus-bill-insight .pp-comparison { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:22px 0; }
+    #pantopus-bill-insight .pp-total { display:grid; gap:4px; margin-bottom:10px; }
+    #pantopus-bill-insight .pp-track { height:10px; background:var(--pp-track); border-radius:3px; overflow:hidden; }
+    #pantopus-bill-insight .pp-fill { height:100%; background:var(--pp-accent); width:0; transition:width 220ms ease; }
+    #pantopus-bill-insight .pp-past { background:var(--pp-muted); }
+    #pantopus-bill-insight .pp-scenarios { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+    #pantopus-bill-insight button { font:inherit; color:var(--pp-text); border:1px solid var(--pp-line); background:var(--pp-surface); border-radius:9px; padding:10px 13px; min-height:44px; cursor:pointer; }
+    #pantopus-bill-insight button[aria-pressed="true"] { background:var(--pp-accent); color:var(--pp-on-accent); border-color:var(--pp-accent); }
+    #pantopus-bill-insight .pp-heading { font-weight:500; margin-bottom:14px; }
+    #pantopus-bill-insight .pp-reason { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px 14px; padding:13px 0; border-top:1px solid var(--pp-line); }
+    #pantopus-bill-insight .pp-evidence { grid-column:1/-1; color:var(--pp-muted); }
+    #pantopus-bill-insight .pp-reason .pp-track { grid-column:1/-1; height:8px; }
+    #pantopus-bill-insight .pp-usage { background:var(--pp-usage); }
+    #pantopus-bill-insight .pp-rate { background:var(--pp-rate); }
+    #pantopus-bill-insight .pp-fees { background:var(--pp-fees); }
+    #pantopus-bill-insight .pp-number { font-variant-numeric:tabular-nums; white-space:nowrap; }
+    #pantopus-bill-insight details { border-top:1px solid var(--pp-line); padding-top:16px; margin-top:8px; }
+    #pantopus-bill-insight summary { cursor:pointer; min-height:44px; display:list-item; color:var(--pp-accent); }
+    #pantopus-bill-insight .pp-source { color:var(--pp-muted); padding:8px 0; }
+    #pantopus-bill-insight .pp-status { background:var(--pp-soft); padding:12px; margin:18px 0 0; border-radius:8px; }
+    @media(max-width:420px) { #pantopus-bill-insight .pp-window { padding:16px; } #pantopus-bill-insight .pp-comparison { gap:12px; } }
+    @media(prefers-reduced-motion:reduce) { #pantopus-bill-insight .pp-fill { transition:none; } }
+  </style>
+  <section class="pp-window">
+    <div class="pp-top"><span class="pp-brand">Pantopus · Home</span><span class="pp-muted">Concept · Fictional bills</span></div>
+    <h3 id="pp-title">Why did my electricity bill go up?</h3>
+    <p class="pp-summary pp-muted" id="pp-summary" aria-live="polite"></p>
+    <div class="pp-comparison" aria-label="Electricity bill comparison in US dollars">
+      <div>
+        <div class="pp-total"><span>Previous bill</span><span class="pp-number">$130.00</span></div>
+        <div class="pp-track" aria-hidden="true"><div class="pp-fill pp-past" id="pp-past"></div></div>
+      </div>
+      <div>
+        <div class="pp-total"><span id="pp-current-label">Current bill</span><span class="pp-number" id="pp-current"></span></div>
+        <div class="pp-track" aria-hidden="true"><div class="pp-fill" id="pp-now"></div></div>
+      </div>
+    </div>
+    <div class="pp-scenarios" role="group" aria-label="Explore the example bill">
+      <button type="button" id="pp-actual" aria-pressed="true">Explain the increase</button>
+      <button type="button" id="pp-old-rate" aria-pressed="false">What if the rate stayed the same?</button>
+    </div>
+    <p class="pp-heading">Where the difference comes from</p>
+    <div class="pp-reason">
+      <span>More electricity used</span><span class="pp-number" id="pp-usage-value"></span>
+      <span class="pp-evidence">600 → 780 kWh · both periods are 30 days</span>
+      <div class="pp-track" aria-hidden="true"><div class="pp-fill pp-usage" id="pp-usage-bar"></div></div>
+    </div>
+    <div class="pp-reason">
+      <span>Unit rate</span><span class="pp-number" id="pp-rate-value"></span>
+      <span class="pp-evidence" id="pp-rate-evidence"></span>
+      <div class="pp-track" aria-hidden="true"><div class="pp-fill pp-rate" id="pp-rate-bar"></div></div>
+    </div>
+    <div class="pp-reason">
+      <span>Fixed charges</span><span class="pp-number" id="pp-fees-value"></span>
+      <span class="pp-evidence">$22.00 → $24.00</span>
+      <div class="pp-track" aria-hidden="true"><div class="pp-fill pp-fees" id="pp-fees-bar"></div></div>
+    </div>
+    <p class="pp-status" id="pp-status" aria-live="polite"></p>
+    <details id="pp-details">
+      <summary>See the evidence and assumptions</summary>
+      <p class="pp-source">Illustrative input: two 30-day bills with one flat energy rate and fixed charges. No real account, utility or tariff is represented.</p>
+      <p class="pp-source">Usage is valued at the previous rate; the rate difference is applied to current usage. This explains the arithmetic, not why consumption changed. A real analysis would account for tiers, time-of-use charges, credits and taxes.</p>
+    </details>
+  </section>
+  <script>
+    (() => {
+      const root = document.getElementById('pantopus-bill-insight');
+      const find = (id) => root.querySelector('#' + id);
+      const previous = { kwh:600, rate:0.18, fixed:22 };
+      const current = { kwh:780, rate:0.20, fixed:24 };
+      const state = { oldRate:false, headline:'Question first', evidence:false };
+      const money = (n) => '$' + n.toFixed(2);
+      const oldTotal = previous.kwh * previous.rate + previous.fixed;
+      const fullTotal = current.kwh * current.rate + current.fixed;
+      const usageDifference = (current.kwh - previous.kwh) * previous.rate;
+      function render() {
+        const rate = state.oldRate ? previous.rate : current.rate;
+        const newTotal = current.kwh * rate + current.fixed;
+        const rateDifference = current.kwh * (rate - previous.rate);
+        const feeDifference = current.fixed - previous.fixed;
+        const difference = newTotal - oldTotal;
+        find('pp-title').textContent = state.headline === 'Question first' ? 'Why did my electricity bill go up?' : money(difference) + ' more than the previous bill';
+        find('pp-summary').textContent = state.oldRate ? 'Scenario · Same current usage, previous unit rate' : money(difference) + ' increase · explained from the two bills';
+        find('pp-current-label').textContent = state.oldRate ? 'Scenario bill' : 'Current bill';
+        find('pp-current').textContent = money(newTotal);
+        find('pp-past').style.width = (100 * oldTotal / fullTotal) + '%';
+        find('pp-now').style.width = (100 * newTotal / fullTotal) + '%';
+        find('pp-usage-value').textContent = '+' + money(usageDifference);
+        find('pp-rate-value').textContent = (rateDifference > 0 ? '+' : '') + money(rateDifference);
+        find('pp-fees-value').textContent = '+' + money(feeDifference);
+        find('pp-usage-bar').style.width = '100%';
+        find('pp-rate-bar').style.width = (100 * rateDifference / usageDifference) + '%';
+        find('pp-fees-bar').style.width = (100 * feeDifference / usageDifference) + '%';
+        find('pp-rate-evidence').textContent = state.oldRate ? 'Held at 18¢ per kWh' : '18¢ → 20¢ per kWh';
+        find('pp-actual').setAttribute('aria-pressed', String(!state.oldRate));
+        find('pp-old-rate').setAttribute('aria-pressed', String(state.oldRate));
+        find('pp-status').textContent = state.oldRate ? money(fullTotal-newTotal) + ' lower in this scenario. A hypothetical calculation, not an available offer.' : 'Most of this increase comes from more electricity used. The cause of that extra usage is not established.';
+      }
+      find('pp-actual').addEventListener('click', () => { state.oldRate = false; render(); });
+      find('pp-old-rate').addEventListener('click', () => { state.oldRate = true; render(); });
+      render();
+      if (globalThis.Tweak) {
+        const tweak = new Tweak({ container:root, onChange:() => { render(); find('pp-details').open = state.evidence; } });
+        tweak.addSelect(state, 'headline', { label:'Lead with', options:['Question first', 'Amount first'] });
+        tweak.addToggle(state, 'evidence', { label:'Show evidence by default' });
+      }
+    })();
+  </script>
+</div>

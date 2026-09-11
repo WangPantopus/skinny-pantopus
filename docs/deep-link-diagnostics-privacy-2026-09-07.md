@@ -38,3 +38,11 @@ Strict SwiftLint (three files, zero violations) and SwiftFormat pass. The origin
 new exact-head required CI must pass before integration. No new installed or
 physical-device acceptance is claimed by this refresh, and no provider or paid
 service was activated. The Home/payment work continues in separate draft PRs.
+
+The refreshed CI build at `c858d743a` exposed three test calls to the old
+`bindSignedInProvider` Boolean seam, replaced on master by account-ID binding.
+Those tests now call `bindSignedInUserIDProvider`, preserving the same signed-in,
+signed-out and restoration assertions. Strict SwiftLint/SwiftFormat pass on the
+repair. PR #24's documentation-only merge `cd764458f` is also integrated; its
+handoff conflict was resolved by preserving both current checkpoints. Required
+CI on this final head remains necessary before merge.

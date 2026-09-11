@@ -1,0 +1,1537 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Pantopus Places — Conversations, Conditions and Visiting</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Pantopus Places — Conversations, Conditions and Visiting" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Pantopus Places — Conversations, Conditions and Visiting&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;pantopus-place-v2&quot; aria-label=&quot;Pantopus place page design&quot;&gt;
+&lt;style&gt;
+#pantopus-place-v2{--pp-paper:light-dark(#fcfbf7,#19251f);--pp-ink:light-dark(#203c31,#eff2e6);--pp-muted:light-dark(#52635a,#bdc9be);--pp-line:light-dark(#dce3d7,#3b4b40);--pp-soft:light-dark(#eef1e7,#26372d);--pp-green:light-dark(#244f3c,#b6d7aa);--pp-on-green:light-dark(#fbfbea,#173624);--pp-warm:light-dark(#f5edda,#3a3527);color-scheme:light dark;font:15px/1.55 ui-sans-serif,system-ui,sans-serif;color:var(--pp-ink);max-width:736px;margin:auto}
+#pantopus-place-v2 *{box-sizing:border-box;min-width:0}
+#pantopus-place-v2 .pp-caption{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:9px;font-size:12px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-window{background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:22px;overflow:clip}
+#pantopus-place-v2 .pp-top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 26px;border-bottom:1px solid var(--pp-line);font-size:13px}
+#pantopus-place-v2 .pp-brand{display:flex;align-items:center;gap:6px;font-weight:500}
+#pantopus-place-v2 .pp-header{padding:24px 28px 16px}
+#pantopus-place-v2 h2{font:400 34px/1.12 Georgia,serif;letter-spacing:-.7px;margin:7px 0 12px}
+#pantopus-place-v2 h3{font-size:17px;line-height:1.35;font-weight:500;margin:0 0 10px}
+#pantopus-place-v2 p{margin:6px 0 12px}
+#pantopus-place-v2 .pp-kind{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-minor{font-size:12px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-muted{color:var(--pp-muted)}
+#pantopus-place-v2 .pp-between{display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap}
+#pantopus-place-v2 .pp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+#pantopus-place-v2 .pp-between .pp-actions{margin:0}
+#pantopus-place-v2 button{font:inherit;font-weight:500;color:var(--pp-ink);background:var(--pp-paper);border:1px solid var(--pp-line);border-radius:10px;min-height:44px;padding:9px 13px;cursor:pointer;max-width:100%;white-space:normal}
+#pantopus-place-v2 button:hover{background:var(--pp-soft)}
+#pantopus-place-v2 .pp-primary{background:var(--pp-green);color:var(--pp-on-green);border-color:var(--pp-green)}
+#pantopus-place-v2 .pp-primary:hover{background:var(--pp-green);filter:brightness(.97)}
+#pantopus-place-v2 .pp-text{border:0;background:transparent;color:var(--pp-green);padding:7px 0;font-size:13px}
+#pantopus-place-v2 .pp-glance{margin:0 28px 18px;padding:0 16px;background:var(--pp-soft);border-radius:15px}
+#pantopus-place-v2 .pp-condition-summary{list-style:none;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:14px 0;min-height:60px;cursor:pointer}
+#pantopus-place-v2 .pp-condition-summary::-webkit-details-marker{display:none}
+#pantopus-place-v2 .pp-condition-summary strong{display:block;font-weight:500;font-size:17px;line-height:1.3;margin:3px 0}
+#pantopus-place-v2 .pp-arrow{transition:transform .16s ease}
+#pantopus-place-v2 details[open]&gt;.pp-condition-summary .pp-arrow{transform:rotate(180deg)}
+#pantopus-place-v2 .pp-condition-body{padding-bottom:15px;border-top:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-observation{padding:12px 0;border-bottom:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-observation strong{font-weight:500;font-size:14px;display:block}
+#pantopus-place-v2 .pp-observation p{font-size:13px;color:var(--pp-muted);margin:4px 0 0}
+#pantopus-place-v2 .pp-offer-shortcut{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0;border-top:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-offer-shortcut button{flex:1;background:transparent;border:0;text-align:left;padding:0;font-size:14px}
+#pantopus-place-v2 .pp-offer-shortcut small{display:block;font-size:12px;color:var(--pp-muted);font-weight:400}
+#pantopus-place-v2 .pp-tabs{display:flex;gap:3px;flex-wrap:wrap;padding:0 24px;border-bottom:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-tabs button{border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--pp-muted);padding:12px}
+#pantopus-place-v2 .pp-tabs button[aria-pressed=true]{color:var(--pp-green);background:var(--pp-soft);box-shadow:inset 0 -2px var(--pp-green)}
+#pantopus-place-v2 .pp-panel{padding:22px 28px 26px}
+#pantopus-place-v2 .pp-thread{padding:18px 0;border-bottom:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-author{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-avatar{width:28px;height:28px;flex:none;border-radius:50%;background:var(--pp-soft);display:grid;place-items:center;color:var(--pp-ink)}
+#pantopus-place-v2 .pp-thread-title{display:block;border:0;background:transparent;border-radius:5px;text-align:left;padding:8px 0 3px;width:100%;font-size:17px;line-height:1.4}
+#pantopus-place-v2 .pp-thread-title:hover{background:transparent;text-decoration:underline;text-underline-offset:4px}
+#pantopus-place-v2 .pp-thread p{font-size:14px;color:var(--pp-muted);margin:4px 0 8px}
+#pantopus-place-v2 .pp-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--pp-soft);border-top:1px solid var(--pp-line);padding:16px 28px}
+#pantopus-place-v2 .pp-quiet,#pantopus-place-v2 .pp-event{background:var(--pp-soft);border-radius:15px;padding:20px}
+#pantopus-place-v2 .pp-quiet h3,#pantopus-place-v2 .pp-event h3{font:400 25px/1.2 Georgia,serif}
+#pantopus-place-v2 .pp-event{display:flex;align-items:flex-start;gap:16px}
+#pantopus-place-v2 .pp-date{min-width:45px;text-align:center;font-size:12px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-date span{display:block;font:400 32px/1.1 Georgia,serif;color:var(--pp-ink)}
+#pantopus-place-v2 .pp-banner{background:var(--pp-warm);padding:13px 16px;border-radius:12px;margin-bottom:18px;font-size:14px}
+#pantopus-place-v2 .pp-banner strong{display:block;font-weight:500}
+#pantopus-place-v2 .pp-facts{margin:0}
+#pantopus-place-v2 .pp-facts&gt;div{padding:13px 0;border-bottom:1px solid var(--pp-line)}
+#pantopus-place-v2 .pp-facts dt{font-size:12px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-facts dd{margin:4px 0 0}
+#pantopus-place-v2 .pp-rule{border-bottom:1px solid var(--pp-line);padding:3px 0}
+#pantopus-place-v2 .pp-rule summary{cursor:pointer;padding:13px 0;min-height:48px;font-size:14px}
+#pantopus-place-v2 .pp-rule p{font-size:13px;color:var(--pp-muted)}
+#pantopus-place-v2 .pp-offer-hero{background:var(--pp-warm);border-radius:16px;padding:23px;margin:10px 0 18px}
+#pantopus-place-v2 .pp-offer-hero h3{font:400 29px/1.15 Georgia,serif;margin:9px 0}
+#pantopus-place-v2 .pp-reply{background:var(--pp-soft);border-left:2px solid var(--pp-line);padding:16px;margin:16px 0}
+#pantopus-place-v2 textarea,#pantopus-place-v2 select{display:block;width:100%;background:var(--pp-paper);color:var(--pp-ink);border:1px solid var(--pp-line);border-radius:10px;padding:12px;font:inherit;font-size:16px;margin:8px 0}
+#pantopus-place-v2 textarea{resize:vertical;min-height:88px}
+#pantopus-place-v2 .pp-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#pantopus-place-v2 label{display:block;font-size:14px}
+#pantopus-place-v2 .pp-check{display:flex;align-items:center;gap:9px;min-height:44px}
+#pantopus-place-v2 .pp-status{font-size:12px;color:var(--pp-muted);margin:8px 0;min-height:18px;overflow-wrap:anywhere;white-space:pre-wrap}
+#pantopus-place-v2 .pp-quote{font:400 26px/1.35 Georgia,serif;overflow-wrap:anywhere}
+@media(max-width:460px){#pantopus-place-v2 .pp-header,#pantopus-place-v2 .pp-panel{padding:20px}#pantopus-place-v2 .pp-top{padding:13px 20px}#pantopus-place-v2 h2{font-size:29px}#pantopus-place-v2 .pp-glance{margin:0 20px 16px;padding:0 13px}#pantopus-place-v2 .pp-tabs{padding:0 10px}#pantopus-place-v2 .pp-tabs button{font-size:14px;padding:11px 9px}#pantopus-place-v2 .pp-footer{padding:16px 20px}#pantopus-place-v2 .pp-form-grid{grid-template-columns:1fr}#pantopus-place-v2 .pp-condition-summary strong{font-size:16px}#pantopus-place-v2 .pp-event{padding:15px;gap:11px}}
+@media(prefers-reduced-motion:reduce){#pantopus-place-v2 .pp-arrow{transition:none}}
+&lt;/style&gt;
+&lt;div class=&quot;pp-caption&quot;&gt;&lt;span&gt;Fictional place-page concept · nothing is published&lt;/span&gt;&lt;span id=&quot;pp-preview-date&quot;&gt;Preview date: Sep 9, 2026&lt;/span&gt;&lt;/div&gt;
+&lt;section class=&quot;pp-window&quot; aria-label=&quot;Cedar House Cafe place page&quot;&gt;
+&lt;div class=&quot;pp-top&quot;&gt;&lt;span class=&quot;pp-brand&quot;&gt;&lt;i data-lucide=&quot;asterisk&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt; Pantopus&lt;/span&gt;&lt;span&gt;Nearby / Places&lt;/span&gt;&lt;/div&gt;
+&lt;header class=&quot;pp-header&quot;&gt;&lt;div class=&quot;pp-kind&quot;&gt;Cafe · public place&lt;/div&gt;&lt;h2&gt;Cedar House Cafe&lt;/h2&gt;&lt;div class=&quot;pp-between&quot;&gt;&lt;div class=&quot;pp-muted&quot;&gt;18 Market Street&lt;br&gt;&lt;span class=&quot;pp-minor&quot;&gt;Illustrative location&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;pp-primary&quot; id=&quot;pp-follow&quot; aria-pressed=&quot;false&quot;&gt;Follow place&lt;/button&gt;&lt;button type=&quot;button&quot; id=&quot;pp-save&quot; aria-pressed=&quot;false&quot;&gt;Save privately&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pp-status&quot; id=&quot;pp-follow-status&quot; aria-live=&quot;polite&quot;&gt;Your follows stay private. Phone alerts are off.&lt;/div&gt;&lt;/header&gt;
+&lt;div id=&quot;pp-glance&quot; class=&quot;pp-glance&quot;&gt;&lt;/div&gt;
+&lt;nav class=&quot;pp-tabs&quot; aria-label=&quot;Place views&quot;&gt;&lt;button type=&quot;button&quot; data-tab=&quot;conversations&quot; aria-pressed=&quot;true&quot;&gt;Conversations&lt;/button&gt;&lt;button type=&quot;button&quot; data-tab=&quot;upcoming&quot; aria-pressed=&quot;false&quot;&gt;Upcoming&lt;/button&gt;&lt;button type=&quot;button&quot; data-tab=&quot;visit&quot; aria-pressed=&quot;false&quot;&gt;Visit info&lt;/button&gt;&lt;/nav&gt;
+&lt;div id=&quot;pp-panel&quot; class=&quot;pp-panel&quot;&gt;&lt;/div&gt;
+&lt;div class=&quot;pp-footer&quot;&gt;&lt;span class=&quot;pp-minor&quot;&gt;A moment, a question, a reason to connect.&lt;/span&gt;&lt;button type=&quot;button&quot; data-action=&quot;compose&quot;&gt;Start a conversation&lt;/button&gt;&lt;/div&gt;
+&lt;/section&gt;
+&lt;script&gt;
+(()=&gt;{
+const root=document.getElementById(&#x27;pantopus-place-v2&#x27;),panel=root.querySelector(&#x27;#pp-panel&#x27;);
+const design={volume:&#x27;Everyday&#x27;,conditions:&#x27;One report&#x27;,offers:&#x27;Current&#x27;};
+const state={tab:&#x27;conversations&#x27;,detail:null,back:&#x27;conversations&#x27;,following:false,saved:false,offerSaved:false,planSaved:false,thread:0,recent:false,draft:&#x27;&#x27;,reply:&#x27;&#x27;,correction:&#x27;&#x27;,observation:&#x27;&#x27;};
+const escape=s=&gt;String(s).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g,c=&gt;({&#x27;&amp;&#x27;:&#x27;&amp;amp;&#x27;,&#x27;&lt;&#x27;:&#x27;&amp;lt;&#x27;,&#x27;&gt;&#x27;:&#x27;&amp;gt;&#x27;,&#x27;&quot;&#x27;:&#x27;&amp;quot;&#x27;,&quot;&#x27;&quot;:&#x27;&amp;#39;&#x27;}[c]));
+const threads=[
+{name:&#x27;Maya&#x27;,letter:&#x27;M&#x27;,kind:&#x27;Moment&#x27;,time:&#x27;Yesterday&#x27;,title:&#x27;Anyone else sketch the places they spend time in?&#x27;,body:&#x27;I started drawing this corner while waiting for the rain to stop. I would love to see what you notice here.&#x27;,count:&#x27;6 replies&#x27;,responder:&#x27;Elena&#x27;,response:&#x27;The window seats are my favorite. I have a drawing from last winter — I will find it.&#x27;},
+{name:&#x27;Dev&#x27;,letter:&#x27;D&#x27;,kind:&#x27;Question&#x27;,time:&#x27;2 days ago&#x27;,title:&#x27;Which entrance has a step-free route?&#x27;,body:&#x27;Planning a visit with my dad. Is the Market Street entrance the best approach?&#x27;,count:&#x27;3 replies&#x27;,responder:&#x27;Jo&#x27;,response:&#x27;I used the side entrance last week. It is worth checking with the cafe before your visit.&#x27;},
+{name:&#x27;Cedar House&#x27;,letter:&#x27;C&#x27;,kind:&#x27;Cafe team&#x27;,time:&#x27;Sep 8&#x27;,title:&#x27;An evening of sketches, September 19&#x27;,body:&#x27;Bring a notebook and join our public drawing evening. Details and questions are in this conversation.&#x27;,count:&#x27;4 replies&#x27;,responder:&#x27;Maya&#x27;,response:&#x27;Is it okay to come if I have never tried this before?&#x27;}];
+const fact=(name,value)=&gt;&#x27;&lt;div&gt;&lt;dt&gt;&#x27;+name+&#x27;&lt;/dt&gt;&lt;dd&gt;&#x27;+value+&#x27;&lt;/dd&gt;&lt;/div&gt;&#x27;;
+const report=(name,value)=&gt;&#x27;&lt;div class=&quot;pp-observation&quot;&gt;&lt;strong&gt;&#x27;+name+&#x27;&lt;/strong&gt;&lt;p&gt;&#x27;+value+&#x27;&lt;/p&gt;&lt;/div&gt;&#x27;;
+const back=()=&gt;&#x27;&lt;button type=&quot;button&quot; class=&quot;pp-text&quot; data-action=&quot;back&quot;&gt;← Back to &#x27;+({conversations:&#x27;conversations&#x27;,upcoming:&#x27;upcoming&#x27;,visit:&#x27;visit info&#x27;}[state.back])+&#x27;&lt;/button&gt;&#x27;;
+function glance(){
+root.querySelector(&quot;#pp-preview-date&quot;).textContent=&quot;Preview date: &quot;+(design.offers===&quot;Expired&quot;?&quot;Sep 14, 2026&quot;:&quot;Sep 9, 2026&quot;);
+const examples={
+&#x27;One report&#x27;:[&#x27;15–25 min quoted table wait&#x27;,&#x27;1 visitor report · observed 8 min ago&#x27;,report(&#x27;A visitor’s observation&#x27;,&#x27;A host quoted a 15–25 minute table wait for 2 people. Observed at 3:52 PM; submitted at 3:54 PM · America/Chicago, on the preview date.&#x27;)+report(&#x27;Busyness&#x27;,&#x27;No recent observation. A table wait does not establish how busy the whole cafe is.&#x27;)],
+&#x27;Mixed reports&#x27;:[&#x27;Recent wait reports differ&#x27;,&#x27;2 reports · different party sizes&#x27;,report(&#x27;Under 10 min · party of 2&#x27;,&#x27;Visitor-reported quoted table wait, observed 5 minutes ago.&#x27;)+report(&#x27;25–40 min · party of 6&#x27;,&#x27;Visitor-reported quoted table wait, observed 9 minutes ago.&#x27;)+report(&#x27;Different experiences can both be real&#x27;,&#x27;Party size and timing differ. These reports are not averaged into one estimate.&#x27;)],
+&#x27;No recent reports&#x27;:[&#x27;No recent conditions reported&#x27;,&#x27;Current wait and busyness are unknown&#x27;,report(&#x27;No current estimate&#x27;,&#x27;A lack of reports does not mean the place is quiet. Check with the cafe before traveling.&#x27;)],
+&#x27;Expired&#x27;:[&#x27;No current wait estimate&#x27;,&#x27;The previous observation is out of date&#x27;,report(&#x27;Earlier report · expired&#x27;,&#x27;One visitor reported a 15–25 minute quoted table wait 2 hours ago. It is history, not a current estimate.&#x27;)],
+&#x27;Venue update&#x27;:[&#x27;Pickup is temporarily paused&#x27;,&#x27;Cafe team update · 12 min ago&#x27;,report(&#x27;From Cedar House Cafe&#x27;,&#x27;The cafe team says pickup orders are paused while equipment is checked. Dine-in status was not supplied.&#x27;)+report(&#x27;Source matters&#x27;,&#x27;This is the venue’s statement. No visitor observation confirms the equipment status.&#x27;)]};
+const value=examples[design.conditions],wasOpen=root.querySelector(&#x27;#pp-conditions&#x27;)?.open||false;
+root.querySelector(&#x27;#pp-glance&#x27;).innerHTML=&#x27;&lt;details id=&quot;pp-conditions&quot;&#x27;+(wasOpen?&#x27; open&#x27;:&#x27;&#x27;)+&#x27;&gt;&lt;summary class=&quot;pp-condition-summary&quot;&gt;&lt;div&gt;&lt;span class=&quot;pp-kind&quot;&gt;Recent conditions&lt;/span&gt;&lt;strong&gt;&#x27;+value[0]+&#x27;&lt;/strong&gt;&lt;span class=&quot;pp-minor&quot;&gt;&#x27;+value[1]+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;span class=&quot;pp-arrow&quot; aria-hidden=&quot;true&quot;&gt;⌄&lt;/span&gt;&lt;/summary&gt;&lt;div class=&quot;pp-condition-body&quot;&gt;&#x27;+value[2]+&#x27;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; data-action=&quot;observation&quot;&gt;Add an observation&lt;/button&gt;&lt;button type=&quot;button&quot; class=&quot;pp-text&quot; data-action=&quot;flag&quot;&gt;Flag a misleading report&lt;/button&gt;&lt;/div&gt;&lt;p class=&quot;pp-minor&quot;&gt;Illustrative reports. No live conditions or visitor location verified.&lt;/p&gt;&lt;/div&gt;&lt;/details&gt;&#x27;+(design.offers===&#x27;Current&#x27;?&#x27;&lt;div class=&quot;pp-offer-shortcut&quot;&gt;&lt;button type=&quot;button&quot; data-action=&quot;offer&quot;&gt;A cookie on the house with a drink&lt;small&gt;From the cafe · Sep 9–13 · see terms&lt;/small&gt;&lt;/button&gt;&lt;span aria-hidden=&quot;true&quot;&gt;→&lt;/span&gt;&lt;/div&gt;&#x27;:&#x27;&#x27;);
+}
+const event=()=&gt;&#x27;&lt;div class=&quot;pp-event&quot;&gt;&lt;div class=&quot;pp-date&quot;&gt;SEP&lt;span&gt;19&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;h3&gt;An evening of sketches&lt;/h3&gt;&lt;p&gt;6:30 PM · America/Chicago&lt;br&gt;From the cafe’s public calendar&lt;/p&gt;&lt;button type=&quot;button&quot; class=&quot;pp-text&quot; data-action=&quot;event&quot;&gt;Details &amp; private plan →&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;
+function conversations(){if(design.volume===&#x27;Quiet&#x27;)return &#x27;&lt;div class=&quot;pp-quiet&quot;&gt;&lt;h3&gt;A place for the first conversation.&lt;/h3&gt;&lt;p&gt;No public conversations here yet.&lt;/p&gt;&lt;span class=&quot;pp-minor&quot;&gt;Explore an upcoming event or keep this place privately.&lt;/span&gt;&lt;/div&gt;&lt;h3 style=&quot;margin-top:23px&quot;&gt;From the public calendar&lt;/h3&gt;&#x27;+event();
+return (design.volume===&#x27;Surge&#x27;?&#x27;&lt;div class=&quot;pp-banner&quot;&gt;&lt;strong&gt;Drawing evening · related conversations&lt;/strong&gt;Separate voices and replies, easier to explore together.&lt;/div&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;div class=&quot;pp-between&quot;&gt;&lt;h3&gt;Conversations about this place&lt;/h3&gt;&lt;button type=&quot;button&quot; class=&quot;pp-text&quot; data-action=&quot;sort&quot;&gt;&#x27;+(state.recent?&#x27;Recent ↓&#x27;:&#x27;Selected · see recent&#x27;)+&#x27;&lt;/button&gt;&lt;/div&gt;&#x27;+(state.recent?[0,1,2]:[0,2,1]).map(i=&gt;{const t=threads[i];return &#x27;&lt;article class=&quot;pp-thread&quot;&gt;&lt;div class=&quot;pp-author&quot;&gt;&lt;span class=&quot;pp-avatar&quot;&gt;&#x27;+t.letter+&#x27;&lt;/span&gt;&lt;span&gt;&#x27;+t.name+&#x27; · &#x27;+t.kind+&#x27; · &#x27;+t.time+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;button type=&quot;button&quot; class=&quot;pp-thread-title&quot; data-thread=&quot;&#x27;+i+&#x27;&quot;&gt;&#x27;+t.title+&#x27;&lt;/button&gt;&lt;p&gt;&#x27;+t.body+&#x27;&lt;/p&gt;&lt;div class=&quot;pp-minor&quot;&gt;&#x27;+t.count+&#x27; · Public · About this place&lt;/div&gt;&lt;/article&gt;&#x27;;}).join(&#x27;&#x27;);}
+function visit(){return &#x27;&lt;h3&gt;A little easier to plan your visit.&lt;/h3&gt;&lt;dl class=&quot;pp-facts&quot;&gt;&#x27;+fact(&#x27;Where&#x27;,&#x27;18 Market Street · Cedar House Cafe&#x27;)+fact(&#x27;Accessibility&#x27;,&#x27;Step-free entrance via Garden Lane.&lt;details class=&quot;pp-rule&quot;&gt;&lt;summary&gt;Source &amp; details&lt;/summary&gt;&lt;p&gt;Venue access guide · checked Sep 8, 2026. The route is described by the cafe; an on-site assessment is not supplied. Fictional example.&lt;/p&gt;&lt;/details&gt;&#x27;)+fact(&#x27;Offers &amp; benefits&#x27;,&#x27;&lt;button type=&quot;button&quot; class=&quot;pp-text&quot; data-action=&quot;offer&quot;&gt;&#x27;+(design.offers===&#x27;Current&#x27;?&#x27;Cookie with a drink · view offer →&#x27;:design.offers===&#x27;Expired&#x27;?&#x27;No current offer · view previous terms →&#x27;:&#x27;No current offers · details →&#x27;)+&#x27;&lt;/button&gt;&#x27;)+&#x27;&lt;/dl&gt;&lt;h3 style=&quot;margin-top:24px&quot;&gt;Rules &amp; visiting&lt;/h3&gt;&lt;details class=&quot;pp-rule&quot;&gt;&lt;summary&gt;Groups of 6 or more need a reservation&lt;/summary&gt;&lt;p&gt;Venue policy · for dine-in groups. Cafe booking page, checked Sep 8, 2026. Fictional example; not a reservation or legal requirement.&lt;/p&gt;&lt;/details&gt;&lt;details class=&quot;pp-rule&quot;&gt;&lt;summary&gt;Cards and cash accepted&lt;/summary&gt;&lt;p&gt;Venue information · cafe website, checked Sep 8, 2026. Fictional source detail.&lt;/p&gt;&lt;/details&gt;&lt;details class=&quot;pp-rule&quot;&gt;&lt;summary&gt;Visitor tip: ask about the window tables&lt;/summary&gt;&lt;p&gt;A visitor suggestion posted Sep 7, 2026. Seating is not guaranteed; this is not a venue rule.&lt;/p&gt;&lt;/details&gt;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; data-action=&quot;correction&quot;&gt;Suggest a correction&lt;/button&gt;&lt;/div&gt;&lt;p class=&quot;pp-minor&quot;&gt;Source labels distinguish venue policies from visitor experiences.&lt;/p&gt;&#x27;;}
+function offer(){if(design.offers===&#x27;None&#x27;)return back()+&#x27;&lt;h3&gt;No current offers listed&lt;/h3&gt;&lt;p class=&quot;pp-muted&quot;&gt;Upcoming events and visiting information are still available.&lt;/p&gt;&lt;p class=&quot;pp-minor&quot;&gt;No discount or benefit is inferred from missing information.&lt;/p&gt;&#x27;;
+const expired=design.offers===&#x27;Expired&#x27;;return back()+&#x27;&lt;div class=&quot;pp-offer-hero&quot;&gt;&lt;div class=&quot;pp-kind&quot;&gt;&#x27;+(expired?&#x27;Expired offer&#x27;:&#x27;From Cedar House Cafe&#x27;)+&#x27;&lt;/div&gt;&lt;h3&gt;A little treat with your drink.&lt;/h3&gt;&lt;p&gt;One classic cookie with a purchased regular hot drink.&lt;/p&gt;&lt;span class=&quot;pp-minor&quot;&gt;&#x27;+(expired?&#x27;Ended Sep 13, 2026&#x27;:&#x27;Sep 9–13, 2026 · Market Street branch&#x27;)+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;dl class=&quot;pp-facts&quot;&gt;&#x27;+fact(&#x27;What you need to buy&#x27;,&#x27;One regular hot drink at the counter.&#x27;)+fact(&#x27;Limits &amp; exclusions&#x27;,&#x27;One cookie per person per day; while supplies last. Delivery orders and specialty cookies excluded.&#x27;)+fact(&#x27;When&#x27;,(&#x27;Sep 9–13&#x27;)+&#x27;, 2026 · during advertised opening hours · America/Chicago.&#x27;)+fact(&#x27;How to use it&#x27;,expired?&#x27;This previous offer is no longer presented as redeemable.&#x27;:&#x27;Ask at the counter before ordering. No code or reservation; stock has not been checked.&#x27;)+fact(&#x27;Source&#x27;,&#x27;Cafe offer page · terms checked &#x27;+(&#x27;Sep 9&#x27;)+&#x27;, 2026. Fictional example.&#x27;)+&#x27;&lt;/dl&gt;&#x27;+(expired?&#x27;&lt;p class=&quot;pp-minor&quot;&gt;&#x27;+(state.offerSaved?&#x27;Your saved copy remains history, not an active benefit.&#x27;:&#x27;Previous terms are shown for context.&#x27;)+&#x27;&lt;/p&gt;&#x27;:&#x27;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;pp-primary&quot; data-action=&quot;save-offer&quot; aria-pressed=&quot;&#x27;+state.offerSaved+&#x27;&quot;&gt;&#x27;+(state.offerSaved?&#x27;Saved · Only you&#x27;:&#x27;Save offer privately&#x27;)+&#x27;&lt;/button&gt;&lt;/div&gt;&lt;p class=&quot;pp-minor&quot;&gt;Saving keeps the terms. It does not reserve stock or confirm redemption.&lt;/p&gt;&#x27;)+&#x27;&lt;div id=&quot;pp-offer-status&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;&#x27;;}
+function observation(){return back()+&#x27;&lt;div class=&quot;pp-kind&quot;&gt;Recent conditions · your observation&lt;/div&gt;&lt;h3&gt;What did you notice?&lt;/h3&gt;&lt;p class=&quot;pp-muted&quot;&gt;Describe your own experience. Different queues and party sizes can have different waits.&lt;/p&gt;&lt;form id=&quot;pp-observation-form&quot;&gt;&lt;label for=&quot;pp-observation-kind&quot;&gt;What are you reporting?&lt;/label&gt;&lt;select id=&quot;pp-observation-kind&quot; required&gt;&lt;option value=&quot;quoted&quot;&gt;A quoted table wait&lt;/option&gt;&lt;option value=&quot;elapsed&quot;&gt;My table wait so far&lt;/option&gt;&lt;option value=&quot;completed&quot;&gt;My completed table wait&lt;/option&gt;&lt;option value=&quot;pickup&quot;&gt;A quoted pickup wait&lt;/option&gt;&lt;option value=&quot;busy&quot;&gt;How busy it looked&lt;/option&gt;&lt;/select&gt;&lt;div class=&quot;pp-form-grid&quot;&gt;&lt;label for=&quot;pp-observation-value&quot;&gt;Your observation&lt;select id=&quot;pp-observation-value&quot; required&gt;&lt;option value=&quot;&quot;&gt;Choose a range&lt;/option&gt;&lt;option&gt;Under 10 minutes&lt;/option&gt;&lt;option&gt;10–20 minutes&lt;/option&gt;&lt;option&gt;20–40 minutes&lt;/option&gt;&lt;option&gt;Over 40 minutes&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;label for=&quot;pp-observation-time&quot;&gt;When did you observe it?&lt;select id=&quot;pp-observation-time&quot; required&gt;&lt;option value=&quot;&quot;&gt;Choose a time&lt;/option&gt;&lt;option&gt;Just now&lt;/option&gt;&lt;option&gt;About 5 minutes ago&lt;/option&gt;&lt;option&gt;About 15 minutes ago&lt;/option&gt;&lt;option&gt;About 30 minutes ago&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;/div&gt;&lt;label for=&quot;pp-party&quot;&gt;Party size, if relevant&lt;select id=&quot;pp-party&quot;&gt;&lt;option&gt;Not supplied&lt;/option&gt;&lt;option&gt;1–2 people&lt;/option&gt;&lt;option&gt;3–4 people&lt;/option&gt;&lt;option&gt;5–6 people&lt;/option&gt;&lt;option&gt;More than 6 people&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;p class=&quot;pp-minor&quot;&gt;Public observation · shown as “A visitor.” Your account is not listed publicly. This preview sends nothing.&lt;/p&gt;&lt;button type=&quot;submit&quot; class=&quot;pp-primary&quot;&gt;Preview my report&lt;/button&gt;&lt;/form&gt;&lt;div id=&quot;pp-observation-preview&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;&#x27;+escape(state.observation)+&#x27;&lt;/div&gt;&#x27;;}
+function render(){root.querySelectorAll(&#x27;[data-tab]&#x27;).forEach(b=&gt;b.setAttribute(&#x27;aria-pressed&#x27;,String(b.dataset.tab===state.tab)));
+if(state.detail===&#x27;offer&#x27;){panel.innerHTML=offer();return;}
+if(state.detail===&#x27;observation&#x27;){panel.innerHTML=observation();return;}
+if(state.detail===&#x27;flag&#x27;||state.detail===&#x27;correction&#x27;){panel.innerHTML=back()+&#x27;&lt;h3&gt;&#x27;+(state.detail===&#x27;flag&#x27;?&#x27;What seems misleading?&#x27;:&#x27;What needs a correction?&#x27;)+&#x27;&lt;/h3&gt;&lt;p class=&quot;pp-muted&quot;&gt;&#x27;+(state.detail===&#x27;flag&#x27;?&#x27;Different experiences alone do not prove a report false. Describe the issue for review.&#x27;:&#x27;Identify the detail and, if possible, a source for the correction.&#x27;)+&#x27;&lt;/p&gt;&lt;form id=&quot;pp-correction-form&quot;&gt;&lt;label for=&quot;pp-correction&quot;&gt;Your note&lt;textarea id=&quot;pp-correction&quot; maxlength=&quot;500&quot; required&gt;&#x27;+escape(state.correction)+&#x27;&lt;/textarea&gt;&lt;/label&gt;&lt;button type=&quot;submit&quot; class=&quot;pp-primary&quot;&gt;Preview note&lt;/button&gt;&lt;/form&gt;&lt;div id=&quot;pp-correction-preview&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;&#x27;;return;}
+if(state.detail===&#x27;compose&#x27;){panel.innerHTML=back()+&#x27;&lt;h3&gt;Start with something you want to share.&lt;/h3&gt;&lt;label for=&quot;pp-draft&quot;&gt;Your post&lt;textarea id=&quot;pp-draft&quot; maxlength=&quot;500&quot; placeholder=&quot;A moment, a question, or a plan…&quot;&gt;&#x27;+escape(state.draft)+&#x27;&lt;/textarea&gt;&lt;/label&gt;&lt;p class=&quot;pp-minor&quot;&gt;Posting as you · Public&lt;br&gt;About Cedar House Cafe · 18 Market Street&lt;/p&gt;&lt;label class=&quot;pp-check&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;pp-discover&quot;&gt; Show in this place’s public conversations&lt;/label&gt;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;pp-primary&quot; data-action=&quot;preview-post&quot;&gt;Preview post&lt;/button&gt;&lt;/div&gt;&lt;div id=&quot;pp-post-preview&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;&#x27;;return;}
+if(state.detail===&#x27;event&#x27;){panel.innerHTML=back()+&#x27;&lt;div class=&quot;pp-kind&quot;&gt;Public calendar · example source&lt;/div&gt;&lt;h3&gt;An evening of sketches&lt;/h3&gt;&lt;p&gt;September 19, 2026 · 6:30 PM&lt;br&gt;America/Chicago · Cedar House Cafe&lt;/p&gt;&lt;p&gt;Bring a notebook for an informal drawing evening.&lt;/p&gt;&lt;details class=&quot;pp-rule&quot;&gt;&lt;summary&gt;Plan details &amp; source&lt;/summary&gt;&lt;p&gt;From the cafe calendar. End time, booking conditions, and availability have not been supplied. All details are fictional.&lt;/p&gt;&lt;/details&gt;&lt;div class=&quot;pp-actions&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;pp-primary&quot; data-action=&quot;save-plan&quot;&gt;&#x27;+(state.planSaved?&#x27;Plan saved · Only you&#x27;:&#x27;Save these details privately&#x27;)+&#x27;&lt;/button&gt;&#x27;+(design.volume!==&#x27;Quiet&#x27;?&#x27;&lt;button type=&quot;button&quot; data-thread=&quot;2&quot;&gt;Read the conversation&lt;/button&gt;&#x27;:&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;div id=&quot;pp-plan-status&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;Review the date, time, timezone, and destination shown. No RSVP or attendance is shared.&lt;/div&gt;&#x27;;return;}
+if(state.detail===&#x27;thread&#x27;){const t=threads[state.thread];panel.innerHTML=back()+&#x27;&lt;div class=&quot;pp-author&quot;&gt;&#x27;+t.name+&#x27; · &#x27;+t.kind+&#x27; · &#x27;+t.time+&#x27; · Public&lt;/div&gt;&lt;p class=&quot;pp-quote&quot;&gt;&#x27;+t.title+&#x27;&lt;/p&gt;&lt;p&gt;&#x27;+t.body+&#x27;&lt;/p&gt;&lt;div class=&quot;pp-reply&quot;&gt;&lt;div class=&quot;pp-author&quot;&gt;&#x27;+t.responder+&#x27; · Reply&lt;/div&gt;&lt;p&gt;&#x27;+t.response+&#x27;&lt;/p&gt;&lt;/div&gt;&lt;label for=&quot;pp-reply&quot;&gt;Join the conversation&lt;textarea id=&quot;pp-reply&quot; maxlength=&quot;500&quot; placeholder=&quot;Write a reply…&quot;&gt;&#x27;+escape(state.reply)+&#x27;&lt;/textarea&gt;&lt;/label&gt;&lt;button type=&quot;button&quot; class=&quot;pp-primary&quot; data-action=&quot;preview-reply&quot;&gt;Preview reply&lt;/button&gt;&lt;div id=&quot;pp-reply-preview&quot; class=&quot;pp-status&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;&lt;p class=&quot;pp-minor&quot;&gt;Original post and replies · Nothing is sent from this concept.&lt;/p&gt;&#x27;;return;}
+panel.innerHTML=state.tab===&#x27;conversations&#x27;?conversations():state.tab===&#x27;upcoming&#x27;?&#x27;&lt;h3&gt;Upcoming at this place&lt;/h3&gt;&#x27;+event():visit();}
+function open(detail){state.back=state.tab;state.detail=detail;const conditions=root.querySelector(&#x27;#pp-conditions&#x27;);if(conditions)conditions.open=false;render();panel.querySelector(&#x27;button&#x27;)?.focus();}
+root.addEventListener(&#x27;click&#x27;,e=&gt;{const b=e.target.closest(&#x27;button&#x27;);if(!b)return;const action=b.dataset.action;
+if(b.dataset.tab){state.tab=b.dataset.tab;state.detail=null;render();}
+if(b.id===&#x27;pp-follow&#x27;){state.following=!state.following;b.setAttribute(&#x27;aria-pressed&#x27;,String(state.following));b.textContent=state.following?&#x27;Following place&#x27;:&#x27;Follow place&#x27;;root.querySelector(&#x27;#pp-follow-status&#x27;).textContent=state.following?&#x27;Following in this concept only. Private · phone alerts off.&#x27;:&#x27;Your follows stay private. Phone alerts are off.&#x27;;}
+if(b.id===&#x27;pp-save&#x27;){state.saved=!state.saved;b.setAttribute(&#x27;aria-pressed&#x27;,String(state.saved));b.textContent=state.saved?&#x27;Saved · Only you&#x27;:&#x27;Save privately&#x27;;root.querySelector(&#x27;#pp-follow-status&#x27;).textContent=state.saved?&#x27;Saved in this concept session only. No post or reservation.&#x27;:&#x27;Private save removed from this concept.&#x27;;}
+if(b.dataset.thread!==undefined){state.thread=Number(b.dataset.thread);open(&#x27;thread&#x27;);}
+if(action===&#x27;back&#x27;){state.tab=state.back;state.detail=null;render();root.querySelector(&#x27;[data-tab=&quot;&#x27;+state.tab+&#x27;&quot;]&#x27;).focus({preventScroll:true});}
+if([&#x27;offer&#x27;,&#x27;event&#x27;,&#x27;flag&#x27;,&#x27;correction&#x27;,&#x27;observation&#x27;,&#x27;compose&#x27;].includes(action))open(action);
+if(action===&#x27;sort&#x27;){state.recent=!state.recent;render();panel.querySelector(&#x27;[data-action=&quot;sort&quot;]&#x27;).focus({preventScroll:true});}
+if(action===&#x27;save-offer&#x27;){state.offerSaved=!state.offerSaved;b.setAttribute(&#x27;aria-pressed&#x27;,String(state.offerSaved));b.textContent=state.offerSaved?&#x27;Saved · Only you&#x27;:&#x27;Save offer privately&#x27;;root.querySelector(&#x27;#pp-offer-status&#x27;).textContent=state.offerSaved?&#x27;Terms kept in this preview session. No redemption or reservation.&#x27;:&#x27;Offer removed from preview saves.&#x27;;}
+if(action===&#x27;save-plan&#x27;){state.planSaved=!state.planSaved;b.textContent=state.planSaved?&#x27;Plan saved · Only you&#x27;:&#x27;Save these details privately&#x27;;root.querySelector(&#x27;#pp-plan-status&#x27;).textContent=state.planSaved?&#x27;Saved in this preview session only. No device calendar, RSVP, or reminder changed.&#x27;:&#x27;Plan removed from preview saves.&#x27;;}
+if(action===&#x27;preview-reply&#x27;)root.querySelector(&#x27;#pp-reply-preview&#x27;).textContent=state.reply.trim()?&#x27;Your reply preview: &#x27;+state.reply.trim()+&#x27; — Nothing has been published.&#x27;:&#x27;Write a reply to preview it.&#x27;;
+if(action===&#x27;preview-post&#x27;)root.querySelector(&#x27;#pp-post-preview&#x27;).textContent=state.draft.trim()?&#x27;Preview: &#x27;+state.draft.trim()+&#x27; — Public&#x27;+(root.querySelector(&#x27;#pp-discover&#x27;).checked?&#x27; · Shown in this place’s conversations.&#x27;:&#x27; · Excluded from place discovery.&#x27;)+&#x27; Nothing has been published.&#x27;:&#x27;Write something to preview it.&#x27;;
+});
+root.addEventListener(&#x27;input&#x27;,e=&gt;{if(e.target.id===&#x27;pp-draft&#x27;)state.draft=e.target.value;if(e.target.id===&#x27;pp-reply&#x27;)state.reply=e.target.value;if(e.target.id===&#x27;pp-correction&#x27;)state.correction=e.target.value;});
+root.addEventListener(&#x27;change&#x27;,e=&gt;{if(e.target.id===&#x27;pp-observation-kind&#x27;){const busy=e.target.value===&#x27;busy&#x27;;root.querySelector(&#x27;#pp-observation-value&#x27;).innerHTML=&#x27;&lt;option value=&quot;&quot;&gt;&#x27;+(busy?&#x27;Choose what you observed&#x27;:&#x27;Choose a range&#x27;)+&#x27;&lt;/option&gt;&#x27;+(busy?[&#x27;Quiet&#x27;,&#x27;Moderately busy&#x27;,&#x27;Very busy&#x27;]:[&#x27;Under 10 minutes&#x27;,&#x27;10–20 minutes&#x27;,&#x27;20–40 minutes&#x27;,&#x27;Over 40 minutes&#x27;]).map(v=&gt;&#x27;&lt;option&gt;&#x27;+v+&#x27;&lt;/option&gt;&#x27;).join(&#x27;&#x27;);root.querySelector(&#x27;#pp-party&#x27;).disabled=busy||e.target.value===&#x27;pickup&#x27;;}});
+root.addEventListener(&#x27;submit&#x27;,e=&gt;{e.preventDefault();if(e.target.id===&#x27;pp-observation-form&#x27;){const kind=root.querySelector(&#x27;#pp-observation-kind&#x27;),value=root.querySelector(&#x27;#pp-observation-value&#x27;).value,time=root.querySelector(&#x27;#pp-observation-time&#x27;).value,party=root.querySelector(&#x27;#pp-party&#x27;);state.observation=&#x27;Preview: &#x27;+kind.options[kind.selectedIndex].text+&#x27; · &#x27;+value+&#x27; · &#x27;+time+(!party.disabled&amp;&amp;party.value!==&#x27;Not supplied&#x27;?&#x27; · &#x27;+party.value:&#x27;&#x27;)+&#x27;. No report was sent; the displayed status has not changed.&#x27;;root.querySelector(&#x27;#pp-observation-preview&#x27;).textContent=state.observation;}if(e.target.id===&#x27;pp-correction-form&#x27;)root.querySelector(&#x27;#pp-correction-preview&#x27;).textContent=&#x27;Preview: &#x27;+state.correction.trim()+&#x27;. No correction or report was sent.&#x27;;});
+glance();render();
+if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=&gt;{state.detail=null;glance();render();}});tweak.addSelect(design,&#x27;volume&#x27;,{label:&#x27;Conversation volume&#x27;,options:[&#x27;Quiet&#x27;,&#x27;Everyday&#x27;,&#x27;Surge&#x27;]});tweak.addSelect(design,&#x27;conditions&#x27;,{label:&#x27;Recent conditions&#x27;,options:[&#x27;One report&#x27;,&#x27;Mixed reports&#x27;,&#x27;No recent reports&#x27;,&#x27;Expired&#x27;,&#x27;Venue update&#x27;]});tweak.addSelect(design,&#x27;offers&#x27;,{label:&#x27;Offer availability&#x27;,options:[&#x27;Current&#x27;,&#x27;Expired&#x27;,&#x27;None&#x27;]});}
+})();
+&lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerdown&quot;, handlePointer);
+    document.removeEventListener(&quot;pointercancel&quot;, handlePointer);
+    document.removeEventListener(&quot;click&quot;, handleTouchClick);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerdown&quot;, handlePointer);
+  document.addEventListener(&quot;pointercancel&quot;, handlePointer);
+  document.addEventListener(&quot;click&quot;, handleTouchClick);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>
