@@ -174,7 +174,7 @@ final class PostcardVerificationViewModelTests: XCTestCase {
     func testTooManyAttemptsRoutesBackToTheRequestStep() async {
         SequencedURLProtocol.reset()
         SequencedURLProtocol.sequence = [
-            .status(429, body: #"{"error":"Too many attempts. Request a new code."}"#)
+            .status(429, body: #"{"error":"Too many attempts. Request a new code.","code":"LOCKED"}"#)
         ]
         let vm = makeLiveVM()
         vm.updateCode("4Q2K7B")
@@ -212,5 +212,59 @@ final class PostcardVerificationViewModelTests: XCTestCase {
         vm.requestNewCode()
         await waitFor("fresh code requested") { !vm.needsNewCode }
         XCTAssertTrue(vm.showsCodeEntryFrame)
+    }
+
+    func testLiveStatusShowsUncertaintyWithoutSendingAnotherCard() async {
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [
+            .status(200, body: #"{"message":"Mail delivery is not confirmed.","delivery_unknown":true,"postcard":{"id":"pc-1"}}"#)
+        ]
+        let vm = makeLiveVM()
+        XCTAssertFalse(vm.usesSamplePresentation)
+        await vm.loadStatus()
+        XCTAssertTrue(vm.deliveryUnknown)
+        XCTAssertFalse(vm.needsNewCode)
+        XCTAssertEqual(vm.notice?.text, "Mail delivery is not confirmed.")
+    }
+
+    func testLiveMissingStatusAllowsRequestAndReadFailureDoesNotInventMail() async {
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [.status(404, body: "{}"), .status(503, body: "{}")]
+        let vm = makeLiveVM()
+        await vm.loadStatus()
+        XCTAssertTrue(vm.needsNewCode)
+        await vm.loadStatus()
+        XCTAssertTrue(vm.needsNewCode)
+        XCTAssertEqual(vm.notice?.isError, true)
+        XCTAssertFalse(vm.isLoadingStatus)
+    }
+
+    func testAcceptedUncertainRequestKeepsCodeEntryAvailable() async {
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [
+            .status(202, body: #"{"message":"Mail delivery is not confirmed.","delivery_unknown":true,"postcard":{"id":"pc-1"}}"#)
+        ]
+        let vm = makeLiveVM()
+        vm.requestNewCode()
+        await waitFor("uncertain receipt") { !vm.isRequestingCode }
+        XCTAssertTrue(vm.deliveryUnknown)
+        XCTAssertTrue(vm.isCodeInputUnlocked)
+        XCTAssertEqual(vm.notice?.text, "Mail delivery is not confirmed.")
+    }
+
+    func testTemporaryThrottlePreservesTheCodeAndDoesNotRequestNewMail() async {
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [
+            .status(429, body: #"{"error":"Too many verification attempts. Please try again later."}"#)
+        ]
+        let vm = makeLiveVM()
+        vm.updateCode("123456")
+        vm.verifyTapped()
+        await waitFor("temporary throttle") {
+            if case .error = vm.submitState { return true }
+            return false
+        }
+        XCTAssertFalse(vm.needsNewCode)
+        XCTAssertEqual(vm.codeInput, "123456")
     }
 }

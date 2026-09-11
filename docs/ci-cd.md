@@ -78,6 +78,12 @@ artifact. The deployment overrides `PGBOSS_ENABLED` and `CRON_ENABLED` to false
 on the API and true on the worker. `DATABASE_URL` is needed for pg-boss; the
 worker retains the application's existing cron fallback if it is unavailable.
 
+Candidate, API and worker also receive `NODE_ENV=production` and `APP_ENV` equal
+to the deployment target. Staging requires `LOB_ENV=test`, a Lob `test_` key and
+a Stripe `sk_test_` or `rk_test_` key. This preserves production security defaults
+while preventing live payments and postcards through these credentials. See
+[staging runtime setup](staging-notification-setup.md#hosted-staging-runtime).
+
 Set environment variable `BACKEND_DEPLOY_ENABLED=true` only after configuring
 all secrets and the host. Missing secrets then fail clearly; a disabled
 environment produces a notice and no release notification.

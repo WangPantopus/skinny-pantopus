@@ -1,6 +1,9 @@
 package app.pantopus.android.data.payments
 
 import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
+import app.pantopus.android.data.api.models.payments.AddCardSheetRequest
+import app.pantopus.android.data.api.models.payments.ConfirmAddCardRequest
+import app.pantopus.android.data.api.models.payments.ConfirmAddCardResponse
 import app.pantopus.android.data.api.models.payments.CreatePaymentIntentRequest
 import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.models.payments.PaymentMethodAckResponse
@@ -27,7 +30,12 @@ class PaymentsRepository
         suspend fun paymentMethods(): NetworkResult<PaymentMethodsResponse> = safeApiCall { api.methods() }
 
         /** `POST /api/payments/payment-sheet-add-card`. */
-        suspend fun addCardSheetParams(): NetworkResult<AddCardSheetParamsDto> = safeApiCall { api.addCardSheet() }
+        suspend fun addCardSheetParams(setupIntentId: String? = null): NetworkResult<AddCardSheetParamsDto> =
+            safeApiCall { api.addCardSheet(AddCardSheetRequest(setupIntentId)) }
+
+        /** Reconcile the same owned SetupIntent after PaymentSheet completes. */
+        suspend fun confirmAddCard(setupIntentId: String): NetworkResult<ConfirmAddCardResponse> =
+            safeApiCall { api.confirmAddCard(ConfirmAddCardRequest(setupIntentId)) }
 
         /** `POST /api/payments/intent` — PaymentSheet params for a checkout (Block 3B). */
         suspend fun createPaymentIntent(request: CreatePaymentIntentRequest): NetworkResult<PaymentIntentSheetParamsDto> =

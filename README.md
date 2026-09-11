@@ -1,5 +1,8 @@
 # Pantopus
 
+**Continuing development?** Read the [project handoff](docs/PROJECT_HANDOFF.md)
+for current release status, completed work, next steps and evidence locations.
+
 Pantopus is a platform for people who live in the same area to connect, trade, and manage day-to-day life around their home and neighborhood. Everything is tied to **verified addresses**, so you know who you're dealing with and can build trust with real neighbors. This repo contains the backend API, the web app, the native iOS app (Swift / SwiftUI), and the native Android app (Kotlin / Jetpack Compose), plus shared packages used by the web app.
 
 ## What the app does

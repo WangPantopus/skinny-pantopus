@@ -2011,26 +2011,15 @@ public struct YouTabRoot: View {
         case let .uploadDocument(homeId):
             UploadDocumentFormView(
                 homeId: homeId,
-                onClose: { Task { @MainActor in pop() } },
-                onUploaded: { _ in
-                    Task { @MainActor in
-                        path.removeAll { route in
-                            if case .uploadDocument = route { return true }
-                            return false
-                        }
-                    }
-                }
+                // swiftlint:disable:next trailing_closure
+                onClose: { Task { @MainActor in pop() } }
             )
         case let .documentDetail(homeId, documentId):
             DocumentDetailView(
                 homeId: homeId,
                 documentId: documentId,
-                onBack: { Task { @MainActor in pop() } },
-                onReplace: {
-                    Task { @MainActor in
-                        path.append(.uploadDocument(homeId: homeId))
-                    }
-                }
+                // swiftlint:disable:next trailing_closure
+                onBack: { Task { @MainActor in pop() } }
             )
         case let .documentSearch(homeId):
             DocumentSearchView(

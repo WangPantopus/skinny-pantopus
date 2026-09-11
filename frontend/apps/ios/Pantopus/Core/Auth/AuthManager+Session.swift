@@ -463,8 +463,11 @@ extension AuthManager {
     /// expired: wipe tokens + session metadata, keep the display hint,
     /// publish the reason. No network call — the server already knows.
     func endSession(reason: SessionEndReason) {
-        let hadSession = clearLocalSession()
+        let hadSession = clearLocalSession(preservingContentArrival: true)
         setSessionEndReason(reason)
+        if PendingDeepLinkStore.peek() != nil {
+            DeepLinkRouter.shared.requestLoginPresentation()
+        }
         Observability.shared.track("session_invalidated", properties: ["code": reason.rawValue])
         if hadSession {
             Observability.shared.track("auth.signed_out", properties: ["reason": reason.rawValue])
@@ -479,8 +482,22 @@ extension AuthManager {
     /// one coalesced refresh fails; only the first fires the side effects
     /// (no suspension points, so the @MainActor serializes the reads).
     @discardableResult
-    func clearLocalSession() -> Bool {
+    func clearLocalSession(preservingContentArrival: Bool = false) -> Bool {
         let hadSession = accessToken != nil || store.get(SecureStoreKey.accessToken) != nil
+        if preservingContentArrival {
+            // Concurrent terminal responses after the first teardown must not
+            // erase the already preserved handoff when tokens are now absent.
+            if hadSession {
+                let userID: String? = if case let .signedIn(user) = state {
+                    user.id
+                } else {
+                    store.get(SecureStoreKey.userId)
+                }
+                PendingDeepLinkStore.retainForReauthentication(userID: userID)
+            }
+        } else {
+            PendingDeepLinkStore.clear()
+        }
         for key in [
             SecureStoreKey.accessToken, SecureStoreKey.refreshToken, SecureStoreKey.userId,
             SecureStoreKey.cachedUser, SecureStoreKey.expiresAt, SecureStoreKey.sessionId,
@@ -496,7 +513,6 @@ extension AuthManager {
         setState(.signedOut)
         // Workstream 1.4 — never resume a prior user's deferred destination.
         PlacePendingStore.clear()
-        PendingDeepLinkStore.clear()
         DeepLinkRouter.shared.clearPending()
         // One account's client-side mutes / hides must never filter the
         // next account's feed (RN drops the provider state on sign-out).

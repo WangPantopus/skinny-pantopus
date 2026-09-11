@@ -247,14 +247,25 @@ final class ReviewClaimsViewModelTests: XCTestCase {
 
     // MARK: - Tab switching
 
-    func test_switching_to_approved_renders_success_chip_and_hides_banner() async {
+    private func waitForTabLoad(_ vm: ReviewClaimsViewModel) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while case .loading = vm.state {
+            guard clock.now < deadline else {
+                return XCTFail("Timed out waiting for the selected claims bucket to load")
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    func test_switching_to_approved_renders_success_chip_and_hides_banner() async throws {
         stubAllBuckets()
         let vm = makeVM()
         await vm.load()
 
         vm.selectedTab = ReviewClaimsTab.approved
-        // Wait for the async refetch triggered by didSet.
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Await the result, not an assumed network/simulator completion time.
+        try await waitForTabLoad(vm)
 
         guard case let .loaded(sections, _) = vm.state,
               let row = sections.first?.rows.first
@@ -265,12 +276,12 @@ final class ReviewClaimsViewModelTests: XCTestCase {
         XCTAssertNil(row.highlight)
     }
 
-    func test_switching_to_rejected_renders_circle_slash_and_muted_highlight() async {
+    func test_switching_to_rejected_renders_circle_slash_and_muted_highlight() async throws {
         stubAllBuckets()
         let vm = makeVM()
         await vm.load()
         vm.selectedTab = ReviewClaimsTab.rejected
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try await waitForTabLoad(vm)
 
         guard case let .loaded(sections, _) = vm.state,
               let row = sections.first?.rows.first

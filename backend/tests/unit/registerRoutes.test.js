@@ -7,6 +7,7 @@ jest.mock('../../config/auth', () => ({
 }));
 
 jest.mock('../../services/emailService', () => ({
+  checkDeliveryAvailability: jest.fn().mockResolvedValue({ available: true }),
   sendPasswordResetEmail: jest.fn().mockResolvedValue({ success: true }),
   sendVerificationEmail: jest.fn().mockResolvedValue({ success: true }),
 }));
@@ -185,7 +186,7 @@ describe('POST /resend-verification', () => {
 
     expect(res._status).toBe(200);
     expect(res._json).toEqual({
-      message: 'If that email exists, a verification email has been sent.',
+      message: 'If that email needs verification, we will attempt to send a new link.',
     });
     expect(adminGenerateLink).not.toHaveBeenCalled();
     expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
@@ -222,7 +223,7 @@ describe('POST /resend-verification', () => {
 
     expect(res._status).toBe(200);
     expect(res._json).toEqual({
-      message: 'If that email exists, a verification email has been sent.',
+      message: 'If that email needs verification, we will attempt to send a new link.',
     });
     expect(adminGenerateLink).not.toHaveBeenCalled();
     expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
@@ -345,5 +346,76 @@ describe('verification email arrival context', () => {
     const url = new URL(emailService.sendVerificationEmail.mock.calls[0][0].verifyLink);
     expect(url.origin).toBe('https://pantopus.com');
     expect(url.searchParams.get('redirectTo')).toBe(target.startsWith('/persona/') ? target : '/app/place');
+  });
+});
+
+
+describe('account email delivery failures', () => {
+  beforeEach(() => {
+    resetTables(); jest.clearAllMocks();
+    emailService.checkDeliveryAvailability.mockResolvedValue({ available: true });
+    emailService.sendVerificationEmail.mockResolvedValue({ success: true });
+    emailService.sendPasswordResetEmail.mockResolvedValue({ success: true });
+    process.env.AUTH_REDIRECT_URL = 'https://pantopus.com';
+  });
+
+  test.each([
+    ['/register', registerHandler],
+    ['/resend-verification', resendVerificationHandler],
+    ['/forgot-password', forgotPasswordHandler],
+  ])('%s rejects mail outages before looking up an account', async (path, handler) => {
+    seedTable('User', [{ id: 'known', email: 'known@example.com', verified: false }]);
+    const from = jest.spyOn(supabaseAdmin, 'from');
+    const generateLink = jest.fn();
+    setAuthMocks({ adminGenerateLink: generateLink });
+    emailService.checkDeliveryAvailability.mockResolvedValue({ available: false });
+    const responses = [];
+    for (const email of ['known@example.com', 'missing@example.com']) {
+      const res = mockRes();
+      await handler(mockReq({ path, body: { email, password: 'long-test-password', username: 'newuser' } }), res);
+      expect(res._status).toBe(503);
+      expect(res._json.code).toBe('EMAIL_UNAVAILABLE');
+      responses.push(res._json);
+    }
+    expect(responses[0]).toEqual(responses[1]);
+    expect(from).not.toHaveBeenCalled();
+    expect(generateLink).not.toHaveBeenCalled();
+    expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+    expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    from.mockRestore();
+  });
+
+  test.each(['rejected', 'thrown', 'missing-token'])('registration preserves a recoverable account after %s delivery', async (failure) => {
+    const deleteUser = jest.fn();
+    setAuthMocks({
+      adminGenerateLink: jest.fn().mockResolvedValue({
+        data: { user: { id: 'new-email-user', email: 'new@example.com', email_confirmed_at: null },
+          properties: failure === 'missing-token' ? {} : { hashed_token: 'verification-hash' } }, error: null,
+      }),
+      adminDeleteUser: deleteUser,
+    });
+    if (failure === 'thrown') emailService.sendVerificationEmail.mockRejectedValueOnce(new Error('transport failed'));
+    else emailService.sendVerificationEmail.mockResolvedValueOnce({ success: false, error: 'EMAIL_SEND_FAILED' });
+    const res = mockRes();
+    await registerHandler(mockReq({ body: { email: 'new@example.com', password: 'long-test-password', username: 'emailuser' } }), res);
+    expect(res._status).toBe(503);
+    expect(res._json).toMatchObject({ code: 'VERIFICATION_EMAIL_UNAVAILABLE', accountCreated: true, requiresEmailVerification: true });
+    expect(res._json.error).toContain('Request a new link');
+    expect(getTable('User')).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new-email-user', verified: false })]));
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  test('recovery acknowledgement remains the same if sending fails for a known account', async () => {
+    const generateLink = jest.fn()
+      .mockResolvedValueOnce({ data: { properties: { hashed_token: 'recovery-hash' } }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'not found' } });
+    setAuthMocks({ adminGenerateLink: generateLink });
+    emailService.sendPasswordResetEmail.mockResolvedValue({ success: false });
+    const known = mockRes(); const missing = mockRes();
+    await forgotPasswordHandler(mockReq({ body: { email: 'known@example.com' } }), known);
+    await forgotPasswordHandler(mockReq({ body: { email: 'missing@example.com' } }), missing);
+    expect(known._status).toBe(200);
+    expect(known._json).toEqual(missing._json);
+    expect(known._json.message).not.toContain('has been sent');
   });
 });

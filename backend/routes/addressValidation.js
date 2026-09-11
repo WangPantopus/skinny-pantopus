@@ -455,6 +455,7 @@ function toMailVerificationResponse(result, fallbackAddressId) {
     verification_id: result.verification_id || result.attempt_id,
     address_id: result.address_id || fallbackAddressId,
     status: result.status || 'pending',
+    ...(result.delivery_unknown && { delivery_unknown: true }),
     expires_at: result.expires_at || result.new_expires_at,
     cooldown_until: result.cooldown_until,
     max_resends: typeof result.max_resends === 'number'
@@ -483,8 +484,8 @@ router.post(
       );
 
       if (!result.success) {
-        const status = mapStartError(result.error);
-        return res.status(status).json({ error: result.error });
+        const status = result.statusCode || mapStartError(result.error);
+        return res.status(status).json(mailVerificationError(result));
       }
 
       return res.json(toMailVerificationResponse(result, address_id));
@@ -511,6 +512,17 @@ function mapResendError(error) {
   return 400;
 }
 
+function mailVerificationError(result) {
+  return {
+    error: result.error,
+    ...(result.delivery_unknown && {
+      delivery_unknown: true,
+      verification_id: result.verification_id,
+      address_id: result.address_id,
+    }),
+  };
+}
+
 async function handleMailResend(req, res) {
   const userId = req.user.id;
   const verificationId = req.params.verification_id || req.body.attempt_id;
@@ -519,8 +531,8 @@ async function handleMailResend(req, res) {
     const result = await mailVerificationService.resendCode(verificationId, userId);
 
     if (!result.success) {
-      const status = mapResendError(result.error);
-      const body = { error: result.error };
+      const status = result.statusCode || mapResendError(result.error);
+      const body = mailVerificationError(result);
       if (result.cooldown_until) body.cooldown_until = result.cooldown_until;
       return res.status(status).json(body);
     }
@@ -567,13 +579,14 @@ router.get(
       const result = await mailVerificationService.getVerificationStatus(verification_id, userId);
 
       if (!result.success) {
-        const status = result.error?.includes('not found') ? 404 : 400;
+        const status = result.statusCode || (result.error?.includes('not found') ? 404 : 400);
         return res.status(status).json({ error: result.error });
       }
 
       return res.json({
         verification_id: result.verification_id,
         status: result.status,
+        ...(result.delivery_unknown && { delivery_unknown: true }),
         expires_at: result.expires_at,
         cooldown_until: result.cooldown_until,
         resends_remaining: result.resends_remaining,
@@ -595,7 +608,7 @@ router.get(
 // ============================================================
 
 function mapConfirmResponse(result) {
-  if (result.verified || result.error === 'Attempt is verified') {
+  if (result.verified && result.occupancy_id) {
     const body = { status: 'confirmed' };
     if (result.occupancy_id) body.occupancy_id = result.occupancy_id;
     return body;
@@ -647,7 +660,7 @@ router.post(
         return res.status(404).json({ error: result.error });
       }
 
-      return res.status(400).json({
+      return res.status(result.statusCode || 400).json({
         error: result.error || 'Verification confirmation failed',
       });
     } catch (err) {

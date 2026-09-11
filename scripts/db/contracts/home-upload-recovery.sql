@@ -1,0 +1,92 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+INSERT INTO auth.users (id,email) VALUES
+  ('eee00000-0000-4000-8000-000000000051','upload-quota@example.invalid');
+INSERT INTO public."User" (id,email,username,name) VALUES
+  ('eee00000-0000-4000-8000-000000000051','upload-quota@example.invalid','upload_quota_contract','Upload quota contract');
+INSERT INTO public."FileQuota" (user_id,storage_limit,max_files,uploads_today,uploads_today_reset_at) VALUES
+  ('eee00000-0000-4000-8000-000000000051',10,2,99,now()+interval '1 day');
+
+CREATE FUNCTION pg_temp.add_quota_file(p_id uuid,p_size bigint) RETURNS void
+LANGUAGE sql AS $f$
+  INSERT INTO public."File" (id,user_id,filename,original_filename,file_path,file_url,
+    file_size,mime_type,file_extension,file_type,visibility,metadata)
+  VALUES (p_id,'eee00000-0000-4000-8000-000000000051','quota.txt','quota.txt','quota-fixture',
+    '/fixture/content',p_size,'text/plain','.txt','home_document','private',
+    '{"storage_contract":"home_document_v1"}');
+$f$;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000053',6);
+DO $$ BEGIN
+  BEGIN
+    PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000054',4);
+    RAISE EXCEPTION 'Daily quota was bypassed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'FILE_QUOTA_EXCEEDED' THEN RAISE; END IF;
+  END;
+  UPDATE public."FileQuota" SET uploads_today=0 WHERE user_id='eee00000-0000-4000-8000-000000000051';
+  BEGIN
+    PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000054',5);
+    RAISE EXCEPTION 'Byte quota was bypassed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'FILE_QUOTA_EXCEEDED' THEN RAISE; END IF;
+  END;
+  UPDATE public."FileQuota" SET max_files=1 WHERE user_id='eee00000-0000-4000-8000-000000000051';
+  BEGIN
+    PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000054',4);
+    RAISE EXCEPTION 'File count quota was bypassed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'FILE_QUOTA_EXCEEDED' THEN RAISE; END IF;
+  END;
+  IF (SELECT count(*) FROM public."File" WHERE user_id='eee00000-0000-4000-8000-000000000051') <> 1
+    OR (SELECT storage_used FROM public."FileQuota" WHERE user_id='eee00000-0000-4000-8000-000000000051') <> 6 THEN
+    RAISE EXCEPTION 'Rejected admission left a file or changed quota';
+  END IF;
+  UPDATE public."FileQuota" SET max_files=2 WHERE user_id='eee00000-0000-4000-8000-000000000051';
+  PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000054',4);
+  BEGIN
+    PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000053',6);
+    RAISE EXCEPTION 'Duplicate file was accepted';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+  BEGIN
+    PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000055',-100);
+    RAISE EXCEPTION 'Negative file size reduced quota';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  IF (SELECT storage_used FROM public."FileQuota" WHERE user_id='eee00000-0000-4000-8000-000000000051') <> 10 THEN
+    RAISE EXCEPTION 'Exact-capacity admission or retry changed quota incorrectly';
+  END IF;
+  UPDATE public."FileQuota" SET storage_limit=20,max_files=3,uploads_today=100,
+    uploads_today_reset_at=now()-interval '1 day'
+    WHERE user_id='eee00000-0000-4000-8000-000000000051';
+  IF (public.can_upload_file('eee00000-0000-4000-8000-000000000051',1)->>'canUpload') IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'Preliminary quota check ignored the expired daily window';
+  END IF;
+  PERFORM pg_temp.add_quota_file('eee00000-0000-4000-8000-000000000055',1);
+  IF (SELECT uploads_today FROM public."FileQuota" WHERE user_id='eee00000-0000-4000-8000-000000000051') <> 1 THEN
+    RAISE EXCEPTION 'Daily quota did not reset at admission';
+  END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','eee00000-0000-4000-8000-000000000051',true);
+DO $$ BEGIN
+  IF (SELECT storage_used FROM public."FileQuota" WHERE user_id=auth.uid()) <> 11 THEN
+    RAISE EXCEPTION 'Client cannot read its own quota';
+  END IF;
+  BEGIN
+    UPDATE public."FileQuota" SET storage_used=0,storage_limit=99999999 WHERE user_id=auth.uid();
+    RAISE EXCEPTION 'Client forged its quota';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    UPDATE public."File" SET file_size=99999999 WHERE user_id=auth.uid();
+    RAISE EXCEPTION 'Client forged file accounting';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+RESET ROLE;
+ROLLBACK;
+SELECT 'PASS: atomic storage/count/daily admission, duplicate rollback and direct accounting isolation';

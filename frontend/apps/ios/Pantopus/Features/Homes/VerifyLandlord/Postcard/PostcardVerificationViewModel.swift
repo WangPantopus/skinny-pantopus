@@ -143,6 +143,9 @@ final class PostcardVerificationViewModel {
     private(set) var codeExpiresOn: String?
     private(set) var notice: PostcardNotice?
     private(set) var isRequestingCode = false
+    private(set) var isLoadingStatus = false
+    private(set) var deliveryUnknown = false
+    let usesSamplePresentation: Bool
     var pendingEvent: PostcardVerificationOutboundEvent?
 
     // MARK: - Init
@@ -165,6 +168,7 @@ final class PostcardVerificationViewModel {
         api: APIClient = .shared,
         submitDelayNanos: UInt64 = 800_000_000
     ) {
+        usesSamplePresentation = expectedCode != nil || content != nil
         self.stage = stage
         self.content = content ?? PostcardVerificationSampleData.content(for: stage)
         hasCodeInHand = stage == .delivered
@@ -279,6 +283,31 @@ final class PostcardVerificationViewModel {
         pendingEvent = nil
     }
 
+    /// Refresh only metadata; opening this screen never spends postage.
+    func loadStatus() async {
+        guard !usesSamplePresentation, !isLoadingStatus, !isRequestingCode else { return }
+        isLoadingStatus = true
+        defer { isLoadingStatus = false }
+        do {
+            let response: RequestPostcardResponse = try await api.request(
+                HomesEndpoints.postcardStatus(homeId: homeId)
+            )
+            applyStatus(response)
+        } catch APIError.notFound {
+            needsNewCode = true
+            notice = PostcardNotice(text: "No pending postcard. Request a code to verify this home.", isError: false)
+        } catch {
+            notice = PostcardNotice(text: "Couldn't check postcard status. Please retry.", isError: true)
+        }
+    }
+
+    private func applyStatus(_ response: RequestPostcardResponse) {
+        needsNewCode = false
+        deliveryUnknown = response.deliveryUnknown == true
+        codeExpiresOn = Self.formatExpiry(response.postcard.expiresAt)
+        notice = PostcardNotice(text: response.message, isError: false)
+    }
+
     // MARK: - Request
 
     private func performRequestCode() async {
@@ -288,7 +317,7 @@ final class PostcardVerificationViewModel {
                 HomesEndpoints.requestPostcard(homeId: homeId),
                 as: RequestPostcardResponse.self
             )
-            needsNewCode = false
+            applyStatus(response)
             // RN's `handleRequestCode` drops the user on the enter-code
             // step once the mailer accepts the request
             // (`verify-postcard.tsx:45`).
@@ -374,6 +403,10 @@ final class PostcardVerificationViewModel {
             )
         case let .clientError(status, body):
             let message = APIError.friendlyClientMessage(body)
+            if status == 429, Self.errorCode(in: body) != "LOCKED" {
+                submitState = .error(message: message ?? "Please wait before trying this code again.")
+                return
+            }
             if status == 410 || status == 429 {
                 needsNewCode = true
                 attemptsRemaining = 0
@@ -403,6 +436,12 @@ final class PostcardVerificationViewModel {
             return APIError.friendlyClientMessage(body)
         }
         return nil
+    }
+
+    private static func errorCode(in body: String?) -> String? {
+        guard let body, let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["code"] as? String
     }
 
     private static func attemptsRemaining(in body: String?) -> Int? {

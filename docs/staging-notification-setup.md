@@ -1,41 +1,190 @@
 # Staging setup for physical notification tests
 
-## Status — September 7, 2026
+## Status — September 8, 2026
 
-The code baseline is master `e30e76036a89c49fd3a27c1bdaff1fa5cd147424`
-(merged PRs #4 and #1). This preparation adds explicit native staging inputs
-and local configuration checks. **Staging is not deployed and physical push
-delivery is not verified.**
+The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`
+(including merged PR #5). Explicit native staging inputs and local configuration
+checks are available. The runtime preparation below adds sandbox vendor checks
+without disabling production security settings. **The staging backend is live
+at `https://staging-api.pantopus.com`; iPhone push display and tap navigation are
+verified on a physical device. Android FCM display, chat navigation, global
+push opt-out and logout token removal are verified on a Google APIs emulator;
+physical Android verification remains pending.** See the
+[Android test record](android-staging-verification-2026-09-08.md).
 
-Read-only discovery found:
+The operator subsequently authorized restarting the existing server, configuring
+its management access, and deploying the current backend to staging, while
+retaining the restriction **against new paid resources**. A separate Free
+Supabase project has been created. See the [recovery record](backend-recovery-2026-09-07.md)
+for the corrected database ownership, local schema rehearsal, and host sharing.
+
+Current discovery and remaining prerequisites:
 
 | Dependency | Observed state |
 | --- | --- |
 | GitHub staging | Exists; no environment secrets; backend deployment and DB migration flags are false. |
 | Staging source branch | No remote `dev` branch exists yet. |
-| Supabase | The authenticated account lists only `Pantopus-backend`; no project has been designated for staging. |
-| Backend host | AWS's configured credentials fail authentication. No staging host is confirmed. |
-| Firebase | Google CLI needs interactive reauthentication. The committed Android config is a placeholder. |
-| Push server credentials | No APNs/FCM credentials in the active local backend env; no staging runtime env exists. |
-| iOS | Paired iPhone 16 Pro is available; a local Apple Development signing identity exists. |
-| Android | No ADB-connected phone. |
-| Recipients | Test accounts/devices have not yet been designated. |
+| Supabase | `Pantopus-backend` is the existing testing database. New Free project `Pantopus-staging` is isolated from both it and production; preserve both existing projects. |
+| Backend host | API and worker release `9d1fe24dc` are healthy on the existing server. Staging API uses loopback port 18001 behind nginx; the old production container is preserved. |
+| DNS | Production API DNS still points to the old address. DNS-only `staging-api.pantopus.com` points to the current server, with verified HTTPS and tested certificate renewal. |
+| Registry | The operator has a Docker Hub account; staging registry secrets are not configured. |
+| Firebase | Created `Pantopus Staging` (`pantopus-staging`) with the owner's terms approval. The console confirms Spark, $0/month; Analytics and the Developer Program opt-in were left off. Registered `app.pantopus.android.debug`; the downloaded client configuration is privately saved in the ignored debug variant directory and passes the native config check. |
+| Push server credentials | Both healthy staging processes load APNs sandbox and FCM credentials. The supplied Apple key passed EC P-256 signing checks, but Apple rejected the first push with `403 InvalidProviderToken`; the Developer portal confirmed it is a WeatherKit-only key. With explicit owner approval, a new sandbox key restricted to `app.pantopus.ios` was created and configured in both staging processes. The retry was accepted by APNs with HTTP 200; the owner confirmed arrival on their iPhone and navigation to the notification screen after tapping. The live staging API passed Google OAuth and an FCM validation-only request; subsequent real chat pushes appeared on the Android emulator and opened the correct conversation. Isolated storage and backend email delivery remain unconfigured. |
+| iOS | A signed physical-device Staging build succeeded. Strict signature verification passed; the signed entitlement is `aps-environment=development` and both bundled endpoints resolve to the staging HTTPS origin. The app was installed on the paired iPhone 16 Pro after confirming no existing Pantopus installation. The owner logged in with a dedicated synthetic staging account. Its APNs token is registered and linked to the device, with push enabled. The owner confirmed that the test arrived and tapping opened notifications. |
+| Android | The staging debug APK was installed on the existing Google APIs ARM64 emulator (Android 14 / API 34). A synthetic account registered one linked FCM token. Real chat push display and conversation navigation passed, as did global push opt-out across re-registration, restoration and logout token removal. Two exposed Android UI/auth bugs were fixed and verified. No physical Android phone is available. |
+| Recipients | Only dedicated synthetic staging accounts were used. The owner confirmed the iPhone retry. Android chat tests used the synthetic iPhone account as sender and a new synthetic Android account as the sole recipient. The Android account is now signed out with no registered token, and its original push preference is restored. |
 
 Do not label provider acceptance, a simulator test, or the presence of config
 fields as proof of device delivery. Record text evidence; screenshots are not
 required for this milestone.
 
-Local preparation validation passed: 26 deployment/migration/configuration tests,
+The dedicated Google service account `pantopus-staging-push` was granted only
+`roles/firebasecloudmessaging.admin` in `pantopus-staging`, with the owner's
+explicit approval. Key generation initially failed because the inherited
+`iam.disableServiceAccountKeyCreation` policy was enforced. The owner separately
+approved a temporary exception for this staging project. One JSON key was
+generated, then the original inheritance was immediately restored; the console
+again showed **Enforced**. No organization-wide policy or other project was
+changed. Both the service-account JSON and mobile client configuration remain
+private and excluded from Git.
+
+The FCM credential passed local RSA signing checks. Using the unchanged deployed
+backend image on AWS, it then passed Google OAuth authentication and an FCM HTTP v1
+`validate_only: true` request (HTTP 200). The validation used a dedicated test
+topic and did not deliver a notification. It establishes sender permission,
+not device-token registration, physical delivery, or notification tap behavior.
+
+Only the three approved FCM fields were transferred over pinned SSH and combined
+with the existing host configuration. The rollout reused backend release
+`9d1fe24dc` and its unchanged image. Both live staging processes passed APNs and
+FCM configuration checks; the running API repeated the FCM validation-only
+request successfully. Public HTTPS `/health` returned HTTP 200 with the database
+connected. The old production container remained healthy. The prior staging
+environment and stopped containers are retained for recovery.
+
+Initial local preparation validation passed: 26 deployment/migration/configuration tests,
 Android `ktlintCheck`, Xcode's resolved Staging settings, and Android's generated
 BuildConfig/Firebase resources. The native checks used synthetic public config;
 both explicit staging paths rejected a missing env file. Test inputs and
 generated secret overlays were removed afterward. No signed app was installed,
-and no staging release or live notification was sent.
+and that initial validation sent no staging release or live notification. Later
+deployment and credential configuration are recorded in the current status above.
+
+Read-only inspection of the existing **testing** database found PostgreSQL 17.6 and 288 public
+tables. A schema-only export was saved outside the repository with private
+permissions; it contains no row INSERT/COPY statements. This is an inspection
+artifact, not an adopted production baseline. Both `AuthDevice` and
+`AuthSession`, used by the current device/session implementation, are absent.
+The missing schema has since been rehearsed in isolation, with corrections and
+limitations recorded in the recovery document. No production application schema
+or migration ledger was changed.
+
+Runtime preparation validation passed: 4,279 backend tests (16 skipped), all
+privacy gates, and 28 deployment/native-configuration/database-safeguard tests.
+The backend total includes 16 new staging startup checks. These tests use
+synthetic credentials and do not deploy or call live providers.
+
+## First iPhone test — September 8, 2026
+
+Login succeeded. Registration then exposed a schema gap: `PushToken.platform`
+and `provider` were missing. Numbered migration
+`backend/database/migrations/152_push_token_platform_provider.sql` contains the
+required change, but it has no counterpart in the timestamped migrations used
+for the initial reconciliation. Passing the identity-firewall checks did not
+establish native-push schema readiness.
+
+The local Docker rehearsal database was unavailable. The exact narrow DDL was
+therefore tested in a short, rollback-only staging transaction before applying
+it: iOS/APNs insert, Android/FCM upsert, device linkage, legacy Expo backfill,
+idempotent replay, unchanged security settings, and complete rollback all
+passed. The guarded staging transaction then added the two nullable text fields
+and provider index and notified PostgREST to reload its schema. No migration
+ledger or existing production/testing database was changed.
+
+After a background app restart, the authenticated iPhone registered one APNs
+token with device linkage and push preferences enabled. The current
+`notificationService.createNotification` path created one notification and
+invoked the native sender once. Apple returned **HTTP 403,
+`InvalidProviderToken`**, with zero accepted or invalid device tokens. The
+private token was retained. That rejected attempt did not verify display or tap navigation.
+
+The live key's signature and JWT timestamps were valid locally. In the Apple
+Developer portal, its Key ID belongs to **Pantopus WeatherKit** and has no APNs
+capability. An existing Expo APNs key is listed, but its private file was not
+found in the checked recovery locations. A proposed **Pantopus Staging Push**
+key was prepared with **Sandbox**, **Topic Specific**, and only
+`app.pantopus.ios`. The owner explicitly approved its creation and the retry.
+No existing Apple key was modified or revoked.
+
+The approved key was created and its downloaded file was saved privately. The
+Developer portal confirmed **1 Topic** and **Sandbox**. Local P-256 signing
+verification passed. Only the five APNs fields were transferred over pinned SSH,
+then combined with the existing staging environment after checking that all
+unrelated values were unchanged. The existing deployment transaction rolled out
+the same application image to API and worker; both were healthy with the new key
+and FCM configuration intact. Public HTTPS health returned HTTP 200 with the
+database connected. Private configuration backups and previous containers remain
+available for recovery.
+
+At **2026-09-08 07:23:41 UTC**, the current notification service created the
+authorized retry and invoked APNs once for the designated iPhone. Apple returned
+**HTTP 200**: one accepted token, zero invalid tokens. The sender guard checked
+the staging project, new Key ID, bundle topic, sandbox mode, exact synthetic
+recipient, one linked iOS token, enabled push preferences, and absence of a
+previous notification with the retry marker. This establishes server-side
+notification creation, registration, routing and provider acceptance. The owner
+then confirmed **“Arrived and opened notifications”** on the physical iPhone
+16 Pro (iOS 26.5.2), establishing device display and the `/notifications` tap
+route for this test. No additional iPhone push was sent. iPhone foreground/cold-start
+cases, notification opt-outs, sign-out/revocation behavior and Beacon-triggered
+delivery still need separate verification. The subsequent Android emulator
+checks and their limits are recorded in the
+[Android test report](android-staging-verification-2026-09-08.md).
+
+Before future device tests, verify the live table contract explicitly (this
+read-only query returns no device data):
+
+```sql
+SELECT token, platform, provider, device_id, updated_at
+FROM public."PushToken" WHERE false;
+```
+
+A matching staging schema is still not proof of a complete production upgrade.
+Include native-push columns when finishing the production gap audit; both old
+schemas lacked them, so comparing only against the initial staging catalog
+could not detect this omission.
+
+## Hosted staging runtime
+
+The deployment script explicitly sets `NODE_ENV=production` and `APP_ENV` to
+the selected target on the candidate, API and worker. Thus staging retains the
+existing production requirements for CSRF, step-up secrets and vendor config.
+The staging runtime requires:
+
+```dotenv
+NODE_ENV=production
+APP_ENV=staging
+LOB_ENV=test
+LOB_API_KEY=test_REPLACE_ME
+STRIPE_SECRET_KEY=sk_test_REPLACE_ME
+```
+
+These lines describe required modes, not a complete or usable runtime env.
+Provide real sandbox keys privately. A restricted Stripe `rk_test_` key is also
+accepted if it has the permissions the app needs. Lob chooses test/live delivery
+from the key itself, so `LOB_ENV=test` with a live key is rejected. Both process
+entry points validate before loading services or registering jobs. Hosted
+staging still requires Google/Smarty configuration and the Lob webhook signing
+secret; ordinary production still requires `LOB_ENV=live`.
+
+The checks do not establish database isolation, credential validity, email/SMS
+recipient restrictions, storage isolation or push delivery. Configure those
+separately before deploying. No live provider call is made by validation.
 
 ## Configure the backend
 
 1. Designate the staging Supabase project and an HTTPS backend host. Restore
-   AWS/Google CLI access if those accounts will be used. Keep resource IDs and
+   Google CLI access if that account will be used. Keep resource IDs and
    secret-file locations in the operator's private configuration.
 2. Follow [CI/CD host setup](ci-cd.md#configure-each-environment). Install
    `~/pantopus/.env.staging` with the staging database credentials and runtime

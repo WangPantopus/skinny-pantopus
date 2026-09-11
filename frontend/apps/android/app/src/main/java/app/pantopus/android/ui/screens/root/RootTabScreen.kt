@@ -17,6 +17,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1441,7 +1442,9 @@ private object ChildRoutes {
     /** Build the invoice-detail path. */
     fun invoiceDetail(invoiceId: String): String = "invoices/$invoiceId"
 
-    /** Build the chat-conversation path with all header context encoded. */
+    /** Build the chat-conversation path with all header context encoded.
+     *  Navigation decodes URI escapes, not form encoding: spaces must be
+     *  `%20`, while literal plus signs remain encoded as `%2B`. */
     fun chatConversation(row: ConversationRowContent): String {
         val kind =
             when (row.variant) {
@@ -1456,7 +1459,7 @@ private object ChildRoutes {
                 null -> ""
             }
 
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/$kind/${enc(row.id)}?" +
             "$CHAT_NAME_KEY=${enc(row.displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(row.initials)}" +
@@ -1493,7 +1496,7 @@ private object ChildRoutes {
         topicRefId: String? = null,
         topicTitle: String? = null,
     ): String {
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/person/${enc(userId)}?" +
             "$CHAT_NAME_KEY=${enc(displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(initials)}" +
@@ -1516,7 +1519,7 @@ private object ChildRoutes {
         initials: String,
         verified: Boolean,
     ): String {
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
             "$CHAT_NAME_KEY=${enc(displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(initials)}" +
@@ -1548,7 +1551,7 @@ private object ChildRoutes {
                 null -> ""
             }
 
-        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8")
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/$kind/${enc(result.conversationId)}?" +
             "$CHAT_NAME_KEY=${enc(result.displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(result.initials)}" +
@@ -2591,6 +2594,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
                         onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
                         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
+                        onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
+                        onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
                 composable(
@@ -3592,13 +3597,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(DOCUMENT_DETAIL_HOME_ID_KEY) { type = NavType.StringType },
                             navArgument(DOCUMENT_DETAIL_DOC_ID_KEY) { type = NavType.StringType },
                         ),
-                ) { entry ->
-                    val homeId = entry.arguments?.getString(DOCUMENT_DETAIL_HOME_ID_KEY).orEmpty()
+                ) {
                     DocumentDetailScreen(
                         onBack = { navController.popBackStack() },
-                        onReplace = {
-                            navController.navigate(ChildRoutes.uploadDocument(homeId))
-                        },
                     )
                 }
                 composable(
@@ -4155,9 +4156,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.PULSE_POST,
                     arguments = listOf(navArgument(PULSE_POST_DETAIL_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { entry ->
+                    val postId = requireNotNull(entry.arguments?.getString(PULSE_POST_DETAIL_ID_KEY))
+                    val arrival = DeepLinkRouter.Destination.Post(postId)
+                    DisposableEffect(postId) {
+                        onDispose { DeepLinkRouter.completeArrival(arrival) }
+                    }
                     PulsePostDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onContentLoaded = { DeepLinkRouter.completeArrival(arrival) },
                         onOpenProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },

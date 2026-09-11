@@ -167,7 +167,7 @@ class StatusWaitingContentTest {
     fun checkYourEmail_resent_state() {
         val content = StatusWaitingContent.checkYourEmail(email = "maria.k@email.com", resent = true)
         assertEquals(StatusPillTone.Success, content.statusPill?.tone)
-        assertEquals("New link sent · just now", content.statusPill?.text)
+        assertEquals("Link requested · just now", content.statusPill?.text)
         assertFalse(content.statusPill?.isSpinning == true)
         val resend = content.actionStack[1]
         assertTrue(resend.isDisabled)

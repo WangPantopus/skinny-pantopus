@@ -53,6 +53,7 @@ public struct PaymentsView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("payments.screen")
         .sensitiveScreen()
         .confirmationDialog(
@@ -170,6 +171,7 @@ private extension PaymentsView {
             .padding(.bottom, Spacing.s5)
         }
         .refreshable { await viewModel.refresh() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paymentsContent")
     }
 
@@ -211,13 +213,13 @@ private extension PaymentsView {
                                 chip: method.chip,
                                 trailing: .chevron,
                                 rowIdentifier: method.id,
-                                rowAccessibilityIdentifier: "payments.method.\(method.id)",
                                 chipIdentifier: method.chip != nil
                                     ? "paymentsRow_\(method.id)_defaultBadge"
                                     : nil
                             )
                         })
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("payments.method.\(method.id)")
                         if index < methods.count - 1 {
                             divider
                         }
@@ -507,7 +509,7 @@ private extension PaymentsView {
                         .frame(width: 38, height: 26)
                     Icon(.plus, size: 16, strokeWidth: 2.5, color: Theme.Color.primary600)
                 }
-                Text("Add payment method")
+                Text(viewModel.addMethodLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.primary600)
                 Spacer(minLength: Spacing.s0)
@@ -518,6 +520,7 @@ private extension PaymentsView {
             .contentShape(Rectangle())
         })
         .buttonStyle(.plain)
+        .disabled(viewModel.isAddingMethod || viewModel.isChangingMethod)
         .accessibilityIdentifier("payments.addMethodBtn")
     }
 
@@ -542,6 +545,7 @@ private extension PaymentsView {
         .padding(.horizontal, Spacing.s5)
         .padding(.top, 28)
         .padding(.bottom, 22)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("payments.empty")
     }
 
@@ -558,6 +562,7 @@ private extension PaymentsView {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .padding(.horizontal, Spacing.s3)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paymentsCard_\(id)")
     }
 

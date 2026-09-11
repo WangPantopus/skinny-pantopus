@@ -56,7 +56,9 @@ public enum HomeDashboardProjection {
             HomeHeroStat(id: "tasks", value: "\(counts.tasksOpen)", label: "Tasks")
         ]
     }
+}
 
+extension HomeDashboardProjection {
     // MARK: - Quick actions
 
     /// Quick-action tiles, permission-gated the same way RN gates its
@@ -107,6 +109,9 @@ public enum HomeDashboardProjection {
                 )
             )
         }
+        if let access, access.hasAccess, access.isOwner || access.permissions.contains("docs.view") {
+            out.append(tile(id: "view_docs", label: "Documents", icon: .fileText, tone: .home, count: counts.documents))
+        }
         out.append(
             tile(
                 id: "add_member",
@@ -137,7 +142,9 @@ public enum HomeDashboardProjection {
             isMuted: count == 0
         )
     }
+}
 
+extension HomeDashboardProjection {
     // MARK: - Overview
 
     /// Maximum "Upcoming" rows — mirrors the design frame's three-row

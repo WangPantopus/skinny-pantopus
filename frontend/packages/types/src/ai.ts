@@ -383,6 +383,8 @@ export interface UserNotificationPreferences {
   aqi_alerts_enabled: boolean;
   mail_summary_enabled: boolean;
   gig_updates_enabled: boolean;
+  /** Beacon device alerts only; disabling keeps in-app notifications. */
+  beacon_push_enabled: boolean;
   home_reminders_enabled: boolean;
   quiet_hours_start_local: string | null;
   quiet_hours_end_local: string | null;

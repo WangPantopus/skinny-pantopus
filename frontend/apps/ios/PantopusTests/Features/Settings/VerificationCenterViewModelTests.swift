@@ -86,6 +86,6 @@ final class VerificationCenterViewModelTests: XCTestCase {
             return
         }
         let resend = groups.first { $0.id == "email" }?.rows.first { $0.id == "email.resend" }
-        XCTAssertEqual(resend?.label, "Sent — check your inbox")
+        XCTAssertEqual(resend?.label, "Requested — check your inbox")
     }
 }

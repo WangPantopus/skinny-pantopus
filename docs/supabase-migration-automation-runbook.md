@@ -1,6 +1,9 @@
 # Supabase migration automation: adoption and activation
 
-Updated 6 September 2026 for the CI/CD implementation in PR #3.
+Updated September 8, 2026: canonical source adoption is prepared in PR #11.
+See the [canonical evidence](database-canonical-baseline-2026-09-08.md).
+The historical implementation description below records the original PR #3;
+the adoption branch now uses `mode: baselined`. Hosted adoption remains pending.
 
 **Decision: prepare automation now; defer production baselining and ledger
 changes to a dedicated adoption change.** The research in the original runbook
@@ -43,9 +46,11 @@ the version prefix, so these files cannot safely be replayed unchanged.
 
 The existing numbered SQL remains historical evidence and test fixtures. Do not
 rename duplicate versions and replay them against production: matching filenames
-does not prove matching production state. The one hosted project described by the
-original research is production, even where a local filename calls it “dev”.
-Re-verify the current project inventory at adoption time.
+does not prove matching production state. On September 7 the owner confirmed that
+`gzzdqechcbfpalfvgyro` (Pantopus-backend, used by this Mac) is a testing database;
+the old AWS backend's `ankjdyvoduutkhhaxvhx` is production. Preserve both. See the
+[recovery record](backend-recovery-2026-09-07.md) and re-verify the owning account
+and current schema before production adoption.
 
 ## Corrections to the original proposal
 
@@ -135,8 +140,16 @@ database to obtain a clean test environment.
 
 - `pnpm db:check` must pass.
 - `supabase db start` must apply the complete baseline on an empty local stack.
-- `supabase db lint --local --fail-on error` must pass. Fix baseline errors; do
-  not silently lower the gate to warnings just to make adoption green.
+- `node scripts/db/check-function-lint.cjs` must pass. It runs the pinned
+  `supabase db lint --local --fail-on error` scan, checks application routines
+  and attached triggers, and executes the PostGIS runtime contract. Fix
+  application errors; do not lower the failure threshold. The only accepted
+  CLI errors are the six stock PostGIS diagnostics recorded in the reviewed
+  manifest, with exact extension membership, version, function hashes and
+  diagnostic contents. Unknown errors, application-name collisions and changed
+  provenance fail. This explicit exception replaces the raw CLI exit-code gate;
+  the raw CLI still exits 1 for these six diagnostics. See the
+  [reference and lint evidence](database-reference-lint-2026-09-08.md).
 - Add pgTAP SQL tests under `supabase/tests/` for auth-user triggers, RLS as actual
   `anon`/`authenticated` roles, sensitive grants, storage policies and core RPCs.
   `supabase test db` must pass with real assertions, not an empty test directory.
@@ -218,6 +231,18 @@ files applied: keep them immutable and ship a forward-compatible fix. Applicatio
 rollback never runs down migrations or modifies the database ledger.
 
 ## Acceptance evidence still required
+
+The [September 8 local continuation](database-baseline-rehearsal-2026-09-08.md)
+closes the known table/column gaps on a preserved production-upgrade copy and
+adds real SQL contracts plus read-only catalog comparison tools. It also finds
+and locally corrects a direct Beacon-storage authorization gap. These results
+now underpin the [canonical baseline](database-canonical-baseline-2026-09-08.md),
+which activates repository database CI. Hosted adoption remains pending; private
+forward SQL and catalogs stay in the operator evidence root.
+The additional application linter cannot pass the gate by itself. The
+[reviewed function gate](../scripts/db/check-function-lint.cjs) retains the
+complete pinned CLI scan and adds provenance checks and real PostGIS calls.
+Its narrowly reviewed extension exceptions do not permit application errors.
 
 Production baselining is deliberately deferred. Completion requires: privately
 verified backups, exact schema equivalence, custom managed-schema objects and

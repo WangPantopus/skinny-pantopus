@@ -597,60 +597,34 @@ class StripeService {
    * then creates a new customer and persists the ID on User.
    */
   async getOrCreateCustomer(userId) {
-    try {
-      // 1. Check User table first (primary source)
-      const { data: user } = await supabaseAdmin
-        .from('User')
-        .select('stripe_customer_id, email, name, username')
-        .eq('id', userId)
-        .single();
+    const { data: user, error: userError } = await supabaseAdmin.from('User')
+      .select('stripe_customer_id, email, name, username').eq('id', userId).single();
+    if (userError) throw new Error('Could not load payment customer');
+    if (!user) throw this._addCardError(404, 'Payment customer not found');
+    if (user.stripe_customer_id) return user.stripe_customer_id;
 
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      if (user.stripe_customer_id) {
-        return user.stripe_customer_id;
-      }
-
-      // 2. Fallback: check PaymentMethod table (legacy)
-      const { data: existingMethod } = await supabaseAdmin
-        .from('PaymentMethod')
-        .select('stripe_customer_id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-
-      if (existingMethod?.stripe_customer_id) {
-        // Backfill to User table
-        await supabaseAdmin
-          .from('User')
-          .update({ stripe_customer_id: existingMethod.stripe_customer_id })
-          .eq('id', userId);
-        return existingMethod.stripe_customer_id;
-      }
-
-      // 3. Create new Stripe customer
+    const { data: existingMethod, error: methodError } = await supabaseAdmin.from('PaymentMethod')
+      .select('stripe_customer_id').eq('user_id', userId).limit(1).maybeSingle();
+    if (methodError) throw new Error('Could not load payment customer');
+    let candidate = existingMethod?.stripe_customer_id;
+    if (!candidate) {
+      // Email/name can change, so a permanent user-scoped provider idempotency
+      // key would conflict with later parameters. The CAS below always returns
+      // the durable winner; a lost provider response may leave an unused
+      // Customer object, but never an intent bound to an uncommitted customer.
       const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.name || user.username,
-        metadata: { user_id: userId }
+        email: user.email, name: user.name || user.username, metadata: { user_id: userId },
       });
-
-      // Persist on User table
-      await supabaseAdmin
-        .from('User')
-        .update({ stripe_customer_id: customer.id })
-        .eq('id', userId);
-
-      logger.info('Stripe customer created', { userId, customerId: customer.id });
-
-      return customer.id;
-
-    } catch (err) {
-      logger.error('Error getting/creating customer', { error: err.message, userId });
-      throw err;
+      candidate = customer?.id;
     }
+    if (!candidate) throw new Error('Could not create payment customer');
+    const result = await this._paymentMethodRpc('bind_payment_customer', {
+      p_user_id: userId, p_customer_id: candidate,
+    });
+    if (typeof result.customer_id !== 'string' || !result.customer_id) {
+      throw new Error('Could not confirm payment customer');
+    }
+    return result.customer_id;
   }
 
   // ============ FEE CALCULATION ============
@@ -1629,251 +1603,229 @@ class StripeService {
    * details, and upserts into the local table. Safe to call multiple times (idempotent).
    */
   async syncPaymentMethodToLocal(paymentId, userId) {
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('stripe_payment_intent_id')
-      .eq('id', paymentId)
-      .single();
-
-    if (!payment?.stripe_payment_intent_id) {
-      logger.info('syncPaymentMethodToLocal: no stripe_payment_intent_id', { paymentId });
-      return;
-    }
-
-    const pi = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, {
-      expand: ['payment_method'],
-    });
-
-    // payment_method can be a string ID or an expanded object
-    const pmObj = typeof pi?.payment_method === 'object' ? pi.payment_method : null;
-    const pmId = pmObj?.id || (typeof pi?.payment_method === 'string' ? pi.payment_method : null);
-    if (!pmId) {
-      logger.info('syncPaymentMethodToLocal: no payment_method on PI', {
-        paymentIntentId: payment.stripe_payment_intent_id,
-      });
-      return;
-    }
-
-    // Already saved? If exists but missing details, update it.
-    const { data: existing } = await supabaseAdmin
-      .from('PaymentMethod')
-      .select('id, card_last4')
-      .eq('stripe_payment_method_id', pmId)
-      .maybeSingle();
-
-    if (existing?.card_last4) return; // Already saved with full details
-
-    // If we got an expanded object, use it directly; otherwise retrieve
-    const pm = pmObj || await stripe.paymentMethods.retrieve(pmId);
-    const card = pm?.card;
-
-    const { data: existingMethods } = await supabaseAdmin
-      .from('PaymentMethod')
-      .select('id')
-      .eq('user_id', userId);
-
-    const row = {
-      user_id: userId,
-      stripe_customer_id: typeof pi.customer === 'string' ? pi.customer : pi.customer?.id || null,
-      stripe_payment_method_id: pmId,
-      payment_method_type: pm?.type || 'card',
-      card_brand: card?.brand || null,
-      card_last4: card?.last4 || null,
-      card_exp_month: card?.exp_month || null,
-      card_exp_year: card?.exp_year || null,
-      card_funding: card?.funding || null,
-      is_default: !existingMethods || existingMethods.length === 0,
-    };
-
-    let insertErr;
-    if (existing) {
-      // Update the existing record with missing details
-      ({ error: insertErr } = await supabaseAdmin
-        .from('PaymentMethod')
-        .update(row)
-        .eq('id', existing.id));
-    } else {
-      ({ error: insertErr } = await supabaseAdmin
-        .from('PaymentMethod')
-        .insert(row));
-    }
-
-    if (insertErr) {
-      logger.error('syncPaymentMethodToLocal: save failed', { error: insertErr.message, pmId });
-    } else {
-      logger.info('syncPaymentMethodToLocal: saved', {
-        paymentMethodId: pmId,
-        userId,
-        brand: card?.brand,
-        last4: card?.last4,
-      });
-    }
+    const { data: payment, error } = await supabaseAdmin.from('Payment')
+      .select('stripe_payment_intent_id, payer_id').eq('id', paymentId).single();
+    if (error) throw new Error('Could not load payment');
+    if (!payment?.stripe_payment_intent_id || payment.payer_id !== userId) return;
+    const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+    const methodId = this._stripeId(intent.payment_method);
+    const customerId = this._stripeId(intent.customer);
+    if (!methodId || !customerId) return;
+    // Current provider state and the shared transaction fence delayed checkout
+    // reconciliation after a removal; an expanded historical PI is not proof.
+    const method = await stripe.paymentMethods.retrieve(methodId);
+    return this._savePaymentMethod(userId, customerId, methodId, async () => method);
   }
 
   /**
    * Attach payment method to customer
    */
   async attachPaymentMethod(userId, paymentMethodId) {
+    const customerId = await this.getOrCreateCustomer(userId);
+    // A DB failure after attachment is retried without another attachment. A
+    // method attached to a different customer can never be claimed by this API.
+    const current = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const attachedCustomer = this._stripeId(current?.customer);
+    if (attachedCustomer && attachedCustomer !== customerId) {
+      throw this._addCardError(404, 'Payment method not found');
+    }
+    return this._savePaymentMethod(userId, customerId, paymentMethodId, () =>
+      attachedCustomer ? current : stripe.paymentMethods.attach(paymentMethodId, { customer: customerId }));
+  }
+
+  // Shared durable save. PostgreSQL owns default selection and removal fences;
+  // retries never write a stale snapshot into Stripe's invoice preferences.
+  async _savePaymentMethod(userId, customerId, paymentMethodId, loadAttachedMethod) {
+    const paymentMethod = await loadAttachedMethod();
+    if (!paymentMethod || paymentMethod.id !== paymentMethodId ||
+        this._stripeId(paymentMethod.customer) !== customerId ||
+        !['card', 'us_bank_account'].includes(paymentMethod.type) ||
+        !paymentMethod[paymentMethod.type]) {
+      throw this._addCardError(404, 'Payment method not found');
+    }
+    const details = { payment_method_type: paymentMethod.type };
+    if (paymentMethod.type === 'card') {
+      details.card_brand = paymentMethod.card.brand;
+      details.card_last4 = paymentMethod.card.last4;
+      details.card_exp_month = paymentMethod.card.exp_month;
+      details.card_exp_year = paymentMethod.card.exp_year;
+      details.card_funding = paymentMethod.card.funding;
+    } else {
+      details.bank_name = paymentMethod.us_bank_account.bank_name;
+      details.bank_last4 = paymentMethod.us_bank_account.last4;
+      details.bank_account_type = paymentMethod.us_bank_account.account_type;
+    }
+    const result = await this._paymentMethodRpc('save_payment_method', {
+      p_user_id: userId, p_customer_id: customerId, p_method_id: paymentMethodId, p_details: details,
+    });
+    const saved = result.payment_method;
+    if (!saved?.id || saved.user_id !== userId || saved.stripe_customer_id !== customerId ||
+        saved.stripe_payment_method_id !== paymentMethodId) {
+      throw new Error('Could not confirm saved payment method');
+    }
+    return { success: true, paymentMethod: saved };
+  }
+
+  async _paymentMethodRpc(name, args) {
+    const { data, error } = await supabaseAdmin.rpc(name, args);
+    if (error || !data) throw new Error('Could not save payment method changes. Please retry.');
+    if (data.error === 'NOT_FOUND' || data.error === 'REMOVED') {
+      throw this._addCardError(404, 'Payment method not found');
+    }
+    if (data.error) throw new Error('Could not save payment method changes. Please retry.');
+    return data;
+  }
+
+  _stripeId(value) {
+    return typeof value === 'string' ? value : value?.id;
+  }
+
+  _addCardError(statusCode, message) {
+    return Object.assign(new Error(message), { statusCode, isAddCardError: true });
+  }
+
+  // Preparation resume and post-sheet confirmation must share proof ownership.
+  // A missing saved identifier never falls back to making a new setup/customer.
+  async _getOwnedMobileCardSetup(userId, setupIntentId) {
+    if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId || '')) {
+      throw this._addCardError(404, 'Card setup not found');
+    }
+    const { data: user, error } = await supabaseAdmin.from('User')
+      .select('id, stripe_customer_id').eq('id', userId).maybeSingle();
+    if (error) throw new Error('Could not load card setup owner');
+    if (!user?.stripe_customer_id) throw this._addCardError(404, 'Card setup not found');
+
+    let setup;
     try {
-      const customerId = await this.getOrCreateCustomer(userId);
-
-      const paymentMethod = await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId
-      });
-
-      const details = {
-        stripe_customer_id: customerId,
-        stripe_payment_method_id: paymentMethodId,
-        payment_method_type: paymentMethod.type
-      };
-
-      if (paymentMethod.type === 'card') {
-        details.card_brand = paymentMethod.card.brand;
-        details.card_last4 = paymentMethod.card.last4;
-        details.card_exp_month = paymentMethod.card.exp_month;
-        details.card_exp_year = paymentMethod.card.exp_year;
-        details.card_funding = paymentMethod.card.funding;
-      } else if (paymentMethod.type === 'us_bank_account') {
-        details.bank_name = paymentMethod.us_bank_account.bank_name;
-        details.bank_last4 = paymentMethod.us_bank_account.last4;
-        details.bank_account_type = paymentMethod.us_bank_account.account_type;
-      }
-
-      const { data: existingMethods } = await supabaseAdmin
-        .from('PaymentMethod')
-        .select('id')
-        .eq('user_id', userId);
-
-      const isFirstMethod = !existingMethods || existingMethods.length === 0;
-
-      const { data: savedMethod, error: dbError } = await supabaseAdmin
-        .from('PaymentMethod')
-        .insert({
-          user_id: userId,
-          ...details,
-          is_default: isFirstMethod
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        logger.error('Error saving payment method', { error: dbError.message });
-      }
-
-      if (isFirstMethod) {
-        await stripe.customers.update(customerId, {
-          invoice_settings: { default_payment_method: paymentMethodId }
-        });
-      }
-
-      logger.info('Payment method attached', { userId, paymentMethodId });
-      return { success: true, paymentMethod: savedMethod };
-
+      setup = await stripe.setupIntents.retrieve(setupIntentId);
     } catch (err) {
-      logger.error('Error attaching payment method', { error: err.message, userId });
+      if (err.code === 'resource_missing') throw this._addCardError(404, 'Card setup not found');
+      throw err;
+    }
+    if (setup?.id !== setupIntentId || this._stripeId(setup.customer) !== user.stripe_customer_id ||
+        setup.metadata?.source !== 'mobile_add_card' || setup.metadata?.user_id !== userId) {
+      throw this._addCardError(404, 'Card setup not found');
+    }
+    if (setup.status === 'canceled') throw this._addCardError(404, 'Card setup is no longer available');
+    return { setup, customerId: user.stripe_customer_id };
+  }
+
+  /** Verify the provider's owned completed setup before saving its attached card.
+   * This path never creates a customer, confirms a setup, charges, or reattaches.
+   */
+  async confirmAddCardSetup(userId, setupIntentId) {
+    const { setup, customerId } = await this._getOwnedMobileCardSetup(userId, setupIntentId);
+    if (setup.status !== 'succeeded') {
+      throw this._addCardError(409, 'Card setup has not completed. Please try again.');
+    }
+    const methodId = this._stripeId(setup.payment_method);
+    if (!methodId) throw this._addCardError(409, 'Card setup has not completed. Please try again.');
+    let method;
+    try {
+      method = await stripe.paymentMethods.retrieve(methodId);
+    } catch (err) {
+      if (err.code === 'resource_missing') throw this._addCardError(404, 'Saved card is no longer available');
+      throw err;
+    }
+    // A stale setup must not re-add a card the user has since removed.
+    if (method?.id !== methodId || this._stripeId(method.customer) !== customerId ||
+        method.type !== 'card' || !method.card) {
+      throw this._addCardError(404, 'Saved card is no longer available');
+    }
+    return this._savePaymentMethod(userId, customerId, methodId, async () => method);
+  }
+
+  /** Attachment events may race the post-sheet request or arrive after removal.
+   * Read current provider ownership and share the same retryable durable save.
+   */
+  async reconcileAttachedPaymentMethod(eventMethod) {
+    const customerId = this._stripeId(eventMethod.customer);
+    if (!customerId) return;
+    const { data: user, error } = await supabaseAdmin.from('User')
+      .select('id').eq('stripe_customer_id', customerId).maybeSingle();
+    if (error) throw new Error('Could not load payment method owner');
+    if (!user) return; // This Stripe customer does not belong to the application.
+    let method;
+    try {
+      method = await stripe.paymentMethods.retrieve(eventMethod.id);
+    } catch (err) {
+      if (err.code === 'resource_missing') return;
+      throw err;
+    }
+    if (method?.id !== eventMethod.id || this._stripeId(method.customer) !== customerId) return;
+    try {
+      return await this._savePaymentMethod(user.id, customerId, method.id, async () => method);
+    } catch (err) {
+      if (err.isAddCardError && err.statusCode === 404) return;
       throw err;
     }
   }
 
-  /**
-   * Set default payment method
-   */
+  /** Select the app's preferred saved card. Explicit checkout choices and
+   * already-authorized payment methods remain authoritative. */
   async setDefaultPaymentMethod(userId, paymentMethodId) {
+    const result = await this._paymentMethodRpc('set_default_payment_method', {
+      p_user_id: userId, p_method_id: paymentMethodId,
+    });
+    if (result.payment_method?.id !== paymentMethodId || result.payment_method.user_id !== userId) {
+      throw new Error('Could not confirm default payment method');
+    }
+    return { success: true };
+  }
+
+  async _currentPaymentMethod(paymentMethodId) {
     try {
-      const { data: method } = await supabaseAdmin
-        .from('PaymentMethod')
-        .select('*')
-        .eq('id', paymentMethodId)
-        .eq('user_id', userId)
-        .single();
-
-      if (!method) throw new Error('Payment method not found');
-
-      await supabaseAdmin
-        .from('PaymentMethod')
-        .update({ is_default: false })
-        .eq('user_id', userId);
-
-      await supabaseAdmin
-        .from('PaymentMethod')
-        .update({ is_default: true })
-        .eq('id', paymentMethodId);
-
-      await stripe.customers.update(method.stripe_customer_id, {
-        invoice_settings: { default_payment_method: method.stripe_payment_method_id }
-      });
-
-      logger.info('Default payment method set', { userId, paymentMethodId });
-      return { success: true };
-
+      return await stripe.paymentMethods.retrieve(paymentMethodId);
     } catch (err) {
-      logger.error('Error setting default payment method', { error: err.message });
+      if (err.code === 'resource_missing') return null;
       throw err;
     }
   }
 
-  /**
-   * Delete payment method
-   */
+  async _completePaymentMethodRemoval(paymentMethodId) {
+    const result = await this._paymentMethodRpc('complete_payment_method_removal', { p_method_id: paymentMethodId });
+    if (result.completed !== true) throw new Error('Could not confirm payment method removal');
+    return { success: true };
+  }
+
+  /** Admit a permanent removal fence before the external detach. Unknown
+   * provider responses and DB failures can retry the original owned method ID. */
   async deletePaymentMethod(userId, paymentMethodId) {
-    try {
-      const { data: method } = await supabaseAdmin
-        .from('PaymentMethod')
-        .select('*')
-        .eq('id', paymentMethodId)
-        .eq('user_id', userId)
-        .single();
-
-      if (!method) throw new Error('Payment method not found');
-
-      await stripe.paymentMethods.detach(method.stripe_payment_method_id);
-
-      await supabaseAdmin
-        .from('PaymentMethod')
-        .delete()
-        .eq('id', paymentMethodId);
-
-      if (method.is_default) {
-        const { data: fallbackMethods, error: fallbackError } = await supabaseAdmin
-          .from('PaymentMethod')
-          .select('id, stripe_payment_method_id')
-          .eq('user_id', userId)
-          .neq('id', paymentMethodId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (fallbackError) {
-          logger.error('Error finding replacement default payment method', {
-            error: fallbackError.message,
-            userId,
-          });
-        }
-
-        const fallback = Array.isArray(fallbackMethods) ? fallbackMethods[0] : null;
-        if (fallback?.id) {
-          await supabaseAdmin
-            .from('PaymentMethod')
-            .update({ is_default: true })
-            .eq('id', fallback.id);
-          if (method.stripe_customer_id) {
-            await stripe.customers.update(method.stripe_customer_id, {
-              invoice_settings: { default_payment_method: fallback.stripe_payment_method_id },
-            });
-          }
-        } else if (method.stripe_customer_id) {
-          await stripe.customers.update(method.stripe_customer_id, {
-            invoice_settings: { default_payment_method: null },
-          });
-        }
-      }
-
-      logger.info('Payment method deleted', { userId, paymentMethodId });
-      return { success: true };
-
-    } catch (err) {
-      logger.error('Error deleting payment method', { error: err.message });
-      throw err;
+    const result = await this._paymentMethodRpc('begin_payment_method_removal', {
+      p_user_id: userId, p_method_id: paymentMethodId,
+    });
+    const removal = result.removal;
+    if (removal?.user_id !== userId || removal.method_id !== paymentMethodId || !removal.stripe_payment_method_id) {
+      throw new Error('Could not confirm payment method removal');
     }
+    if (removal.completed_at) return { success: true };
+    const methodId = removal.stripe_payment_method_id;
+    const current = await this._currentPaymentMethod(methodId);
+    if (current && current.id !== methodId) throw new Error('Could not confirm payment method removal');
+    const customer = this._stripeId(current?.customer);
+    if (customer && customer !== removal.stripe_customer_id) {
+      throw this._addCardError(404, 'Payment method not found');
+    }
+    if (customer) {
+      try {
+        const detached = await stripe.paymentMethods.detach(methodId);
+        if (detached?.id !== methodId || this._stripeId(detached.customer)) {
+          throw new Error('Could not confirm payment method removal');
+        }
+      } catch (err) {
+        // A concurrent request or a lost success response may already have
+        // detached it. Otherwise preserve the tombstone and return failure.
+        const after = await this._currentPaymentMethod(methodId);
+        if (after && (after.id !== methodId || this._stripeId(after.customer))) throw err;
+      }
+    }
+    return this._completePaymentMethodRemoval(methodId);
+  }
+
+  async reconcileDetachedPaymentMethod(eventMethod) {
+    const current = await this._currentPaymentMethod(eventMethod.id);
+    if (current && (current.id !== eventMethod.id || this._stripeId(current.customer))) return;
+    return this._completePaymentMethodRemoval(eventMethod.id);
   }
 
   // ============ MOBILE PAYMENT SHEET ============
@@ -1955,30 +1907,45 @@ class StripeService {
    * Get Stripe mobile PaymentSheet params for adding/saving a card only.
    * This creates a standalone SetupIntent tied to the user Stripe customer.
    */
-  async getAddCardSheetParams(userId) {
-    try {
-      const customerId = await this.getOrCreateCustomer(userId);
-      const ephemeralKey = await this.createEphemeralKey(customerId);
-      const setupIntent = await stripe.setupIntents.create({
+  async getAddCardSheetParams(userId, setupIntentId = null) {
+    let customerId;
+    let setupIntent;
+    let ephemeralKey;
+    if (setupIntentId != null) {
+      const owned = await this._getOwnedMobileCardSetup(userId, setupIntentId);
+      customerId = owned.customerId;
+      setupIntent = owned.setup;
+    } else {
+      customerId = await this.getOrCreateCustomer(userId);
+      // Mint the key before creating the first setup, so a key outage cannot
+      // leave an unreturned new setup behind. Resumes mint only when needed.
+      ephemeralKey = await this.createEphemeralKey(customerId);
+      setupIntent = await stripe.setupIntents.create({
         customer: customerId,
         payment_method_types: ['card'],
         usage: 'off_session',
-        metadata: {
-          source: 'mobile_add_card',
-          user_id: userId,
-        },
+        metadata: { source: 'mobile_add_card', user_id: userId },
       });
-
-      return {
-        setupIntent: setupIntent.client_secret,
-        ephemeralKey: ephemeralKey.secret,
-        customer: customerId,
-        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      };
-    } catch (err) {
-      logger.error('Error getting add-card payment sheet params', { error: err.message, userId });
-      throw err;
     }
+    const resumable = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+    if (!setupIntent?.id || ![...resumable, 'processing', 'succeeded'].includes(setupIntent.status)) {
+      throw new Error('Could not prepare card setup');
+    }
+    if (resumable.includes(setupIntent.status)) {
+      if (!setupIntent.client_secret) throw new Error('Could not resume card setup');
+      ephemeralKey ||= await this.createEphemeralKey(customerId);
+      if (!ephemeralKey?.secret) throw new Error('Could not prepare card setup');
+    }
+    // A succeeded setup needs durable reconciliation, not another PaymentSheet.
+    // Processing must be rechecked later. Neither needs a new ephemeral key.
+    return {
+      setupIntent: setupIntent.client_secret || '',
+      setupIntentId: setupIntent.id,
+      setupStatus: setupIntent.status,
+      ephemeralKey: resumable.includes(setupIntent.status) ? ephemeralKey.secret : '',
+      customer: customerId,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    };
   }
 }
 

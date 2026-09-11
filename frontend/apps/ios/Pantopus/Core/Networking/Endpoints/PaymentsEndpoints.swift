@@ -18,13 +18,26 @@ public enum PaymentsEndpoints {
     }
 
     /// `POST /api/payments/payment-sheet-add-card` — route
-    /// `backend/routes/pays.js:1095`. SetupIntent params for the mobile
-    /// PaymentSheet "add a card" flow. The attached card is reconciled into
-    /// the `PaymentMethod` table server-side via the
-    /// `payment_method.attached` webhook, so the client just refreshes
-    /// `methods()` on success.
-    public static func addCardSheet() -> Endpoint {
-        Endpoint(method: .post, path: "/api/payments/payment-sheet-add-card")
+    /// `backend/routes/pays.js:1412`. SetupIntent params for the mobile
+    /// PaymentSheet "add a card" flow. Confirm the returned SetupIntent ID
+    /// after the sheet completes before displaying a saved card.
+    public static func addCardSheet(setupIntentId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/payments/payment-sheet-add-card",
+            body: setupIntentId.map { AddCardSheetBody(setupIntentId: $0) }
+        )
+    }
+
+    /// `POST /api/payments/payment-sheet-add-card/confirm` — route
+    /// `backend/routes/pays.js:1431`. Reconciles the owned SetupIntent into
+    /// durable saved-card state; retries must keep the same identifier.
+    public static func confirmAddCard(setupIntentId: String) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/payments/payment-sheet-add-card/confirm",
+            body: ConfirmAddCardBody(setupIntentId: setupIntentId)
+        )
     }
 
     /// `POST /api/payments/intent` — route `backend/routes/pays.js:280`.

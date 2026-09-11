@@ -672,6 +672,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
     // Return row or defaults
     const prefs = data ? {
       ...data,
+      beacon_push_enabled: data.beacon_push_enabled ?? true,
       evening_briefing_enabled: data.evening_briefing_enabled ?? true,
       evening_briefing_time_local: data.evening_briefing_time_local || '18:00',
     } : {
@@ -686,6 +687,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       aqi_alerts_enabled: true,
       mail_summary_enabled: true,
       gig_updates_enabled: true,
+      beacon_push_enabled: true,
       home_reminders_enabled: true,
       quiet_hours_start_local: null,
       quiet_hours_end_local: null,
@@ -720,6 +722,7 @@ const preferencesSchema = Joi.object({
   aqi_alerts_enabled: Joi.boolean(),
   mail_summary_enabled: Joi.boolean(),
   gig_updates_enabled: Joi.boolean(),
+  beacon_push_enabled: Joi.boolean(),
   home_reminders_enabled: Joi.boolean(),
   quiet_hours_start_local: Joi.string().pattern(/^\d{2}:\d{2}$/).allow(null),
   quiet_hours_end_local: Joi.string().pattern(/^\d{2}:\d{2}$/).allow(null),

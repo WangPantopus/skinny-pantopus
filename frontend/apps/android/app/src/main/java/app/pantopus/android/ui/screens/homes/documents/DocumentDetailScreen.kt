@@ -8,10 +8,13 @@
 
 package app.pantopus.android.ui.screens.homes.documents
 
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,11 +39,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +59,11 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.ui.components.Shimmer
@@ -66,11 +75,15 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okio.ByteString
 import java.io.File
-import java.net.URL
 
 /**
  * P2.10 — Document detail. Reads the document via the existing list
@@ -81,15 +94,48 @@ import java.net.URL
 @Composable
 fun DocumentDetailScreen(
     onBack: () -> Unit,
-    onReplace: () -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
+    val replacementFile by viewModel.replacementFile.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scope = rememberCoroutineScope()
+    val exports = remember { mutableListOf<File>() }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showReplacementConfirm by remember { mutableStateOf(false) }
+    val replacementPicker = rememberDocumentReplacementPicker(viewModel)
+    LaunchedEffect(replacementFile) { showReplacementConfirm = replacementFile != null }
 
+    DisposableEffect(lifecycle) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) viewModel.clearContent()
+                if (event == Lifecycle.Event.ON_START) viewModel.load()
+            }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.clearContent()
+            exports.forEach { it.deleteRecursively() }
+        }
+    }
     LaunchedEffect(Unit) { viewModel.load() }
+
+    LaunchedEffect(shouldDismiss) {
+        if (shouldDismiss) {
+            viewModel.acknowledgeDismiss()
+            onBack()
+        }
+    }
+    LaunchedEffect(state) {
+        if (state is DocumentDetailUiState.Error || (state as? DocumentDetailUiState.Loaded)?.isMutating == true) {
+            exports.forEach { it.deleteRecursively() }
+            exports.clear()
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -111,11 +157,16 @@ fun DocumentDetailScreen(
                 is DocumentDetailUiState.Loaded ->
                     LoadedShell(
                         dto = current.document,
+                        content = current.content,
                         isMutating = current.isMutating,
                         onBack = onBack,
-                        onOpenExternally = { openExternally(context, current.document) },
-                        onShare = { shareDocument(context, current.document) },
-                        onReplace = onReplace,
+                        onOpenExternally = {
+                            viewModel.export { dto, bytes -> scope.launch { exportDocument(context, dto, bytes, false, exports) } }
+                        },
+                        onShare = {
+                            viewModel.export { dto, bytes -> scope.launch { exportDocument(context, dto, bytes, true, exports) } }
+                        },
+                        onReplace = { if (viewModel.beginReplacement()) replacementPicker.launch(ALLOWED_UPLOAD_MIMES) },
                         onDelete = { showDeleteConfirm = true },
                     )
                 is DocumentDetailUiState.Error ->
@@ -145,6 +196,29 @@ fun DocumentDetailScreen(
         }
     }
 
+    if (showReplacementConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                showReplacementConfirm = false
+                viewModel.cancelReplacement()
+            },
+            title = { Text("Replace this file?") },
+            text = { Text("The document link and details will stay the same.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showReplacementConfirm = false
+                    viewModel.replace()
+                }) { Text("Replace file") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showReplacementConfirm = false
+                    viewModel.cancelReplacement()
+                }) { Text("Cancel") }
+            },
+        )
+    }
+
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -164,6 +238,30 @@ fun DocumentDetailScreen(
                 }
             },
         )
+    }
+}
+
+/** Read only the selected file; the view-model enforces size and cancellation. */
+@Composable
+private fun rememberDocumentReplacementPicker(
+    viewModel: DocumentDetailViewModel,
+): androidx.activity.compose.ManagedActivityResultLauncher<Array<String>, android.net.Uri?> {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    return rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) {
+            viewModel.cancelReplacement()
+        } else {
+            val resolver = context.contentResolver
+            val mime = runCatching { resolver.getType(uri) }.getOrNull()
+            val filename =
+                runCatching {
+                    resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+                }.getOrNull() ?: "document"
+            scope.launch { viewModel.readReplacement(filename, mime) { resolver.openInputStream(uri) } }
+        }
     }
 }
 
@@ -240,6 +338,7 @@ private fun ErrorShell(
 @Composable
 private fun LoadedShell(
     dto: HomeDocumentDto,
+    content: ByteString?,
     isMutating: Boolean,
     onBack: () -> Unit,
     onOpenExternally: () -> Unit,
@@ -271,7 +370,7 @@ private fun LoadedShell(
             body = {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
                     PreviewPane(
-                        dto = dto,
+                        bytes = content,
                         fileType = fileType,
                         onOpenExternally = onOpenExternally,
                         modifier = Modifier.padding(horizontal = Spacing.s4),
@@ -293,6 +392,7 @@ private fun LoadedShell(
         )
         StickyActionFooter(
             isMutating = isMutating,
+            canReplace = dto.fileVersion != null,
             onOpenExternally = onOpenExternally,
             onShare = onShare,
             onReplace = onReplace,
@@ -385,12 +485,11 @@ private fun CategoryBadge(category: DocumentCategory) {
 
 @Composable
 private fun PreviewPane(
-    dto: HomeDocumentDto,
+    bytes: ByteString?,
     fileType: DocumentFileType,
     onOpenExternally: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val previewUrl = remember(dto) { resolvePreviewUrl(dto) }
     Box(
         modifier =
             modifier
@@ -403,40 +502,45 @@ private fun PreviewPane(
         contentAlignment = Alignment.Center,
     ) {
         when {
-            previewUrl != null && (fileType == DocumentFileType.Pdf || fileType == DocumentFileType.Scan) ->
-                PdfPreview(url = previewUrl)
-            previewUrl != null && fileType == DocumentFileType.Image ->
-                ImagePreview(url = previewUrl)
+            bytes != null && (fileType == DocumentFileType.Pdf || fileType == DocumentFileType.Scan) ->
+                PdfPreview(bytes = bytes)
+            bytes != null && fileType == DocumentFileType.Image ->
+                ImagePreview(bytes = bytes)
             else -> UnsupportedPreview(fileType = fileType, onOpenExternally = onOpenExternally)
         }
     }
 }
 
 @Composable
-private fun PdfPreview(url: String) {
+private fun PdfPreview(bytes: ByteString) {
     val context = LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = url) {
-        value = withContext(Dispatchers.IO) { renderFirstPage(context, url) }
+    val preview by produceState<Pair<Boolean, Bitmap?>>(initialValue = false to null, key1 = bytes) {
+        value = true to withContext(Dispatchers.IO) { renderFirstPage(context, bytes) }
     }
-    if (bitmap == null) {
+    val bitmap = preview.second
+    if (!preview.first) {
         CircularProgressIndicator(
             color = PantopusColors.primary600,
             modifier = Modifier.size(28.dp),
         )
-    } else {
+    } else if (bitmap != null) {
         Image(
-            bitmap = bitmap!!.asImageBitmap(),
+            bitmap = bitmap.asImageBitmap(),
             contentDescription = "PDF preview",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
         )
+    } else {
+        Text("Preview unavailable", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
     }
 }
 
 @Composable
-private fun ImagePreview(url: String) {
+private fun ImagePreview(bytes: ByteString) {
     SubcomposeAsyncImage(
-        model = url,
+        model =
+            ImageRequest.Builder(LocalContext.current).data(bytes.toByteArray())
+                .memoryCachePolicy(CachePolicy.DISABLED).diskCachePolicy(CachePolicy.DISABLED).build(),
         contentDescription = "Image preview",
         modifier = Modifier.fillMaxSize(),
         contentScale = ContentScale.Fit,
@@ -513,7 +617,7 @@ private fun MetadataGrid(
     val uploadedLabel = projection.uploadedLabel ?: "—"
     val visibility =
         when (dto.visibility) {
-            "managers" -> "Owners only"
+            "managers" -> "Managers and owners"
             "members" -> "All members"
             "private" -> "Private"
             "public" -> "Public"
@@ -669,6 +773,7 @@ private fun LinkedToCard(
 @Composable
 private fun StickyActionFooter(
     isMutating: Boolean,
+    canReplace: Boolean,
     onOpenExternally: () -> Unit,
     onShare: () -> Unit,
     onReplace: () -> Unit,
@@ -712,7 +817,7 @@ private fun StickyActionFooter(
                 testTag = "documentDetailReplace",
                 tint = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
-                enabled = !isMutating,
+                enabled = !isMutating && canReplace,
                 onClick = onReplace,
             )
             FooterButton(
@@ -766,64 +871,72 @@ private fun FooterButton(
 
 // MARK: - Helpers (preview + share)
 
-private fun resolvePreviewUrl(dto: HomeDocumentDto): String? {
-    dto.details?.get("preview_url")?.takeIf { it.isNotEmpty() }?.let { return it }
-    val path = dto.storagePath ?: return null
-    return if (path.startsWith("http")) path else null
-}
-
-private fun openExternally(
+private suspend fun exportDocument(
     context: android.content.Context,
     dto: HomeDocumentDto,
+    bytes: ByteString,
+    share: Boolean,
+    exports: MutableList<File>,
 ) {
-    val url = resolvePreviewUrl(dto) ?: return
-    val intent =
-        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val file =
+        try {
+            withContext(Dispatchers.IO) {
+                val directory = app.pantopus.android.core.network.HomeDocumentTemporaryFiles.makeExportDirectory(context.cacheDir)
+                val filename = File(dto.details?.get("original_filename") ?: dto.title).name.ifBlank { "document" }
+                File(directory, filename).also { it.writeBytes(bytes.toByteArray()) }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: java.io.IOException) {
+            android.widget.Toast.makeText(context, "Couldn't prepare this file. Try again.", android.widget.Toast.LENGTH_SHORT).show()
+            return
         }
-    runCatching { context.startActivity(intent) }
+    exports.add(checkNotNull(file.parentFile))
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent =
+        if (share) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = dto.mimeType ?: "application/octet-stream"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, dto.title)
+            }
+        } else {
+            Intent(Intent.ACTION_VIEW).setDataAndType(uri, dto.mimeType ?: "application/octet-stream")
+        }
+    intent.clipData = ClipData.newRawUri(dto.title, uri)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    runCatching { context.startActivity(Intent.createChooser(intent, if (share) "Share document" else "Open document")) }
 }
 
-private fun shareDocument(
-    context: android.content.Context,
-    dto: HomeDocumentDto,
-) {
-    val url = resolvePreviewUrl(dto) ?: dto.title
-    val intent =
-        Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, dto.title)
-            putExtra(Intent.EXTRA_TEXT, url)
-        }
-    runCatching {
-        context.startActivity(Intent.createChooser(intent, "Share document"))
-    }
-}
-
-/**
- * Render the first page of a remote PDF into a [Bitmap]. Returns null
- * on failure; the call site falls back to the unsupported-preview UI.
- */
+/** Render the first authenticated PDF page; remove its private temporary file. */
 private suspend fun renderFirstPage(
     context: android.content.Context,
-    url: String,
-): Bitmap? {
-    return runCatching {
-        val tempFile = File.createTempFile("doc-preview-", ".pdf", context.cacheDir)
-        URL(url).openStream().use { input ->
-            tempFile.outputStream().use { output -> input.copyTo(output) }
-        }
-        val fd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-        PdfRenderer(fd).use { renderer ->
-            if (renderer.pageCount == 0) return@use null
-            renderer.openPage(0).use { page ->
-                val bitmap = Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                bitmap
+    bytes: ByteString,
+): Bitmap? =
+    runCatching {
+        val tempFile = app.pantopus.android.core.network.HomeDocumentTemporaryFiles.makePreview(context.cacheDir)
+        try {
+            tempFile.writeBytes(bytes.toByteArray())
+            ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    if (renderer.pageCount == 0) return@use null
+                    renderer.openPage(0).use { page ->
+                        val scale = minOf(2f, 1600f / maxOf(page.width, page.height))
+                        val bitmap =
+                            Bitmap.createBitmap(
+                                (page.width * scale).toInt().coerceAtLeast(1),
+                                (page.height * scale).toInt().coerceAtLeast(1),
+                                Bitmap.Config.ARGB_8888,
+                            )
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bitmap
+                    }
+                }
             }
+        } finally {
+            tempFile.delete()
         }
     }.getOrNull()
-}
 
 /** Parse the comma-separated `tags` payload from a document's `details` map. */
 internal fun parseTags(details: Map<String, String>): List<String> {

@@ -6,7 +6,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import {
   ArrowLeft, Sun, Clock, CloudLightning, Wind, Home, Briefcase, Mail,
-  Moon, Navigation, Smartphone, Check,
+  Moon, Navigation, Smartphone, Check, Megaphone,
 } from 'lucide-react';
 import type { UserNotificationPreferences } from '@pantopus/types';
 
@@ -34,6 +34,9 @@ export default function NotificationPreferencesPage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatch = useRef<Partial<Prefs>>({});
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const revision = useRef(0);
 
   const fetchPrefs = useCallback(async () => {
     try {
@@ -51,19 +54,30 @@ export default function NotificationPreferencesPage() {
   useEffect(() => { fetchPrefs(); }, [fetchPrefs]);
 
   const update = useCallback((patch: Partial<Prefs>) => {
+    const currentRevision = ++revision.current;
+    pendingPatch.current = { ...pendingPatch.current, ...patch };
     setPrefs((prev) => prev ? { ...prev, ...patch } : prev);
     setSaveStatus('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (statusTimer.current) clearTimeout(statusTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        await api.updateHubPreferences(patch);
-        setSaveStatus('saved');
-        statusTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
-      } catch {
-        setSaveStatus('error');
-        fetchPrefs();
-      }
+    saveTimer.current = setTimeout(() => {
+      const batch = pendingPatch.current;
+      pendingPatch.current = {};
+      // Preserve every changed key and serialize saves so an older opt-in
+      // cannot arrive after a newer opt-out.
+      saveQueue.current = saveQueue.current.then(async () => {
+        try {
+          const res = await api.updateHubPreferences(batch);
+          if (revision.current !== currentRevision) return;
+          setPrefs(res.preferences);
+          setSaveStatus('saved');
+          statusTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch {
+          if (revision.current !== currentRevision) return;
+          setSaveStatus('error');
+          await fetchPrefs();
+        }
+      });
     }, 600);
   }, [fetchPrefs]);
 
@@ -157,6 +171,14 @@ export default function NotificationPreferencesPage() {
             value={prefs.mail_summary_enabled} onChange={(v) => update({ mail_summary_enabled: v })} last />
         </Section>
 
+        <Section title="Beacon Notifications">
+          <ToggleRow icon={<Megaphone className="w-5 h-5" />}
+            title="Beacon Push Notifications"
+            subtitle="Device alerts for Beacon updates. Updates stay in the app when off."
+            value={prefs.beacon_push_enabled ?? true}
+            onChange={(v) => update({ beacon_push_enabled: v })} last />
+        </Section>
+
         {/* 3. Quiet Hours */}
         <Section title="Quiet Hours">
           <ToggleRow icon={<Moon className="w-5 h-5" />}
@@ -242,7 +264,7 @@ function ToggleRow({ icon, title, subtitle, value, onChange, last }: {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
         </div>
       </div>
-      <button onClick={() => onChange(!value)}
+      <button onClick={() => onChange(!value)} role="switch" aria-checked={value} aria-label={title}
         className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
           value ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
         }`}>

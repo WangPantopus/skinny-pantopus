@@ -443,7 +443,8 @@ const ALL_FALSE_TEMPLATE = {
  * then upserts the row. This is the SINGLE write path for occupancy permissions.
  *
  * Every place that creates or modifies a HomeOccupancy row must call this.
- * Never set the boolean columns directly anywhere else.
+ * Never set the boolean columns directly anywhere else. Transactional postcard
+ * confirmation uses dryRun templates in its atomic database function.
  *
  * Called by:
  *   - Home creation (POST /api/homes)

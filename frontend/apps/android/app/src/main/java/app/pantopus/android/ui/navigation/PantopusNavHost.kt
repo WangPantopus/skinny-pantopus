@@ -84,11 +84,10 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
         }
         // Workstream 1.4 — one-shot replay of a deferred content deep link
         // into DeepLinkRouter so RootTabScreen consumers navigate.
-        if (authState is AuthRepository.State.SignedIn &&
-            prev !is AuthRepository.State.SignedIn
-        ) {
+        val signedIn = authState as? AuthRepository.State.SignedIn
+        if (signedIn != null && prev !is AuthRepository.State.SignedIn) {
             DeepLinkRouter.acknowledgeLoginPresentation()
-            PendingDeepLinkStore.take()?.let { DeepLinkRouter.handle(it) }
+            PendingDeepLinkStore.take(userId = signedIn.user.id)?.let { DeepLinkRouter.handle(it) }
         }
     }
 

@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,9 +68,10 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Allowed picker MIME types — PDF / image / DOC / DOCX / XLSX. */
-private val ALLOWED_UPLOAD_MIMES: Array<String> =
+internal val ALLOWED_UPLOAD_MIMES: Array<String> =
     arrayOf(
         "application/pdf",
         "image/*",
@@ -87,6 +89,7 @@ fun UploadDocumentFormScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val pickerScope = rememberCoroutineScope()
     var showLinkSheet by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.toast) {
@@ -112,16 +115,15 @@ fun UploadDocumentFormScreen(
                 val mime = resolver.getType(uri)
                 val cursor = resolver.query(uri, null, null, null, null)
                 var filename = uri.lastPathSegment ?: "document"
-                var sizeBytes: Long? = null
                 cursor?.use { c ->
                     if (c.moveToFirst()) {
                         val nameIdx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        val sizeIdx = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
                         if (nameIdx >= 0) filename = c.getString(nameIdx)
-                        if (sizeIdx >= 0 && !c.isNull(sizeIdx)) sizeBytes = c.getLong(sizeIdx)
                     }
                 }
-                viewModel.acceptPicked(filename = filename, sizeBytes = sizeBytes, mimeType = mime)
+                pickerScope.launch {
+                    viewModel.readPickedFile(filename, mime) { resolver.openInputStream(uri) }
+                }
             }
         }
 
@@ -145,6 +147,7 @@ fun UploadDocumentFormScreen(
                 onPick = { filePicker.launch(ALLOWED_UPLOAD_MIMES) },
                 onRemove = viewModel::clearPickedFile,
             )
+            if (state.isReadingFile) Text("Reading file…", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
             TitleSection(state, viewModel::updateTitle)
             CategorySection(state.category, viewModel::selectCategory)
             TagsSection(

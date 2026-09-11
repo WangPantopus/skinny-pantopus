@@ -73,6 +73,8 @@ class NotificationSettingsViewModel
         private var preferences: NotificationPreferences? = null
         private var pendingPatch = NotificationPreferencesPatch()
         private var saveJob: Job? = null
+        private var saveInFlight = false
+        private var saveRevision = 0L
 
         /** Overridable in tests so the debounce never races the assertions. */
         internal var saveDebounceMillis: Long = DEFAULT_SAVE_DEBOUNCE_MS
@@ -128,6 +130,11 @@ class NotificationSettingsViewModel
                     applyLocally(
                         current.copy(gigUpdatesEnabled = isOn),
                         NotificationPreferencesPatch(gigUpdatesEnabled = isOn),
+                    )
+                RowId.BEACON_PUSH ->
+                    applyLocally(
+                        current.copy(beaconPushEnabled = isOn),
+                        NotificationPreferencesPatch(beaconPushEnabled = isOn),
                     )
                 RowId.MAIL_SUMMARY ->
                     applyLocally(
@@ -204,11 +211,14 @@ class NotificationSettingsViewModel
             patch: NotificationPreferencesPatch,
         ) {
             publish(updated)
+            saveRevision += 1
             pendingPatch = pendingPatch.mergedWith(patch)
             saveJob?.cancel()
             saveJob =
                 viewModelScope.launch {
                     delay(saveDebounceMillis)
+                    // New taps cancel only the timer, never an active request.
+                    saveJob = null
                     flushPendingSave()
                 }
         }
@@ -221,19 +231,28 @@ class NotificationSettingsViewModel
         }
 
         private suspend fun flushPendingSave() {
-            val patch = pendingPatch
-            pendingPatch = NotificationPreferencesPatch()
-            if (patch.isEmpty) return
-            when (val result = repository.updatePreferences(patch)) {
-                is NetworkResult.Success -> {
-                    publish(result.data)
-                    _toast.value = ToastMessage("Saved", ToastKind.Success)
+            if (saveInFlight) return
+            saveInFlight = true
+            try {
+                while (!pendingPatch.isEmpty) {
+                    val patch = pendingPatch
+                    val revision = saveRevision
+                    pendingPatch = NotificationPreferencesPatch()
+                    val result = repository.updatePreferences(patch)
+                    if (revision != saveRevision) continue
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            publish(result.data)
+                            _toast.value = ToastMessage("Saved", ToastKind.Success)
+                        }
+                        is NetworkResult.Failure -> {
+                            _toast.value = ToastMessage("Failed to save", ToastKind.Error)
+                            fetch()
+                        }
+                    }
                 }
-                is NetworkResult.Failure -> {
-                    _toast.value = ToastMessage("Failed to save", ToastKind.Error)
-                    // Roll back by re-reading server truth (RN does the same).
-                    fetch()
-                }
+            } finally {
+                saveInFlight = false
             }
         }
 
@@ -348,6 +367,12 @@ class NotificationSettingsViewModel
                             control = RowControl.Toggle(prefs.gigUpdatesEnabled),
                         ),
                         GroupedListRow(
+                            id = RowId.BEACON_PUSH,
+                            label = "Beacon Push Notifications",
+                            subtext = "Device alerts for Beacon updates. Updates stay in the app when off.",
+                            control = RowControl.Toggle(prefs.beaconPushEnabled),
+                        ),
+                        GroupedListRow(
                             id = RowId.MAIL_SUMMARY,
                             label = "Mail Summary",
                             subtext = "Daily mailbox digest",
@@ -436,6 +461,7 @@ class NotificationSettingsViewModel
             const val AQI_ALERTS = "alerts.aqi"
             const val HOME_REMINDERS = "alerts.homeReminders"
             const val GIG_UPDATES = "alerts.gigUpdates"
+            const val BEACON_PUSH = "alerts.beaconPush"
             const val MAIL_SUMMARY = "alerts.mailSummary"
             const val QUIET_HOURS = "quietHours.enabled"
             const val QUIET_HOURS_START = "quietHours.start"

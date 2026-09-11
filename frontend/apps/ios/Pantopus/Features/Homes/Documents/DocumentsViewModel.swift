@@ -124,12 +124,7 @@ final class DocumentsViewModel: ListOfRowsDataSource {
             icon: .folderLock,
             title: bannerTitle(for: summary),
             subtitle: bannerSubtitle(for: summary),
-            cta: BannerCTA(
-                label: "Export",
-                icon: .download,
-                accessibilityLabel: "Export documents",
-                tint: .home
-            ) { [onExport] in onExport() },
+            cta: nil,
             tint: .home
         )
     }
@@ -204,7 +199,7 @@ final class DocumentsViewModel: ListOfRowsDataSource {
                 ListOfRowsState.EmptyContent(
                     icon: .folderLock,
                     headline: "No documents yet",
-                    subcopy: "Upload your lease, insurance, or warranties. Stored end-to-end encrypted, shareable with household members.",
+                    subcopy: "Save leases, insurance and warranties privately. Choose which household members can access each file.",
                     ctaTitle: "Upload document"
                 ) { [onUpload] in onUpload() }
             )
@@ -518,7 +513,7 @@ final class DocumentsViewModel: ListOfRowsDataSource {
             let unit = summary.expiringCount == 1 ? "document" : "documents"
             return "\(summary.expiringCount) \(unit) expiring in the next 90 days"
         }
-        return "All current · vault end-to-end encrypted"
+        return "All current · access limited to permitted household members"
     }
 
     // MARK: - Chip counts

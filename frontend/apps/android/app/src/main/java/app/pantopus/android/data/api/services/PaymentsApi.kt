@@ -1,6 +1,9 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.payments.AddCardSheetParamsDto
+import app.pantopus.android.data.api.models.payments.AddCardSheetRequest
+import app.pantopus.android.data.api.models.payments.ConfirmAddCardRequest
+import app.pantopus.android.data.api.models.payments.ConfirmAddCardResponse
 import app.pantopus.android.data.api.models.payments.CreatePaymentIntentRequest
 import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.models.payments.PaymentMethodAckResponse
@@ -29,11 +32,19 @@ interface PaymentsApi {
 
     /**
      * `POST /api/payments/payment-sheet-add-card` — route
-     * `backend/routes/pays.js:1095`. SetupIntent params for the mobile
+     * `backend/routes/pays.js:1412`. SetupIntent params for the mobile
      * PaymentSheet "add a card" flow.
      */
     @POST("api/payments/payment-sheet-add-card")
-    suspend fun addCardSheet(): AddCardSheetParamsDto
+    suspend fun addCardSheet(
+        @Body request: AddCardSheetRequest,
+    ): AddCardSheetParamsDto
+
+    /** `POST /api/payments/payment-sheet-add-card/confirm` — route `backend/routes/pays.js:1431`. */
+    @POST("api/payments/payment-sheet-add-card/confirm")
+    suspend fun confirmAddCard(
+        @Body request: ConfirmAddCardRequest,
+    ): ConfirmAddCardResponse
 
     /**
      * `POST /api/payments/intent` — route `backend/routes/pays.js:280`.

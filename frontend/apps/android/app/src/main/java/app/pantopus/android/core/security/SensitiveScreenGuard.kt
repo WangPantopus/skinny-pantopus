@@ -92,21 +92,9 @@ fun SensitiveScreenGuard(
 
     LaunchedEffect(attempt) {
         if (phase !is GuardPhase.Pending) return@LaunchedEffect
-        manager.refreshCapability()
-        val host = activity
-        // RN's first branch: nothing to check against — never make the screen
-        // unreachable. Same when the host isn't a FragmentActivity (previews).
-        if (host == null || manager.capability.value != AppLockManager.Capability.Available) {
-            phase = GuardPhase.Authenticated
-            return@LaunchedEffect
-        }
-        if (manager.isWithinSensitiveGracePeriod(graceMs)) {
-            phase = GuardPhase.Authenticated
-            return@LaunchedEffect
-        }
         phase = GuardPhase.Authenticating
         phase =
-            when (val outcome = manager.verifySensitiveAction(host, reason)) {
+            when (val outcome = manager.verifySensitiveScreen(activity, reason, graceMs)) {
                 is AppLockManager.SensitiveActionOutcome.Verified -> GuardPhase.Authenticated
                 is AppLockManager.SensitiveActionOutcome.Cancelled -> {
                     onRejected()
@@ -189,12 +177,7 @@ fun rememberSensitiveActionGuard(
     val activity = remember(context) { context.findFragmentActivity() }
     return remember(manager, activity) {
         { reason ->
-            val host = activity
-            if (host == null) {
-                AppLockManager.SensitiveActionOutcome.Verified
-            } else {
-                manager.verifySensitiveAction(host, reason)
-            }
+            manager.verifySensitiveAction(activity, reason)
         }
     }
 }

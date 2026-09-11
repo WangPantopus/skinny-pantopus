@@ -1052,6 +1052,33 @@ describe('revocation', () => {
     expect(emailService.sendEmail.mock.calls[0][0].subject).toMatch(/All devices were signed out/);
   });
 
+  test.each([127, 999])('password reset at millisecond %i permits an immediate new login while older JWTs stay revoked', async (millisecond) => {
+    const instant = Date.parse('2026-09-09T11:19:27Z') + millisecond;
+    jest.useFakeTimers({ now: instant });
+    try {
+      seedTwoDevices();
+      let completed = false;
+      const resetting = authDeviceService.onPasswordReset({ userId: UID, req: fakeReq() })
+        .then(() => { completed = true; });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(completed).toBe(false);
+      await jest.advanceTimersByTimeAsync(1000 - millisecond);
+      await resetting;
+      const watermark = await authSessionService.getSessionsValidAfter(UID);
+      // Do not round the revocation cutoff down to accommodate a new login.
+      expect(watermark.getTime()).toBe(instant);
+      const { checkSessionPolicy } = jest.requireActual(require('path').resolve(__dirname, '../middleware/verifyToken.js'));
+      const newSessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7';
+      const fresh = jwtFor({ session_id: newSessionId });
+      expect(await checkSessionPolicy(fresh, { userId: UID, sessionsValidAfter: watermark })).toMatchObject({ ok: true });
+      const old = jwtFor({ session_id: newSessionId, iat: Math.floor(instant / 1000) });
+      expect(await checkSessionPolicy(old, { userId: UID, sessionsValidAfter: watermark })).toMatchObject({ ok: false, reason: 'watermark' });
+      expect(findRow('AuthSession', SID).revoked_reason).toBe('password_reset');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('onPasswordChanged / onPasswordReset / onAccountDeleted composite hooks', async () => {
     seedTwoDevices();
     await authDeviceService.onPasswordChanged({ userId: UID, currentSessionId: SID, accessToken: 'jwt', req: fakeReq() });

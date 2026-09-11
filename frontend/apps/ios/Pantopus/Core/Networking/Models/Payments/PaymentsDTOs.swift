@@ -60,13 +60,31 @@ public struct PaymentMethodDTO: Decodable, Sendable, Hashable, Identifiable {
 }
 
 /// `POST /api/payments/payment-sheet-add-card` — route
-/// `backend/routes/pays.js:1095`. SetupIntent params for the mobile
+/// `backend/routes/pays.js:1412`. SetupIntent params for the mobile
 /// PaymentSheet "add a card" flow. Keys are already camelCase server-side.
 public struct AddCardSheetParams: Decodable, Sendable, Hashable {
     public let setupIntent: String
+    public let setupIntentId: String
+    public let setupStatus: String
     public let ephemeralKey: String
     public let customer: String
     public let publishableKey: String?
+}
+
+/// An existing identifier resumes the same setup without creating another one.
+public struct AddCardSheetBody: Encodable, Sendable, Hashable {
+    public let setupIntentId: String
+}
+
+/// `POST /api/payments/payment-sheet-add-card/confirm`; keys are camelCase.
+public struct ConfirmAddCardBody: Encodable, Sendable, Hashable {
+    public let setupIntentId: String
+}
+
+/// Durable server receipt, returned only after the owned card is saved.
+public struct ConfirmAddCardResponse: Decodable, Sendable, Hashable {
+    public let confirmed: Bool
+    public let paymentMethod: PaymentMethodDTO
 }
 
 /// Body for `POST /api/payments/intent` (Block 3B checkout). The server

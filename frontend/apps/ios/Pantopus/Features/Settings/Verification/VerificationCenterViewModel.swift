@@ -115,7 +115,7 @@ public final class VerificationCenterViewModel: GroupedListDataSource {
         let resendLabel = switch lastResendStatus {
         case .idle: "Resend verification email"
         case .sending: "Sending…"
-        case .sent: "Sent — check your inbox"
+        case .sent: "Requested — check your inbox"
         case .failed: "Try again"
         }
         let emailGroup: GroupedListGroup

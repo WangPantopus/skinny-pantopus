@@ -433,7 +433,7 @@ final class AuthManagerTests: XCTestCase {
         stub(
             "/api/users/resend-verification",
             status: 200,
-            body: "{\"message\":\"If that email exists, a verification email has been sent.\"}"
+            body: "{\"message\":\"If that email needs verification, we will attempt to send a new link.\"}"
         )
         let manager = makeManager()
         try await manager.resendVerification(email: "alice@example.com")

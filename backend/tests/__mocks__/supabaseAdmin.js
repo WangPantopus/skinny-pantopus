@@ -193,6 +193,9 @@ const AUTH_UNIQUE_KEYS = {
   AuthResumeGrant: [['id'], ['grant_hash']],
   AuthSession: [['id']],
   AuthDevice: [['id'], ['user_id', 'device_id']],
+  // Financial retries depend on the canonical baseline's provider ID keys.
+  PaymentMethod: [['id'], ['stripe_payment_method_id']],
+  StripeWebhookEvent: [['id'], ['stripe_event_id']],
 };
 
 const PERSONA_FOLLOW_VIEW = 'PersonaFollow';
@@ -254,6 +257,11 @@ function getTable(name) {
 }
 
 function seedTable(name, rows) {
+  if (name === 'AddressVerificationToken') {
+    // This nullable database column defaults to SQL NULL, not undefined.
+    tables[name] = rows.map((row) => ({ used_at: null, ...row }));
+    return;
+  }
   if (isPersonaFollowView(name)) {
     tables[PERSONA_MEMBERSHIP_TABLE] = rows.map(reverseProjectFollowAsMembership);
     return;
@@ -297,6 +305,7 @@ function createQueryBuilder(tableName) {
   // though in production it turns "no such home" into a 500.
   let isStrictSingle = false;
   let isUpsert = false;
+  let ignoreUpsertDuplicates = false;
   let upsertOnConflict = null;
   let isCountMode = false;
   let isHeadMode = false;
@@ -509,6 +518,7 @@ function createQueryBuilder(tableName) {
     upsert(payload, options) {
       insertPayload = Array.isArray(payload) ? payload : [payload];
       isUpsert = true;
+      ignoreUpsertDuplicates = options?.ignoreDuplicates === true;
       // Capture the onConflict key so the executor can do conflict
       // resolution by composite columns (e.g. 'persona_id,user_id'),
       // matching real Postgres ON CONFLICT semantics.
@@ -609,6 +619,9 @@ function createQueryBuilder(tableName) {
               idx = table.findIndex((r) => r.id === row.id);
             }
             if (idx >= 0) {
+              // PostgREST resolution=ignore-duplicates maps to DO NOTHING;
+              // no existing columns or timestamps change, and no row returns.
+              if (ignoreUpsertDuplicates) continue;
               table[idx] = { ...table[idx], ...row };
               inserted.push(table[idx]);
               continue;
@@ -723,6 +736,14 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
+    if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
+    if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {
+      return require('./mailMetadata')(args[0], args[1], getTable);
+    }
+    if (['bind_payment_customer', 'save_payment_method', 'set_default_payment_method', 'begin_payment_method_removal', 'complete_payment_method_removal'].includes(args[0])) {
+      return require('./paymentMethods')(args[0], args[1], getTable);
+    }
     return { data: null, error: { message: 'No RPC mock configured' } };
   },
   auth: {

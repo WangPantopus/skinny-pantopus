@@ -122,6 +122,7 @@ struct RootView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(AppLockManager.self) private var appLock
     @State private var capturePrivacy = CapturePrivacyManager.shared
+    @State private var showsSessionLogin = false
 
     var body: some View {
         ZStack {
@@ -130,7 +131,14 @@ struct RootView: View {
                 case .unknown:
                     SplashView()
                 case .signedOut:
-                    PlaceLaunchHost()
+                    if showsSessionLogin || auth.sessionEndReason != nil {
+                        // A detail sheet may still be dismissing after a 401.
+                        // Render sign-in here instead of presenting another
+                        // cover during that transition.
+                        LoginView()
+                    } else {
+                        PlaceLaunchHost()
+                    }
                 case let .resumable(hint):
                     // L2 "Continue as X": tokens survived a reinstall (or
                     // the account went dormant) — one presence gesture via
@@ -178,9 +186,14 @@ struct RootView: View {
         }
         .onChange(of: auth.state) { previous, new in
             syncAppLock()
+            if case .signedOut = new, auth.sessionEndReason != nil {
+                // Dismissing the reason banner must not dismiss the form.
+                showsSessionLogin = true
+            }
             // Workstream 1.4 — one-shot replay of a deferred content deep
             // link into DeepLinkRouter so RootTabView / tab roots navigate.
             if becameSignedIn(from: previous, to: new) {
+                showsSessionLogin = false
                 DeepLinkRouter.shared.acknowledgeLoginPresentation()
                 Task { @MainActor in
                     replayDeferredDeepLinkIfNeeded()
@@ -241,7 +254,9 @@ struct RootView: View {
     }
 
     private func replayDeferredDeepLinkIfNeeded() {
-        guard let path = PendingDeepLinkStore.take() else { return }
+        guard case let .signedIn(user) = auth.state,
+              DeepLinkRouter.shared.activeContentArrival == nil,
+              let path = PendingDeepLinkStore.take(userID: user.id) else { return }
         DeepLinkRouter.shared.handle(path: path)
     }
 }

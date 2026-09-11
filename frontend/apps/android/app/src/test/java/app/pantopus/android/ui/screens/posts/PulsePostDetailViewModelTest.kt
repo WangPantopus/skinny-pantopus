@@ -18,6 +18,7 @@ import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaKind
+import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -124,6 +125,30 @@ class PulsePostDetailViewModelTest {
             assertEquals(PostIntent.Ask, loaded.content.intent)
             assertEquals(3, loaded.content.reactions.helpful)
             assertNull(loaded.content.reactions.userReaction)
+        }
+
+    @Test fun beacon_author_decodes_the_public_projection_for_exact_post_return() =
+        runTest {
+            val author =
+                Moshi.Builder().build().adapter(PostCreatorDto::class.java).fromJson(
+                    """{
+                        "id":"persona-1",
+                        "displayName":"Beacon Journey Test",
+                        "handle":"beacon-test",
+                        "avatarUrl":"https://example.com/beacon.png"
+                    }""",
+                )!!
+            coEvery { repo.detail("p1") } returns
+                NetworkResult.Success(PostDetailResponse(post = samplePost().copy(creator = author)))
+            val vm = makeVm()
+            vm.load()
+
+            val loaded = vm.state.value as PulsePostDetailUiState.Loaded
+            assertEquals("Beacon Journey Test", loaded.content.authorDisplayName)
+            assertEquals("https://example.com/beacon.png", loaded.content.authorAvatarUrl)
+            assertEquals("@beacon-test", author.copy(projectedDisplayName = null).displayName)
+            assertNull(author.firstName)
+            assertNull(author.city)
         }
 
     @Test fun lost_found_purpose_maps_to_lost_found_intent() {

@@ -107,6 +107,8 @@ data class PostcardVerificationUiState(
     val codeExpiresOn: String? = null,
     val notice: PostcardNotice? = null,
     val isRequestingCode: Boolean = false,
+    val isLoadingStatus: Boolean = false,
+    val deliveryUnknown: Boolean = false,
 ) {
     val isSubmitting: Boolean get() = submitState is VerifyLandlordSubmitState.Submitting
 
@@ -199,6 +201,45 @@ open class PostcardVerificationViewModel
         val state: StateFlow<PostcardVerificationUiState> = _state.asStateFlow()
         val pendingEvent = MutableStateFlow<PostcardVerificationOutboundEvent?>(null)
 
+        val usesSamplePresentation: Boolean get() = expectedCode != null
+
+        /** Opening or refreshing the screen never requests more mail. */
+        fun loadStatus() {
+            if (usesSamplePresentation || _state.value.isLoadingStatus || _state.value.isRequestingCode) return
+            _state.update { it.copy(isLoadingStatus = true) }
+            viewModelScope.launch {
+                when (val result = verificationRepository.postcardStatus(homeId)) {
+                    is NetworkResult.Success ->
+                        _state.update {
+                            it.copy(
+                                isLoadingStatus = false,
+                                needsNewCode = false,
+                                deliveryUnknown = result.data.deliveryUnknown == true,
+                                codeExpiresOn = formatExpiry(result.data.postcard.expiresAt),
+                                notice = PostcardNotice(result.data.message, false),
+                            )
+                        }
+                    is NetworkResult.Failure ->
+                        _state.update {
+                            val missing = result.error.code == HTTP_NOT_FOUND
+                            it.copy(
+                                isLoadingStatus = false,
+                                needsNewCode = if (missing) true else it.needsNewCode,
+                                notice =
+                                    PostcardNotice(
+                                        if (missing) {
+                                            "No pending postcard. Request a code to verify this home."
+                                        } else {
+                                            "Couldn't check postcard status. Please retry."
+                                        },
+                                        !missing,
+                                    ),
+                            )
+                        }
+                }
+            }
+        }
+
         // MARK: - Mutations
 
         fun updateCode(raw: String) {
@@ -279,6 +320,7 @@ open class PostcardVerificationViewModel
                             hasCodeInHand = true,
                             submitState = VerifyLandlordSubmitState.Idle,
                             codeExpiresOn = formatExpiry(result.data.postcard.expiresAt),
+                            deliveryUnknown = result.data.deliveryUnknown == true,
                             notice = PostcardNotice(text = result.data.message, isError = false),
                         )
                     }
@@ -388,6 +430,11 @@ open class PostcardVerificationViewModel
                         )
                     }
                 }
+                error is NetworkError.ClientError && error.code == HTTP_TOO_MANY && errorCodeIn(error.body) != "LOCKED" -> {
+                    _state.update {
+                        it.copy(submitState = VerifyLandlordSubmitState.Error(error.message))
+                    }
+                }
                 error is NetworkError.ClientError && (error.code == HTTP_GONE || error.code == HTTP_TOO_MANY) -> {
                     _state.update {
                         it.copy(
@@ -429,6 +476,8 @@ open class PostcardVerificationViewModel
             }
         }
 
+        private fun errorCodeIn(body: String?): String? = runCatching { org.json.JSONObject(body.orEmpty()).optString("code") }.getOrNull()
+
         private fun attemptsRemainingIn(body: String?): Int? {
             if (body.isNullOrBlank()) return null
             return runCatching {
@@ -451,6 +500,7 @@ open class PostcardVerificationViewModel
         companion object {
             const val SUBMIT_DELAY_DEFAULT_MILLIS: Long = 800L
             const val DEFAULT_EXPECTED_CODE: String = "4Q2K7B"
+            private const val HTTP_NOT_FOUND = 404
             private const val HTTP_GONE = 410
             private const val HTTP_TOO_MANY = 429
             private const val EXPIRY_ISO_LENGTH = 19

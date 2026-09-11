@@ -145,9 +145,15 @@ fun ChatConversationScreen(
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
+    onContentLoaded: () -> Unit = {},
     viewModel: ChatConversationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(state) {
+        if (state is ChatConversationUiState.Loaded || state is ChatConversationUiState.Empty) {
+            onContentLoaded()
+        }
+    }
     val activeCounterparty by viewModel.counterparty.collectAsStateWithLifecycle()
     val composerText by viewModel.composerText.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()

@@ -42,6 +42,7 @@ data class NotificationPreferencesDto(
     @Json(name = "aqi_alerts_enabled") val aqiAlertsEnabled: Boolean? = null,
     @Json(name = "mail_summary_enabled") val mailSummaryEnabled: Boolean? = null,
     @Json(name = "gig_updates_enabled") val gigUpdatesEnabled: Boolean? = null,
+    @Json(name = "beacon_push_enabled") val beaconPushEnabled: Boolean? = null,
     @Json(name = "home_reminders_enabled") val homeRemindersEnabled: Boolean? = null,
     /** `HH:mm` or null. A null start means quiet hours are off. */
     @Json(name = "quiet_hours_start_local") val quietHoursStartLocal: String? = null,
@@ -64,6 +65,7 @@ data class NotificationPreferences(
     val aqiAlertsEnabled: Boolean,
     val mailSummaryEnabled: Boolean,
     val gigUpdatesEnabled: Boolean,
+    val beaconPushEnabled: Boolean,
     val homeRemindersEnabled: Boolean,
     val quietHoursStartLocal: String?,
     val quietHoursEndLocal: String?,
@@ -90,6 +92,7 @@ data class NotificationPreferences(
                 aqiAlertsEnabled = dto.aqiAlertsEnabled ?: true,
                 mailSummaryEnabled = dto.mailSummaryEnabled ?: true,
                 gigUpdatesEnabled = dto.gigUpdatesEnabled ?: true,
+                beaconPushEnabled = dto.beaconPushEnabled ?: true,
                 homeRemindersEnabled = dto.homeRemindersEnabled ?: true,
                 quietHoursStartLocal = dto.quietHoursStartLocal,
                 quietHoursEndLocal = dto.quietHoursEndLocal,
@@ -116,6 +119,7 @@ data class NotificationPreferencesPatch(
     val aqiAlertsEnabled: Boolean? = null,
     val mailSummaryEnabled: Boolean? = null,
     val gigUpdatesEnabled: Boolean? = null,
+    val beaconPushEnabled: Boolean? = null,
     val homeRemindersEnabled: Boolean? = null,
     val quietHours: QuietHoursPatch? = null,
     val locationMode: String? = null,
@@ -131,6 +135,7 @@ data class NotificationPreferencesPatch(
             aqiAlertsEnabled = newer.aqiAlertsEnabled ?: aqiAlertsEnabled,
             mailSummaryEnabled = newer.mailSummaryEnabled ?: mailSummaryEnabled,
             gigUpdatesEnabled = newer.gigUpdatesEnabled ?: gigUpdatesEnabled,
+            beaconPushEnabled = newer.beaconPushEnabled ?: beaconPushEnabled,
             homeRemindersEnabled = newer.homeRemindersEnabled ?: homeRemindersEnabled,
             quietHours = newer.quietHours ?: quietHours,
             locationMode = newer.locationMode ?: locationMode,
@@ -168,6 +173,7 @@ class NotificationPreferencesPatchJsonAdapter {
         value.aqiAlertsEnabled?.let { writer.name("aqi_alerts_enabled").value(it) }
         value.mailSummaryEnabled?.let { writer.name("mail_summary_enabled").value(it) }
         value.gigUpdatesEnabled?.let { writer.name("gig_updates_enabled").value(it) }
+        value.beaconPushEnabled?.let { writer.name("beacon_push_enabled").value(it) }
         value.homeRemindersEnabled?.let { writer.name("home_reminders_enabled").value(it) }
         value.quietHours?.let { quiet ->
             val previous = writer.serializeNulls

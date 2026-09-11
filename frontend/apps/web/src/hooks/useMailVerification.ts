@@ -35,6 +35,7 @@ export type MailVerificationState = {
   normalized?: NormalizedAddress;
   /** ID returned from /verify/mail/start */
   verificationId: string | null;
+  deliveryUnknown: boolean;
   /** When the code expires */
   expiresAt: string | null;
   /** When the user can resend */
@@ -70,6 +71,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
     unit,
     normalized,
     verificationId: null,
+    deliveryUnknown: false,
     expiresAt: null,
     cooldownUntil: null,
     resendsRemaining: 0,
@@ -117,6 +119,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
         ...prev,
         phase: 'pending',
         verificationId: resp.verification_id,
+        deliveryUnknown: resp.delivery_unknown === true,
         expiresAt: resp.expires_at,
         cooldownUntil: resp.cooldown_until,
         resendsRemaining: resp.resends_remaining,
@@ -131,6 +134,43 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
     [startCooldownTimer],
   );
 
+  const recoverUncertainDelivery = useCallback((err: unknown) => {
+    const data = (err as { data?: { delivery_unknown?: boolean; verification_id?: string; address_id?: string } })?.data;
+    if (!data?.delivery_unknown || data.address_id !== addressId
+      || !data.verification_id || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(data.verification_id)) return false;
+    setState((prev) => ({
+      ...prev,
+      phase: 'pending',
+      verificationId: data.verification_id!,
+      deliveryUnknown: true,
+      error: null,
+      errorType: null,
+    }));
+    return true;
+  }, [addressId]);
+
+  const refreshDeliveryStatus = useCallback(async () => {
+    if (!state.verificationId) return;
+    try {
+      const resp = await api.addressValidation.getMailVerificationStatus(state.verificationId);
+      setState((prev) => ({
+        ...prev,
+        ...(resp.status === 'expired' || resp.status === 'locked' ? {
+          phase: 'error' as const,
+          errorType: resp.status,
+        } : {}),
+        deliveryUnknown: resp.delivery_unknown === true,
+        expiresAt: resp.expires_at,
+        cooldownUntil: resp.cooldown_until,
+        resendsRemaining: resp.resends_remaining,
+        error: null,
+      }));
+      if (resp.cooldown_until) startCooldownTimer(resp.cooldown_until);
+    } catch {
+      setState((prev) => ({ ...prev, error: 'Could not check delivery. Please try again.' }));
+    }
+  }, [state.verificationId, startCooldownTimer]);
+
   // ── Send code (initial) ───────────────────────────────────
   const sendCode = useCallback(async () => {
     setState((prev) => ({ ...prev, phase: 'sending', error: null, errorType: null }));
@@ -142,6 +182,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
       });
       applyStartResponse(resp);
     } catch (err: unknown) {
+      if (recoverUncertainDelivery(err)) return;
       setState((prev) => ({
         ...prev,
         phase: 'start',
@@ -149,7 +190,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
         errorType: 'network',
       }));
     }
-  }, [addressId, unit, applyStartResponse]);
+  }, [addressId, unit, applyStartResponse, recoverUncertainDelivery]);
 
   // ── Resend code ───────────────────────────────────────────
   const resendCode = useCallback(async () => {
@@ -163,13 +204,14 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
       );
       applyStartResponse(resp);
     } catch (err: unknown) {
+      if (recoverUncertainDelivery(err)) return;
       setState((prev) => ({
         ...prev,
         error: err instanceof Error ? err.message : 'Failed to resend code',
         errorType: 'network',
       }));
     }
-  }, [state.verificationId, state.cooldownSeconds, applyStartResponse]);
+  }, [state.verificationId, state.cooldownSeconds, applyStartResponse, recoverUncertainDelivery]);
 
   // ── Confirm code ──────────────────────────────────────────
   const confirmCode = useCallback(
@@ -253,6 +295,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
       unit,
       normalized,
       verificationId: null,
+      deliveryUnknown: false,
       expiresAt: null,
       cooldownUntil: null,
       resendsRemaining: 0,
@@ -279,6 +322,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
     ...state,
     sendCode,
     resendCode,
+    refreshDeliveryStatus,
     confirmCode,
     reset,
     goToCodeEntry,

@@ -17,8 +17,9 @@ lane is itemised below with a status marker:
   - [x] `POST /api/notifications/register` accepting
         `{ token, platform?: "ios" | "android", provider?: "apns" | "fcm"
         | "expo" }`. Persists the token (with platform + provider) against
-        the authenticated user and enables the push preference, mirroring
-        the legacy `/push-token` route so dual-write works during the
+        the authenticated user and initializes push preferences only when no
+        row exists. Existing opt-outs survive registration/token rotation on
+        both this endpoint and the legacy `/push-token` route during the
         cutover. `platform`/`provider` each derive from the other when one
         is omitted; Expo-formatted tokens are auto-tagged `expo`. Route:
         `backend/routes/notifications.js`.

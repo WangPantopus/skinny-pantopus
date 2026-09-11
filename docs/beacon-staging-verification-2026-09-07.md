@@ -5,6 +5,23 @@
 For the latest infrastructure inventory and explicit native staging build
 commands, see [staging notification setup](staging-notification-setup.md).
 
+September 8 live follow-up: [the full journey report](beacon-full-journey-2026-09-08.md)
+records actual staging publication, exact Following/notification/post matching,
+WebSocket audience delivery, mute/restore, per-Beacon opt-out, Member restrictions,
+revoked/block denial, and draft/archive exclusion. Four exposed fanout/access
+failures were fixed and deployed. Physical iPhone foreground, background,
+closed-app launch, old blocked-notification denial, mute/resume and global
+push opt-out/restore have owner confirmation. Android emulator foreground,
+background and process-absent notifications opened the exact post; an old
+blocked notification denied access. Native registration/author-projection
+repairs pass 86 targeted tests; a rebuilt staging APK received a fresh push and
+opened the exact post with the correct public author. Application CI also passes,
+including 45 instrumented Android tests after an SDK-download retry. Test fixtures
+are cleaned up. Physical Android and a Beacon push-only type setting remain
+unverified/unimplemented, respectively. This is not complete release acceptance.
+
+## Initial readiness inspection — September 7
+
 The master integration commit `4172e37fcacead6cb3cea1e6c1398604b7f356fe`
 passed the complete [PR #4 CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34142598999),
 including the web type-check gate, backend/privacy tests, Android build and

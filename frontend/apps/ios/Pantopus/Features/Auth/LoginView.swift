@@ -756,7 +756,7 @@ final class LoginViewModel {
         defer { isResendingVerification = false }
         do {
             try await auth.resendVerification(email: trimmed.lowercased())
-            infoMessage = "If that email exists, a verification email has been sent."
+            infoMessage = "If that email needs verification, we will attempt to send a new link."
         } catch let error as AuthError {
             errorMessage = error
             Observability.shared.capture(error)

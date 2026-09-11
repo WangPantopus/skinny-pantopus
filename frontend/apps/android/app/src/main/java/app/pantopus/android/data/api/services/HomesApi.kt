@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.homes.CreateHomeResponse
 import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.CreatePackageRequest
 import app.pantopus.android.data.api.models.homes.CreatePollRequest
+import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
@@ -59,11 +60,17 @@ import app.pantopus.android.data.api.models.homes.UpdatePackageRequest
 import app.pantopus.android.data.api.models.homes.UpdatePollRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Part
+import retrofit2.http.PartMap
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -319,6 +326,39 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Body body: CreateDocumentRequest,
     ): CreateDocumentResponse
+
+    /** Private byte upload — route `backend/routes/homeDocumentFiles.js:61`. */
+    @Multipart
+    @POST("api/homes/{id}/documents/upload")
+    suspend fun uploadHomeDocument(
+        @Path("id") homeId: String,
+        @Part file: MultipartBody.Part,
+        @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>,
+    ): CreateDocumentResponse
+
+    /** Replace bytes at a stable document — route `backend/routes/homeDocumentReplacement.js:62`. */
+    @Multipart
+    @POST("api/homes/{id}/documents/{documentId}/replace")
+    suspend fun replaceHomeDocument(
+        @Path("id") homeId: String,
+        @Path("documentId") documentId: String,
+        @Part file: MultipartBody.Part,
+        @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>,
+    ): CreateDocumentResponse
+
+    /** Authenticated file bytes — route `backend/routes/homeDocumentFiles.js:166`. */
+    @GET("api/homes/{id}/documents/{documentId}/content")
+    suspend fun homeDocumentContent(
+        @Path("id") homeId: String,
+        @Path("documentId") documentId: String,
+    ): ResponseBody
+
+    /** `DELETE /api/homes/:id/documents/:documentId` — route `backend/routes/homeDocumentFiles.js:191`. */
+    @DELETE("api/homes/{id}/documents/{documentId}")
+    suspend fun deleteHomeDocument(
+        @Path("id") homeId: String,
+        @Path("documentId") documentId: String,
+    ): DeleteDocumentResponse
 
     /** `GET /api/homes/:id/packages` — route `backend/routes/home.js:4673`. */
     @GET("api/homes/{id}/packages")

@@ -32,12 +32,14 @@ class DeepLinkRouterTest {
      * Workstream 1.4 cases flip it to `false` to exercise the deferred path.
      */
     private var signedIn: Boolean = true
+    private var userId = "original-account"
 
     @Before
     fun setUp() {
         installInMemoryPendingDeepLinkStore()
         signedIn = true
-        DeepLinkRouter.bindSignedInProvider { signedIn }
+        userId = "original-account"
+        DeepLinkRouter.bindSignedInUserIdProvider { userId.takeIf { signedIn } }
         DeepLinkRouter.clearPending()
         PendingDeepLinkStore.clear()
     }
@@ -46,7 +48,7 @@ class DeepLinkRouterTest {
     fun tearDown() {
         DeepLinkRouter.clearPending()
         PendingDeepLinkStore.clear()
-        DeepLinkRouter.bindSignedInProvider(DEFAULT_SIGNED_IN_PROVIDER)
+        DeepLinkRouter.bindSignedInUserIdProvider { null }
     }
 
     @Test
@@ -764,17 +766,167 @@ class DeepLinkRouterTest {
 
     // MARK: - WS1.4 auth-aware dispatch (DeepLinkRouter.apply)
 
-    /**
-     * Signed in, a content destination goes straight to `pending` and nothing
-     * is persisted — there is no login to defer past.
-     */
     @Test
-    fun signed_in_content_link_publishes_without_stashing() {
+    fun signed_in_chat_arrival_remains_pending_after_navigation() {
+        DeepLinkRouter.handle("/chat/session-room?name=Beacon%20%2B%20test")
+        assertEquals(
+            DeepLinkRouter.Destination.Conversation("session-room", "Beacon + test"),
+            DeepLinkRouter.consume(),
+        )
+        assertEquals("pantopus://chat/session-room?name=Beacon%20%2B%20test", PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun rejected_chat_session_replays_for_same_account_with_its_title() {
+        DeepLinkRouter.handle("/chat/session-room?name=Beacon%20%2B%20test")
+        DeepLinkRouter.consume()
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("session-room"))
+        signedIn = false
+        DeepLinkRouter.clearPending()
+        assertEquals("pantopus://chat/session-room?name=Beacon%20%2B%20test", PendingDeepLinkStore.peek())
+        signedIn = true
+        DeepLinkRouter.handle(requireNotNull(PendingDeepLinkStore.take(userId)))
+        assertEquals(DeepLinkRouter.Destination.Conversation("session-room", "Beacon + test"), DeepLinkRouter.consume())
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("session-room"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun another_account_cannot_complete_or_replay_chat_arrival() {
+        DeepLinkRouter.handle("/chat/private-room")
+        userId = "another-account"
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("private-room"))
+        assertEquals("pantopus://chat/private-room", PendingDeepLinkStore.peek())
+        assertNull(PendingDeepLinkStore.take(userId))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun chat_completion_matches_room_without_requiring_the_notification_title() {
+        DeepLinkRouter.handle("/chat/room?name=Beacon%20%2B%20test")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("room"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun old_chat_completion_cannot_clear_a_new_room_or_a_post_with_the_same_id() {
+        DeepLinkRouter.handle("/chat/older")
+        DeepLinkRouter.handle("/chat/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("older"))
+        assertEquals("pantopus://chat/newer", PendingDeepLinkStore.peek())
+        DeepLinkRouter.handle("/post/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("newer"))
+        assertEquals("pantopus://post/newer", PendingDeepLinkStore.peek())
+        DeepLinkRouter.handle("/chat/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("newer"))
+        assertEquals("pantopus://chat/newer", PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun completed_chat_does_not_replay_after_a_later_session_end() {
+        DeepLinkRouter.handle("/chat/room")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Conversation("room"))
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun signed_in_post_arrival_survives_navigation_until_content_loads() {
         DeepLinkRouter.handle("/post/abc-123")
 
         assertEquals(DeepLinkRouter.Destination.Post("abc-123"), DeepLinkRouter.pending.value)
-        assertNull(PendingDeepLinkStore.peek())
+        DeepLinkRouter.consume()
+        assertEquals("pantopus://post/abc-123", PendingDeepLinkStore.peek())
         assertFalse(DeepLinkRouter.prefersLoginPresentation.value)
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("abc-123"))
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun revoked_session_replays_exact_post_for_same_account_despite_late_completion() {
+        DeepLinkRouter.handle("https://pantopus.app/post/a%2Fb")
+        DeepLinkRouter.consume()
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        // The old screen can finish loading or dispose while auth teardown suspends.
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+        signedIn = false
+        DeepLinkRouter.clearPending()
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+
+        signedIn = true
+        DeepLinkRouter.handle(requireNotNull(PendingDeepLinkStore.take(userId)))
+        assertEquals(DeepLinkRouter.Destination.Post("a%2Fb"), DeepLinkRouter.consume())
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+        assertNull(PendingDeepLinkStore.take(userId))
+    }
+
+    @Test
+    fun bound_arrival_is_discarded_when_another_account_signs_in() {
+        DeepLinkRouter.handle("/post/private-post")
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        DeepLinkRouter.clearPending()
+        userId = "another-account"
+
+        assertNull(PendingDeepLinkStore.take(userId))
+        assertNull(PendingDeepLinkStore.peek())
+        assertNull(DeepLinkRouter.pending.value)
+    }
+
+    @Test
+    fun ordinary_signed_out_arrival_can_replay_for_the_signing_in_account() {
+        signedIn = false
+        DeepLinkRouter.handle("/post/public-post")
+        userId = "new-account"
+        assertEquals("pantopus://post/public-post", PendingDeepLinkStore.take(userId))
+        assertNull(PendingDeepLinkStore.take(userId))
+    }
+
+    @Test
+    fun late_completion_cannot_erase_a_newer_post_arrival() {
+        DeepLinkRouter.handle("/post/older")
+        DeepLinkRouter.consume()
+        DeepLinkRouter.handle("/post/newer")
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("older"))
+        assertEquals("pantopus://post/newer", PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun a_new_content_destination_supersedes_the_unfinished_post() {
+        DeepLinkRouter.handle("/post/older")
+        DeepLinkRouter.handle("/homes/h_1/dashboard")
+        assertNull(PendingDeepLinkStore.peek())
+        assertEquals(DeepLinkRouter.Destination.HomeDashboard("h_1"), DeepLinkRouter.consume())
+    }
+
+    @Test
+    fun server_signout_cannot_retain_an_unbound_or_different_accounts_link() {
+        PendingDeepLinkStore.stash("pantopus://post/unbound")
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.peek())
+        PendingDeepLinkStore.stash("pantopus://post/another", "another-account")
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun bound_arrival_requires_an_account_even_after_memory_is_cleared() {
+        DeepLinkRouter.handle("/post/persisted")
+        DeepLinkRouter.clearPending()
+        assertEquals("pantopus://post/persisted", PendingDeepLinkStore.take(userId))
+        DeepLinkRouter.handle("/post/persisted")
+        assertNull(PendingDeepLinkStore.take())
+    }
+
+    @Test
+    fun reauthentication_does_not_extend_the_arrival_expiry() {
+        DeepLinkRouter.handle("/post/persisted")
+        val timestamp = persistedValues["timestamp_ms"]
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertEquals(timestamp, persistedValues["timestamp_ms"])
+        persistedValues["timestamp_ms"] = 1L
+        assertNull(PendingDeepLinkStore.take(userId))
+        assertNull(PendingDeepLinkStore.peek())
     }
 
     /**
@@ -889,17 +1041,10 @@ class DeepLinkRouterTest {
     }
 
     private companion object {
-        /**
-         * The production default of `DeepLinkRouter.signedInProvider` — it is
-         * only rebound for real when `AuthRepository` is constructed, which
-         * never happens on the JVM. Restored after every case so this suite
-         * can't leak a signed-in router into another one.
-         */
-        private val DEFAULT_SIGNED_IN_PROVIDER: () -> Boolean = { false }
-
         private const val PROBE_PATH = "pantopus://__probe__"
 
         private var storeInstalled = false
+        private val persistedValues = mutableMapOf<String, Any>()
 
         /**
          * [PendingDeepLinkStore] is SharedPreferences-backed and silently
@@ -920,7 +1065,7 @@ class DeepLinkRouterTest {
 
         /** A `Context` whose SharedPreferences are a plain in-memory map. */
         fun inMemoryPrefsContext(): Context {
-            val values = mutableMapOf<String, Any>()
+            val values = persistedValues
             val editor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { editor.putString(any(), any()) } answers {
                 val value = secondArg<String?>()
@@ -929,6 +1074,10 @@ class DeepLinkRouterTest {
             }
             every { editor.putLong(any(), any()) } answers {
                 values[firstArg()] = secondArg<Long>()
+                editor
+            }
+            every { editor.putBoolean(any(), any()) } answers {
+                values[firstArg()] = secondArg<Boolean>()
                 editor
             }
             every { editor.clear() } answers {
@@ -942,6 +1091,9 @@ class DeepLinkRouterTest {
             }
             every { prefs.getLong(any(), any()) } answers {
                 values[firstArg<String>()] as? Long ?: secondArg<Long>()
+            }
+            every { prefs.getBoolean(any(), any()) } answers {
+                values[firstArg<String>()] as? Boolean ?: secondArg<Boolean>()
             }
             val context = mockk<Context>(relaxed = true)
             every { context.applicationContext } returns context

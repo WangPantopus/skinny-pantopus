@@ -94,8 +94,13 @@ function check(root, base) {
       const names = git(['ls-tree', '-r', '--name-only', base, 'supabase/migrations']).trim().split('\n').filter(n => n.endsWith('.sql'));
       const newest = names.map(n => path.basename(n).slice(0, 14)).sort().at(-1);
       for (const name of names) {
-        const original = execFileSync('git', ['show', `${base}:${name}`], { cwd: root });
-        if (files[name] === undefined || !original.equals(files[name])) errors.push(`Applied migrations are immutable: ${name}`);
+        // Compare exact Git blob identities without buffering a complete schema
+        // dump through stdout (canonical baselines can exceed Node's 1 MiB cap).
+        const original = git(['rev-parse', `${base}:${name}`]).trim();
+        const current = files[name] === undefined ? null : execFileSync('git', ['hash-object', '--stdin'], {
+          cwd: root, input: files[name], encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        if (current !== original) errors.push(`Applied migrations are immutable: ${name}`);
       }
       for (const name of Object.keys(files).filter(n => n.startsWith('supabase/migrations/') && !names.includes(n))) {
         if (path.basename(name).slice(0, 14) <= newest) errors.push(`New migrations must sort after ${newest}: ${name}`);

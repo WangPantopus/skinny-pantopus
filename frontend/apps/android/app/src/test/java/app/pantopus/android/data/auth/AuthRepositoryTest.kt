@@ -3,11 +3,13 @@
 package app.pantopus.android.data.auth
 
 import app.cash.turbine.test
+import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.auth.AuthMessageResponse
 import app.pantopus.android.data.api.models.auth.AuthenticatedUser
 import app.pantopus.android.data.api.models.auth.ForgotPasswordRequest
 import app.pantopus.android.data.api.models.auth.LoginResponse
+import app.pantopus.android.data.api.models.auth.LogoutResponse
 import app.pantopus.android.data.api.models.auth.RefreshResponse
 import app.pantopus.android.data.api.models.auth.RegisterRequest
 import app.pantopus.android.data.api.models.auth.RegisterResponse
@@ -25,9 +27,14 @@ import app.pantopus.android.data.realtime.SocketManager
 import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -698,6 +705,70 @@ class AuthRepositoryTest {
         }
 
     @Test
+    fun `manual logout stays neutral when its revocation is confirmed before the response`() =
+        runTest {
+            val authApi = mockk<AuthApi>(relaxed = true)
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val sockets = mockk<SocketManager>(relaxed = true)
+            val repo = buildRepo(authApi = authApi, storage = storage, socketManager = sockets)
+            coEvery { authApi.logout(any(), any(), any(), any()) } coAnswers {
+                verify { sockets.disconnect() }
+                repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+                assertEquals(null, repo.sessionEndReason.value)
+                LogoutResponse(success = true)
+            }
+
+            repo.signOut()
+
+            coVerify(exactly = 1) { authApi.logout(any(), any(), any(), any()) }
+            assertEquals(null, storage.accessToken())
+            assertEquals(AuthRepository.State.SignedOut, repo.state.value)
+            assertEquals(null, repo.sessionEndReason.value)
+        }
+
+    @Test
+    fun `late revocation does not add a security warning after manual logout`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val repo = buildRepo(storage = storage)
+
+            repo.signOut()
+            repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+
+            assertEquals(AuthRepository.State.SignedOut, repo.state.value)
+            assertEquals(null, storage.accessToken())
+            assertEquals(null, repo.sessionEndReason.value)
+        }
+
+    @Test
+    fun `server session end retains only the original account arrival while manual logout clears it`() =
+        runTest {
+            mockkObject(PendingDeepLinkStore)
+            try {
+                every { PendingDeepLinkStore.clear() } returns Unit
+                every { PendingDeepLinkStore.retainForReauthentication(any()) } returns Unit
+                val storage = AuthTestSupport.tokenStorage()
+                storage.save("at", "rt", "u_1")
+                val repo = buildRepo(storage = storage)
+
+                repo.signOut(reason = SessionEndReason.fromCode("SESSION_REVOKED"))
+
+                verify(exactly = 1) { PendingDeepLinkStore.retainForReauthentication("u_1") }
+                verify(exactly = 0) { PendingDeepLinkStore.clear() }
+                assertEquals(null, storage.accessToken())
+
+                repo.signOut()
+
+                verify(exactly = 1) { PendingDeepLinkStore.clear() }
+                verify(exactly = 1) { PendingDeepLinkStore.retainForReauthentication(any()) }
+            } finally {
+                unmockkObject(PendingDeepLinkStore)
+            }
+        }
+
+    @Test
     fun `signOut with a server reason skips the network call, keeps hints, publishes the reason`() =
         runTest {
             val authApi = mockk<AuthApi>(relaxed = true)
@@ -911,5 +982,72 @@ class AuthRepositoryTest {
             assertEquals("a•••@b.com", hint?.maskedEmail)
             assertEquals("password", hint?.lastMethod)
             assertEquals("u_1", repo.rememberedAccounts.value.single().userId)
+        }
+
+    @Test
+    fun `failed forced registration retries despite a prior matching fingerprint`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val authApi = mockk<AuthApi>()
+            val success = app.pantopus.android.data.api.models.auth.RegisterDeviceResponse(device = null, resumeGrant = null)
+            coEvery { authApi.registerDevice(any(), any()) } returns success
+            val repo = AuthTestSupport.repository(storage = storage, authApi = authApi, deviceIdentity = identity)
+            assertTrue(repo.registerDevice())
+            val fingerprint = identity.lastRegistrationFingerprint()
+            assertTrue(!fingerprint.isNullOrBlank())
+
+            coEvery { authApi.registerDevice(any(), any()) } throws IOException("temporary outage")
+            assertEquals(false, repo.registerDevice(force = true))
+            assertEquals(null, identity.lastRegistrationFingerprint())
+
+            coEvery { authApi.registerDevice(any(), any()) } returns success
+            assertTrue(repo.registerDevice())
+            assertEquals(fingerprint, identity.lastRegistrationFingerprint())
+            assertTrue(repo.registerDevice()) // successful retry is cached again
+            coVerify(exactly = 3) { authApi.registerDevice(any(), any()) }
+        }
+
+    @Test
+    fun `logout invalidates the registration acknowledgment without rotating device identity`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val deviceId = identity.deviceId()
+            identity.markRegistered("u_1|1.0.0 (1)|fcm-token")
+            val repo = AuthTestSupport.repository(storage = storage, deviceIdentity = identity)
+
+            repo.signOut()
+
+            assertEquals(null, identity.lastRegistrationFingerprint())
+            assertEquals(deviceId, identity.deviceId())
+            assertEquals(false, repo.registerDevice())
+        }
+
+    @Test
+    fun `registration finishing after logout cannot restore its cached acknowledgment`() =
+        runTest {
+            val storage = AuthTestSupport.tokenStorage()
+            storage.save("at", "rt", "u_1")
+            val identity = AuthTestSupport.deviceIdentity()
+            val authApi = mockk<AuthApi>(relaxed = true)
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            coEvery { authApi.registerDevice(any(), any()) } coAnswers {
+                started.complete(Unit)
+                release.await()
+                app.pantopus.android.data.api.models.auth.RegisterDeviceResponse(device = null, resumeGrant = null)
+            }
+            val repo = AuthTestSupport.repository(storage = storage, authApi = authApi, deviceIdentity = identity)
+            val registration = async { repo.registerDevice(force = true) }
+            started.await()
+            repo.signOut()
+            release.complete(Unit)
+
+            assertEquals(false, registration.await())
+            assertEquals(null, identity.lastRegistrationFingerprint())
+            assertEquals(null, storage.accessToken())
         }
 }

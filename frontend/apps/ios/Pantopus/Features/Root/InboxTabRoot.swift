@@ -116,6 +116,11 @@ public struct InboxTabRoot: View {
         )
     }
 
+    private func completeConversationArrival(_ destination: InboxConversationDestination) {
+        guard case let .room(id) = destination.mode else { return }
+        router.completeConversationArrival(id: id)
+    }
+
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
         return ""
@@ -188,8 +193,10 @@ public struct InboxTabRoot: View {
                 mode: dest.kind,
                 onUseAIDraft: { draft in
                     path.append(draftRoute(for: draft))
-                }
+                },
+                onContentLoaded: { completeConversationArrival(dest) }
             ) { if !path.isEmpty { path.removeLast() } }
+                .onDisappear { completeConversationArrival(dest) }
         case .compose:
             NewMessageView(
                 viewModel: NewMessageViewModel(

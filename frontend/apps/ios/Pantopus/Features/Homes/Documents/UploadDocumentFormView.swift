@@ -12,7 +12,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Allowed picker types — PDF, image, .doc/.docx, .xls/.xlsx.
-private let allowedUploadTypes: [UTType] = {
+let allowedUploadTypes: [UTType] = {
     var types: [UTType] = [.pdf, .image]
     if let docx = UTType(filenameExtension: "docx") { types.append(docx) }
     if let doc = UTType(filenameExtension: "doc") { types.append(doc) }
@@ -26,12 +26,13 @@ public struct UploadDocumentFormView: View {
     @State private var viewModel: UploadDocumentFormViewModel
     @State private var showsFilePicker = false
     @State private var showsLinkPicker = false
+    @State private var hasClosed = false
     @Environment(\.dismiss) private var dismiss
-    private let onClose: @MainActor () -> Void
+    private let onClose: (@MainActor () -> Void)?
 
     public init(
         homeId: String,
-        onClose: @escaping @MainActor () -> Void = {},
+        onClose: (@MainActor () -> Void)? = nil,
         onUploaded: @escaping @Sendable (HomeDocumentDTO) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: UploadDocumentFormViewModel(
@@ -60,6 +61,7 @@ public struct UploadDocumentFormView: View {
             }
         )
         .formShakeOnChange(of: viewModel.shakeTrigger)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("uploadDocumentShell")
         .fileImporter(
             isPresented: $showsFilePicker,
@@ -77,25 +79,21 @@ public struct UploadDocumentFormView: View {
         .onChange(of: viewModel.shouldDismiss) { _, dismissNow in
             guard dismissNow else { return }
             viewModel.acknowledgeDismiss()
-            Task {
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                handleClose()
-            }
+            handleClose()
         }
     }
 
     private func handleClose() {
-        onClose()
-        dismiss()
+        guard !hasClosed else { return }
+        hasClosed = true
+        if let onClose { onClose() } else { dismiss() }
     }
 
     private func handlePicked(result: Result<[URL], any Error>) {
         switch result {
         case let .success(urls):
             guard let url = urls.first else { return }
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-            viewModel.acceptPicked(url: url)
+            Task { await viewModel.acceptPicked(url: url) }
         case let .failure(error):
             viewModel.toast = ToastMessage(
                 text: error.localizedDescription,
@@ -108,7 +106,9 @@ public struct UploadDocumentFormView: View {
 
     private var fileSection: some View {
         FormFieldGroup("File") {
-            if let file = viewModel.pickedFile {
+            if viewModel.isReadingFile {
+                ProgressView("Reading file…")
+            } else if let file = viewModel.pickedFile {
                 PickedFileCard(file: file) {
                     showsFilePicker = true
                 } onRemove: {

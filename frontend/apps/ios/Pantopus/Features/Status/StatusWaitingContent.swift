@@ -406,7 +406,7 @@ public extension StatusWaitingContent {
         return StatusWaitingContent(
             halo: StatusHalo(tone: .info, icon: .mailCheck),
             headline: "Check your email",
-            subcopy: "We sent a reset link to \(recipient). Click it to set a new password.",
+            subcopy: "If this email is eligible, check \(recipient) for a password reset link.",
             bodyEmphasis: email.isEmpty ? nil : email,
             primaryCta: StatusCTA(label: "Resend", actionKey: "resend_reset"),
             secondaryCta: StatusCTA(label: "Back to login", actionKey: "back_to_login")
@@ -457,10 +457,10 @@ public extension StatusWaitingContent {
         return StatusWaitingContent(
             halo: StatusHalo(tone: .info, icon: .mailCheck),
             headline: "Check your email",
-            subcopy: "We sent a link to \(recipient). Tap it to finish setting up your account.",
+            subcopy: "Check \(recipient) for a verification link to finish setting up your account.",
             bodyEmphasis: email?.isEmpty == false ? email : nil,
             statusPill: resent
-                ? StatusWaitingPill(text: "New link sent · just now", icon: .checkCircle, tone: .success)
+                ? StatusWaitingPill(text: "Link requested · just now", icon: .checkCircle, tone: .success)
                 : StatusWaitingPill(text: "Waiting for link click…", icon: .hourglass, tone: .neutral, isSpinning: true),
             actionStack: [openMail, resend, useDifferent],
             footnote: resent

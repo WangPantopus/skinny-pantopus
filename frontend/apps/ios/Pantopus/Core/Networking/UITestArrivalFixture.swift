@@ -43,9 +43,9 @@ enum UITestArrivalFixture {
             allowSecureEnclave: false
         )
         APIClient.shared.authProvider = manager
-        DeepLinkRouter.bindSignedInProvider { [weak manager] in
-            if case .signedIn = manager?.state { return true }
-            return false
+        DeepLinkRouter.bindSignedInUserIDProvider { [weak manager] in
+            if case let .signedIn(user) = manager?.state { return user.id }
+            return nil
         }
         return manager
     }
@@ -55,6 +55,7 @@ enum UITestArrivalFixture {
         let method = request.httpMethod ?? "GET"
         if let auth = authResponse(method: method, path: path) { return auth }
         if let social = socialResponse(method: method, path: path) { return social }
+        if let chat = chatResponse(method: method, path: path) { return chat }
         switch (method, path) {
         case ("GET", "/api/geo/autocomplete"):
             return json([
@@ -96,6 +97,30 @@ enum UITestArrivalFixture {
         }
     }
 
+    private static func chatResponse(method: String, path: String) -> (status: Int, data: Data)? {
+        switch (method, path) {
+        case ("GET", "/api/chat/rooms/entry-room/messages"):
+            if let code = ProcessInfo.processInfo.environment["UI_TESTS_SESSION_END_CODE"],
+               defaults.integer(forKey: "login-count") < 2 {
+                return json(["error": "Session ended", "code": code], status: 401)
+            }
+            return json([
+                "messages": [
+                    [
+                        "id": "entry-chat-message", "room_id": "entry-room", "user_id": "entry-friend",
+                        "message_text": "Chat return — violet compass", "message_type": "text",
+                        "created_at": "2026-09-09T08:00:00Z",
+                        "sender": ["id": "entry-friend", "name": "Room sender"]
+                    ]
+                ],
+                "hasMore": false
+            ])
+        case ("POST", "/api/chat/rooms/entry-room/read"):
+            return json(["success": true])
+        default: return nil
+        }
+    }
+
     private static func authResponse(method: String, path: String) -> (status: Int, data: Data)? {
         switch (method, path) {
         case ("POST", "/api/users/register"):
@@ -108,12 +133,17 @@ enum UITestArrivalFixture {
             if defaults.bool(forKey: "needs-verification") {
                 return json(["error": "Please verify your email before signing in."], status: 403)
             }
+            defaults.set(defaults.integer(forKey: "login-count") + 1, forKey: "login-count")
             return json([
                 "user": user,
                 "accessToken": "entry-test-access",
+                "refreshToken": "entry-test-refresh",
                 "expiresIn": 3600,
                 "expiresAt": Int(Date().timeIntervalSince1970) + 3600
             ])
+        case ("POST", "/api/users/refresh"):
+            guard let code = ProcessInfo.processInfo.environment["UI_TESTS_SESSION_END_CODE"] else { return nil }
+            return json(["error": "Session ended", "code": code], status: 401)
         case ("GET", "/api/users/profile"):
             return json(["user": user])
         default: return nil
@@ -161,6 +191,10 @@ enum UITestArrivalFixture {
                 ]
             ])
         case ("GET", "/api/posts/entry-post"), ("GET", "/api/posts/beacon-return"):
+            if ProcessInfo.processInfo.environment["UI_TESTS_SESSION_END_CODE"] != nil,
+               defaults.integer(forKey: "login-count") < 2 {
+                return json(["error": "Session ended"], status: 401)
+            }
             return json([
                 "post": [
                     "id": path.hasSuffix("beacon-return") ? "beacon-return" : "entry-post",

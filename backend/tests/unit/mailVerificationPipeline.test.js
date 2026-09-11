@@ -43,9 +43,10 @@ beforeEach(() => {
   resetTables();
   mockAttach.mockClear();
   mockDispatchPostcard.mockClear();
-  mockDispatchPostcard.mockResolvedValue({
-    success: true,
-    vendorJobId: 'mock-vendor-job-1',
+  mockDispatchPostcard.mockImplementation(async (jobId) => {
+    const job = getTable('MailVerificationJob').find((row) => row.id === jobId);
+    if (job) { job.vendor_job_id = 'mock-vendor-job-1'; job.vendor_status = 'sent'; }
+    return { success: true, vendorJobId: 'mock-vendor-job-1' };
   });
   mockAttach.mockResolvedValue({
     success: true,
@@ -90,7 +91,7 @@ function seedHome(overrides = {}) {
     city: 'Portland',
     state: 'OR',
     zipcode: '97201',
-    owner_id: 'other-user',
+    owner_id: null,
     ...overrides,
   }]);
 }
@@ -185,11 +186,8 @@ describe('full flow: start → confirm → occupancy', () => {
     expect(attempts[0].status).toBe('verified');
 
     // OccupancyAttachService was called
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'mail_code',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 
   test('confirmed code results in member role (never admin)', async () => {
@@ -202,11 +200,8 @@ describe('full flow: start → confirm → occupancy', () => {
     await service.confirmCode(startResult.attempt_id, code, 'user-1');
 
     // mail_code always maps to member
-    expect(mockAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'mail_code',
-      }),
-    );
+    expect(getTable('HomeOccupancy')[0]).toMatchObject({ home_id: 'home-1', user_id: 'user-1', role_base: 'member', verification_status: 'verified', can_manage_home: false });
+    expect(mockAttach).not.toHaveBeenCalled();
   });
 });
 
@@ -247,6 +242,7 @@ describe('wrong code → lockout', () => {
   });
 
   test('correct code after 4 wrong attempts still works', async () => {
+    seedTable('MailVerificationJob', [{ id: 'mailed-job', attempt_id: 'attempt-1', vendor_status: 'sent', metadata: {}, created_at: new Date().toISOString() }]);
     seedDeliverableAddress();
     seedHome();
     seedActiveAttempt();
@@ -316,11 +312,15 @@ describe('rate limiting', () => {
     const r1 = await service.startVerification('user-1', 'addr-1');
     expect(r1.success).toBe(true);
 
-    // Second start — OK
+    getTable('AddressVerificationAttempt')[0].status = 'canceled';
+
+    // Second fresh attempt — OK
     const r2 = await service.startVerification('user-1', 'addr-1');
     expect(r2.success).toBe(true);
 
-    // Third start — rate limited
+    getTable('AddressVerificationAttempt')[1].status = 'canceled';
+
+    // Third fresh attempt — rate limited
     const r3 = await service.startVerification('user-1', 'addr-1');
     expect(r3.success).toBe(false);
     expect(r3.error).toMatch(/rate limit|too many/i);

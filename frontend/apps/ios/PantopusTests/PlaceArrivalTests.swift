@@ -128,7 +128,7 @@ final class PlaceArrivalTests: XCTestCase {
         defer {
             router.clearPending()
             PendingDeepLinkStore.clear()
-            DeepLinkRouter.bindSignedInProvider(nil)
+            DeepLinkRouter.bindSignedInUserIDProvider(nil)
         }
         let cases: [(String, DeepLinkRouter.Destination)] = [
             ("https://pantopus.app/app/feed?surface=personas", .beacons),
@@ -136,12 +136,12 @@ final class PlaceArrivalTests: XCTestCase {
             ("https://pantopus.app/persona/maria", .beaconProfile(handle: "maria"))
         ]
         for (link, expected) in cases {
-            DeepLinkRouter.bindSignedInProvider { false }
+            DeepLinkRouter.bindSignedInUserIDProvider { nil }
             router.clearPending()
             try router.handle(url: XCTUnwrap(URL(string: link)))
             XCTAssertNil(router.pending)
             let saved = try XCTUnwrap(PendingDeepLinkStore.take())
-            DeepLinkRouter.bindSignedInProvider { true }
+            DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
             try router.handle(url: XCTUnwrap(URL(string: saved)))
             XCTAssertEqual(router.consume(), expected)
         }

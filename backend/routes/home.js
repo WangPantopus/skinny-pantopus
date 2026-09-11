@@ -11,11 +11,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
-const {
-  generatePostcardCode,
-  hashPostcardCode,
-  dispatchPostcardCode,
-} = require('../utils/postcardDispatch');
+const homePostcardService = require('../services/homePostcardService');
 const {
   checkHomePermission,
   isVerifiedOwner,
@@ -25,6 +21,7 @@ const {
   getActiveOccupancy,
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
+const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
 const { getClaimRiskScore } = require('../utils/homeSecurityPolicy');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
@@ -5500,6 +5497,25 @@ router.post('/:id/events/:eventId/rsvp', verifyToken, async (req, res) => {
 
 // ============ HOME DOCUMENTS ============
 
+const createHomeDocumentSchema = Joi.object({
+  doc_type: Joi.string().valid(...HOME_DOCUMENT_TYPES).required(),
+  title: Joi.string().trim().min(1).max(255).required(),
+  visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES).default('members'),
+  // File attachments are created by the authenticated multipart route, which
+  // owns the storage path and verifies bytes. Metadata cannot attach a raw key.
+  file_id: Joi.any().valid(null),
+  storage_bucket: Joi.any().valid(null, ''),
+  storage_path: Joi.any().valid(null, ''),
+  mime_type: Joi.string().max(255).allow(null, ''),
+  size_bytes: Joi.number().integer().min(0).allow(null),
+  details: Joi.object().custom((value, helpers) => {
+    if (Object.keys(value).some(key => key.startsWith('upload_') || ['storage_contract', 'preview_url', 'original_filename'].includes(key))) {
+      return helpers.error('any.invalid');
+    }
+    return value;
+  }).default({}),
+});
+
 /**
  * GET /api/homes/:id/documents
  */
@@ -5508,25 +5524,19 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'docs.view');
+    if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
-    // Filter by visibility based on permissions
-    const canViewSensitive = access.isOwner || (access.occupancy && access.occupancy.can_view_sensitive);
-    const canManageHome = access.isOwner || (access.occupancy && access.occupancy.can_manage_home);
+    const visibility = await homeDocumentVisibilities(homeId, userId, access);
+    if (visibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
 
-    let query = supabaseAdmin
+    const query = supabaseAdmin
       .from('HomeDocument')
       .select('*')
       .eq('home_id', homeId)
+      .in('visibility', visibility.allowed)
       .order('created_at', { ascending: false });
-
-    // Restrict based on visibility
-    if (!canViewSensitive && !canManageHome) {
-      query = query.eq('visibility', 'members');
-    } else if (!canViewSensitive) {
-      query = query.in('visibility', ['members', 'managers']);
-    }
 
     const { data, error } = await query;
     if (error) {
@@ -5534,7 +5544,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    res.json({ documents: data || [] });
+    res.json({ documents: (data || []).map(serializeHomeDocument) });
   } catch (err) {
     logger.error('Documents fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch documents' });
@@ -5544,19 +5554,20 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/documents
  */
-router.post('/:id/documents', verifyToken, async (req, res) => {
+router.post('/:id/documents', verifyToken, validate(createHomeDocumentSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'docs.upload');
+    if (access.readFailed) return res.status(503).json({ error: 'Could not check home access. Try again.' });
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { file_id, doc_type, title, storage_bucket, storage_path, mime_type, size_bytes, visibility, details } = req.body;
 
-    if (!doc_type || !title) {
-      return res.status(400).json({ error: 'doc_type and title are required' });
-    }
+    const documentVisibility = await homeDocumentVisibilities(homeId, userId, access);
+    if (documentVisibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
+    if (!documentVisibility.allowed.includes(visibility)) return res.status(403).json({ error: 'No access to that document visibility' });
 
     const { data, error } = await supabaseAdmin
       .from('HomeDocument')
@@ -6612,6 +6623,11 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
     const perms = new Set(myAccess.permissions || []);
 
     const canFinance = myAccess.isOwner || perms.has('finance.view') || perms.has('finance.manage');
+    const canViewDocuments = access.isOwner || myAccess.isOwner || perms.has('docs.view');
+    const documentVisibility = canViewDocuments
+      ? await homeDocumentVisibilities(homeId, userId, access)
+      : { allowed: [] };
+    if (documentVisibility.readFailed) return res.status(503).json({ error: 'Could not check document access. Try again.' });
 
     // Build date boundaries for "today" queries
     const now = new Date();
@@ -6725,10 +6741,13 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
         .eq('home_id', homeId)
         .in('status', ['ordered', 'shipped', 'out_for_delivery']),
       // counts: documents
-      supabaseAdmin
-        .from('HomeDocument')
-        .select('id', { count: 'exact', head: true })
-        .eq('home_id', homeId),
+      canViewDocuments
+        ? supabaseAdmin
+            .from('HomeDocument')
+            .select('id', { count: 'exact', head: true })
+            .eq('home_id', homeId)
+            .in('visibility', documentVisibility.allowed)
+        : Promise.resolve({ count: 0 }),
       // counts: upcoming events
       supabaseAdmin
         .from('HomeCalendarEvent')
@@ -6961,13 +6980,14 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
     // Determine how to route this claim based on authority count.
 
     // 1. Count active authorities
-    const { data: authorities } = await supabaseAdmin
+    const { data: authorities, error: authoritiesError } = await supabaseAdmin
       .from('HomeOccupancy')
       .select('user_id')
       .eq('home_id', homeId)
       .eq('is_active', true)
       .in('role_base', ['owner', 'admin', 'manager']);
-    const authorityCount = authorities?.length || 0;
+    if (authoritiesError || !authorities) throw new Error('Could not check household authorities');
+    const authorityCount = authorities.length;
 
     // 2. Get home creator
     const { data: homeForCreator } = await supabaseAdmin
@@ -6995,42 +7015,9 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
 
     } else if (authorityCount === 0) {
       // PATH 2 — External cold-start: no authorities, not the creator
-      const code = generatePostcardCode();
-      const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
-
-      const { data: postcard, error: pcError } = await supabaseAdmin
-        .from('HomePostcardCode')
-        .insert({
-          home_id: homeId,
-          user_id: userId,
-          code_hash: hashPostcardCode(code),
-          status: 'pending',
-          expires_at: expiresAt,
-        })
-        .select('id')
-        .single();
-
-      if (pcError) {
-        logger.error('Failed to create postcard code for cold-start', { error: pcError.message });
-      }
-
-      // UX-01: actually mail it. This branch used to return "a verification
-      // code will be mailed to this address" while nothing dispatched.
-      const coldStartMail = await dispatchPostcardCode(home, code);
-      if (!coldStartMail.success) {
-        if (postcard?.id) {
-          await supabaseAdmin
-            .from('HomePostcardCode')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', postcard.id);
-        }
-        logger.error('Cold-start postcard dispatch failed', {
-          homeId, userId, error: coldStartMail.error,
-        });
-        return res.status(502).json({
-          error: 'We could not send mail to this address right now. Please try again later.',
-        });
-      }
+      const coldStartMail = await homePostcardService.request(homeId, userId);
+      if (coldStartMail.status >= 400) return res.status(coldStartMail.status).json(coldStartMail.body);
+      const postcard = coldStartMail.body.postcard;
 
       await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
       await supabaseAdmin
@@ -7044,9 +7031,10 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
         .eq('id', claim.id);
 
       return res.status(201).json({
-        message: 'A verification code will be mailed to this address. Enter it to gain access.',
+        message: coldStartMail.body.message,
         claim,
         postcard_requested: true,
+        delivery_unknown: coldStartMail.body.delivery_unknown,
       });
 
     } else {
@@ -7068,42 +7056,11 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
 
       if (authoritiesStale) {
         // All authorities are stale — treat as cold-start (PATH 2 fallback)
-        const code = generatePostcardCode();
-        const expiresAt = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
+        const staleMail = await homePostcardService.request(homeId, userId);
+        if (staleMail.status >= 400) return res.status(staleMail.status).json(staleMail.body);
+        const postcard = staleMail.body.postcard;
 
-        const { data: postcard, error: pcError } = await supabaseAdmin
-          .from('HomePostcardCode')
-          .insert({
-            home_id: homeId,
-            user_id: userId,
-            code_hash: hashPostcardCode(code),
-            status: 'pending',
-            expires_at: expiresAt,
-          })
-          .select('id')
-          .single();
-
-        if (pcError) {
-          logger.error('Failed to create postcard code for stale-authority cold-start', { error: pcError.message });
-        }
-
-        const staleMail = await dispatchPostcardCode(home, code);
-        if (!staleMail.success) {
-          if (postcard?.id) {
-            await supabaseAdmin
-              .from('HomePostcardCode')
-              .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-              .eq('id', postcard.id);
-          }
-          logger.error('Stale-authority postcard dispatch failed', {
-            homeId, userId, error: staleMail.error,
-          });
-          return res.status(502).json({
-            error: 'We could not send mail to this address right now. Please try again later.',
-          });
-        }
-
-        await applyOccupancyTemplate(homeId, userId, effectiveRole, 'pending_postcard');
+        await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
         await supabaseAdmin
           .from('HomeResidencyClaim')
           .update({
@@ -7115,9 +7072,10 @@ router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) =>
           .eq('id', claim.id);
 
         return res.status(201).json({
-          message: 'A verification code will be mailed to this address. Enter it to gain access.',
+          message: staleMail.body.message,
           claim,
           postcard_requested: true,
+          delivery_unknown: staleMail.body.delivery_unknown,
         });
       }
 

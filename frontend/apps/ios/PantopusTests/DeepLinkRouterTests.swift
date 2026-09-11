@@ -20,13 +20,13 @@ final class DeepLinkRouterTests: XCTestCase {
     /// hold. Mirrors Android `DeepLinkRouterTest.setUp`.
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
         DeepLinkRouter.shared.clearPending() // pending + prefersLoginPresentation
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
         super.tearDown()
@@ -414,13 +414,13 @@ final class DeepLinkRouterTests: XCTestCase {
 final class DeepLinkRouterBatch2Tests: XCTestCase {
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
         DeepLinkRouter.shared.clearPending() // pending + prefersLoginPresentation
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
         super.tearDown()
@@ -518,13 +518,13 @@ final class DeepLinkRouterBatch2Tests: XCTestCase {
 final class DeepLinkRouterAliasTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
         super.tearDown()
@@ -610,13 +610,13 @@ final class DeepLinkRouterAliasTests: XCTestCase {
 final class DeepLinkRouterSignedOutTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        DeepLinkRouter.bindSignedInProvider { false }
+        DeepLinkRouter.bindSignedInUserIDProvider { nil }
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
     }
 
     override func tearDown() {
-        DeepLinkRouter.bindSignedInProvider(nil)
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
         super.tearDown()
@@ -662,12 +662,236 @@ final class DeepLinkRouterSignedOutTests: XCTestCase {
         try DeepLinkRouter.shared.handle(url: XCTUnwrap(URL(string: "pantopus://post/abc-123")))
         XCTAssertNil(DeepLinkRouter.shared.pending)
 
-        DeepLinkRouter.bindSignedInProvider { true }
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
         DeepLinkRouter.shared.acknowledgeLoginPresentation()
         let replayed = try XCTUnwrap(PendingDeepLinkStore.take())
         try DeepLinkRouter.shared.handle(url: XCTUnwrap(URL(string: replayed)))
 
         XCTAssertEqual(DeepLinkRouter.shared.pending, .post(id: "abc-123"))
-        XCTAssertNil(PendingDeepLinkStore.peek(), "the stash is one-shot")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/abc-123")
+        DeepLinkRouter.shared.completePostArrival(id: "abc-123")
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+}
+
+@MainActor
+final class DeepLinkRouterSessionReturnTests: XCTestCase {
+    private var userID: String? = "original-user"
+
+    override func setUp() {
+        super.setUp()
+        userID = "original-user"
+        DeepLinkRouter.bindSignedInUserIDProvider { [weak self] in self?.userID }
+        DeepLinkRouter.shared.clearPending()
+        PendingDeepLinkStore.clear()
+    }
+
+    override func tearDown() {
+        DeepLinkRouter.bindSignedInUserIDProvider(nil)
+        DeepLinkRouter.shared.clearPending()
+        PendingDeepLinkStore.clear()
+        super.tearDown()
+    }
+
+    func testSignedInPostRemainsPendingUntilItsContentLoads() {
+        beginArrival()
+        XCTAssertEqual(DeepLinkRouter.shared.activeContentArrival, .post(id: "session-return"))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
+        DeepLinkRouter.shared.completePostArrival(id: "session-return")
+        XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testSignedInConversationRemainsPendingAfterNavigationConsumption() {
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .conversation(id: "session-room"))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/session-room")
+    }
+
+    func testConversationReplaysAfterServerRejectionAndLateDeparture() throws {
+        for reason in [SessionEndReason.sessionRevoked, .expired] {
+            userID = "original-user"
+            let manager = try makeManager()
+            DeepLinkRouter.shared.handle(path: "/chat/session-room")
+            _ = DeepLinkRouter.shared.consume()
+            XCTAssertEqual(DeepLinkRouter.shared.activeContentArrival, .conversation(id: "session-room"))
+            manager.endSession(reason: reason)
+            manager.endSession(reason: reason)
+            DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+            XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/session-room")
+            XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
+            userID = nil
+            let replay = try XCTUnwrap(PendingDeepLinkStore.take(userID: "original-user"))
+            userID = "original-user"
+            DeepLinkRouter.shared.handle(path: replay)
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .conversation(id: "session-room"))
+            DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+            XCTAssertNil(PendingDeepLinkStore.peek())
+        }
+    }
+
+    func testConversationCannotReplayForAnotherAccount() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        manager.endSession(reason: .sessionRevoked)
+        XCTAssertNil(PendingDeepLinkStore.take(userID: "different-user"))
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testManualLogoutClearsConversationHandoff() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        manager.endSession(reason: .expired)
+        manager.clearLocalSession()
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testPostAndConversationCompletionDoNotClearEachOther() {
+        DeepLinkRouter.shared.handle(path: "/post/shared-id")
+        DeepLinkRouter.shared.handle(path: "/chat/shared-id")
+        DeepLinkRouter.shared.completePostArrival(id: "shared-id")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://chat/shared-id")
+        DeepLinkRouter.shared.handle(path: "/post/shared-id")
+        DeepLinkRouter.shared.completeConversationArrival(id: "shared-id")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/shared-id")
+    }
+
+    func testCompletedConversationDoesNotReplayAfterLaterSessionEnd() throws {
+        let manager = try makeManager()
+        DeepLinkRouter.shared.handle(path: "/chat/session-room")
+        DeepLinkRouter.shared.completeConversationArrival(id: "session-room")
+        manager.endSession(reason: .expired)
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testOriginalAccountReplaysAfterServerRejectionAndConcurrentTeardown() throws {
+        for reason in [SessionEndReason.sessionRevoked, .expired] {
+            userID = "original-user"
+            let manager = try makeManager()
+            beginArrival()
+            manager.endSession(reason: reason)
+            manager.endSession(reason: reason)
+            XCTAssertNil(DeepLinkRouter.shared.activeContentArrival)
+            XCTAssertNil(manager.accessToken)
+            XCTAssertEqual(manager.sessionEndReason, reason)
+            XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
+            XCTAssertTrue(DeepLinkRouter.shared.prefersLoginPresentation)
+
+            // A disappearing old detail may report completion after teardown.
+            DeepLinkRouter.shared.completePostArrival(id: "session-return")
+            XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
+            userID = nil
+            DeepLinkRouter.shared.clearPending()
+            let path = try XCTUnwrap(PendingDeepLinkStore.take(userID: "original-user"))
+            userID = "original-user"
+            DeepLinkRouter.shared.handle(path: path)
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .post(id: "session-return"))
+            DeepLinkRouter.shared.completePostArrival(id: "session-return")
+            XCTAssertNil(PendingDeepLinkStore.peek())
+        }
+    }
+
+    func testDifferentAccountCannotReplayOriginalArrival() throws {
+        let manager = try makeManager()
+        beginArrival()
+        manager.endSession(reason: .sessionRevoked)
+        userID = "different-user"
+        XCTAssertNil(PendingDeepLinkStore.take(userID: userID))
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testDifferentAccountCannotCompleteOriginalArrival() {
+        beginArrival()
+        userID = "different-user"
+        DeepLinkRouter.shared.completePostArrival(id: "session-return")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
+    }
+
+    func testManualLogoutClearsEvenAnAlreadyEndedSessionArrival() throws {
+        let manager = try makeManager()
+        beginArrival()
+        manager.endSession(reason: .expired)
+        manager.clearLocalSession()
+        XCTAssertNil(PendingDeepLinkStore.peek())
+        XCTAssertFalse(DeepLinkRouter.shared.prefersLoginPresentation)
+    }
+
+    func testSuccessfulLoadDoesNotReplayAfterALaterSessionEnd() throws {
+        let manager = try makeManager()
+        beginArrival()
+        DeepLinkRouter.shared.completePostArrival(id: "session-return")
+        manager.endSession(reason: .expired)
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testOldCompletionCannotClearANewerPost() {
+        beginArrival()
+        DeepLinkRouter.shared.handle(path: "/post/newer")
+        DeepLinkRouter.shared.completePostArrival(id: "session-return")
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/newer")
+        DeepLinkRouter.shared.completePostArrival(id: "newer")
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testDifferentContentDestinationSupersedesPost() {
+        beginArrival()
+        DeepLinkRouter.shared.handle(path: "/beacons")
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testSignedOutArrivalRemainsUnboundUntilLogin() throws {
+        userID = nil
+        DeepLinkRouter.shared.handle(path: "/post/session-return")
+        XCTAssertNil(DeepLinkRouter.shared.pending)
+        let path = try XCTUnwrap(PendingDeepLinkStore.take(userID: "new-user"))
+        userID = "new-user"
+        DeepLinkRouter.shared.handle(path: path)
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .post(id: "session-return"))
+        DeepLinkRouter.shared.completePostArrival(id: "session-return")
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testReauthenticationDoesNotExtendExpiry() throws {
+        let manager = try makeManager()
+        beginArrival()
+        let original = Int64(Date().addingTimeInterval(-3600).timeIntervalSince1970 * 1000)
+        UserDefaults.standard.set(original, forKey: "pantopus.pendingDeepLink.timestampMs")
+        manager.endSession(reason: .sessionRevoked)
+        XCTAssertEqual(UserDefaults.standard.object(forKey: "pantopus.pendingDeepLink.timestampMs") as? Int64, original)
+        XCTAssertNotNil(PendingDeepLinkStore.take(userID: "original-user"))
+    }
+
+    func testExpiredArrivalCannotBeRevivedBySessionEnd() throws {
+        let manager = try makeManager()
+        beginArrival()
+        let expired = Int64(Date().addingTimeInterval(-25 * 3600).timeIntervalSince1970 * 1000)
+        UserDefaults.standard.set(expired, forKey: "pantopus.pendingDeepLink.timestampMs")
+        manager.endSession(reason: .expired)
+        XCTAssertNil(PendingDeepLinkStore.take(userID: "original-user"))
+    }
+
+    func testUnboundOrWrongOwnerArrivalIsNotRetainedAtServerTeardown() throws {
+        for owner in [nil, "someone-else"] {
+            let manager = try makeManager()
+            PendingDeepLinkStore.stash("pantopus://post/session-return", expectedUserID: owner)
+            manager.endSession(reason: .sessionRevoked)
+            XCTAssertNil(PendingDeepLinkStore.peek())
+        }
+    }
+
+    private func beginArrival() {
+        DeepLinkRouter.shared.handle(path: "/post/session-return")
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .post(id: "session-return"))
+    }
+
+    private func makeManager() throws -> AuthManager {
+        let store = InMemorySecureStore()
+        try store.set("test-access", for: SecureStoreKey.accessToken)
+        try store.set("original-user", for: SecureStoreKey.userId)
+        return AuthManager(
+            store: store,
+            apiClient: APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none),
+            allowSecureEnclave: false
+        )
     }
 }

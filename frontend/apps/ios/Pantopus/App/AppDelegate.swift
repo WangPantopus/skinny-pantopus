@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         Self.bootstrapLogging()
+        try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
             // Product analytics (PostHog). No-ops until POSTHOG_API_KEY is set,
@@ -77,7 +78,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let tokenString = deviceToken.map { String(format: "%02x", $0) }.joined()
-        logger.info("APNs token received", metadata: ["token": .string(tokenString)])
+        logger.info("APNs token received")
         Task {
             // POST the APNs device token to /api/notifications/register with
             // platform=ios. The backend stores it as an APNs provider token

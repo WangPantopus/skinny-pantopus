@@ -260,3 +260,53 @@ test.each(['PersonaBlock', 'Post'])(
     }
   },
 );
+
+
+test('every accepted broadcast creates an exact-post notification, including the third and later publication', async () => {
+  for (let i = 0; i < 4; i += 1) {
+    const published = await publish(`Update ${i}`);
+    expect(published.status).toBe(201);
+    expect(db.getTable('Notification').filter((n) => n.user_id === follower))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ link: `/post/${published.body.message.id}` })]));
+  }
+});
+
+test.each(['expired', 'pending', 'removed', 'paused'])(
+  '%s subscriber cannot read restricted content through either broadcast endpoint', async (status) => {
+    const published = await publish('Restricted content must stay private', {
+      visibility: 'tier_or_above', target_tier_rank: 2,
+    });
+    const postId = published.body.message.id;
+    db.getTable('PersonaMembership').find((m) => m.user_id === member).status = status;
+    expect((await read(member, postId)).status).toBe(403);
+    const channel = await as(request(app).get(`/api/broadcast/channels/${channelId}/messages`), member);
+    expect(channel.status).toBe(200);
+    expect(JSON.stringify(channel.body)).not.toContain('Restricted content must stay private');
+    const marked = await as(request(app).post(`/api/broadcast/messages/${postId}/read`), member).send({});
+    expect(marked.status).toBe(403);
+  },
+);
+
+test('locked channel preview contains no excerpt of restricted text', async () => {
+  const text = 'Short secret';
+  await publish(text, { visibility: 'tier_or_above', target_tier_rank: 2 });
+  const channel = await as(request(app).get(`/api/broadcast/channels/${channelId}/messages`), follower);
+  expect(channel.status).toBe(200);
+  expect(channel.body.messages[0]).toMatchObject({ locked: true, teaser: 'Members-only update' });
+  expect(JSON.stringify(channel.body)).not.toContain(text);
+});
+
+test.each(['draft', 'archived'])(
+  '%s post stays unavailable through old notification and broadcast read destinations', async (state) => {
+    const published = await publish('No longer published');
+    const postId = published.body.message.id;
+    const post = db.getTable('Post').find((p) => p.id === postId);
+    if (state === 'draft') post.post_metadata.broadcast_status = 'draft';
+    else post.archived_at = new Date().toISOString();
+    expect((await read(follower, postId)).status).toBe(403);
+    expect((await read(owner, postId)).status).toBe(200);
+    const marked = await as(request(app).post(`/api/broadcast/messages/${postId}/read`), follower).send({});
+    expect(marked.status).toBe(403);
+    expect((await following(follower)).body.items[0].latestPost).toBeNull();
+  },
+);

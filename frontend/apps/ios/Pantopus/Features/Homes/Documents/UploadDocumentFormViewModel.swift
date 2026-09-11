@@ -17,10 +17,10 @@
 //  open until a structured `linked_to` column lands.
 //
 
+import CryptoKit
 import Foundation
 import Observation
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// A document category the user can choose at upload time. The nine
 /// choices come from the P2.10 design spec; each maps onto a closest-
@@ -107,7 +107,7 @@ public enum UploadDocumentVisibility: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .owners: "Owners only"
+        case .owners: "Managers and owners"
         case .allMembers: "All members"
         }
     }
@@ -159,18 +159,18 @@ public enum UploadDocumentLinkOptionsState: Sendable, Equatable {
     case error(String)
 }
 
-/// Display-only handle on a picked file. The view-model never reads
-/// bytes — the actual upload is a follow-up patch once Supabase
-/// storage signing lands; today we POST the metadata.
+/// A selected file retains bounded bytes after its security-scoped URL closes.
 public struct PickedFile: Equatable, Sendable {
     public let filename: String
     public let sizeBytes: Int64?
     public let mimeType: String?
+    public let data: Data?
 
-    public init(filename: String, sizeBytes: Int64? = nil, mimeType: String? = nil) {
+    public init(filename: String, sizeBytes: Int64? = nil, mimeType: String? = nil, data: Data? = nil) {
         self.filename = filename
         self.sizeBytes = sizeBytes
         self.mimeType = mimeType
+        self.data = data
     }
 
     public var fileType: DocumentFileType {
@@ -197,6 +197,7 @@ final class UploadDocumentFormViewModel {
     // MARK: - Surface state
 
     private(set) var isSaving: Bool = false
+    private(set) var isReadingFile: Bool = false
     var toast: ToastMessage?
     private(set) var shouldDismiss: Bool = false
     /// Used to drive the FormShell shake on submit failure.
@@ -209,22 +210,27 @@ final class UploadDocumentFormViewModel {
 
     let homeId: String
     private let api: APIClient
+    private let uploader: MultipartUploader
+    private var selectionId = UUID()
+    private var uploadAttempt: (fingerprint: Data, id: String)?
     private let onUploaded: @Sendable (HomeDocumentDTO) -> Void
 
     init(
         homeId: String,
         api: APIClient = .shared,
+        uploader: MultipartUploader = .shared,
         onUploaded: @escaping @Sendable (HomeDocumentDTO) -> Void = { _ in }
     ) {
         self.homeId = homeId
         self.api = api
+        self.uploader = uploader
         self.onUploaded = onUploaded
     }
 
     // MARK: - Derived flags
 
     var isValid: Bool {
-        pickedFile != nil && !trimmedTitle.isEmpty && titleField.error == nil
+        pickedFile?.data?.isEmpty == false && !isReadingFile && !trimmedTitle.isEmpty && titleField.error == nil
     }
 
     var isDirty: Bool {
@@ -282,20 +288,30 @@ final class UploadDocumentFormViewModel {
     /// Called by the SwiftUI `.fileImporter` once the user picks a file.
     /// Defaults the title to the filename (sans extension) when the
     /// title field is still untouched.
-    func acceptPicked(url: URL) {
-        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
-        let size = (attributes?[.size] as? NSNumber)?.int64Value
-        let utType = UTType(filenameExtension: url.pathExtension) ?? .data
-        let mime = utType.preferredMIMEType
-        pickedFile = PickedFile(
-            filename: url.lastPathComponent,
-            sizeBytes: size,
-            mimeType: mime
-        )
+    func acceptPicked(url: URL) async {
+        let currentSelection = UUID()
+        selectionId = currentSelection
+        isReadingFile = true
+        defer { if selectionId == currentSelection { isReadingFile = false } }
+        do {
+            let file = try await Task.detached(priority: .userInitiated) {
+                try DocumentFileReader.read(url)
+            }.value
+            guard selectionId == currentSelection else { return }
+            pickedFile = file
+            toast = nil
+        } catch {
+            guard selectionId == currentSelection else { return }
+            pickedFile = nil
+            toast = ToastMessage(text: (error as? APIError)?.errorDescription ?? "Couldn't read that file. Choose it again.", kind: .error)
+        }
     }
 
     func clearPickedFile() {
+        selectionId = UUID()
+        isReadingFile = false
         pickedFile = nil
+        uploadAttempt = nil
     }
 
     private func onPickedFileChanged(_ previous: PickedFile?) {
@@ -380,7 +396,7 @@ final class UploadDocumentFormViewModel {
     func submit() async -> Bool {
         titleField.error = validator.validate(titleField.value)
         titleField.touched = true
-        guard isValid, let pickedFile, !isSaving else {
+        guard isValid, let pickedFile, let bytes = pickedFile.data, !isSaving else {
             shakeTrigger &+= 1
             toast = ToastMessage(text: "Pick a file and add a title.", kind: .error)
             return false
@@ -415,9 +431,31 @@ final class UploadDocumentFormViewModel {
         )
 
         do {
-            let response: CreateDocumentResponse = try await api.request(
-                HomesEndpoints.createDocument(homeId: homeId, request: request)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            var hash = SHA256()
+            try hash.update(data: encoder.encode(request))
+            hash.update(data: Data(pickedFile.filename.utf8))
+            hash.update(data: bytes)
+            let fingerprint = Data(hash.finalize())
+            if uploadAttempt?.fingerprint != fingerprint {
+                uploadAttempt = (fingerprint, UUID().uuidString.lowercased())
+            }
+            guard let uploadId = uploadAttempt?.id else { throw APIError.invalidResponse }
+            let response = try await uploader.uploadHomeDocument(
+                homeId: homeId,
+                uploadId: uploadId,
+                file: MultipartFile(
+                    fieldName: "file",
+                    filename: pickedFile.filename,
+                    mimeType: pickedFile.mimeType ?? "application/octet-stream",
+                    data: bytes
+                ),
+                metadata: request
             )
+            guard response.document.id.lowercased() == uploadId,
+                  response.document.fileId == response.document.id,
+                  response.document.contentURL != nil else { throw APIError.invalidResponse }
             toast = ToastMessage(text: "Document uploaded.", kind: .success)
             shouldDismiss = true
             onUploaded(response.document)

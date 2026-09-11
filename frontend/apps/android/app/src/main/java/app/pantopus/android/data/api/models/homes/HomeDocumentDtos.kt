@@ -28,6 +28,8 @@ data class HomeDocumentDto(
     @Json(name = "created_by") val createdBy: String?,
     @Json(name = "created_at") val createdAt: String?,
     @Json(name = "updated_at") val updatedAt: String?,
+    @Json(name = "content_url") val contentUrl: String? = null,
+    @Json(name = "file_version") val fileVersion: String? = null,
 )
 
 /** `GET /api/homes/:id/documents` envelope. */
@@ -54,4 +56,11 @@ data class CreateDocumentRequest(
 @JsonClass(generateAdapter = true)
 data class CreateDocumentResponse(
     val document: HomeDocumentDto,
+)
+
+/** Deletion is committed even when private object cleanup is still pending. */
+@JsonClass(generateAdapter = true)
+data class DeleteDocumentResponse(
+    val deleted: Boolean,
+    @Json(name = "cleanup_pending") val cleanupPending: Boolean,
 )

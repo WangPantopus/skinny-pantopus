@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +54,7 @@ import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 
 const val PLACE_DASHBOARD_HOME_ID_KEY = "homeId"
 
@@ -79,6 +81,8 @@ fun PlaceDashboardScreen(
     modifier: Modifier = Modifier,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
+    onOpenHomeTools: () -> Unit = {},
+    onOpenMenu: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -99,6 +103,8 @@ fun PlaceDashboardScreen(
                     moveInDate = current.moveInDate,
                     onOpenMailDay = onOpenMailDay,
                     onOpenPrivacyMirror = onOpenPrivacyMirror,
+                    onOpenHomeTools = onOpenHomeTools,
+                    onOpenMenu = onOpenMenu,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
@@ -150,6 +156,8 @@ internal fun PlaceDashboardContent(
     moveInDate: String? = null,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
+    onOpenHomeTools: () -> Unit = {},
+    onOpenMenu: () -> Unit = {},
     homeId: String = "",
 ) {
     val isVerified = intel.tier == PlaceTier.T4
@@ -162,6 +170,7 @@ internal fun PlaceDashboardContent(
                 label = intel.place.label,
                 isVerified = isVerified,
                 onOpenAvatar = onOpenAvatar,
+                onOpenMenu = onOpenMenu,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
         }
@@ -172,6 +181,15 @@ internal fun PlaceDashboardContent(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
                 )
             }
+        }
+        item {
+            PlaceMessagesActionRow(
+                icon = PantopusIcon.Home,
+                title = "Home tools",
+                subtitle = "Documents, household tasks and members.",
+                onTap = onOpenHomeTools,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.homeTools"),
+            )
         }
         // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
         item { PrivacyMirrorRow(onOpen = onOpenPrivacyMirror) }
@@ -343,6 +361,7 @@ private fun PlaceVerifyLockedGroup(
 private fun PlaceDashboardHeader(
     label: String,
     isVerified: Boolean,
+    onOpenMenu: () -> Unit,
     onOpenAvatar: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -382,6 +401,14 @@ private fun PlaceDashboardHeader(
             } else {
                 PlaceClaimedAvatar(size = 40.dp)
             }
+        }
+        IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
+            PantopusIconImage(
+                icon = PantopusIcon.Menu,
+                contentDescription = "Menu",
+                size = Spacing.s5,
+                tint = PantopusColors.appText,
+            )
         }
     }
 }
