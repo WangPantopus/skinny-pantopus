@@ -7,6 +7,11 @@
 -- Invitations snapshot the complete role defaults. An older affected pending
 -- invitation must be reissued by an authorized inviter (INVITE_POLICY_CHANGED);
 -- do not rewrite its saved policy or silently broaden its original terms.
+-- Backwards compatible: yes. Existing readers use these role defaults and
+-- invitation clients already handle the existing INVITE_POLICY_CHANGED result.
+-- No schema or response shape changes, and no stored decisions are overwritten.
+SET LOCAL lock_timeout = '5s';
+
 INSERT INTO public."HomeRolePermission" (role_base, permission, allowed)
 VALUES ('admin', 'home.view', true),
        ('manager', 'home.view', true),

@@ -9,6 +9,10 @@ actual invitation → SDK/SQL → Home list/detail, lost-reply recovery and priv
 gates pass. Local fixture rows and original role policy were restored exactly.
 The migration is source only; no permanent adoption or ledger rewrite occurred.
 
+Pushed `9c758865e` exposed missing migration compatibility/lock-bound metadata
+in CI. The insert is unchanged; both safeguards are supplied and the local
+policy gate passes. Verify the corrective head and its fresh database replay.
+
 H07 remains partial: create/save/join UI and transactional onboarding still need
 work. The native H05/H08 candidate remains in installed acceptance. Continue
 those flows without stopping at this milestone, then native residency and the

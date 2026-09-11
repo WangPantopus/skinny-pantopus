@@ -61,3 +61,10 @@ versions in this milestone. The owned replay database's ledger still trails some
 already-rehearsed source migrations; do not rewrite that ledger to make counts
 look current. Combined populated upgrades, ledger adoption and final-head CI
 remain integration gates. No hosted mutation, deployment or paid activation.
+
+Pushed `9c758865e` passed backend and privacy CI, but the migration safeguard
+correctly refused its missing compatibility declaration and bounded lock timeout.
+Both are added before database replay; the permission insert is unchanged. The
+local migration policy gate now passes. Preserve the failed job at
+`/private/tmp/pantopus-home-member-defaults-ci-failed-9c758865e.log` and verify the
+corrected pushed head separately.
