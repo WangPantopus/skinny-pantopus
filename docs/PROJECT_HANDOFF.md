@@ -14,6 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Recoverable residency review backend — September 11
+
+The [residency receipt report](home-residency-review-receipts-2026-09-11.md) records
+prepared current review and atomic original decision/receipt recovery. Actual
+production HTTP/service/local SQL and 13 observed lock-wait races pass. Approval
+retries preserve later move-out; rejection retries preserve a later pending
+resubmission. Current authority, reviewed membership restrictions and receipt
+failure rollback pass. Pinned-CLI fresh replay has 35 migrations; all 40 SQL and
+pgTAP contracts, function lint and six SDK/PostgREST cases pass. Populated upgrade
+preserves all 15,117 original rows across 364 tables. Final full backend and
+privacy gates pass; the report records the initial CLI and socket limitations.
+
+**Next:** both browser residency entries, encrypted originals/confirmations and
+actual UI/HTTP/SQL acceptance, including Cancel and denied-list findings; then
+installed iOS/Android parity, transactional submission/cold-start/resubmission,
+ownership transfer/challenge and lease/resource work. PRs #32/#34 remain drafts.
+Home now has 35 migrations / 44 combined with paid, collision-free but still
+requiring combined dependency/replay reconciliation. Paid #34 `e9ef2decb` remains
+green but unfinished. All paid services stay one final launch bundle.
+
+PR #7 merged as `6a1013784` after all final required checks and is integrated here
+at `e709fbd0b`. That predecessor's native jobs were still running; verify this
+new exact head. Older superseded Home/master runs are cancelled, not all-green.
+The owner authorized Docker recovery; the existing engine is healthy and real
+SQL verification resumed. All exact SQL/HTTP/race fixtures are cleaned. The owned
+Gig database remains for browser continuation; the fresh replay is stopped with
+backup after verification. Owner source, emulator and persistent data are intact.
+
 ### Diagnostics privacy merged and residency continued — September 11
 
 The [diagnostics report](deep-link-diagnostics-privacy-2026-09-07.md) records PR #7.

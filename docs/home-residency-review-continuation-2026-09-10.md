@@ -1,7 +1,9 @@
 # Residency review continuation — September 10, 2026
 
-This is a source audit for the next unfinished Home slice, not completed
-implementation or workflow acceptance. It preserves the existing transactional
+This is the original source audit for the residency slice. The September 11
+[backend receipt milestone](home-residency-review-receipts-2026-09-11.md) now completes
+prepared HTTP/service/SQL receipts and recovery; browser/native integration and
+submission/cold-start/resubmission remain unfinished. It preserves the existing transactional
 admission report and does not replace invitation/evidence/relationship work.
 
 ## Findings to resolve
@@ -55,15 +57,10 @@ work and the broader handoff backlog remain afterward.
 PRs #32/#34 stay drafts until their complete scopes and migration dependencies
 are reconciled. All paid dependencies stay one final launch-preparation bundle.
 
-## Local source in progress
+## Backend checkpoint — September 11
 
-The additive `20260910233000_home_residency_review_receipts.sql` and
-`homeResidencyReviewService.js` have started locally. They are not applied,
-committed or wired to HTTP yet. The migration adds protected receipt/read/write
-entry points, claim-plus-membership/role-rule snapshot binding, current authority
-and a private-setup deletion fence. It wraps the existing admission transaction;
-no normal role defaults, provider operations or existing records are changed.
-Service JavaScript syntax passes, but SQL execution, HTTP integration, actual
-races, all contracts, fresh replay and populated preservation remain required.
-The committed Home branch still has 34 migrations; this candidate would be 35
-and would bring the eventual combined Home/paid set to 44 distinct versions.
+The additive `20260910233000_home_residency_review_receipts.sql`, service and HTTP
+routes now pass the actual behavior and schema gates in the linked report.
+The committed Home set becomes 35 migrations and the eventual combined Home/paid
+set 44 distinct versions. Browser/native review recovery and submission remain
+next; the original findings above are retained to keep their full scope visible.

@@ -1,5 +1,17 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+Latest September 11 milestone: [residency review receipts](home-residency-review-receipts-2026-09-11.md)
+now pass actual HTTP/service/SQL, 13 observed lock races, 35-version pinned fresh
+replay, all 40 SQL/pgTAP contracts, function lint, six SDK/PostgREST cases and a
+populated upgrade preserving 15,117 original rows / 364 tables. Final full backend
+and privacy pass; initial CLI and transient socket observations remain documented.
+Next are both browser entries with encrypted recovery and Cancel/list repairs,
+then native parity and submission/cold-start/resubmission. Docker recovery was
+authorized and succeeded; source/owner runtimes/data are preserved. PRs #32/#34
+remain drafts, combined 44-version dependency/replay work remains, and paid
+services stay one final bundle. Refresh the new exact head's CI. Older candidate
+and infrastructure notes below are historical, not current blockers.
+
 September 11 continuation: PR #7 at `8c2eaa110` passed all required checks and
 merged as `6a1013784`; integrated into the Home branch with current routing and
 handoff preserved. Verify this new integration head. Residency HTTP/session

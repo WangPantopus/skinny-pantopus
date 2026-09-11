@@ -10,7 +10,7 @@ function handler(router, method, path) {
   return router.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
 function response() {
-  return { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+  return { statusCode: 200, set() { return this; }, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
 }
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 test.each([
@@ -66,12 +66,16 @@ test.each(['owner','admin','manager','property_manager'])('legacy residency clai
   const rpc = jest.fn(async () => ({ data: { ok: false, code: 'RESIDENCY_ROLE_FORBIDDEN', status: 403 }, error: null }));
   db.setRpcMock(rpc);
   const res = response();
-  await handler(home, 'post', '/:id/claim/:claimId/approve')({ params: { id: 'home', claimId: 'claim' }, user: { id: 'actor' }, body: {} }, res);
+  const homeId = 'ddc23502-0000-4000-8000-000000000100';
+  const claimId = 'ddc23502-0000-4000-8000-000000000201';
+  const actorId = 'ddc23502-0000-4000-8000-000000000001';
+  await handler(home, 'post', '/:id/claim/:claimId/approve')({ params: { id: homeId, claimId },
+    user: { id: actorId }, session: { id: 'residency-authority' }, body: {} }, res);
   expect(res.statusCode).toBe(403);
   expect(res.body.code).toBe('RESIDENCY_ROLE_FORBIDDEN');
   expect(db.getTable('HomeResidencyClaim')[0].status).toBe('pending');
   expect(db.getTable('HomeOccupancy')).toHaveLength(0);
-  expect(rpc).toHaveBeenCalledWith('review_home_residency', expect.objectContaining({
-    p_home_id: 'home', p_actor_id: 'actor', p_action: 'approve', p_payload: { claim_id: 'claim' },
+  expect(rpc).toHaveBeenCalledWith('decide_home_residency_review', expect.objectContaining({
+    p_home_id: homeId, p_actor_id: actorId, p_action: 'approve', p_claim_id: claimId,
   }));
 });

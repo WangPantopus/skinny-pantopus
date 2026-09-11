@@ -14,6 +14,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeResidencyService = require('../services/homeResidencyService');
+const homeResidencyReviewService = require('../services/homeResidencyReviewService');
 const homeInvitationService = require('../services/homeInvitationService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
@@ -5263,14 +5264,38 @@ router.get('/:id/claims', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * POST /:id/claim/:claimId/approve - Approve a residency claim
- * Creates a HomeOccupancy for the claimant.
- */
-router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
+/** Prepared current review; this session proof never grants membership authority. */
+router.get('/:id/claim/:claimId/review', verifyToken, async (req, res) => {
   try {
-    const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
-      action: 'approve', claimId: req.params.claimId, role: req.body.proposed_role });
+    res.set('Cache-Control', 'private, no-store');
+    if (!requireExpectedSessionScope(req, res)) return;
+    const session = getRequestSessionScope(req);
+    const result = await homeResidencyReviewService.read({ homeId: req.params.id,
+      claimId: req.params.claimId, actorId: req.user.id });
+    res.json({ ...result, residency_session: { ...session, home_id: result.home_id } });
+  } catch (error) { homeResidencyReviewService.sendError(res, error); }
+});
+
+const residencyDecisionIdentity = {
+  request_id: Joi.string().guid(),
+  review_token: Joi.string().pattern(/^[a-f0-9]{64}$/),
+};
+const residencyApprovalSchema = Joi.object({
+  ...residencyDecisionIdentity, proposed_role: Joi.string().trim().max(64).allow('', null),
+}).and('request_id', 'review_token');
+const residencyRejectionSchema = Joi.object({
+  ...residencyDecisionIdentity, reason: Joi.string().trim().max(2000).allow('', null),
+}).and('request_id', 'review_token');
+
+/** Original approval receipt and today's membership are returned separately. */
+router.post('/:id/claim/:claimId/approve', verifyToken, validate(residencyApprovalSchema), async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    if (!requireExpectedSessionScope(req, res, { required: req.body.request_id !== undefined })) return;
+    const session = getRequestSessionScope(req);
+    const result = await homeResidencyReviewService.decide({ homeId: req.params.id, actorId: req.user.id,
+      action: 'approve', claimId: req.params.claimId, role: req.body.proposed_role,
+      requestId: req.body.request_id, reviewToken: req.body.review_token });
     if (!result.replayed) {
       // The transaction is already committed. A notification failure must not
       // pretend the admission failed or cause the client to apply it again.
@@ -5283,20 +5308,26 @@ router.post('/:id/claim/:claimId/approve', verifyToken, async (req, res) => {
         });
       } catch (err) { logger.error('Residency approval notification failed', { code: err.code }); }
     }
-    res.json({ message: 'Claim approved, membership confirmed', occupancy: result.occupancy });
+    res.json({ ...result, message: result.replayed
+      ? 'Original approval confirmed. Review the current membership below.' : 'Claim approved, membership confirmed',
+    residency_session: { ...session, home_id: result.home_id } });
   } catch (err) {
     logger.error('Approve claim error', { code: err.code, homeId: req.params.id });
-    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
+    homeResidencyReviewService.sendError(res, err);
   }
 });
 
 /**
  * POST /:id/claim/:claimId/reject - Reject a residency claim
  */
-router.post('/:id/claim/:claimId/reject', verifyToken, async (req, res) => {
+router.post('/:id/claim/:claimId/reject', verifyToken, validate(residencyRejectionSchema), async (req, res) => {
   try {
-    const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
-      action: 'reject', claimId: req.params.claimId, reason: req.body.reason });
+    res.set('Cache-Control', 'private, no-store');
+    if (!requireExpectedSessionScope(req, res, { required: req.body.request_id !== undefined })) return;
+    const session = getRequestSessionScope(req);
+    const result = await homeResidencyReviewService.decide({ homeId: req.params.id, actorId: req.user.id,
+      action: 'reject', claimId: req.params.claimId, reason: req.body.reason,
+      requestId: req.body.request_id, reviewToken: req.body.review_token });
     if (!result.replayed) {
       try {
         await require('../services/notificationService').createNotification({
@@ -5307,10 +5338,12 @@ router.post('/:id/claim/:claimId/reject', verifyToken, async (req, res) => {
         });
       } catch (err) { logger.error('Residency rejection notification failed', { code: err.code }); }
     }
-    res.json({ message: 'Claim rejected' });
+    res.json({ ...result, message: result.replayed
+      ? 'Original rejection confirmed. Review the current claim below.' : 'Claim rejected',
+    residency_session: { ...session, home_id: result.home_id } });
   } catch (err) {
     logger.error('Reject claim error', { code: err.code, homeId: req.params.id });
-    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
+    homeResidencyReviewService.sendError(res, err);
   }
 });
 
