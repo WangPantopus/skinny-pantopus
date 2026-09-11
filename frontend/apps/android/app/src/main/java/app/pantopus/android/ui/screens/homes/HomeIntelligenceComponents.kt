@@ -873,8 +873,15 @@ fun BillTrendsCard(
                     onRetry = onRetry,
                 )
             is HomeIntelligenceCardState.Loaded ->
-                if (state.value.billsByType.isEmpty()) {
-                    CardNote("Mark a bill as paid to start tracking your monthly trend.")
+                if (!HomeBillPresentation.isCurrent(state.value)) {
+                    CardError(
+                        headline = "Current bill information is unavailable",
+                        message = "Retry to check the current format and amounts.",
+                        retryTag = "homeDashboard_billTrendsRetry",
+                        onRetry = onRetry,
+                    )
+                } else if (state.value.billsByType.isEmpty()) {
+                    CardNote("No paid USD bills with a period start in the last 24 months.")
                 } else {
                     state.value.billsByType.keys.sorted().forEach { key ->
                         state.value.billsByType[key]?.let { series ->
@@ -882,6 +889,7 @@ fun BillTrendsCard(
                                 billType = key,
                                 series = series,
                                 benchmark = state.value.benchmarks[key],
+                                currency = state.value.currency ?: "USD",
                             )
                         }
                     }
@@ -895,6 +903,7 @@ private fun BillTrendRow(
     billType: String,
     series: HomeBillTrendSeriesDto,
     benchmark: HomeBillBenchmarkDto?,
+    currency: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3),
@@ -908,44 +917,22 @@ private fun BillTrendRow(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
-            benchmarkNote(series, benchmark)?.let { note ->
+            HomeBillPresentation.note(series, benchmark, currency)?.let { note ->
                 Text(
                     text = note,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
-                    maxLines = 2,
                 )
             }
         }
-        series.amounts.firstOrNull()?.let { latest ->
+        series.amounts.lastOrNull()?.let { latest ->
             Text(
-                text = HomeDashboardProjection.fullCurrency(latest),
+                text = HomeBillPresentation.amount(latest, currency),
                 style = PantopusTextStyle.small,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
         }
-    }
-}
-
-private fun benchmarkNote(
-    series: HomeBillTrendSeriesDto,
-    benchmark: HomeBillBenchmarkDto?,
-): String? {
-    val fallback = series.months.firstOrNull()
-    if (benchmark == null) return fallback
-    if (benchmark.insufficientData) {
-        return benchmark.message ?: "Not enough neighbors for comparison yet"
-    }
-    val neighborCents = benchmark.avgAmounts.firstOrNull()
-    val mine = series.amounts.firstOrNull()
-    if (neighborCents == null || mine == null) return fallback
-    val neighbors = HomeDashboardProjection.centsToDollars(neighborCents)
-    val label = HomeDashboardProjection.fullCurrency(neighbors)
-    return when {
-        mine > neighbors -> "Above the $label neighborhood average"
-        mine < neighbors -> "Below the $label neighborhood average"
-        else -> "In line with the $label neighborhood average"
     }
 }
 

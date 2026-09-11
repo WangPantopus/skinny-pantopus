@@ -12,11 +12,19 @@ explicit and does not hide the personal amount. Malformed/legacy/wrong-currency
 responses are retryable unavailable states. A current finance denial hides the
 bill card; confirmed absence has distinct paid-USD/24-month wording.
 
-**iOS milestone passes:** final signed build r4, complete installed journey r2
-and Swift quality. Android format, Detekt, compilation, packaging and lint pass
-in build r2; its installed journey is currently running and its source/driver
-remain outside the iOS commit. Neither milestone completes currency choice,
-lifecycle, whole-Home, physical-device or release acceptance.
+**Both native initial bill milestones pass:** iOS signed build r4 / complete
+installed journey r2 / Swift quality, and Android build r2 / complete installed
+journey r2 / formatting / Detekt / lint. Each final platform journey records
+22 production bill reads through all listed cases. Neither milestone completes
+currency choice, lifecycle, whole-Home, physical-device or release acceptance.
+
+**Next uncommitted iOS work:** currency selection, monthly totals and a scoped
+read identifier are implemented locally. Currency build r2 passes after fixing
+Text-only typography modifiers; the initial build failed and is not a pass.
+An added installed journey and held-earlier-reply fixture are running under
+`/private/tmp/pantopus-native-bill-ios-currency-ui-r1.xcresult`. Inspect that
+outcome before claiming acceptance. Keep these iOS/fixture changes out of the
+verified Android milestone until their own full workflow passes.
 
 The first installed iOS run passed current amounts and both missing-month/cohort
 cases, then failed to find Retry by identifier. The visible button existed;
@@ -50,8 +58,15 @@ through the persistent 503 case. Original sign-in is observed in r1; r2 continue
 with the real simulator Keychain's existing synthetic session and normal
 navigation. Screenshots of current amounts, cohort absence, invalid-currency
 recovery, confirmed empty and current denial were visually reviewed. The Retry
-control is separately accessible and was actually pressed. Android results are
-pending; its driver alone is not a passing journey.
+control is separately accessible and was actually pressed. Android r2 also passes every listed case with 22 production bill reads, normal
+sign-in/Profile/My homes navigation, explicit Retry and final restoration.
+Android r1 reached the denial case but its case-sensitive locator missed the
+uppercase ESTIMATED HOME VALUE heading. The captured hierarchy confirmed the
+heading; case-insensitive matching (including absence checks) repaired the
+driver, and the entire r2 journey passed. This was not an app-state failure.
+Android accessibility hierarchies were retained; no Android pixel, dynamic-type
+or physical-device acceptance is claimed here. Existing capture protections
+are unchanged.
 
 ## Open work
 
@@ -80,7 +95,10 @@ Combined Home/paid dependency reconciliation and replay remain outstanding.
   `...-ios-lint-r1.log` and `...-ios-format-r1.log` (2,148 files); the subsequent
   containing-group change also passes affected Swift quality.
 - Android `/private/tmp/pantopus-native-bill-android-build-r2.log` passes;
-  installed `/private/tmp/pantopus-native-bill-android-ui-r1` is in progress.
+  final installed `/private/tmp/pantopus-native-bill-android-ui-r2` contains
+  result.json, fixture-final.json, all state hierarchies and the complete log.
+  Both platform scopes' exact SQL fixture cleanup passes in the shared
+  `/private/tmp/pantopus-native-bill-fixture-r2.log`.
 
 
 Evidence is outside Git under /private/tmp/pantopus-native-bill-*.
@@ -89,6 +107,7 @@ F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8. Owner simulators, source, databases and ap
 data are untouched. Low disk space was relieved by removing only rebuildable
 x86_64 object directories from the owned preceding build; products, UI evidence,
 source and SQL backups were retained. The current build targets arm64. The owned iOS
-simulator is shut down after acceptance. The owned Android recurrence AVD and
-loopback fixture remain active for its sequential journey; no concurrent test
-changes the shared mode/SQL fixtures.
+simulator was shut down after its first milestone and has now been booted for
+currency acceptance. The owned Android recurrence AVD is shut down after its
+final pass. The loopback fixture was cleaned and restarted as r3 for currency
+acceptance; no concurrent test changes the shared mode/SQL fixtures.

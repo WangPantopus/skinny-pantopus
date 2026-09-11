@@ -14,6 +14,33 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Android bill comparison installed milestone — September 11
+
+The [native bill report](home-native-bill-comparison-2026-09-11.md) now records
+complete Android r2 installed acceptance, with 22 production HTTP/SQL bill reads:
+fractional amounts, same-month comparison, cohort withdrawal, repeated failures
+and Retry, malformed/legacy/wrong currency, confirmed empty, current denial and
+restoration. Normal sign-in/navigation and cold returns pass. Format, Detekt,
+compile, assemble and lint r2 pass. The first UI run's uppercase-heading locator
+failure is documented; the full corrected run passes. Both completed platform
+fixtures have exact cleanup proof. Android's owned recurrence AVD is shut down.
+
+**Next: finish the uncommitted iOS currency/monthly-history work.** Signed currency
+build r2 and affected quality pass; full two-journey installed run r1 is active
+(session 57193, `/private/tmp/pantopus-native-bill-ios-currency-ui-r1.xcresult`).
+The new fixture (session 61295, port 18083) can hold/release an earlier currency
+response. These iOS/fixture changes are not part of the verified Android commit.
+Owned iOS simulator F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8 is booted for this work.
+Inspect actual results, repair findings, then add Android parity and continue
+native Home access/lifecycle/UI, Place, residency, submission, ownership/leases/
+resources, settings/privacy and the full ordered backlog. Do not omit the prior
+captured UI/copy findings or confuse hierarchy evidence with full visual/device
+acceptance. Keep paid services in one final launch bundle.
+
+No new migration; #32/#34 remain unfinished drafts and combined 47-version
+migration reconciliation/replay remains. iOS predecessor d17947d0b is pushed;
+its new remote CI needs verification. Preserve owner work, data and devices.
+
 ### iOS bill comparison installed milestone — September 11
 
 The [native bill report](home-native-bill-comparison-2026-09-11.md) records final

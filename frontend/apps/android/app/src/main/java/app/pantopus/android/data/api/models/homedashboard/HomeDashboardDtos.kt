@@ -246,11 +246,13 @@ data class HomeBillTrendsDto(
     @Json(name = "bills_by_type") val billsByType: Map<String, HomeBillTrendSeriesDto> = emptyMap(),
     @Json(name = "benchmarks") val benchmarks: Map<String, HomeBillBenchmarkDto> = emptyMap(),
     @Json(name = "bill_benchmark_opt_in") val billBenchmarkOptIn: Boolean = false,
+    val currency: String? = null,
+    @Json(name = "format_version") val formatVersion: Int? = null,
+    @Json(name = "calculation_version") val calculationVersion: Int? = null,
 )
 
 /**
- * One `bills_by_type` series. `months` are `YYYY-MM` keys, newest first
- * (the query orders `period_start` descending).
+ * Format 2 uses unique chronological `YYYY-MM` keys and decimal major units.
  */
 @JsonClass(generateAdapter = true)
 data class HomeBillTrendSeriesDto(
@@ -266,7 +268,7 @@ data class HomeBillTrendSeriesDto(
 @JsonClass(generateAdapter = true)
 data class HomeBillBenchmarkDto(
     val months: List<String> = emptyList(),
-    /** Neighbourhood average in **cents** (`BillBenchmark.avg_amount_cents`). */
+    /** Format 2 neighbourhood average in decimal major units, in the response currency. */
     @Json(name = "avg_amounts") val avgAmounts: List<Double> = emptyList(),
     @Json(name = "household_count") val householdCount: Int? = null,
     @Json(name = "insufficient_data") val insufficientData: Boolean = false,
