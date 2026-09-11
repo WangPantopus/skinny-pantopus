@@ -22,7 +22,7 @@ class HomeDocumentEntryTest {
             )
         for ((access, expected) in cases) {
             val tile =
-                HomeDashboardProjection.quickActions(HomeDashboardCountsDto(documents = 2), access)
+                HomeDashboardProjection.quickActions(HomeDashboardCountsDto.empty().copy(documents = 2), access)
                     .firstOrNull { it.id == "view_docs" }
             assertEquals(expected, tile != null)
             if (expected) assertEquals("2", tile?.badge)

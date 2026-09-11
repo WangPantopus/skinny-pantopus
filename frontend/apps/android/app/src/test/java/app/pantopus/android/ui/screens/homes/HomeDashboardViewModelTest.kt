@@ -1,9 +1,13 @@
 package app.pantopus.android.ui.screens.homes
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelStore
 import app.pantopus.android.data.api.models.homedashboard.HomeAuditLogEntryDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAccessDto
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardCountsDto
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardHomeDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardMemberDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardMemberUserDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
@@ -16,22 +20,20 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemD
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistProgressDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistSeasonDto
 import app.pantopus.android.data.api.models.homes.BillDto
-import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDetail
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
-import app.pantopus.android.data.api.models.homes.HomePublicProfile
-import app.pantopus.android.data.api.models.homes.HomePublicProfileResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -46,45 +48,60 @@ import java.math.BigDecimal
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeDashboardViewModelTest {
+    private val fixtureHomeId = "ddc23600-0000-4000-8000-000000000100"
     private val repo: HomesRepository = mockk()
     private val intelligenceRepo: HomeDashboardRepository = mockk()
-    private val adminRepo: HomeAdminRepository = mockk()
+    private val accessFactory: HomeDashboardAccessFactory = mockk()
+    private val authority: HomeDashboardAccess = mockk()
+    private val store = ViewModelStore()
+    private val permissions =
+        listOf(
+            "home.view", "home.edit", "tasks.view", "finance.view", "packages.view", "members.view",
+            "ownership.view", "docs.view", "maintenance.view", "sensitive.view",
+        )
+
+    private fun authorityResponse() =
+        HomeDashboardAuthorityDto(
+            true,
+            permissions,
+            fixtureHomeId,
+            "a".repeat(64),
+            isOwner = true,
+        )
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        // Every Home Intelligence read defaults to "unavailable" so each
-        // test only stubs what it asserts on.
-        coEvery { intelligenceRepo.dashboard(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
-        coEvery { adminRepo.myAccess(any()) } returns
-            NetworkResult.Success(
-                HomeAccessDto(
-                    hasAccess = true,
-                    permissions = listOf("tasks.view", "finance.view", "packages.view", "members.view", "ownership.view", "docs.view"),
-                ),
-            )
-        coEvery { intelligenceRepo.healthScore(any(), any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
-        coEvery { intelligenceRepo.seasonalChecklist(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
-        coEvery { intelligenceRepo.propertyValue(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
-        coEvery { intelligenceRepo.billTrends(any()) } returns NetworkResult.Failure(NetworkError.Forbidden)
+        every { accessFactory.create(any(), any()) } returns authority
+        every { authority.isCurrent } returns true
+        every { authority.invalidated } returns MutableStateFlow(false)
+        coEvery { authority.read() } returns authorityResponse()
+        coEvery { authority.readTasks() } throws NetworkError.Forbidden
+        coEvery { intelligenceRepo.dashboard(any()) } returns NetworkResult.Success(dashboard())
+        // Ordinary independent failures remain Retry states; unexpected 403 retires the Home.
+        coEvery { intelligenceRepo.healthScore(any(), any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        coEvery { intelligenceRepo.seasonalChecklist(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        coEvery { intelligenceRepo.propertyValue(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        coEvery { intelligenceRepo.billTrends(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
     }
 
     @After fun tearDown() {
+        store.clear()
         Dispatchers.resetMain()
     }
 
-    private fun makeVm(homeId: String = "h1") =
+    private fun makeVm(homeId: String = fixtureHomeId) =
         HomeDashboardViewModel(
             repo = repo,
             intelligenceRepo = intelligenceRepo,
-            adminRepo = adminRepo,
+            accessFactory = accessFactory,
             savedStateHandle = SavedStateHandle(mapOf(HOME_DASHBOARD_HOME_ID_KEY to homeId)),
-        )
+        ).also { store.put(homeId, it) }
 
     private fun detail(isOwner: Boolean = true) =
         HomeDetailResponse(
             home =
                 HomeDetail(
-                    id = "h1",
+                    id = fixtureHomeId,
                     name = "Main",
                     address = "1 Main",
                     city = "X",
@@ -106,38 +123,20 @@ class HomeDashboardViewModelTest {
                 ),
         )
 
-    private fun public_() =
-        HomePublicProfileResponse(
-            home =
-                HomePublicProfile(
-                    id = "h1",
-                    name = null,
-                    address = "200 Public St",
-                    city = "Y",
-                    state = "CA",
-                    zipcode = "90000",
-                    homeType = "single_family",
-                    visibility = "public",
-                    description = null,
-                    createdAt = "2025-01-01T00:00:00Z",
-                    hasVerifiedOwner = true,
-                    verifiedOwner = null,
-                    userMembershipStatus = "none",
-                    userResidencyClaim = null,
-                    memberCount = 2,
-                    nearbyGigs = 5,
-                ),
-        )
-
     private fun dashboard() =
         HomeDashboardResponse(
+            home = HomeDashboardHomeDto(id = fixtureHomeId),
+            myAccess = HomeDashboardAccessDto(permissions = permissions, isOwner = true),
             today =
                 HomeDashboardTodayDto(
+                    nextEvents = emptyList(),
+                    unreadMailCount = 0,
+                    activeGuestPasses = 0,
                     tasksDue =
                         listOf(
                             HomeTaskDto(
                                 id = "t1",
-                                homeId = "h1",
+                                homeId = fixtureHomeId,
                                 taskType = "chore",
                                 title = "Take out trash",
                                 status = "open",
@@ -147,7 +146,7 @@ class HomeDashboardViewModelTest {
                     nextBill =
                         BillDto(
                             id = "b1",
-                            homeId = "h1",
+                            homeId = fixtureHomeId,
                             billType = "electric",
                             providerName = "ConEd",
                             amount = BigDecimal("142.80"),
@@ -231,17 +230,25 @@ class HomeDashboardViewModelTest {
     @Test
     fun access_loss_removes_private_navigation_and_resets_selected_tab() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
             val vm = makeVm()
             vm.load()
             vm.selectTab("bills")
             assertEquals("bills", vm.selectedTab.value)
-            coEvery { adminRepo.myAccess("h1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+            coEvery {
+                authority.read()
+            } returns
+                authorityResponse().copy(
+                    hasAccess = false,
+                    permissions = emptyList(),
+                    isOwner = null,
+                    accessRevision = "b".repeat(64),
+                )
             vm.refresh()
-            val loaded = vm.state.value as HomeDashboardUiState.Loaded
-            assertEquals(listOf("overview"), loaded.content.tabs.map { it.id })
-            assertTrue(loaded.content.quickActions.isEmpty())
+            assertTrue(vm.state.value is HomeDashboardUiState.Limited)
+            assertTrue(vm.healthScore.value is HomeIntelligenceCardState.Loading)
+            assertTrue(vm.billTrends.value is HomeIntelligenceCardState.Loading)
             assertEquals("overview", vm.selectedTab.value)
             vm.selectTab("bills")
             assertEquals("overview", vm.selectedTab.value)
@@ -250,8 +257,8 @@ class HomeDashboardViewModelTest {
     @Test
     fun hero_stats_come_from_the_dashboard_aggregate() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as HomeDashboardUiState.Loaded
@@ -265,8 +272,8 @@ class HomeDashboardViewModelTest {
     @Test
     fun quick_action_badges_come_from_counts() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as HomeDashboardUiState.Loaded
@@ -280,9 +287,9 @@ class HomeDashboardViewModelTest {
     @Test
     fun overview_is_built_from_the_aggregate_not_fixtures() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
-            coEvery { intelligenceRepo.healthScore("h1", any()) } returns NetworkResult.Success(health())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
+            coEvery { intelligenceRepo.healthScore(fixtureHomeId, any()) } returns NetworkResult.Success(health())
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as HomeDashboardUiState.Loaded
@@ -303,10 +310,10 @@ class HomeDashboardViewModelTest {
     @Test
     fun missing_emergency_contacts_flip_the_emergency_row_to_unconfigured() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
             coEvery {
-                intelligenceRepo.healthScore("h1", any())
+                intelligenceRepo.healthScore(fixtureHomeId, any())
             } returns NetworkResult.Success(health(emergencyScore = 0))
             val vm = makeVm()
             vm.load()
@@ -315,23 +322,19 @@ class HomeDashboardViewModelTest {
         }
 
     @Test
-    fun forbidden_falls_back_to_public_profile() =
+    fun forbidden_detail_stays_unavailable_without_public_fallback() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Failure(NetworkError.Forbidden)
-            coEvery { repo.publicProfile("h1") } returns NetworkResult.Success(public_())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Failure(NetworkError.Forbidden)
             val vm = makeVm()
             vm.load()
-            val loaded = vm.state.value as HomeDashboardUiState.Loaded
-            assertEquals("200 Public St", loaded.content.address)
-            assertTrue(loaded.content.verified)
-            // No dashboard access → zeroed hero stats, never fixtures.
-            assertEquals(listOf("0", "0", "0"), loaded.content.stats.map { it.value })
+            assertTrue(vm.state.value is HomeDashboardUiState.Error)
+            coVerify(exactly = 0) { repo.publicProfile(any()) }
         }
 
     @Test
     fun server_error_surfaces_error() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is HomeDashboardUiState.Error)
@@ -340,7 +343,7 @@ class HomeDashboardViewModelTest {
     @Test
     fun tab_selection_updates_state_flow() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
             val vm = makeVm()
             vm.load()
             vm.selectTab("members")
@@ -352,17 +355,17 @@ class HomeDashboardViewModelTest {
     @Test
     fun intelligence_cards_load_independently() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
             coEvery {
-                intelligenceRepo.healthScore("h1", any())
+                intelligenceRepo.healthScore(fixtureHomeId, any())
             } returns NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { intelligenceRepo.seasonalChecklist("h1") } returns NetworkResult.Success(checklist())
+            coEvery { intelligenceRepo.seasonalChecklist(fixtureHomeId) } returns NetworkResult.Success(checklist())
             coEvery {
-                intelligenceRepo.propertyValue("h1")
+                intelligenceRepo.propertyValue(fixtureHomeId)
             } returns NetworkResult.Success(HomePropertyValueDto(estimatedValue = 812_000.0))
             coEvery {
-                intelligenceRepo.billTrends("h1")
+                intelligenceRepo.billTrends(fixtureHomeId)
             } returns NetworkResult.Success(HomeBillTrendsDto())
 
             val vm = makeVm()
@@ -379,8 +382,13 @@ class HomeDashboardViewModelTest {
     @Test
     fun bill_trends_without_finance_permission_is_forbidden_not_an_error() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
+            val restricted = permissions.filterNot { it == "finance.view" }
+            coEvery { authority.read() } returns authorityResponse().copy(permissions = restricted)
+            coEvery {
+                intelligenceRepo.dashboard(fixtureHomeId)
+            } returns NetworkResult.Success(dashboard().copy(myAccess = HomeDashboardAccessDto(permissions = restricted, isOwner = true)))
             val vm = makeVm()
             vm.load()
             assertTrue(vm.billTrends.value is HomeIntelligenceCardState.Forbidden)
@@ -389,12 +397,12 @@ class HomeDashboardViewModelTest {
     @Test
     fun complete_checklist_item_reflects_the_server_returned_row() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
-            coEvery { intelligenceRepo.seasonalChecklist("h1") } returns NetworkResult.Success(checklist())
-            coEvery { intelligenceRepo.healthScore("h1", any()) } returns NetworkResult.Success(health())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
+            coEvery { intelligenceRepo.seasonalChecklist(fixtureHomeId) } returns NetworkResult.Success(checklist())
+            coEvery { intelligenceRepo.healthScore(fixtureHomeId, any()) } returns NetworkResult.Success(health())
             coEvery {
-                intelligenceRepo.updateSeasonalChecklistItem("h1", "i1", "completed")
+                intelligenceRepo.updateSeasonalChecklistItem(fixtureHomeId, "i1", "completed")
             } returns
                 NetworkResult.Success(
                     SeasonalChecklistItemDto(
@@ -417,18 +425,18 @@ class HomeDashboardViewModelTest {
             assertEquals(2, vm.checklist.value.valueOrNull()?.progress?.completed)
             assertEquals(100, vm.checklist.value.valueOrNull()?.progress?.percentage)
             assertTrue(vm.pendingChecklistItemIds.value.isEmpty())
-            coVerify { intelligenceRepo.updateSeasonalChecklistItem("h1", "i1", "completed") }
+            coVerify { intelligenceRepo.updateSeasonalChecklistItem(fixtureHomeId, "i1", "completed") }
         }
 
     @Test
     fun skip_checklist_item_sends_skipped_status() =
         runTest {
-            coEvery { repo.detail("h1") } returns NetworkResult.Success(detail())
-            coEvery { intelligenceRepo.dashboard("h1") } returns NetworkResult.Success(dashboard())
-            coEvery { intelligenceRepo.seasonalChecklist("h1") } returns NetworkResult.Success(checklist())
-            coEvery { intelligenceRepo.healthScore("h1", any()) } returns NetworkResult.Success(health())
+            coEvery { repo.detail(fixtureHomeId) } returns NetworkResult.Success(detail())
+            coEvery { intelligenceRepo.dashboard(fixtureHomeId) } returns NetworkResult.Success(dashboard())
+            coEvery { intelligenceRepo.seasonalChecklist(fixtureHomeId) } returns NetworkResult.Success(checklist())
+            coEvery { intelligenceRepo.healthScore(fixtureHomeId, any()) } returns NetworkResult.Success(health())
             coEvery {
-                intelligenceRepo.updateSeasonalChecklistItem("h1", "i1", "skipped")
+                intelligenceRepo.updateSeasonalChecklistItem(fixtureHomeId, "i1", "skipped")
             } returns
                 NetworkResult.Success(
                     SeasonalChecklistItemDto(
@@ -446,7 +454,7 @@ class HomeDashboardViewModelTest {
             vm.skipChecklistItem("i1")
 
             assertEquals("skipped", vm.checklist.value.valueOrNull()?.items?.first()?.status)
-            coVerify { intelligenceRepo.updateSeasonalChecklistItem("h1", "i1", "skipped") }
+            coVerify { intelligenceRepo.updateSeasonalChecklistItem(fixtureHomeId, "i1", "skipped") }
         }
 
     @Test
@@ -481,7 +489,7 @@ class HomeDashboardViewModelTest {
             vm.load()
             val needsAttention = vm.state.value as HomeDashboardUiState.NeedsAttention
             assertEquals(
-                "3 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim",
+                "4 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim",
                 needsAttention.content.attentionSummary?.message,
             )
             assertEquals(

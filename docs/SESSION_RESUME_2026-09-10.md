@@ -1,5 +1,33 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Android current-Home acceptance — September 11
+
+Installed Android dashboard r3 passes the full current/denied/applicant,
+summary/card Retry, foreground held-summary retirement and private Tasks journey
+(232 recorded Home HTTP requests, zero fixture errors). Reviewed screens confirm
+safe activity identity, finished recovery and private first use. Build r5,
+affected validation/lint r2 and all three reviewed Home snapshots/quality r2 pass.
+The Documents shortcut split mid-word on the real screen; it now says Docs.
+Final build/quality/lint r6 passes and is installed. Retirement r1 passes all
+four held authority/health/checklist/property cases and restoration; the Docs
+shortcut pixels are reviewed. Both Android bill replays are the next regression
+step; currency/history r1 is running. See the [dashboard report](home-dashboard-current-summary-2026-09-11.md)
+for earlier failures, capacity/Docker recovery, private evidence and limits.
+
+All required checks on pushed iOS `661e5fea1` pass. #32/#34 are the only open PRs,
+both unfinished drafts; #34 remains conflicted. No new migration, hosted action
+or paid activation. Combined 47-version dependencies/replay remain. Owner source
+and devices remain untouched. Owned Android 5556, bill-authority fixture r1/18083, owned
+Gig SQL and web 18080 remain; owned iOS F9BBAB33 is off. Native dashboard fixtures
+r4/r5 completed exact SQL cleanup and are stopped. The next iOS build must resolve its generated Sentry artifact again.
+
+**Next:** finish both Android bill replays and verify the new pushed head. Then
+close actual account switching, remaining iOS held intelligence and malformed
+intelligence/direct server authority gaps, real Home identity and
+native residency, followed by the entire ordered backlog. Paid services stay one
+final launch-preparation bundle; this is not a claim that all Home writes or the
+app are complete.
+
 ## iOS current-Home read milestone — September 11
 
 The iOS current-Home milestone now passes signed build r8, full SwiftLint and

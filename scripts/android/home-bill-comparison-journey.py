@@ -91,7 +91,8 @@ class Journey(relationship.Journey):
         self.contains('No paid USD bills', scroll=True)
         self.evidence('confirmed-empty')
         self.reopen('denied')
-        self.contains('Estimated home value', scroll=True)
+        # A card heading is also present while loading; wait for the finished state.
+        self.contains('No estimate available', scroll=True)
         self.adb('shell', 'input', 'swipe', '530', '1660', '530', '780', '250')
         self.absent('Bill trends', '142.50')
         self.evidence('current-permission-denied')

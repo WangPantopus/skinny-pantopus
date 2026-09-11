@@ -28,12 +28,12 @@ import com.squareup.moshi.JsonClass
 /** Response of `GET /api/homes/:id/dashboard`. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardResponse(
-    val home: HomeDashboardHomeDto? = null,
-    val myAccess: HomeDashboardAccessDto? = null,
-    val today: HomeDashboardTodayDto = HomeDashboardTodayDto(),
-    val counts: HomeDashboardCountsDto = HomeDashboardCountsDto(),
-    val members: List<HomeDashboardMemberDto> = emptyList(),
-    @Json(name = "recent_activity") val recentActivity: List<HomeAuditLogEntryDto> = emptyList(),
+    val home: HomeDashboardHomeDto,
+    val myAccess: HomeDashboardAccessDto,
+    val today: HomeDashboardTodayDto,
+    val counts: HomeDashboardCountsDto,
+    val members: List<HomeDashboardMemberDto>,
+    @Json(name = "recent_activity") val recentActivity: List<HomeAuditLogEntryDto>,
     /** Only present when the caller passed `?include_health_score=true`. */
     @Json(name = "health_score") val healthScore: HomeHealthScoreDto? = null,
 )
@@ -55,40 +55,56 @@ data class HomeDashboardHomeDto(
 /** `myAccess` — the caller's permission bag for this home. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardAccessDto(
-    val permissions: List<String>? = null,
+    val permissions: List<String>,
     @Json(name = "role_base") val roleBase: String? = null,
-    val isOwner: Boolean? = null,
+    val isOwner: Boolean,
 ) {
     /** Mirrors the backend's `canFinance` gate (`home.js:6238`). */
     val canViewFinance: Boolean
         get() =
-            isOwner == true ||
-                permissions.orEmpty().any { it == "finance.view" || it == "finance.manage" }
+            "finance.view" in permissions
 }
 
 /** `today` block — the "what's happening now" slice. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardTodayDto(
-    @Json(name = "next_events") val nextEvents: List<CalendarEventDto> = emptyList(),
-    @Json(name = "tasks_due") val tasksDue: List<HomeTaskDto> = emptyList(),
+    @Json(name = "next_events") val nextEvents: List<CalendarEventDto>,
+    @Json(name = "tasks_due") val tasksDue: List<HomeTaskDto>,
     @Json(name = "next_bill") val nextBill: BillDto? = null,
-    @Json(name = "unread_mail_count") val unreadMailCount: Int = 0,
-    @Json(name = "active_guest_passes") val activeGuestPasses: Int = 0,
-    @Json(name = "deliveries_arriving") val deliveriesArriving: Int = 0,
-)
+    @Json(name = "unread_mail_count") val unreadMailCount: Int,
+    @Json(name = "active_guest_passes") val activeGuestPasses: Int,
+    @Json(name = "deliveries_arriving") val deliveriesArriving: Int,
+) {
+    init {
+        if (listOf(unreadMailCount, activeGuestPasses, deliveriesArriving).any { it < 0 }) {
+            throw com.squareup.moshi.JsonDataException("Invalid Home summary count.")
+        }
+    }
+}
 
 /** `counts` block — the hero-stat / quick-action badge source. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardCountsDto(
-    @Json(name = "tasks_open") val tasksOpen: Int = 0,
-    @Json(name = "issues_open") val issuesOpen: Int = 0,
-    @Json(name = "bills_due") val billsDue: Int = 0,
-    @Json(name = "packages_expected") val packagesExpected: Int = 0,
-    val documents: Int = 0,
-    @Json(name = "events_upcoming") val eventsUpcoming: Int = 0,
-    @Json(name = "members_active") val membersActive: Int = 0,
-    val pets: Int = 0,
-)
+    @Json(name = "tasks_open") val tasksOpen: Int,
+    @Json(name = "issues_open") val issuesOpen: Int,
+    @Json(name = "bills_due") val billsDue: Int,
+    @Json(name = "packages_expected") val packagesExpected: Int,
+    val documents: Int,
+    @Json(name = "events_upcoming") val eventsUpcoming: Int,
+    @Json(name = "members_active") val membersActive: Int,
+    val pets: Int,
+) {
+    init {
+        if (listOf(tasksOpen, issuesOpen, billsDue, packagesExpected, documents, eventsUpcoming, membersActive, pets).any { it < 0 }) {
+            throw com.squareup.moshi.JsonDataException("Invalid Home summary count.")
+        }
+    }
+
+    companion object {
+        /** Explicit presentation placeholder; absent wire values never decode to this. */
+        fun empty() = HomeDashboardCountsDto(0, 0, 0, 0, 0, 0, 0, 0)
+    }
+}
 
 /** One entry of the dashboard `members` array (HomeOccupancy + user join). */
 @JsonClass(generateAdapter = true)
@@ -102,6 +118,9 @@ data class HomeDashboardMemberDto(
 /** Nested `user` join on a dashboard member row. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardMemberUserDto(
+    val displayName: String? = null,
+    val handle: String? = null,
+    val avatarUrl: String? = null,
     val id: String? = null,
     val username: String? = null,
     val name: String? = null,

@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "TooManyFunctions")
+@file:Suppress("MagicNumber", "TooManyFunctions", "TooGenericExceptionCaught")
 
 package app.pantopus.android.ui.screens.homes
 
@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
@@ -15,11 +16,9 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemD
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistProgressDto
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDetail
-import app.pantopus.android.data.api.models.homes.HomePublicProfile
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
-import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.screens.homes.settings.ownership_security.HomeOwnershipSecurityViewModel
@@ -29,6 +28,8 @@ import app.pantopus.android.ui.screens.shared.content_detail.QuickActionTile
 import app.pantopus.android.ui.screens.shared.content_detail.QuickActionTone
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -201,6 +202,8 @@ sealed interface HomeDashboardUiState {
     data class Error(
         val message: String,
     ) : HomeDashboardUiState
+
+    data class Limited(val verificationKind: String?, val canOpenTasks: Boolean) : HomeDashboardUiState
 }
 
 /**
@@ -214,7 +217,7 @@ class HomeDashboardViewModel
     constructor(
         private val repo: HomesRepository,
         private val intelligenceRepo: HomeDashboardRepository,
-        private val adminRepo: HomeAdminRepository,
+        accessFactory: HomeDashboardAccessFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -268,20 +271,89 @@ class HomeDashboardViewModel
 
         // Raw responses; [rebuild] composes the rendered content from them.
         private var detailData: HomeDetail? = null
-        private var publicData: HomePublicProfile? = null
         private var dashboardData: HomeDashboardResponse? = null
 
         /**
-         * The viewer's own per-home access record. Gates the quick-action
-         * tiles and tab strip. A failed read leaves private navigation
-         * unavailable while the overview can still render.
+         * Current confirmed Home access gates private content and actions.
+         * An unavailable or changed authority retires the shared overview.
          */
         private var accessData: HomeAccessDto? = null
+        private val authority = accessFactory.create(homeId, viewModelScope)
+        private var authoritySnapshot: HomeDashboardAuthorityDto? = null
+        private var generation = 0L
+        private var visible = false
+        private var refreshJob: Job? = null
+        private var canCreateTask = false
+
+        fun can(permission: String): Boolean = visible && authority.isCurrent && accessData?.can(permission) == true
+
+        fun canPerform(action: String): Boolean {
+            if (!visible || !authority.isCurrent) return false
+            if (action == "add_task") return canCreateTask
+            if (action == "access_codes") return can("access.view_wifi") || can("access.view_codes")
+            val permission =
+                mapOf(
+                    "track_bill" to "finance.manage", "track_package" to "packages.edit", "log_package" to "packages.edit",
+                    "add_pet" to "home.edit", "create_poll" to "home.edit", "send_mail" to "mailbox.view",
+                    "add_member" to "members.view", "view_bills" to "finance.view", "view_polls" to "home.view",
+                    "view_maintenance" to "maintenance.view", "pets" to "home.view", "calendar" to "calendar.view",
+                    "view_docs" to "docs.view", "view_emergency" to "sensitive.view", "view_packages" to "packages.view",
+                    "view_tasks" to "tasks.view", "view_claims" to "ownership.view",
+                )[action]
+            return permission?.let(::can) == true
+        }
+
+        fun suspendContent() {
+            generation += 1
+            visible = false
+            refreshJob?.cancel()
+            clearPrivateData()
+        }
+
+        private fun clearPrivateData() {
+            detailData = null
+            dashboardData = null
+            accessData = null
+            authoritySnapshot = null
+            canCreateTask = false
+            _selectedTab.value = "overview"
+            _healthScore.value = HomeIntelligenceCardState.Loading
+            _checklist.value = HomeIntelligenceCardState.Loading
+            _propertyValue.value = HomeIntelligenceCardState.Loading
+            billReadId += 1
+            _billTrends.value = HomeIntelligenceCardState.Loading
+            _pendingChecklistItemIds.value = emptySet()
+            _state.value = HomeDashboardUiState.Loading
+        }
+
+        private fun current(revision: Long): Boolean = visible && revision == generation && authority.isCurrent
+
+        private fun requireCurrent(revision: Long) {
+            if (!current(revision)) throw CancellationException("Obsolete Home read")
+        }
+
+        private fun retireAccess(revision: Long) {
+            if (!visible || generation != revision) return
+            generation += 1
+            clearPrivateData()
+            _state.value = HomeDashboardUiState.Error("Home access changed or could not be confirmed. Reload to check current access.")
+        }
 
         private val _selectedTab = MutableStateFlow("overview")
 
         /** Currently-selected grid tab. */
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
+
+        init {
+            viewModelScope.launch {
+                authority.invalidated.collect { invalidated ->
+                    if (invalidated) {
+                        suspendContent()
+                        _state.value = HomeDashboardUiState.Error("Your session changed. Reopen this Home to continue.")
+                    }
+                }
+            }
+        }
 
         /** Switch the active grid tab. */
         fun selectTab(id: String) {
@@ -290,7 +362,7 @@ class HomeDashboardViewModel
         }
 
         /** Expose the home id so the screen can build outbound nav routes. */
-        fun currentHomeId(): String? = homeId
+        fun currentHomeId(): String? = homeId.takeIf { visible && authority.isCurrent }
 
         /**
          * Display name of the loaded home, used as the 2-line top-bar
@@ -302,104 +374,130 @@ class HomeDashboardViewModel
                 is HomeDashboardUiState.Loaded -> current.content.address
                 is HomeDashboardUiState.Empty -> current.brandNew.content.address
                 is HomeDashboardUiState.NeedsAttention -> current.content.address
-                HomeDashboardUiState.Loading, is HomeDashboardUiState.Error -> null
+                HomeDashboardUiState.Loading, is HomeDashboardUiState.Error, is HomeDashboardUiState.Limited -> null
             }
 
-        /** Initial load; no-op when already loaded. */
+        /** Recheck on every foreground or return to this Home. */
         fun load() {
-            if (_state.value is HomeDashboardUiState.Loaded ||
-                _state.value is HomeDashboardUiState.Empty ||
-                _state.value is HomeDashboardUiState.NeedsAttention
-            ) {
-                return
-            }
+            if (visible) return
+            visible = true
             refresh()
         }
 
-        /** Retry / pull-to-refresh. */
         fun refresh() {
+            if (!visible) return
+            refreshJob?.cancel()
+            generation += 1
+            val revision = generation
+            clearPrivateData()
             HomeDashboardSampleData.stateFor(homeId)?.let { sample ->
                 _state.value = sample
                 return
             }
-            _state.value = HomeDashboardUiState.Loading
-            viewModelScope.launch { fetchAll() }
+            if (!authority.isCurrent) {
+                _state.value = HomeDashboardUiState.Error("Your session changed. Reopen this Home to continue.")
+                return
+            }
+            refreshJob = viewModelScope.launch { fetchAll(revision) }
         }
 
-        private suspend fun fetchAll() =
-            coroutineScope {
-                val core = async { fetchCore() }
-                val health = async { loadHealthScore() }
-                val seasonal = async { loadChecklist() }
-                val property = async { loadPropertyValue() }
-                val trends = async { loadBillTrends() }
-                core.await()
-                health.await()
-                seasonal.await()
-                property.await()
-                trends.await()
-            }
-
-        /**
-         * Home detail (identity / ownership) + the dashboard aggregate +
-         * the viewer's access record (`GET /api/homes/:id/me`, route
-         * `backend/routes/homeIam.js:51`). The access read is
-         * best-effort: a 403 there means "no access record", which must
-         * not fail the dashboard.
-         */
-        private suspend fun fetchCore() =
-            coroutineScope {
-                val detailDeferred = async { repo.detail(homeId) }
-                val dashboardDeferred = async { intelligenceRepo.dashboard(homeId) }
-                val accessDeferred = async { adminRepo.myAccess(homeId) }
-                val detailResult = detailDeferred.await()
-                val dashboardResult = dashboardDeferred.await()
-                val accessResult = accessDeferred.await()
-                dashboardData = if (dashboardResult is NetworkResult.Success) dashboardResult.data else null
-                // Missing or denied access leaves private navigation unavailable.
-                accessData =
-                    (accessResult as? NetworkResult.Success)?.data?.takeIf { it.hasAccess }
-                if (HomeDashboardProjection.gatedTabs(accessData).none { it.id == _selectedTab.value }) {
-                    _selectedTab.value = "overview"
+        private suspend fun fetchAll(revision: Long) {
+            try {
+                requireCurrent(revision)
+                val opening = authority.read()
+                requireCurrent(revision)
+                val access = opening.sharedAccess()
+                if (access == null) {
+                    val collection = readOptionalTasks()
+                    requireCurrent(revision)
+                    check(authority.read() == opening) { "Home authority changed" }
+                    requireCurrent(revision)
+                    canCreateTask = collection?.collectionCapabilities?.canCreate == true
+                    _state.value = HomeDashboardUiState.Limited(opening.currentVerificationKind(), collection != null)
+                    return
                 }
-
-                when (detailResult) {
-                    is NetworkResult.Success -> {
-                        detailData = detailResult.data.home
-                        publicData = null
-                        rebuild()
+                val (detail, dashboard) =
+                    coroutineScope {
+                        val detailRead = async { repo.detail(homeId).homeValue().home }
+                        val dashboardRead = async { intelligenceRepo.dashboard(homeId).homeValue() }
+                        detailRead.await() to dashboardRead.await()
                     }
-                    is NetworkResult.Failure ->
-                        if (detailResult.error is NetworkError.Forbidden ||
-                            detailResult.error is NetworkError.NotFound
-                        ) {
-                            fetchPublic()
-                        } else {
-                            detailData = null
-                            publicData = null
-                            _state.value =
-                                HomeDashboardUiState.Error(
-                                    detailResult.error.displayMessage("Couldn't load this home."),
-                                )
-                        }
+                requireCurrent(revision)
+                check(
+                    detail.id == homeId && dashboard.home?.id == homeId &&
+                        dashboard.myAccess?.permissions.orEmpty().toSet() == access.permissions.toSet() &&
+                        dashboard.myAccess?.isOwner == access.isOwner,
+                ) { "Unexpected Home information" }
+                val collection = if (access.can("tasks.view")) readOptionalTasks() else null
+                requireCurrent(revision)
+                check(authority.read() == opening) { "Home authority changed" }
+                requireCurrent(revision)
+                authoritySnapshot = opening
+                accessData = access
+                detailData = detail
+                dashboardData = dashboard
+                canCreateTask = collection?.collectionCapabilities?.canCreate == true
+                rebuild()
+                coroutineScope {
+                    launch { loadHealthScore() }
+                    launch { loadChecklist() }
+                    launch { loadPropertyValue() }
+                    launch { loadBillTrends() }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (visible && revision == generation) {
+                    clearPrivateData()
+                    _state.value = HomeDashboardUiState.Error("Current Home information could not be confirmed. Reload to try again.")
                 }
             }
+        }
 
-        private suspend fun fetchPublic() {
-            when (val result = repo.publicProfile(homeId)) {
-                is NetworkResult.Success -> {
-                    publicData = result.data.home
-                    detailData = null
-                    rebuild()
+        private suspend fun readOptionalTasks() =
+            try {
+                authority.readTasks()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                null
+            }
+
+        private fun <T> NetworkResult<T>.homeValue(): T =
+            when (this) {
+                is NetworkResult.Success -> data
+                is NetworkResult.Failure -> throw error
+            }
+
+        private suspend fun authorize(revision: Long) {
+            requireCurrent(revision)
+            val snapshot = authority.read()
+            requireCurrent(revision)
+            if (snapshot.sharedAccess() == null || snapshot != authoritySnapshot) throw NetworkError.Forbidden
+        }
+
+        private suspend fun <T> authorizedCard(
+            permissions: List<String>,
+            work: suspend () -> NetworkResult<T>,
+        ): HomeIntelligenceCardState<T>? {
+            val revision = generation
+            if (!current(revision) || authoritySnapshot == null) return null
+            if (!permissions.all { accessData?.can(it) == true }) return HomeIntelligenceCardState.Forbidden
+            return try {
+                authorize(revision)
+                val result = work().toCardState()
+                authorize(revision)
+                if (result is HomeIntelligenceCardState.Forbidden) {
+                    retireAccess(revision)
+                    null
+                } else {
+                    result
                 }
-                is NetworkResult.Failure -> {
-                    detailData = null
-                    publicData = null
-                    _state.value =
-                        HomeDashboardUiState.Error(
-                            result.error.displayMessage("Couldn't load this home."),
-                        )
-                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                retireAccess(revision)
+                null
             }
         }
 
@@ -410,23 +508,25 @@ class HomeDashboardViewModel
          * recompute so a stale zero-score can't mask a populated home.
          */
         private suspend fun loadHealthScore() {
-            _healthScore.value = intelligenceRepo.healthScore(homeId, force = true).toCardState()
+            _healthScore.value = authorizedCard(
+                listOf("home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"),
+            ) { intelligenceRepo.healthScore(homeId, force = true) } ?: return
             // The Overview's emergency row reads the health breakdown.
             rebuild()
         }
 
         private suspend fun loadChecklist() {
-            _checklist.value = intelligenceRepo.seasonalChecklist(homeId).toCardState()
+            _checklist.value = authorizedCard(listOf("home.view")) { intelligenceRepo.seasonalChecklist(homeId) } ?: return
         }
 
         private suspend fun loadPropertyValue() {
-            _propertyValue.value = intelligenceRepo.propertyValue(homeId).toCardState()
+            _propertyValue.value = authorizedCard(listOf("home.view")) { intelligenceRepo.propertyValue(homeId) } ?: return
         }
 
         private suspend fun loadBillTrends() {
             val readId = ++billReadId
             val currency = _billCurrency.value
-            val result = intelligenceRepo.billTrends(homeId, currency).toCardState()
+            val result = authorizedCard(listOf("finance.view")) { intelligenceRepo.billTrends(homeId, currency) } ?: return
             if (readId != billReadId || currency != _billCurrency.value) return
             result.valueOrNull()?.let { data ->
                 if (HomeBillPresentation.isCurrent(data, currency)) {
@@ -499,25 +599,26 @@ class HomeDashboardViewModel
             itemId: String,
             status: String,
         ) {
-            if (_pendingChecklistItemIds.value.contains(itemId)) return
+            if (!can("home.edit") || _pendingChecklistItemIds.value.contains(itemId)) return
+            val revision = generation
             _pendingChecklistItemIds.value = _pendingChecklistItemIds.value + itemId
             try {
-                when (val result = intelligenceRepo.updateSeasonalChecklistItem(homeId, itemId, status)) {
-                    is NetworkResult.Success -> {
-                        // Reflect exactly what the server returned, then
-                        // re-read the score (seasonal progress is one of
-                        // its six dimensions).
-                        applyChecklistItem(result.data)
-                        loadHealthScore()
-                    }
-                    is NetworkResult.Failure ->
-                        _checklist.value =
-                            HomeIntelligenceCardState.Failed(
-                                result.error.displayMessage("Couldn't update that task. Try again."),
-                            )
+                authorize(revision)
+                val updated = intelligenceRepo.updateSeasonalChecklistItem(homeId, itemId, status).homeValue()
+                authorize(revision)
+                check(updated.id == itemId && updated.status == status) { "The checklist update was not confirmed." }
+                applyChecklistItem(updated)
+                loadHealthScore()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: NetworkError.Forbidden) {
+                retireAccess(revision)
+            } catch (_: Throwable) {
+                if (current(revision)) {
+                    _checklist.value = HomeIntelligenceCardState.Failed("Couldn't confirm that task update. Reload to try again.")
                 }
             } finally {
-                _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
+                if (revision == generation) _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
             }
         }
 
@@ -555,40 +656,17 @@ class HomeDashboardViewModel
         // ── Projection ──────────────────────────────────────────────
 
         private fun rebuild() {
-            val detail = detailData
-            val publicProfile = publicData
-            when {
-                detail != null ->
-                    _state.value =
-                        HomeDashboardUiState.Loaded(
-                            content(
-                                address = detail.address ?: detail.name ?: "Home",
-                                // Header / summary: home has any verified owner.
-                                verified = detail.isOwner || detail.owners.any { it.ownerStatus == "verified" },
-                                // Banner gate: I'm the verified owner only when
-                                // isOwner is true and no claim is still in flight.
-                                isVerifiedOwner = detail.isOwner && !detail.isPendingOwner,
-                                securityBanner =
-                                    securityBanner(
-                                        state = detail.securityState,
-                                        claimWindowEndsAt = detail.claimWindowEndsAt,
-                                    ),
-                            ),
-                        )
-                publicProfile != null ->
-                    _state.value =
-                        HomeDashboardUiState.Loaded(
-                            content(
-                                address = publicProfile.address,
-                                verified = publicProfile.hasVerifiedOwner,
-                                // Public-profile path is hit when the user is NOT
-                                // a verified owner; detail returned 403/404 first.
-                                isVerifiedOwner = false,
-                                // The public preview carries no security_state.
-                                securityBanner = null,
-                            ),
-                        )
-            }
+            val detail = detailData ?: return
+            if (!can("home.view") || dashboardData == null) return
+            _state.value =
+                HomeDashboardUiState.Loaded(
+                    content(
+                        address = detail.address ?: detail.name ?: "Home",
+                        verified = detail.isOwner || detail.owners.any { it.ownerStatus == "verified" },
+                        isVerifiedOwner = accessData?.isOwner == true,
+                        securityBanner = securityBanner(detail.securityState, detail.claimWindowEndsAt),
+                    ),
+                )
         }
 
         private fun content(
@@ -602,7 +680,16 @@ class HomeDashboardViewModel
                 address = address,
                 verified = verified,
                 isVerifiedOwner = isVerifiedOwner,
-                stats = HomeDashboardProjection.stats(counts),
+                stats =
+                    HomeDashboardProjection.stats(counts).filter {
+                        can(
+                            when (it.id) {
+                                "packages" -> "packages.view"
+                                "bills" -> "finance.view"
+                                else -> "tasks.view"
+                            },
+                        )
+                    },
                 quickActions = HomeDashboardProjection.quickActions(counts, accessData),
                 tabs = HomeDashboardProjection.gatedTabs(accessData),
                 overview =

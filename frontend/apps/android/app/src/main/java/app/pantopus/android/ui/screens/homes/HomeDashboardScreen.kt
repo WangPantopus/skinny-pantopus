@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,6 +39,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
@@ -115,8 +120,26 @@ fun HomeDashboardScreen(
     val billCurrencies by viewModel.billCurrencies.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(viewModel, lifecycleOwner) {
+        val lifecycle = lifecycleOwner.lifecycle
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> viewModel.load()
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> viewModel.suspendContent()
+                    else -> Unit
+                }
+            }
+        lifecycle.addObserver(observer)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) viewModel.load()
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.suspendContent()
+        }
+    }
+
     LaunchedEffect(Unit) {
-        viewModel.load()
         app.pantopus.android.data.analytics.Analytics.track(
             app.pantopus.android.data.analytics.AnalyticsEvent.ScreenHomeDashboardViewed,
         )
@@ -167,6 +190,7 @@ fun HomeDashboardScreen(
     }
 
     fun handleFab(actionId: String) {
+        if (!viewModel.canPerform(actionId)) return
         when (actionId) {
             "add_task" -> routeFab(actionId, onAddTask, onOpenTasks)
             "track_bill" -> routeFab(actionId, onTrackBill, onOpenBills)
@@ -189,6 +213,7 @@ fun HomeDashboardScreen(
     }
 
     fun handleQuickAction(actionId: String) {
+        if (!viewModel.canPerform(actionId)) return
         when (actionId) {
             "verify" ->
                 viewModel.currentHomeId()?.let { homeId ->
@@ -253,6 +278,8 @@ fun HomeDashboardScreen(
      */
     fun handleSecurityAction(action: HomeSecurityBannerAction) {
         val homeId = viewModel.currentHomeId() ?: return
+        if (action == HomeSecurityBannerAction.InviteCoOwner && !viewModel.can("members.manage")) return
+        if (action == HomeSecurityBannerAction.OpenSecuritySettings && !viewModel.can("security.manage")) return
         when (action) {
             HomeSecurityBannerAction.InviteCoOwner ->
                 onInviteOwner?.invoke(homeId)
@@ -268,19 +295,24 @@ fun HomeDashboardScreen(
     // trends. Each card owns its loading / loaded / empty / error surface
     // so one failing read can't blank the Overview.
     val intelligenceStack: @Composable () -> Unit = {
-        HealthScoreRingCard(
-            state = healthScore,
-            onAction = ::handleQuickAction,
-            onRetry = viewModel::refreshHealthScore,
-        )
+        if (healthScore !is HomeIntelligenceCardState.Forbidden) {
+            HealthScoreRingCard(
+                state = healthScore,
+                onAction = ::handleQuickAction,
+                onRetry = viewModel::refreshHealthScore,
+            )
+        }
         SeasonalChecklistCard(
             state = checklist,
             pendingItemIds = pendingChecklistItemIds,
+            canEdit = viewModel.can("home.edit"),
             onComplete = viewModel::completeChecklistItem,
             onSkip = viewModel::skipChecklistItem,
             onHireHelp = { item ->
-                onHireHelp?.invoke(GigsCategory.fromBackendKey(item.gigCategory).key)
-                    ?: openPlaceholder("hire_help")
+                if (viewModel.can("home.edit")) {
+                    onHireHelp?.invoke(GigsCategory.fromBackendKey(item.gigCategory).key)
+                        ?: openPlaceholder("hire_help")
+                }
             },
             onGenerate = viewModel::generateChecklist,
             onRetry = viewModel::generateChecklist,
@@ -308,12 +340,6 @@ fun HomeDashboardScreen(
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
-                    onClaim = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onClaimOwnership?.invoke(homeId) ?: openPlaceholder("verify")
-                        }
-                    },
-                    onViewClaims = { onOpenClaimsList?.invoke() ?: openPlaceholder("verify") },
                     onOpenPropertyDetails = {
                         viewModel.currentHomeId()?.let { homeId ->
                             onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
@@ -326,6 +352,8 @@ fun HomeDashboardScreen(
                             }
                         },
                     onSecurityAction = ::handleSecurityAction,
+                    canPerform = viewModel::canPerform,
+                    can = viewModel::can,
                 )
             is HomeDashboardUiState.Empty ->
                 DashboardLayout(
@@ -336,12 +364,6 @@ fun HomeDashboardScreen(
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
-                    onClaim = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onClaimOwnership?.invoke(homeId) ?: openPlaceholder("verify")
-                        }
-                    },
-                    onViewClaims = { onOpenClaimsList?.invoke() ?: openPlaceholder("verify") },
                     onOpenPropertyDetails = {
                         viewModel.currentHomeId()?.let { homeId ->
                             onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
@@ -354,6 +376,8 @@ fun HomeDashboardScreen(
                             }
                         },
                     onSecurityAction = ::handleSecurityAction,
+                    canPerform = viewModel::canPerform,
+                    can = viewModel::can,
                 )
             is HomeDashboardUiState.NeedsAttention ->
                 DashboardLayout(
@@ -365,12 +389,6 @@ fun HomeDashboardScreen(
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
-                    onClaim = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onClaimOwnership?.invoke(homeId) ?: openPlaceholder("verify")
-                        }
-                    },
-                    onViewClaims = { onOpenClaimsList?.invoke() ?: openPlaceholder("verify") },
                     onOpenPropertyDetails = {
                         viewModel.currentHomeId()?.let { homeId ->
                             onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
@@ -383,9 +401,19 @@ fun HomeDashboardScreen(
                             }
                         },
                     onSecurityAction = ::handleSecurityAction,
+                    canPerform = viewModel::canPerform,
+                    can = viewModel::can,
                 )
             is HomeDashboardUiState.Error ->
                 ErrorLayout(message = current.message, onBack = onBack, onRetry = viewModel::refresh)
+            is HomeDashboardUiState.Limited ->
+                LimitedLayout(
+                    state = current,
+                    onBack = onBack,
+                    onRetry = viewModel::refresh,
+                    onTasks = { viewModel.currentHomeId()?.let { onOpenTasks?.invoke(it) } },
+                    onOwnership = { viewModel.currentHomeId()?.let { onClaimOwnership?.invoke(it) } },
+                )
         }
     }
 }
@@ -399,7 +427,6 @@ fun HomeDashboardScreenContent(
     onQuickAction: (String) -> Unit = {},
     onFabAction: (String) -> Unit = {},
     onClaim: () -> Unit = {},
-    onViewClaims: () -> Unit = {},
     onOpenPropertyDetails: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
@@ -414,8 +441,6 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onClaim = onClaim,
-                onViewClaims = onViewClaims,
                 onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.Empty ->
@@ -427,8 +452,6 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onClaim = onClaim,
-                onViewClaims = onViewClaims,
                 onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.NeedsAttention ->
@@ -440,11 +463,10 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onClaim = onClaim,
-                onViewClaims = onViewClaims,
                 onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.Error -> ErrorLayout(message = state.message, onBack = onBack, onRetry = onRetry)
+        is HomeDashboardUiState.Limited -> LimitedLayout(state, onBack, onRetry, { onQuickAction("view_tasks") }, onClaim)
     }
 }
 
@@ -457,8 +479,6 @@ private fun DashboardLayout(
     onBack: () -> Unit,
     onQuickAction: (String) -> Unit,
     onFabAction: (String) -> Unit,
-    onClaim: () -> Unit,
-    onViewClaims: () -> Unit,
     onOpenPropertyDetails: () -> Unit,
     onOpenSettings: (() -> Unit)? = null,
     /** Security-state banner CTA. No-op in preview/snapshot hosts. */
@@ -466,6 +486,8 @@ private fun DashboardLayout(
     /** H1 — Home Intelligence stack slot (health ring, seasonal checklist,
      *  property value, bill trends). Empty in preview/snapshot hosts. */
     intelligence: @Composable () -> Unit = {},
+    canPerform: (String) -> Boolean = { true },
+    can: (String) -> Boolean = { true },
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.weight(1f)) {
@@ -494,9 +516,6 @@ private fun DashboardLayout(
                         content.attentionSummary?.let { summary ->
                             NeedsAttentionBanner(summary = summary, onJump = onQuickAction)
                         }
-                        if (!content.isVerifiedOwner) {
-                            ClaimOwnershipBanner(onClaim = onClaim, onViewClaims = onViewClaims)
-                        }
                         GridTabsBody(
                             quickActions = content.quickActions,
                             tabs = content.tabs,
@@ -513,6 +532,7 @@ private fun DashboardLayout(
                                         content = content,
                                         onOpenEmergency = { onQuickAction("view_emergency") },
                                         onOpenPropertyDetails = onOpenPropertyDetails,
+                                        can = can,
                                     )
                                 }
                             }
@@ -521,22 +541,22 @@ private fun DashboardLayout(
                 },
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg).padding(Spacing.s4),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            FabCreateCTA(
-                actions =
-                    listOf(
-                        FabSheetAction("add_task", "Add Task", PantopusIcon.ListChecks),
-                        FabSheetAction("track_bill", "Track Bill", PantopusIcon.CreditCard),
-                        FabSheetAction("track_package", "Track Package", PantopusIcon.Package),
-                        FabSheetAction("add_pet", "Add Pet", PantopusIcon.PawPrint),
-                        FabSheetAction("create_poll", "Create Poll", PantopusIcon.BarChart3),
-                        FabSheetAction("send_mail", "Send Mail", PantopusIcon.Mail),
-                    ),
-                onSelect = onFabAction,
-            )
+        val actions =
+            listOf(
+                FabSheetAction("add_task", "Add Task", PantopusIcon.ListChecks),
+                FabSheetAction("track_bill", "Track Bill", PantopusIcon.CreditCard),
+                FabSheetAction("track_package", "Track Package", PantopusIcon.Package),
+                FabSheetAction("add_pet", "Add Pet", PantopusIcon.PawPrint),
+                FabSheetAction("create_poll", "Create Poll", PantopusIcon.BarChart3),
+                FabSheetAction("send_mail", "Send Mail", PantopusIcon.Mail),
+            ).filter { canPerform(it.id) }
+        if (actions.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg).padding(Spacing.s4),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                FabCreateCTA(actions = actions, onSelect = onFabAction)
+            }
         }
     }
 }
@@ -697,82 +717,6 @@ private fun NeedsAttentionBanner(
 }
 
 @Composable
-private fun ClaimOwnershipBanner(
-    onClaim: () -> Unit,
-    onViewClaims: () -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.s4)
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .border(
-                    1.dp,
-                    PantopusColors.primary600.copy(alpha = 0.4f),
-                    RoundedCornerShape(Radii.lg),
-                )
-                .padding(Spacing.s4),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            PantopusIconImage(
-                icon = PantopusIcon.ShieldCheck,
-                contentDescription = null,
-                size = Radii.xl2,
-                tint = PantopusColors.primary600,
-            )
-            Text(
-                text = "Are you the owner?",
-                style = PantopusTextStyle.body,
-                color = PantopusColors.appText,
-            )
-        }
-        Text(
-            text = "Claim this home to unlock private features for owners.",
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.appTextSecondary,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier =
-                    Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.primary600)
-                        .clickable(onClick = onClaim)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
-                        .testTag("homeDashboard_claimCTA"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Claim ownership",
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
-            Box(
-                modifier =
-                    Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .clickable(onClick = onViewClaims)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
-                        .testTag("homeDashboard_viewClaimsCTA"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "View claims",
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.primary600,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun BrandNewHomeSection(
     brandNew: HomeDashboardBrandNewContent,
     onStep: (String) -> Unit,
@@ -891,11 +835,12 @@ private fun OverviewSection(
     content: HomeDashboardContent,
     onOpenEmergency: () -> Unit,
     onOpenPropertyDetails: () -> Unit,
+    can: (String) -> Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-        DashboardCard(title = "Upcoming", action = "See all", accent = PantopusColors.warning) {
+        DashboardCard(title = "Upcoming", accent = PantopusColors.warning) {
             if (content.overview.upcoming.isEmpty()) {
-                OverviewEmptyRow("Nothing due today. You're all clear.")
+                OverviewEmptyRow("No upcoming items in the sections you can view.")
             }
             content.overview.upcoming.forEachIndexed { index, item ->
                 TimelineRow(item)
@@ -904,18 +849,20 @@ private fun OverviewSection(
                 }
             }
         }
-        DashboardCard(title = "Recent activity", action = "See all") {
-            if (content.overview.activity.isEmpty()) {
-                OverviewEmptyRow("No household activity yet.")
-            }
-            content.overview.activity.forEachIndexed { index, item ->
-                ActivityRow(item)
-                if (index != content.overview.activity.lastIndex) {
-                    HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
+        if (can("security.manage")) {
+            DashboardCard(title = "Recent activity") {
+                if (content.overview.activity.isEmpty()) {
+                    OverviewEmptyRow("No recent household activity.")
+                }
+                content.overview.activity.forEachIndexed { index, item ->
+                    ActivityRow(item)
+                    if (index != content.overview.activity.lastIndex) {
+                        HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
+                    }
                 }
             }
         }
-        EmergencyInfoRow(info = content.overview.emergency, onOpen = onOpenEmergency)
+        if (can("sensitive.view")) EmergencyInfoRow(info = content.overview.emergency, onOpen = onOpenEmergency)
         PropertyDetailsRow(onClick = onOpenPropertyDetails)
     }
 }
@@ -1201,4 +1148,55 @@ private fun ErrorLayout(
             }
         },
     )
+}
+
+/** Denied shared access keeps only current personal guidance and an exact independent Tasks entry. */
+@Composable
+private fun LimitedLayout(
+    state: HomeDashboardUiState.Limited,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onTasks: () -> Unit,
+    onOwnership: () -> Unit,
+) {
+    ContentDetailShell(title = "Home", onBack = onBack, header = {}, body = {
+        Column(
+            Modifier.fillMaxWidth().padding(Spacing.s4).testTag("homeDashboard_limited"),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+        ) {
+            Text(
+                when (state.verificationKind) {
+                    "residency" -> "Your residency request"
+                    "ownership" -> "Home ownership verification"
+                    else -> "Home access unavailable"
+                },
+                style = PantopusTextStyle.body,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                when (state.verificationKind) {
+                    "residency" -> "Your residency is not yet verified. Check for updates to your request."
+                    "ownership" -> "Complete your ownership verification to request access to this Home."
+                    else -> "Current access to this Home could not be confirmed. Reload to check access."
+                },
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
+            Button(onClick = onRetry, modifier = Modifier.testTag("homeDashboard_accessRetry")) { Text("Reload access") }
+            if (state.canOpenTasks) {
+                Button(
+                    onClick = onTasks,
+                    modifier = Modifier.testTag("homeDashboard_limitedTasks"),
+                ) { Text("Open your Tasks") }
+            }
+            if (state.verificationKind == "ownership") {
+                Button(
+                    onClick = onOwnership,
+                    modifier = Modifier.testTag("homeDashboard_verifyOwnership"),
+                ) {
+                    Text("Continue ownership verification")
+                }
+            }
+        }
+    })
 }

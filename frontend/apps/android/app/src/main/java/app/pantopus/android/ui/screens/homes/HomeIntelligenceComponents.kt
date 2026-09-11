@@ -340,6 +340,7 @@ fun SeasonalChecklistCard(
     onHireHelp: (SeasonalChecklistItemDto) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
+    canEdit: Boolean = true,
 ) {
     var carryoverExpanded by remember { mutableStateOf(false) }
 
@@ -373,6 +374,7 @@ fun SeasonalChecklistCard(
                 } else {
                     SeasonalLoaded(
                         checklist = state.value,
+                        canEdit = canEdit,
                         pendingItemIds = pendingItemIds,
                         carryoverExpanded = carryoverExpanded,
                         onToggleCarryover = { carryoverExpanded = !carryoverExpanded },
@@ -445,6 +447,7 @@ private fun SeasonalEmpty(onGenerate: () -> Unit) {
 @Composable
 private fun SeasonalLoaded(
     checklist: SeasonalChecklistDto,
+    canEdit: Boolean,
     pendingItemIds: Set<String>,
     carryoverExpanded: Boolean,
     onToggleCarryover: () -> Unit,
@@ -486,6 +489,7 @@ private fun SeasonalLoaded(
             SeasonalRow(
                 item = item,
                 isPending = pendingItemIds.contains(item.id),
+                canEdit = canEdit,
                 onComplete = onComplete,
                 onSkip = onSkip,
                 onHireHelp = onHireHelp,
@@ -532,6 +536,7 @@ private fun SeasonalLoaded(
                     SeasonalRow(
                         item = item,
                         isPending = pendingItemIds.contains(item.id),
+                        canEdit = canEdit,
                         onComplete = onComplete,
                         onSkip = onSkip,
                         onHireHelp = onHireHelp,
@@ -546,6 +551,7 @@ private fun SeasonalLoaded(
 private fun SeasonalRow(
     item: SeasonalChecklistItemDto,
     isPending: Boolean,
+    canEdit: Boolean,
     onComplete: (String) -> Unit,
     onSkip: (String) -> Unit,
     onHireHelp: (SeasonalChecklistItemDto) -> Unit,
@@ -560,7 +566,7 @@ private fun SeasonalRow(
             modifier =
                 Modifier
                     .size(44.dp)
-                    .clickable(enabled = !done && !isPending) { onComplete(item.id) }
+                    .clickable(enabled = canEdit && !done && !isPending) { onComplete(item.id) }
                     .testTag("homeDashboard_seasonalItemToggle_${item.id}")
                     .semantics {
                         role = Role.Button
@@ -582,7 +588,6 @@ private fun SeasonalRow(
                 style = PantopusTextStyle.small,
                 color = if (done) PantopusColors.appTextSecondary else PantopusColors.appText,
                 textDecoration = if (done) TextDecoration.LineThrough else null,
-                maxLines = 1,
             )
             val description = item.description
             if (!done && !description.isNullOrEmpty()) {
@@ -590,7 +595,6 @@ private fun SeasonalRow(
                     text = description,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
-                    maxLines = 1,
                 )
             }
         }
@@ -600,7 +604,7 @@ private fun SeasonalRow(
                 modifier =
                     Modifier
                         .size(44.dp)
-                        .clickable(enabled = !isPending) { onSkip(item.id) }
+                        .clickable(enabled = canEdit && !isPending) { onSkip(item.id) }
                         .testTag("homeDashboard_seasonalItemSkip_${item.id}")
                         .semantics {
                             role = Role.Button
@@ -622,7 +626,7 @@ private fun SeasonalRow(
                             .heightIn(min = 32.dp)
                             .clip(RoundedCornerShape(Radii.md))
                             .background(PantopusColors.primary600)
-                            .clickable { onHireHelp(item) }
+                            .clickable(enabled = canEdit && !isPending) { onHireHelp(item) }
                             .padding(horizontal = Spacing.s3)
                             .testTag("homeDashboard_seasonalItemHire_${item.id}")
                             .semantics {
@@ -756,13 +760,13 @@ private fun PropertyValueUnavailable() {
             tint = PantopusColors.primary600,
         )
         Text(
-            text = "Property insights coming soon",
+            text = "No estimate available",
             style = PantopusTextStyle.small,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
         )
         Text(
-            text = "We'll show your home's estimated value once your address is fully verified.",
+            text = "No property estimate is available for this Home right now.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,

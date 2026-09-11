@@ -29,7 +29,7 @@ function reset(clearEvents = true) {
     UPDATE public."HomeOccupancy" SET verification_status='verified' WHERE home_id=${q(home)} AND user_id=${q(f.users[4])};
     UPDATE public."User" SET username='current_household_member',name='Private legal fixture name' WHERE id=${q(f.users[4])};
     INSERT INTO public."HomeTask"(id,home_id,created_by,task_type,title,due_at) VALUES(${q(id(901))},${q(home)},${q(actor)},'chore','Smoke alarm check',now()-interval '1 hour');
-    INSERT INTO public."HomeCalendarEvent"(id,home_id,created_by,event_type,title,start_at) VALUES(${q(id(902))},${q(home)},${q(actor)},'other','Quarterly Home check',now()+interval '5 minutes');
+    INSERT INTO public."HomeCalendarEvent"(id,home_id,created_by,event_type,title,start_at) VALUES(${q(id(902))},${q(home)},${q(actor)},'other','Quarterly Home check',now()+interval '2 hours');
     INSERT INTO public."HomeBill"(id,home_id,created_by,bill_type,provider_name,amount,currency,status,due_date) VALUES(${q(id(903))},${q(home)},${q(actor)},'electric','Home electricity',142.50,'USD','overdue',CURRENT_DATE-1);
     INSERT INTO public."HomeIssue"(home_id,reported_by,title,status) VALUES(${q(home)},${q(actor)},'Kitchen handle','scheduled');
     INSERT INTO public."HomePackage"(home_id,created_by,status,expected_at) VALUES(${q(home)},${q(actor)},'expected',now()+interval '2 days');

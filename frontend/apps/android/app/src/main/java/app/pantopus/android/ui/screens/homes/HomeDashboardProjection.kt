@@ -85,7 +85,7 @@ object HomeDashboardProjection {
      * number has no server-side source).
      */
     fun stats(counts: HomeDashboardCountsDto?): List<HomeHeroStat> {
-        val safe = counts ?: HomeDashboardCountsDto()
+        val safe = counts ?: HomeDashboardCountsDto.empty()
         return listOf(
             HomeHeroStat("packages", safe.packagesExpected.toString(), "Packages"),
             HomeHeroStat("bills", safe.billsDue.toString(), "Bills"),
@@ -102,7 +102,7 @@ object HomeDashboardProjection {
         counts: HomeDashboardCountsDto?,
         access: HomeAccessDto? = null,
     ): List<QuickActionTile> {
-        val safe = counts ?: HomeDashboardCountsDto()
+        val safe = counts ?: HomeDashboardCountsDto.empty()
 
         fun allowed(permission: String): Boolean = access?.can(permission) == true
         return buildList {
@@ -124,7 +124,7 @@ object HomeDashboardProjection {
                 )
             }
             if (allowed("docs.view")) {
-                add(tile("view_docs", "Documents", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
+                add(tile("view_docs", "Docs", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
             }
             if (allowed("members.view")) {
                 add(
@@ -221,7 +221,7 @@ object HomeDashboardProjection {
                     icon = PantopusIcon.Package,
                     tone = QuickActionTone.Business,
                     title = if (count == 1) "1 package on the way" else "$count packages on the way",
-                    subtitle = "Ordered, shipped, or out for delivery",
+                    subtitle = "Expected to arrive today",
                     trailing = null,
                 )
         }
@@ -235,7 +235,13 @@ object HomeDashboardProjection {
             dashboard.members
                 .mapNotNull { member ->
                     val id = member.user?.id ?: member.userId ?: return@mapNotNull null
-                    val name = firstNonEmpty(member.user?.name, member.user?.username) ?: return@mapNotNull null
+                    val name =
+                        firstNonEmpty(
+                            member.user?.displayName,
+                            member.user?.handle,
+                            member.user?.name,
+                            member.user?.username,
+                        ) ?: return@mapNotNull null
                     id to name
                 }
                 .toMap()
@@ -261,11 +267,14 @@ object HomeDashboardProjection {
      * emergency contacts set").
      */
     fun emergency(health: HomeHealthScoreDto?): HomeDashboardEmergencyInfo {
-        val configured = (health?.breakdown?.get("emergency")?.score ?: 0) > 0
+        val dimension = health?.breakdown?.get("emergency")
+        val configured = (dimension?.score ?: 0) > 0
         return HomeDashboardEmergencyInfo(
             title = "Emergency info",
             body =
-                if (configured) {
+                if (dimension == null) {
+                    "Current emergency information could not be confirmed. Open Emergency info to check."
+                } else if (configured) {
                     "Tap to access shut-off valves, landlord contacts, insurance."
                 } else {
                     "Add shut-off valves, landlord contacts, insurance - for when it matters."
@@ -310,13 +319,16 @@ object HomeDashboardProjection {
 
     /** "Overdue" / "Today 4 PM" / "Tomorrow" / "Fri" / "Mar 3". */
     fun whenLabel(iso: String?): String? {
-        val instant = parseInstant(iso) ?: return null
-        val zoned = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault())
+        val dateOnly =
+            iso?.takeIf { it.matches(Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) }
+                ?.let { runCatching { java.time.LocalDate.parse(it).atStartOfDay(ZoneId.systemDefault()) }.getOrNull() }
+        val zoned = dateOnly ?: ZonedDateTime.ofInstant(parseInstant(iso) ?: return null, ZoneId.systemDefault())
         val now = ZonedDateTime.now(ZoneId.systemDefault())
         val isToday = zoned.toLocalDate() == now.toLocalDate()
         val days = ChronoUnit.DAYS.between(now.toLocalDate(), zoned.toLocalDate())
         return when {
             zoned.isBefore(now) && !isToday -> "Overdue"
+            isToday && dateOnly != null -> "Today"
             isToday -> "Today ${DateTimeFormatter.ofPattern("h a", Locale.US).format(zoned)}"
             days == 1L -> "Tomorrow"
             days < WEEK_DAYS -> DateTimeFormatter.ofPattern("EEE", Locale.US).format(zoned)

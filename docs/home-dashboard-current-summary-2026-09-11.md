@@ -4,6 +4,82 @@ This continues PR #32 after native bill currency/history commit `983c93a919`.
 It does not complete the Home branch, PR #34, or launch preparation. Paid
 providers remain one final bundle; no hosted database or deployment was changed.
 
+## Android current-Home read milestone
+
+The Android candidate now uses the same production current-authority envelope,
+exact Home/permission agreement, captured account/session, and foreground/return
+retirement as iOS. Explicit grants gate private cards and actions. Pending
+residency and ownership have separate guidance, and an independently authorized
+Tasks collection preserves private creator first use. Missing or malformed
+aggregates cannot become successful empty Homes. Safe activity identity, local
+calendar dates, wrapping checklist copy and truthful estimate/emergency states
+match the iOS repairs. This does not finish deeper nested data or record writes.
+
+Build r5 passes format/Detekt/compile/assemble. Validation r2 passes lint and the
+20 affected dashboard/document checks. Snapshot/quality r2 passes all three Home
+states plus ktlint and Detekt. Review of r1's two actual differences confirmed
+only removed dead See all labels and the sample attention count 3 → 4; those two
+baselines were updated, while the passing empty baseline was retained. The r1
+report's six failures are retries of those two differences, not six distinct
+screens. Private reviewed deltas and XML remain in
+`/private/tmp/pantopus-home-dashboard-android-snapshot-review-r1/`.
+
+Installed r1 could not reset SQL while Docker was unavailable; it is not app
+acceptance. Installed r2 passed summary recovery, finance denial, both applicants
+and revoked/frozen/denied states, then failed after the fixture's five-minute
+sample event naturally left Upcoming. Its reset now seeds that event two hours
+ahead, preserving the event assertion. Complete installed r3 passes: populated summaries, safe identity, all aggregate
+failure/Retry cases, finance denial, both applicants, revoked/frozen/denied entry,
+restoration, all three finished card recoveries, foreground revocation with a
+produced held aggregate and the actual private creator Tasks destination. It
+records 232 Home HTTP requests and zero fixture errors. Reviewed pixels confirm
+readable safe identity, finished health/checklist/property recovery, distinct
+applicant guidance, retired private content and reachable Add a task. Screen review also found the
+five-tile Documents label split mid-word; the candidate now says Docs. Final build r6 passes ktlint/Detekt/assemble/lint (8m 9s) and is installed.
+Focused retirement r1 passes all four produced held authority, health, checklist
+and property responses, current denial and restoration; no fixture errors. The
+Docs shortcut is reviewed and readable. Both Android bill compatibility replays
+remain the next regression step; currency/history r1 is currently running.
+
+Private proof prefixes under `/private/tmp/`:
+`pantopus-home-dashboard-android-build-r5`,
+`pantopus-home-dashboard-android-validation-r2`,
+`pantopus-home-dashboard-android-snapshots-quality-r2`, and
+`pantopus-home-dashboard-android-installed-r3/`,
+`pantopus-home-dashboard-android-build-r6.log`, and
+`pantopus-home-dashboard-android-retirement-r1/`. Native dashboard fixtures r4/r5
+completed exact SQL cleanup and are stopped. Bill-authority fixture r1 now owns
+loopback 18083 and the isolated SQL fixture. Owned Android emulator-5556 is running; owned iOS F9BBAB33 stays off.
+
+Capacity/recovery evidence: Android validation r1 failed with No space left on
+device, and two owned emulator launches failed for capacity. Only inspected
+owned generated Xcode intermediates/module/index caches, Android intermediates/
+tmp/Kotlin outputs and Sentry extraction/dependency caches were removed. Source
+checkouts, signed products/APK outputs, test evidence, databases and owner work
+remain. The next iOS build must resolve its Sentry package artifact again. Disk
+later reported about 41 GiB free; the entire increase is not attributed to one
+cleanup. Docker Desktop stayed stuck after capacity recovery. Its bounded CLI
+restarts failed; only identified stuck Docker/owned diagnostic processes were
+stopped, then Desktop start succeeded. Docker 29.1.3, the owned Gig database and
+SQL reset are healthy again. No volume, database or owner emulator was deleted.
+See private `pantopus-docker-recovery-after-disk-*` and build/validation logs.
+
+Fresh origin/PR verification: iOS `661e5fea1` passes every required check in
+[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34610436649).
+The only open PRs are unfinished drafts #32 and #34; #34 is still conflicted at
+`e9ef2decb`; its required checks pass (Seeder is skipped). Green checks do not
+complete its scope or reconcile the conflict/migrations. Owner checkout retains
+only its recorded handoff edit and two design
+artifacts; the paid-gig worktree is clean. No new migration or paid/hosted action.
+
+Additional confirmed follow-up: direct health/checklist/property HTTP handlers
+still use the general IAM check without the dashboard's SQL Home-state boundary
+or final authority comparison. Native UI guards do not close that server scope.
+Reconcile these routes alongside malformed nested intelligence and checklist
+mutation receipts; retain actual account-switch UI, real Home identity, residency,
+all other Home/Place/Pulse/Beacon/account/payment/release work and the 47-version
+migration dependency/replay work. Paid providers remain one final launch bundle.
+
 ## Current native authority checkpoint
 
 `GET /api/homes/:id/dashboard-access` now provides a minimal no-store current
