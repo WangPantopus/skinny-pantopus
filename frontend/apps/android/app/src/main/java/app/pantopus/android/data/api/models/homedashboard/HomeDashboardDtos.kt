@@ -247,6 +247,7 @@ data class HomeBillTrendsDto(
     @Json(name = "benchmarks") val benchmarks: Map<String, HomeBillBenchmarkDto> = emptyMap(),
     @Json(name = "bill_benchmark_opt_in") val billBenchmarkOptIn: Boolean = false,
     val currency: String? = null,
+    @Json(name = "available_currencies") val availableCurrencies: List<String> = emptyList(),
     @Json(name = "format_version") val formatVersion: Int? = null,
     @Json(name = "calculation_version") val calculationVersion: Int? = null,
 )

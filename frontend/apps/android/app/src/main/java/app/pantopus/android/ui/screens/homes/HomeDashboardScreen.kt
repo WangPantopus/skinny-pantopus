@@ -111,6 +111,8 @@ fun HomeDashboardScreen(
     val checklist by viewModel.checklist.collectAsStateWithLifecycle()
     val propertyValue by viewModel.propertyValue.collectAsStateWithLifecycle()
     val billTrends by viewModel.billTrends.collectAsStateWithLifecycle()
+    val billCurrency by viewModel.billCurrency.collectAsStateWithLifecycle()
+    val billCurrencies by viewModel.billCurrencies.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -284,7 +286,13 @@ fun HomeDashboardScreen(
             onRetry = viewModel::generateChecklist,
         )
         PropertyValueCard(state = propertyValue, onRetry = viewModel::retryPropertyValue)
-        BillTrendsCard(state = billTrends, onRetry = viewModel::retryBillTrends)
+        BillTrendsCard(
+            state = billTrends,
+            currency = billCurrency,
+            currencies = billCurrencies,
+            onCurrencyChange = viewModel::selectBillCurrency,
+            onRetry = viewModel::retryBillTrends,
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -459,21 +467,64 @@ private fun DashboardLayout(
      *  property value, bill trends). Empty in preview/snapshot hosts. */
     intelligence: @Composable () -> Unit = {},
 ) {
-    ContentDetailShell(
-        title = "Home",
-        onBack = onBack,
-        topBarAction =
-            onOpenSettings?.let {
-                ContentDetailTopBarAction(
-                    icon = PantopusIcon.SlidersHorizontal,
-                    contentDescription = "Home settings",
-                    onClick = it,
-                )
-            },
-        cta = {
-            // Six one-tap creates, matching RN's `homeFabActions`
-            // (`src/app/homes/[id]/index.tsx:154-161`). Every entry
-            // routes to a real create surface — no placeholders.
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
+            ContentDetailShell(
+                title = "Home",
+                onBack = onBack,
+                topBarAction =
+                    onOpenSettings?.let {
+                        ContentDetailTopBarAction(
+                            icon = PantopusIcon.SlidersHorizontal,
+                            contentDescription = "Home settings",
+                            onClick = it,
+                        )
+                    },
+                header = {
+                    HomeHeroHeader(address = content.address, verified = content.verified, stats = content.stats)
+                },
+                body = {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                        content.securityBanner?.let { banner ->
+                            HomeSecurityStatusBanner(
+                                content = banner,
+                                onCta = { onSecurityAction(banner.action) },
+                            )
+                        }
+                        content.attentionSummary?.let { summary ->
+                            NeedsAttentionBanner(summary = summary, onJump = onQuickAction)
+                        }
+                        if (!content.isVerifiedOwner) {
+                            ClaimOwnershipBanner(onClaim = onClaim, onViewClaims = onViewClaims)
+                        }
+                        GridTabsBody(
+                            quickActions = content.quickActions,
+                            tabs = content.tabs,
+                            selectedTab = selectedTab,
+                            onSelectTab = onSelectTab,
+                            onQuickAction = onQuickAction,
+                        ) {
+                            if (brandNew != null) {
+                                BrandNewHomeSection(brandNew = brandNew, onStep = onQuickAction)
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                                    intelligence()
+                                    OverviewSection(
+                                        content = content,
+                                        onOpenEmergency = { onQuickAction("view_emergency") },
+                                        onOpenPropertyDetails = onOpenPropertyDetails,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg).padding(Spacing.s4),
+            horizontalArrangement = Arrangement.End,
+        ) {
             FabCreateCTA(
                 actions =
                     listOf(
@@ -486,47 +537,8 @@ private fun DashboardLayout(
                     ),
                 onSelect = onFabAction,
             )
-        },
-        header = {
-            HomeHeroHeader(address = content.address, verified = content.verified, stats = content.stats)
-        },
-        body = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                content.securityBanner?.let { banner ->
-                    HomeSecurityStatusBanner(
-                        content = banner,
-                        onCta = { onSecurityAction(banner.action) },
-                    )
-                }
-                content.attentionSummary?.let { summary ->
-                    NeedsAttentionBanner(summary = summary, onJump = onQuickAction)
-                }
-                if (!content.isVerifiedOwner) {
-                    ClaimOwnershipBanner(onClaim = onClaim, onViewClaims = onViewClaims)
-                }
-                GridTabsBody(
-                    quickActions = content.quickActions,
-                    tabs = content.tabs,
-                    selectedTab = selectedTab,
-                    onSelectTab = onSelectTab,
-                    onQuickAction = onQuickAction,
-                ) {
-                    if (brandNew != null) {
-                        BrandNewHomeSection(brandNew = brandNew, onStep = onQuickAction)
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                            intelligence()
-                            OverviewSection(
-                                content = content,
-                                onOpenEmergency = { onQuickAction("view_emergency") },
-                                onOpenPropertyDetails = onOpenPropertyDetails,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
+        }
+    }
 }
 
 /**

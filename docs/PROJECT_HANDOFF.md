@@ -14,53 +14,46 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Android bill comparison installed milestone — September 11
+### Native bill currencies and monthly history — September 11
 
-The [native bill report](home-native-bill-comparison-2026-09-11.md) now records
-complete Android r2 installed acceptance, with 22 production HTTP/SQL bill reads:
-fractional amounts, same-month comparison, cohort withdrawal, repeated failures
-and Retry, malformed/legacy/wrong currency, confirmed empty, current denial and
-restoration. Normal sign-in/navigation and cold returns pass. Format, Detekt,
-compile, assemble and lint r2 pass. The first UI run's uppercase-heading locator
-failure is documented; the full corrected run passes. Both completed platform
-fixtures have exact cleanup proof. Android's owned recurrence AVD is shut down.
+The [native bill report](home-native-bill-comparison-2026-09-11.md) records both
+platforms' completed currency/history milestone. iOS signed currency build r5,
+final Swift quality and both installed UI r5 journeys pass; pushed as
+`3c95d77db`. Android currency build r2 passes format/Detekt/compile/assemble/lint,
+installed currency r2 passes six format-2 production reads and full recovery r3
+passes 22 reads. USD/CAD separation, earlier-reply retirement, 24-month cold
+returns, monthly amounts, Create overlap and Back navigation pass. Current,
+error, empty and denied screenshots were reviewed. The shared r5 fixture's exact
+SQL cleanup passes. Both owned native devices are shut down.
 
-**Current currency/history continuation:** iOS signed currency build r5,
-affected final Swift quality and both installed UI r5 journeys pass. The final
-run covers currency switching, a deliberately delayed CAD reply, 24 months,
-amount/footer overlap, one Back control and the complete 22-read recovery
-regression. Visual review confirms readable USD/CAD values and reserved Create
-space. The earlier r4 recovery failure coincided with Docker stopping; direct
-HTTP/SQL also hung. It remains recorded as a failure, with successful recovery
-and full rerun, rather than being omitted.
+The report preserves earlier compile, identifier, input and resource failures.
+Android's first history run missed disclosure expansion; two focused probes and
+the complete r2 with explicit before/after evidence pass. Its single missed
+input's cause was not established; broader loading/lifecycle interaction remains
+in the next scope. iOS's r4 recovery failure coincided with Docker stopping;
+direct HTTP/SQL also hung, then authorized recovery and full r5 passed. Generated
+cache/intermediate cleanup preserved source, products, evidence and databases.
 
-Android currency source is still uncommitted. Build r2 passes formatting,
-Detekt, compile, assemble and lint. Installed currency/history r1 passed USD/CAD
-and delayed replies but failed to find the oldest row with the disclosure still
-collapsed. Two focused normal-UI probes, including a cold return, successfully
-expanded it. The complete r2 journey now records before/after expansion and
-asserts its visible reaction (session 89109,
-`/private/tmp/pantopus-native-bill-android-currency-ui-r2`). Do not call it passed
-until it finishes; full Android recovery rerun remains next. The shared fixture
-is r5, session 33500 at 18083. Owned iOS simulator
-F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8 is shut down. Owned Android recurrence AVD
-is emulator-5556. No concurrent shared fixture mutation is allowed.
+**Next: native Home dashboard current access and lifecycle.** Recheck authority
+on foreground/return, clear private summaries and controls while suspended or
+unconfirmed, and retire held reads and account/session changes. Preserve exact
+private-creator first use and current ownership/residency verification entry;
+do not infer grants from role or confuse applicants with owners. Fix captured
+checklist truncation and unsupported property-estimate copy during that UI pass.
+Then complete native Place, residency review/submission/recovery, ownership/
+leases/resources, settings/privacy and the entire ordered Home/Pulse/Beacon/
+account/payment/release backlog below. Currency read ordering is not whole-Home
+lifecycle acceptance. Physical-device, broad accessibility and provider limits
+remain explicit. Paid services stay one final launch-preparation bundle.
 
-After this milestone, continue native Home access/lifecycle/UI, Place, residency,
-submission, ownership/leases/resources, settings/privacy and the full ordered
-backlog. Checklist truncation and unsupported property-estimate copy remain;
-general foreground/account/access retirement is not completed by currency read
-ordering. Keep physical-device and broader accessibility limits explicit. Paid
-services remain one final launch bundle.
-
-Origin was fetched; master remains `6a1013784`. All required checks on pushed
-`3fb62d564` now pass. #32/#34 remain unfinished drafts; #34 is still conflicted.
-No new migration; combined 47-version dependencies/replay remain. Docker 29.1.3
-and the owned Gig database are healthy after authorized recovery; 23 automatically
-restarted older replay containers were stopped with data retained. Disk cleanup
-removed only identified generated build caches/intermediates; source, products,
-test evidence, DB backups and owner device data remain. Read the detailed
-[native report](home-native-bill-comparison-2026-09-11.md) for exact limits.
+Origin was fetched; master remains `6a1013784`. All required checks on
+`3fb62d564` pass. New iOS `3c95d77db` checks have no failures, with native jobs
+still running; refresh every newly pushed head separately. #32/#34 remain
+unfinished drafts; #34 is conflicted at `e9ef2decb` and its worktree is clean.
+No new migration: combined 47-version dependencies/replay remain. Docker 29.1.3,
+the owned Gig SQL and web 18080 remain; 23 older replay containers were stopped
+with their data retained after the engine automatically restarted them. Fixture
+18083 is stopped and cleaned. Owner checkout/files/devices/data remain untouched.
 
 ### iOS bill comparison installed milestone — September 11
 

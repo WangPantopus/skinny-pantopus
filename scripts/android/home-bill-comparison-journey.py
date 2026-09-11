@@ -17,6 +17,11 @@ base = relationship.base
 
 
 class Journey(relationship.Journey):
+    def evidence(self, name):
+        super().evidence(name)
+        # Normal Home has no app-lock session here. Never remove FLAG_SECURE.
+        (self.output / (name + '.png')).write_bytes(self.adb('exec-out', 'screencap', '-p'))
+
     def login(self):
         self.launch()
         self.tap('Sign in')

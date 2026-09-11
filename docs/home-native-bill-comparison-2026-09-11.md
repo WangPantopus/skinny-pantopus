@@ -18,7 +18,7 @@ journey r2 / formatting / Detekt / lint. Each final platform journey records
 22 production bill reads through all listed cases. Neither milestone completes
 currency choice, lifecycle, whole-Home, physical-device or release acceptance.
 
-**Currency/history continuation in progress:** both clients now select the
+**Currency/history milestone verified on both clients:** both clients now select the
 server's available currencies, show every monthly total, and retire an earlier
 currency reply after a new selection. The Home-specific Create footer reserves
 space instead of covering amounts. iOS additionally removes the duplicate host
@@ -29,7 +29,7 @@ iOS signed currency build r5 and affected final Swift quality pass. Currency UI
 r4 passes currency/held-reply/24-month/overlap/Back but its recovery test failed
 at legacy Retry when Docker stopped during the run. A direct HTTP read and
 Docker CLI also hung; this is retained as failed environmental evidence, not a
-passing app run. Docker recovery is described below. Complete iOS UI r5 passes both journeys against the recovered database: currency/history in 116.739 seconds and full recovery with 22 production reads. USD/CAD and oldest-history screenshots were reviewed. Android currency build r1 failed for a missing semantics import; r2 passes format/Detekt/compile/assemble/lint. Android installed currency r1 passed USD/CAD and held-reply retirement, but failed to find the oldest row while the disclosure was collapsed. Two focused installed probes (including cold return) expand it correctly. Full currency r2 now records before/after expansion and asserts its visible response; full recovery remains next. Android source/driver are still uncommitted, distinct from the completed iOS milestone. General Home lifecycle remains incomplete.
+passing app run. Docker recovery is described below. Complete iOS UI r5 passes both journeys against the recovered database: currency/history in 116.739 seconds and full recovery with 22 production reads. USD/CAD and oldest-history screenshots were reviewed. Android currency build r1 failed for a missing semantics import; r2 passes format/Detekt/compile/assemble/lint. Android installed currency r1 passed USD/CAD and held-reply retirement, but failed to find the oldest row while the disclosure was collapsed. Two focused installed probes (including cold return) expand it correctly. Full currency r2 now records before/after expansion and asserts its visible response; full recovery remains next. Android currency/history r2 and full recovery r3 now pass on the built currency APK; the final evidence is below. General Home lifecycle remains incomplete. iOS currency/history is committed and pushed as `3c95d77db`.
 
 The first installed iOS run passed current amounts and both missing-month/cohort
 cases, then failed to find Retry by identifier. The visible button existed;
@@ -75,11 +75,12 @@ are unchanged.
 
 ## Open work
 
-Android full currency/history acceptance remains; iOS currency/history r5 passes. Foreground
+Native currency/history acceptance now passes on both clients. Foreground
 refresh, cancellation/held reads, account changes and retirement of the surrounding
 Home summary/access controls require separate actual acceptance. The original captured
 iOS duplicate Back and floating-button overlap are repaired and pass final r5
-acceptance; Android equivalent layout needs its final full history check.
+acceptance; Android equivalent layout passes its full currency r2 journey and
+visual review.
 The same screenshots show truncated checklist instructions and a missing-value
 message that attributes unavailable property estimates to address verification
 without showing evidence for that cause. Verify and repair these native summary
@@ -149,3 +150,36 @@ attachments, signed `...-ios-currency-build-r5.log`, final format/lint logs,
 `...-ios-currency-final-r5.json` and Android `...-android-currency-build-r2.log`
 retain the evidence. Neither resource recovery nor local acceptance is a hosted
 release or production disaster-recovery rehearsal.
+
+## Android currency/history acceptance
+
+Installed currency r2 passes normal login, USD/CAD separation, deliberately held
+CAD reply retirement after selecting USD, a normal cold return, all 24 seeded
+monthly periods, oldest/latest values without Create overlap and Back to My
+homes. It records six production format-2 reads. Its visible USD/CAD and oldest/
+latest-history screenshots were reviewed. The first full r1 missed disclosure
+expansion; both focused probes pass, and the complete r2 explicitly records and
+asserts the expanded state before inspecting history. The failed r1 remains
+retained; no monthly case was skipped. The APK/source is unchanged between these
+runs. General loading-layout movement and broader lifecycle acceptance remain
+in the next Home scope; a single missed input's cause was not established.
+
+Private evidence: `/private/tmp/pantopus-native-bill-android-currency-ui-r2`
+contains result.json, fixture-final.json and hierarchy/pixel artifacts. The
+focused probes are `...-android-currency-probe-r1` and `...-probe-r2`.
+The full error/Retry/cohort/empty/permission regression also passes as
+`/private/tmp/pantopus-native-bill-android-ui-r3`, with 22 production reads on the
+same verified currency APK. Error, wrong-currency, confirmed-empty and current
+denial screenshots were reviewed. Its result.json and fixture-final.json retain
+all counts; normal sign-in and final restoration pass. The r5 fixture then
+completed exact SQL cleanup (`/private/tmp/pantopus-native-bill-fixture-r5.log`).
+Both owned native devices are shut down. No hosted or paid action occurred.
+
+The Android evidence helper now retains screenshots for normal Home journeys
+without changing capture protection. Initial Android r2 evidence remains
+hierarchy-only as originally recorded; final currency r2 and recovery r3 include
+reviewed pixels. Existing platform warnings are retained in the successful build
+log, not waived. This milestone adds no migration or old-cache fallback. Required
+CI on predecessor 3fb62d564 passes; iOS 3c95d77db has native jobs still running
+without observed failures. Every newly pushed head needs independent completion
+of its required checks, and neither feature PR is ready to merge.

@@ -252,6 +252,11 @@ class HomeDashboardViewModel
 
         /** `GET /api/homes/:id/bill-trends`. */
         val billTrends: StateFlow<HomeIntelligenceCardState<HomeBillTrendsDto>> = _billTrends.asStateFlow()
+        private val _billCurrency = MutableStateFlow("USD")
+        val billCurrency: StateFlow<String> = _billCurrency.asStateFlow()
+        private val _billCurrencies = MutableStateFlow(listOf("USD"))
+        val billCurrencies: StateFlow<List<String>> = _billCurrencies.asStateFlow()
+        private var billReadId = 0L
 
         private val _pendingChecklistItemIds = MutableStateFlow<Set<String>>(emptySet())
 
@@ -419,7 +424,16 @@ class HomeDashboardViewModel
         }
 
         private suspend fun loadBillTrends() {
-            _billTrends.value = intelligenceRepo.billTrends(homeId).toCardState()
+            val readId = ++billReadId
+            val currency = _billCurrency.value
+            val result = intelligenceRepo.billTrends(homeId, currency).toCardState()
+            if (readId != billReadId || currency != _billCurrency.value) return
+            result.valueOrNull()?.let { data ->
+                if (HomeBillPresentation.isCurrent(data, currency)) {
+                    _billCurrencies.value = (data.availableCurrencies + listOf("USD", currency)).distinct().sorted()
+                }
+            }
+            _billTrends.value = result
         }
 
         private fun <T> NetworkResult<T>.toCardState(): HomeIntelligenceCardState<T> =
@@ -470,6 +484,13 @@ class HomeDashboardViewModel
 
         /** Card-level retry for the bill-trends card. */
         fun retryBillTrends() {
+            _billTrends.value = HomeIntelligenceCardState.Loading
+            viewModelScope.launch { loadBillTrends() }
+        }
+
+        fun selectBillCurrency(currency: String) {
+            if (currency == _billCurrency.value || currency !in _billCurrencies.value) return
+            _billCurrency.value = currency
             _billTrends.value = HomeIntelligenceCardState.Loading
             viewModelScope.launch { loadBillTrends() }
         }

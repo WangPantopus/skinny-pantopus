@@ -13,9 +13,17 @@ internal object HomeBillPresentation {
     private const val MAXIMUM_MONTHS = 24
     private const val MAXIMUM_SAFE_MINOR_UNITS = 9_007_199_254_740_991.0
 
-    fun isCurrent(data: HomeBillTrendsDto): Boolean {
+    fun isCurrent(
+        data: HomeBillTrendsDto,
+        currency: String = "USD",
+    ): Boolean {
         if (data.formatVersion != 2 || data.calculationVersion != 2 ||
-            data.currency != "USD"
+            data.currency != currency
+        ) {
+            return false
+        }
+        if (data.availableCurrencies.distinct().size != data.availableCurrencies.size ||
+            !data.availableCurrencies.all { it.matches(Regex("^[A-Z]{3}$")) }
         ) {
             return false
         }

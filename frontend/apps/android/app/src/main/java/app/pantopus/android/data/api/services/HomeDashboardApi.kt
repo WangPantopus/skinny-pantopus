@@ -78,8 +78,9 @@ interface HomeDashboardApi {
      * `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.
      * 403s for members without `finance.view` / `finance.manage`.
      */
-    @GET("api/homes/{id}/bill-trends?format=2&currency=USD")
+    @GET("api/homes/{id}/bill-trends?format=2")
     suspend fun billTrends(
         @Path("id") homeId: String,
+        @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
 }

@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -847,14 +851,31 @@ private fun trendMeta(trend: String?): Triple<PantopusIcon, Color, String>? =
 fun BillTrendsCard(
     state: HomeIntelligenceCardState<HomeBillTrendsDto>,
     onRetry: () -> Unit,
+    currency: String = "USD",
+    currencies: List<String> = listOf("USD"),
+    onCurrencyChange: (String) -> Unit = {},
 ) {
     if (state is HomeIntelligenceCardState.Forbidden) return
+    var currencyMenu by remember { mutableStateOf(false) }
 
     DashboardCard(
         title = "Bill trends",
         accent = PantopusColors.warning,
         modifier = Modifier.testTag("homeDashboard_billTrendsCard"),
     ) {
+        Box {
+            TextButton(onClick = { currencyMenu = true }, modifier = Modifier.testTag("homeDashboard_billCurrency")) {
+                Text("Currency: $currency")
+            }
+            DropdownMenu(expanded = currencyMenu, onDismissRequest = { currencyMenu = false }) {
+                currencies.forEach { code ->
+                    DropdownMenuItem(text = { Text(code) }, onClick = {
+                        currencyMenu = false
+                        onCurrencyChange(code)
+                    })
+                }
+            }
+        }
         when (state) {
             HomeIntelligenceCardState.Loading ->
                 Column(
@@ -873,7 +894,7 @@ fun BillTrendsCard(
                     onRetry = onRetry,
                 )
             is HomeIntelligenceCardState.Loaded ->
-                if (!HomeBillPresentation.isCurrent(state.value)) {
+                if (!HomeBillPresentation.isCurrent(state.value, currency)) {
                     CardError(
                         headline = "Current bill information is unavailable",
                         message = "Retry to check the current format and amounts.",
@@ -881,7 +902,7 @@ fun BillTrendsCard(
                         onRetry = onRetry,
                     )
                 } else if (state.value.billsByType.isEmpty()) {
-                    CardNote("No paid USD bills with a period start in the last 24 months.")
+                    CardNote("No paid $currency bills with a period start in the last 24 months.")
                 } else {
                     state.value.billsByType.keys.sorted().forEach { key ->
                         state.value.billsByType[key]?.let { series ->
@@ -900,6 +921,54 @@ fun BillTrendsCard(
 
 @Composable
 private fun BillTrendRow(
+    billType: String,
+    series: HomeBillTrendSeriesDto,
+    benchmark: HomeBillBenchmarkDto?,
+    currency: String,
+) {
+    var expanded by remember(billType, currency) { mutableStateOf(false) }
+    Column {
+        BillTrendSummary(billType, series, benchmark, currency)
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("homeDashboard_billMonths_$billType")) {
+            Text(if (expanded) "Hide monthly totals" else "Monthly totals")
+        }
+        if (expanded) {
+            series.months.indices.forEach { index ->
+                val month = series.months[index]
+                val amount = HomeBillPresentation.amount(series.amounts[index], currency)
+                val comparison = monthlyBillComparison(month, benchmark, currency)
+                Column(
+                    modifier =
+                        Modifier.fillMaxWidth().padding(vertical = Spacing.s2)
+                            .clearAndSetSemantics {
+                                contentDescription = "Monthly total for $month. Your home: $amount. $comparison"
+                            },
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(month, style = PantopusTextStyle.caption)
+                        Text(amount, style = PantopusTextStyle.caption, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(comparison, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+                }
+            }
+        }
+    }
+}
+
+private fun monthlyBillComparison(
+    month: String,
+    benchmark: HomeBillBenchmarkDto?,
+    currency: String,
+): String {
+    val index = benchmark?.months?.indexOf(month) ?: -1
+    if (benchmark == null || benchmark.insufficientData || index !in benchmark.avgAmounts.indices) {
+        return "No comparison for this month"
+    }
+    return "Neighborhood average: ${HomeBillPresentation.amount(benchmark.avgAmounts[index], currency)}"
+}
+
+@Composable
+private fun BillTrendSummary(
     billType: String,
     series: HomeBillTrendSeriesDto,
     benchmark: HomeBillBenchmarkDto?,

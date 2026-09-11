@@ -3,20 +3,19 @@
 ## Most recent native bill checkpoint
 
 Read the top of [PROJECT_HANDOFF](PROJECT_HANDOFF.md) and the
-[native report](home-native-bill-comparison-2026-09-11.md). Initial USD journeys
-pass on both clients. Uncommitted currency/history now passes both iOS installed
-r5 journeys, including full 22-read recovery. Android currency build r2 passes;
-installed currency r1 missed the history disclosure expansion; two focused
-probes pass. Complete currency r2 is now running under session 89109, with explicit
-expansion evidence and assertions, against fixture r5/session
-33500 at 18083. Finish currency/pixel acceptance and full Android recovery,
-then exact fixture cleanup and commit/push. iOS owned simulator is shut down;
-Android owned recurrence AVD is emulator-5556. Docker is recovered and active
-Gig SQL healthy; older replay containers are stopped with data retained. Owner
-files/devices are untouched. Current pushed 3fb62d564 has all required CI green.
-Both PRs remain drafts; #34 conflicted, combined migrations and full native/Home/
-Pulse/Beacon/account/payment/release backlog open. Paid services stay one final
-launch bundle. Do not mistake the currency read guard for whole-Home lifecycle.
+[native report](home-native-bill-comparison-2026-09-11.md). iOS currency/history
+build r5, both installed r5 journeys and final Swift quality pass, pushed as
+`3c95d77db`; its native CI was still running without failures. Android currency
+build r2, installed currency/history r2 (six reads) and full recovery r3 (22 reads)
+all pass; pixels reviewed. The shared r5 fixture completed exact cleanup and is
+stopped. Both owned native devices are shut down. Docker/owned Gig SQL/web 18080
+remain; older replay containers stopped with data retained. Generated resource
+cleanup and initial failed runs are preserved in the report. Owner files/devices
+are untouched. Next implement and actually verify native Home current-access/
+lifecycle/held-read/session retirement, preserving private first use and applicant
+verification, then summary UI repairs and the full ordered backlog. #32/#34 stay
+unfinished drafts; #34 conflicted, combined migrations still unreconciled. Paid
+services remain one final launch bundle. New pushed heads need their own checks.
 
 ## Latest continuation — September 11, live bill comparisons
 
