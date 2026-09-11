@@ -3,7 +3,29 @@
 This is a source-preservation checkpoint requested by the owner so work can
 continue in a fresh session. It includes unfinished implementation. It is not a
 release, completed acceptance, or permission to merge failing/unfinished PRs.
-The newest [Android conversion report](home-android-task-gig-publication-2026-09-10.md)
+The newest [relationship decision report](home-claim-relationship-decisions-2026-09-10.md)
+records atomic decline/flag decisions, current authority and original/current
+receipt recovery. Actual production HTTP/service/SQL and 12 observed races pass.
+Pending/untrusted evidence no longer creates a property dispute. Final fresh
+34-migration replay, all 39 SQL/pgTAP contracts, reviewed function lint and full
+backend/privacy gates pass. Final populated upgrade preserves 15,114 original
+rows across 363 tables. A deletion-policy dependency found by the complete SQL
+gate is fixed in the final additive migration.
+
+Next is browser prepared relationship review and encrypted original/confirmation
+recovery with actual UI/HTTP/SQL acceptance, followed by native parity, residency
+receipts and remaining ownership/lease/resource work. This is a backend checkpoint;
+explicit client recovery remains unfinished. Legacy identical requests acknowledge
+one historical intent, never a new decision after a later claim change. Android
+`05c678efe` has all reported jobs passing except Android lint/test/assemble still
+running; refresh the next exact head. PRs #32/#34 stay drafts, paid #34 stays
+`e9ef2decb` and unfinished, combined 43-version dependencies/replay remain open,
+and every paid service stays in one final launch bundle. Exact fixtures are
+cleaned; the fresh relationship database is stopped with backup; the owned Gig
+database remains for immediate browser work. Owner files/runtimes remain untouched.
+Older next actions below are historical.
+
+The preceding [Android conversion report](home-android-task-gig-publication-2026-09-10.md)
 completes core native public review and encrypted original/receipt recovery with
 installed app → production HTTP/service → SQL acceptance. Final r5 passes stale
 review, lost replies, cold recovery, ciphertext corruption/restoration, exact

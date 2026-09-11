@@ -56,7 +56,9 @@ const uploadEvidenceSchema = Joi.object({
 const resolveRelationshipSchema = Joi.object({
   action: Joi.string().valid('invite_to_household', 'decline_relationship', 'flag_unknown_person').required(),
   note: Joi.string().max(1000).allow('', null),
-});
+  request_id: Joi.string().uuid().when('action', { is: 'invite_to_household', then: Joi.forbidden() }),
+  review_token: Joi.string().pattern(/^[a-f0-9]{64}$/).when('action', { is: 'invite_to_household', then: Joi.forbidden() }),
+}).and('request_id', 'review_token');
 
 const acceptMergeSchema = Joi.object({
   invitation_id: Joi.string().uuid().allow(null),
@@ -552,100 +554,23 @@ router.post('/:id/ownership-claims/:claimId/resolve-relationship', verifyToken, 
       });
     }
 
-    const access = await checkHomePermission(homeId, userId, 'ownership.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    const authority = await getVerifiedHouseholdAuthority(homeId, userId);
-    if (!authority) {
-      return res.status(403).json({ error: 'Only verified household authorities can resolve claimant relationships' });
-    }
-
-    const { data: claim, error: claimError } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('id, home_id, claimant_user_id, claim_type, state, claim_phase_v2, terminal_reason, challenge_state, routing_classification, identity_status, merged_into_claim_id')
-      .eq('id', claimId)
-      .eq('home_id', homeId)
-      .maybeSingle();
-
-    if (claimError) throw claimError;
-    if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
-    }
-
-    if (claim.claimant_user_id === userId) {
-      return res.status(400).json({ error: 'You cannot resolve your own claim relationship' });
-    }
-
-    if (!homeClaimRoutingService.isClaimActiveRecord(claim)) {
-      return res.status(400).json({ error: 'Claim is not eligible for relationship resolution' });
-    }
-
-    if (action === 'decline_relationship') {
-      await writeAuditLog(homeId, userId, 'OWNERSHIP_CLAIM_RELATIONSHIP_DECLINED', 'HomeOwnershipClaim', claimId, {
-        note: note || null,
-        authority_type: authority.authorityType,
-      });
-
-      return res.json({
-        message: 'Claim will continue through independent verification',
-        action,
-        claim: {
-          id: claim.id,
-          routing_classification: claim.routing_classification || null,
-          claim_phase_v2: claim.claim_phase_v2 || homeClaimRoutingService.mapLegacyStateToPhaseV2(claim.state),
-        },
-      });
-    }
-
-    const challengeStrength = await homeClaimRoutingService.deriveClaimStrength(claimId, { includeUnverified: true });
-    const qualifiesForDispute = homeClaimRoutingService.isChallengeStrengthEligible(challengeStrength);
-    const nextPhase = qualifiesForDispute ? 'challenged' : (claim.claim_phase_v2 || homeClaimRoutingService.mapLegacyStateToPhaseV2(claim.state));
-    const nextChallengeState = qualifiesForDispute ? 'challenged' : claim.challenge_state || 'none';
-
-    const { error: challengeUpdateError } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .update({
-        routing_classification: 'challenge_claim',
-        claim_phase_v2: nextPhase,
-        challenge_state: nextChallengeState,
-        claim_strength: challengeStrength,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', claimId);
-
-    if (challengeUpdateError) throw challengeUpdateError;
-
-    const homeResolutionState = await recalculateHouseholdResolutionState(homeId);
-
-    await writeAuditLog(homeId, userId, 'OWNERSHIP_CLAIM_RELATIONSHIP_FLAGGED', 'HomeOwnershipClaim', claimId, {
-      note: note || null,
-      authority_type: authority.authorityType,
-      challenge_strength: challengeStrength,
-      qualifies_for_dispute: qualifiesForDispute,
+    const result = await require('../services/homeClaimRelationshipService').decide({
+      homeId, claimId, actorId: userId, action, note,
+      requestId: req.body.request_id, reviewToken: req.body.review_token,
     });
-
-    res.json({
-      message: qualifiesForDispute
-        ? 'Claim flagged for dispute review'
-        : 'Claim flagged for admin review',
-      action,
-      claim: {
-        id: claim.id,
-        routing_classification: 'challenge_claim',
-        claim_phase_v2: nextPhase,
-        challenge_state: nextChallengeState,
-        claim_strength: challengeStrength,
-      },
-      home_resolution_state: homeResolutionState,
-    });
+    const message = result.replayed
+      ? 'Original relationship decision confirmed; current claim refreshed'
+      : action === 'decline_relationship'
+        ? 'Claim will continue through independent verification'
+        : result.receipt.result.qualifies_for_dispute ? 'Claim flagged for dispute review' : 'Claim flagged for admin review';
+    return res.json({ ...result, message });
   } catch (err) {
-    if (err.statusCode || err.status) {
-      return res.status(err.statusCode || err.status).json({ error: err.message, code: err.code });
+    if (req.body.action === 'invite_to_household') {
+      if (err.statusCode || err.status) return res.status(err.statusCode || err.status).json({ error: err.message, code: err.code });
+      logger.error('Failed to resolve claimant invitation', { code: err.code });
+      return res.status(500).json({ error: 'Failed to resolve claimant relationship' });
     }
-    logger.error('Failed to resolve claimant relationship', { error: err.message });
-    res.status(500).json({ error: 'Failed to resolve claimant relationship' });
+    return require('../services/homeClaimRelationshipService').sendError(res, err);
   }
 });
 

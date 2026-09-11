@@ -279,72 +279,31 @@ describe('homeOwnership Phase 2 compatibility writes', () => {
     expect(getTable('HomeVerificationEvidence')).toHaveLength(0);
   });
 
-  test('flagging an unknown claimant opens dispute review on the home', async () => {
+  test('relationship flags bind the actor to the committed receipt without local claim writes', async () => {
     householdClaimConfig.flags.inviteMerge = true;
-
-    seedBaseHome({
-      security_state: 'normal',
-      household_resolution_state: 'verified_household',
-      owner_id: 'owner-1',
-    });
-    seedTable('HomeOwner', [{
-      id: 'home-owner-1',
-      home_id: 'home-1',
-      subject_id: 'owner-1',
-      owner_status: 'verified',
-      verification_tier: 'strong',
-      is_primary_owner: true,
-    }]);
-    seedTable('HomeOwnershipClaim', [{
-      id: 'claim-2',
-      home_id: 'home-1',
-      claimant_user_id: 'user-2',
-      claim_type: 'owner',
-      state: 'submitted',
-      method: 'doc_upload',
-      claim_phase_v2: 'under_review',
-      terminal_reason: 'none',
-      challenge_state: 'none',
-      identity_status: 'not_started',
-      routing_classification: 'parallel_claim',
-      merged_into_claim_id: null,
-    }]);
-    seedTable('HomeVerificationEvidence', [{
-      id: 'evidence-1',
-      claim_id: 'claim-2',
-      evidence_type: 'deed',
-      status: 'pending',
-    }]);
-
-    const res = await request(app)
-      .post('/api/homes/home-1/ownership-claims/claim-2/resolve-relationship')
-      .set('x-test-user-id', 'owner-1')
-      .send({
-        action: 'flag_unknown_person',
-        note: 'I do not recognize this claimant',
-      });
-
+    const id = n => `ddc23100-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const rpc = jest.fn(async () => ({ data: {
+      ok: true, homeId: id(100), claimId: id(201), claimantId: id(2), action: 'flag_unknown_person', replayed: false,
+      claim: { id: id(201), state: 'submitted', review_token: 'a'.repeat(64), challenge_state: 'none' },
+      home_resolution_state: 'verified_household',
+      receipt: { id: id(301), home_id: id(100), claim_id: id(201), actor_id: id(1), request_id: id(401),
+        action: 'flag_unknown_person', legacy_request: true, request_hash: 'b'.repeat(64), review_token: 'a'.repeat(64),
+        created_at: '2026-09-10T20:00:00Z', result: { qualifies_for_dispute: false } },
+    } }));
+    setRpcMock(rpc);
+    const res = await request(app).post(`/api/homes/${id(100)}/ownership-claims/${id(201)}/resolve-relationship`)
+      .set('x-test-user-id', id(1)).send({ action: 'flag_unknown_person', note: 'Unknown claimant' });
     expect(res.status).toBe(200);
-    expect(res.body.home_resolution_state).toBe('disputed');
-
-    const claim = getTable('HomeOwnershipClaim')[0];
-    const home = getTable('Home')[0];
-    expect(claim.routing_classification).toBe('challenge_claim');
-    expect(claim.claim_phase_v2).toBe('challenged');
-    expect(claim.challenge_state).toBe('challenged');
-    expect(claim.claim_strength).toBe('owner_legal');
-    expect(home.household_resolution_state).toBe('disputed');
-    expect(home.security_state).toBe('normal');
-    expect(notificationService.notifyOwnershipDispute).toHaveBeenCalledTimes(0);
+    expect(res.body.message).toBe('Claim flagged for admin review');
+    expect(res.body.claim.challenge_state).toBe('none');
+    expect(rpc).toHaveBeenCalledWith('decide_home_claim_relationship', {
+      p_home_id: id(100), p_claim_id: id(201), p_actor_id: id(1), p_action: 'flag_unknown_person',
+      p_note: 'Unknown claimant', p_request_id: null, p_review_token: null,
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(getTable('HomeOwnershipClaim')).toEqual([]);
+    expect(notificationService.notifyOwnershipDispute).not.toHaveBeenCalled();
   });
-
-
-
-
-
-
-
-
 
   // Mutation semantics now run against actual canonical PostgreSQL in the
   // home-claim-merge-transactions contract; routes verify exact RPC bindings.

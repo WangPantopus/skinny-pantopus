@@ -14,6 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Recoverable claimant relationship decisions — September 10
+
+The [relationship decision report](home-claim-relationship-decisions-2026-09-10.md)
+records atomic current authority, reviewed snapshots, decline/flag decisions and
+original receipt/audit recovery. Actual HTTP/service/SQL and 12 observed lock-wait
+races pass. Pending/untrusted evidence can no longer escalate a flag into a
+property dispute; a retry returns current claim state without rewinding it.
+Final 34-migration fresh replay, 39 SQL/pgTAP contracts, reviewed function lint
+and populated upgrade pass, preserving all 15,114 original rows across 363 tables.
+The full backend and privacy gates pass. The full deletion check found a missing
+receipt dependency; the final migration repairs it and all contracts pass.
+
+**Next:** browser prepared relationship review and encrypted original/confirmation
+recovery with actual UI → production HTTP/SQL acceptance, then iOS/Android parity,
+residency receipts, ownership transfer/challenge and lease/resource cleanup.
+This backend checkpoint does not complete client recovery: legacy identical
+actor/claim/action/note requests acknowledge one historical decision; deliberate
+new decisions need a new explicit UUID and current review token. Preserve the
+completed invitation/evidence workflows. Android predecessor `05c678efe` passes
+all reported required jobs except Android lint/test/assemble, still running;
+refresh the new exact head. Both PRs remain drafts; paid #34 `e9ef2decb` remains
+green but unfinished. Final combined migration dependencies/replay remain open
+(43 distinct versions), and paid services stay in one final launch bundle.
+The fresh relationship replay project is stopped with backup; exact fixtures
+are cleaned and the owned Gig database remains for immediate browser acceptance.
+Owner files/runtimes remain untouched. Actual behavior, UI, transitions and
+recovery continue to take priority over unit-coverage percentages.
+
 ### Android task-to-Gig publication and installed recovery — September 10
 
 The [Android conversion report](home-android-task-gig-publication-2026-09-10.md)
