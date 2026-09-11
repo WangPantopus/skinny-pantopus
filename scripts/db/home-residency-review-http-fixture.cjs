@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container, { summary = false, place = false, dashboard = false } = {}) {
+module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -22,7 +22,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   let propertyResult = { profile: null, source: 'fallback' };
   let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -125,6 +125,13 @@ module.exports = function(container, { summary = false, place = false, dashboard
   const express = require(path.join(root, 'backend/node_modules/express'));
   const scope = require(path.join(root, 'backend/utils/requestSessionScope'));
   Module._load = function(request, parent, isMain) {
+    if (invitations && parent?.filename.endsWith('/services/homeInvitationService.js')) {
+      if (request === './emailService') return { sendHomeInviteEmail: async () => ({ success: false, preview: true }) };
+      if (request === './notificationService') return {
+        notifyHomeInvite: async () => { notifications.push({ kind: 'controlled_invitation' }); },
+        notifyHomeInviteAccepted: async () => { notifications.push({ kind: 'controlled_acceptance' }); },
+      };
+    }
     if (parent?.filename.startsWith(path.join(root, 'backend/'))) {
       if (request === '../config/supabaseAdmin') return db;
       if (request === '../services/notificationService') return transport;
@@ -152,7 +159,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
@@ -182,6 +189,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   function cleanup() {
     sql(`BEGIN; DROP TRIGGER IF EXISTS residency_http_receipt_failure ON public."HomeResidencyReviewReceipt";
       DROP FUNCTION IF EXISTS public.residency_http_receipt_failure();
+      ${invitations ? `DELETE FROM public."HomeInvite" WHERE home_id=${q(home)};` : ''}
       DELETE FROM public."HomeAuditLog" WHERE home_id=${q(home)};
       DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)};
       DELETE FROM public."HomeResidencyClaim" WHERE home_id=${q(home)};

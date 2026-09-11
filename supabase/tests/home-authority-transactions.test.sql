@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 SELECT plan(1);
 SELECT lives_ok($contract$
--- Member authority uses the shipped 24 role rows. Scoped fixture overrides and
+-- Member authority uses the shipped 29 role rows. Scoped fixture overrides and
 -- presets exercise delegation without expanding any global role defaults.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
@@ -13,7 +13,7 @@ SET LOCAL search_path = public, extensions, pg_catalog;
 CREATE TEMP TABLE authority_reference_before AS
   SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows FROM public."HomeRolePermission" r;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission")<>24 THEN RAISE EXCEPTION 'Expected shipped role matrix'; END IF;
+  IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role matrix'; END IF;
   IF has_function_privilege('authenticated','public.mutate_home_member(uuid,uuid,uuid,text,jsonb)','EXECUTE')
     OR has_function_privilege('anon','public.mutate_home_member(uuid,uuid,uuid,text,jsonb)','EXECUTE')
     OR NOT has_function_privilege('service_role','public.mutate_home_member(uuid,uuid,uuid,text,jsonb)','EXECUTE')

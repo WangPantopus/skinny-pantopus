@@ -30,7 +30,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [ ] H05 **Fix:** Separate saved address, private Home, verified address/property, residency, ownership and administrative role. Native “Verified Home” currently infers verification from owner authority or an owner's row.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify:** Real create/save/join/invite onboarding must produce the intended role defaults. Reconcile the verified-member `home.view` gap without overriding explicit denies or granting membership from an address.
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Finish real create/save/join UI and transactional, recoverable onboarding. Address validation grants no membership.
 - [ ] H08 **Verify (partial):** Browser current owner, applicant privacy/destination and private setup list → real Tasks pass. Finish real onboarding and native list/detail useful/recovery screens for applicants, owners and ordinary members. Earlier native dashboard tests used a controlled Home shell.
 
 ## 2. Residency, ownership and leases
@@ -121,7 +121,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 - [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Update their stale PR descriptions to match the final work.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile 38 Home / 21 payment / 47 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile 39 Home / 21 payment / 48 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 

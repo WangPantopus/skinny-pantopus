@@ -1,5 +1,28 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Ordinary invitation defaults — September 11
+
+The [member overview default repair](home-member-view-defaults-2026-09-11.md)
+adds only missing `home.view` role defaults and preserves existing role decisions
+and individual denies. All 44 SQL contracts, populated/idempotent upgrade,
+actual invitation → SDK/SQL → Home list/detail, lost-reply recovery and privacy
+gates pass. Local fixture rows and original role policy were restored exactly.
+The migration is source only; no permanent adoption or ledger rewrite occurred.
+
+H07 remains partial: create/save/join UI and transactional onboarding still need
+work. The native H05/H08 candidate remains in installed acceptance. Continue
+those flows without stopping at this milestone, then native residency and the
+full backlog. The final native build and Android recovery run are underway.
+Pushed parent `b0097a41a` now has every CI check green in
+[run 34638384517](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34638384517);
+verify this milestone's own head separately. #32 remains draft and mergeable;
+#34 remains draft and conflicted at `e9ef2decb`. Master remains `6a1013784`.
+
+The owner authorizes branches, PRs and merges as needed for completed scopes,
+subject to passing checks and reconciled migrations. The source inventory is
+now 39 Home / 21 payment / 48 distinct combined versions. Paid services remain
+one final launch bundle. Preserve unrelated checkouts, data, devices and evidence.
+
 ### CI follow-up for the detail milestone
 
 The pushed `afd231655` run [34636714349](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34636714349)
@@ -14,11 +37,16 @@ private at `/private/tmp/pantopus-home-detail-projection-ci-backend-afd231655.lo
 A first focused invocation used the repository root instead of backend and could
 not resolve its test mock's express import; the backend invocation passed.
 
-The native H05/H08 candidate is now in progress, not yet accepted. Previous
-native products are preserved with filesystem clones under
-`/private/tmp/pantopus-home-native-artifacts-before-h05/`. Actual SDK list/detail
-native-fixture mode is being prepared; no new migration or paid activation.
-Verify the repair's new pushed head independently; the failed head is not green.
+The native H05/H08 candidate is in progress, not yet accepted; see the
+[native list report](home-native-list-first-use-2026-09-11.md). Both apps compile
+with the actual SDK list/detail fixture. Installed checks found a missing iOS
+banner caused by generic protocol dispatch and Android packaging/driver startup
+failures; fixes are being verified on the owned devices. Prior products remain
+preserved under `/private/tmp/pantopus-home-native-artifacts-before-h05/`.
+This earlier candidate checkpoint predates the member-view migration above.
+Pushed `b0097a41a` now has all checks passing. The H07 role-default gap is
+repaired in the newer milestone; the guest create path is already rejected before occupancy
+creation, despite an unreachable old guest branch later in the route.
 
 ### Home detail projection and browser property recovery — September 11
 

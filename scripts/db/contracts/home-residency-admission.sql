@@ -7,7 +7,7 @@ SET LOCAL search_path=public,extensions,pg_catalog;
 CREATE TEMP TABLE admission_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows
   FROM public."HomeRolePermission" r;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission")<>24 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+  IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
   IF has_function_privilege('authenticated','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE')
     OR has_function_privilege('anon','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE')
     OR NOT has_function_privilege('service_role','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE') THEN

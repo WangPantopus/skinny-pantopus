@@ -92,7 +92,7 @@ BEGIN
  IF result->>'allowed' <> 'true'
    OR EXISTS (SELECT FROM public."AddressCalendarRule" WHERE scope_type='home' AND scope_key=h::text) THEN
    RAISE EXCEPTION 'Authorized reset did not remove exact Home pickup'; END IF;
- IF (SELECT count(*) FROM public."HomeRolePermission") <> 24 THEN RAISE EXCEPTION 'Reference policy changed'; END IF;
+ IF (SELECT count(*) FROM public."HomeRolePermission") <> 29 THEN RAISE EXCEPTION 'Reference policy changed'; END IF;
 END $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;

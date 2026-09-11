@@ -12,7 +12,7 @@ CREATE FUNCTION pg_temp.cm_expect(r jsonb,c text DEFAULT NULL) RETURNS void LANG
   RAISE EXCEPTION 'Expected %, got %',coalesce(c,'success'),r; END IF;
 END $$;
 DO $$ DECLARE t text; f text; BEGIN
- IF (SELECT count(*) FROM public."HomeRolePermission")<>24 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+ IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
  FOREACH t IN ARRAY ARRAY['HomeOwnershipClaim','HomeVerificationEvidence'] LOOP
   IF has_table_privilege('authenticated','public.'||quote_ident(t),'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
    OR has_table_privilege('anon','public.'||quote_ident(t),'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN

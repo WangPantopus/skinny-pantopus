@@ -13,7 +13,7 @@ SET LOCAL search_path = public, extensions, pg_catalog;
 CREATE TEMP TABLE effective_reference_before AS
   SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base, permission) AS rows FROM public."HomeRolePermission" r;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission") <> 24 THEN
+  IF (SELECT count(*) FROM public."HomeRolePermission") <> 29 THEN
     RAISE EXCEPTION 'Contract requires the exact shipped role reference count';
   END IF;
   IF has_function_privilege('authenticated', 'public.home_effective_access(uuid,uuid)', 'EXECUTE')
@@ -63,8 +63,8 @@ BEGIN
   IF cardinality(perms) <> 8 OR NOT ('tasks.edit' = ANY(perms)) OR 'docs.upload' = ANY(perms) THEN
     RAISE EXCEPTION 'Exact shipped lease defaults changed';
   END IF;
-  IF cardinality(public.home_get_user_permissions(h, 'ddb00000-0000-4000-8000-000000000012')) <> 0 THEN
-    RAISE EXCEPTION 'Resolver invented member defaults';
+  IF public.home_get_user_permissions(h, 'ddb00000-0000-4000-8000-000000000012') IS DISTINCT FROM ARRAY['home.view']::text[] THEN
+    RAISE EXCEPTION 'Member must receive only the explicit overview default';
   END IF;
   IF NOT public.home_is_active_member(h, 'ddb00000-0000-4000-8000-000000000012') THEN
     RAISE EXCEPTION 'Membership fact should not invent or require a permission default';

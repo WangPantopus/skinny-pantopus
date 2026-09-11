@@ -12,7 +12,7 @@ SET LOCAL search_path=public,extensions,pg_catalog;
 CREATE TEMP TABLE invitation_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows
  FROM public."HomeRolePermission" r;
 DO $$ DECLARE f text; t text; BEGIN
- IF (SELECT count(*) FROM public."HomeRolePermission")<>24 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+ IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
  FOREACH f IN ARRAY ARRAY['write_home_invitation(uuid,uuid,text,jsonb,text)',
   'act_on_home_invitation(uuid,text,uuid,text,integer)','list_home_invitations(uuid,uuid)',
   'list_home_household_requests(uuid,uuid,text)'] LOOP
