@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container) {
+module.exports = function(container, { summary = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -16,35 +16,62 @@ module.exports = function(container) {
       { input: query, encoding: 'utf8', timeout: 20000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   }
   let loseReply = false, notificationFailure = false, calls = 0;
-  const notifications = [];
+  const notifications = [], queryCalls = [], diagnostics = []; let queryFailure = null;
+  let propertyResult = { profile: null, source: 'fallback' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review'].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(summary ? ['update_home_seasonal_item', 'update_home_settings'] : [])].includes(name));
     const params = Object.entries(args).map(([key, value]) => {
-      assert.match(key, /^p_[a-z_]+$/); return `${key} => ${value == null ? 'NULL' : q(value)}`;
+      assert.match(key, /^p_[a-z_]+$/); return `${key} => ${value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value)}`;
     });
-    if (name === 'decide_home_residency_review') calls++;
+    const mutation = ['decide_home_residency_review', 'update_home_seasonal_item', 'update_home_settings'].includes(name);
+    if (mutation) calls++;
     const data = JSON.parse(sql(`SET ROLE service_role; SELECT public.${name}(${params.join(',')})::text; RESET ROLE;`));
-    if (name === 'decide_home_residency_review' && data.ok && loseReply) {
+    if (mutation && data.ok && loseReply) {
       loseReply = false; throw new Error('Synthetic lost committed reply');
     }
     return { data, error: null };
   } };
-  // Read-only Supabase query adapter for the production IAM router/helper.
+  // Supabase query adapter for production reads and isolated summary preference/audit writes.
   db.from = table => {
     assert(['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride',
-      'HomePostcardCode', 'HomeOwnershipClaim'].includes(table));
-    const filters = []; let columns = '*', order = '', limit = '', single = false;
+      'HomePostcardCode', 'HomeOwnershipClaim', ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark'] : [])].includes(table));
+    const filters = []; let columns = '*', order = '', limit = '', single = false, count = false, head = false, writes = null, conflict = null;
     const column = name => { assert.match(name, /^[a-z_]+$/); return `"${name}"`; };
     const query = {
-      select(value) { columns = value === '*' ? '*' : value.split(',').map(v => column(v.trim())).join(','); return query; },
+      select(value, options = {}) {
+        count = options.count === 'exact'; head = options.head === true;
+        if (table === 'HomeOccupancy' && value.includes('user:user_id')) {
+          columns = `user_id, jsonb_build_object('id',user_id,'profile_picture_url',(SELECT profile_picture_url FROM public."User" WHERE id=user_id)) AS "user"`;
+        } else columns = value === '*' ? '*' : value.split(',').map(v => column(v.trim())).join(',');
+        return query;
+      },
+      insert(value) { assert(summary && ['HomeAuditLog', 'HomeSeasonalChecklistItem'].includes(table)); writes = Array.isArray(value) ? value : [value]; return query; },
+      upsert(value, options) { assert(summary && table === 'HomePreference' && options.onConflict === 'home_id,key'); writes = value; conflict = ['home_id', 'key']; return query; },
+      gt(key, value) { filters.push(`${column(key)}>${q(value)}`); return query; },
+      gte(key, value) { filters.push(`${column(key)}>=${q(value)}`); return query; },
+      not(key, operator, value) { assert(operator === 'is' && value === null); filters.push(`${column(key)} IS NOT NULL`); return query; },
       eq(key, value) { filters.push(`${column(key)}=${q(value)}`); return query; },
-      order(key, options) { order = ` ORDER BY ${column(key)} ${options?.ascending === false ? 'DESC' : 'ASC'}`; return query; },
+      in(key, values) { assert(Array.isArray(values) && values.length); filters.push(`${column(key)} IN (${values.map(q)})`); return query; },
+      range(start, end) { assert(Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start); limit = ` LIMIT ${end-start+1} OFFSET ${start}`; return query; },
+      order(key, options) { order += `${order ? ',' : ' ORDER BY'} ${column(key)} ${options?.ascending === false ? 'DESC' : 'ASC'}`; return query; },
       limit(value) { assert(Number.isInteger(value) && value > 0); limit = ` LIMIT ${value}`; return query; },
       maybeSingle() { single = true; return query; }, single() { single = true; return query; },
       then(resolve, reject) { return Promise.resolve().then(() => {
+        queryCalls.push(table);
+        if (queryFailure?.table === table) { const failure = queryFailure; queryFailure = null;
+          if (failure.reject) throw new Error('Synthetic summary database transport failure');
+          return { data: null, count: null, error: { message: 'Synthetic summary database failure' } }; }
+        if (writes) {
+          assert(writes.length && writes.every(row => row.home_id === home));
+          const keys = Object.keys(writes[0]);
+          const literal = value => value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value);
+          const inserted = JSON.parse(sql(`WITH written AS (INSERT INTO public."${table}" (${keys.map(column)}) VALUES ${writes.map(row => '(' + keys.map(key => literal(row[key])).join(',') + ')').join(',')}${conflict ? ` ON CONFLICT (${conflict.map(column)}) DO UPDATE SET ${keys.filter(key => !conflict.includes(key)).map(key => `${column(key)}=EXCLUDED.${column(key)}`).join(',')}` : ''} RETURNING *) SELECT coalesce(jsonb_agg(to_jsonb(written)),'[]') FROM written;`));
+          if (table === 'HomePreference' && loseReply) { loseReply = false; throw new Error('Synthetic lost committed preference reply'); }
+          return { data: single ? inserted[0] || null : inserted, error: null };
+        }
         const rows = JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT ${columns} FROM public."${table}"${filters.length ? ' WHERE ' + filters.join(' AND ') : ''}${order}${limit}) r;`));
         if (single && rows.length > 1) throw new Error('Fixture expected a single IAM record');
-        return { data: single ? rows[0] || null : rows, error: null };
+        return { data: head ? null : single ? rows[0] || null : rows, ...(count ? { count: rows.length } : {}), error: null };
       }).then(resolve, reject); },
     };
     return query;
@@ -60,10 +87,11 @@ module.exports = function(container) {
     if (parent?.filename.startsWith(path.join(root, 'backend/'))) {
       if (request === '../config/supabaseAdmin') return db;
       if (request === '../services/notificationService') return transport;
-      if (request === '../utils/logger') return { info() {}, warn() {}, error() {} };
+      if (request === '../utils/logger') return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
     }
     if (parent?.filename.endsWith('/routes/homeIam.js') && ['../services/homeAuthorityService', '../services/homeExternalShareService'].includes(request)) return {};
     if (parent?.filename.endsWith('/routes/homeIam.js') && request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+    if (summary && parent?.filename.endsWith('/routes/home.js') && request === '../services/ai/propertyIntelligenceService') return { getProfile: async () => propertyResult };
     if (parent?.filename.endsWith('/routes/home.js')) {
       if (request === '../middleware/verifyToken') return (req, _res, next) => {
         req.user = { id: req.headers['x-fixture-actor'] || actor };
@@ -72,7 +100,7 @@ module.exports = function(container) {
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
       if (request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope'].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(summary ? ['../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
@@ -110,6 +138,8 @@ module.exports = function(container) {
       (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
   }
   return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications,
+    queryCalls, diagnostics, failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },
+    setPropertyResult: value => { propertyResult = value; },
     get calls() { return calls; }, loseNextReply: () => { loseReply = true; },
     failNextNotification: () => { notificationFailure = true; }, restoreModules: () => { Module._load = load; } };
 };

@@ -1,5 +1,17 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+Newest September 11 continuation: [Home summaries and preferences](home-summary-boundary-continuation-2026-09-11.md)
+repairs summary failure/empty states, current permission gates, exact checklist
+changes and an actual HomePreference schema mismatch. Settings/typed preferences/
+audit commit together. Real Chrome r3 (pointer/keyboard and visible switch state), HTTP/SQL r5, eight checklist/seven settings
+lock races, 37-version fresh replay, all 42 SQL/pgTAP, SDK/lint and preserved-data
+upgrades pass. Final color-state browser r3 passes; commit/push and exact-head CI follow. Next reconcile
+bill currency/monthly comparisons/stale cohorts, then native summaries/residency
+and every existing backlog item. PRs #32/#34 remain unfinished drafts; combined
+46-version dependency/replay work remains. All paid services stay one final
+bundle. The report preserves detailed limits, initial findings and evidence.
+
+
 Newest September 11 continuation: [dashboard current access](home-web-dashboard-access-retirement-2026-09-11.md)
 repairs stale private data/Owner/Invite/security controls and open panels. Final
 actual Chrome/production IAM/helper/SQL passes revocation, stale reads, account

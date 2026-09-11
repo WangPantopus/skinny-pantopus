@@ -66,8 +66,7 @@ async function billBenchmarkRefresh() {
     const { data: prefs, error: prefError } = await supabaseAdmin
       .from('HomePreference')
       .select('home_id')
-      .eq('key', 'bill_benchmark_opt_in')
-      .eq('value', 'true')
+      .eq('settings->>bill_benchmark_opt_in', 'true')
       .range(prefOffset, prefOffset + BATCH_SIZE - 1);
 
     if (prefError) {

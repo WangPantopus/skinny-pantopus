@@ -508,18 +508,16 @@ router.get('/:id/settings', verifyToken, async (req, res) => {
         .eq('home_id', homeId),
     ]);
 
+    if ([homeRes, prefRes].some(result => result.status !== 'fulfilled' || !result.value || result.value.error)) {
+      return res.status(503).json({ error: 'Current home settings could not be loaded.' });
+    }
     const home = homeRes.status === 'fulfilled' ? homeRes.value.data : null;
     if (!home) {
       return res.status(404).json({ error: 'Home not found' });
     }
 
     const preferences = prefRes.status === 'fulfilled' ? (prefRes.value.data || []) : [];
-
-    // Transform preferences into a key-value map
-    const prefMap = {};
-    for (const pref of preferences) {
-      prefMap[pref.key] = pref.value;
-    }
+    const prefMap = preferences[0]?.settings || {};
 
     res.json({
       home: {
@@ -609,55 +607,17 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
       homeUpdates.default_guest_pass_hours = hours;
     }
 
-    const promises = [];
-
-    // Update home fields if any
-    if (Object.keys(homeUpdates).length > 0) {
-      homeUpdates.updated_at = new Date().toISOString();
-      promises.push(
-        supabaseAdmin
-          .from('Home')
-          .update(homeUpdates)
-          .eq('id', homeId)
-      );
+    const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+      p_home_id: homeId, p_actor_id: actorId, p_fields: homeUpdates,
+      p_preferences: preferences === undefined ? {} : preferences,
+    }).catch(() => ({ data: null, error: true }));
+    if (error || !data || typeof data.ok !== 'boolean') {
+      return res.status(503).json({ error: 'The settings change could not be confirmed. Reload current settings before trying again.' });
     }
-
-    // Upsert HomePreference rows if provided
-    if (preferences && typeof preferences === 'object') {
-      const prefRows = Object.entries(preferences).map(([key, value]) => ({
-        home_id: homeId,
-        key,
-        value: typeof value === 'string' ? value : JSON.stringify(value),
-        updated_at: new Date().toISOString(),
-      }));
-
-      if (prefRows.length > 0) {
-        promises.push(
-          supabaseAdmin
-            .from('HomePreference')
-            .upsert(prefRows, { onConflict: 'home_id,key' })
-        );
-      }
+    if (!data.ok) {
+      const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
+      return res.status(status).json({ error: status === 400 ? 'Invalid home settings.' : 'Current permission to change these settings could not be confirmed.', code: data.code });
     }
-
-    if (promises.length === 0) {
-      return res.status(400).json({ error: 'No settings to update' });
-    }
-
-    const results = await Promise.allSettled(promises);
-
-    // Check for errors
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.error) {
-        logger.error('Error updating settings', { error: result.value.error.message });
-        return res.status(500).json({ error: 'Failed to update settings' });
-      }
-    }
-
-    await writeAuditLog(homeId, actorId, 'home_settings_updated', 'Home', homeId, {
-      fields_updated: Object.keys(homeUpdates).filter(k => k !== 'updated_at'),
-      preferences_updated: preferences ? Object.keys(preferences) : [],
-    });
 
     res.json({ message: 'Settings updated' });
   } catch (err) {

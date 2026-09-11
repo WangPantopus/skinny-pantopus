@@ -11,6 +11,10 @@ const { getSeasonalContext } = require('./ai/seasonalEngine');
 
 // ── Dimension weights ────────────────────────────────────────────────────────
 
+// This aggregate includes bill/provider, document and household details.
+const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
+function canReadHealthScore(permissions = []) { return HEALTH_READ_PERMISSIONS.every(permission => permissions.includes(permission)); }
+
 const DIMENSIONS = {
   maintenance: 25,
   bills: 20,
@@ -224,7 +228,15 @@ async function computeHealthScore(homeId) {
       .eq('home_id', homeId),
   ]);
 
-  // Extract results (gracefully handle failures)
+  // A failed dimension cannot become a healthy/empty dimension or enter cache.
+  if ([issuesRes, billsRes, checklistRes, emergencyRes, membersRes, documentsRes]
+    .some(result => result.status !== 'fulfilled' || !result.value || result.value.error)) {
+    throw Object.assign(new Error('Current home health could not be computed. Retry after the data is available.'), {
+      code: 'HOME_HEALTH_UNAVAILABLE', statusCode: 503,
+    });
+  }
+
+  // Extract successful results
   const extract = (r) => (r.status === 'fulfilled' ? r.value : null);
   const extractData = (r) => extract(r)?.data || [];
   const extractCount = (r) => extract(r)?.count ?? 0;
@@ -288,4 +300,4 @@ async function getHealthScore(homeId, { force = false } = {}) {
   return result;
 }
 
-module.exports = { computeHealthScore, getHealthScore, invalidateHealthScoreCache };
+module.exports = { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadHealthScore };

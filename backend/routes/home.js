@@ -4956,7 +4956,7 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
 
     // Optionally embed health score to avoid a second round-trip
     let healthScore = undefined;
-    if (req.query.include_health_score === 'true') {
+    if (req.query.include_health_score === 'true' && canReadHealthScore(myAccess.permissions)) {
       try {
         healthScore = await getHealthScore(homeId);
       } catch (err) {
@@ -5942,7 +5942,7 @@ router.get('/:id/activity', verifyToken, async (req, res) => {
 
 // ============ HOME INTELLIGENCE ENDPOINTS ============
 
-const { computeHealthScore, getHealthScore, invalidateHealthScoreCache } = require('../services/homeHealthService');
+const { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadHealthScore } = require('../services/homeHealthService');
 const { getOrCreateChecklist, updateChecklistItem, getChecklistHistory } = require('../services/seasonalChecklistService');
 const { getSeasonalContext, SEASONS } = require('../services/ai/seasonalEngine');
 const { getProfile: getPropertyProfile } = require('../services/ai/propertyIntelligenceService');
@@ -5959,13 +5959,16 @@ router.get('/:id/health-score', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
+    if (!canReadHealthScore(access.permissions)) return res.status(403).json({
+      error: 'Home health requires access to the household records used in this score.', code: 'HOME_HEALTH_PERMISSION_REQUIRED',
+    });
     const force = req.query.force === 'true';
     const result = await getHealthScore(homeId, { force });
     res.set('Cache-Control', force ? 'no-store' : 'private, max-age=300');
     res.json(result);
   } catch (err) {
     logger.error('Health score error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to compute health score' });
+    res.status(err.statusCode || 503).json({ error: 'Current home health could not be computed.', code: 'HOME_HEALTH_UNAVAILABLE' });
   }
 });
 
@@ -6068,13 +6071,15 @@ router.patch('/:id/seasonal-checklist/:itemId', verifyToken, validate(updateChec
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to edit this home' });
 
-    const updated = await updateChecklistItem(itemId, req.body.status, userId);
+    const updated = await updateChecklistItem(homeId, itemId, req.body.status, userId);
+    invalidateHealthScoreCache(homeId);
     if (!updated) return res.status(404).json({ error: 'Checklist item not found' });
 
     res.json(updated);
   } catch (err) {
     logger.error('Checklist item update error', { error: err.message, itemId: req.params.itemId });
-    res.status(500).json({ error: 'Failed to update checklist item' });
+    res.status(err.statusCode || 503).json({ error: err.message || 'The checklist change could not be confirmed.',
+      code: err.code || 'HOME_CHECKLIST_UNAVAILABLE' });
   }
 });
 
@@ -6128,12 +6133,13 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
 
     // Fetch neighborhood benchmarks via home geohash
     let benchmarks = {};
-    const { data: home } = await supabaseAdmin
+    const { data: home, error: homeReadError } = await supabaseAdmin
       .from('Home')
       .select('location')
       .eq('id', homeId)
       .maybeSingle();
 
+    if (homeReadError || !home) return res.status(503).json({ error: 'Current bill comparison context could not be loaded.' });
     if (home?.location) {
       const parsed = parsePostGISPoint(home.location);
       if (parsed) {
@@ -6141,18 +6147,19 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
 
         // Fetch benchmarks with household_count >= 3 (the write floor).
         // Rows with 3-9 produce an insufficient_data flag; >= 10 are shown.
-        const { data: benchmarkRows } = await supabaseAdmin
+        const { data: benchmarkRows, error: benchmarkError } = await supabaseAdmin
           .from('BillBenchmark')
           .select('bill_type, month, year, avg_amount_cents, household_count')
           .eq('geohash', hash)
           .gte('household_count', 3);
 
+        if (benchmarkError) return res.status(503).json({ error: 'Current bill comparisons could not be loaded.' });
         for (const row of (benchmarkRows || [])) {
           const monthKey = `${row.year}-${String(row.month).padStart(2, '0')}`;
 
           if (row.household_count >= 10) {
             // Full benchmark — safe to display aggregates
-            if (!benchmarks[row.bill_type]) {
+            if (!benchmarks[row.bill_type] || benchmarks[row.bill_type].insufficient_data) {
               benchmarks[row.bill_type] = { months: [], avg_amounts: [], household_count: row.household_count };
             }
             benchmarks[row.bill_type].months.push(monthKey);
@@ -6171,14 +6178,14 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
     }
 
     // Fetch opt-in status for this home
-    const { data: optInPref } = await supabaseAdmin
+    const { data: optInPref, error: preferenceError } = await supabaseAdmin
       .from('HomePreference')
-      .select('value')
+      .select('settings')
       .eq('home_id', homeId)
-      .eq('key', 'bill_benchmark_opt_in')
       .maybeSingle();
 
-    const billBenchmarkOptIn = optInPref?.value === 'true';
+    if (preferenceError) return res.status(503).json({ error: 'Current bill sharing preference could not be confirmed.' });
+    const billBenchmarkOptIn = optInPref?.settings?.bill_benchmark_opt_in === true;
 
     res.json({ bills_by_type: billsByType, benchmarks, bill_benchmark_opt_in: billBenchmarkOptIn });
   } catch (err) {
@@ -6196,7 +6203,7 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
+    const access = await checkHomePermission(homeId, userId, 'members.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -6216,6 +6223,9 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
         .eq('home_id', homeId),
     ]);
 
+    if ([dataRes, countRes].some(result => result.status !== 'fulfilled' || !result.value || result.value.error)) {
+      return res.status(503).json({ error: 'Current home activity could not be loaded.', code: 'HOME_TIMELINE_UNAVAILABLE' });
+    }
     const items = (dataRes.status === 'fulfilled' ? dataRes.value.data : null) || [];
     const total = (countRes.status === 'fulfilled' ? countRes.value.count : null) ?? 0;
 
@@ -6245,7 +6255,10 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
 
     const { profile, source } = await getPropertyProfile(homeId);
 
-    if (!profile || source === 'error') {
+    if (source === 'error') return res.status(503).json({
+      error: 'Current property information could not be loaded.', code: 'HOME_PROPERTY_UNAVAILABLE',
+    });
+    if (!profile) {
       return res.json({
         estimated_value: null,
         value_range_low: null,

@@ -14,6 +14,39 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home summary and preference workflows — September 11
+
+The [summary report](home-summary-boundary-continuation-2026-09-11.md) records
+retryable summary errors, current permission/action gates, exact Home checklist
+transactions and atomic Home settings/preferences/audit. Real HTTP/SQL found and
+repaired the HomePreference key/value schema mismatch without changing fixed
+preferences or inventing opt-ins. First checklist generation, lost replies,
+current recovery, mixed cohorts and typed settings pass. Eight checklist and
+seven settings observed lock races pass. Final source is **37 Home / 46 combined**.
+Pinned fresh replay passes 37 versions, all 42 SQL/pgTAP contracts, function lint
+and six SDK cases. Two populated copies preserve 15,119 and 15,120 original rows
+across 365 tables; the report explains the additive-column comparison. Final
+backend/web/types/privacy pass, with existing skips and warning limits retained.
+Dashboard and full residency regressions pass (8 POSTs/4 receipts for residency).
+Actual summary Chrome r3 passes four PATCHes/zero page errors, pointer/keyboard,
+error/recovery, permission and narrow states. Visual review repaired desktop
+floating-button overlap and limited-reader layout. Final distinct switch on/off colors pass and the final screens were reviewed.
+
+**Next:** push this milestone and verify its exact-head CI; then reconcile
+bill comparison currency/monthly aggregation/period alignment, stale cohorts
+after opt-outs/deletions and derived-row version/rebuild. This is a confirmed
+source finding, not completed financial acceptance. Continue native summary and
+residency recovery, submission/cold-start/resubmission, ownership/lease/resources,
+then the entire ordered backlog below. General settings UI, issue/package writes,
+dashboard entity errors and remaining device/accessibility/provider limits are
+explicit in the report. Keep all paid services in one final launch bundle.
+
+PR #32 remains draft (preceding `d681da444` all required CI now passes). #34 stays
+draft `e9ef2decb`, prior CI green but conflicted/unfinished. Combined migration
+dependency/replay reconciliation remains. Fresh replay projects stopped with
+backups; owned web/Gig DB and Docker engine remain. Owner files/devices/data are
+untouched. No new native/physical/provider release acceptance is claimed here.
+
 ### Browser dashboard current access — September 11
 
 The [dashboard report](home-web-dashboard-access-retirement-2026-09-11.md) records

@@ -53,6 +53,7 @@ import SeasonalChecklist from '@/components/home/SeasonalChecklist';
 import PropertyValueCard from '@/components/home/PropertyValueCard';
 import BillTrendChart from '@/components/home/BillTrendChart';
 import HomeTimeline from '@/components/home/HomeTimeline';
+import HomeSummaryBoundary from '@/components/home/HomeSummaryBoundary';
 
 type HighLevelTab = 'dashboard' | 'share' | 'security' | 'settings';
 
@@ -136,7 +137,9 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
     setTasks, setIssues, setBills, setPackages, setMembers, setSecrets,
   } = data;
 
-  const intelligence = useHomeIntelligence(homeId);
+  const { reload: reloadPermissions } = useHomePermissions();
+  const reloadAccess = useCallback(() => { void Promise.all([refresh(), reloadPermissions()]); }, [refresh, reloadPermissions]);
+  const intelligence = useHomeIntelligence(homeId, can, reloadAccess);
   const [selectedBillType, setSelectedBillType] = useState<string | null>(null);
 
   // Show toast when the season transitions
@@ -366,7 +369,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-4 py-6 pb-32 md:pr-24">
       {/* Slide-over Panels */}
       <TaskSlidePanel
         open={taskPanel.open}
@@ -498,11 +501,11 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
       {tab === 'dashboard' && (
         <UnifiedFAB
           contextActions={[
-            { key: 'add-task', icon: QuickCreateIcons.task, label: 'Add Task', iconColor: 'text-emerald-600', onAction: () => openTaskPanel() },
-            { key: 'report-issue', icon: QuickCreateIcons.issue, label: 'Report Issue', iconColor: 'text-amber-600', onAction: () => openIssuePanel() },
-            { key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() },
-            { key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() },
-            { key: 'invite-member', icon: QuickCreateIcons.member, label: 'Invite Member', iconColor: 'text-orange-600', onAction: openInviteModal },
+            ...(can('tasks.edit') || can('tasks.manage') ? [{ key: 'add-task', icon: QuickCreateIcons.task, label: 'Add Task', iconColor: 'text-emerald-600', onAction: () => openTaskPanel() }] : []),
+            ...(can('maintenance.edit') || can('maintenance.manage') ? [{ key: 'report-issue', icon: QuickCreateIcons.issue, label: 'Report Issue', iconColor: 'text-amber-600', onAction: () => openIssuePanel() }] : []),
+            ...(can('finance.manage') ? [{ key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() }] : []),
+            ...(can('packages.edit') || can('packages.manage') ? [{ key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() }] : []),
+            ...(can('members.manage') ? [{ key: 'invite-member', icon: QuickCreateIcons.member, label: 'Invite Member', iconColor: 'text-orange-600', onAction: openInviteModal }] : []),
             { key: 'post-home-task', icon: QuickCreateIcons.gig, label: 'Post Home Task', iconColor: 'text-primary-600', onAction: () => router.push(`/app/gigs/new?home_id=${homeId}`) },
           ]}
         />
@@ -721,53 +724,44 @@ function DashboardTab({
         onNavigateTab={(t) => onExpandCard(t)}
       />
 
-      {/* Home Intelligence Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col items-center">
-          <HealthScoreRing
-            score={intelligence.healthScore?.score ?? 0}
-            topIssue={intelligence.healthScore?.topIssue ?? null}
-            topAction={intelligence.healthScore?.topAction ?? null}
-            loading={intelligence.healthLoading}
-            isNewHome={!intelligence.healthLoading && intelligence.healthScore == null}
-            homeId={homeId}
-            onActionPress={(route) => router.push(route)}
-          />
-        </div>
-        <SeasonalChecklist
-          checklist={intelligence.checklist}
-          loading={intelligence.checklistLoading}
-          onComplete={(itemId) => intelligence.completeChecklistItem(itemId)}
-          onSkip={(itemId) => intelligence.skipChecklistItem(itemId)}
-          onHireHelp={(item) =>
-            router.push(`/app/gigs/new?initialText=${encodeURIComponent(item.gig_title_suggestion || item.title)}`)
-          }
-          onGenerate={() => intelligence.generateChecklist()}
-        />
+      {/* Home summaries keep unavailable reads separate from valid empty data. */}
+      <div className={`grid grid-cols-1 ${intelligence.canReadHealth ? 'md:grid-cols-2' : ''} gap-4`}>
+        {intelligence.canReadHealth && <HomeSummaryBoundary title="Home health" error={intelligence.errors.health} loading={intelligence.healthLoading} onRetry={() => void intelligence.reloadSummary('health')}>
+          <div className="flex flex-col items-center">
+            <HealthScoreRing score={intelligence.healthScore?.score ?? 0} topIssue={intelligence.healthScore?.topIssue ?? null}
+              topAction={intelligence.healthScore?.topAction ?? null} loading={intelligence.healthLoading}
+              isNewHome={false} homeId={homeId}
+              onActionPress={(route) => {
+                const prefix = `/homes/${homeId}/`;
+                const target = route.startsWith(prefix) ? route.slice(prefix.length) : '';
+                const tab = ({ maintenance: 'issues', bills: 'bills', emergency: 'emergency', members: 'members', documents: 'documents', dashboard: 'dashboard' } as Record<string, string>)[target];
+                if (tab) router.push(`/app/homes/${homeId}/dashboard?tab=${tab}`);
+              }} />
+          </div>
+        </HomeSummaryBoundary>}
+        <HomeSummaryBoundary title="Seasonal checklist" error={intelligence.errors.checklist} loading={intelligence.checklistLoading} onRetry={() => void intelligence.reloadSummary('checklist')}>
+          <SeasonalChecklist checklist={intelligence.checklist} loading={intelligence.checklistLoading}
+            canEdit={can('home.edit')} busy={intelligence.checklistBusy}
+            onComplete={(itemId) => void intelligence.completeChecklistItem(itemId)}
+            onSkip={(itemId) => void intelligence.skipChecklistItem(itemId)}
+            onHireHelp={(item) => router.push(`/app/gigs/new?initialText=${encodeURIComponent(item.gig_title_suggestion || item.title)}`)}
+            onGenerate={() => void intelligence.generateChecklist()} />
+        </HomeSummaryBoundary>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PropertyValueCard
-          data={intelligence.propertyValue}
-          loading={intelligence.propertyValueLoading}
-        />
-        <BillTrendChart
-          data={intelligence.billTrends}
-          selectedType={selectedBillType}
-          onTypeChange={onBillTypeChange}
-          loading={intelligence.billTrendsLoading}
-          onAddBill={onAddBill}
-          onOptInChange={(optedIn) => intelligence.setBillBenchmarkOptIn(optedIn)}
-        />
+      <div className={`grid grid-cols-1 ${intelligence.canReadBills ? 'md:grid-cols-2' : ''} gap-4`}>
+        <HomeSummaryBoundary title="Property information" error={intelligence.errors.property} loading={intelligence.propertyValueLoading} onRetry={() => void intelligence.reloadSummary('property')}>
+          <PropertyValueCard data={intelligence.propertyValue} loading={intelligence.propertyValueLoading} />
+        </HomeSummaryBoundary>
+        {intelligence.canReadBills && <HomeSummaryBoundary title="Bill trends" error={intelligence.errors.bills} loading={intelligence.billTrendsLoading} onRetry={() => void intelligence.reloadSummary('bills')}>
+          <BillTrendChart data={intelligence.billTrends} selectedType={selectedBillType} onTypeChange={onBillTypeChange}
+            loading={intelligence.billTrendsLoading} onAddBill={can('finance.manage') ? onAddBill : undefined}
+            savingPreference={intelligence.benchmarkBusy} onOptInChange={can('home.edit') ? (optedIn) => void intelligence.setBillBenchmarkOptIn(optedIn) : undefined} />
+        </HomeSummaryBoundary>}
       </div>
-
-      {/* Timeline */}
-      <HomeTimeline
-        items={intelligence.timeline}
-        loading={intelligence.timelineLoading}
-        hasMore={intelligence.timelineHasMore}
-        onLoadMore={intelligence.loadMoreTimeline}
-      />
+      {intelligence.canReadTimeline && <HomeSummaryBoundary title="Home activity" error={intelligence.errors.timeline} loading={intelligence.timelineLoading} onRetry={() => void intelligence.reloadSummary('timeline')}>
+        <HomeTimeline items={intelligence.timeline} loading={intelligence.timelineLoading}
+          hasMore={intelligence.timelineHasMore} onLoadMore={() => void intelligence.loadMoreTimeline()} />
+      </HomeSummaryBoundary>}
 
       {/* Card grid */}
       {!isEmpty ? (
@@ -818,16 +812,15 @@ function DashboardTab({
           <div className="mb-3 flex justify-center"><Home className="w-12 h-12 text-app-muted" /></div>
           <div className="text-lg font-semibold text-app mb-1">Welcome to your home dashboard!</div>
           <p className="text-sm text-app-secondary max-w-sm mx-auto">
-            This is your household command center. Start by adding tasks, tracking bills, or inviting household
-            members to collaborate.
+            Your household’s shared details and activity appear here.
           </p>
           <div className="flex items-center justify-center gap-3 mt-5 flex-wrap">
             <ActionPill icon={<Building2 className="w-4 h-4" />} label="Property Details" onClick={() => router.push(`/app/homes/${homeId}/property-details`)} />
-            <ActionPill icon={<ClipboardList className="w-4 h-4" />} label="Add Task" onClick={onAddTask} />
-            <ActionPill icon={<AlertTriangle className="w-4 h-4" />} label="Report Issue" onClick={onAddIssue} />
-            <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />
-            <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />
-            <ActionPill icon={<Users className="w-4 h-4" />} label="Invite Member" onClick={onInviteMember} />
+            {(can('tasks.edit') || can('tasks.manage')) && <ActionPill icon={<ClipboardList className="w-4 h-4" />} label="Add Task" onClick={onAddTask} />}
+            {(can('maintenance.edit') || can('maintenance.manage')) && <ActionPill icon={<AlertTriangle className="w-4 h-4" />} label="Report Issue" onClick={onAddIssue} />}
+            {(can('finance.manage')) && <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />}
+            {(can('packages.edit') || can('packages.manage')) && <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />}
+            {(can('members.manage')) && <ActionPill icon={<Users className="w-4 h-4" />} label="Invite Member" onClick={onInviteMember} />}
             <ActionPill icon={<Hammer className="w-4 h-4" />} label="Post Home Gig" onClick={() => router.push(`/app/gigs/new?home_id=${homeId}`)} />
           </div>
         </div>

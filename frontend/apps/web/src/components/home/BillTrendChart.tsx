@@ -10,6 +10,7 @@ interface BillTrendChartProps {
   selectedType: string | null;
   onTypeChange: (type: string) => void;
   loading: boolean;
+  savingPreference?: boolean;
   /** Called when user clicks "Add a bill" in the empty state. */
   onAddBill?: () => void;
   /** Called when the user toggles the benchmark opt-in switch. */
@@ -49,6 +50,7 @@ export default function BillTrendChart({
   selectedType,
   onTypeChange,
   loading,
+  savingPreference = false,
   onAddBill,
   onOptInChange,
 }: BillTrendChartProps) {
@@ -78,6 +80,31 @@ export default function BillTrendChart({
     );
   }
 
+  const sharingControl = data ? <>
+      {savingPreference && <p role="status" className="mt-2 text-sm text-app-text-secondary">Saving sharing preference…</p>}
+      {onOptInChange ? (
+        <div className="mt-3 pt-3 border-t border-app-border flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-app-text">Share bill data anonymously</p>
+            <p className="text-[11px] text-app-text-secondary leading-snug mt-0.5">
+              Help neighbors compare costs. Only averages are shared &mdash; never individual amounts.
+            </p>
+          </div>
+          <label className="relative inline-flex cursor-pointer items-center flex-shrink-0">
+            <input
+              type="checkbox"
+              aria-label="Share bill data anonymously"
+              className="peer sr-only"
+              disabled={savingPreference}
+              checked={data?.bill_benchmark_opt_in === true}
+              onChange={(e) => onOptInChange(e.target.checked)}
+            />
+            <div className="peer-focus-visible:ring-2 peer-focus-visible:ring-primary-600 peer-focus-visible:ring-offset-2 h-5 w-9 rounded-full bg-gray-300 peer-checked:bg-primary-600 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:bg-gray-600" />
+          </label>
+        </div>
+      ) : <p className="mt-3 text-xs text-app-text-secondary">Bill sharing is {data?.bill_benchmark_opt_in ? 'on' : 'off'}.</p>}
+  </> : null;
+
   // ── Empty state ─────────────────────────────────────────────
   const types = data ? Object.keys(data.bills_by_type) : [];
   if (!data || types.length === 0) {
@@ -102,6 +129,7 @@ export default function BillTrendChart({
             </button>
           )}
         </div>
+        {sharingControl}
       </div>
     );
   }
@@ -250,26 +278,7 @@ export default function BillTrendChart({
         </div>
       )}
 
-      {/* Opt-in toggle */}
-      {onOptInChange && (
-        <div className="mt-3 pt-3 border-t border-app-border flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-app-text">Share bill data anonymously</p>
-            <p className="text-[11px] text-app-text-secondary leading-snug mt-0.5">
-              Help neighbors compare costs. Only averages are shared &mdash; never individual amounts.
-            </p>
-          </div>
-          <label className="relative inline-flex cursor-pointer items-center flex-shrink-0">
-            <input
-              type="checkbox"
-              className="peer sr-only"
-              checked={data.bill_benchmark_opt_in}
-              onChange={(e) => onOptInChange(e.target.checked)}
-            />
-            <div className="h-5 w-9 rounded-full bg-gray-300 peer-checked:bg-primary transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:bg-gray-600" />
-          </label>
-        </div>
-      )}
+      {sharingControl}
     </div>
   );
 }

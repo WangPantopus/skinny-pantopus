@@ -363,7 +363,7 @@ export default function MembersSecurityTab({
       </div>
 
       {/* ===== Section 3: Audit Log ===== */}
-      {can('security.manage') && (
+      {can('members.manage') && (
         <div>
           <button
             onClick={handleShowAudit}

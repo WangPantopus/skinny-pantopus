@@ -2,323 +2,166 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
-import type {
-  HomeHealthScore,
-  SeasonalChecklist,
-  BillTrendData,
-  PropertyValueData,
-  HomeTimelineItem,
-} from '@pantopus/types';
+import type { HomeHealthScore, SeasonalChecklist, BillTrendData, PropertyValueData, HomeTimelineItem } from '@pantopus/types';
 
-const isDev = process.env.NODE_ENV === 'development';
+type SummaryKey = 'health' | 'checklist' | 'bills' | 'property' | 'timeline';
+const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
 
-// ── Health score cache (5-minute TTL, shared across instances) ──
-const HEALTH_CACHE_TTL = 5 * 60 * 1000;
-const healthCache: Record<string, { data: HomeHealthScore; ts: number }> = {};
-
-export function useHomeIntelligence(homeId: string | undefined) {
-  // ── Health score ──────────────────────────────────────────────
-  const [healthScore, setHealthScore] = useState<HomeHealthScore | null>(null);
-  const [healthLoading, setHealthLoading] = useState(true);
-
-  // ── Seasonal checklist ────────────────────────────────────────
-  const [checklist, setChecklist] = useState<SeasonalChecklist | null>(null);
-  const [checklistLoading, setChecklistLoading] = useState(true);
-
-  // ── Bill trends (deferred — fetched on demand) ────────────────
-  const [billTrends, setBillTrends] = useState<BillTrendData | null>(null);
-  const [billTrendsLoading, setBillTrendsLoading] = useState(true);
-  const billTrendsFetchedRef = useRef(false);
-
-  // ── Timeline (deferred — fetched on demand) ───────────────────
-  const [timeline, setTimeline] = useState<HomeTimelineItem[]>([]);
-  const [timelinePage, setTimelinePage] = useState(1);
-  const [timelineHasMore, setTimelineHasMore] = useState(false);
-  const [timelineLoading, setTimelineLoading] = useState(true);
-  const timelineFetchedRef = useRef(false);
-
-  // ── Property value (deferred — fetched on demand) ─────────────
-  const [propertyValue, setPropertyValue] = useState<PropertyValueData | null>(null);
-  const [propertyValueLoading, setPropertyValueLoading] = useState(true);
-  const propertyValueFetchedRef = useRef(false);
-
-  // ── Season transition detection ──────────────────────────────
-  const lastSeasonKeyRef = useRef<string | null>(null);
-  const [seasonTransition, setSeasonTransition] = useState<{
-    from: string;
-    toKey: string;
-    toLabel: string;
-  } | null>(null);
-
-  // ── Cancelled flag for cleanup ────────────────────────────────
-  const cancelledRef = useRef(false);
-
-  // ── Deferred loading timer refs ─────────────────────────────
-  const deferredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Individual fetchers ───────────────────────────────────────
-
-  const fetchHealthScore = useCallback(
-    async (cancelled: { current: boolean }, silent = false, opts?: { forceServer?: boolean }) => {
-      if (!homeId) return;
-
-      if (!opts?.forceServer) {
-        const cached = healthCache[homeId];
-        if (cached && Date.now() - cached.ts < HEALTH_CACHE_TTL) {
-          if (!cancelled.current) {
-            setHealthScore(cached.data);
-            setHealthLoading(false);
-          }
-          return;
-        }
-      }
-
-      if (!silent) setHealthLoading(true);
-      try {
-        const res = await api.homeProfile.getHomeHealthScore(homeId, opts?.forceServer ? { force: true } : undefined);
-        if (!cancelled.current) {
-          setHealthScore(res ?? null);
-          if (res) healthCache[homeId] = { data: res, ts: Date.now() };
-        }
-      } catch (err) {
-        if (isDev) console.warn('Failed to fetch health score:', err);
-      } finally {
-        if (!cancelled.current) setHealthLoading(false);
-      }
-    },
-    [homeId],
-  );
-
-  const fetchChecklist = useCallback(async (cancelled: { current: boolean }, silent = false) => {
-    if (!homeId) return;
-    if (!silent) setChecklistLoading(true);
-    try {
-      const res = await api.homeProfile.getSeasonalChecklist(homeId);
-      if (!cancelled.current) {
-        setChecklist(res ?? null);
-        // Detect season transition
-        if (res?.season?.key) {
-          const prevKey = lastSeasonKeyRef.current;
-          if (prevKey && prevKey !== res.season.key) {
-            setSeasonTransition({
-              from: prevKey,
-              toKey: res.season.key,
-              toLabel: res.season.label,
-            });
-          }
-          lastSeasonKeyRef.current = res.season.key;
-        }
-      }
-    } catch (err) {
-      if (isDev) console.warn('Failed to fetch checklist:', err);
-    } finally {
-      if (!cancelled.current) setChecklistLoading(false);
-    }
-  }, [homeId]);
-
-  const fetchBillTrends = useCallback(async (cancelled: { current: boolean }, silent = false) => {
-    if (!homeId) return;
-    if (!silent) setBillTrendsLoading(true);
-    try {
-      const res = await api.homeProfile.getBillTrends(homeId);
-      if (!cancelled.current) setBillTrends(res ?? null);
-    } catch (err) {
-      if (isDev) console.warn('Failed to fetch bill trends:', err);
-    } finally {
-      if (!cancelled.current) setBillTrendsLoading(false);
-      billTrendsFetchedRef.current = true;
-    }
-  }, [homeId]);
-
-  const fetchTimeline = useCallback(async (cancelled: { current: boolean }, page = 1, append = false, silent = false) => {
-    if (!homeId) return;
-    if (!silent) setTimelineLoading(true);
-    try {
-      const res = await api.homeProfile.getHomeTimeline(homeId, page, 20);
-      if (!cancelled.current) {
-        const items = res?.items ?? [];
-        setTimeline((prev) => append ? [...prev, ...items] : items);
-        setTimelinePage(page);
-        setTimelineHasMore(res?.hasMore ?? false);
-      }
-    } catch (err) {
-      if (isDev) console.warn('Failed to fetch timeline:', err);
-    } finally {
-      if (!cancelled.current) setTimelineLoading(false);
-      timelineFetchedRef.current = true;
-    }
-  }, [homeId]);
-
-  const fetchPropertyValue = useCallback(async (cancelled: { current: boolean }, silent = false) => {
-    if (!homeId) return;
-    if (!silent) setPropertyValueLoading(true);
-    try {
-      const res = await api.homeProfile.getPropertyValue(homeId);
-      if (!cancelled.current) setPropertyValue(res ?? null);
-    } catch (err) {
-      if (isDev) console.warn('Failed to fetch property value:', err);
-    } finally {
-      if (!cancelled.current) setPropertyValueLoading(false);
-      propertyValueFetchedRef.current = true;
-    }
-  }, [homeId]);
-
-  // ── Fetch critical data on mount (health score + checklist) ───
-  // Property value, bill trends, and timeline are deferred
-
+/** A read belongs to one mounted Home/account and cannot outlive a newer read. */
+function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>, name: string, onDenied: () => void) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const lifetime = useRef({ retired: true });
+  const revision = useRef(0);
   useEffect(() => {
-    cancelledRef.current = false;
-    billTrendsFetchedRef.current = false;
-    timelineFetchedRef.current = false;
-    propertyValueFetchedRef.current = false;
+    const opening = { retired: false }; lifetime.current = opening;
+    return () => { opening.retired = true; revision.current++; };
+  }, [homeId]);
+  const capture = useCallback(() => {
+    const opening = lifetime.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    return () => !opening.retired && opening === lifetime.current && !!homeId && !!token
+      && token === api.getAuthToken() && origin === api.getApiBaseUrl()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) && document.visibilityState !== 'hidden';
+  }, [homeId]);
+  const load = useCallback(async (read = request) => {
+    const current = capture(), sequence = ++revision.current;
+    if (!current()) return;
+    const active = () => current() && sequence === revision.current;
+    setLoading(true); setError(null);
+    try {
+      const result = await read();
+      if (active()) setData(result);
+    } catch (failure) {
+      if (active()) {
+        setData(null); setError(`${name} could not be loaded. Retry to check current information.`);
+        if ((failure as { statusCode?: number })?.statusCode === 403) onDenied();
+      }
+    } finally { if (active()) setLoading(false); }
+  }, [request, capture, name, onDenied]);
+  const failAction = useCallback((message: string) => { revision.current++; setData(null); setLoading(false); setError(message); }, []);
+  return { data, loading, error, load, capture, failAction };
+}
 
-    if (homeId) {
-      delete healthCache[homeId];
-      Promise.allSettled([
-        fetchHealthScore(cancelledRef, false, { forceServer: true }),
-        fetchChecklist(cancelledRef),
-      ]);
-    }
+export function useHomeIntelligence(homeId: string | undefined, can: (permission: string) => boolean, onDenied: () => void) {
+  const readHealth = useCallback(async () => {
+    const result = await api.homeProfile.getHomeHealthScore(homeId!, { force: true });
+    if (!result || !Number.isFinite(result.score) || !result.breakdown) throw new Error('Invalid health response');
+    return result;
+  }, [homeId]);
+  const readChecklist = useCallback(async () => {
+    const result = await api.homeProfile.getSeasonalChecklist(homeId!);
+    if (!result || !Array.isArray(result.items) || !result.season?.key || !result.progress) throw new Error('Invalid checklist response');
+    return result;
+  }, [homeId]);
+  const readBills = useCallback(async () => {
+    const result = await api.homeProfile.getBillTrends(homeId!);
+    if (!result || !result.bills_by_type || !result.benchmarks || typeof result.bill_benchmark_opt_in !== 'boolean') throw new Error('Invalid bill response');
+    return result;
+  }, [homeId]);
+  const readProperty = useCallback(async () => {
+    const result = await api.homeProfile.getPropertyValue(homeId!);
+    if (!result || !Object.hasOwn(result, 'estimated_value') || result.source === 'error') throw new Error('Invalid property response');
+    return result;
+  }, [homeId]);
+  const readTimelinePage = useCallback(async (page = 1) => {
+    const result = await api.homeProfile.getHomeTimeline(homeId!, page, 20);
+    if (!result || !Array.isArray(result.items) || typeof result.hasMore !== 'boolean') throw new Error('Invalid timeline response');
+    return { items: result.items, page, hasMore: result.hasMore };
+  }, [homeId]);
+  const health = useSummaryRead<HomeHealthScore>(homeId, readHealth, 'Home health', onDenied);
+  const checklist = useSummaryRead<SeasonalChecklist>(homeId, readChecklist, 'Seasonal checklist', onDenied);
+  const bills = useSummaryRead<BillTrendData>(homeId, readBills, 'Bill trends', onDenied);
+  const property = useSummaryRead<PropertyValueData>(homeId, readProperty, 'Property information', onDenied);
+  const timeline = useSummaryRead<{ items: HomeTimelineItem[]; page: number; hasMore: boolean }>(homeId, readTimelinePage, 'Home activity', onDenied);
+  const { load: loadHealth } = health, { load: loadChecklist } = checklist;
+  const { load: loadBills } = bills, { load: loadProperty } = property, { load: loadTimeline } = timeline;
+  const canReadHealth = HEALTH_READ_PERMISSIONS.every(can), canReadBills = can('finance.view'), canReadTimeline = can('members.manage');
+  const deferred = useRef({ bills: false, property: false, timeline: false });
+  const actionBusy = useRef({ checklist: false, bills: false });
+  const [checklistBusy, setChecklistBusy] = useState(false), [benchmarkBusy, setBenchmarkBusy] = useState(false);
+  const lastSeason = useRef<string | null>(null);
+  const [seasonTransition, setSeasonTransition] = useState<{ from: string; toKey: string; toLabel: string } | null>(null);
 
-    return () => {
-      cancelledRef.current = true;
-      if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
-    };
-  }, [homeId, fetchHealthScore, fetchChecklist]);
-
-  // ── Deferred fetchers (called by components when visible) ─────
-
+  useEffect(() => { deferred.current = { bills: false, property: false, timeline: false }; }, [homeId]);
+  useEffect(() => { if (canReadHealth) void loadHealth(); void loadChecklist(); }, [canReadHealth, loadHealth, loadChecklist]);
+  useEffect(() => {
+    const season = checklist.data?.season;
+    if (!season) return;
+    if (lastSeason.current && lastSeason.current !== season.key) setSeasonTransition({ from: lastSeason.current, toKey: season.key, toLabel: season.label });
+    lastSeason.current = season.key;
+  }, [checklist.data]);
   const ensureBillTrends = useCallback(() => {
-    if (!billTrendsFetchedRef.current && homeId) {
-      billTrendsFetchedRef.current = true;
-      // Delay 500ms so below-fold fetches don't compete with critical data
-      deferredTimerRef.current = setTimeout(() => {
-        if (!cancelledRef.current) fetchBillTrends(cancelledRef);
-      }, 500);
-    }
-  }, [homeId, fetchBillTrends]);
-
+    if (canReadBills && !deferred.current.bills) { deferred.current.bills = true; void loadBills(); }
+  }, [canReadBills, loadBills]);
   const ensurePropertyValue = useCallback(() => {
-    if (!propertyValueFetchedRef.current && homeId) {
-      propertyValueFetchedRef.current = true;
-      // Delay 500ms so below-fold fetches don't compete with critical data
-      setTimeout(() => {
-        if (!cancelledRef.current) fetchPropertyValue(cancelledRef);
-      }, 500);
-    }
-  }, [homeId, fetchPropertyValue]);
-
+    if (!deferred.current.property) { deferred.current.property = true; void loadProperty(); }
+  }, [loadProperty]);
   const ensureTimeline = useCallback(() => {
-    if (!timelineFetchedRef.current && homeId) {
-      timelineFetchedRef.current = true;
-      fetchTimeline(cancelledRef, 1, false);
-    }
-  }, [homeId, fetchTimeline]);
-
-  // ── Actions ───────────────────────────────────────────────────
-
-  const invalidateHealthCache = useCallback(() => {
-    if (homeId) delete healthCache[homeId];
-  }, [homeId]);
-
-  const completeChecklistItem = useCallback(async (itemId: string) => {
-    if (!homeId) return;
+    if (canReadTimeline && !deferred.current.timeline) { deferred.current.timeline = true; void loadTimeline(); }
+  }, [canReadTimeline, loadTimeline]);
+  const reloadSummary = useCallback(async (key: SummaryKey) => {
+    if (key === 'health' && canReadHealth) await loadHealth();
+    if (key === 'checklist') await loadChecklist();
+    if (key === 'bills' && canReadBills) await loadBills();
+    if (key === 'property') await loadProperty();
+    if (key === 'timeline' && canReadTimeline) await loadTimeline();
+  }, [canReadHealth, canReadBills, canReadTimeline, loadHealth, loadChecklist, loadBills, loadProperty, loadTimeline]);
+  const changeChecklist = async (itemId: string, status: 'completed' | 'skipped') => {
+    const current = checklist.capture();
+    if (!current() || !can('home.edit') || actionBusy.current.checklist || checklist.error || checklist.loading) return;
+    actionBusy.current.checklist = true; setChecklistBusy(true);
     try {
-      await api.homeProfile.updateChecklistItem(homeId, itemId, 'completed');
-      invalidateHealthCache();
-      await Promise.allSettled([
-        fetchChecklist(cancelledRef),
-        fetchHealthScore(cancelledRef, true, { forceServer: true }),
-        timelineFetchedRef.current ? fetchTimeline(cancelledRef, 1, false) : Promise.resolve(),
-      ]);
-    } catch (err) {
-      if (isDev) console.warn('Failed to complete checklist item:', err);
-    }
-  }, [homeId, fetchChecklist, fetchHealthScore, fetchTimeline, invalidateHealthCache]);
-
-  const skipChecklistItem = useCallback(async (itemId: string) => {
-    if (!homeId) return;
+      await api.homeProfile.updateChecklistItem(homeId!, itemId, status);
+      if (!current()) return;
+      await Promise.all([loadChecklist(), ...(canReadHealth ? [loadHealth()] : []), ...(deferred.current.timeline && canReadTimeline ? [loadTimeline()] : [])]);
+    } catch (failure) {
+      if (current()) {
+        checklist.failAction('The checklist change was not confirmed. Reload the current checklist before trying again.');
+        if ((failure as { statusCode?: number })?.statusCode === 403) onDenied();
+      }
+    } finally { actionBusy.current.checklist = false; if (current()) setChecklistBusy(false); }
+  };
+  const setBillBenchmarkOptIn = async (optedIn: boolean) => {
+    const current = bills.capture();
+    if (!current() || !can('home.edit') || actionBusy.current.bills || bills.error || bills.loading) return;
+    actionBusy.current.bills = true; setBenchmarkBusy(true);
     try {
-      await api.homeProfile.updateChecklistItem(homeId, itemId, 'skipped');
-      invalidateHealthCache();
-      await Promise.allSettled([
-        fetchChecklist(cancelledRef),
-        fetchHealthScore(cancelledRef, true, { forceServer: true }),
-        timelineFetchedRef.current ? fetchTimeline(cancelledRef, 1, false) : Promise.resolve(),
-      ]);
-    } catch (err) {
-      if (isDev) console.warn('Failed to skip checklist item:', err);
-    }
-  }, [homeId, fetchChecklist, fetchHealthScore, fetchTimeline, invalidateHealthCache]);
-
-  const loadMoreTimeline = useCallback(async () => {
-    if (!timelineHasMore || timelineLoading) return;
-    await fetchTimeline(cancelledRef, timelinePage + 1, true);
-  }, [timelineHasMore, timelineLoading, timelinePage, fetchTimeline]);
-
-  const clearSeasonTransition = useCallback(() => {
-    setSeasonTransition(null);
-  }, []);
-
-  const generateChecklist = useCallback(async () => {
-    if (!homeId) return;
-    await fetchChecklist(cancelledRef);
-  }, [homeId, fetchChecklist]);
-
-  const setBillBenchmarkOptIn = useCallback(async (optedIn: boolean) => {
-    if (!homeId) return;
-    try {
-      await api.homeProfile.setBillBenchmarkOptIn(homeId, optedIn);
-      // Optimistically update the local state
-      setBillTrends((prev) => prev ? { ...prev, bill_benchmark_opt_in: optedIn } : prev);
-    } catch (err) {
-      if (isDev) console.warn('Failed to update bill benchmark opt-in:', err);
-    }
-  }, [homeId]);
-
-  const refreshHealthScore = useCallback(async () => {
-    if (!homeId) return;
-    invalidateHealthCache();
-    await fetchHealthScore(cancelledRef, true, { forceServer: true });
-  }, [homeId, fetchHealthScore, invalidateHealthCache]);
-
+      await api.homeProfile.setBillBenchmarkOptIn(homeId!, optedIn);
+      if (current()) await loadBills();
+    } catch (failure) {
+      if (current()) {
+        bills.failAction('The sharing preference was not confirmed. Reload current bill trends before trying again.');
+        if ((failure as { statusCode?: number })?.statusCode === 403) onDenied();
+      }
+    } finally { actionBusy.current.bills = false; if (current()) setBenchmarkBusy(false); }
+  };
+  const loadMoreTimeline = async () => {
+    const previous = timeline.data;
+    if (!previous?.hasMore || timeline.loading) return;
+    await loadTimeline(async () => { const next = await readTimelinePage(previous.page + 1);
+      return { ...next, items: [...previous.items, ...next.items.filter(item => !previous.items.some(old => old.id === item.id))] }; });
+  };
+  const clearSeasonTransition = useCallback(() => setSeasonTransition(null), []);
   const refreshAll = useCallback(async () => {
-    if (!homeId) return;
-    invalidateHealthCache();
-    // Stale-while-revalidate: don't show loading spinners on refresh
-    await Promise.allSettled([
-      fetchHealthScore(cancelledRef, true, { forceServer: true }),
-      fetchChecklist(cancelledRef, true),
-      billTrendsFetchedRef.current ? fetchBillTrends(cancelledRef, true) : Promise.resolve(),
-      timelineFetchedRef.current ? fetchTimeline(cancelledRef, 1, false, true) : Promise.resolve(),
-      propertyValueFetchedRef.current ? fetchPropertyValue(cancelledRef, true) : Promise.resolve(),
-    ]);
-  }, [homeId, fetchHealthScore, fetchChecklist, fetchBillTrends, fetchTimeline, fetchPropertyValue, invalidateHealthCache]);
-
+    await Promise.all([loadChecklist(), ...(canReadHealth ? [loadHealth()] : []),
+      ...(deferred.current.bills && canReadBills ? [loadBills()] : []), ...(deferred.current.property ? [loadProperty()] : []),
+      ...(deferred.current.timeline && canReadTimeline ? [loadTimeline()] : [])]);
+  }, [canReadHealth, canReadBills, canReadTimeline, loadChecklist, loadHealth, loadBills, loadProperty, loadTimeline]);
   return {
-    healthScore,
-    healthLoading,
-    checklist,
-    checklistLoading,
-    billTrends,
-    billTrendsLoading,
-    timeline,
-    timelinePage,
-    timelineHasMore,
-    timelineLoading,
-    propertyValue,
-    propertyValueLoading,
-    seasonTransition,
-    clearSeasonTransition,
-    refreshAll,
-    refreshHealthScore,
-    generateChecklist,
-    setBillBenchmarkOptIn,
-    completeChecklistItem,
-    skipChecklistItem,
-    loadMoreTimeline,
-    ensureBillTrends,
-    ensurePropertyValue,
-    ensureTimeline,
+    healthScore: health.data, healthLoading: health.loading,
+    checklist: checklist.data, checklistLoading: checklist.loading, checklistBusy,
+    billTrends: bills.data, billTrendsLoading: bills.loading, benchmarkBusy,
+    propertyValue: property.data, propertyValueLoading: property.loading,
+    timeline: timeline.data?.items || [], timelinePage: timeline.data?.page || 1,
+    timelineHasMore: timeline.data?.hasMore || false, timelineLoading: timeline.loading,
+    errors: { health: health.error, checklist: checklist.error, bills: bills.error, property: property.error, timeline: timeline.error },
+    canReadHealth, canReadBills, canReadTimeline, reloadSummary,
+    seasonTransition, clearSeasonTransition, refreshAll,
+    refreshHealthScore: () => reloadSummary('health'), generateChecklist: () => reloadSummary('checklist'),
+    setBillBenchmarkOptIn, completeChecklistItem: (id: string) => changeChecklist(id, 'completed'),
+    skipChecklistItem: (id: string) => changeChecklist(id, 'skipped'), loadMoreTimeline,
+    ensureBillTrends, ensurePropertyValue, ensureTimeline,
   };
 }
