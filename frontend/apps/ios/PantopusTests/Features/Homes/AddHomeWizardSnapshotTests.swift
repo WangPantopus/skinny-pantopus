@@ -17,23 +17,27 @@ final class AddHomeWizardSnapshotTests: XCTestCase {
         let vm = AddHomeWizardViewModel(
             api: makeAPI(),
             initialState: .empty,
-            identity: { "home-entry-render-session" },
-            isOnlineProvider: { true }
+            identity: Self.identity,
+            creationActorId: "ddc23700-0000-4000-8000-000000000001",
+            creationStore: MemoryHomeCreationStore(),
+            isOnlineProvider: Self.online
         )
         vm.selectAddressCandidate(AddHomeSampleData.nearbyHomes[0])
-        assertRenders(AddHomeWizardView(viewModel: vm) { _ in })
+        assertRenders(AddHomeWizardView(viewModel: vm) {})
     }
 
     func test_find_home_autocomplete_renders() {
         let vm = AddHomeWizardViewModel(
             api: makeAPI(),
             initialState: .empty,
-            identity: { "home-entry-render-session" },
-            isOnlineProvider: { true }
+            identity: Self.identity,
+            creationActorId: "ddc23700-0000-4000-8000-000000000001",
+            creationStore: MemoryHomeCreationStore(),
+            isOnlineProvider: Self.online
         )
         vm.addManuallyTapped()
         vm.update(.street, to: "412 Elm")
-        assertRenders(AddHomeWizardView(viewModel: vm) { _ in })
+        assertRenders(AddHomeWizardView(viewModel: vm) {})
     }
 
     func test_add_home_geocoded_ready_renders() async {
@@ -48,11 +52,13 @@ final class AddHomeWizardSnapshotTests: XCTestCase {
         let vm = AddHomeWizardViewModel(
             api: makeAPI(),
             initialState: seed,
-            identity: { "home-entry-render-session" },
-            isOnlineProvider: { true }
+            identity: Self.identity,
+            creationActorId: "ddc23700-0000-4000-8000-000000000001",
+            creationStore: MemoryHomeCreationStore(),
+            isOnlineProvider: Self.online
         )
         await vm.advanceForTesting()
-        assertRenders(AddHomeWizardView(viewModel: vm) { _ in })
+        assertRenders(AddHomeWizardView(viewModel: vm) {})
     }
 
     func test_add_home_zip_mismatch_apply_renders() async {
@@ -67,11 +73,13 @@ final class AddHomeWizardSnapshotTests: XCTestCase {
         let vm = AddHomeWizardViewModel(
             api: makeAPI(),
             initialState: seed,
-            identity: { "home-entry-render-session" },
-            isOnlineProvider: { true }
+            identity: Self.identity,
+            creationActorId: "ddc23700-0000-4000-8000-000000000001",
+            creationStore: MemoryHomeCreationStore(),
+            isOnlineProvider: Self.online
         )
         await vm.advanceForTesting()
-        assertRenders(AddHomeWizardView(viewModel: vm) { _ in })
+        assertRenders(AddHomeWizardView(viewModel: vm) {})
     }
 
     private static let validationJSON = """
@@ -79,6 +87,14 @@ final class AddHomeWizardSnapshotTests: XCTestCase {
       "line1":"412 Elm St","line2":"Apt 3B","city":"Brooklyn","state":"NY","zip":"11211","lat":40.7138,"lng":-73.9527
     }}}
     """
+
+    private static func identity() -> String? {
+        "home-entry-render-session"
+    }
+
+    private static func online() -> Bool {
+        true
+    }
 
     private func makeAPI() -> APIClient {
         APIClient(

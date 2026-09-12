@@ -8,9 +8,8 @@
 //  toggle, a "Scan WiFi QR" affordance on Wi-Fi rows, and an "Add another
 //  network or code" button.
 //
-//  Each filled row becomes a `POST /api/homes/:id/access` call once the
-//  home exists (`backend/routes/home.js:5735`), matching RN's
-//  `finalizeCreatedHome`.
+//  Complete rows join the protected original Home creation command and
+//  commit atomically with the Home setup. Values never enter scene storage.
 //
 //  Rendered on the wizard's Role step, which is RN's Setup step — role
 //  picker first, networks & codes underneath — and hidden entirely when
@@ -66,6 +65,7 @@ struct AddHomeAccessSetupSection: View {
             .accessibilityIdentifier("addHome_addAccessItem")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeAccessSetupSection")
     }
 }

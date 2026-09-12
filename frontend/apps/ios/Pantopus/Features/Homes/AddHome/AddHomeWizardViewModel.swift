@@ -32,7 +32,7 @@ public enum AddHomeOutboundEvent: Sendable, Equatable {
     /// Pop the wizard with no further navigation.
     case dismiss
     /// Pop the wizard and navigate to the newly-created home dashboard.
-    case openHomeDashboard(homeId: String)
+    case openHomes
     /// `check-address` matched an already-claimed home and the user
     /// picked the owner role — hand off to the ownership-claim wizard
     /// for that existing home instead of creating a duplicate row.
@@ -160,19 +160,12 @@ final class AddHomeWizardViewModel: WizardModel {
 
     // MARK: - Setup step: networks & codes
 
-    /// Wi-Fi / gate / alarm secrets the user adds while creating the
-    /// home. POSTed to `POST /api/homes/:id/access` once the home row
-    /// exists (RN `useHomeForm.ts:321-336`). Held off `form` so the
-    /// secrets never reach `@SceneStorage`.
+    /// Access details join the immutable creation command in protected storage.
+    /// Held off `form` so the secrets never reach `@SceneStorage`.
     private(set) var accessItems: [AddHomeAccessItem] = [AddHomeAccessItem()]
     /// Non-nil while the Wi-Fi QR scanner sheet is up; carries the row
     /// the scan will fill.
     var scannerTargetItemID: UUID?
-    /// Set when at least one access secret failed to save after the home
-    /// was created. RN swallows these silently; we surface them because
-    /// the home already exists and the user should know to re-add.
-    private(set) var accessSecretWarning: String?
-
     /// One-shot navigation events the host view consumes.
     var pendingEvent: AddHomeOutboundEvent?
 
@@ -180,6 +173,10 @@ final class AddHomeWizardViewModel: WizardModel {
 
     private let api: APIClient
     private let scope: HomeClaimSessionScope
+    private let creation: HomeCreationCoordinator
+    private var creationRevision = 0
+    private var showsSavedCreation = false
+    private var creationReadFailed = false
     private let locationProvider: any LocationProviding
     private let isOnlineProvider: @MainActor () -> Bool
 
@@ -189,6 +186,9 @@ final class AddHomeWizardViewModel: WizardModel {
         api: APIClient = .shared,
         initialState: AddHomeFormState = .empty,
         identity: (() -> String?)? = nil,
+        creationActorId: String? = nil,
+        creationStore: (any PendingHomeCreationStoring)? = nil,
+        creationRequestId: @escaping () -> String = { UUID().uuidString.lowercased() },
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         // Defaults to the live NetworkMonitor in production. Tests inject
         // a closure returning a fixed value so the simulator's
@@ -197,7 +197,22 @@ final class AddHomeWizardViewModel: WizardModel {
         isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline }
     ) {
         self.api = api
-        scope = HomeClaimSessionScope(api: api, identity: identity)
+        let sessionScope = HomeClaimSessionScope(api: api, identity: identity)
+        scope = sessionScope
+        let actor: String = if let creationActorId {
+            creationActorId
+        } else if case let .signedIn(user) = (api.authProvider ?? AuthManager.shared).state {
+            user.id
+        } else {
+            ""
+        }
+        creation = HomeCreationCoordinator(
+            scope: HomeCreationScope(origin: api.apiBaseURL.absoluteString, actorId: actor),
+            store: creationStore ?? PendingHomeCreationStore(),
+            transport: APIHomeCreationTransport(api: api),
+            requireCurrent: { try sessionScope.requireCurrent() },
+            requestId: creationRequestId
+        )
         self.locationProvider = locationProvider
         self.isOnlineProvider = isOnlineProvider
         form = initialState
@@ -219,6 +234,19 @@ final class AddHomeWizardViewModel: WizardModel {
     // MARK: - WizardModel
 
     var chrome: WizardChrome {
+        if showsCreationRecovery {
+            return WizardChrome(
+                title: "Add Home",
+                progressLabel: .hidden,
+                progressFraction: nil,
+                leading: .close,
+                primaryCTALabel: creationPrimaryLabel,
+                primaryCTAEnabled: isCurrent && !isSubmitting && !creation.isBusy,
+                isSubmitting: isSubmitting || creation.isBusy,
+                dirty: false,
+                showsProgressBar: false
+            )
+        }
         let step = currentStep
         return WizardChrome(
             title: title(for: step),
@@ -238,6 +266,10 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func leadingTapped() {
+        if showsCreationRecovery { suspendCreation()
+            pendingEvent = .dismiss
+            return
+        }
         switch leadingControl(for: currentStep) {
         case .back: goBack()
         case .close: pendingEvent = .dismiss
@@ -250,12 +282,15 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func primaryTapped() {
+        if showsCreationRecovery { Task { await creationPrimaryTapped() }
+            return
+        }
         Task { await advance() }
     }
 
     #if DEBUG
     func advanceForTesting() async {
-        await advance()
+        if showsCreationRecovery { await creationPrimaryTapped() } else { await advance() }
     }
     #endif
 
@@ -276,6 +311,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func finishDraft() {
+        suspendCreation()
         retainsDraft = false
         invalidateAddress()
         form = .empty
@@ -295,6 +331,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func retireSession() {
+        suspendCreation()
         retired = true
         invalidateAddress()
         form = .empty
@@ -575,6 +612,10 @@ final class AddHomeWizardViewModel: WizardModel {
     // MARK: - Setup step (RN `SetupStep.tsx`)
 
     func addAccessItem() {
+        guard accessItems.count < 20 else {
+            errorMessage = "You can include up to 20 access details. Remove an entry before adding another."
+            return
+        }
         accessItems.append(AddHomeAccessItem())
     }
 
@@ -644,29 +685,28 @@ final class AddHomeWizardViewModel: WizardModel {
         return true
     }
 
-    /// A row is invalid when exactly one of label / value is filled.
-    /// Mirrors RN's `validateAccessItems` (`useHomeForm.ts:184-200`).
+    /// Validate optional setup before review or reserving an immutable command.
     @discardableResult
     func validateAccessItems() -> Bool {
         var isValid = true
         for index in accessItems.indices {
-            let hasLabel = !accessItems[index].label.trimmingCharacters(in: .whitespaces).isEmpty
-            let hasSecret = !accessItems[index].secretValue
-                .trimmingCharacters(in: .whitespaces).isEmpty
+            let label = accessItems[index].label.trimmingCharacters(in: .whitespacesAndNewlines)
+            let secret = accessItems[index].secretValue.trimmingCharacters(in: .whitespacesAndNewlines)
             accessItems[index].labelError = nil
             accessItems[index].valueError = nil
-            guard hasLabel != hasSecret else { continue }
-            isValid = false
-            if !hasLabel {
+            if label.isEmpty && !secret.isEmpty {
                 accessItems[index].labelError = "Label is required when a value is entered."
+            } else if label.utf16.count > 200 {
+                accessItems[index].labelError = "Use a label of 200 characters or fewer."
             }
-            if !hasSecret {
+            if secret.isEmpty && !label.isEmpty {
                 accessItems[index].valueError = "Password/code is required when label is entered."
+            } else if secret.utf16.count > 2048 {
+                accessItems[index].valueError = "Use a password or code of 2,048 characters or fewer."
             }
+            if accessItems[index].labelError != nil || accessItems[index].valueError != nil { isValid = false }
         }
-        if !isValid {
-            errorMessage = "Please fix the highlighted fields."
-        }
+        if !isValid { errorMessage = "Please fix the highlighted access details." }
         return isValid
     }
 
@@ -675,10 +715,6 @@ final class AddHomeWizardViewModel: WizardModel {
     /// (`SetupStep.tsx:66`).
     var showsAccessSetup: Bool {
         !isClaimingExistingHome
-    }
-
-    func acknowledgeAccessSecretWarning() {
-        accessSecretWarning = nil
     }
 
     /// User-tapped on the "Try again" CTA after a check-address error.
@@ -711,14 +747,12 @@ final class AddHomeWizardViewModel: WizardModel {
             )
             transition(to: .role)
         case .role:
+            guard isClaimingExistingHome || validateAccessItems() else { return }
             transition(to: .review)
         case .review:
             await submit()
         case .success:
-            // "View home" — route to dashboard.
-            if let homeId = createdHomeId {
-                pendingEvent = .openHomeDashboard(homeId: homeId)
-            }
+            if createdHomeId != nil { pendingEvent = .openHomes }
         }
     }
 
@@ -1037,83 +1071,125 @@ final class AddHomeWizardViewModel: WizardModel {
         )
         do {
             try scope.requireCurrent()
-            let response: CreateHomeResponse = try await api.request(
-                HomesEndpoints.create(request)
-            )
-            guard isCurrent else { retireSession()
-                return
-            }
-            guard UUID(uuidString: response.home.id) != nil else { throw APIError.invalidResponse }
-            createdHomeId = response.home.id
-            await persistAccessSecrets(homeId: response.home.id)
-            guard isCurrent else { retireSession()
-                return
-            }
-            transition(to: .success)
+            showsSavedCreation = true
+            try creation.prepare(request: request, form: form, accessItems: accessItems)
+            accessItems = []
+            await resolveCreation(.submit)
+        } catch {
+            creationReadFailed = true
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    var showsCreationRecovery: Bool {
+        isCurrent && (showsSavedCreation || creationReadFailed || creation.storageFailed)
+    }
+
+    var pendingCreation: PendingHomeCreation? {
+        isCurrent ? creation.pending : nil
+    }
+
+    var creationOutcome: HomeCreationOutcome? {
+        isCurrent ? creation.outcome : nil
+    }
+
+    var creationStorageUnavailable: Bool {
+        creationReadFailed || creation.storageFailed
+    }
+
+    private var creationPrimaryLabel: String {
+        if creationStorageUnavailable || creation.pending == nil { return "Retry recovery" }
+        switch creation.outcome?.state {
+        case .completed: return "Open My Homes"
+        case .rejected, .cancelled: return "Edit details"
+        case .pending, nil: return "Try saving again"
+        }
+    }
+
+    func resumeCreation() async {
+        guard isCurrent, !creation.isBusy else { return }
+        do {
+            try creation.restore()
+            creationReadFailed = false
+            showsSavedCreation = creation.pending != nil
+            guard showsSavedCreation else { return }
+            accessItems = []
+            await resolveCreation(.check)
         } catch {
             guard isCurrent else { retireSession()
                 return
             }
-            // UX-06: a 422 from address verification carries a `code` saying
-            // exactly what is wrong. Without this the user completed every step
-            // and got a generic networking string, with no idea what to change.
-            if let addressError = AddressVerificationError.from(error) {
-                addressVerificationError = addressError
-                if addressError.isFixableInAddressStep {
-                    // Send them back to the step that can actually fix it,
-                    // rather than stranding them on the final screen.
-                    //
-                    // transition(to:) clears errorMessage on every step change,
-                    // so the message has to be set AFTER the move — setting it
-                    // first sent the user back to the address step with nothing
-                    // on screen, which is the same silent failure this replaces.
-                    transition(to: .address)
-                }
-                errorMessage = "\(addressError.message) \(addressError.recoverySuggestion)"
-            } else {
-                addressVerificationError = nil
-                errorMessage = (error as? APIError)?.errorDescription
-                    ?? "Couldn't add your home. Please try again."
-            }
+            creationReadFailed = true
+            errorMessage = error.localizedDescription
         }
     }
 
-    /// `POST /api/homes/:id/access` for every filled Setup row — route
-    /// `backend/routes/home.js:5735`. Mirrors RN's `finalizeCreatedHome`
-    /// (`useHomeForm.ts:321-336`): a failure here is non-fatal because
-    /// the home already exists, but we tell the user which rows to re-add
-    /// rather than dropping them silently.
-    private func persistAccessSecrets(homeId: String) async {
-        var failedLabels: [String] = []
-        for item in accessItems where item.isComplete {
-            guard isCurrent else { retireSession()
-                return
-            }
-            let label = item.label.trimmingCharacters(in: .whitespacesAndNewlines)
-            let secret = item.secretValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            do {
-                try scope.requireCurrent()
-                _ = try await api.request(
-                    HomesEndpoints.createAccessSecret(
-                        homeId: homeId,
-                        request: CreateAccessSecretRequest(
-                            accessType: item.accessType.rawValue,
-                            label: label,
-                            secretValue: secret
-                        )
-                    )
-                ) as HomeAccessSecretResponse
-            } catch {
-                failedLabels.append(label)
-            }
+    func suspendCreation() {
+        creationRevision += 1
+        creation.hide()
+        if showsSavedCreation { accessItems = [] }
+    }
+
+    func checkCreationStatus() {
+        Task { await resumeCreation() }
+    }
+
+    func cancelCreation() {
+        Task { await resolveCreation(.cancel) }
+    }
+
+    private func resolveCreation(_ action: HomeCreationAction) async {
+        guard isCurrent, !creation.isBusy else { return }
+        let revision = creationRevision
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            let result = try await creation.resolve(action)
+            guard isCurrent, revision == creationRevision else { return }
+            creationReadFailed = false
+            errorMessage = nil
+            showsSavedCreation = true
+            if result.state == .completed { createdHomeId = result.home?.id }
+        } catch {
+            guard isCurrent, revision == creationRevision else { return }
+            errorMessage = error.localizedDescription
         }
-        guard isCurrent else { retireSession()
+    }
+
+    private func creationPrimaryTapped() async {
+        guard isCurrent, !isSubmitting, !creation.isBusy else { return }
+        if creationStorageUnavailable || creation.pending == nil { await resumeCreation()
             return
         }
-        guard !failedLabels.isEmpty else { return }
-        accessSecretWarning = "Your home was created, but we couldn't save "
-            + failedLabels.joined(separator: ", ")
-            + ". Add them again from Access codes."
+        guard let outcome = creation.outcome, outcome.isTerminal else {
+            await resolveCreation(.submit)
+            return
+        }
+        do {
+            let original = creation.pending
+            try creation.acknowledge()
+            showsSavedCreation = false
+            creationReadFailed = false
+            errorMessage = nil
+            if outcome.state == .completed {
+                pendingEvent = .openHomes
+            } else if let original {
+                form = original.form
+                form.step = AddHomeStep.address.rawValue
+                invalidateAddress()
+                isManualEntry = true
+                homeSearchQuery = form.address.street
+                accessItems = (original.body.dictValue?["access_secrets"]?.arrayValue ?? []).compactMap {
+                    guard let item = $0.dictValue, let raw = item["access_type"]?.stringValue,
+                          let type = AddHomeAccessType(rawValue: raw), let label = item["label"]?.stringValue,
+                          let secret = item["secret_value"]?.stringValue else { return nil }
+                    return AddHomeAccessItem(accessType: type, label: label, secretValue: secret)
+                }
+                if accessItems.isEmpty { accessItems = [AddHomeAccessItem()] }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     // MARK: - Chrome derivation
@@ -1148,7 +1224,7 @@ final class AddHomeWizardViewModel: WizardModel {
         switch step {
         case .address, .confirm, .role: "Continue"
         case .review: isClaimingExistingHome ? "Submit claim" : "Submit"
-        case .success: "View home"
+        case .success: "Open My Homes"
         }
     }
 

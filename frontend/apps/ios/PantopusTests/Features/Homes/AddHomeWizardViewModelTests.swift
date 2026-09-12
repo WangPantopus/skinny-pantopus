@@ -34,6 +34,9 @@ final class AddHomeWizardViewModelTests: XCTestCase {
             api: makeAPI(),
             initialState: initialState,
             identity: { "home-entry-test-session" },
+            creationActorId: "ddc23700-0000-4000-8000-000000000001",
+            creationStore: MemoryHomeCreationStore(),
+            creationRequestId: { "ddc23700-0000-4000-8000-000000000002" },
             isOnlineProvider: { true }
         )
     }
@@ -86,12 +89,10 @@ final class AddHomeWizardViewModelTests: XCTestCase {
     }
 
     private static let createHomeJSON = """
-    {"message":"ok","home":{
-      "id":"ddc23700-0000-4000-8000-000000000100","name":"412 Elm St","address":"412 Elm St",
-      "city":"Portland","state":"OR","zipcode":"97214",
-      "home_type":null,"visibility":"public","description":null,
-      "created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"
-    },"requires_verification":false,"verification_type":null,"role":"owner"}
+    {"state":"completed","command":{"actor_id":"ddc23700-0000-4000-8000-000000000001",
+    "request_id":"ddc23700-0000-4000-8000-000000000002","created_at":"2026-09-11T00:00:00Z","updated_at":"2026-09-11T00:00:00Z"},
+    "home":{"id":"ddc23700-0000-4000-8000-000000000100"},"ownership_claim_id":"ddc23700-0000-4000-8000-000000000101",
+    "access_secret_ids":[],"requires_verification":true,"verification_type":"ownership","role":"owner","current_access":"not_checked"}
     """
 
     // MARK: - Initial state
@@ -176,41 +177,47 @@ final class AddHomeWizardViewModelTests: XCTestCase {
 
     // MARK: - Submit happy path
 
-    func testSubmitAdvancesToSuccessAndRecordsHomeId() async {
+    func testSubmitShowsRetainedOutcomeAndRecordsHomeId() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.createHomeJSON)]
         let vm = await reviewVM()
         await vm.advanceForTesting()
-        XCTAssertEqual(vm.currentStep, .success)
+        XCTAssertTrue(vm.showsCreationRecovery)
+        XCTAssertEqual(vm.creationOutcome?.state, .completed)
         XCTAssertEqual(vm.createdHomeId, "ddc23700-0000-4000-8000-000000000100")
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "View home")
-        XCTAssertEqual(vm.chrome.secondaryCTA?.identifier, "addHomeBackToHub")
+        XCTAssertEqual(vm.chrome.primaryCTALabel, "Open My Homes")
+        XCTAssertNil(vm.chrome.secondaryCTA)
+        XCTAssertFalse(vm.chrome.dirty)
         XCTAssertFalse(vm.chrome.showsProgressBar, "Success step hides the segmented progress bar.")
     }
 
-    func testSubmitErrorKeepsUserOnReview() async {
+    func testSubmitErrorKeepsOriginalRequestForRecovery() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{\"error\":\"server\"}")]
         let vm = await reviewVM()
         await vm.advanceForTesting()
-        XCTAssertEqual(vm.currentStep, .review)
+        XCTAssertTrue(vm.showsCreationRecovery)
+        XCTAssertNotNil(vm.pendingCreation)
+        XCTAssertNil(vm.creationOutcome)
+        XCTAssertEqual(vm.chrome.primaryCTALabel, "Try saving again")
         XCTAssertNotNil(vm.errorMessage)
     }
 
     // MARK: - Success step CTAs
 
-    func testSuccessPrimaryFiresOpenDashboardEvent() async {
+    func testSuccessPrimaryReloadsCurrentHomesList() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.createHomeJSON)]
         let vm = await reviewVM()
         await vm.advanceForTesting()
         await vm.advanceForTesting()
-        XCTAssertEqual(vm.pendingEvent, .openHomeDashboard(homeId: "ddc23700-0000-4000-8000-000000000100"))
+        XCTAssertEqual(vm.pendingEvent, .openHomes)
     }
 
-    func testSuccessSecondaryFiresDismissEvent() async {
+    func testClosingSuccessPreservesOutcome() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.createHomeJSON)]
         let vm = await reviewVM()
         await vm.advanceForTesting()
-        vm.secondaryTapped()
+        vm.leadingTapped()
         XCTAssertEqual(vm.pendingEvent, .dismiss)
+        XCTAssertEqual(vm.creationOutcome?.state, .completed)
     }
 
     // MARK: - Close-confirm
@@ -223,13 +230,6 @@ final class AddHomeWizardViewModelTests: XCTestCase {
     func testCloseOnFilledStep1IsDirty() {
         let vm = makeVM(initialState: filled())
         XCTAssertTrue(vm.chrome.dirty)
-    }
-
-    func testCloseOnSuccessIsClean() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.createHomeJSON)]
-        let vm = await reviewVM()
-        await vm.advanceForTesting()
-        XCTAssertFalse(vm.chrome.dirty)
     }
 
     // MARK: - Search

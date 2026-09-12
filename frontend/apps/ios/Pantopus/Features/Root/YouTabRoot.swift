@@ -1113,9 +1113,9 @@ public struct YouTabRoot: View {
             }
         case .addHome:
             AddHomeWizardView(
-                onOpenHomeDashboard: { homeId in
-                    path.removeAll { $0 == .addHome }
-                    path.append(.homeDashboard(homeId: homeId))
+                onOpenHomes: {
+                    path.removeAll { $0 == .addHome || $0 == .myHomes }
+                    path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
                     path.removeAll { $0 == .addHome }

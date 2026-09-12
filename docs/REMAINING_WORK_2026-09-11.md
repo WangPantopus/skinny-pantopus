@@ -6,15 +6,17 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [atomic Home creation backend](home-create-recovery-2026-09-11.md),
-following native location/address entry and identity/private first use. Production
-HTTP/SDK/SQL verifies rollback, duplicate refusal and original-command recovery.
-Retained client commands, create/join UI, primary eligibility and private first use
-remain open. Location predecessor `af28df271` has every CI job green in
-[run 34660624151](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34660624151).
-Verify the next pushed head separately through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
-#32 remains draft. #34 remains draft/conflicted at `e9ef2decb`, with an unwired
-durable-tip draft. Cancelled or earlier-head checks do not certify a final head.
+Latest local Home milestone: [iPhone retained Home creation](home-ios-create-recovery-2026-09-11.md),
+following the atomic creation backend and native location/address/identity work.
+Installed original-command restart/cancel and atomic optional-setup recovery pass;
+final iPhone regression passes 4,369 checks (168 skips). Visual review finds missing
+unit identifiers in Home cards; fix projection and labels next. Android/browser
+retained commands, existing-Home join, primary eligibility and complete private
+first use remain open. Backend predecessor `c0d474989` has all CI checks green in
+[run 34663479661](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34663479661).
+Verify the next pushed head through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
+#32 remains draft; #34 remains draft/conflicted at `e9ef2decb`, with an unwired
+durable-tip draft. Earlier-head checks do not certify a final head.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
@@ -32,7 +34,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Real onboarding/verification and broader UI remain H07/H08/R01/R02/U01/U02.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). Finish real create/save/join UI and transactional, recoverable onboarding. Address validation grants no membership.
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Finish Android/browser retained creation and real existing-Home join, then complete onboarding. Address validation grants no membership.
 - [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Finish real onboarding, ordinary-member UI and completed verification flows. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
 
 ## 2. Residency, ownership and leases
@@ -113,7 +115,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 ## 10. UI, accessibility and operating conditions
 
-- [ ] U01 **Fix/Verify:** Resolve retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
+- [ ] U01 **Fix/Verify:** Actual creation acceptance exposes indistinguishable cards for different units at one street: preserve authorized `address2` and show unit labels on all clients. Resolve retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
 - [ ] U02 **Verify:** Complete small screens, large text/Dynamic Type, zoom, keyboard/focus, screen readers, contrast and dark-mode checks across reachable flows.
 - [ ] U03 **Verify:** Exercise loading, empty, partial, unavailable, offline, slow response, retry, cancellation, back navigation, duplicate taps and process death with actual UI and persisted state.
 - [ ] U04 **Verify:** Validate long-lived sessions, background/foreground transitions and concurrent device/account changes beyond the bounded Home tests.

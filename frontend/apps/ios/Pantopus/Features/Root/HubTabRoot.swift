@@ -2976,11 +2976,9 @@ public struct HubTabRoot: View {
             )
         case .addHome:
             AddHomeWizardView(
-                onOpenHomeDashboard: { homeId in
-                    // Replace the wizard with the dashboard so Back goes to
-                    // MyHomes, not the success screen.
-                    path.removeAll { $0 == .addHome }
-                    path.append(.homeDashboard(homeId: homeId))
+                onOpenHomes: {
+                    path.removeAll { $0 == .addHome || $0 == .myHomes }
+                    path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
                     path.removeAll { $0 == .addHome }

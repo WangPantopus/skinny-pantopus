@@ -1,5 +1,33 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### iPhone Home creation recovery — September 11
+
+The [iPhone creation milestone](home-ios-create-recovery-2026-09-11.md) passes
+installed original-command recovery after a lost committed reply/app restart,
+server-confirmed cancellation before a delayed worker can create, and atomic
+optional-access refusal → correction → fresh request. Current My Homes reloads
+show private Tasks without inventing residency or ownership. Protected Keychain
+storage retains the original command; optional access commits in the same request.
+Input accessibility and inline validation are repaired. Final regression passes
+4,369 checks (168 skips), signed build/style/privacy pass, and exact synthetic SQL
+and temporary functions are cleaned. Accepted iPhone products are preserved.
+
+**Continue now:** actual visual review found that two units at one street look
+identical in My Homes because `address2` is omitted. Fix safe unit projection and
+client labels, then finish Android/browser retained creation, existing-Home join,
+primary/private first use and invitations, native residency and the full backlog.
+Android command/codec/encrypted-store components are local WIP and compile; their
+wizard integration and installed acceptance are not complete and are not included
+in this iPhone checkpoint. H07/H08/R02 remain open; 74 inventory entries remain.
+
+Backend predecessor `c0d474989` has all checks green in
+[run 34663479661](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34663479661).
+Verify this new pushed head separately. #32/#34 remain unfinished drafts; #34
+conflicts. Source migrations remain 40 Home / 21 paid / 49 combined. No merge,
+permanent adoption or paid activation. The disk-full Docker interruption was
+repaired without deleting data; the original stopped REST container and private
+configuration snapshot remain preserved. The local ledger remains `20260910220000`.
+
 ### Atomic Home creation backend — September 11
 
 The [creation repair](home-create-recovery-2026-09-11.md) passes actual production

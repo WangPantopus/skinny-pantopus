@@ -13,7 +13,7 @@ import SwiftUI
 
 /// Pushed onto the Hub stack from the MyHomes FAB / empty-CTA. On
 /// success, signals the parent stack to pop the wizard and route to the
-/// new home's dashboard via `onOpenHomeDashboard`.
+/// refreshed My Homes list via `onOpenHomes`.
 public struct AddHomeWizardView: View {
     @State private var viewModel: AddHomeWizardViewModel
     @SceneStorage("addHomeWizardForm") private var storedForm: String = ""
@@ -23,7 +23,7 @@ public struct AddHomeWizardView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
-    private let onOpenHomeDashboard: (String) -> Void
+    private let onOpenHomes: () -> Void
     /// `check-address` matched an already-claimed home and the user
     /// picked "owner" — route to the ownership-claim wizard for that
     /// existing home instead of creating a duplicate.
@@ -33,24 +33,24 @@ public struct AddHomeWizardView: View {
     private let onOpenWaitingRoom: (String) -> Void
 
     public init(
-        onOpenHomeDashboard: @escaping (String) -> Void,
+        onOpenHomes: @escaping () -> Void,
         onOpenClaimOwnership: @escaping (String) -> Void = { _ in },
         onOpenWaitingRoom: @escaping (String) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: AddHomeWizardViewModel())
-        self.onOpenHomeDashboard = onOpenHomeDashboard
+        self.onOpenHomes = onOpenHomes
         self.onOpenClaimOwnership = onOpenClaimOwnership
         self.onOpenWaitingRoom = onOpenWaitingRoom
     }
 
     init(
         viewModel: AddHomeWizardViewModel,
-        onOpenHomeDashboard: @escaping (String) -> Void,
+        onOpenHomes: @escaping () -> Void,
         onOpenClaimOwnership: @escaping (String) -> Void = { _ in },
         onOpenWaitingRoom: @escaping (String) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: viewModel)
-        self.onOpenHomeDashboard = onOpenHomeDashboard
+        self.onOpenHomes = onOpenHomes
         self.onOpenClaimOwnership = onOpenClaimOwnership
         self.onOpenWaitingRoom = onOpenWaitingRoom
     }
@@ -65,7 +65,11 @@ public struct AddHomeWizardView: View {
                     Button("Edit address", action: viewModel.leadingTapped)
                 }
             }
-            stepContent
+            if viewModel.showsCreationRecovery {
+                AddHomeCreationRecoveryView(viewModel: viewModel)
+            } else {
+                stepContent
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .scrollDismissesKeyboard(.interactively)
@@ -91,6 +95,7 @@ public struct AddHomeWizardView: View {
         }
         .onAppear {
             restoreIfNeeded()
+            Task { await viewModel.resumeCreation() }
             // Fire the initial step view event since transitions only
             // fire on user-driven step changes after this point.
             if let stepNumber = viewModel.currentStep.stepNumber {
@@ -103,10 +108,16 @@ public struct AddHomeWizardView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { viewModel.suspendAddressEntry() }
+            if phase == .background {
+                viewModel.suspendCreation()
+                viewModel.suspendAddressEntry()
+            } else if phase == .active {
+                Task { await viewModel.resumeCreation() }
+            }
         }
         .onDisappear {
             keyboardVisible = false
+            viewModel.suspendCreation()
             if viewModel.scannerTargetItemID == nil { viewModel.suspendAddressEntry() }
         }
         .onChange(of: viewModel.isCurrent) { _, current in
@@ -133,17 +144,6 @@ public struct AddHomeWizardView: View {
                 onScanned: { viewModel.applyScannedWifi($0) },
                 onClose: { viewModel.closeWifiQRScanner() }
             )
-        }
-        .alert(
-            "Home created",
-            isPresented: Binding(
-                get: { viewModel.accessSecretWarning != nil },
-                set: { if !$0 { viewModel.acknowledgeAccessSecretWarning() } }
-            )
-        ) {
-            Button("OK", role: .cancel) { viewModel.acknowledgeAccessSecretWarning() }
-        } message: {
-            Text(viewModel.accessSecretWarning ?? "")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeWizard")
@@ -195,9 +195,9 @@ public struct AddHomeWizardView: View {
         case .dismiss:
             storedForm = ""
             dismiss()
-        case let .openHomeDashboard(homeId):
+        case .openHomes:
             storedForm = ""
-            onOpenHomeDashboard(homeId)
+            onOpenHomes()
         case let .openClaimOwnership(homeId):
             storedForm = ""
             onOpenClaimOwnership(homeId)
@@ -354,11 +354,6 @@ private struct AddHomeConfirmStep: View {
             if let check = viewModel.addressCheck, viewModel.isGeocodeResolved {
                 AddressVerdictRow(check: check)
             }
-            if viewModel.isGeocodeResolved {
-                PrimaryHomeToggle(isPrimary: viewModel.form.isPrimary) {
-                    viewModel.setPrimaryHome($0)
-                }
-            }
             // A12.2 Details — nickname / type / beds / baths / sizes /
             // year / description, pre-filled from public records. Hidden
             // on the join-an-existing-home path, which RN skips too
@@ -407,12 +402,13 @@ private struct ReviewStep: View {
         HeadlineBlock("Review and submit")
         SubcopyBlock("Make sure everything below looks right before submitting.")
         ReviewSummaryBlock(summaryRows)
+        if !viewModel.isClaimingExistingHome {
+            SubcopyBlock("Saving starts your private Home setup. Residency and ownership require verification.")
+        }
     }
 
-    /// Address / role / primary, plus everything the Details and Setup
-    /// blocks collected — the review step previously showed only the
-    /// first three, so nothing the user typed on those blocks was
-    /// verifiable before submit.
+    /// Review the requested address, role and optional setup before saving.
+    /// Creation cannot establish primary-Home eligibility or verified membership.
     private var summaryRows: [ReviewSummaryRow] {
         var rows: [ReviewSummaryRow] = [
             ReviewSummaryRow(
@@ -422,10 +418,6 @@ private struct ReviewStep: View {
             ReviewSummaryRow(
                 label: "Role",
                 value: viewModel.form.role?.label ?? "—"
-            ),
-            ReviewSummaryRow(
-                label: "Primary",
-                value: viewModel.form.isPrimary ? "Yes" : "No"
             )
         ]
         guard !viewModel.isClaimingExistingHome else { return rows }
@@ -486,7 +478,7 @@ private struct SuccessStep: View {
         StatusWaitingBodyView(
             content: .claimSubmitted(homeName: nil)
                 .withHeadline("Home added")
-                .withSubcopy("We'll email you when verification completes.")
+                .withSubcopy("Open My Homes to see current setup and verification options.")
         )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -577,35 +569,6 @@ private struct AddressVerdictRow: View {
     }
 }
 
-private struct PrimaryHomeToggle: View {
-    let isPrimary: Bool
-    let onChange: @MainActor @Sendable (Bool) -> Void
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("This is my primary home")
-                    .pantopusTextStyle(.body)
-                    .foregroundStyle(Theme.Color.appText)
-                Text("Use this home for default mail and notifications.")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-            }
-            Spacer()
-            Toggle(
-                "",
-                isOn: Binding(get: { isPrimary }, set: onChange)
-            )
-            .labelsHidden()
-            .tint(Theme.Color.primary600)
-            .accessibilityIdentifier("addHome_primaryToggle")
-        }
-        .padding(Spacing.s3)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-    }
-}
-
 private struct RoleRow: View {
     let role: AddHomeRole
     let isSelected: Bool
@@ -666,5 +629,5 @@ private struct AddHomeErrorBanner: View {
 }
 
 #Preview {
-    AddHomeWizardView { _ in }
+    AddHomeWizardView {}
 }
