@@ -74,12 +74,14 @@ out of 80; it is not a whole-app completion or effort percentage.
 Fetched origin/master remains `6a1013784db69bf339535a2f4b33b328f2bbf40c`. #32 is an
 open mergeable draft; #34 is a conflicting draft at
 `e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No merge. Private-first-use predecessor
-`ff4c82609e37203031df32daa3a3a9378723b2d3` has backend, database, browser, all iOS
-checks and Android instrumented checks passing in
-[CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883);
-Android lint/test/assembly is still running at this checkpoint. The workflow
-cancels older runs when a new head is pushed, so finish that current run while
-continuing useful local work, then push this milestone and verify its own CI.
+`ff4c82609e37203031df32daa3a3a9378723b2d3` has every job passing in
+[CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883).
+The browser source milestone is `9a10a7dd47329300faa26f40fa4e248fb73ea8d7`; its
+five source files and 43 evidence anchors are bound privately. Push it with this
+checkpoint and verify the new head independently. The next additive decision
+command migration is an uncommitted candidate and is not part of this accepted
+browser scope. Its isolated syntax check was rolled back with complete schema
+and ledger preservation.
 Migrations remain 43 Home / 21 paid / 52 combined, with 12 identical shared
 versions and zero collisions. Combined replay/adoption remains open. Paid
 services stay in the final launch bundle.

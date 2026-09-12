@@ -35,11 +35,12 @@ ordinary-member onboarding, legacy submission compatibility and the full backlog
 This bounded milestone does not close H07/H08: **7 of 80 rows closed; 73 partial
 or open**. These counts do not measure app completion or remaining effort.
 
-Predecessor `ff4c82609e37203031df32daa3a3a9378723b2d3` has every completed job passing
-in [CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883);
-only Android lint/test/assembly is still running at this checkpoint. Let it finish
-while progressing locally before pushing this milestone, because a new push
-cancels the earlier run. Then verify the newly pushed head independently.
+Predecessor `ff4c82609e37203031df32daa3a3a9378723b2d3` has every job passing in
+[CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883).
+Browser milestone `9a10a7dd47329300faa26f40fa4e248fb73ea8d7` is committed and ready to
+push with this checkpoint; verify the pushed head independently. An additive
+invitation command migration is an uncommitted candidate, with transactional
+syntax/rollback preservation checked; it is not accepted or permanently installed.
 #32 remains a mergeable draft; #34 a conflicting draft. No merge. Migrations
 remain 43 Home / 21 paid / 52 combined, 12 identical shared, zero collisions;
 combined replay/adoption remains open. Paid services remain one final launch
