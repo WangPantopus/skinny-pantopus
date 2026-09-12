@@ -64,10 +64,9 @@ class VerifyLandlordDetailsSnapshotTest {
         networkMonitor: NetworkMonitor,
         handle: SavedStateHandle,
     ) : VerifyLandlordWizardViewModel(
-            networkMonitor,
-            handle,
-            mockk(relaxed = true),
-            mockk(relaxed = true),
+            networkMonitor = networkMonitor,
+            savedStateHandle = handle,
+            tenantRepository = mockk(relaxed = true),
         ) {
         override val submitDelayMillis: Long = 0L
     }

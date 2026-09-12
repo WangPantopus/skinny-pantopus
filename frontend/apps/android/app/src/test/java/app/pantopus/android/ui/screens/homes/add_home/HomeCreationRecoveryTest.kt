@@ -32,6 +32,33 @@ class HomeCreationRecoveryTest {
         )
 
     @Test
+    fun acknowledgement_io_cancellation_does_not_strand_the_next_home_request() =
+        runTest {
+            val store =
+                object : PendingHomeCreationStore by fixture.store {
+                    override suspend fun replace(
+                        scope: HomeCreationScope,
+                        expected: PendingHomeCreation?,
+                        next: PendingHomeCreation?,
+                    ) {
+                        fixture.store.replace(scope, expected, next)
+                        if (next == null) throw kotlinx.coroutines.CancellationException("Screen retired after IO commit")
+                    }
+                }
+            val subject = HomeCreationCoordinator(fixture.scope, store, fixture.codec, { draft, _ -> fixture.completed(draft) }, {})
+            subject.prepare(request, form.creationSnapshot())
+            subject.resolve(HomeCreationAction.Submit)
+            assertTrue(runCatching { subject.acknowledge() }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+            assertNull(fixture.saved)
+            subject.hide()
+            subject.restore()
+            assertNull(subject.pending)
+            assertNull(subject.outcome)
+            subject.prepare(request, form.creationSnapshot())
+            assertNotNull(fixture.saved)
+        }
+
+    @Test
     fun lost_reply_and_restart_retry_the_exact_retained_command() =
         runTest {
             val first = fixture.coordinator()

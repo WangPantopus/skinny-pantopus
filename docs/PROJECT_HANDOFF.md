@@ -14,38 +14,48 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### iOS postal recovery — accepted locally; Android postal next
+### Both native postal flows accepted; prepared residency review next
 
-The [iOS postal milestone](home-ios-postal-recovery-2026-09-12.md) passes the complete
-installed HTTP/SDK/SQL journey on final signed build r13: explicit apartment,
-failed status/retry, cancellation before admission, lost/restarted mailing and code
-requests, missing-key recovery, unknown delivery without resend, household review
-and current-access removal with retired replies. Persistent field labels, native
-keyboard Done and truthful completed-code UI are accepted. All three existing
-creation recovery journeys pass on the same products. Full iOS regression:
-4,368 passed / 168 skips; style, privacy and strict signing pass. Three postal
-fixtures and the creation fixture are cleaned exactly with the ledger preserved.
-Final products and evidence remain private; no active server or held work remains.
+The [iOS postal milestone](home-ios-postal-recovery-2026-09-12.md) and
+[Android postal milestone](home-android-postal-recovery-2026-09-12.md) pass actual
+installed HTTP/SDK/SQL recovery: explicit apartment confirmation, failed status
+and retry, cancellation, lost/restarted mailing and code requests, missing-key
+recovery, unknown delivery without resend, historical proof and current-access
+removal with retired replies. All three original creation regressions pass on
+both native platforms. Final Android r2 repeats the complete postal journey.
+The optimized Release APK additionally passes a reproduced Moshi enum failure's
+before/after runtime check. Both exact postal fixtures and the creation fixture
+are cleaned; protected originals are acknowledged and no held work remains.
 
-**Continue now:** finish the separate Android postal candidate. Its models,
-encrypted storage and API compile; the new coordinator/transport, native screen,
-navigation and installed recovery acceptance are pending. Then both native prepared
-household review, invitations/private first use and legacy compatibility. H08 needs
-a private-Home verification entry and ordinary selected-address submission before
-mail when no claim exists; ownership is separate. H07/H08/R01/R02 and the wider
-backlog remain open. Six of 80 inventory rows are closed; this is not whole-app
-completion or a percentage of remaining engineering effort.
+Android full regression: Debug and Release each 4,540 passed / 80 skips across
+514 suites. Ktlint, Detekt, full Lint, privacy and signing pass. Full regression
+and Lint precede the final enum-retention annotation only; both rebuilt APKs,
+Release vital lint, four focused checks, file style, actual optimized serializer
+and installed postal journey pass after it. iOS production regression remains
+4,368 passed / 168 skips. A separately committed retry-fixture correction
+`1a60fc39470a` passes 30 consecutive iterations; no iOS production behavior changed.
+Final products and detailed evidence remain private. Both owned native runtimes
+are stopped with userdata retained; the physical iPhone stays Pantopus 1.0.0 (2).
 
-Android joining milestone `e8c3459bd5a4` and its instrumented-fixture correction
-`077195b4f720` are pushed. The corrected instrumented job passes in
-[CI 34692652031](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34692652031);
-Android lint/test/assembly is still running. Verify this new iOS milestone's own
-pushed-head checks before merging. #32 remains a mergeable draft; #34 remains a
-conflicting draft. No new migration: 43 Home / 21 paid / 52 combined, 12 identical
-shared versions, zero timestamp collisions. Combined replay/adoption remains open.
-No merge, hosted release, physical-device update or paid activation. iPhone stays
-Pantopus 1.0.0 (2); owner work/data/devices and artifacts are preserved. Paid services
-remain one final launch bundle.
+**Continue now:** finish both native prepared residency review, invitations/private
+first use and legacy compatibility. An uncommitted iOS prepared-review candidate
+has models, protected store, transport, coordinator, view model and view; it is
+not yet wired, compiled or accepted and is outside the Android milestone.
+H08 needs a private-Home verification entry and ordinary selected-address
+submission before mail when no claim exists; ownership is separate. H07/H08/R01/
+R02 and the wider backlog remain open. Six of 80 inventory rows are closed;
+this is not whole-app completion or a percentage of remaining engineering effort.
+
+Predecessor `ecac0940f075bb1600b2ef4872567b8e1c3d8147` has all checks passing in
+[CI 34694232465](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34694232465)
+after its failed iPhone 16 Pro retry-test scope passed on rerun. Original
+diagnostics remain private. Verify the new Android milestone's own pushed-head
+checks. #32 remains a mergeable draft; #34 remains a conflicting draft with all
+checks passing at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration:
+43 Home / 21 paid / 52 combined, 12 identical shared SQL versions, zero timestamp
+collisions. Combined replay/adoption remains open. No merge, hosted release,
+physical-device update or paid activation. Paid services remain one final launch
+bundle; owner work/data/devices and artifacts are preserved.
 
 ### iOS joining and personal status — accepted locally; Android next
 

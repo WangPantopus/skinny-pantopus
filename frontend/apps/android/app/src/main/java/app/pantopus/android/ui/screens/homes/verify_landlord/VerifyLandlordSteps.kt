@@ -309,7 +309,7 @@ sealed interface VerifyLandlordOutboundEvent {
 
     /**
      * Submit succeeded — pop the wizard and push the standalone A12.7
-     * Postcard verification screen so the user can track delivery.
+     * Mail verification screen so the user can review their mailing address.
      */
     data class OpenPostcardVerification(val homeId: String) : VerifyLandlordOutboundEvent
 }

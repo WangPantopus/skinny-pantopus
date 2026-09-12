@@ -129,6 +129,7 @@ class HomeCreationCoordinator(
     private var revision = 0L
     private var knownOutcome: HomeCreationOutcome? = null
     private var expectedRequestId: String? = null
+    private var acknowledging: PendingHomeCreation? = null
     val outcome: HomeCreationOutcome? get() = knownOutcome ?: pending?.outcome
 
     suspend fun restore() {
@@ -138,6 +139,10 @@ class HomeCreationCoordinator(
         val saved = readSaved()
         requireCurrent()
         check(openingRevision == revision) { CHANGED }
+        // A cancelled IO return can follow a successful explicit acknowledgement.
+        // Reconcile only that action; an unexpectedly missing original still fails.
+        val acknowledgement = acknowledging
+        if (acknowledgement != null && (saved == null || !acknowledgement.sameIntent(saved))) clearAcknowledgedOriginal()
         check(expectedRequestId == null || saved?.requestId == expectedRequestId) { CHANGED }
         check(pending == null || saved == null || checkNotNull(pending).sameIntent(saved)) { CHANGED }
         val known = knownOutcome
@@ -216,18 +221,27 @@ class HomeCreationCoordinator(
     }
 
     suspend fun acknowledge(): PendingHomeCreation {
+        val opening = revision
         requireCurrent()
         val original = checkNotNull(pending) { CHANGED }
         val proof = checkNotNull(outcome) { CHANGED }
         val saved = checkNotNull(readSaved()) { CHANGED }
-        check(!isBusy && proof.isTerminal && original.sameIntent(saved) && saved.outcome?.sameDecision(proof) == true) { CHANGED }
+        check(opening == revision && !isBusy && proof.isTerminal && original.sameIntent(saved)) { CHANGED }
+        check(saved.outcome?.sameDecision(proof) == true) { CHANGED }
         requireCurrent()
+        acknowledging = original
         replace(saved, null)
+        clearAcknowledgedOriginal()
         requireCurrent()
+        check(opening == revision) { CHANGED }
+        return original
+    }
+
+    private fun clearAcknowledgedOriginal() {
         pending = null
         knownOutcome = null
         expectedRequestId = null
-        return original
+        acknowledging = null
     }
 
     fun hide() {

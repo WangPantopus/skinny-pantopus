@@ -195,6 +195,8 @@ import app.pantopus.android.ui.screens.homes.polls.PollDetailScreen
 import app.pantopus.android.ui.screens.homes.polls.PollsListScreen
 import app.pantopus.android.ui.screens.homes.polls.START_POLL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.polls.StartPollFormScreen
+import app.pantopus.android.ui.screens.homes.postal.HomePostalNavigation
+import app.pantopus.android.ui.screens.homes.postal.HomePostalScreen
 import app.pantopus.android.ui.screens.homes.property_correction.PROPERTY_CORRECTION_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.property_correction.PropertyCorrectionScreen
 import app.pantopus.android.ui.screens.homes.property_details.PropertyDetailsScreen
@@ -224,7 +226,6 @@ import app.pantopus.android.ui.screens.homes.tasks.HouseholdTasksListScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.VERIFY_LANDLORD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.verify_landlord.VerifyLandlordWizardScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.postcard.POSTCARD_VERIFICATION_HOME_ID_KEY
-import app.pantopus.android.ui.screens.homes.verify_landlord.postcard.PostcardVerificationScreen
 import app.pantopus.android.ui.screens.hub.ActionChipContent
 import app.pantopus.android.ui.screens.hub.DiscoveryCardContent
 import app.pantopus.android.ui.screens.hub.DiscoveryKind
@@ -6026,12 +6027,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(POSTCARD_VERIFICATION_HOME_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
-                    PostcardVerificationScreen(
-                        onDismiss = { navController.popBackStack() },
-                        onVerified = { _ ->
-                            // Pop the tracker — the underlying home dashboard
-                            // refreshes on next visit.
-                            navController.popBackStack()
+                    HomePostalScreen(
+                        onBack = { navController.popBackStack() },
+                        onNavigate = { homeId, destination ->
+                            navController.navigate(
+                                when (destination) {
+                                    HomePostalNavigation.Home -> ChildRoutes.homeDashboard(homeId)
+                                    HomePostalNavigation.Residency -> ChildRoutes.homeResidency(homeId)
+                                    HomePostalNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
+                                    HomePostalNavigation.AddHome -> ChildRoutes.ADD_HOME
+                                },
+                            ) { launchSingleTop = true }
                         },
                     )
                 }
