@@ -85,6 +85,7 @@ public struct MemberActionTarget: Sendable, Equatable, Identifiable {
 
 /// Outbound event the host view reacts to (sheet presentation, alerts).
 public enum MembersListEvent: Sendable, Equatable {
+    case openResidencyReview
     case openInvite
     /// A13.1 — open the Add Guest form (issue a short-term guest pass).
     /// Fired from the Guests tab's FAB + empty-state CTA.
@@ -108,10 +109,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     public let title = "Members"
 
     public var topBarAction: TopBarAction? {
-        // The design ships a top-bar plus AND a FAB; per the iOS
-        // convention (Pets, Connections) we keep the FAB and drop the
-        // duplicate top-bar plus on phone widths.
-        nil
+        guard canManageMembers else { return nil }
+        return TopBarAction(icon: .gavel, accessibilityLabel: "Review residency claims") { @Sendable [weak self] in
+            Task { @MainActor in self?.pendingEvent = .openResidencyReview }
+        }
     }
 
     public var tabs: [ListOfRowsTab] {

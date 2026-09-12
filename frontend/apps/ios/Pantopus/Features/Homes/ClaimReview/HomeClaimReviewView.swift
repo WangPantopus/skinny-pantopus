@@ -23,14 +23,16 @@ public struct HomeClaimReviewView: View {
     @State private var viewModel: HomeClaimReviewViewModel
     @State private var verdictConfirm: VerdictConfirm?
     @State private var relationshipConfirm: RelationshipConfirm?
-    @State private var residencyConfirm: ResidencyConfirm?
+    @State private var residencyTarget: HomeResidencyReviewViewModel?
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
     @State private var relationshipTarget: HomeRelationshipViewModel?
 
     private let onBack: @MainActor () -> Void
 
-    public init(homeId: String, onBack: @escaping @MainActor () -> Void) {
-        _viewModel = State(initialValue: HomeClaimReviewViewModel(homeId: homeId))
+    public init(homeId: String, initialTab: HomeClaimReviewTab = .ownership, onBack: @escaping @MainActor () -> Void) {
+        let model = HomeClaimReviewViewModel(homeId: homeId)
+        model.selectedTab = initialTab
+        _viewModel = State(initialValue: model)
         self.onBack = onBack
     }
 
@@ -40,8 +42,15 @@ public struct HomeClaimReviewView: View {
             Button("Relationship decisions and recovery") {
                 relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
             }
+            .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
+            Button("Residency decisions and recovery") {
+                residencyTarget = .live(homeId: viewModel.homeId)
+            }
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.residencyRecovery")
             if case .loaded = viewModel.state {
                 HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             }
@@ -58,6 +67,9 @@ public struct HomeClaimReviewView: View {
         })
         .sheet(item: $relationshipTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
             HomeRelationshipView(model: target)
+        })
+        .sheet(item: $residencyTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            HomeResidencyReviewView(model: target)
         })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -110,26 +122,6 @@ public struct HomeClaimReviewView: View {
         } message: { target in
             Text(target.body)
         }
-        .confirmationDialog(
-            residencyConfirm?.title ?? "",
-            isPresented: residencyDialogBinding,
-            titleVisibility: .visible,
-            presenting: residencyConfirm
-        ) { target in
-            Button(target.title, role: target.approve ? nil : ButtonRole.destructive) {
-                Task {
-                    await viewModel.reviewResidency(
-                        claimId: target.claimId,
-                        approve: target.approve
-                    )
-                }
-                residencyConfirm = nil
-            }
-            .accessibilityIdentifier("homeClaimReview_residencyConfirm")
-            Button("Cancel", role: .cancel) { residencyConfirm = nil }
-        } message: { target in
-            Text(target.body)
-        }
     }
 
     // MARK: - Chrome
@@ -138,7 +130,7 @@ public struct HomeClaimReviewView: View {
         HStack(spacing: Spacing.s0) {
             Button(action: onBack) {
                 Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
@@ -149,7 +141,7 @@ public struct HomeClaimReviewView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity)
 
-            Color.clear.frame(width: 36, height: 36)
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 52)
@@ -308,18 +300,10 @@ public struct HomeClaimReviewView: View {
                             item: item,
                             isBusy: viewModel.actionLoading == item.id,
                             onApprove: {
-                                residencyConfirm = ResidencyConfirm(
-                                    claimId: item.id,
-                                    displayName: item.displayName,
-                                    approve: true
-                                )
+                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .approve)
                             },
                             onReject: {
-                                residencyConfirm = ResidencyConfirm(
-                                    claimId: item.id,
-                                    displayName: item.displayName,
-                                    approve: false
-                                )
+                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .reject)
                             }
                         )
                     }
@@ -381,25 +365,6 @@ public struct HomeClaimReviewView: View {
         }
     }
 
-    private struct ResidencyConfirm: Identifiable, Equatable {
-        let claimId: String
-        let displayName: String
-        let approve: Bool
-        var id: String {
-            "\(claimId):\(approve)"
-        }
-
-        var title: String {
-            approve ? "Approve" : "Reject"
-        }
-
-        var body: String {
-            approve
-                ? "Are you sure you want to approve \(displayName)'s residency claim?"
-                : "Are you sure you want to reject \(displayName)'s residency claim?"
-        }
-    }
-
     private var verdictDialogBinding: Binding<Bool> {
         Binding(
             get: { verdictConfirm != nil },
@@ -411,13 +376,6 @@ public struct HomeClaimReviewView: View {
         Binding(
             get: { relationshipConfirm != nil },
             set: { if !$0 { relationshipConfirm = nil } }
-        )
-    }
-
-    private var residencyDialogBinding: Binding<Bool> {
-        Binding(
-            get: { residencyConfirm != nil },
-            set: { if !$0 { residencyConfirm = nil } }
         )
     }
 }

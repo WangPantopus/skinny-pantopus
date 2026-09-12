@@ -1,47 +1,43 @@
 # Pantopus remaining work — September 11, 2026
 
-### Both native postal flows accepted; prepared residency review next
+### iOS prepared residency review accepted; Android installed acceptance next
 
-The [iOS postal milestone](home-ios-postal-recovery-2026-09-12.md) and
-[Android postal milestone](home-android-postal-recovery-2026-09-12.md) pass actual
-installed HTTP/SDK/SQL recovery: explicit apartment confirmation, failed status
-and retry, cancellation, lost/restarted mailing and code requests, missing-key
-recovery, unknown delivery without resend, historical proof and current-access
-removal with retired replies. All three original creation regressions pass on
-both native platforms. Final Android r2 repeats the complete postal journey.
-The optimized Release APK additionally passes a reproduced Moshi enum failure's
-before/after runtime check. Both exact postal fixtures and the creation fixture
-are cleaned; protected originals are acknowledged and no held work remains.
+The [iOS prepared-review milestone](home-ios-residency-review-2026-09-12.md)
+passes the complete installed HTTP/SDK/SQL journey on signed build r8: owner and
+member entries, explicit confirmation, failed reads, lost approval and rejection,
+cold original recovery, changed claims, later move-out/resubmission, revoked
+reviewer access, background preflight and retired authorized replies. Reload and
+Close stay fixed while review content scrolls. Final SQL records six POST attempts
+and three receipts, with no duplicate decisions or held work. All saved originals
+are acknowledged through the app; final screens were visually reviewed.
 
-Android full regression: Debug and Release each 4,540 passed / 80 skips across
-514 suites. Ktlint, Detekt, full Lint, privacy and signing pass. Full regression
-and Lint precede the final enum-retention annotation only; both rebuilt APKs,
-Release vital lint, four focused checks, file style, actual optimized serializer
-and installed postal journey pass after it. iOS production regression remains
-4,368 passed / 168 skips. A separately committed retry-fixture correction
-`1a60fc39470a` passes 30 consecutive iterations; no iOS production behavior changed.
-Final products and detailed evidence remain private. Both owned native runtimes
-are stopped with userdata retained; the physical iPhone stays Pantopus 1.0.0 (2).
+Full iOS regression passes **4,379 checks / 168 skips / zero failures**. Final
+style, privacy and signing pass. Source, all 27 Mach-O images and the installed
+production dylib are bound to private evidence; products are preserved in an APFS
+clone. All six exact review fixtures are cleaned. Final r6 verifies full migration
+ledger rows/columns and exact function definitions/properties before and after.
+The [iOS postal](home-ios-postal-recovery-2026-09-12.md) and
+[Android postal](home-android-postal-recovery-2026-09-12.md) milestones and their
+original creation regressions remain accepted. The physical iPhone stays 1.0.0 (2).
 
-**Continue now:** finish both native prepared residency review, invitations/private
-first use and legacy compatibility. An uncommitted iOS prepared-review candidate
-has models, protected store, transport, coordinator, view model and view; it is
-not yet wired, compiled or accepted and is outside the Android milestone.
-H08 needs a private-Home verification entry and ordinary selected-address
-submission before mail when no claim exists; ownership is separate. H07/H08/R01/
-R02 and the wider backlog remain open. Six of 80 inventory rows are closed;
-this is not whole-app completion or a percentage of remaining engineering effort.
+**Continue now:** finish the separate Android prepared-review candidate. Both
+owner and member entries are wired, Debug build and five recovery checks pass;
+optimized Release build and installed acceptance are next. The owned Android
+emulator is active with retained userdata. Then finish invitations/private first
+use and legacy compatibility. H08 needs a private-Home verification entry and an
+ordinary selected-address submission before mail when no claim exists; ownership
+is separate. H07/H08/R01/R02 and the wider backlog remain open. Six of 80 inventory
+rows are closed; this is not whole-app completion or remaining engineering effort.
 
-Predecessor `ecac0940f075bb1600b2ef4872567b8e1c3d8147` has all checks passing in
-[CI 34694232465](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34694232465)
-after its failed iPhone 16 Pro retry-test scope passed on rerun. Original
-diagnostics remain private. Verify the new Android milestone's own pushed-head
-checks. #32 remains a mergeable draft; #34 remains a conflicting draft with all
-checks passing at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration:
-43 Home / 21 paid / 52 combined, 12 identical shared SQL versions, zero timestamp
-collisions. Combined replay/adoption remains open. No merge, hosted release,
-physical-device update or paid activation. Paid services remain one final launch
-bundle; owner work/data/devices and artifacts are preserved.
+Predecessor `e44981d5cbe879481176aaf0286f8ee4b753381a` has every exact-head check
+passing in [CI 34698783795](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34698783795).
+Verify this new iOS milestone's own pushed-head checks. #32 remains a mergeable
+draft; #34 remains a conflicting draft with all checks passing at
+`e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration: 43 Home / 21 paid /
+52 combined, 12 identical shared versions, zero timestamp collisions. Combined
+replay/adoption remains open. No merge, hosted release, physical-device update or
+paid activation. Paid services remain one final launch bundle; owner work/data/
+devices and private evidence are preserved.
 
 ### iOS joining and personal status — accepted locally; Android next
 
@@ -109,9 +105,9 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [iOS postal recovery](home-ios-postal-recovery-2026-09-12.md).
-Browser/iOS postal and both native joining/status acceptance pass. Android postal,
-both native prepared-review flows, private first use and legacy compatibility remain open. The inventory retains those larger exit scopes.
+Latest pushed Home milestone: [Android postal recovery](home-android-postal-recovery-2026-09-12.md).
+Browser and both native postal/joining/status acceptance pass. Both native
+prepared-review flows, private first use and legacy compatibility remain open. The inventory retains those larger exit scopes.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is

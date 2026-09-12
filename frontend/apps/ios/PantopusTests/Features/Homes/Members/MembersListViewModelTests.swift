@@ -727,7 +727,7 @@ final class MembersListViewModelTests: XCTestCase {
         XCTAssertNil(vm.fab, "The review queue has nothing to create")
     }
 
-    func testNoTopBarActionByDesign() {
+    func testNoReviewActionBeforeAccessIsKnown() {
         let vm = makeVM()
         XCTAssertNil(vm.topBarAction)
     }

@@ -174,6 +174,9 @@ module.exports = function(container, { summary = false, place = false, dashboard
       };
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
+      // The native review queue uses the route's lazy permission check. Keep
+      // that actual IAM read when exercising dashboard-backed navigation.
+      if (dashboard && request === '../utils/homePermissions') return load.call(this, request, parent, isMain);
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
       if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }

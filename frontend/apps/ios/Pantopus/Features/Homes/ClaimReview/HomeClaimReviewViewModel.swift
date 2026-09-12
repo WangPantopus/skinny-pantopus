@@ -351,32 +351,6 @@ public final class HomeClaimReviewViewModel {
         }
     }
 
-    /// `POST /api/homes/:id/claim/:claimId/approve|reject`
-    /// (`backend/routes/home.js:6752` / `:6838`).
-    public func reviewResidency(claimId: String, approve: Bool) async {
-        guard actionLoading == nil, scope.isCurrent else { return }
-        actionLoading = claimId
-        defer { actionLoading = nil }
-        do {
-            let endpoint = approve
-                ? HomeClaimReviewEndpoints.approveResidencyClaim(homeId: homeId, claimId: claimId)
-                : HomeClaimReviewEndpoints.rejectResidencyClaim(homeId: homeId, claimId: claimId)
-            let _: HomeResidencyClaimActionResponse = try await api.request(endpoint)
-            try scope.requireCurrent()
-            toast = ToastMessage(
-                text: approve ? "Claim approved" : "Claim rejected",
-                kind: .success
-            )
-            await fetch()
-        } catch {
-            toast = ToastMessage(
-                text: (error as? APIError)?.errorDescription
-                    ?? (approve ? "Failed to approve claim" : "Failed to reject claim"),
-                kind: .error
-            )
-        }
-    }
-
     // MARK: - Fetch
 
     /// Three independent reads, all tolerated individually — the

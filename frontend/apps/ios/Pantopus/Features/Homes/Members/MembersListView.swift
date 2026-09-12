@@ -21,6 +21,7 @@ import SwiftUI
 public struct MembersListView: View {
     @State private var viewModel: MembersListViewModel
     @State private var showingInvite = false
+    @State private var showingResidencyReview = false
     @State private var removeConfirm: RemoveTarget?
     @State private var actionsTarget: MemberActionTarget?
     @State private var roleTarget: MemberActionTarget?
@@ -52,6 +53,11 @@ public struct MembersListView: View {
                     if let invitation { viewModel.handleInvited(invitation) }
                 }
             }
+            .sheet(isPresented: $showingResidencyReview, onDismiss: { Task { await viewModel.refresh() } }, content: {
+                NavigationStack {
+                    HomeClaimReviewView(homeId: homeId, initialTab: .residency) { showingResidencyReview = false }
+                }
+            })
             .modifier(MemberActionsDialogs(
                 viewModel: viewModel,
                 actionsTarget: $actionsTarget,
@@ -79,6 +85,8 @@ public struct MembersListView: View {
     private func handle(_ event: MembersListEvent?) {
         guard let event else { return }
         switch event {
+        case .openResidencyReview:
+            showingResidencyReview = true
         case .openInvite:
             showingInvite = true
         case .openAddGuest:
