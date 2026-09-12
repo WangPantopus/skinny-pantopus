@@ -3,6 +3,10 @@ const db = require('../config/supabaseAdmin');
 const verificationAge = require('../utils/verificationAge');
 const logger = require('../utils/logger');
 const MESSAGES = {
+  INVITE_ACCOUNT_UNAVAILABLE: 'Sign in again to recover your invitation decision.',
+  INVITE_DECISION_NOT_FOUND: 'This decision has not been found. Retry or cancel its original attempt.',
+  INVITE_DECISION_CONFLICT: 'This attempt has different details. Recover its original decision.',
+  INVITE_DECISION_CHANGED: 'This invitation changed. Review its current details before making a new decision.',
   INVITE_INVALID: 'Check the invitation details and try again.',
   INVITE_DATES_INVALID: 'Choose valid access dates with an explicit time zone.',
   HOME_NOT_FOUND: 'Home not found.', USER_NOT_FOUND: 'User not found.',
@@ -104,4 +108,4 @@ async function notifyAccepted(result,actorId) {
       homeName: result.home_label, homeId: result.homeId });
   } catch (err) { logger.error('Home invite acceptance notification failed after commit', { code: err.code }); }
 }
-module.exports = { write, act, list, listRequests, notifyCreated, notifyAccepted };
+module.exports = { write, act, list, listRequests, notifyCreated, notifyAccepted, failure };

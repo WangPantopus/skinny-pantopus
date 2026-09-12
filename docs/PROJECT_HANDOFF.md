@@ -14,6 +14,37 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Invitation decision backend accepted; protected client recovery next
+
+The [ordinary invitation decision protocol](home-invitation-decision-recovery-2026-09-12.md)
+adds account/session-bound context and immutable submit/read/cancel receipts.
+Actual HTTP/SDK/SQL passes lost replies, historical replay after access removal,
+wrong account/session, changed terms, failed reads, receipt rollback, concurrent
+accept/decline/cancel, viewer-only open-link decline and history after Home
+deletion. Current Home access remains separate. No client uses this contract yet.
+
+Backend regression: **5,170 passed / 16 skipped**, privacy gates pass. Populated
+upgrade preserves every value in **366 tables**, with zero function lint issues;
+rehearsal DDL rolls back. All three owned harness runs are cleaned, restoring
+complete role rows, full ledger and exact schema/function provenance. New source
+migration `20260912020000` is additive; no permanent adoption occurred.
+
+**Continue now:** browser protected original decisions, then native resolver/
+decision recovery, complete invitation delivery and ordinary-member onboarding;
+then legacy compatibility and the full backlog. H07/H08 remain partial, with
+**7 of 80 rows closed and 73 partial/open**. Notification delivery is still a
+separate best-effort boundary; the command proves the saved decision only.
+
+Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` is pushed. Its
+[CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692)
+is running with completed jobs passing. Finish that run while progressing locally,
+then push this milestone and verify its new head. Private-first-use `ff4c82609`
+is fully green. #32 remains a draft, #34 an unfinished conflicting draft. No merge.
+Migrations now total **44 Home / 21 paid / 53 combined**, with 12 identical shared
+versions and zero collisions; combined replay/adoption remains open. Paid services
+remain one final launch bundle. iPhone remains 1.0.0 (2), with owner work/data/
+devices and private evidence preserved.
+
 ### Browser invitation recovery accepted; full decision recovery next
 
 The [browser invitation milestone](home-browser-invitation-recovery-2026-09-12.md)

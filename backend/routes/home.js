@@ -19,6 +19,7 @@ const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
 const homeInvitationService = require('../services/homeInvitationService');
+const homeInvitationDecisions = require('../services/homeInvitationDecisionService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
@@ -1241,6 +1242,44 @@ router.get('/invitations/token/:token', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(preview);
   } catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
+});
+
+const invitationDecisionNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+// A fresh account/session scope is available even when the original invitation
+// has expired or been deleted. Historical command recovery needs no Home access.
+router.get('/invitations/decisions/session', invitationDecisionNoStore, verifyToken, (req, res) => {
+  try { res.json({ session: getRequestSessionScope(req) }); }
+  catch (error) { homeInvitationDecisions.sendError(res, error); }
+});
+router.get('/invitations/token/:token/decision-context', invitationDecisionNoStore, verifyToken, async (req, res) => {
+  try {
+    if (!requireExpectedSessionScope(req, res, { required: true })) return;
+    const result = await homeInvitationDecisions.prepare({ actorId: req.user.id, token: req.params.token });
+    res.json({ ...result, session: getRequestSessionScope(req) });
+  } catch (error) { homeInvitationDecisions.sendError(res, error); }
+});
+router.get('/invitations/decisions/:requestId', invitationDecisionNoStore, verifyToken, async (req, res) => {
+  try {
+    if (!requireExpectedSessionScope(req, res, { required: true })) return;
+    homeInvitationDecisions.send(res, await homeInvitationDecisions.read({ actorId: req.user.id,
+      requestId: req.params.requestId }), getRequestSessionScope(req));
+  } catch (error) { homeInvitationDecisions.sendError(res, error); }
+});
+router.post('/invitations/decisions', invitationDecisionNoStore, verifyToken, async (req, res) => {
+  try {
+    if (!requireExpectedSessionScope(req, res, { required: true })) return;
+    const { request_id, token, ...intent } = req.body || {};
+    homeInvitationDecisions.send(res, await homeInvitationDecisions.resolve({ actorId: req.user.id,
+      requestId: request_id, token, intent }), getRequestSessionScope(req));
+  } catch (error) { homeInvitationDecisions.sendError(res, error); }
+});
+router.post('/invitations/decisions/:requestId/cancel', invitationDecisionNoStore, verifyToken, async (req, res) => {
+  try {
+    if (!requireExpectedSessionScope(req, res, { required: true })) return;
+    const { token, ...intent } = req.body || {};
+    homeInvitationDecisions.send(res, await homeInvitationDecisions.resolve({ actorId: req.user.id,
+      requestId: req.params.requestId, token, intent, cancel: true }), getRequestSessionScope(req));
+  } catch (error) { homeInvitationDecisions.sendError(res, error); }
 });
 
 async function acceptHomeInvitation(req, res, selector) {
