@@ -14,34 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Postal code verification — backend milestone; browser flow next
+### Browser postal recovery — accepted locally; native joining/status next
 
-The [verification and review milestone](home-postcard-verification-recovery-2026-09-12.md)
-passes actual HTTP/SDK/SQL exact-card/attempt recovery, wrong-code and successful
-lost replies, cancellation, late-write rollback and current-access refusal.
-Prepared household approval now completes a coherent postal review. The actual
-promotion worker preserves child restrictions/denies, passes 201 earlier blocked
-rows and recovers failure. Sixteen observed races and four SQL contracts pass.
-Populated upgrade preserves all row values in 365 tables with zero function lint
-issues. Backend: 317 suites / 5,170 passed (16 skips); types/privacy pass.
+The [browser postal milestone](home-browser-postcard-recovery-2026-09-12.md)
+passes actual Chrome/HTTP/SDK/SQL initial-read recovery, explicit apartment binding,
+original mailing resume, missing-key recovery, unknown delivery without resend,
+code cancellation, lost wrong/success replies and protected proof-write repair.
+Postal proof remains separate from household review and current Home access;
+removed access and retired replies cannot restore navigation. Browser diagnostics
+exclude Home requests/responses and codes. Narrow layouts were visually reviewed.
 
-**Continue now:** browser postal status, selected mailing address, retained
-request/code recovery, unknown delivery and truthful post-verification access.
-Then native submission/status/postal/prepared review, invitations/private first use
-and the full backlog. H07/H08/R02 stay partial; 74 inventory entries remain. Legacy
-mutation compatibility, provider delivery and native destinations remain open.
-Paid services and dedicated postal code keys stay one final launch bundle.
+**Continue now:** native existing-Home submission and personal residency status,
+then native postal/prepared review, invitations/private first use and the full
+backlog. H07/H08/R02 remain partial; 74 inventory entries remain. Legacy mutation
+compatibility and provider/device delivery still require acceptance. Paid services
+and dedicated postal code keys stay one final launch bundle.
 
-Fresh HTTP/concurrency cleanup passes exact persisted review-function restoration;
-the report records an earlier cleanup error and its restoration provenance limit.
-Fixtures and temporary schema are removed; the ledger is unchanged. Predecessor
-`f035c47ef` has every CI job passing in
-[run 34680612277](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34680612277).
-Verify this milestone's own pushed-head checks. #32/#34 remain unfinished drafts;
-#34 conflicts. Source migrations: 43 Home / 21 paid / 52 combined, 12 identical
-shared files, no timestamp collisions; combined replay/adoption remains open.
-No merge, hosted release, paid activation or physical-device change. iPhone stays
-verified Pantopus 1.0.0 (2). Owner work, data/devices and artifacts are preserved.
+Browser regression: 93 suites / 1,193 passed. Final types, changed-surface lint and
+privacy pass; full web lint has zero errors and existing warnings. All owned
+fixtures/temporary schema are cleaned with exact review-definition/properties
+restoration and unchanged ledger. Source migrations remain 43 Home / 21 paid /
+52 combined with no timestamp collision; combined replay/adoption remains open.
+Backend predecessor `d88c9efcc` has completed backend/database/web, iOS lint/build
+and Android instrumented CI jobs passing in
+[run 34682745853](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34682745853);
+iPhone execution and Android lint/test/assembly remain unfinished at this checkpoint.
+Verify the browser milestone's own pushed-head checks. #32/#34 remain drafts;
+#34 conflicts. No merge, hosted release, paid activation or device change. iPhone
+stays verified Pantopus 1.0.0 (2). Owner work, data/devices and artifacts are preserved.
 
 ### Personal residency status — accepted milestone; mail verification next
 
