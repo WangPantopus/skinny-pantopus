@@ -28,10 +28,10 @@ final class HomeDashboardViewModelTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeAPI() -> APIClient {
+    private func makeAPI(session: URLSession? = nil) -> APIClient {
         APIClient(
             environment: .current,
-            session: SequencedURLProtocol.makeSession(),
+            session: session ?? SequencedURLProtocol.makeSession(),
             retryPolicy: .none
         )
     }
@@ -286,18 +286,21 @@ final class HomeDashboardViewModelTests: XCTestCase {
         stubHappyPath(detail: [
             .status(500, body: "{}"),
             .status(200, body: Self.detailBody)
-        ])
+        ], dashboard: Array(repeating: .status(200, body: Self.dashboardBody), count: 2))
+        // The first detail failure can cancel its concurrent dashboard read
+        // before URLProtocol consumes that response. Keep both attempts in one
+        // session-scoped queue; replacing the shared queue between attempts lets
+        // that cancelled sibling consume the retry's only dashboard response.
+        let session = SequencedURLProtocol.makeSession(routeResponses: SequencedURLProtocol.routeResponses)
         let vm = HomeDashboardViewModel(
             homeId: "ddc23600-0000-4000-8000-000000000100",
-            api: makeAPI()
+            api: makeAPI(session: session)
         ) { "current-dashboard-test-session" }
         await vm.load()
         guard case .error = vm.state else {
             XCTFail("Expected error first")
             return
         }
-        // Re-stub the one-shot intelligence routes for the retry pass.
-        stubHappyPath(detail: [.status(200, body: Self.detailBody)])
         await vm.refresh()
         guard case .loaded = vm.state else {
             XCTFail("Expected loaded after retry")

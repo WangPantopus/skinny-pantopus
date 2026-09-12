@@ -1,6 +1,7 @@
 # iOS postal recovery — September 12, 2026
 
-Accepted locally after `077195b4f72081dfd1a2c3c85f11f24dd9f195c6`. Final signed
+Milestone `ecac0940f075bb1600b2ef4872567b8e1c3d8147` is pushed, accepted locally
+after `077195b4f72081dfd1a2c3c85f11f24dd9f195c6`. Final signed
 build r13 passes the complete installed postal journey, all three existing
 creation recovery journeys and full native regression. Android postal and native
 prepared household review remain open; this is a bounded iOS milestone.
@@ -106,12 +107,42 @@ private first use and legacy compatibility. H08 still needs an explicit private-
 verification entry and ordinary selected-address submission before mail when no
 claim exists. Ownership remains a separate route. H07/H08/R01/R02 remain open.
 
-PR #32 and #34 remain drafts; #34 conflicts. Predecessor 077195b4f has its corrected
-instrumented job passing; the Android lint/test/assembly job is still running in
-[CI 34692652031](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34692652031).
-The new milestone must pass its own current-head CI. No merge, hosted migration,
+PR #32 and #34 remain drafts; #34 conflicts. Predecessor 077195b4f has every check
+passing in [CI 34692652031](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34692652031).
+This milestone must pass its own [current-head CI 34694232465](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34694232465),
+which is running. No merge, hosted migration,
 release, real provider delivery or paid activation. Owner work, databases, devices,
 prior artifacts and private evidence are preserved. The physical iPhone remains
 verified Pantopus 1.0.0 (2). Paid services and dedicated postal keys remain one final
 launch bundle. Broader device/provider/accessibility/version combinations stay
 explicit acceptance limits, not app-wide certification.
+
+## Current-head CI follow-up
+
+The pushed `ecac0940f075` run `34694232465` has one failure on iPhone 16 Pro:
+`HomeDashboardViewModelTests.testRetryRecovers`, expected loaded after retry.
+iPhone 16 and SE pass; the failure is outside the new postal tests. The test
+replaces shared one-shot route stubs between attempts; investigate its concurrent
+cancelled sibling request before treating the failure as an app or harness issue.
+Do not mark this head green. Private failed-job log:
+`/private/tmp/pantopus-home-ios-postal-ci-ecac-iphone16pro-r1.log`.
+
+The exact same `ecac0940f075` head now has all CI checks passing after one rerun
+of the failed scope. The first attempt remains recorded privately and above.
+This establishes an intermittent retry-test failure. The correction keeps
+both attempts' dashboard responses in one session-scoped queue without replacing
+shared stubs after a cancelled sibling. Assertions remain unchanged. SwiftLint,
+SwiftFormat, signed arm64 build and strict/deep signing pass. The corrected test
+passes **30 consecutive iterations** on the owned simulator (one unique test in
+the xcresult summary, 30 successful executions in its log).
+
+Private prefix `/private/tmp/pantopus-home-ios-postal-ci-` contains
+`source-build-r1.json`, `retry-r1.xcresult`, `retry-r1-summary.json`, build r2 and
+style/signing evidence. Final products are preserved in
+`/private/tmp/pantopus-home-native-artifacts-after-ios-postal-ci/Products`.
+The initial generic local build unnecessarily selected x86_64 as well as arm64;
+only that identified build was interrupted, its artifacts retained, and the
+arm64 build completed. An initial evidence assertion expected 30 unique tests;
+it was corrected to verify one unique test and all 30 successful iterations.
+The owned iOS simulator is stopped with userdata retained. No application feature,
+permission decision, physical phone or provider configuration changed in this fix.
