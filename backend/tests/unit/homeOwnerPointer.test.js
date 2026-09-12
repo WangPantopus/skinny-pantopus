@@ -11,6 +11,7 @@
 
 const express = require('express');
 const request = require('supertest');
+const createBoundary = require('../__mocks__/homeCreateBoundary');
 const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 
 jest.setTimeout(15000);
@@ -95,9 +96,12 @@ const CREATE_BODY = {
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  createBoundary.install();
+  require('../../utils/homePermissions').applyOccupancyTemplate.mockImplementation(
+    jest.requireActual('../../utils/homePermissions').applyOccupancyTemplate);
   pipelineService.runValidationPipeline.mockResolvedValue({
     verdict: { status: 'OK', confidence: 1.0, reasons: [] },
-    canonical_address: null,
+    canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
     address_id: null,
   });
 });
@@ -109,14 +113,14 @@ describe('POST /api/homes with is_owner', () => {
 
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home).toBeTruthy();
     // The pointer is what checkHomePermission's isLegacyOwner branch reads.
     // It must only ever be written by claim approval.
     expect(home.owner_id).toBeNull();
   });
 
-  test('still records the pending claim and the pending_doc occupancy', async () => {
+  test('delegates the pending ownership setup with capped occupancy templates', async () => {
     const app = createApp();
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
 
@@ -124,13 +128,14 @@ describe('POST /api/homes with is_owner', () => {
     expect(res.body.requires_verification).toBe(true);
     expect(res.body.verification_type).toBe('ownership');
 
-    const ownerRow = getTable('HomeOwner').find((o) => o.subject_id === TEST_USER);
-    expect(ownerRow).toBeTruthy();
-    expect(ownerRow.owner_status).toBe('pending');
-
-    expect(applyOccupancyTemplate).toHaveBeenCalledWith(
-      expect.anything(), TEST_USER, 'admin', 'pending_doc',
-    );
+    expect(createBoundary.commits()).toHaveLength(1);
+    expect(createBoundary.commits()[0].p_intent).toMatchObject({ is_owner: true, role: 'owner' });
+    for (const ageBand of ['adult', 'teen', 'child']) {
+      expect(applyOccupancyTemplate).toHaveBeenCalledWith(null, TEST_USER, 'admin', 'pending_doc', { ageBand, dryRun: true });
+      expect(createBoundary.commits()[0].p_templates[ageBand]).toMatchObject({ role_base: 'restricted_member',
+        verification_status: 'pending_doc', can_manage_home: false, can_manage_access: false, can_manage_finance: false });
+    }
+    expect(getTable('HomeOwner')).toHaveLength(0); // The route makes no independent writes.
   });
 });
 
@@ -273,7 +278,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
   beforeEach(() => {
     pipelineService.runValidationPipeline.mockResolvedValue({
       verdict: { status: 'MISSING_UNIT', confidence: 0.3, reasons: ['missing_secondary'] },
-      canonical_address: null,
+      canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
       address_id: null,
     });
   });
@@ -294,7 +299,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
       .send({ ...CREATE_BODY, no_unit_attestation: true });
 
     expect(res.status).toBe(201);
-    expect(getTable('Home')).toHaveLength(1);
+    expect(createBoundary.commits()).toHaveLength(1);
 
     const created = recordCreateHomeOutcome.mock.calls
       .map(([o]) => o)
@@ -306,7 +311,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
   test('the attestation does not clear any other refusal', async () => {
     pipelineService.runValidationPipeline.mockResolvedValue({
       verdict: { status: 'UNDELIVERABLE', confidence: 0.1, reasons: [] },
-      canonical_address: null,
+      canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
       address_id: null,
     });
     const app = createApp();
@@ -326,7 +331,7 @@ describe('coordinate provenance at create', () => {
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     // A fake 'verified' stamp here would make shouldBlockCoordinateOverwrite
     // protect the attacker's pin from later correction.
     expect(home.geocode_mode).toBe('user_asserted');
@@ -342,7 +347,7 @@ describe('coordinate provenance at create', () => {
     });
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home.geocode_mode).toBe('user_asserted');
     expect(home.geocode_provider).toBe('client');
     expect(home.geocode_accuracy).toBeNull();
@@ -363,7 +368,7 @@ describe('coordinate provenance at create', () => {
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home.geocode_mode).toBe('verified');
     expect(home.geocode_provider).toBe('google_validation');
     expect(home.map_center_lat).toBe(45.52);

@@ -70,6 +70,9 @@ function friendlyMessage(detail) {
 const SENSITIVE_FIELD_RE = /^(?:.*(?:password|passcode|token|secret|signature|credential|authorization)|code|otp|pin|grant|challenge)$/i;
 
 function isSensitiveField(path) {
+  // A malformed nested row/array can contain the entire access code, even
+  // when Joi reports its parent rather than the secret_value leaf.
+  if (path.some(part => /^(?:access_secrets|secret_value)$/i.test(String(part)))) return true;
   const leaf = String(path[path.length - 1] ?? '');
   return SENSITIVE_FIELD_RE.test(leaf);
 }

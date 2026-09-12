@@ -123,6 +123,7 @@ jest.mock('../../utils/trustState', () => ({
 }));
 
 jest.mock('../../utils/homePermissions', () => ({
+  applyOccupancyTemplate: jest.fn(),
   checkHomePermission: jest.fn().mockResolvedValue({ hasAccess: true }),
   getActiveOccupancy: jest.fn().mockResolvedValue(null),
   mapLegacyRole: jest.fn((role) => role),
@@ -354,7 +355,11 @@ describe('Home onboarding by autocomplete', () => {
     expect(n.place_id).toBe('address.12345');
   });
 
-  it('creates a home with resolved location', async () => {
+  it('passes resolved location to the atomic Home transaction', async () => {
+    const createBoundary = require('../__mocks__/homeCreateBoundary');
+    createBoundary.install();
+    require('../../utils/homePermissions').applyOccupancyTemplate.mockImplementation(
+      jest.requireActual('../../utils/homePermissions').applyOccupancyTemplate);
     const app = createHomeApp();
 
     seedTable('User', [{ id: USER_ID, role: 'user', name: 'Test User' }]);
@@ -378,10 +383,8 @@ describe('Home onboarding by autocomplete', () => {
     // Home creation should succeed (201 or 200)
     expect([200, 201]).toContain(res.status);
 
-    // Check the Home was inserted with correct location data
-    const homes = getTable('Home');
-    expect(homes.length).toBeGreaterThanOrEqual(1);
-    const home = homes[homes.length - 1];
+    // SQL setup is covered by real contracts; this checks provider provenance.
+    const home = createBoundary.preparedHome();
     expect(home.city).toBe('Portland');
     expect(home.state).toBe('OR');
   });

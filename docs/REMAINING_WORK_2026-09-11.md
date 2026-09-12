@@ -6,10 +6,12 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [native device location recovery](home-device-location-recovery-2026-09-11.md),
-following real native address entry and identity/private first use. Address-entry
-predecessor `b40b2ba5b` has all CI jobs green in
-[run 34658007186](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34658007186).
+Latest local Home milestone: [atomic Home creation backend](home-create-recovery-2026-09-11.md),
+following native location/address entry and identity/private first use. Production
+HTTP/SDK/SQL verifies rollback, duplicate refusal and original-command recovery.
+Retained client commands, create/join UI, primary eligibility and private first use
+remain open. Location predecessor `af28df271` has every CI job green in
+[run 34660624151](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34660624151).
 Verify the next pushed head separately through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
 #32 remains draft. #34 remains draft/conflicted at `e9ef2decb`, with an unwired
 durable-tip draft. Cancelled or earlier-head checks do not certify a final head.
@@ -121,7 +123,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 - [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Update their stale PR descriptions to match the final work.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile 39 Home / 21 payment / 48 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile 40 Home / 21 payment / 49 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 

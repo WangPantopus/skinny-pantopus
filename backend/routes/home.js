@@ -14,6 +14,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
+const homeCreateService = require('../services/homeCreateService');
 const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
@@ -30,8 +31,6 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
-const { getClaimRiskScore } = require('../utils/homeSecurityPolicy');
-const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
@@ -64,6 +63,7 @@ const HOME_TYPES = ['house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 
 const VISIBILITY_TYPES = ['private', 'members', 'public_preview'];
 
 const createHomeSchema = Joi.object({
+  request_id: Joi.string().uuid().optional(),
   // --- Required location fields ---
   address: Joi.string().min(5).max(255).required(),
   unit_number: Joi.string().max(50).optional().allow('', null),
@@ -103,13 +103,24 @@ const createHomeSchema = Joi.object({
   visibility: Joi.string().valid(...VISIBILITY_TYPES).optional(),
   amenities: Joi.object().optional(),
 
-  // --- Quick-setup fields (written to related tables after create) ---
+  // Optional setup is committed atomically with the Home and its creator.
+  access_secrets: Joi.array().max(20).items(Joi.object({
+    access_type: Joi.string().valid('wifi', 'door_code', 'gate_code', 'lockbox', 'garage', 'alarm', 'other').required(),
+    label: Joi.string().max(200).required(),
+    secret_value: Joi.string().max(2048).required(),
+    notes: Joi.string().max(4000).allow('', null).optional(),
+    visibility: Joi.string().valid(...HOME_DOCUMENT_VISIBILITIES).optional(),
+  })).optional(),
   wifi_name: Joi.string().max(200).optional().allow('', null),
   wifi_password: Joi.string().max(200).optional().allow('', null),
 
   /** Full ATTOM /property/detail bundle from property-suggestions — stored under Home.niche_data */
   attom_property_detail: Joi.object().unknown(true).optional().allow(null),
 }).custom((value, helpers) => {
+  if (value.role && value.is_owner !== undefined && value.is_owner !== (value.role === 'owner')) {
+    return helpers.message({ custom: 'Choose one consistent relationship to this Home.' });
+  }
+
   // Require zip
   if (!value.zip_code && !value.zipcode) {
     return helpers.message({ custom: 'zip_code or zipcode is required' });
@@ -396,12 +407,7 @@ async function findVerifiedAddressStepUp(userId, addressId) {
     .eq('status', 'verified');
 
   if (error) {
-    logger.warn('Failed to look up verified address step-up state', {
-      userId,
-      addressId,
-      error: error.message,
-    });
-    return null;
+    throw homeCreateService.failure();
   }
 
   const attempts = Array.isArray(data) ? data : data ? [data] : [];
@@ -679,37 +685,19 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
  * POST /api/homes
  * Create a new home
  */
-router.post('/', verifyToken, (req, res, next) => {
-  // Debug: log body before Joi validation
-  logger.info('POST /api/homes — raw body keys', {
-    keys: Object.keys(req.body || {}),
-    zip_code: req.body?.zip_code,
-    zipcode: req.body?.zipcode,
-    latitude: req.body?.latitude,
-    longitude: req.body?.longitude,
-    hasBody: !!req.body,
-  });
-  next();
-}, validate(createHomeSchema), async (req, res) => {
-  try {
+async function prepareHomeCreate(req) {
     const {
       address, unit_number, address_id: requestedAddressId, city, state, zip_code, zipcode, country,
       latitude, longitude, location,
       name, home_type, bedrooms, bathrooms, sq_ft, square_feet, lot_sq_ft,
-      year_built, move_in_date, is_owner, role,
+      year_built, move_in_date, role,
       description, entry_instructions, parking_instructions,
       visibility, amenities,
-      wifi_name, wifi_password,
       attom_property_detail,
     } = req.body;
     const userId = req.user.id;
+    const is_owner = role === 'owner' || (!role && req.body.is_owner === true);
 
-    logger.info('Creating home — body received', {
-      userId,
-      hasZip: !!(zip_code || zipcode),
-      hasCoords: !!(latitude && longitude),
-      fields: Object.keys(req.body),
-    });
 
     let normalizedZip = (zip_code || zipcode || '').toString();
 
@@ -728,7 +716,7 @@ router.post('/', verifyToken, (req, res, next) => {
         validation_path: 'address_id_required',
         message: 'Address must be validated before creating a home.',
       });
-      return res.status(422).json({
+      throw homeCreateService.refusal(422, {
         error: 'Address must be validated before creating a home.',
         code: 'ADDRESS_VALIDATION_REQUIRED',
         message: 'Validate the address first, then try creating the home again.',
@@ -737,11 +725,12 @@ router.post('/', verifyToken, (req, res, next) => {
 
     let canonicalAddress = null;
     if (requestedAddressId) {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from('HomeAddress')
         .select('*')
         .eq('id', requestedAddressId)
         .maybeSingle();
+      if (error) throw homeCreateService.failure();
       canonicalAddress = data || null;
 
       if (!canonicalAddress) {
@@ -753,7 +742,7 @@ router.post('/', verifyToken, (req, res, next) => {
           validation_path: 'requested_address_id',
           message: 'Address must be revalidated before creating a home.',
         });
-        return res.status(422).json({
+        throw homeCreateService.refusal(422, {
           error: 'Address must be revalidated before creating a home.',
           code: 'ADDRESS_VALIDATION_REQUIRED',
         });
@@ -784,7 +773,7 @@ router.post('/', verifyToken, (req, res, next) => {
       });
 
       addressVerdict = validationResult.verdict;
-      canonicalAddress = validationResult.canonical_address || canonicalAddress;
+      canonicalAddress = validationResult.canonical_address || null;
 
       if (requestedAddressId && validationResult.address_id && requestedAddressId !== validationResult.address_id) {
         await recordCreateHomeOutcomeSafe({
@@ -797,7 +786,7 @@ router.post('/', verifyToken, (req, res, next) => {
           validation_path: createHomeValidationPath,
           message: 'Address changed after validation. Please confirm the address again.',
         });
-        return res.status(422).json({
+        throw homeCreateService.refusal(422, {
           error: 'Address changed after validation. Please confirm the address again.',
           code: 'ADDRESS_VALIDATION_MISMATCH',
           verdict_status: validationResult.verdict.status,
@@ -816,7 +805,7 @@ router.post('/', verifyToken, (req, res, next) => {
           fallback_reason: outageError.body.fallback_reason,
           message: outageError.body.message,
         });
-        return res.status(outageError.statusCode).json(outageError.body);
+        throw homeCreateService.refusal(outageError.statusCode, outageError.body);
       }
 
       if (!matchesCanonicalAddress(canonicalAddress, requestAddressInput)) {
@@ -833,7 +822,7 @@ router.post('/', verifyToken, (req, res, next) => {
           fallback_reason: mismatchError.body.fallback_reason,
           message: mismatchError.body.message,
         });
-        return res.status(mismatchError.statusCode).json(mismatchError.body);
+        throw homeCreateService.refusal(mismatchError.statusCode, mismatchError.body);
       }
 
       if (!(canonicalAddress?.last_validated_at && canonicalAddress?.validation_raw_response)) {
@@ -850,7 +839,7 @@ router.post('/', verifyToken, (req, res, next) => {
           fallback_reason: missingValidationError.body.fallback_reason,
           message: missingValidationError.body.message,
         });
-        return res.status(missingValidationError.statusCode).json(missingValidationError.body);
+        throw homeCreateService.refusal(missingValidationError.statusCode, missingValidationError.body);
       }
 
       if (!isFreshTimestamp(canonicalAddress.last_validated_at, addressConfig.outageFallback.maxValidationAgeDays)) {
@@ -867,7 +856,7 @@ router.post('/', verifyToken, (req, res, next) => {
           fallback_reason: staleValidationError.body.fallback_reason,
           message: staleValidationError.body.message,
         });
-        return res.status(staleValidationError.statusCode).json(staleValidationError.body);
+        throw homeCreateService.refusal(staleValidationError.statusCode, staleValidationError.body);
       }
 
       const storedInputs = pipelineService.buildStoredDecisionInputs(canonicalAddress);
@@ -905,7 +894,7 @@ router.post('/', verifyToken, (req, res, next) => {
           fallback_reason: unsafeFallbackError.body.fallback_reason,
           message: unsafeFallbackError.body.message,
         });
-        return res.status(unsafeFallbackError.statusCode).json(unsafeFallbackError.body);
+        throw homeCreateService.refusal(unsafeFallbackError.statusCode, unsafeFallbackError.body);
       }
 
       logger.warn('Address providers unavailable; allowing createHome from safe cached canonical validation', {
@@ -945,13 +934,15 @@ router.post('/', verifyToken, (req, res, next) => {
         fallback_reason: outageError.body.fallback_reason,
         message: outageError.body.message,
       });
-      return res.status(outageError.statusCode).json(outageError.body);
+      throw homeCreateService.refusal(outageError.statusCode, outageError.body);
     }
 
     const stepUpPolicy = getCreateHomeStepUpPolicy(addressVerdict);
+    let verifiedCreateStepUp = null;
     if (stepUpPolicy) {
       const canonicalAddressId = canonicalAddress?.id || requestedAddressId || null;
       const verifiedStepUp = await findVerifiedAddressStepUp(userId, canonicalAddressId);
+      verifiedCreateStepUp = verifiedStepUp;
 
       if (!verifiedStepUp) {
         const gateError = buildStepUpRequiredError(addressVerdict, canonicalAddressId, stepUpPolicy);
@@ -966,7 +957,7 @@ router.post('/', verifyToken, (req, res, next) => {
           step_up_reason: gateError.body.step_up_reason,
           message: gateError.body.message,
         });
-        return res.status(gateError.statusCode).json(gateError.body);
+        throw homeCreateService.refusal(gateError.statusCode, gateError.body);
       }
 
       logger.info('Allowing createHome after completed address step-up verification', {
@@ -1022,12 +1013,15 @@ router.post('/', verifyToken, (req, res, next) => {
         message: problem.message,
       });
 
-      return res.status(statusCode).json({
+      throw homeCreateService.refusal(statusCode, {
         ...problem,
         verdict_status: addressVerdict.status,
         reasons: addressVerdict.reasons || [],
       });
     }
+
+    // Failed canonical persistence cannot authorize an unbound Home.
+    if (!canonicalAddress?.id) throw homeCreateService.failure();
 
     const normalizedLine1 = canonicalAddress?.address_line1_norm || address;
     const normalizedLine2 = canonicalAddress?.address_line2_norm ?? (unit_number || null);
@@ -1045,9 +1039,6 @@ router.post('/', verifyToken, (req, res, next) => {
     const addressHash = canonicalAddress?.address_hash ||
       computeAddressHash(normalizedLine1, normalizedLine2 || '', normalizedCity, normalizedState, normalizedZip, countryVal);
 
-    // Roles that require residency verification before full access
-    const requiresResidencyVerification = ['renter', 'household', 'property_manager'].includes(role);
-
     // Guest cannot create a canonical home — they must attach to an existing one
     if (role === 'guest') {
       await recordCreateHomeOutcomeSafe({
@@ -1060,7 +1051,7 @@ router.post('/', verifyToken, (req, res, next) => {
         validation_path: createHomeValidationPath,
         message: 'Guests cannot create a new home. Ask a resident, owner, or property manager to set it up first, or choose a different role.',
       });
-      return res.status(400).json({
+      throw homeCreateService.refusal(400, {
         error: 'Guests cannot create a new home. Ask a resident, owner, or property manager to set it up first, or choose a different role.',
         code: 'GUEST_CANNOT_CREATE_HOME',
       });
@@ -1135,373 +1126,73 @@ router.post('/', verifyToken, (req, res, next) => {
       homeData.geocode_provider = coordsAreCanonical ? 'google_validation' : 'client';
       homeData.geocode_mode = coordsAreCanonical ? 'verified' : 'user_asserted';
       homeData.geocode_accuracy = coordsAreCanonical ? 'rooftop' : null;
-      homeData.geocode_place_id = coordsAreCanonical ? (req.body.geocode_place_id || null) : null;
+      homeData.geocode_place_id = coordsAreCanonical ? (canonicalAddress.geocode_place_id || null) : null;
       homeData.geocode_source_flow = 'home_onboarding';
       homeData.geocode_created_at = new Date().toISOString();
     }
 
-    // Create home
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .insert(homeData)
-      .select()
-      .single();
-
-    if (error) {
-      // Handle duplicate active home at same address (race condition with unique index)
-      if (error.code === '23505' && error.message?.includes('address_hash')) {
-        const { data: existingHome } = await supabaseAdmin
-          .from('Home')
-          .select('id')
-          .eq('address_hash', addressHash)
-          .eq('home_status', 'active')
-          .maybeSingle();
-        if (existingHome) {
-          await recordCreateHomeOutcomeSafe({
-            address_id: canonicalAddress?.id || requestedAddressId || null,
-            outcome: 'conflict',
-            verdict_status: addressVerdict?.status || null,
-            reasons: addressVerdict?.reasons || [],
-            code: 'HOME_ALREADY_EXISTS',
-            status_code: 409,
-            validation_path: createHomeValidationPath,
-            message: 'This home already exists on Pantopus.',
-          });
-          return res.status(409).json({
-            error: 'This home already exists on Pantopus.',
-            code: 'HOME_ALREADY_EXISTS',
-            home_id: existingHome.id,
-          });
-        }
-      }
-      logger.error('Error creating home', { error: error.message, code: error.code, details: error.details, hint: error.hint, userId });
-      await recordCreateHomeOutcomeSafe({
-        address_id: canonicalAddress?.id || requestedAddressId || null,
-        outcome: 'error',
-        verdict_status: addressVerdict?.status || null,
-        reasons: addressVerdict?.reasons || [],
-        code: 'HOME_CREATE_FAILED',
-        status_code: 500,
-        validation_path: createHomeValidationPath,
-        message: error.message,
-      });
-      return res.status(500).json({ error: 'Failed to create home', debug: error.message });
-    }
-
-    logger.info('Home created', { homeId: home.id, userId });
-
-    // --- Auto-create HomeAddress record and link to Home ---
-    if (!homeData.address_id) {
-      try {
-        const { data: addrRecord, error: addrError } = await supabaseAdmin
-          .from('HomeAddress')
-          .insert({
-            address_line1_norm: normalizedLine1,
-            address_line2_norm: normalizedLine2 || null,
-            city_norm: normalizedCity,
-            state: normalizedState.toUpperCase(),
-            postal_code: normalizedZip,
-            country: countryVal,
-            address_hash: addressHash,
-            geocode_lat: coords?.latitude || null,
-            geocode_lng: coords?.longitude || null,
-            place_type: normalizedLine2 ? 'unit' : 'single_family',
-            // Same provenance rule as the Home row above: 'verified' only when
-            // the pipeline produced these coordinates.
-            geocode_provider: coordsAreCanonical ? 'google_validation' : 'client',
-            geocode_mode: coordsAreCanonical ? 'verified' : 'user_asserted',
-            geocode_accuracy: coordsAreCanonical ? 'rooftop' : null,
-            geocode_place_id: coordsAreCanonical ? (req.body.geocode_place_id || null) : null,
-            geocode_source_flow: 'home_onboarding',
-            geocode_created_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-
-        if (addrError && !addrError.message?.includes('duplicate')) {
-          logger.warn('Failed to create HomeAddress (non-fatal)', { error: addrError.message, homeId: home.id });
-        }
-
-        const canonicalId = addrRecord?.id;
-        if (!canonicalId && addrError?.message?.includes('duplicate')) {
-          const { data: existing } = await supabaseAdmin
-            .from('HomeAddress')
-            .select('id')
-            .eq('address_hash', addressHash)
-            .maybeSingle();
-          if (existing?.id) {
-            await supabaseAdmin.from('Home').update({ address_id: existing.id }).eq('id', home.id);
-          }
-        } else if (canonicalId) {
-          await supabaseAdmin.from('Home').update({ address_id: canonicalId }).eq('id', home.id);
-        }
-      } catch (addrErr) {
-        logger.warn('HomeAddress creation error (non-fatal)', { error: addrErr.message });
-      }
-    }
-
-    // --- BUG 6C: Auto-link unit homes to parent building ---
-    if (normalizedLine2) {
-      try {
-        // Look for an existing home at the same base address (no unit) that could be the parent building
-        const baseAddrLower = normalizedLine1.trim().toLowerCase();
-        const cityLower = normalizedCity.trim().toLowerCase();
-        const stateLower = normalizedState.trim().toLowerCase();
-
-        const { data: parentCandidates } = await supabaseAdmin
-          .from('Home')
-          .select('id, home_type, address2')
-          .ilike('address', baseAddrLower)
-          .ilike('city', cityLower)
-          .ilike('state', stateLower)
-          .eq('home_status', 'active')
-          .neq('id', home.id)
-          .is('address2', null)
-          .limit(1);
-
-        let parentId = parentCandidates?.[0]?.id || null;
-
-        // If no explicit parent building exists, find any sibling unit and share its parent
-        if (!parentId) {
-          const { data: siblings } = await supabaseAdmin
-            .from('Home')
-            .select('parent_home_id')
-            .ilike('address', baseAddrLower)
-            .ilike('city', cityLower)
-            .ilike('state', stateLower)
-            .eq('home_status', 'active')
-            .neq('id', home.id)
-            .not('parent_home_id', 'is', null)
-            .limit(1);
-
-          parentId = siblings?.[0]?.parent_home_id || null;
-        }
-
-        if (parentId) {
-          await supabaseAdmin
-            .from('Home')
-            .update({ parent_home_id: parentId, updated_at: new Date().toISOString() })
-            .eq('id', home.id);
-          logger.info('Auto-linked unit to parent building', { homeId: home.id, parentId });
-        }
-      } catch (parentErr) {
-        logger.warn('Failed to auto-link parent building (non-fatal)', { error: parentErr.message, homeId: home.id });
-      }
-    }
-
-    // --- Auto-create occupancy for creator via applyOccupancyTemplate ---
-    // All occupancy writes go through the single template function.
-    const creatorRoleBaseMap = {
-      owner: 'admin', renter: 'lease_resident', household: 'member',
-      property_manager: 'manager', guest: 'guest',
+    return { home: homeData, canonicalAddress,
+      stepUp: verifiedCreateStepUp ? { id: verifiedCreateStepUp.id, max_age_days: addressConfig.mailVerification.stepUpMaxAgeDays } : null,
+      audit: { verdict_status: addressVerdict?.status || null,
+        reasons: [...(addressVerdict?.reasons || []), ...(allowCreateWithNoUnitAttestation ? ['no_unit_attestation'] : [])],
+        validation_path: createHomeValidationPath, step_up_reason: stepUpPolicy?.policy || null },
     };
-    const creatorRoleBase = creatorRoleBaseMap[role] || (is_owner ? 'admin' : 'member');
+}
 
-    try {
-      if (is_owner) {
-        // Owners: admin role, pending doc verification
-        await applyOccupancyTemplate(home.id, userId, 'admin', 'pending_doc');
-      } else if (role === 'guest') {
-        // Guests: verified immediately
-        await applyOccupancyTemplate(home.id, userId, 'guest', 'verified');
-      } else {
-        // Non-owners (renter, household, property_manager): self-bootstrap
-        // They created the home, so they're the first person at this address
-        await applyOccupancyTemplate(home.id, userId, creatorRoleBase, 'provisional_bootstrap');
-      }
-    } catch (occError) {
-      logger.warn('Failed to create creator occupancy (non-fatal)', { error: occError.message, homeId: home.id });
-    }
-
-    // --- Ownership claim flow ---
-    // If user claims to be owner, create a PENDING HomeOwner + an
-    // OwnershipClaim that requires verification before becoming verified.
-    // This prevents instant unverified ownership (spec §7.1).
-    let ownershipClaim = null;
-    if (is_owner) {
-      // Create pending HomeOwner record (not yet verified)
-      const { error: ownerError } = await supabaseAdmin
-        .from('HomeOwner')
-        .insert({
-          home_id: home.id,
-          subject_type: 'user',
-          subject_id: userId,
-          owner_status: 'pending',
-          is_primary_owner: true,
-          added_via: 'claim',
-          verification_tier: 'weak',
-        });
-      if (ownerError) {
-        logger.warn('Failed to create HomeOwner (non-fatal)', { error: ownerError.message, homeId: home.id });
-      }
-
-      // TODO: Make claim method dynamic once property_data_match is implemented.
-      // For now, doc_upload is the only supported self-service method.
-      const claimMethod = 'doc_upload';
-
-      // Calculate risk score for the auto-created claim
-      const riskScore = await getClaimRiskScore({ method: claimMethod }, userId);
-      let routingClassification = 'standalone_claim';
-      try {
-        routingClassification = (await homeClaimRoutingService.classifySubmission({
-          homeId: home.id,
-          userId,
-          claimType: 'owner',
-          method: claimMethod,
-        })).routingClassification;
-      } catch (classificationError) {
-        logger.warn('household_claim.home_creation_classification_failed', {
-          homeId: home.id,
-          claimant_user_id: userId,
-          error: classificationError.message,
-        });
-      }
-      homeClaimCompatService.logClaimSubmissionDecision({
-        source: 'home_creation',
-        homeId: home.id,
-        userId,
-        claimType: 'owner',
-        method: claimMethod,
-        allowed: true,
-        routingClassification,
-      });
-
-      // Create an ownership claim in "submitted" state
-      const { data: claim, error: claimError } = await supabaseAdmin
-        .from('HomeOwnershipClaim')
-        .insert({
-          home_id: home.id,
-          claimant_user_id: userId,
-          claim_type: 'owner',
-          state: 'submitted',
-          method: claimMethod,
-          risk_score: riskScore,
-          ...(await homeClaimCompatService.buildInitialClaimCompatibilityFields({
-            homeId: home.id,
-            userId,
-            claimType: 'owner',
-            method: claimMethod,
-            legacyState: 'submitted',
-            routingClassification,
-          })),
-        })
-        .select('id, state')
-        .single();
-
-      if (claimError) {
-        // 23505 = unique_violation from idx_home_claim_active_unique (concurrent claim race)
-        if (claimError.code === '23505') {
-          logger.warn('Ownership claim blocked by active claim index (non-fatal)', { homeId: home.id });
-        } else {
-          logger.warn('Failed to create ownership claim (non-fatal)', { error: claimError.message, homeId: home.id });
+router.get('/create-commands/:requestId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try { return homeCreateService.send(res, await homeCreateService.read(req.user.id, req.params.requestId)); }
+  catch (error) { return homeCreateService.sendError(res, error); }
+});
+router.post('/create-commands/:requestId/cancel', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try { return homeCreateService.send(res, await homeCreateService.cancel(req.user.id, req.params.requestId)); }
+  catch (error) { return homeCreateService.sendError(res, error); }
+});
+router.post('/', verifyToken, (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  next();
+}, validate(createHomeSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  // Older clients still receive atomic setup and address deduplication. New
+  // clients persist their UUID and original body before making this request.
+  const requestId = req.body.request_id || crypto.randomUUID();
+  const actorId = req.user.id;
+  let leaseId;
+  try {
+    const command = await homeCreateService.begin(actorId, requestId, req.body);
+    leaseId = command.worker_lease_id;
+    if (!leaseId) return homeCreateService.send(res, command);
+    const prepared = await prepareHomeCreate(req);
+    const result = await homeCreateService.commit(actorId, requestId, leaseId, req.body, prepared);
+    if (result.committed_now) {
+      await recordCreateHomeOutcomeSafe({ ...prepared.audit, address_id: prepared.home.address_id, outcome: 'created',
+        code: 'HOME_CREATED', status_code: 201,
+        message: 'Home and private setup saved; verification remains required.' });
+      if (result.ownership_claim_id) {
+        try {
+          const { notifyOwnershipVerificationNeeded } = require('../services/notificationService');
+          await notifyOwnershipVerificationNeeded({ userId: actorId, homeName: req.body.name || req.body.address,
+            homeId: result.home_id, claimId: result.ownership_claim_id });
+        } catch (_) {
+          logger.warn('Ownership setup notification unavailable', { homeId: result.home_id });
         }
-      } else {
-        ownershipClaim = claim;
-        await homeClaimCompatService.recalculateHouseholdResolutionState(home.id);
-        await writeAuditLog(home.id, userId, 'OWNERSHIP_CLAIM_SUBMITTED', 'HomeOwnershipClaim', claim.id, {
-          method: claimMethod, claim_type: 'owner', risk_score: riskScore, context: 'home_creation',
-        });
       }
     }
-
-    // --- Auto-create default HomePreference ---
-    const { error: prefError } = await supabaseAdmin
-      .from('HomePreference')
-      .insert({ home_id: home.id });
-    if (prefError) {
-      logger.warn('Failed to create home preferences (non-fatal)', { error: prefError.message, homeId: home.id });
-    }
-
-    // --- Auto-create WiFi access secret if provided ---
-    if (wifi_name || wifi_password) {
+    return homeCreateService.send(res, result);
+  } catch (error) {
+    if (leaseId) {
       try {
-        await homeAccessSecretService.mutate({
-          homeId: home.id,
-          actorId: userId,
-          action: 'bootstrap_wifi',
-          payload: {
-            access_type: 'wifi',
-            label: wifi_name || 'Home WiFi',
-            secret_value: wifi_password || '',
-            visibility: 'members',
-          },
-        });
-      } catch (wifiError) {
-        logger.warn('Failed to create wifi secret (non-fatal)', { code: wifiError.code, homeId: home.id });
+        // A lost commit reply can already have completed. Its durable outcome
+        // wins; transient failures only release this worker for an exact retry.
+        return homeCreateService.send(res, await homeCreateService.finish(actorId, requestId, leaseId, error), error);
+      } catch (_) {
+        // Even an earlier provider refusal cannot resolve a newer worker's
+        // outcome when the durable-command read fails.
+        return homeCreateService.sendError(res, homeCreateService.failure());
       }
     }
-
-    // Parse location back to a friendly object
-    const response = { ...home };
-    if (home.location) {
-      response.location = parsePostGISPoint(home.location);
-    }
-
-    // Include ownership verification status in response
-    if (is_owner && ownershipClaim) {
-      response.ownership_status = 'pending_verification';
-      response.ownership_claim_id = ownershipClaim.id;
-    }
-
-    // Send in-app notification guiding user to upload ownership evidence
-    if (is_owner && ownershipClaim) {
-      try {
-        const { notifyOwnershipVerificationNeeded } = require('../services/notificationService');
-        await notifyOwnershipVerificationNeeded({
-          userId,
-          homeName: name || address,
-          homeId: home.id,
-          claimId: ownershipClaim.id,
-        });
-      } catch (notifErr) {
-        logger.warn('Failed to send ownership verification notification (non-fatal)', { error: notifErr.message });
-      }
-    }
-
-    const needsVerification = is_owner || requiresResidencyVerification;
-    let messageText = 'Home created successfully';
-    let verificationType = null;
-    if (is_owner) {
-      messageText = 'Home created. Please upload a deed, closing disclosure, or property tax bill to verify ownership.';
-      verificationType = 'ownership';
-    } else if (requiresResidencyVerification) {
-      messageText = 'Home created. To verify your residency, please upload a lease, utility bill, or similar document.';
-      verificationType = 'residency';
-    }
-
-    await recordCreateHomeOutcomeSafe({
-      address_id: canonicalAddress?.id || response.address_id || requestedAddressId || null,
-      outcome: 'created',
-      verdict_status: addressVerdict?.status || null,
-      reasons: allowCreateWithNoUnitAttestation
-        ? [...(addressVerdict?.reasons || []), 'no_unit_attestation']
-        : (addressVerdict?.reasons || []),
-      code: 'HOME_CREATED',
-      status_code: 201,
-      validation_path: createHomeValidationPath,
-      step_up_reason: stepUpPolicy?.policy || null,
-      message: messageText,
-    });
-
-    res.status(201).json({
-      message: messageText,
-      home: response,
-      requires_verification: needsVerification,
-      verification_type: verificationType,
-      role: role || (is_owner ? 'owner' : 'member'),
-    });
-
-  } catch (err) {
-    logger.error('Home creation error', { error: err.message, userId: req.user.id });
-    await recordCreateHomeOutcomeSafe({
-      address_id: req.body?.address_id || null,
-      outcome: 'error',
-      code: 'HOME_CREATE_FAILED',
-      status_code: 500,
-      validation_path: 'exception',
-      message: err.message,
-    });
-    res.status(500).json({ error: 'Failed to create home' });
+    return homeCreateService.sendError(res, error);
   }
 });
 

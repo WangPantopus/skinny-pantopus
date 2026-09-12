@@ -14,6 +14,29 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Atomic Home creation backend — September 11
+
+The [creation repair](home-create-recovery-2026-09-11.md) passes actual production
+HTTP/SDK/SQL rollback, duplicate/concurrent requests, retained outcomes, lost replies,
+cancellation fencing and pending-owner/private access setup. Backend regression
+passes 317 suites / 5,170 checks (16 skips); privacy gates and SQL/function checks
+pass. A populated upgrade preserves all row values in 365 existing tables. Exact
+fixture rows, temporary functions and fault trigger are cleaned; no ledger changed.
+Location predecessor `af28df271` has every CI job green in
+[run 34660624151](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34660624151).
+Verify this backend checkpoint's own pushed-head CI, including empty-schema replay.
+
+**Continue now:** protected original create/join commands on native and browser,
+lost-reply/restart/cancel UI, optional setup in the same command, truthful primary
+eligibility and private first use; then native residency and the full backlog.
+H07/H08/R02 remain open. Legacy clients without a retained UUID, existing orphan/
+duplicate Home admission and best-effort notification delivery are explicit limits.
+There are still 74 open inventory entries; counts are not effort percentages.
+Source migrations are 40 Home / 21 paid / 49 combined with no shared-content
+conflicts. #32/#34 remain unfinished drafts; #34 conflicts. No merge, permanent
+adoption or paid activation. Owner work, devices, databases, accepted native
+products and private evidence remain preserved; paid services stay one final bundle.
+
 ### Native device location recovery — September 11
 
 The [location milestone](home-device-location-recovery-2026-09-11.md) passes

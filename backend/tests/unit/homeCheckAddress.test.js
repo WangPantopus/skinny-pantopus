@@ -1,12 +1,13 @@
 const express = require('express');
 const request = require('supertest');
+const createBoundary = require('../__mocks__/homeCreateBoundary');
 const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
 const addressConfig = require('../../config/addressVerification');
 
 jest.setTimeout(15000);
 
 jest.mock('../../middleware/verifyToken', () => (req, _res, next) => {
-  req.user = { id: 'test-user-id', role: 'user' };
+  req.user = { id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa', role: 'user' };
   next();
 });
 
@@ -69,6 +70,9 @@ const {
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  createBoundary.install();
+  require('../../utils/homePermissions').applyOccupancyTemplate.mockImplementation(
+    jest.requireActual('../../utils/homePermissions').applyOccupancyTemplate);
   addressConfig.outageFallback.enabled = true;
   addressConfig.outageFallback.maxValidationAgeDays = 30;
   addressConfig.outageFallback.minConfidence = 0.8;
@@ -255,7 +259,7 @@ describe('POST /api/homes/check-address', () => {
 });
 
 describe('POST /api/homes stored-address fallback', () => {
-  test('WiFi bootstrap uses one actor-bound secret transaction after creating the exact Home', async () => {
+  test('WiFi setup travels in the original atomic Home command without a separate route write', async () => {
     const service = require('../../services/homeAccessSecretService');
     const mutate = jest.spyOn(service, 'mutate').mockResolvedValue({ id: 'secret', secret_value: 'synthetic-wifi' });
     seedTable('HomeAddress', [{
@@ -271,9 +275,10 @@ describe('POST /api/homes stored-address fallback', () => {
         role: 'owner', is_owner: true, wifi_name: 'Synthetic network', wifi_password: 'synthetic-wifi',
       });
       expect(res.status).toBe(201);
-      expect(mutate).toHaveBeenCalledTimes(1);
-      expect(mutate).toHaveBeenCalledWith({ homeId: res.body.home.id, actorId: res.body.home.created_by_user_id, action: 'bootstrap_wifi',
-        payload: { access_type: 'wifi', label: 'Synthetic network', secret_value: 'synthetic-wifi', visibility: 'members' } });
+      expect(mutate).not.toHaveBeenCalled();
+      expect(createBoundary.commits()).toHaveLength(1);
+      expect(createBoundary.commits()[0]).toMatchObject({ p_actor_id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
+        p_intent: { wifi_name: 'Synthetic network', wifi_password: 'synthetic-wifi' } });
       expect(getTable('HomeAccessSecret')).toHaveLength(0);
       expect(getTable('HomeAccessSecretValue')).toHaveLength(0);
       expect(JSON.stringify(res.body)).not.toContain('synthetic-wifi');
@@ -483,7 +488,7 @@ describe('POST /api/homes stored-address fallback', () => {
       use_provider_parcel_for_classification: false,
     }));
     expect(res.status).toBe(201);
-    expect(res.body.home.address_id).toBe('44444444-4444-4444-8444-444444444444');
+    expect(createBoundary.preparedHome().address_id).toBe('44444444-4444-4444-8444-444444444444');
     expect(getTable('AddressVerificationEvent')).toEqual(expect.arrayContaining([
       expect.objectContaining({
         event_type: 'create_home_outcome',
@@ -497,7 +502,7 @@ describe('POST /api/homes stored-address fallback', () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/homes')
-      .set('x-test-user-id', 'test-user-id')
+      .set('x-test-user-id', 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa')
       .send({
         address: '123 Main St',
         city: 'Portland',
@@ -726,7 +731,7 @@ describe('POST /api/homes stored-address fallback', () => {
     );
     expect(addressDecisionEngine.classify).not.toHaveBeenCalled();
     expect(res.status).toBe(201);
-    expect(res.body.home.address_id).toBe('88888888-8888-4888-8888-888888888888');
+    expect(createBoundary.preparedHome().address_id).toBe('88888888-8888-4888-8888-888888888888');
   });
 
   test('flag ON blocks MIXED_USE create-home until address step-up is completed', async () => {
@@ -883,7 +888,7 @@ describe('POST /api/homes stored-address fallback', () => {
     seedTable('AddressVerificationAttempt', [
       {
         id: 'verified-step-up-1',
-        user_id: 'test-user-id',
+        user_id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
         address_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         method: 'mail_code',
         status: 'verified',
@@ -918,7 +923,7 @@ describe('POST /api/homes stored-address fallback', () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.home.address_id).toBe('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    expect(createBoundary.preparedHome().address_id).toBe('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   });
 
   test('stale mail step-up does not satisfy create-home gating', async () => {
@@ -952,7 +957,7 @@ describe('POST /api/homes stored-address fallback', () => {
     });
     seedTable('AddressVerificationAttempt', [{
       id: 'verified-step-up-stale',
-      user_id: 'test-user-id',
+      user_id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
       address_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
       method: 'mail_code',
       status: 'verified',
@@ -1010,7 +1015,7 @@ describe('POST /api/homes stored-address fallback', () => {
     });
     seedTable('AddressVerificationAttempt', [{
       id: 'verified-step-up-fresh',
-      user_id: 'test-user-id',
+      user_id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
       address_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       method: 'mail_code',
       status: 'verified',
@@ -1127,7 +1132,7 @@ describe('POST /api/homes stored-address fallback', () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.home.address_id).toBe('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    expect(createBoundary.preparedHome().address_id).toBe('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
   });
 
   test('existing-home conflict behavior stays unchanged when step-up flags are enabled', async () => {
