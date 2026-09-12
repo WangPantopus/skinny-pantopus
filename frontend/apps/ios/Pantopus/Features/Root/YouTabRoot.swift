@@ -53,6 +53,7 @@ public enum YouRoute: Hashable {
     /// tax-bill document set (RN
     /// `homes/[id]/claim-owner/evidence.tsx?verificationType=residency`).
     case verifyResidency(homeId: String)
+    case residencyStatus(homeId: String)
     /// T5.2.4 — cross-listing Offers (incoming + outgoing).
     case offers
     /// T5.3.1 — My bids. The "me.bids" action tile pushes here.
@@ -1168,6 +1169,15 @@ public struct YouTabRoot: View {
                     path.append(.findHome)
                 }
             )
+        case let .residencyStatus(homeId):
+            HomeResidencyProgressView(viewModel: HomeResidencyProgressViewModel(homeId: homeId)) { destination in
+                switch destination {
+                case .home: path.append(.homeDashboard(homeId: homeId))
+                case .mail: path.append(.postcardVerification(homeId: homeId))
+                case .ownership: path.append(.claimOwnership(homeId: homeId))
+                case .addHome: path.append(.addHome)
+                }
+            }
         case let .verifyResidency(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,
@@ -2148,7 +2158,7 @@ public struct YouTabRoot: View {
                         Task { @MainActor in path.append(.claimOwnership(homeId: homeId)) }
                     },
                     onVerifyResidency: { homeId in
-                        Task { @MainActor in path.append(.verifyResidency(homeId: homeId)) }
+                        Task { @MainActor in path.append(.residencyStatus(homeId: homeId)) }
                     }
                 )
             )

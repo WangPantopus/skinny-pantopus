@@ -212,8 +212,7 @@ public struct AddHomeWizardView: View {
 // MARK: - Address-already-claimed modal (RN AddressClaimedModal)
 
 /// Two-page confirm modal shown when `POST /api/homes/check-address`
-/// returns `HOME_FOUND_CLAIMED`. Copy mirrors RN's `ADDRESS_CHECK`
-/// constants (`src/constants/ownershipCopy.ts:176-183`).
+/// returns `HOME_FOUND_CLAIMED`. An active occupancy is not proof of verification.
 private struct AddressClaimedModal: View {
     @Bindable var viewModel: AddHomeWizardViewModel
 
@@ -223,9 +222,12 @@ private struct AddressClaimedModal: View {
                 .fill(Theme.Color.appText.opacity(0.45))
                 .ignoresSafeArea()
                 .onTapGesture { viewModel.dismissClaimedModal() }
+                .accessibilityHidden(true)
             card
                 .padding(.horizontal, Spacing.s5)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("addHomeAddressClaimedModal")
     }
 
@@ -237,7 +239,7 @@ private struct AddressClaimedModal: View {
                     .pantopusTextStyle(.h3)
                     .foregroundStyle(Theme.Color.appText)
                     .multilineTextAlignment(.center)
-                Text("You entered:")
+                Text("Checked address:")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
@@ -265,11 +267,11 @@ private struct AddressClaimedModal: View {
                     .overlay {
                         Icon(.shieldCheck, size: 28, color: Theme.Color.primary600)
                     }
-                Text("This home already has verified members")
+                Text("This address has an existing Home")
                     .pantopusTextStyle(.h3)
                     .foregroundStyle(Theme.Color.appText)
                     .multilineTextAlignment(.center)
-                Text("To protect privacy, you’ll need verification to join this home.")
+                Text("Confirm your address and relationship to request household access.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
@@ -402,7 +404,9 @@ private struct ReviewStep: View {
         HeadlineBlock("Review and submit")
         SubcopyBlock("Make sure everything below looks right before submitting.")
         ReviewSummaryBlock(summaryRows)
-        if !viewModel.isClaimingExistingHome {
+        if viewModel.isClaimingExistingHome {
+            SubcopyBlock("Submitting saves a residency request. It does not request mail or grant household access.")
+        } else {
             SubcopyBlock("Saving starts your private Home setup. Residency and ownership require verification.")
         }
     }

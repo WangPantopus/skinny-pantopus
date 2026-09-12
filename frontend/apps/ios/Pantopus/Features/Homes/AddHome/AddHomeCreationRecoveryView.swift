@@ -10,7 +10,8 @@ struct AddHomeCreationRecoveryView: View {
             SubcopyBlock(explanation)
             if let draft = viewModel.pendingCreation {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
-                    Text(draft.form.details.nickname.isEmpty ? "Your Home request" : draft.form.details.nickname)
+                    Text(draft.residencyHomeId != nil ? "Your residency request" : draft.form.details.nickname
+                        .isEmpty ? "Your Home request" : draft.form.details.nickname)
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.appText)
                     Text([
@@ -56,7 +57,8 @@ struct AddHomeCreationRecoveryView: View {
             Button("Keep request", role: .cancel) {}
         } message: {
             Text(
-                "We’ll check whether it has finished. If the Home was saved, you’ll see that result. Cancelling won’t delete the Home."
+                "We’ll check whether it has finished. If the request was already saved, you’ll see that result. "
+                    + "Cancellation cannot undo a saved Home or residency request."
             )
         }
     }
@@ -64,10 +66,12 @@ struct AddHomeCreationRecoveryView: View {
     private var headline: String {
         if viewModel.creationStorageUnavailable { return "Recover your saved request" }
         switch viewModel.creationOutcome?.state {
-        case .completed: return "Home saved"
+        case .completed: return viewModel.pendingCreation?.residencyHomeId != nil ? "Residency request saved" : "Home saved"
         case .cancelled: return "Request cancelled"
-        case .rejected: return "Review your Home details"
-        case .pending, nil: return "Finish adding your Home"
+        case .rejected:
+            return viewModel.pendingCreation?.residencyHomeId != nil ? "Review your residency request" : "Review your Home details"
+        case .pending, nil:
+            return viewModel.pendingCreation?.residencyHomeId != nil ? "Recover your residency request" : "Finish adding your Home"
         }
     }
 
@@ -77,8 +81,15 @@ struct AddHomeCreationRecoveryView: View {
         }
         switch viewModel.creationOutcome?.state {
         case .completed:
+            if viewModel.pendingCreation?.residencyHomeId != nil {
+                return "Your residency request is recorded. Open My Homes to check its current status, "
+                    + "household access and verification steps."
+            }
             return "Open My Homes to see your current setup and verification options. Saving a Home does not verify residency or ownership."
         case .cancelled:
+            if viewModel.pendingCreation?.residencyHomeId != nil {
+                return "This request cannot submit a residency claim. Check the street, apartment and relationship before starting again."
+            }
             return "This request can no longer create a Home. You can edit its details and start again."
         case .rejected:
             return viewModel.creationOutcome?.error ?? "The server rejected this request. Review its details before trying again."

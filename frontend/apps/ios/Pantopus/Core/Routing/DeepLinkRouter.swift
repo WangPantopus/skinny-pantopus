@@ -144,6 +144,7 @@ final class DeepLinkRouter {
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
         case waitingRoom(id: String)
+        case homeResidency(id: String)
         /// `pantopus://hub-today?deliveryId=&kind=morning|evening` — the Hub
         /// "Today" briefing opened from a Morning/Evening Briefing push. The
         /// notification's metadata carries `briefing_delivery_id` +
@@ -574,6 +575,10 @@ final class DeepLinkRouter {
             guard trailing.count == 2, UUID(uuidString: id) != nil,
                   let taskId = trailing.last, UUID(uuidString: taskId) != nil else { return .unknown(url) }
             return .homeTask(homeId: id.lowercased(), taskId: taskId.lowercased())
+        }
+        if trailing.first == "residency" {
+            guard trailing.count == 1, UUID(uuidString: id) != nil else { return .unknown(url) }
+            return .homeResidency(id: id.lowercased())
         }
         if trailing.first == "dashboard" {
             return .homeDashboard(id: id)

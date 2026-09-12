@@ -17,9 +17,24 @@ struct PendingHomeCreation: Codable, Equatable {
     let requestId: String
     let body: JSONValue
     let form: AddHomeFormState
+    var residencyHomeId: String?
     var outcome: HomeCreationOutcome?
 
     func matches(_ expected: HomeCreationScope) -> Bool {
+        if let residencyHomeId {
+            guard scope == expected, scope.isValid, UUID(uuidString: residencyHomeId) != nil,
+                  UUID(uuidString: requestId) != nil, let values = body.dictValue,
+                  Set(values.keys) == ["request_id", "claimed_role", "address"],
+                  values["request_id"]?.stringValue == requestId,
+                  let role = values["claimed_role"]?.stringValue, ["renter", "household"].contains(role),
+                  form.role?.claimedRole == role, let address = values["address"],
+                  let data = try? JSONEncoder().encode(address),
+                  let snapshot = try? JSONDecoder().decode(HomeResidencyAddressSnapshot.self, from: data), snapshot.isValid,
+                  snapshot.line1 == form.address.street, snapshot.line2 == form.address.unit,
+                  snapshot.city == form.address.city, snapshot.state == form.address.state,
+                  snapshot.postalCode == form.address.zipCode else { return false }
+            return outcome == nil || outcome?.matches(self) == true
+        }
         guard scope == expected, scope.isValid, UUID(uuidString: requestId) != nil,
               let values = body.dictValue, values["request_id"]?.stringValue == requestId,
               let address = values["address"]?.stringValue, !address.isEmpty,
@@ -31,6 +46,7 @@ struct PendingHomeCreation: Codable, Equatable {
 
     func hasSameIntent(as other: Self) -> Bool {
         scope == other.scope && requestId == other.requestId && body == other.body && form == other.form
+            && residencyHomeId == other.residencyHomeId
     }
 }
 
@@ -71,6 +87,13 @@ struct HomeCreationOutcome: Codable, Equatable {
     let code: String?
     let error: String?
     let message: String?
+    var residencyHomeId: String?
+    var claimId: String?
+    var occupancyId: String?
+    var claimedRole: String?
+    var routing: String?
+    var nextStep: String?
+    var postcardRequested: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case state, command, home, role, code, error, message
@@ -79,6 +102,13 @@ struct HomeCreationOutcome: Codable, Equatable {
         case requiresVerification = "requires_verification"
         case verificationType = "verification_type"
         case currentAccess = "current_access"
+        case residencyHomeId = "home_id"
+        case claimId = "claim_id"
+        case occupancyId = "occupancy_id"
+        case claimedRole = "claimed_role"
+        case routing
+        case nextStep = "next_step"
+        case postcardRequested = "postcard_requested"
     }
 
     var isTerminal: Bool {
@@ -88,6 +118,19 @@ struct HomeCreationOutcome: Codable, Equatable {
     func matches(_ draft: PendingHomeCreation) -> Bool {
         guard command.actorId == draft.scope.actorId, command.requestId == draft.requestId,
               Self.validDate(command.createdAt), Self.validDate(command.updatedAt) else { return false }
+        if let requestedHome = draft.residencyHomeId {
+            guard residencyHomeId == requestedHome, home == nil, ownershipClaimId == nil, accessSecretIds == nil else { return false }
+            if state == .completed {
+                return claimId.flatMap(UUID.init(uuidString:)) != nil && occupancyId.flatMap(UUID.init(uuidString:)) != nil
+                    && claimedRole == draft.body.dictValue?["claimed_role"]?.stringValue
+                    && ["household_review", "self_bootstrap", "external_postcard", "stale_authority_postcard"].contains(routing ?? "")
+                    && nextStep == (routing == "household_review" ? "household_review" : "address_verification")
+                    && requiresVerification == true && currentAccess == "not_checked" && postcardRequested == false
+            }
+            return claimId == nil && occupancyId == nil && claimedRole == nil && routing == nil
+                && (state != .rejected || code?.range(of: "^[A-Z][A-Z0-9_]{1,79}$", options: .regularExpression) != nil)
+        }
+        guard residencyHomeId == nil, claimId == nil, occupancyId == nil else { return false }
         if state == .completed {
             guard let home, UUID(uuidString: home.id) != nil,
                   role == draft.body.dictValue?["role"]?.stringValue,
@@ -107,6 +150,9 @@ struct HomeCreationOutcome: Codable, Equatable {
         state == other.state && command.actorId == other.command.actorId && command.requestId == other.command.requestId
             && home == other.home && ownershipClaimId == other.ownershipClaimId && accessSecretIds == other.accessSecretIds
             && role == other.role && (state != .rejected || code == other.code)
+            && residencyHomeId == other.residencyHomeId && claimId == other.claimId && occupancyId == other.occupancyId
+            && claimedRole == other.claimedRole && routing == other.routing && nextStep == other.nextStep
+            && postcardRequested == other.postcardRequested
     }
 
     private static func validDate(_ value: String) -> Bool {

@@ -17,7 +17,7 @@ final class MyHomesListViewModelTests: XCTestCase {
     }
 
     func testLoadEmptyTransitionsToEmpty() async {
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}")]
+        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}"), .status(200, body: "{\"requests\":[],\"next_cursor\":null}")]
         let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .empty(content) = vm.state else {
@@ -44,7 +44,8 @@ final class MyHomesListViewModelTests: XCTestCase {
                "occupancy":{"id":"o2","role":"lease_resident","role_base":"lease_resident",
                             "is_active":true,"verification_status":"verified"}}
             ]}
-            """)
+            """),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
         ]
         let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()

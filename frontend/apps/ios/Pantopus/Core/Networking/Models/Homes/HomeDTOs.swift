@@ -628,6 +628,28 @@ public struct CheckAddressRequest: Encodable, Sendable {
     }
 }
 
+/// Actor-selected unit identity returned by the address check. It grants no access.
+public struct HomeResidencyAddressSnapshot: Codable, Sendable, Hashable {
+    public let line1: String
+    public let line2: String
+    public let city: String
+    public let state: String
+    public let postalCode: String
+    public let country: String
+
+    private enum CodingKeys: String, CodingKey {
+        case line1, line2, city, state, country
+        case postalCode = "postal_code"
+    }
+
+    public var isValid: Bool {
+        let required = [(line1, 255), (city, 100), (state, 50), (postalCode, 20), (country, 100)]
+        return line2.utf16.count <= 255 && required.allSatisfy {
+            !$0.0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.0.utf16.count <= $0.1
+        }
+    }
+}
+
 /// `POST /api/homes/check-address` response.
 ///
 /// The handler (`backend/routes/home.js:635` / `:661`) returns
@@ -645,6 +667,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
     public let isMultiUnit: Bool
     /// Server-formatted "address, unit, city, state, zip" label.
     public let formattedAddress: String?
+    public let residencyAddress: HomeResidencyAddressSnapshot?
 
     public let exists: Bool
     public let homeCount: Int
@@ -674,6 +697,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
         homeId: String? = nil,
         isMultiUnit: Bool = false,
         formattedAddress: String? = nil,
+        residencyAddress: HomeResidencyAddressSnapshot? = nil,
         exists: Bool = false,
         homeCount: Int = 0,
         hasVerifiedMembers: Bool = false,
@@ -684,6 +708,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
         self.homeId = homeId
         self.isMultiUnit = isMultiUnit
         self.formattedAddress = formattedAddress
+        self.residencyAddress = residencyAddress
         self.exists = exists
         self.homeCount = homeCount
         self.hasVerifiedMembers = hasVerifiedMembers
@@ -696,6 +721,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
         case homeId = "home_id"
         case isMultiUnit = "is_multi_unit"
         case formattedAddress = "formatted_address"
+        case residencyAddress = "residency_address"
         case exists, homeCount, hasVerifiedMembers
         case verdictStatus = "verdict_status"
         case normalizedAddress = "normalized_address"
@@ -707,6 +733,7 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
         homeId = try container.decodeIfPresent(String.self, forKey: .homeId)
         isMultiUnit = try container.decodeIfPresent(Bool.self, forKey: .isMultiUnit) ?? false
         formattedAddress = try container.decodeIfPresent(String.self, forKey: .formattedAddress)
+        residencyAddress = try container.decodeIfPresent(HomeResidencyAddressSnapshot.self, forKey: .residencyAddress)
         verdictStatus = try container.decodeIfPresent(String.self, forKey: .verdictStatus)
         normalizedAddress = try container.decodeIfPresent(
             NormalizedAddressDTO.self,

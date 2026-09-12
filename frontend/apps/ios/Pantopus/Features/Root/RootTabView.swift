@@ -187,7 +187,7 @@ public struct RootTabView: View {
             model.selected = .mail
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
-             .homeDetail, .homeDashboard, .homeTask, .homeMemberRequests,
+             .homeDetail, .homeDashboard, .homeTask, .homeMemberRequests, .homeResidency,
              .homeOwnersTransfer,
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,

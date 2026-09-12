@@ -15,16 +15,19 @@ struct APIHomeCreationTransport: HomeCreationTransport {
     let api: APIClient
 
     func resolve(_ draft: PendingHomeCreation, action: HomeCreationAction) async throws -> HomeCreationOutcome {
+        let submitPath = draft.residencyHomeId.map { "/api/homes/\($0)/residency-submissions" } ?? "/api/homes"
+        let recoveryPath = draft.residencyHomeId != nil ? "\(submitPath)/\(draft.requestId)"
+            : "/api/homes/create-commands/\(draft.requestId)"
         let endpoint: Endpoint = switch action {
-        case .submit: Endpoint(method: .post, path: "/api/homes", body: draft.body, cachePolicy: .reloadIgnoringLocalCacheData)
+        case .submit: Endpoint(method: .post, path: submitPath, body: draft.body, cachePolicy: .reloadIgnoringLocalCacheData)
         case .check: Endpoint(
                 method: .get,
-                path: "/api/homes/create-commands/\(draft.requestId)",
+                path: recoveryPath,
                 cachePolicy: .reloadIgnoringLocalCacheData
             )
         case .cancel: Endpoint(
                 method: .post,
-                path: "/api/homes/create-commands/\(draft.requestId)/cancel",
+                path: "\(recoveryPath)/cancel",
                 cachePolicy: .reloadIgnoringLocalCacheData
             )
         }
@@ -133,6 +136,27 @@ final class HomeCreationCoordinator {
             ])
         })
         let draft = PendingHomeCreation(scope: scope, requestId: id, body: .object(body), form: form)
+        try replace(expected: nil, next: draft)
+        pending = draft
+        expectedRequestId = draft.requestId
+    }
+
+    func prepareResidency(homeId: String, address: HomeResidencyAddressSnapshot, form: AddHomeFormState) throws {
+        try requireCurrent()
+        guard !isBusy, pending == nil, knownOutcome == nil, try readSaved() == nil,
+              UUID(uuidString: homeId) != nil, address.isValid,
+              let role = form.role?.claimedRole, ["renter", "household"].contains(role) else {
+            throw HomeCreationRecoveryError.changed
+        }
+        let id = requestId()
+        let addressValue = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(address))
+        let draft = PendingHomeCreation(
+            scope: scope,
+            requestId: id,
+            body: .object(["request_id": .string(id), "claimed_role": .string(role), "address": addressValue]),
+            form: form,
+            residencyHomeId: homeId.lowercased()
+        )
         try replace(expected: nil, next: draft)
         pending = draft
         expectedRequestId = draft.requestId

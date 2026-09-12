@@ -48,7 +48,7 @@ const client = createClient(config.API_URL, config.SERVICE_ROLE_KEY, { auth: { p
 let mode = 'current', events = [], serial = 1000, held = null, holdSuffix = null, server, initialized = false;
 const log = event => events.push(event);
 let heldProvider = null, heldSubmission = null, holdSubmission = false;
-let residencyReadFault = null;
+let residencyReadFault = null, residencyReadFaultPersistent = false;
 const db = { async rpc(name, args) {
   assert(['begin_home_create_command','get_home_create_command','cancel_home_create_command','finish_home_create_attempt','commit_home_create_command','home_record_context','home_delete_eligibility','submit_home_residency','get_home_residency_submission','cancel_home_residency_submission'].includes(name));
   assert.equal(args.p_actor_id || args.p_user_id, actor);
@@ -79,7 +79,7 @@ const db = { async rpc(name, args) {
         if (k === 'then') return (resolve, reject) => t.then(result => {
           if (mode === 'lookup_error' && table === 'Home') return { data: null, error: { code: 'SYNTHETIC', message: 'Private fault' } };
           if (residencyReadFault && table === 'HomeResidencyClaim') {
-            const kind = residencyReadFault; residencyReadFault = null;
+            const kind = residencyReadFault; if (!residencyReadFaultPersistent) residencyReadFault = null;
             if (kind === 'error') return { data: null, error: { code: 'SYNTHETIC', message: 'Private progress fault' } };
             if (result.data) return { ...result, data: Array.isArray(result.data) ? result.data.map(row => ({ ...row, user_id: owner })) : { ...result.data, user_id: owner } };
           }
@@ -172,7 +172,9 @@ app.use((req, res, next) => {
     sql(`UPDATE public."Home" SET address2=${q(req.body.unit)} WHERE id=${q(id(req.body.home))};`);return res.json(state());
   }
   if (residency && p === '/fixture/residency-read-fault') {
-    assert(['error', 'malformed'].includes(req.body.kind)); residencyReadFault=req.body.kind;return res.json(state());
+    assert(['error', 'malformed', 'clear'].includes(req.body.kind));
+    residencyReadFault=req.body.kind === 'clear' ? null : req.body.kind;
+    residencyReadFaultPersistent=req.body.persistent === true;return res.json(state());
   }
   if (residency && p === '/fixture/residency-history') {
     assert.equal(req.body.count,51);

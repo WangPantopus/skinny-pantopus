@@ -1,5 +1,34 @@
 # Pantopus remaining work — September 11, 2026
 
+### iOS joining and personal status — accepted locally; Android next
+
+The [iOS milestone](home-ios-residency-recovery-2026-09-12.md) passes actual installed
+UI/HTTP/SDK/SQL original-request recovery, cancellation, changed apartments,
+rejected resubmission, personal history beyond 50 rows, failed/malformed reads
+and retry, later removal and held-reply retirement. It also repairs the existing
+Home modal's controls and truthful membership wording. Signed build, style,
+privacy and all three installed creation regressions pass. Full iOS regression:
+4,372 passed / 168 skipped; the report records its controlled-backend dependency.
+All three exact fixtures are cleaned; final r8 products and private evidence are
+preserved. The physical iPhone remains verified Pantopus 1.0.0 (2).
+
+**Continue now:** finish the existing uncommitted Android joining/personal-status
+candidate and installed acceptance, then both native postal/prepared-review flows.
+H08 also needs a private-Home verification entry: ordinary users without a claim
+must confirm a selected-address request before mail; ownership is separate.
+Finish invitations/private first use, legacy compatibility and the full backlog.
+H07/H08/R01/R02 remain partial; 6 of 80 inventory rows are closed and 74 remain.
+That count is not a percentage of the whole app or remaining engineering effort.
+
+Predecessor `022e3c086b60` has all checks passing in
+[CI run 34683643763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34683643763).
+Verify this new milestone's pushed-head CI independently. PR #32 remains a draft;
+#34 remains a conflicting draft. No new migration: 43 Home / 21 paid / 52 combined,
+12 identical shared migrations, no timestamp collision. Combined replay/adoption
+remains open. No merge, hosted release, device update or paid activation. Paid
+services and postal keys stay one final launch bundle; owner work/data/devices
+and private evidence are preserved.
+
 ### Browser postal recovery — accepted locally; native joining/status next
 
 The [browser postal milestone](home-browser-postcard-recovery-2026-09-12.md)
@@ -35,10 +64,10 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [browser postal recovery](home-browser-postcard-recovery-2026-09-12.md).
-Actual request/code recovery and truthful current access pass through Chrome and
-the real API/SQL. Both native joining/status/postal/review flows and legacy
-compatibility remain open. The inventory retains those larger exit scopes.
+Latest local Home milestone: [iOS joining and personal status](home-ios-residency-recovery-2026-09-12.md).
+Browser postal and iOS joining/status acceptance pass. Android joining/status,
+both native postal/review flows, private first use and legacy compatibility remain
+open. The inventory retains those larger exit scopes.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
@@ -62,7 +91,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 ## 2. Residency, ownership and leases
 
 - [ ] R01 **Fix/Verify:** Finish installed iOS and Android prepared residency review, protected original-command/receipt storage, approve/deny, lost replies, app restart and current-access recovery. Backend and both browser review entries already have acceptance.
-- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. [Browser postal recovery](home-browser-postcard-recovery-2026-09-12.md) also passes. Finish both native clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
+- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. [Browser postal recovery](home-browser-postcard-recovery-2026-09-12.md) also passes. iOS joining/status also passes; finish Android and both native postal/review clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
 - [ ] R03 **Verify:** Review history, needs-more-information, resubmission after a decision, later removal, expired authority and conflicting reviewers across actual native flows.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.

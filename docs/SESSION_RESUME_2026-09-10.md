@@ -1,5 +1,34 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### iOS joining and personal status — accepted locally; Android next
+
+The [iOS milestone](home-ios-residency-recovery-2026-09-12.md) passes actual installed
+UI/HTTP/SDK/SQL original-request recovery, cancellation, changed apartments,
+rejected resubmission, personal history beyond 50 rows, failed/malformed reads
+and retry, later removal and held-reply retirement. It also repairs the existing
+Home modal's controls and truthful membership wording. Signed build, style,
+privacy and all three installed creation regressions pass. Full iOS regression:
+4,372 passed / 168 skipped; the report records its controlled-backend dependency.
+All three exact fixtures are cleaned; final r8 products and private evidence are
+preserved. The physical iPhone remains verified Pantopus 1.0.0 (2).
+
+**Continue now:** finish the existing uncommitted Android joining/personal-status
+candidate and installed acceptance, then both native postal/prepared-review flows.
+H08 also needs a private-Home verification entry: ordinary users without a claim
+must confirm a selected-address request before mail; ownership is separate.
+Finish invitations/private first use, legacy compatibility and the full backlog.
+H07/H08/R01/R02 remain partial; 6 of 80 inventory rows are closed and 74 remain.
+That count is not a percentage of the whole app or remaining engineering effort.
+
+Predecessor `022e3c086b60` has all checks passing in
+[CI run 34683643763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34683643763).
+Verify this new milestone's pushed-head CI independently. PR #32 remains a draft;
+#34 remains a conflicting draft. No new migration: 43 Home / 21 paid / 52 combined,
+12 identical shared migrations, no timestamp collision. Combined replay/adoption
+remains open. No merge, hosted release, device update or paid activation. Paid
+services and postal keys stay one final launch bundle; owner work/data/devices
+and private evidence are preserved.
+
 ### Browser postal recovery — accepted locally; native joining/status next
 
 The [browser postal milestone](home-browser-postcard-recovery-2026-09-12.md)

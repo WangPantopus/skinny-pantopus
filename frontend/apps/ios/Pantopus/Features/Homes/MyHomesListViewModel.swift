@@ -23,7 +23,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     }
 
     var banner: BannerConfig? {
-        guard case let .loaded(sections, _) = state, let count = sections.first?.rows.count, count > 0 else { return nil }
+        guard case .loaded = state, !entries.isEmpty else { return nil }
+        let count = entries.count
         return BannerConfig(
             icon: .home,
             title: count == 1 ? "1 saved Home" : "\(count) saved Homes",
@@ -47,6 +48,11 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     private var generation = 0
     private var visible = false
     private var entries: [MyHome] = []
+    private var requests: [PersonalHomeResidencyRequest] = []
+    private var nextCursor: String?
+    private var homesError: String?
+    private var historyError: String?
+    private var loadingHistory = false
 
     init(
         api: APIClient = .shared,
@@ -76,6 +82,11 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         generation += 1
         visible = false
         entries = []
+        requests = []
+        nextCursor = nil
+        homesError = nil
+        historyError = nil
+        loadingHistory = false
         pendingEvent = nil
         actionError = nil
         state = .loading
@@ -92,6 +103,9 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     }
 
     func refresh() async {
+        guard isCurrent else { retireSession()
+            return
+        }
         suspend()
         visible = true
         let revision = generation
@@ -102,26 +116,47 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             guard response.homes.allSatisfy(\.hasValidListContext),
                   Set(response.homes.map(\.id)).count == response.homes.count else { throw APIError.invalidResponse }
             entries = response.homes
-            let rows = entries.map { row(for: $0, revision: revision) }
-            state = rows.isEmpty ? .empty(.init(
-                icon: .home,
-                headline: "No saved Homes yet",
-                subcopy: "Add a Home to organize your private tasks, or continue a household invitation.",
-                ctaTitle: "Add a home",
-                onCTA: onAddHome
-            )) : .loaded(
-                sections: [RowSection(rows: rows)],
-                hasMore: false
-            )
         } catch {
-            guard visible, generation == revision else { return }
-            entries = []
-            state = .error(message: isCurrent ? ((error as? APIError)?.errorDescription ?? "Could not load your Homes. Retry.")
-                : "Your session changed. Reopen your Homes list to continue.")
+            guard current(revision) else { return }
+            homesError = "Your saved Homes could not be checked. Retry."
         }
+        guard current(revision) else { return }
+        await loadHistory(revision: revision, cursor: nil)
     }
 
-    func loadMoreIfNeeded() async {}
+    func loadMoreIfNeeded() async {
+        guard current(generation), !loadingHistory, let cursor = nextCursor else { return }
+        await loadHistory(revision: generation, cursor: cursor)
+    }
+
+    private func loadHistory(revision: Int, cursor: String?) async {
+        guard current(revision), !loadingHistory else { return }
+        loadingHistory = true
+        historyError = nil
+        render(revision: revision)
+        do {
+            let page: PersonalHomeResidencyPage = try await api.request(Endpoint(
+                method: .get,
+                path: "/api/homes/my-residency",
+                query: cursor.map { ["after": $0] } ?? [:],
+                cachePolicy: .reloadIgnoringLocalCacheData
+            ))
+            guard current(revision), !Task.isCancelled else { return }
+            guard page.follows(cursor), Set(requests.map(\.id)).isDisjoint(with: page.requests.map(\.id)) else {
+                throw APIError.invalidResponse
+            }
+            requests.append(contentsOf: page.requests)
+            nextCursor = page.nextCursor
+        } catch {
+            guard current(revision) else { return }
+            historyError = cursor == nil ? "Your residency requests could not be checked. Retry."
+                : "More residency requests could not be checked. Retry."
+        }
+        guard current(revision) else { return }
+        loadingHistory = false
+        render(revision: revision)
+    }
+
     private func current(_ revision: Int) -> Bool {
         visible && generation == revision && isCurrent
     }
@@ -167,7 +202,9 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
 
     private func row(for entry: MyHome, revision: Int) -> RowModel {
         let home = entry.home
-        let title = home.name?.nilIfEmpty ?? home.address?.nilIfEmpty ?? "Home"
+        let personal = Self.pendingVerification(for: entry) == .residency ? requests.first { $0.homeId == entry.id } : nil
+        let fallback = Self.pendingVerification(for: entry) == .residency ? "Residency request · \(entry.id.suffix(8))" : "Home"
+        let title = personal?.label ?? home.name?.nilIfEmpty ?? home.address?.nilIfEmpty ?? fallback
         let locality = [home.city, home.state].compactMap { $0?.nilIfEmpty }.joined(separator: ", ").nilIfEmpty
         let unit = entry.accessKind == "verification" ? nil : home.address2?.nilIfEmpty.map { "Unit \($0)" }
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
@@ -184,11 +221,15 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             tint: .status(.success)
         )) }
         let pending = Self.pendingVerification(for: entry)
-        if pending != nil { chips.append(.init(text: "Verification in progress", icon: .clock, tint: .status(.warning))) }
+        if pending != nil { chips.append(.init(
+            text: personal?.reviewLabel ?? "Verification in progress",
+            icon: .clock,
+            tint: .status(.warning)
+        )) }
         let canDelete = entry.canDeleteHome == true
         let footerTitle = entry
             .accessKind == "private_setup" ? "My tasks" : pending == .owner ? "Continue ownership verification" : pending == .residency ?
-            "Continue residency verification" : nil
+            "Check residency status" : nil
         let footer = footerTitle.map { text in
             let action = RowFooterAction(
                 title: text,
@@ -240,6 +281,113 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "service_provider": return "Service provider"
         default: return nil
         }
+    }
+}
+
+private extension MyHomesListViewModel {
+    func render(revision: Int) {
+        guard current(revision) else { return }
+        if homesError != nil, historyError != nil, entries.isEmpty, requests.isEmpty {
+            state = .error(message: "Your Homes and residency requests could not be checked. Retry.")
+            return
+        }
+        var sections: [RowSection] = []
+        if !entries.isEmpty {
+            sections.append(RowSection(id: "homes", rows: entries.map { row(for: $0, revision: revision) }))
+        }
+        if let homesError {
+            sections.append(RowSection(id: "homes-error", rows: [
+                recoveryRow(
+                    id: "homes-retry",
+                    message: homesError,
+                    title: "Retry saved Homes",
+                    revision: revision,
+                    refreshAll: true
+                )
+            ]))
+        }
+        let represented = Set(entries.filter { Self.pendingVerification(for: $0) == .residency }.map(\.id))
+        var history = requests.filter { !represented.contains($0.homeId ?? "") }.map { request in
+            let open: @Sendable () -> Void = { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.current(revision), let homeId = request.homeId else { return }
+                    self.onVerifyResidency?(homeId)
+                }
+            }
+            return RowModel(
+                id: "residency-request_" + request.id,
+                title: request.label,
+                subtitle: request.reviewLabel,
+                template: .avatarKebab,
+                leading: .typeIcon(.home, background: Theme.Color.homeBg, foreground: Theme.Color.home),
+                trailing: request.homeId == nil ? .none : .chevron,
+                onTap: open,
+                body: request.homeId == nil ? "This saved request is no longer linked to a Home."
+                    : "Your submitted request. Check current status before continuing.",
+                footer: request.homeId.map { _ in
+                    RowFooter(actions: [
+                        RowFooterAction(
+                            title: "Check residency status",
+                            icon: .arrowRight,
+                            variant: .primary,
+                            identifier: "myResidency.request_" + request.id + ".continue",
+                            handler: open
+                        )
+                    ])
+                }
+            )
+        }
+        if loadingHistory {
+            history.append(RowModel(id: "residency-loading", title: "Checking residency requests…", template: .avatarKebab))
+        } else if let historyError {
+            history.append(recoveryRow(id: "residency-retry", message: historyError, title: "Retry residency requests", revision: revision))
+        } else if nextCursor != nil {
+            history.append(recoveryRow(
+                id: "residency-more",
+                message: "More personal requests are available.",
+                title: "Load more requests",
+                revision: revision
+            ))
+        }
+        if !history.isEmpty {
+            sections.append(RowSection(
+                id: "residency-history",
+                header: "Your residency requests",
+                footer: "Saved requests do not grant current household access.",
+                rows: history
+            ))
+        }
+        state = sections.isEmpty ? .empty(.init(
+            icon: .home,
+            headline: "No saved Homes yet",
+            subcopy: "Add a Home to organize your private tasks, or continue a household invitation.",
+            ctaTitle: "Add a home",
+            onCTA: onAddHome
+        )) : .loaded(sections: sections, hasMore: false)
+    }
+
+    func recoveryRow(id: String, message: String, title: String, revision: Int, refreshAll: Bool = false) -> RowModel {
+        let action: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.current(revision) else { return }
+                if refreshAll { await self.refresh() } else { await self.loadHistory(revision: revision, cursor: self.nextCursor) }
+            }
+        }
+        return RowModel(
+            id: id,
+            title: message,
+            template: .avatarKebab,
+            onTap: action,
+            footer: RowFooter(actions: [
+                RowFooterAction(
+                    title: title,
+                    icon: .arrowRight,
+                    variant: .primary,
+                    identifier: "myHomes." + id,
+                    handler: action
+                )
+            ])
+        )
     }
 }
 

@@ -141,6 +141,10 @@ final class AddHomeWizardViewModel: WizardModel {
     /// Address label rendered in the confirm sheet — the server's
     /// `formatted_address` when present, else the typed fields.
     var claimedAddressLabel: String {
+        if let address = addressCheck?.residencyAddress {
+            return [address.line1, address.line2, address.city, address.state, address.postalCode, address.country]
+                .filter { !$0.isEmpty }.joined(separator: ", ")
+        }
         if let formatted = addressCheck?.formattedAddress?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !formatted.isEmpty {
@@ -817,11 +821,11 @@ final class AddHomeWizardViewModel: WizardModel {
             addressCheck = response
             validatedAddressId = addressId
             geocodedAddress = AddHomeGeocodedAddress(
-                street: address.line1,
-                unit: address.line2 ?? "",
-                city: address.city,
-                state: address.state,
-                zipCode: address.zip,
+                street: response.residencyAddress?.line1 ?? address.line1,
+                unit: response.residencyAddress?.line2 ?? address.line2 ?? "",
+                city: response.residencyAddress?.city ?? address.city,
+                state: response.residencyAddress?.state ?? address.state,
+                zipCode: response.residencyAddress?.postalCode ?? address.zip,
                 latitude: address.lat,
                 longitude: address.lng,
                 isMultiUnit: response.isMultiUnit
@@ -852,6 +856,7 @@ final class AddHomeWizardViewModel: WizardModel {
         else { throw APIError.invalidResponse }
         // A validation conflict must never turn into a create-a-new-Home offer.
         guard verdictStatus != "CONFLICT" || response.homeId != nil else { throw APIError.invalidResponse }
+        guard response.homeId == nil || response.residencyAddress?.isValid == true else { throw APIError.invalidResponse }
     }
 
     private static func addressValidationMessage(_ status: String) -> String {
@@ -975,7 +980,15 @@ final class AddHomeWizardViewModel: WizardModel {
     /// the details step and lands on role selection
     /// (`useHomeForm.ts:700-705`).
     func confirmClaimedAddress() {
-        guard isCurrent, validatedAddressId != nil, existingHomeId != nil else { return }
+        guard isCurrent, validatedAddressId != nil, existingHomeId != nil,
+              let address = addressCheck?.residencyAddress, address.isValid else { return }
+        form.address = .init(
+            street: address.line1,
+            unit: address.line2,
+            city: address.city,
+            state: address.state,
+            zipCode: address.postalCode
+        )
         showsClaimedModal = false
         showsConfirmAddressSheet = false
         isClaimingExistingHome = true
@@ -996,26 +1009,24 @@ final class AddHomeWizardViewModel: WizardModel {
             pendingEvent = .openClaimOwnership(homeId: homeId)
             return
         }
+        guard let address = addressCheck?.residencyAddress, address.isValid else {
+            errorMessage = "Check the exact street and apartment again before submitting."
+            transition(to: .address)
+            return
+        }
         isSubmitting = true
         defer { isSubmitting = false }
         do {
             try scope.requireCurrent()
-            _ = try await api.request(
-                HomeDiscoveryEndpoints.submitResidencyClaim(
-                    homeId: homeId,
-                    request: SubmitResidencyClaimRequest(claimedRole: role.claimedRole)
-                )
-            ) as SubmitResidencyClaimResponse
-            guard isCurrent else { retireSession()
-                return
-            }
-            pendingEvent = .openWaitingRoom(homeId: homeId)
+            try creation.prepareResidency(homeId: homeId, address: address, form: form)
+            showsSavedCreation = true
+            await resolveCreation(.submit)
         } catch {
             guard isCurrent else { retireSession()
                 return
             }
-            errorMessage = (error as? APIError)?.errorDescription
-                ?? "Failed to submit claim"
+            creationReadFailed = true
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -1149,7 +1160,7 @@ final class AddHomeWizardViewModel: WizardModel {
             creationReadFailed = false
             errorMessage = nil
             showsSavedCreation = true
-            if result.state == .completed { createdHomeId = result.home?.id }
+            if result.state == .completed { createdHomeId = result.residencyHomeId ?? result.home?.id }
         } catch {
             guard isCurrent, revision == creationRevision else { return }
             errorMessage = error.localizedDescription

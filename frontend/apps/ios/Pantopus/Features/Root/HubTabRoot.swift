@@ -28,6 +28,7 @@ public enum HubRoute: Hashable {
     /// tax-bill document set (RN
     /// `homes/[id]/claim-owner/evidence.tsx?verificationType=residency`).
     case verifyResidency(homeId: String)
+    case residencyStatus(homeId: String)
     /// A12.5 / A12.6 — Verify landlord wizard. Pushed when the
     /// dashboard's ownership claim resolves to the "verify via
     /// landlord" branch (rental detected, owner-claim path not
@@ -877,6 +878,9 @@ public struct HubTabRoot: View {
         case let .verifyLandlord(id):
             path.append(.verifyLandlord(homeId: id))
             _ = router.consume()
+        case let .homeResidency(id):
+            path.append(.residencyStatus(homeId: id))
+            _ = router.consume()
         case let .postcardVerification(id):
             path.append(.postcardVerification(homeId: id))
             _ = router.consume()
@@ -1221,7 +1225,7 @@ public struct HubTabRoot: View {
                         Task { @MainActor in push(.claimOwnership(homeId: homeId)) }
                     },
                     onVerifyResidency: { homeId in
-                        Task { @MainActor in push(.verifyResidency(homeId: homeId)) }
+                        Task { @MainActor in push(.residencyStatus(homeId: homeId)) }
                     }
                 )
             )
@@ -1773,6 +1777,15 @@ public struct HubTabRoot: View {
                     path.append(.findHome)
                 }
             )
+        case let .residencyStatus(homeId):
+            HomeResidencyProgressView(viewModel: HomeResidencyProgressViewModel(homeId: homeId)) { destination in
+                switch destination {
+                case .home: push(.homeDashboard(homeId: homeId))
+                case .mail: push(.postcardVerification(homeId: homeId))
+                case .ownership: push(.claimOwnership(homeId: homeId))
+                case .addHome: push(.addHome)
+                }
+            }
         case let .verifyResidency(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,
