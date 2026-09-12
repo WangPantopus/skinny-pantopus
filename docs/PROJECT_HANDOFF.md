@@ -14,6 +14,37 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Browser invitation recovery accepted; full decision recovery next
+
+The [browser invitation milestone](home-browser-invitation-recovery-2026-09-12.md)
+passes real Chrome/HTTP/SDK/SQL unavailable and malformed preview retry,
+nullable legacy metadata, missing/revoked/expired states, failed decline,
+wrong-recipient denial, lost acceptance reply, future-dated access and retirement
+of a held old preview. Success describes saved acceptance and offers My Homes;
+there is no unconditional dashboard redirect or full-access promise. Session and
+visibility changes retire stale reads, confirmations and result displays.
+
+Final browser r3 and narrow visual review pass. Web regression is **1,193 passed**;
+final types/style and privacy gates pass. All three owned fixtures are cleaned
+with complete role rows, full ledger and exact function provenance preserved.
+No native build/device update or new migration. iPhone remains 1.0.0 (2).
+
+**Continue now:** full account-bound invitation decision recovery, current access,
+both native resolvers/failed declines and truthful invitation delivery; then
+ordinary-member onboarding, legacy submission compatibility and the full backlog.
+This bounded milestone does not close H07/H08: **7 of 80 rows closed; 73 partial
+or open**. These counts do not measure app completion or remaining effort.
+
+Predecessor `ff4c82609e37203031df32daa3a3a9378723b2d3` has every completed job passing
+in [CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883);
+only Android lint/test/assembly is still running at this checkpoint. Let it finish
+while progressing locally before pushing this milestone, because a new push
+cancels the earlier run. Then verify the newly pushed head independently.
+#32 remains a mergeable draft; #34 a conflicting draft. No merge. Migrations
+remain 43 Home / 21 paid / 52 combined, 12 identical shared, zero collisions;
+combined replay/adoption remains open. Paid services remain one final launch
+bundle. Owner work, devices/data and all private evidence remain preserved.
+
 ### Private Home first use accepted; invitations next
 
 The [private first-use repair](home-private-first-use-2026-09-12.md) connects
