@@ -1,5 +1,33 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Browser invitation decisions accepted; native recovery next
+
+The [protected browser invitation flow](home-browser-invitation-decisions-2026-09-12.md)
+passes final actual Chrome/HTTP/SDK/SQL acceptance: encrypted original decisions,
+lost-reply cold recovery, failed protected writes/reads, cancellation, changed
+terms, account isolation, stale confirmations, explicit sign-out/sign-in return,
+late replies and separate current Home access. Six decisions leave no retained
+originals after acknowledgement. Open Home rechecks access before navigation.
+All three exact fixtures are cleaned with full role rows, ledger and exact
+function provenance preserved. Web regression: **1,193 passed**; types/style,
+privacy and narrow visual checks pass.
+
+**Continue now:** native invitation resolver and protected decision recovery,
+then creation/resend/cancellation/delivery and complete member onboarding, legacy
+compatibility and the full backlog. H07/H08 remain partial: **7 of 80 rows closed;
+73 partial/open**. This is acceptance coverage, not whole-app completion or
+remaining effort. Live delivery and full dashboard services are separate limits.
+
+Predecessor `ab0a6644d56440f3504fc22e10023d5655fa5caa` has completed backend,
+database, web and iOS style checks passing in
+[CI 34712404106](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34712404106);
+native jobs remain running. Verify this milestone's pushed-head checks separately.
+#32 remains a mergeable draft; #34 an unfinished conflicting draft. No merge or
+permanent adoption. Migrations remain **44 Home / 21 paid / 53 combined**, 12
+identical shared and zero collisions; combined replay/adoption stays open. Paid
+services remain one final launch bundle. iPhone stays 1.0.0 (2); owner work/data,
+devices and private evidence are preserved.
+
 ### Invitation decision backend accepted; protected client recovery next
 
 The [ordinary invitation decision protocol](home-invitation-decision-recovery-2026-09-12.md)

@@ -4,10 +4,12 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
-const [container, project, cli, output, portText = '18084'] = process.argv.slice(2);
+const [container, project, cli, output, portText = '18084', purpose = 'preview'] = process.argv.slice(2);
 assert.match(project || '', /^\/private\/tmp\/pantopus-home-gig-[a-z0-9_-]+$/);
 assert(path.isAbsolute(output || '') && !output.startsWith(root + '/'));
 fs.mkdirSync(output, { recursive: true, mode: 0o700 });
+assert(['preview','decision-recovery'].includes(purpose));
+const decisionFunctions = ['home_invitation_decision_projection','prepare_home_invitation_decision','get_home_invitation_decision','resolve_home_invitation_decision'];
 const port = Number(portText); assert(port >= 18083 && port <= 18089);
 const f = require('../db/home-residency-review-http-fixture.cjs')(container, { summary: true, dashboard: true, invitations: true });
 const { actor, home, users, sql, q } = f;
@@ -15,20 +17,22 @@ const save = (name, value) => fs.writeFileSync(path.join(output, name), JSON.str
 const ledgerQuery = `SELECT encode(sha256(convert_to(coalesce(jsonb_agg(to_jsonb(m) ORDER BY version),'[]')::text,'UTF8')),'hex') FROM supabase_migrations.schema_migrations m;`;
 const functionQuery = `SELECT coalesce(jsonb_agg(jsonb_build_object('oid',oid,'definition',pg_get_functiondef(oid),
   'owner',proowner,'acl',proacl,'config',proconfig) ORDER BY oid),'[]') FROM pg_proc WHERE pronamespace='public'::regnamespace
-  AND proname IN ('write_home_invitation','act_on_home_invitation','list_home_invitations','home_invite_authority','home_record_context','home_delete_eligibility');`;
+  AND proname IN ('write_home_invitation','act_on_home_invitation','list_home_invitations','home_invite_authority','home_record_context','home_delete_eligibility','home_invitation_decision_projection','prepare_home_invitation_decision','get_home_invitation_decision','resolve_home_invitation_decision');`;
 const policyRows = () => JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY role_base,permission),'[]') FROM public."HomeRolePermission" r;`));
 const before = { ledger: sql(ledgerQuery), functions: JSON.parse(sql(functionQuery)), roles: policyRows() };
 save('preservation-before.json', before);
 assert.equal(sql("SELECT count(*) FROM pg_trigger WHERE tgname='residency_http_receipt_failure';"), '0');
 assert.equal(sql("SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname='residency_http_receipt_failure';"), '0');
-let initialized = false, rolesApplied = false, installed = [], introduced = [], server, stopping = false, fault = null, held = null;
+let initialized = false, rolesApplied = false, installed = [], introduced = [], server, stopping = false, fault = null, held = null, commandsApplied = false, installedCommands = null;
 const events = [], capabilities = [];
 const authToken = index => 'pantopus-synthetic-invitation-loopback-' + index;
 const profile = index => ({ id: users[index], email: `residency-http-${index + 1}@example.invalid`,
   username: 'invitation_fixture_' + index, name: index === 0 ? 'Invitation owner' : 'Invite recipient ' + index,
   firstName: 'Invite', lastName: 'Fixture', accountType: 'personal', account_type: 'personal', role: 'user', verified: true,
   createdAt: '2026-09-12T12:00:00Z', updatedAt: '2026-09-12T12:00:00Z' });
+const commandDefinition = () => sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('oid',oid,'definition',pg_get_functiondef(oid),'owner',proowner,'acl',proacl,'config',proconfig) ORDER BY oid),'[]') FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN (${decisionFunctions.map(q)});`);
 const state = () => ({ events, controlled_notifications: f.notifications,
+  commands: commandsApplied ? JSON.parse(sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('actor_id',actor_user_id,'request_id',request_id,'invitation_id',invitation_id,'home_id',home_id,'action',action,'state',state,'occupancy_id',occupancy_id,'code',error_code) ORDER BY request_id),'[]') FROM public."HomeInvitationDecisionCommand" WHERE actor_user_id IN (${users.map(q)});`)) : [],
   invitations: JSON.parse(sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'status',status,'invitee_user_id',invitee_user_id,
     'accepted_by_user_id',accepted_by_user_id,'accepted_at',accepted_at) ORDER BY id),'[]') FROM public."HomeInvite" WHERE home_id=${q(home)};`)),
   memberships: JSON.parse(sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'user_id',user_id,'is_active',is_active,
@@ -40,6 +44,7 @@ async function stop() {
   if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
   if (initialized) {
     save('state.json', state());
+    if (commandsApplied) sql(`DELETE FROM public."HomeInvitationDecisionCommand" WHERE actor_user_id IN (${users.map(q)});`);
     // This fixture creates no receipt-failure trigger/function. Leave unrelated
     // schema objects alone and remove only the owned Home and actor rows.
     sql(`BEGIN;
@@ -55,6 +60,12 @@ async function stop() {
     assert.equal(sql(`SELECT (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+
       (SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
     initialized = false;
+  }
+  if (commandsApplied) {
+    assert.equal(commandDefinition(), installedCommands);
+    assert.equal(sql('SELECT count(*) FROM public."HomeInvitationDecisionCommand";'), '0');
+    sql(`BEGIN; DROP FUNCTION public.resolve_home_invitation_decision(uuid,uuid,text,jsonb,boolean,integer), public.get_home_invitation_decision(uuid,uuid), public.prepare_home_invitation_decision(uuid,text), public.home_invitation_decision_projection(public."HomeInvitationDecisionCommand"); DROP TABLE public."HomeInvitationDecisionCommand"; NOTIFY pgrst,'reload schema'; COMMIT;`);
+    commandsApplied = false;
   }
   if (rolesApplied) {
     assert.equal(installed.length, introduced.length);
@@ -81,17 +92,19 @@ async function main() {
   const { createClient } = require(path.join(root, 'backend/node_modules/@supabase/supabase-js'));
   const client = createClient(config.API_URL, config.SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   f.useDatabaseClient({ supabaseUrl: client.supabaseUrl, from: table => client.from(table), async rpc(name, args) {
-    const action = args.p_action;
-    if (name === 'act_on_home_invitation' && fault?.action === action && fault.kind === 'before') {
+    const action = name === 'resolve_home_invitation_decision' ? args.p_cancel ? 'decision_cancel' : args.p_intent.action : name === 'prepare_home_invitation_decision' ? 'context' : name === 'get_home_invitation_decision' ? 'decision_read' : args.p_action;
+    const invitationRpc = name === 'act_on_home_invitation' || decisionFunctions.includes(name);
+    if (invitationRpc && fault?.action === action && fault.kind === 'before') {
       // Resolve a real read before reporting the controlled unavailable write.
-      await client.rpc(name, { ...args, p_action: 'preview' });
+      if (name === 'resolve_home_invitation_decision') await client.rpc('get_home_invitation_decision', {p_actor_id:args.p_actor_id,p_request_id:args.p_request_id});
+      else await client.rpc(name, name === 'act_on_home_invitation' ? { ...args, p_action: 'preview' } : args);
       events.push({ event: 'unavailable_before_decision', action });
       if (!fault.persistent) fault = null;
       return { data: null, error: { code: 'SYNTHETIC_UNAVAILABLE' } };
     }
     const result = await client.rpc(name, args);
     events.push({ event: 'sdk_rpc', name, action, ok: result.data?.ok, code: result.data?.code, replayed: result.data?.replayed });
-    if (name === 'act_on_home_invitation' && fault?.action === action) {
+    if (invitationRpc && fault?.action === action) {
       const kind = fault.kind; if (!fault.persistent) fault = null;
       if (kind === 'after' && result.data?.ok) throw Error('Controlled lost invitation reply');
       if (kind === 'hold') { events.push({ event: 'reply_held', action }); await new Promise(resolve => { assert.equal(held, null); held = resolve; }); events.push({ event: 'reply_released', action }); }
@@ -107,6 +120,12 @@ async function main() {
   sql('BEGIN;' + fs.readFileSync(path.join(root, 'supabase/migrations/20260911030000_home_member_view_defaults.sql'), 'utf8') + 'COMMIT;');
   rolesApplied = true; installed = policyRows().filter(row => row.permission === 'home.view' && introduced.includes(row.role_base));
   save('roles-introduced.json', installed);
+  if (purpose === 'decision-recovery') {
+    assert.equal(sql(`SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relname='HomeInvitationDecisionCommand';`), '0');
+    assert.equal(commandDefinition(), '[]');
+    sql('BEGIN;' + fs.readFileSync(path.join(root,'supabase/migrations/20260912020000_home_invitation_decision_recovery.sql'),'utf8') + "NOTIFY pgrst,'reload schema';COMMIT;");
+    commandsApplied = true; installedCommands = commandDefinition(); save('installed-command-functions.json',JSON.parse(installedCommands));
+  }
   f.setup(); initialized = true;
   sql(`DELETE FROM public."HomeResidencyClaim" WHERE home_id=${q(home)} AND user_id IN (${users.slice(1).map(q)});
     DELETE FROM public."HomeOccupancy" WHERE home_id=${q(home)} AND user_id IN (${users.slice(1).map(q)});`);
@@ -115,13 +134,15 @@ async function main() {
   app.use((req,res,next) => {
     res.set('Cache-Control','private, no-store');
     if (req.path === '/fixture/state') return res.json(state());
-    if (req.path === '/fixture/fault') { assert(['preview','accept','decline'].includes(req.body.action));
+    if (req.path === '/fixture/fault') { assert(['preview','accept','decline','context','decision_read','decision_cancel'].includes(req.body.action));
       assert(['before','after','malformed','hold','clear'].includes(req.body.kind));fault=req.body.kind==='clear'?null:req.body;return res.json({ok:true}); }
     if (req.path === '/fixture/release') { assert(held); const release = held; held = null; release(); return res.json({ok:true}); }
     if (req.path === '/fixture/scenario') {
       const capability = capabilities.find(c => c.index === req.body.index); assert(capability);
-      assert(['expire','scheduled','legacy_metadata'].includes(req.body.mode));
-      if (req.body.mode === 'legacy_metadata') {
+      assert(['expire','scheduled','legacy_metadata','remove','deny_view'].includes(req.body.mode));
+      if (req.body.mode === 'remove') sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${q(home)} AND user_id=${q(capability.actor_id)};`);
+      else if (req.body.mode === 'deny_view') sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(capability.actor_id)},'home.view',false) ON CONFLICT(home_id,user_id,permission) DO UPDATE SET allowed=false;`);
+      else if (req.body.mode === 'legacy_metadata') {
         sql(`UPDATE public."Home" SET home_type=NULL WHERE id=${q(home)}; UPDATE public."HomeInvite" SET expires_at=NULL WHERE id=${q(capability.invitation_id)} AND home_id=${q(home)} AND status='pending';`);
       } else sql(`UPDATE public."HomeInvite" SET ${req.body.mode === 'expire' ? "expires_at=clock_timestamp()-interval '1 minute'" : "access_start_at=clock_timestamp()+interval '1 day'"} WHERE id=${q(capability.invitation_id)} AND home_id=${q(home)} AND status='pending';`);
       events.push({event:'owned_scenario',index:req.body.index,mode:req.body.mode}); return res.json({ok:true});
@@ -136,7 +157,7 @@ async function main() {
     if (index<0 && !(req.method==='GET' && /^\/api\/homes\/invitations\/token\/[^/]+$/.test(req.path)))
       return res.status(401).json({error:'Synthetic sign-in required'});
     if(index>=0){req.headers['x-fixture-actor']=users[index];req.headers['x-fixture-session']='local-invitation-'+index;}
-    events.push({event:'request',method:req.method,path:req.path.replace(/\/token\/[^/]+/,'/token/[redacted]'),actor:index});
+    events.push({event:'request',method:req.method,path:req.path.replace(/\/token\/[^/]+/,'/token/[redacted]'),actor:index,...(req.method==='POST'&&req.path==='/api/homes/invitations/decisions'?{request_id:req.body.request_id,request_hash:require('node:crypto').createHash('sha256').update(JSON.stringify(req.body)).digest('hex')}: {})});
     if(['/api/users/profile','/api/users/me'].includes(req.path)) return res.json({user:profile(index),...profile(index)});
     if(req.path==='/api/hub') return res.json({user:profile(index),context:{activeHomeId:null,activePersona:{type:'personal'}},
       availability:{hasHome:false,hasBusiness:false,hasPayoutMethod:false},homes:[],businesses:[],
