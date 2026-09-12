@@ -48,6 +48,29 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(headers["Content-Type"], "application/json")
     }
 
+    func testNotFoundReceiptRequiresExplicitOptIn() async throws {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/command-recovery", authenticated: false)
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{\"state\":\"rejected\"}", status: 404))
+        do {
+            _ = try await client.requestDataResponse(endpoint)
+            XCTFail("The default not-found behavior must be preserved")
+        } catch APIError.notFound {}
+        let response = try await client.requestDataResponse(endpoint, includingNotFound: true)
+        XCTAssertEqual(response.response.statusCode, 404)
+        XCTAssertEqual(String(data: response.data, encoding: .utf8), "{\"state\":\"rejected\"}")
+    }
+
+    func testNotFoundReceiptOptInStillRejectsUnauthorizedResponse() async {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/command-recovery", authenticated: false)
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{\"state\":\"completed\"}", status: 401))
+        do {
+            _ = try await client.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
+            XCTFail("Receipt options cannot expose an unauthorized response as success")
+        } catch APIError.unauthorized {} catch {
+            XCTFail("Expected unauthorized response")
+        }
+    }
+
     func test401TriggersUnauthorizedError() async {
         URLProtocolStub.stub(
             path: "/api/users/me",

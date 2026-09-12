@@ -1826,13 +1826,18 @@ public struct HubTabRoot: View {
                 }
             )
         case let .postcardVerification(homeId):
-            PostcardVerificationView(
-                homeId: homeId,
+            HomePostalVerificationView(
+                viewModel: .live(homeId: homeId),
                 onClose: { if !path.isEmpty { path.removeLast() } },
-                onVerified: { _ in
-                    // Pop the tracker — the underlying home dashboard
-                    // refreshes its verification status on next visit.
+                onNavigate: { destination in
                     if !path.isEmpty { path.removeLast() }
+                    switch destination {
+                    case .home: path.append(.homeDashboard(homeId: homeId))
+                    case .residency:
+                        if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
+                    case .ownership: path.append(.claimOwnership(homeId: homeId))
+                    case .addHome: path.append(.addHome)
+                    }
                 }
             )
         case let .mailItemDetail(mailId):

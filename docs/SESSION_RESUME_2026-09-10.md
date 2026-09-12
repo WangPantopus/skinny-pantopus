@@ -1,37 +1,37 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
-### Android joining/status — accepted locally; native postal next
+### iOS postal recovery — accepted locally; Android postal next
 
-The [Android milestone](home-android-residency-recovery-2026-09-12.md) passes all
-five installed joining/status journeys and all three existing creation regressions
-against real local HTTP/SDK/SQL. It retains exact encrypted requests through loss,
-restart and cancellation; personal history and current access stay distinct.
-Complete history, failed/malformed reads, resubmission and removal with delayed
-responses pass. Captures were reviewed. Debug and Release each pass 4,535 checks
-with 80 skips; Android Lint, Ktlint, Detekt and privacy pass. Both exact fixtures
-are cleaned with the ledger preserved. Production sources match the retained APK.
-The owned Android emulator is stopped with userdata and snapshots retained.
+The [iOS postal milestone](home-ios-postal-recovery-2026-09-12.md) passes the complete
+installed HTTP/SDK/SQL journey on final signed build r13: explicit apartment,
+failed status/retry, cancellation before admission, lost/restarted mailing and code
+requests, missing-key recovery, unknown delivery without resend, household review
+and current-access removal with retired replies. Persistent field labels, native
+keyboard Done and truthful completed-code UI are accepted. All three existing
+creation recovery journeys pass on the same products. Full iOS regression:
+4,368 passed / 168 skips; style, privacy and strict signing pass. Three postal
+fixtures and the creation fixture are cleaned exactly with the ledger preserved.
+Final products and evidence remain private; no active server or held work remains.
 
-**Continue now:** installed acceptance for the separately built, uncommitted iOS
-postal recovery candidate, then Android postal and both native prepared-review
-flows. iOS signed build r9 passes; installed acceptance and full regression are
-pending. Sustained status failure/retry passes; keyboard accessibility was refined. Its code remains outside the Android milestone.
-Finish invitations/private first use and legacy compatibility next. H08 still
-needs a private-Home verification entry and ordinary address confirmation before
-mail when no claim exists. H07/H08/R01/R02 and the wider backlog remain open.
-Six of 80 acceptance-inventory rows are closed; that is not whole-app completion.
+**Continue now:** finish the separate Android postal candidate. Its models,
+encrypted storage and API compile; the new coordinator/transport, native screen,
+navigation and installed recovery acceptance are pending. Then both native prepared
+household review, invitations/private first use and legacy compatibility. H08 needs
+a private-Home verification entry and ordinary selected-address submission before
+mail when no claim exists; ownership is separate. H07/H08/R01/R02 and the wider
+backlog remain open. Six of 80 inventory rows are closed; this is not whole-app
+completion or a percentage of remaining engineering effort.
 
-Predecessor `a528c54a1060` has all checks passing in
-[CI run 34687192433](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34687192433).
-Android milestone `e8c3459bd5a45243ef35c5ff6097575ee1f85982` is pushed; its
-[CI run 34691789888](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34691789888)
-exposed a stale constructor in the Android instrumented test setup. The corrected
-setup now compiles and passes instrumented-source lint locally; follow-up CI must
-pass before merging. Fetched #32 is a mergeable draft; #34 remains a conflicting draft. No new migration: 43 Home /
-21 paid / 52 combined, 12 identical shared migrations, no timestamp collision.
-Combined replay/adoption remains open. No merge, hosted release, physical-device
-update or paid activation. iPhone stays Pantopus 1.0.0 (2); owner work/data/devices
-and private evidence are preserved. Paid services remain one final launch bundle.
+Android joining milestone `e8c3459bd5a4` and its instrumented-fixture correction
+`077195b4f720` are pushed. The corrected instrumented job passes in
+[CI 34692652031](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34692652031);
+Android lint/test/assembly is still running. Verify this new iOS milestone's own
+pushed-head checks before merging. #32 remains a mergeable draft; #34 remains a
+conflicting draft. No new migration: 43 Home / 21 paid / 52 combined, 12 identical
+shared versions, zero timestamp collisions. Combined replay/adoption remains open.
+No merge, hosted release, physical-device update or paid activation. iPhone stays
+Pantopus 1.0.0 (2); owner work/data/devices and artifacts are preserved. Paid services
+remain one final launch bundle.
 
 ### iOS joining and personal status — accepted locally; Android next
 

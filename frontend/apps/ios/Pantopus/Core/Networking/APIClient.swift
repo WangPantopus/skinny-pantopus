@@ -165,8 +165,10 @@ final class APIClient: @unchecked Sendable {
 
     /// Binary artifacts may carry a receipt in their response headers. Keep
     /// the same authentication, refresh and cache handling as typed requests.
-    func requestDataResponse(_ endpoint: Endpoint, includingForbidden: Bool = false) async throws -> DataResponse {
-        try await executeWithRetry(endpoint, includingForbidden: includingForbidden)
+    func requestDataResponse(
+        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+    ) async throws -> DataResponse {
+        try await executeWithRetry(endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound)
     }
 
     struct DataResponse {
@@ -257,7 +259,9 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Retry loop
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func executeWithRetry(_ endpoint: Endpoint, includingForbidden: Bool = false) async throws -> DataResponse {
+    private func executeWithRetry(
+        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+    ) async throws -> DataResponse {
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
         // One silent token refresh per request. On a 401 for an authenticated
@@ -290,7 +294,9 @@ final class APIClient: @unchecked Sendable {
                 extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
             )
             do {
-                return try await executeOnce(request, endpoint: endpoint, includingForbidden: includingForbidden)
+                return try await executeOnce(
+                    request, endpoint: endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound
+                )
             } catch let signal as StepUpRequiredSignal {
                 guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden }
                 didAttemptStepUp = true
@@ -352,7 +358,9 @@ final class APIClient: @unchecked Sendable {
         let methods: [String]
     }
 
-    private func executeOnce(_ request: URLRequest, endpoint: Endpoint, includingForbidden: Bool) async throws -> DataResponse {
+    private func executeOnce(
+        _ request: URLRequest, endpoint: Endpoint, includingForbidden: Bool, includingNotFound: Bool
+    ) async throws -> DataResponse {
         let data: Data
         let response: URLResponse
         do {
@@ -395,7 +403,11 @@ final class APIClient: @unchecked Sendable {
             // callers must inspect the status before interpreting any payload.
             if includingForbidden { return DataResponse(data: data, response: http) }
             throw APIError.forbidden
-        case 404: throw APIError.notFound
+        case 404:
+            // Atomic command recovery may carry a bound rejected receipt on
+            // 404. Opt-in callers must validate its actor, Home and original
+            // command; authentication and step-up retain their normal behavior.
+            return try notFoundResponse(data, response: http, includeBody: includingNotFound)
         case 400..<500:
             let message = String(data: data, encoding: .utf8)
             throw APIError.clientError(status: http.statusCode, message: message)
@@ -407,6 +419,11 @@ final class APIClient: @unchecked Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw APIError.server(status: http.statusCode, body: body)
         }
+    }
+
+    private func notFoundResponse(_ data: Data, response: HTTPURLResponse, includeBody: Bool) throws -> DataResponse {
+        guard includeBody else { throw APIError.notFound }
+        return DataResponse(data: data, response: response)
     }
 
     // MARK: - Building requests
