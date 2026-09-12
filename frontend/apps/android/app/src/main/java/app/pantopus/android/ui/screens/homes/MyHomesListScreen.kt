@@ -14,8 +14,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -42,6 +45,7 @@ const val MY_HOMES_LIST_TAG = "myHomesList"
  * destructive "Delete home" confirm (`DELETE /api/homes/:id`).
  */
 @Suppress("LongParameterList") // Each callback is a distinct authorized Home destination.
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MyHomesListScreen(
     onOpenHome: (String) -> Unit,
@@ -111,7 +115,7 @@ fun MyHomesListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG)) {
+    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
             state = state,

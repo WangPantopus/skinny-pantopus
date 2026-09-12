@@ -72,6 +72,7 @@ data class MyHome(
     @Json(name = "access_kind") val accessKind: String? = null,
     @Json(name = "has_home_access") val hasHomeAccess: Boolean? = null,
     @Json(name = "role_base") val roleBase: String? = null,
+    val address2: String? = null,
 ) {
     val hasSharedAccess: Boolean get() = accessKind == "shared" && hasHomeAccess == true
     val hasValidListContext: Boolean get() =
@@ -259,6 +260,8 @@ data class CreateHomeRequest(
     val role: String? = null,
     @Json(name = "attom_property_detail") val attomPropertyDetail: JsonValue? = null,
     @Json(name = "address_id") val addressId: String? = null,
+    @Json(name = "request_id") val requestId: String? = null,
+    @Json(name = "access_secrets") val accessSecrets: List<CreateAccessSecretRequest>? = null,
 )
 
 /** `POST /api/homes` response — route `backend/routes/home.js:677`. */

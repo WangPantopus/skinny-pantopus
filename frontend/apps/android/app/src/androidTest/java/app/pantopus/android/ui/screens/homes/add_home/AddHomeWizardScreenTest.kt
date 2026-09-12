@@ -12,20 +12,23 @@ import androidx.compose.ui.test.performClick
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
 import app.pantopus.android.data.api.models.homes.CheckAddressResponse
-import app.pantopus.android.data.api.models.homes.CreateHomeRequest
-import app.pantopus.android.data.api.models.homes.CreateHomeResponse
 import app.pantopus.android.data.api.models.homes.HomeAddressValidationResponse
 import app.pantopus.android.data.api.models.homes.HomeAddressVerdict
-import app.pantopus.android.data.api.models.homes.HomeDto
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.ValidatedHomeAddress
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomeCreationCodec
+import app.pantopus.android.data.homes.HomeCreationOutcome
+import app.pantopus.android.data.homes.HomeCreationScope
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.homes.PendingHomeCreation
+import app.pantopus.android.data.homes.PendingHomeCreationStore
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardShellTags
+import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -55,28 +58,6 @@ class AddHomeWizardScreenTest {
             status = CheckAddressResponse.STATUS_NOT_FOUND,
         )
 
-    private val createHomeResponse =
-        CreateHomeResponse(
-            message = "ok",
-            home =
-                HomeDto(
-                    id = "ddc23800-0000-4000-8000-000000000042",
-                    name = "412 Elm St",
-                    address = "412 Elm St",
-                    city = "Portland",
-                    state = "OR",
-                    zipcode = "97214",
-                    homeType = null,
-                    visibility = "public",
-                    description = null,
-                    createdAt = "2025-01-01T00:00:00Z",
-                    updatedAt = "2025-01-01T00:00:00Z",
-                ),
-            requiresVerification = false,
-            verificationType = null,
-            role = "owner",
-        )
-
     private fun makeViewModel(): AddHomeWizardViewModel {
         coEvery { repo.validateAddress(any()) } returns
             NetworkResult.Success(
@@ -86,7 +67,6 @@ class AddHomeWizardScreenTest {
                 ),
             )
         coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns NetworkResult.Success(checkAddressOk)
-        coEvery { repo.create(any<CreateHomeRequest>()) } returns NetworkResult.Success(createHomeResponse)
         // `runCheckAddress` also fans out to the ATTOM public-records lookup.
         // Unstubbed, the relaxed mock hands back an instance that is neither
         // Success nor Failure, and the exhaustive `when` in
@@ -104,6 +84,34 @@ class AddHomeWizardScreenTest {
         coEvery { session.confirmCurrent() } returns true
         val sessions = mockk<HomeClaimSessionScopeFactory>()
         every { sessions.create(any()) } returns session
+        val codec = HomeCreationCodec(Moshi.Builder().build())
+        val scope = HomeCreationScope("http://127.0.0.1:18084/", "ddc23800-0000-4000-8000-000000000001")
+        var saved: PendingHomeCreation? = null
+        val store =
+            object : PendingHomeCreationStore {
+                override suspend fun read(scope: HomeCreationScope): PendingHomeCreation? = saved
+
+                override suspend fun replace(
+                    scope: HomeCreationScope,
+                    expected: PendingHomeCreation?,
+                    next: PendingHomeCreation?,
+                ) {
+                    check(saved == expected)
+                    saved = next
+                }
+            }
+        val creation =
+            HomeCreationCoordinator(scope, store, codec, { draft, _ ->
+                HomeCreationOutcome(
+                    state = "completed",
+                    command = HomeCreationOutcome.Command(scope.actorId, draft.requestId, "2026-09-11T12:00:00Z", "2026-09-11T12:00:01Z"),
+                    home = HomeCreationOutcome.Home("ddc23800-0000-4000-8000-000000000042"),
+                    ownershipClaimId = "ddc23800-0000-4000-8000-000000000043", accessSecretIds = emptyList(),
+                    role = "owner", requiresVerification = true, verificationType = "ownership", currentAccess = "not_checked",
+                )
+            }, session::requireCurrent)
+        val creations = mockk<HomeCreationFactory>()
+        every { creations.create(any()) } returns creation
         return AddHomeWizardViewModel(
             repo,
             mockk(relaxed = true),
@@ -112,6 +120,7 @@ class AddHomeWizardScreenTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             sessions,
+            creations,
         )
     }
 
@@ -122,7 +131,7 @@ class AddHomeWizardScreenTest {
     @Test
     fun continue_button_is_disabled_until_home_is_selected() {
         compose.setContent {
-            AddHomeWizardScreen(onDismiss = {}, onOpenHomeDashboard = {}, viewModel = makeViewModel())
+            AddHomeWizardScreen(onDismiss = {}, onOpenHomes = {}, viewModel = makeViewModel())
         }
         compose
             .onNodeWithTag(WizardShellTags.PRIMARY_CTA)
@@ -134,7 +143,7 @@ class AddHomeWizardScreenTest {
     fun selecting_home_enables_continue() {
         val vm = makeViewModel()
         compose.setContent {
-            AddHomeWizardScreen(onDismiss = {}, onOpenHomeDashboard = {}, viewModel = vm)
+            AddHomeWizardScreen(onDismiss = {}, onOpenHomes = {}, viewModel = vm)
         }
         compose.runOnIdle { vm.fillAddress() }
         compose.waitForIdle()
@@ -148,7 +157,7 @@ class AddHomeWizardScreenTest {
         compose.setContent {
             AddHomeWizardScreen(
                 onDismiss = { dismissed = true },
-                onOpenHomeDashboard = {},
+                onOpenHomes = {},
                 viewModel = vm,
             )
         }
@@ -173,7 +182,7 @@ class AddHomeWizardScreenTest {
         compose.setContent {
             AddHomeWizardScreen(
                 onDismiss = { dismissed = true },
-                onOpenHomeDashboard = {},
+                onOpenHomes = {},
                 viewModel = makeViewModel(),
             )
         }
@@ -183,10 +192,10 @@ class AddHomeWizardScreenTest {
     }
 
     @Test
-    fun happy_path_reaches_success_step() {
+    fun confirmed_creation_shows_result_before_opening_current_homes() {
         val vm = makeViewModel()
         compose.setContent {
-            AddHomeWizardScreen(onDismiss = {}, onOpenHomeDashboard = {}, viewModel = vm)
+            AddHomeWizardScreen(onDismiss = {}, onOpenHomes = {}, viewModel = vm)
         }
 
         // Drive every step through the VM. We stay inside `runOnIdle` so
@@ -207,14 +216,14 @@ class AddHomeWizardScreenTest {
         compose.runOnIdle { vm.selectRole(AddHomeRole.Owner) }
         compose.runOnIdle { vm.onPrimary() }
 
-        // Step 4: submit. Wait for the .Success transition.
+        // Step 4: submit and await the retained outcome.
         compose.runOnIdle { vm.onPrimary() }
         compose.waitUntil(timeoutMillis = 15_000) {
-            vm.state.value.form.currentStep == AddHomeStep.Success
+            vm.state.value.creationOutcome?.state == "completed"
         }
 
-        assert(vm.state.value.form.currentStep == AddHomeStep.Success) {
-            "Wizard must reach Success after submit completes."
+        assert(vm.state.value.creationOutcome?.state == "completed") {
+            "Wizard must show the confirmed result after submit completes."
         }
         assert(vm.state.value.createdHomeId == "ddc23800-0000-4000-8000-000000000042") {
             "createdHomeId must capture the response's home id."

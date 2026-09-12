@@ -283,6 +283,7 @@ class MyHomesListViewModel
                 id = home.id, title = title,
                 subtitle =
                     listOfNotNull(
+                        unitLabel(home),
                         roleLabel(home),
                         locality,
                     ).joinToString(" · "),
@@ -311,6 +312,11 @@ class MyHomesListViewModel
                         )
                     },
             )
+        }
+
+        private fun unitLabel(home: MyHome): String? {
+            if (home.accessKind == "verification") return null
+            return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { "Unit $it" }
         }
 
         private fun roleLabel(home: MyHome): String? =

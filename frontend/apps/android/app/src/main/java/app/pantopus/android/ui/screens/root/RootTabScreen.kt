@@ -5890,11 +5890,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.ADD_HOME) {
                     AddHomeWizardScreen(
                         onDismiss = { navController.popBackStack() },
-                        onOpenHomeDashboard = { homeId ->
-                            // Pop the wizard then push the dashboard so Back
-                            // returns to MyHomes, not the success screen.
+                        onOpenHomes = {
                             navController.popBackStack()
-                            navController.navigate(ChildRoutes.homeDashboard(homeId))
+                            navController.navigate(ChildRoutes.MY_HOMES) {
+                                popUpTo(ChildRoutes.MY_HOMES) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         },
                         onOpenClaimOwnership = { homeId ->
                             navController.popBackStack()

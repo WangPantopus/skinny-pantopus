@@ -1,5 +1,31 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Android Home creation and unit identity — September 11
+
+The [Android creation milestone](home-android-create-recovery-2026-09-11.md) passes
+installed original-command restart/cancellation, committed lost-reply recovery,
+atomic optional-setup refusal/correction and distinct Home-unit cards against
+production HTTP/SDK/SQL. Encrypted original-command storage, lifecycle/session
+fences, current My Homes refresh, accessible optional fields and truthful review
+are implemented. Both variants pass 4,531 regression checks (80 skips), full
+lint/style/snapshots/build and final instrumented-source compilation pass, and
+privacy gates pass. Exact fixture SQL/functions are cleaned; protected commands
+were acknowledged through UI before cleanup. Accepted APK/source digests and
+screens are preserved privately.
+
+**Continue now:** browser retained creation, existing-Home admission, primary and
+private first use/invitations, then native residency and the full backlog. Native
+storage-failure/cross-account, client-server version combinations and broader
+physical/provider/accessibility acceptance remain bounded limits. H07/H08/R02/U01
+remain partial; 74 inventory entries remain. Keep paid services one final bundle.
+
+Predecessor `1565c8190` has all CI green in
+[run 34669307089](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34669307089).
+Verify this new pushed head separately. #32/#34 remain unfinished drafts; #34
+conflicts. Source migrations remain 40 Home / 21 payment / 49 combined. No merge,
+permanent adoption or hosted/paid activation. The physical iPhone remains on the
+verified build 2; owner checkout/data/devices and accepted products are preserved.
+
 ### Owner-requested physical iPhone refresh — September 11
 
 The [latest committed iOS build is installed](physical-iphone-refresh-2026-09-11.md)

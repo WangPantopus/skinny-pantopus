@@ -60,7 +60,7 @@ class AddHomeWizardSnapshotTest {
             PantopusTheme {
                 AddHomeWizardScreen(
                     onDismiss = {},
-                    onOpenHomeDashboard = {},
+                    onOpenHomes = {},
                     viewModel = vm,
                 )
             }
@@ -75,7 +75,7 @@ class AddHomeWizardSnapshotTest {
             PantopusTheme {
                 AddHomeWizardScreen(
                     onDismiss = {},
-                    onOpenHomeDashboard = {},
+                    onOpenHomes = {},
                     viewModel = vm,
                 )
             }
@@ -111,6 +111,9 @@ class AddHomeWizardSnapshotTest {
         every { session.storageIdentityHash } returns "a".repeat(64)
         val sessions = mockk<HomeClaimSessionScopeFactory>()
         every { sessions.create(any()) } returns session
+        val creations = mockk<HomeCreationFactory>()
+        val fixture = HomeCreationTestFixture()
+        every { creations.create(any()) } answers { fixture.coordinator(session::requireCurrent) }
         return AddHomeWizardViewModel(
             repository = mockk<HomesRepository>(relaxed = true),
             discoveryRepository = mockk<HomeDiscoveryRepository>(relaxed = true),
@@ -119,6 +122,7 @@ class AddHomeWizardSnapshotTest {
             geoApi = mockk(relaxed = true),
             locationProvider = mockk(relaxed = true),
             sessions = sessions,
+            creations = creations,
         )
     }
 

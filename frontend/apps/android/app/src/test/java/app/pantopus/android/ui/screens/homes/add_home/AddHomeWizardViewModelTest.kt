@@ -6,11 +6,8 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
 import app.pantopus.android.data.api.models.homes.CheckAddressResponse
-import app.pantopus.android.data.api.models.homes.CreateHomeRequest
-import app.pantopus.android.data.api.models.homes.CreateHomeResponse
 import app.pantopus.android.data.api.models.homes.HomeAddressValidationResponse
 import app.pantopus.android.data.api.models.homes.HomeAddressVerdict
-import app.pantopus.android.data.api.models.homes.HomeDto
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.ValidatedHomeAddress
 import app.pantopus.android.data.api.net.NetworkError
@@ -59,11 +56,14 @@ class AddHomeWizardViewModelTest {
     private val sessions: HomeClaimSessionScopeFactory = mockk()
     private val invalidated = MutableStateFlow(false)
     private val scopeHash = "a".repeat(64)
+    private val creationFixture = HomeCreationTestFixture()
+    private val creations: HomeCreationFactory = mockk()
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { sessions.create(any()) } returns session
+        every { creations.create(any()) } answers { creationFixture.coordinator(session::requireCurrent) }
         every { session.isCurrent } answers { !invalidated.value }
         every { session.invalidated } returns invalidated
         every { session.storageIdentityHash } answers { scopeHash.takeUnless { invalidated.value } }
@@ -89,7 +89,7 @@ class AddHomeWizardViewModelTest {
     }
 
     private fun makeVm(savedStateHandle: SavedStateHandle = SavedStateHandle()) =
-        AddHomeWizardViewModel(repo, discoveryRepo, savedStateHandle, networkMonitor, geo, location, sessions)
+        AddHomeWizardViewModel(repo, discoveryRepo, savedStateHandle, networkMonitor, geo, location, sessions, creations)
 
     private fun fillAddress(vm: AddHomeWizardViewModel) {
         vm.selectAddressCandidate(AddHomeSampleData.nearbyHomes[0])
@@ -105,28 +105,6 @@ class AddHomeWizardViewModelTest {
         vm.updateField(AddressField.State, "NY")
         vm.updateField(AddressField.Zip, zipCode)
     }
-
-    private val createHomeResponse =
-        CreateHomeResponse(
-            message = "ok",
-            home =
-                HomeDto(
-                    id = "ddc23700-0000-4000-8000-000000000100",
-                    name = "412 Elm St",
-                    address = "412 Elm St",
-                    city = "Portland",
-                    state = "OR",
-                    zipcode = "97214",
-                    homeType = null,
-                    visibility = "public",
-                    description = null,
-                    createdAt = "2025-01-01T00:00:00Z",
-                    updatedAt = "2025-01-01T00:00:00Z",
-                ),
-            requiresVerification = false,
-            verificationType = null,
-            role = "owner",
-        )
 
     private val checkAddressOk =
         CheckAddressResponse(
@@ -253,12 +231,10 @@ class AddHomeWizardViewModelTest {
     // MARK: - Submit happy path
 
     @Test
-    fun submit_advances_to_success_and_records_home_id() =
+    fun confirmed_creation_shows_saved_result_without_granting_dashboard_access() =
         runTest {
             coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns
                 NetworkResult.Success(checkAddressOk)
-            coEvery { repo.create(any<CreateHomeRequest>()) } returns
-                NetworkResult.Success(createHomeResponse)
 
             val vm = makeVm()
             fillAddress(vm)
@@ -272,10 +248,12 @@ class AddHomeWizardViewModelTest {
             vm.onPrimary()
             advanceTimeBy(50) // Submit → Success
 
-            assertEquals(AddHomeStep.Success, vm.state.value.form.currentStep)
-            assertEquals("ddc23700-0000-4000-8000-000000000100", vm.state.value.createdHomeId)
-            assertEquals("View home", vm.chrome.primaryCtaLabel)
-            assertEquals("addHomeBackToHub", vm.chrome.secondaryCta?.testTag)
+            assertTrue(vm.state.value.showsCreationRecovery)
+            assertEquals("completed", vm.state.value.creationOutcome?.state)
+            assertEquals(HomeCreationTestFixture.HOME_ID, vm.state.value.createdHomeId)
+            assertEquals("Open My Homes", vm.chrome.primaryCtaLabel)
+            assertNull(vm.pendingEvent.value)
+            assertNull(vm.chrome.secondaryCta)
             assertFalse(
                 "Success step must hide the segmented progress bar.",
                 vm.chrome.showsProgressBar,
@@ -283,12 +261,11 @@ class AddHomeWizardViewModelTest {
         }
 
     @Test
-    fun submit_error_keeps_user_on_review() =
+    fun unknown_submission_retains_original_request_and_recovery_choices() =
         runTest {
             coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns
                 NetworkResult.Success(checkAddressOk)
-            coEvery { repo.create(any<CreateHomeRequest>()) } returns
-                NetworkResult.Failure(NetworkError.Server(500, "boom"))
+            creationFixture.failTransport = true
 
             val vm = makeVm()
             fillAddress(vm)
@@ -304,17 +281,18 @@ class AddHomeWizardViewModelTest {
 
             assertEquals(AddHomeStep.Review, vm.state.value.form.currentStep)
             assertNotNull(vm.state.value.errorMessage)
+            assertTrue(vm.state.value.showsCreationRecovery)
+            assertNotNull(creationFixture.saved)
+            assertEquals("Try saving again", vm.chrome.primaryCtaLabel)
         }
 
-    // MARK: - Success step CTAs
+    // MARK: - Confirmed creation CTAs
 
     @Test
-    fun success_primary_fires_open_dashboard_event() =
+    fun confirmed_creation_acknowledgment_opens_current_homes_and_clears_command() =
         runTest {
             coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns
                 NetworkResult.Success(checkAddressOk)
-            coEvery { repo.create(any<CreateHomeRequest>()) } returns
-                NetworkResult.Success(createHomeResponse)
 
             val vm = makeVm()
             fillAddress(vm)
@@ -333,19 +311,17 @@ class AddHomeWizardViewModelTest {
                 assertNull(awaitItem())
                 vm.onPrimary()
                 val event = awaitItem()
-                assertTrue(event is AddHomeOutboundEvent.OpenHomeDashboard)
-                assertEquals("ddc23700-0000-4000-8000-000000000100", (event as AddHomeOutboundEvent.OpenHomeDashboard).homeId)
+                assertEquals(AddHomeOutboundEvent.OpenHomes, event)
+                assertNull(creationFixture.saved)
                 cancelAndConsumeRemainingEvents()
             }
         }
 
     @Test
-    fun success_secondary_fires_dismiss_event() =
+    fun closing_confirmed_creation_retains_unacknowledged_outcome() =
         runTest {
             coEvery { repo.checkAddress(any<CheckAddressRequest>()) } returns
                 NetworkResult.Success(checkAddressOk)
-            coEvery { repo.create(any<CreateHomeRequest>()) } returns
-                NetworkResult.Success(createHomeResponse)
 
             val vm = makeVm()
             fillAddress(vm)
@@ -358,8 +334,9 @@ class AddHomeWizardViewModelTest {
             advanceTimeBy(50)
             vm.onPrimary()
             advanceTimeBy(50)
-            vm.onSecondary()
+            vm.onLeading()
             assertEquals(AddHomeOutboundEvent.Dismiss, vm.pendingEvent.value)
+            assertEquals("completed", creationFixture.saved?.outcome?.state)
         }
 
     // MARK: - Close-confirm

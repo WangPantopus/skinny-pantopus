@@ -27,12 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +37,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -52,6 +50,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,10 +91,11 @@ const val ADD_HOME_SCREEN_TAG = "addHomeWizard"
  * changes via Hilt's `SavedStateHandle`, so the wizard restores after
  * process death (acceptance criterion #5).
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun AddHomeWizardScreen(
     onDismiss: () -> Unit,
-    onOpenHomeDashboard: (String) -> Unit,
+    onOpenHomes: () -> Unit,
     viewModel: AddHomeWizardViewModel = hiltViewModel(),
     onOpenClaimOwnership: (String) -> Unit = {},
     onOpenWaitingRoom: (String) -> Unit = {},
@@ -103,18 +103,7 @@ fun AddHomeWizardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
 
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, viewModel) {
-        val observer =
-            LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) viewModel.suspendAddressEntry()
-            }
-        lifecycle.addObserver(observer)
-        onDispose {
-            lifecycle.removeObserver(observer)
-            viewModel.suspendAddressEntry()
-        }
-    }
+    ObserveHomeCreationLifecycle(viewModel)
 
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
@@ -122,9 +111,9 @@ fun AddHomeWizardScreen(
                 viewModel.acknowledgeEvent()
                 onDismiss()
             }
-            is AddHomeOutboundEvent.OpenHomeDashboard -> {
+            AddHomeOutboundEvent.OpenHomes -> {
                 viewModel.acknowledgeEvent()
-                onOpenHomeDashboard(event.homeId)
+                onOpenHomes()
             }
             is AddHomeOutboundEvent.OpenClaimOwnership -> {
                 viewModel.acknowledgeEvent()
@@ -139,6 +128,7 @@ fun AddHomeWizardScreen(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.resumeCreation()
         // Fire the initial step view; subsequent transitions emit
         // their own ScreenAddHomeWizardStepViewed events from the VM.
         val current = state.form.currentStep
@@ -157,21 +147,24 @@ fun AddHomeWizardScreen(
         handleSystemBack = true,
         chrome = viewModel.chromeFor(state),
         scrollResetKey = state.form.currentStep to (state.errorMessage != null),
-        modifier = Modifier.testTag(ADD_HOME_SCREEN_TAG),
+        modifier = Modifier.testTag(ADD_HOME_SCREEN_TAG).semantics { testTagsAsResourceId = true },
     ) {
         AddressEntryError(state, viewModel)
-        when (state.form.currentStep) {
-            AddHomeStep.Address -> AddressStep(state, viewModel)
-            AddHomeStep.Confirm ->
-                ConfirmStep(
-                    state = state,
-                    onApplyGeocodedZip = viewModel::applyGeocodedZip,
-                    onPrimaryHomeChange = viewModel::setPrimaryHome,
-                    detailsSection = { AddHomeDetailsSection(state = state, vm = viewModel) },
-                )
-            AddHomeStep.Role -> RoleStep(state, viewModel)
-            AddHomeStep.Review -> ReviewStep(state)
-            AddHomeStep.Success -> SuccessStep()
+        if (state.showsCreationRecovery) {
+            HomeCreationRecoveryContent(state, viewModel)
+        } else {
+            when (state.form.currentStep) {
+                AddHomeStep.Address -> AddressStep(state, viewModel)
+                AddHomeStep.Confirm ->
+                    ConfirmStep(
+                        state = state,
+                        onApplyGeocodedZip = viewModel::applyGeocodedZip,
+                        detailsSection = { AddHomeDetailsSection(state = state, vm = viewModel) },
+                    )
+                AddHomeStep.Role -> RoleStep(state, viewModel)
+                AddHomeStep.Review -> ReviewStep(state)
+                AddHomeStep.Success -> SuccessStep()
+            }
         }
     }
 
@@ -193,35 +186,27 @@ fun AddHomeWizardScreen(
             onClose = viewModel::closeWifiQrScanner,
         )
     }
+}
 
-    state.accessSecretWarning?.let { message ->
-        AlertDialog(
-            onDismissRequest = viewModel::acknowledgeAccessSecretWarning,
-            modifier = Modifier.testTag("addHomeAccessSecretWarning"),
-            title = {
-                Text(
-                    text = "Home created",
-                    style = PantopusTextStyle.h3,
-                    color = PantopusColors.appText,
-                )
-            },
-            text = {
-                Text(
-                    text = message,
-                    style = PantopusTextStyle.caption,
-                    color = PantopusColors.appTextSecondary,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::acknowledgeAccessSecretWarning) {
-                    Text(
-                        text = "OK",
-                        style = PantopusTextStyle.body,
-                        color = PantopusColors.primary600,
-                    )
+@Composable
+private fun ObserveHomeCreationLifecycle(viewModel: AddHomeWizardViewModel) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, viewModel) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                    viewModel.suspendCreation()
+                    viewModel.suspendAddressEntry()
+                } else if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.resumeCreation()
                 }
-            },
-        )
+            }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.suspendCreation()
+            viewModel.suspendAddressEntry()
+        }
     }
 }
 
@@ -455,7 +440,6 @@ private fun ManualAddressField(
 private fun ConfirmStep(
     state: AddHomeUiState,
     onApplyGeocodedZip: () -> Unit,
-    onPrimaryHomeChange: (Boolean) -> Unit,
     /**
      * A12.2 Details block, supplied by the live screen. The Paparazzi
      * geocode-confirmation preview omits it so its golden frames keep
@@ -478,9 +462,6 @@ private fun ConfirmStep(
         AddressConfirmationFields(state)
         state.addressCheck?.takeIf { state.isGeocodeResolved }?.let { check ->
             AddressVerdictRow(check)
-        }
-        if (state.isGeocodeResolved) {
-            PrimaryHomeToggle(isPrimary = state.form.isPrimary, onChange = onPrimaryHomeChange)
         }
         // A12.2 Details — nickname / type / beds / baths / sizes / year /
         // description, pre-filled from public records. Hidden on the
@@ -537,7 +518,7 @@ private fun ReviewStep(state: AddHomeUiState) {
             append(", ${state.form.address.city}")
             append(", ${state.form.address.state} ${state.form.address.zipCode}")
         }
-    // Address / role / primary, plus everything the Details and Setup
+    // Address / role, plus everything the Details and Setup
     // blocks collected — the review step previously showed only the first
     // three, so nothing the user typed on those blocks was verifiable
     // before submit.
@@ -545,7 +526,6 @@ private fun ReviewStep(state: AddHomeUiState) {
         buildList {
             add(ReviewSummaryRow("Address", composedAddress))
             add(ReviewSummaryRow("Role", state.form.role?.label ?: "—"))
-            add(ReviewSummaryRow("Primary", if (state.form.isPrimary) "Yes" else "No"))
             if (state.isClaimingExistingHome) return@buildList
             val details = state.form.details
             if (details.nickname.isNotBlank()) {
@@ -578,6 +558,7 @@ private fun ReviewStep(state: AddHomeUiState) {
             }
         }
     ReviewSummaryBlock(rows = rows)
+    if (!state.isClaimingExistingHome) SubcopyBlock("Saving starts your private Home setup. Residency and ownership require verification.")
 }
 
 @Composable
@@ -755,7 +736,6 @@ internal fun AddHomeWizardConfirmPreview(
         ConfirmStep(
             state = state,
             onApplyGeocodedZip = {},
-            onPrimaryHomeChange = {},
         )
     }
 }
@@ -1270,45 +1250,6 @@ private data class Verdict(
     val headline: String,
     val subcopy: String,
 )
-
-@Composable
-private fun PrimaryHomeToggle(
-    isPrimary: Boolean,
-    onChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .padding(Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "This is my primary home",
-                style = PantopusTextStyle.body,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text = "Use this home for default mail and notifications.",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        Switch(
-            checked = isPrimary,
-            onCheckedChange = onChange,
-            colors =
-                SwitchDefaults.colors(
-                    checkedThumbColor = PantopusColors.appTextInverse,
-                    checkedTrackColor = PantopusColors.primary600,
-                ),
-            modifier = Modifier.testTag("addHome_primaryToggle"),
-        )
-    }
-}
 
 @Composable
 private fun RoleRow(
