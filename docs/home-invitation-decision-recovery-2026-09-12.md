@@ -74,11 +74,13 @@ Acceptance notification transport remains the existing best-effort behavior;
 these command receipts do not claim notification delivery. H07/H08 stay partial;
 7 of 80 rows are closed and 73 remain partial/open, not a whole-app percentage.
 
-Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` is pushed and its
-[CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692)
-is running; all completed jobs pass. Allow it to complete while progressing
-locally, then push this backend milestone and verify the new head. The earlier
-private-first-use `ff4c82609e37203031df32daa3a3a9378723b2d3` has all checks green.
+Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` has every job passing
+in [CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692).
+Backend source milestone `30958f8420cf0b50e66cae8ea950bbe5e0a41afb` binds seven
+source files and 12 artifact anchors privately. It is ready to push with this
+checkpoint; verify that new head independently. The protected browser candidate
+is uncommitted and undergoing final actual acceptance. Private-first-use
+`ff4c82609e37203031df32daa3a3a9378723b2d3` is also fully green.
 #32 remains a draft; #34 remains an unfinished conflicting draft with passing
 checks at its own head. No merge, hosted migration/release, native build or device
 update. The physical iPhone remains 1.0.0 (2). Source inventory is now 44 Home /

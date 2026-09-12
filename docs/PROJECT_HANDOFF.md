@@ -35,11 +35,12 @@ then legacy compatibility and the full backlog. H07/H08 remain partial, with
 **7 of 80 rows closed and 73 partial/open**. Notification delivery is still a
 separate best-effort boundary; the command proves the saved decision only.
 
-Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` is pushed. Its
-[CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692)
-is running with completed jobs passing. Finish that run while progressing locally,
-then push this milestone and verify its new head. Private-first-use `ff4c82609`
-is fully green. #32 remains a draft, #34 an unfinished conflicting draft. No merge.
+Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` has every job passing in
+[CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692).
+Backend source milestone `30958f8420cf0b50e66cae8ea950bbe5e0a41afb` is committed
+and ready to push with this checkpoint; verify that new head independently.
+The protected browser candidate is uncommitted and is undergoing final actual
+UI/storage/HTTP acceptance. Private-first-use `ff4c82609` is fully green. #32 remains a draft, #34 an unfinished conflicting draft. No merge.
 Migrations now total **44 Home / 21 paid / 53 combined**, with 12 identical shared
 versions and zero collisions; combined replay/adoption remains open. Paid services
 remain one final launch bundle. iPhone remains 1.0.0 (2), with owner work/data/
