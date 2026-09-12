@@ -10,6 +10,11 @@ export interface HomeCreationDraft {
   request_json: string;
   outcome?: HomeCreationOutcome;
 }
+export interface HomeResidencyDraft extends Omit<HomeCreationDraft, 'version'> {
+  version: 2;
+  home_id: string;
+}
+export type HomeRequestDraft = HomeCreationDraft | HomeResidencyDraft;
 export interface HomeCreationOutcome {
   state: 'pending' | 'completed' | 'cancelled' | 'rejected';
   command: { actor_id: string; request_id: string; created_at: string; updated_at: string };
@@ -21,6 +26,13 @@ export interface HomeCreationOutcome {
   verification_type?: string;
   current_access?: string;
   code?: string;
+  home_id?: string;
+  claim_id?: string;
+  occupancy_id?: string;
+  claimed_role?: string;
+  routing?: string;
+  next_step?: string;
+  postcard_requested?: boolean;
 }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const uuid = (value: unknown): value is string => typeof value === 'string' && HOME_CREATE_UUID.test(value);
@@ -49,8 +61,8 @@ export function validHomeCreationInput(value: unknown): value is HomeCreationInp
   return value.amenities === undefined || (object(value.amenities) && Object.values(value.amenities).every(v => typeof v === 'boolean'));
 }
 
-export function validHomeCreationOutcome(value: unknown, draft: HomeCreationDraft): value is HomeCreationOutcome {
-  if (!object(value) || !['pending', 'completed', 'cancelled', 'rejected'].includes(String(value.state))
+export function validHomeCreationOutcome(value: unknown, draft: HomeRequestDraft): value is HomeCreationOutcome {
+  if (draft.version !== 1 || !object(value) || !['pending', 'completed', 'cancelled', 'rejected'].includes(String(value.state))
     || !object(value.command) || value.command.actor_id !== draft.actor_id || value.command.request_id !== draft.request_id
     || !['created_at', 'updated_at'].every(k => typeof value.command === 'object' && value.command !== null
       && typeof (value.command as Record<string, unknown>)[k] === 'string'

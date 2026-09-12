@@ -1,10 +1,11 @@
 import { openTaskRecoveryDatabase, readTaskRecoveryValue, taskRecoveryEncryptionKey } from '../../home/tasks/TaskRecoveryStorage';
 
-import { validHomeCreationDraft, type HomeCreationDraft } from './homeCreationModel';
+import type { HomeRequestDraft } from './homeCreationModel';
+import { validHomeRequestDraft } from './homeResidencySubmissionModel';
 
-export interface HomeCreationSnapshot { draft: HomeCreationDraft; revision: string }
+export interface HomeCreationSnapshot { draft: HomeRequestDraft; revision: string }
 interface SealedDraft { version: 1; revision: string; iv: ArrayBuffer; ciphertext: ArrayBuffer }
-/** Encrypted original create input, with atomic compare-and-write across tabs. */
+/** Encrypted original create/join input, with atomic compare-and-write across tabs. */
 export class PendingHomeCreationStore {
   private readonly key: string;
   private readonly additionalData: Uint8Array<ArrayBuffer>;
@@ -25,17 +26,17 @@ export class PendingHomeCreationStore {
       const key = await readTaskRecoveryValue<CryptoKey>(db, 'keys', 'home-create-v1');
       if (!key) throw new Error('Missing key');
       const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: sealed.iv, additionalData: this.additionalData }, key, sealed.ciphertext);
-      const draft = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as HomeCreationDraft;
-      if (!validHomeCreationDraft(draft, this.origin, this.actorId)) throw new Error('Invalid saved request');
+      const draft = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as HomeRequestDraft;
+      if (!validHomeRequestDraft(draft, this.origin, this.actorId)) throw new Error('Invalid saved request');
       return { draft, revision: sealed.revision };
     } catch {
       // A corrupt command is never treated as an empty slot or silently erased.
-      throw new Error('The original Home request could not be read. It has been kept; no new Home was submitted.');
+      throw new Error('The original Home request could not be read. It has been kept; no replacement request was submitted.');
     }
   }
 
-  async save(draft: HomeCreationDraft, expected: HomeCreationSnapshot | null, isCurrent: () => boolean): Promise<HomeCreationSnapshot> {
-    if (!validHomeCreationDraft(draft, this.origin, this.actorId)) throw new Error('The original Home request is invalid.');
+  async save(draft: HomeRequestDraft, expected: HomeCreationSnapshot | null, isCurrent: () => boolean): Promise<HomeCreationSnapshot> {
+    if (!validHomeRequestDraft(draft, this.origin, this.actorId)) throw new Error('The original Home request is invalid.');
     const db = await openTaskRecoveryDatabase();
     const key = await taskRecoveryEncryptionKey(db, 'home-create-v1');
     const iv = crypto.getRandomValues(new Uint8Array(12));

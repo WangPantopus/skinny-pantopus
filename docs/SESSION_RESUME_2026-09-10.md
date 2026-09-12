@@ -1,5 +1,37 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Browser existing-Home submission — accepted milestone; first use next
+
+The [browser joining milestone](home-browser-residency-submission-2026-09-11.md)
+passes actual Chrome/HTTP/SDK/SQL lost replies, restart/cancellation, changed
+apartments and corrected new UUIDs, rejected resubmission, protected proof-write
+repair and current My Homes refresh. Creation and joining share a fenced,
+encrypted slot while retaining version 1 creation compatibility. Unsupported
+optional join fields are removed; all three browser entry points use explicit
+address confirmation. Edited address/units, pagehide and controlled geolocation/
+property replies retire stale results. Fast unit entry during street resolution
+still works. Actual owner/renter creation regression also passes. Full browser
+regression: 93 suites / 1,193 checks; types/privacy pass; lint has zero errors and
+two existing legacy warnings. All owned fixtures/SQL/functions are cleaned.
+
+**Continue now:** fix applicants' current personal residency status and next-step
+destinations. My Homes currently sends every residency applicant to document
+upload and renders indistinguishable verification cards. Use the applicant's own
+submitted identity without exposing current private household details. Keep
+household review, evidence, postal intent and unknown delivery truthful. Then
+finish both native submission flows, prepared residency review, invitations/
+private first use and the full backlog. R02/H07/H08 remain partial; 74 inventory
+entries remain. Browser lifecycle/provider/accessibility and client-server
+compatibility acceptance remain bounded, not app-wide certification.
+
+Backend predecessor `2f8625be0` has every CI job green in
+[run 34673934859](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34673934859).
+Verify this browser milestone's own CI. #32/#34 remain unfinished drafts; #34
+conflicts. Source migrations remain 41 Home / 21 payment / 50 combined. No merge,
+permanent adoption, hosted/paid activation or physical-device change. The iPhone
+remains on verified Pantopus 1.0.0 (2). Owner work, devices/data and private
+artifacts are preserved. Paid services stay one final launch bundle.
+
 ### Existing-Home submission — backend milestone, R02 remains open
 
 The [atomic submission command](home-residency-submission-recovery-2026-09-11.md)

@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { HomeCreationController } from './HomeCreationController';
-import type { HomeCreationDraft, HomeCreationInput } from './homeCreationModel';
+import type { HomeRequestDraft, HomeCreationInput } from './homeCreationModel';
+import type { HomeResidencyInput } from './homeResidencySubmissionModel';
 
-interface View { ready: boolean; busy: boolean; error: string; pending: HomeCreationDraft | null; canAcknowledge: boolean; blocked: boolean; actorId: string | null }
+interface View { ready: boolean; busy: boolean; error: string; pending: HomeRequestDraft | null; canAcknowledge: boolean; blocked: boolean; actorId: string | null }
 const empty: View = { ready: false, busy: false, error: '', pending: null, canAcknowledge: false, blocked: false, actorId: null };
 export function useHomeCreation() {
   const controller = useRef<HomeCreationController | null>(null);
@@ -58,6 +59,7 @@ export function useHomeCreation() {
   };
   return { ...view, reopen: () => setReload(value => value + 1),
     submit: (input: HomeCreationInput) => run(current => current.submit(input)),
+    submitResidency: (homeId: string, input: HomeResidencyInput) => run(current => current.submitResidency(homeId, input)),
     recover: (action: 'status' | 'retry' | 'cancel') => run(current => current.recover(action)),
     acknowledge: () => run(current => current.acknowledge()) };
 }

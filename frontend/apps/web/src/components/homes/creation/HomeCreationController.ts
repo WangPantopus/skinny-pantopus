@@ -1,8 +1,9 @@
 import * as api from '@pantopus/api';
 import { PendingHomeCreationStore, type HomeCreationSnapshot } from './PendingHomeCreationStore';
-import { HOME_CREATE_UUID, projectHomeCreationOutcome, sameHomeCreationDecision,
-  validHomeCreationInput, validHomeCreationOutcome, type HomeCreationDraft,
+import { HOME_CREATE_UUID, validHomeCreationInput, type HomeCreationDraft, type HomeRequestDraft,
   type HomeCreationInput, type HomeCreationOutcome } from './homeCreationModel';
+import { validHomeRequestOutcome, projectHomeRequestOutcome, sameHomeRequestDecision, validHomeResidencyInput,
+  type HomeResidencyInput } from './homeResidencySubmissionModel';
 
 export const HOME_CREATE_UNKNOWN = 'The result is not confirmed. Your original request is kept. Check its status, retry it, or confirm cancellation.';
 type Store = Pick<PendingHomeCreationStore, 'load' | 'save' | 'clear'>;
@@ -57,6 +58,21 @@ export class HomeCreationController {
       await this.resolve('retry');
     });
   }
+  async submitResidency(homeId: string, input: HomeResidencyInput) {
+    return this.action(async () => {
+      if (this.attempted || this.snapshot) throw new Error('Recover the original Home request before starting another.');
+      if (!this.actorId || !this.store || !HOME_CREATE_UUID.test(homeId) || !validHomeResidencyInput(input)) {
+        throw new Error('Check the existing Home address and your relationship before submitting.');
+      }
+      const requestId = crypto.randomUUID();
+      const draft: HomeRequestDraft = { version: 2, home_id: homeId.toLowerCase(), origin: this.origin, actor_id: this.actorId,
+        request_id: requestId, request_json: JSON.stringify({ ...input, request_id: requestId }) };
+      this.attempted = true;
+      this.snapshot = await this.store.save(draft, null, () => this.current());
+      this.requireCurrent();
+      await this.resolve('retry');
+    });
+  }
   async recover(action: 'status' | 'retry' | 'cancel') { return this.action(() => this.resolve(action)); }
 
   private async resolve(action: 'status' | 'retry' | 'cancel') {
@@ -74,11 +90,12 @@ export class HomeCreationController {
       if (!original.draft.outcome || original.draft.outcome.state === 'pending') await this.saveOutcome(outcome, original);
       return;
     }
-    const endpoint = `/api/homes/create-commands/${original.draft.request_id}`;
+    const submitEndpoint = original.draft.version === 2 ? `/api/homes/${original.draft.home_id}/residency-submissions` : '/api/homes';
+    const endpoint = original.draft.version === 2 ? `${submitEndpoint}/${original.draft.request_id}` : `/api/homes/create-commands/${original.draft.request_id}`;
     let body: unknown, status: number | undefined;
     try {
       const response = await api.apiClient.request<unknown>({
-        url: action === 'retry' ? '/api/homes' : endpoint + (action === 'cancel' ? '/cancel' : ''),
+        url: action === 'retry' ? submitEndpoint : endpoint + (action === 'cancel' ? '/cancel' : ''),
         method: action === 'status' ? 'GET' : 'POST',
         data: action === 'retry' ? original.draft.request_json : action === 'cancel' ? {} : undefined,
         headers: { 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json' },
@@ -90,11 +107,11 @@ export class HomeCreationController {
       if (status === 401) this.retire();
     }
     this.requireCurrent();
-    if (!validHomeCreationOutcome(body, original.draft)) throw new Error(HOME_CREATE_UNKNOWN);
+    if (!validHomeRequestOutcome(body, original.draft)) throw new Error(HOME_CREATE_UNKNOWN);
     const allowed = { completed: [200, 201], pending: [202, 503], cancelled: [200], rejected: [400, 403, 404, 409, 422] };
     if (!status || !allowed[body.state].includes(status)) throw new Error(HOME_CREATE_UNKNOWN);
-    const proof = projectHomeCreationOutcome(body);
-    if (this.observed && !sameHomeCreationDecision(this.observed, proof)) throw new Error(HOME_CREATE_UNKNOWN);
+    const proof = projectHomeRequestOutcome(body, original.draft);
+    if (this.observed && !sameHomeRequestDecision(this.observed, proof, original.draft)) throw new Error(HOME_CREATE_UNKNOWN);
     if (proof.state !== 'pending') this.observed = proof;
     await this.saveOutcome(proof, original);
   }
@@ -104,7 +121,7 @@ export class HomeCreationController {
     this.requireCurrent();
   }
 
-  async acknowledge(): Promise<HomeCreationDraft> {
+  async acknowledge(): Promise<HomeRequestDraft> {
     if (!this.canAcknowledge) throw new Error('Confirm and save the original outcome before continuing.');
     return this.action(async () => {
       const original = this.snapshot!;

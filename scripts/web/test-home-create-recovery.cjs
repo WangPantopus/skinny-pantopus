@@ -167,7 +167,7 @@ async function main() {
       await page.getByRole('button', { name: 'Review →', exact: true }).click();
       await page.getByRole('button', { name: '✅ Create Home', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Your Home was saved', exact: true })).toBeVisible();
-      await expect(page.getByText('Renter · Verification still required', { exact: true })).toBeVisible();
+      await expect(page.getByText('Renter · Check verification in My Homes', { exact: true })).toBeVisible();
       await saved('504-renter-recovery-without-owner-claim');
       await currentHomes('504', false); await saved('504-current-private-renter-tasks');
       assert.equal((await control('state')).events.slice(before).filter(e => e.event === 'request' && e.path === '/api/homes' && e.method === 'POST').length, 1);

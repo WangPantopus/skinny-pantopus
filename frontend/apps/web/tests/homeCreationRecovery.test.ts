@@ -88,3 +88,77 @@ test('retirement during protected save cannot start a POST', async () => {
   const action = c.submit(input); c.retire(); release();
   await expect(action).rejects.toThrow('Protected write'); expect(api.apiClient.request).not.toHaveBeenCalled(); expect(saved).toBeNull();
 });
+
+const residencyHome = 'ddc24100-0000-4000-8000-000000000010';
+const residencyInput = { claimed_role: 'household' as const,
+  address: { line1: 'Private fixture street', line2: 'Unit 7', city: 'Test', state: 'WA', postal_code: '98607', country: 'US' } };
+const residencyReply = (state = 'completed') => ({ status: state === 'rejected' ? 409 : 200, data: {
+  state, home_id: residencyHome, command: reply().data.command,
+  ...(state === 'completed' ? { claim_id: 'ddc24100-0000-4000-8000-000000000011', occupancy_id: 'ddc24100-0000-4000-8000-000000000012',
+    claimed_role: 'household', routing: 'household_review', requires_verification: true, current_access: 'not_checked',
+    next_step: 'household_review', postcard_requested: false } : {}),
+  ...(state === 'rejected' ? { code: 'RESIDENCY_ADDRESS_CHANGED' } : {}),
+} });
+
+test('residency lost reply reopens the exact Home/address command and cannot start creation', async () => {
+  const first = await open(); (api.apiClient.request as jest.Mock).mockRejectedValueOnce({ statusCode: 503 });
+  await expect(first.submitResidency(residencyHome.toUpperCase(), residencyInput)).rejects.toThrow('not confirmed');
+  const original = clone(saved!);
+  const next = await open(); await expect(next.submit(input)).rejects.toThrow('original Home');
+  (api.apiClient.request as jest.Mock).mockImplementation(async () => residencyReply());
+  await next.recover('status');
+  expect(next.pending?.version).toBe(2); expect(next.pending?.request_json).toBe(original.draft.request_json);
+  const calls = (api.apiClient.request as jest.Mock).mock.calls.map(([c]) => c);
+  expect(calls.map(c => c.method)).toEqual(['POST', 'GET']);
+  expect(calls[0].url).toBe(`/api/homes/${residencyHome}/residency-submissions`);
+  expect(calls[1].url).toBe(`${calls[0].url}/${original.draft.request_id}`);
+  expect(JSON.parse(calls[0].data)).toEqual({ ...residencyInput, request_id: original.draft.request_id });
+});
+test('residency result binds Home, role, unchecked current access and dispatch semantics', async () => {
+  const c = await open(); (api.apiClient.request as jest.Mock).mockRejectedValueOnce({});
+  await expect(c.submitResidency(residencyHome, residencyInput)).rejects.toThrow();
+  const { validHomeRequestOutcome } = await import('../src/components/homes/creation/homeResidencySubmissionModel');
+  const proof = residencyReply().data;
+  for (const changes of [{ home_id: actor }, { claimed_role: 'renter' }, { current_access: 'granted' },
+    { postcard_requested: true }, { next_step: 'address_verification' }, { occupancy_id: 'invalid' }]) {
+    expect(validHomeRequestOutcome({ ...proof, ...changes }, saved!.draft)).toBe(false);
+  }
+  expect(validHomeRequestOutcome(proof, saved!.draft)).toBe(true); expect(c.canAcknowledge).toBe(false);
+});
+test('residency proof-write repair sends no second POST or cancellation', async () => {
+  const c = await open(); failWrite = 2; (api.apiClient.request as jest.Mock).mockImplementation(async () => residencyReply());
+  await expect(c.submitResidency(residencyHome, residencyInput)).rejects.toThrow('Protected write');
+  failWrite = -1; await c.recover('cancel'); expect(c.canAcknowledge).toBe(true);
+  expect(api.apiClient.request).toHaveBeenCalledTimes(1); expect((await c.acknowledge()).outcome?.state).toBe('completed');
+});
+test('throttled residency stays recoverable until cancellation is confirmed', async () => {
+  const c = await open(); (api.apiClient.request as jest.Mock).mockRejectedValueOnce({ statusCode: 429, data: { code: 'RESIDENCY_SUBMISSION_RATE_LIMITED' } });
+  await expect(c.submitResidency(residencyHome, residencyInput)).rejects.toThrow('not confirmed'); expect(c.canAcknowledge).toBe(false);
+  (api.apiClient.request as jest.Mock).mockImplementation(async () => residencyReply('cancelled'));
+  await c.recover('cancel');
+  expect((api.apiClient.request as jest.Mock).mock.lastCall[0].url).toBe(`/api/homes/${residencyHome}/residency-submissions/${saved!.draft.request_id}/cancel`);
+  const original = await c.acknowledge(); expect(JSON.parse(original.request_json).address).toEqual(residencyInput.address); expect(saved).toBeNull();
+});
+test('bound address rejection keeps editable original; acknowledgement permits a new UUID', async () => {
+  const c = await open(); (api.apiClient.request as jest.Mock).mockImplementation(async () => { const r = residencyReply('rejected'); throw { statusCode: r.status, data: r.data }; });
+  await c.submitResidency(residencyHome, residencyInput); const old = saved!.draft.request_id;
+  await expect(c.submitResidency(residencyHome, residencyInput)).rejects.toThrow('original Home');
+  expect((await c.acknowledge()).outcome?.code).toBe('RESIDENCY_ADDRESS_CHANGED');
+  (api.apiClient.request as jest.Mock).mockImplementation(async () => residencyReply());
+  await c.submitResidency(residencyHome, residencyInput); expect(saved!.draft.request_id).not.toBe(old);
+});
+test('a v1 creation command fences a competing v2 join across controllers', async () => {
+  const create = await open(); const join = await open(); await create.submit(input);
+  await expect(join.submitResidency(residencyHome, residencyInput)).rejects.toThrow('Protected write');
+  expect(api.apiClient.request).toHaveBeenCalledTimes(1); expect(saved!.draft.version).toBe(1);
+  const { validHomeRequestDraft } = await import('../src/components/homes/creation/homeResidencySubmissionModel');
+  expect(validHomeRequestDraft(saved!.draft, create.origin, actor)).toBe(true);
+  expect(validHomeRequestDraft({ ...saved!.draft, version: 2, home_id: residencyHome }, create.origin, actor)).toBe(false);
+});
+test('residency proof arriving after a session change cannot replace protected state', async () => {
+  const c = await open(); (api.apiClient.request as jest.Mock).mockImplementation(async () => {
+    localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'new-session'); return residencyReply();
+  });
+  await expect(c.submitResidency(residencyHome, residencyInput)).rejects.toThrow('no longer current');
+  expect(saved!.draft.outcome).toBeUndefined(); expect(c.current()).toBe(false);
+});
