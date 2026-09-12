@@ -21,9 +21,9 @@ struct AddressConfirmationFields: View {
             )
             HStack(alignment: .top, spacing: Spacing.s2) {
                 ConfirmationField(
-                    label: "Apt / Unit",
+                    label: "Unit",
                     value: address.unit,
-                    optional: true,
+                    optional: address.unit.isEmpty,
                     identifier: "addHome_confirmUnit"
                 )
                 .frame(maxWidth: .infinity)

@@ -18,6 +18,7 @@ public enum HubRoute: Hashable {
     /// T6.5e (P19.5) Mailbox Vault — saved mail list. Personal pillar.
     case mailboxVault
     case addHome
+    case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Search public-preview
     /// homes, start a claim on one, add a missing address, or paste an
     /// invite code. Mirrors RN `src/app/homes/find.tsx`.
@@ -1783,7 +1784,7 @@ public struct HubTabRoot: View {
                 case .home: push(.homeDashboard(homeId: homeId))
                 case .mail: push(.postcardVerification(homeId: homeId))
                 case .ownership: push(.claimOwnership(homeId: homeId))
-                case .addHome: push(.addHome)
+                case .addHome: push(.joinHome(homeId: homeId))
                 }
             }
         case let .verifyResidency(homeId):
@@ -1836,7 +1837,7 @@ public struct HubTabRoot: View {
                     case .residency:
                         if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
                     case .ownership: path.append(.claimOwnership(homeId: homeId))
-                    case .addHome: path.append(.addHome)
+                    case .addHome: path.append(.joinHome(homeId: homeId))
                     }
                 }
             )
@@ -2992,18 +2993,19 @@ public struct HubTabRoot: View {
                 onBack: { pop() },
                 onNav: { nav in handleWaitingRoomNav(nav, homeId: homeId) }
             )
-        case .addHome:
+        case .addHome, .joinHome:
             AddHomeWizardView(
+                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
                 onOpenHomes: {
-                    path.removeAll { $0 == .addHome || $0 == .myHomes }
+                    path.removeAll { $0.isHomeEntry || $0 == .myHomes }
                     path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.claimOwnership(homeId: homeId))
                 },
                 onOpenWaitingRoom: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.waitingRoom(homeId: homeId))
                 }
             )
@@ -3223,4 +3225,19 @@ private struct BusinessProfileDestination: View {
 
 #Preview {
     HubTabRoot()
+}
+
+/// The selected Home survives address editing and original-request recovery.
+extension HubRoute {
+    var homeEntryTarget: String? {
+        if case let .joinHome(homeId) = self { return homeId }
+        return nil
+    }
+
+    var isHomeEntry: Bool {
+        switch self {
+        case .addHome, .joinHome: true
+        default: false
+        }
+    }
 }

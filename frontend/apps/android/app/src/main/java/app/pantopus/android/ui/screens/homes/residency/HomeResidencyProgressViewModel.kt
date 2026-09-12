@@ -110,9 +110,9 @@ class HomeResidencyProgressViewModel
             val progress = _state.value.progress ?: return false
             return when (destination) {
                 HomeResidencyNavigation.Home -> progress.nextStep == "home" && progress.currentAccess == "shared"
-                HomeResidencyNavigation.Mail -> progress.nextStep == "address_verification"
+                HomeResidencyNavigation.Mail -> progress.nextStep == "address_verification" && !progress.needsResidencyRequest
                 HomeResidencyNavigation.Ownership -> progress.nextStep == "ownership_verification"
-                HomeResidencyNavigation.AddHome -> progress.nextStep == "resubmit"
+                HomeResidencyNavigation.AddHome -> progress.nextStep == "resubmit" || progress.needsResidencyRequest
             }
         }
     }

@@ -100,11 +100,15 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
             && (request == nil || (request?.isValid == true && request?.homeId == homeId))
     }
 
+    var needsResidencyRequest: Bool {
+        nextStep == .addressVerification && request == nil
+    }
+
     var title: String {
         switch nextStep {
         case .home: "Household access is available"
         case .householdReview: "Waiting for household review"
-        case .addressVerification: "Address verification is required"
+        case .addressVerification: needsResidencyRequest ? "Request residency review" : "Address verification is required"
         case .resubmit: "Review your request"
         case .accessReview: "Household access needs review"
         case .ownershipVerification: "Continue ownership verification"
@@ -119,7 +123,10 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
             "Your request is saved for a household reviewer. You do not need to upload an ownership "
                 + "document for this step. Refresh to check for a decision."
         case .addressVerification:
-            "Saving a request does not request a postcard or verify residency. Review mail verification "
+            needsResidencyRequest
+                ? "Confirm this Home’s address, apartment and your relationship before submitting a residency request. "
+                + "Checking an address does not grant household access or send mail."
+                : "Saving a request does not request a postcard or verify residency. Review mail verification "
                 + "to check for an existing request and its delivery status."
         case .resubmit:
             "Check your street, apartment and relationship before submitting again. A new request does "
@@ -192,9 +199,9 @@ final class HomeResidencyProgressViewModel {
         guard visible, isCurrent, !isLoading, let progress else { return false }
         switch destination {
         case .home: return progress.currentAccess == "shared" && progress.nextStep == .home
-        case .mail: return progress.nextStep == .addressVerification
+        case .mail: return progress.nextStep == .addressVerification && !progress.needsResidencyRequest
         case .ownership: return progress.nextStep == .ownershipVerification
-        case .addHome: return progress.nextStep == .resubmit
+        case .addHome: return progress.nextStep == .resubmit || progress.needsResidencyRequest
         }
     }
 }

@@ -106,7 +106,8 @@ fun HomeResidencyProgressScreen(
                             HomeResidencyNavigation.Home to "Open Home",
                             HomeResidencyNavigation.Mail to "Review mail verification",
                             HomeResidencyNavigation.Ownership to "Continue ownership verification",
-                            HomeResidencyNavigation.AddHome to "Review address in Add Home",
+                            HomeResidencyNavigation.AddHome to
+                                if (progress.needsResidencyRequest) "Check address and request residency" else "Check address and resubmit",
                         ).forEach { (destination, label) ->
                             if (viewModel.permits(destination)) {
                                 TextButton(onClick = {

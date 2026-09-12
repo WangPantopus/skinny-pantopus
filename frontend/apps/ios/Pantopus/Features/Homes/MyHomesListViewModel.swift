@@ -239,7 +239,21 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             ) { [weak self] in
                 Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) }
             }
-            return RowFooter(actions: [action])
+            var actions = [action]
+            if entry.accessKind == "private_setup", onVerifyResidency != nil {
+                actions.append(RowFooterAction(
+                    title: "Check status",
+                    icon: .shieldCheck,
+                    variant: .ghost,
+                    identifier: "myHomes.row_\(entry.id).verification"
+                ) { [weak self] in
+                    Task<Void, Never> { @MainActor in
+                        guard let self, self.current(revision) else { return }
+                        self.onVerifyResidency?(entry.id)
+                    }
+                })
+            }
+            return RowFooter(actions: actions)
         }
         let secondary: (@Sendable () -> Void)? = if canDelete {
             { [weak self] in

@@ -203,6 +203,7 @@ open class AddHomeWizardViewModel
     ) : ViewModel(),
         WizardModel {
         private val session = sessions.create(viewModelScope)
+        private val requiredHomeId = savedStateHandle.get<String>("joinHome")?.lowercase()
         private val creation = creations.create(session)
         private var creationRevision = 0L
         private var retainsDraft = true
@@ -814,27 +815,31 @@ open class AddHomeWizardViewModel
                 check(if (response.status == CheckAddressResponse.STATUS_NOT_FOUND) response.homeId == null else validId(response.homeId))
                 check(response.homeId == null || response.residencyAddress?.isValid() == true)
                 check(validation.verdict.status != "CONFLICT" || response.homeId != null)
-                _state.update {
-                    it.copy(
-                        addressCheck = response,
-                        validatedAddressId = addressId,
-                        geocodedAddress =
-                            AddHomeGeocodedAddress(
-                                street = response.residencyAddress?.line1 ?: address.line1,
-                                unit = response.residencyAddress?.line2 ?: address.line2.orEmpty(),
-                                city = response.residencyAddress?.city ?: address.city,
-                                state = response.residencyAddress?.state ?: address.state,
-                                zipCode = response.residencyAddress?.postalCode ?: address.zip,
-                                latitude = address.lat,
-                                longitude = address.lng,
-                                isMultiUnit = response.isMultiUnit,
-                            ),
-                        existingHomeId = response.homeId,
-                        showsClaimedModal = response.isAlreadyClaimed,
-                        isClaimingExistingHome = response.isFoundUnclaimed,
-                    )
+                if (!matchesRequiredHome(response.homeId)) {
+                    rejectDifferentHome()
+                } else {
+                    _state.update {
+                        it.copy(
+                            addressCheck = response,
+                            validatedAddressId = addressId,
+                            geocodedAddress =
+                                AddHomeGeocodedAddress(
+                                    street = response.residencyAddress?.line1 ?: address.line1,
+                                    unit = response.residencyAddress?.line2 ?: address.line2.orEmpty(),
+                                    city = response.residencyAddress?.city ?: address.city,
+                                    state = response.residencyAddress?.state ?: address.state,
+                                    zipCode = response.residencyAddress?.postalCode ?: address.zip,
+                                    latitude = address.lat,
+                                    longitude = address.lng,
+                                    isMultiUnit = response.isMultiUnit,
+                                ),
+                            existingHomeId = response.homeId,
+                            showsClaimedModal = response.isAlreadyClaimed,
+                            isClaimingExistingHome = response.isFoundUnclaimed,
+                        )
+                    }
+                    if (!response.isAlreadyClaimed && !response.isFoundUnclaimed) loadPropertySuggestions()
                 }
-                if (!response.isAlreadyClaimed && !response.isFoundUnclaimed) loadPropertySuggestions()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: NetworkError) {
@@ -976,13 +981,33 @@ open class AddHomeWizardViewModel
             transitionTo(AddHomeStep.Role)
         }
 
+        private fun matchesRequiredHome(homeId: String?): Boolean =
+            requiredHomeId == null || (validId(requiredHomeId) && homeId?.lowercase() == requiredHomeId)
+
+        private fun rejectDifferentHome() {
+            _state.update {
+                it.copy(
+                    addressCheck = null,
+                    validatedAddressId = null,
+                    geocodedAddress = null,
+                    existingHomeId = null,
+                    isClaimingExistingHome = false,
+                    showsClaimedModal = false,
+                    showsConfirmAddressSheet = false,
+                    errorMessage =
+                        "This address does not match the Home you opened. Check its street and apartment, " +
+                            "or return to My Homes to choose a different Home.",
+                )
+            }
+        }
+
         private suspend fun submitExistingHomeClaim(role: AddHomeRole) {
             if (!session.confirmCurrent()) {
                 retireSession()
                 return
             }
             val homeId = _state.value.existingHomeId
-            if (homeId == null) {
+            if (homeId == null || !matchesRequiredHome(homeId)) {
                 _state.update {
                     it.copy(
                         errorMessage =
@@ -1039,6 +1064,11 @@ open class AddHomeWizardViewModel
             }
             // Existing-home flow: claim it rather than creating a
             // duplicate Home row (RN `useHomeForm.ts:456-473`).
+            if (requiredHomeId != null && (!_state.value.isClaimingExistingHome || !matchesRequiredHome(_state.value.existingHomeId))) {
+                rejectDifferentHome()
+                transitionTo(AddHomeStep.Address)
+                return
+            }
             if (_state.value.isClaimingExistingHome) {
                 submitExistingHomeClaim(role)
                 return

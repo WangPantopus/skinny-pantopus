@@ -442,6 +442,9 @@ private object ChildRoutes {
     const val MY_HOMES = "homes/my-homes"
     const val MY_CLAIMS = "homes/my-claims"
     const val ADD_HOME = "homes/add"
+    const val ADD_HOME_WITH_TARGET = "$ADD_HOME?joinHome={joinHome}"
+
+    fun joinHome(homeId: String): String = "$ADD_HOME?joinHome=$homeId"
 
     /**
      * A12.1 — "Find or Add Home" discovery. Search public-preview homes,
@@ -5906,7 +5909,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                     )
                 }
-                composable(ChildRoutes.ADD_HOME) {
+                composable(
+                    route = ChildRoutes.ADD_HOME_WITH_TARGET,
+                    arguments =
+                        listOf(
+                            navArgument("joinHome") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
                     AddHomeWizardScreen(
                         onDismiss = { navController.popBackStack() },
                         onOpenHomes = {
@@ -5974,7 +5987,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     HomeResidencyNavigation.Home -> ChildRoutes.homeDashboard(homeId)
                                     HomeResidencyNavigation.Mail -> ChildRoutes.postcardVerification(homeId)
                                     HomeResidencyNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
-                                    HomeResidencyNavigation.AddHome -> ChildRoutes.ADD_HOME
+                                    HomeResidencyNavigation.AddHome -> ChildRoutes.joinHome(homeId)
                                 },
                             )
                         },
@@ -6043,7 +6056,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     HomePostalNavigation.Home -> ChildRoutes.homeDashboard(homeId)
                                     HomePostalNavigation.Residency -> ChildRoutes.homeResidency(homeId)
                                     HomePostalNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
-                                    HomePostalNavigation.AddHome -> ChildRoutes.ADD_HOME
+                                    HomePostalNavigation.AddHome -> ChildRoutes.joinHome(homeId)
                                 },
                             ) { launchSingleTop = true }
                         },

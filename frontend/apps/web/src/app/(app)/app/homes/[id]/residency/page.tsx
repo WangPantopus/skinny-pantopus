@@ -18,7 +18,11 @@ const guidance = {
 export default function ResidencyStatusPage() {
   const { id: homeId } = useParams<{ id: string }>();
   const { progress, loading, error, refresh } = useResidencyProgress(homeId);
-  const next = progress ? guidance[progress.next_step] : null;
+  const needsRequest = progress?.next_step === 'address_verification' && progress.request === null;
+  const next = progress ? needsRequest ? {
+    title: 'Request residency review',
+    body: 'Confirm this Home’s address, apartment and your relationship before submitting a residency request. Checking an address does not grant household access or send mail.',
+  } : guidance[progress.next_step] : null;
   return <main className="mx-auto max-w-lg px-4 py-6 pb-28">
     <Link href="/app/homes" className="inline-block rounded-lg py-2 text-sm font-semibold text-app-text-secondary">← My Homes</Link>
     <h1 className="mt-3 text-2xl font-semibold text-app-text">Residency status</h1>
@@ -40,7 +44,8 @@ export default function ResidencyStatusPage() {
           <div className="mt-4 flex flex-wrap gap-3">
             {progress.next_step === 'home' && <Link href={`/app/homes/${homeId}/dashboard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Open Home</Link>}
             {progress.next_step === 'resubmit' && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and resubmit</Link>}
-            {progress.next_step === 'address_verification' && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Review mail verification</Link>}
+            {needsRequest && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and request residency</Link>}
+            {progress.next_step === 'address_verification' && !needsRequest && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Review mail verification</Link>}
             {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/claim-owner/evidence`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Ownership verification</Link>}
             <button type="button" onClick={() => void refresh()} className="rounded-lg border border-app-border px-4 py-2 font-semibold text-app-text">Refresh status</button>
           </div>

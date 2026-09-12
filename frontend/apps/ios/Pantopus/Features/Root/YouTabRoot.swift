@@ -42,6 +42,7 @@ public enum YouRoute: Hashable {
     case legal
     case legalContent(LegalDocument)
     case addHome
+    case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Mirrors RN
     /// `src/app/homes/find.tsx`.
     case findHome
@@ -1112,18 +1113,19 @@ public struct YouTabRoot: View {
             LegalContentView(document: doc) {
                 if !path.isEmpty { path.removeLast() }
             }
-        case .addHome:
+        case .addHome, .joinHome:
             AddHomeWizardView(
+                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
                 onOpenHomes: {
-                    path.removeAll { $0 == .addHome || $0 == .myHomes }
+                    path.removeAll { $0.isHomeEntry || $0 == .myHomes }
                     path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.claimOwnership(homeId: homeId))
                 },
                 onOpenWaitingRoom: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.waitingRoom(homeId: homeId))
                 }
             )
@@ -1175,7 +1177,7 @@ public struct YouTabRoot: View {
                 case .home: path.append(.homeDashboard(homeId: homeId))
                 case .mail: path.append(.postcardVerification(homeId: homeId))
                 case .ownership: path.append(.claimOwnership(homeId: homeId))
-                case .addHome: path.append(.addHome)
+                case .addHome: path.append(.joinHome(homeId: homeId))
                 }
             }
         case let .verifyResidency(homeId):
@@ -2634,7 +2636,7 @@ public struct YouTabRoot: View {
                     case .residency:
                         if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
                     case .ownership: path.append(.claimOwnership(homeId: homeId))
-                    case .addHome: path.append(.addHome)
+                    case .addHome: path.append(.joinHome(homeId: homeId))
                     }
                 }
             )
@@ -2692,4 +2694,19 @@ public struct YouTabRoot: View {
 #Preview {
     YouTabRoot()
         .environment(AuthManager.previewSignedIn)
+}
+
+/// The selected Home survives address editing and original-request recovery.
+extension YouRoute {
+    var homeEntryTarget: String? {
+        if case let .joinHome(homeId) = self { return homeId }
+        return nil
+    }
+
+    var isHomeEntry: Bool {
+        switch self {
+        case .addHome, .joinHome: true
+        default: false
+        }
+    }
 }

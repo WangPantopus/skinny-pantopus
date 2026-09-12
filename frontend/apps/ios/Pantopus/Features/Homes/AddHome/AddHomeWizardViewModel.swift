@@ -137,6 +137,7 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var isClaimingExistingHome: Bool = false
     /// `home_id` returned by `check-address` for the matched home.
     private(set) var existingHomeId: String?
+    private let requiredHomeId: String?
 
     /// Address label rendered in the confirm sheet — the server's
     /// `formatted_address` when present, else the typed fields.
@@ -189,6 +190,7 @@ final class AddHomeWizardViewModel: WizardModel {
     init(
         api: APIClient = .shared,
         initialState: AddHomeFormState = .empty,
+        requiredHomeId: String? = nil,
         identity: (() -> String?)? = nil,
         creationActorId: String? = nil,
         creationStore: (any PendingHomeCreationStoring)? = nil,
@@ -201,6 +203,7 @@ final class AddHomeWizardViewModel: WizardModel {
         isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline }
     ) {
         self.api = api
+        self.requiredHomeId = requiredHomeId?.lowercased()
         let sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         scope = sessionScope
         let actor: String = if let creationActorId {
@@ -818,6 +821,10 @@ final class AddHomeWizardViewModel: WizardModel {
             ))
             guard addressIsCurrent(revision) else { return }
             try Self.validateLookup(response, verdictStatus: validation.verdict.status)
+            guard matchesRequiredHome(response.homeId) else {
+                rejectDifferentHome()
+                return
+            }
             addressCheck = response
             validatedAddressId = addressId
             geocodedAddress = AddHomeGeocodedAddress(
@@ -995,12 +1002,34 @@ final class AddHomeWizardViewModel: WizardModel {
         transition(to: .role)
     }
 
+    private func matchesRequiredHome(_ homeId: String?) -> Bool {
+        guard let requiredHomeId else { return true }
+        return UUID(uuidString: requiredHomeId) != nil && homeId?.lowercased() == requiredHomeId
+    }
+
+    private func rejectDifferentHome() {
+        addressCheck = nil
+        validatedAddressId = nil
+        geocodedAddress = nil
+        existingHomeId = nil
+        isClaimingExistingHome = false
+        showsClaimedModal = false
+        showsConfirmAddressSheet = false
+        errorMessage = "This address does not match the Home you opened. Check its street and apartment, "
+            + "or return to My Homes to choose a different Home."
+    }
+
     private func submitExistingHomeClaim(role: AddHomeRole) async {
         guard isCurrent else { retireSession()
             return
         }
         guard let homeId = existingHomeId else {
             errorMessage = "We could not find the existing home record. Please try that address again."
+            transition(to: .address)
+            return
+        }
+        guard matchesRequiredHome(homeId) else {
+            rejectDifferentHome()
             transition(to: .address)
             return
         }
@@ -1040,6 +1069,11 @@ final class AddHomeWizardViewModel: WizardModel {
         }
         // Existing-home flow: claim it rather than creating a duplicate
         // Home row (RN `useHomeForm.ts:456-473`).
+        guard requiredHomeId == nil || (isClaimingExistingHome && matchesRequiredHome(existingHomeId)) else {
+            rejectDifferentHome()
+            transition(to: .address)
+            return
+        }
         if isClaimingExistingHome {
             await submitExistingHomeClaim(role: role)
             return

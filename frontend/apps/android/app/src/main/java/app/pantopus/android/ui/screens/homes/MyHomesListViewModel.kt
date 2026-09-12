@@ -430,22 +430,39 @@ class MyHomesListViewModel
                         null
                     },
                 chips = chips.takeIf { it.isNotEmpty() },
-                footer =
-                    footerTitle?.let {
-                        RowFooter(
-                            listOf(
-                                RowFooterAction(
-                                    title = it,
-                                    icon = PantopusIcon.ArrowRight,
-                                    variant = CompactButtonVariant.Primary,
-                                    testTag = "myHomes.row_${home.id}.continue",
-                                    onClick = { open(home, revision) },
-                                ),
-                            ),
-                        )
-                    },
+                footer = footerTitle?.let { homeFooter(home, it, revision) },
             )
         }
+
+        private fun homeFooter(
+            home: MyHome,
+            title: String,
+            revision: Long,
+        ): RowFooter =
+            RowFooter(
+                buildList {
+                    add(
+                        RowFooterAction(
+                            title = title,
+                            icon = PantopusIcon.ArrowRight,
+                            variant = CompactButtonVariant.Primary,
+                            testTag = "myHomes.row_${home.id}.continue",
+                            onClick = { open(home, revision) },
+                        ),
+                    )
+                    if (home.accessKind == "private_setup" && onVerifyResidency != null) {
+                        add(
+                            RowFooterAction(
+                                title = "Check status",
+                                icon = PantopusIcon.ShieldCheck,
+                                variant = CompactButtonVariant.Ghost,
+                                testTag = "myHomes.row_${home.id}.verification",
+                                onClick = { if (current(revision)) onVerifyResidency?.invoke(home.id) },
+                            ),
+                        )
+                    }
+                },
+            )
 
         private fun unitLabel(home: MyHome): String? {
             if (home.accessKind == "verification") return null

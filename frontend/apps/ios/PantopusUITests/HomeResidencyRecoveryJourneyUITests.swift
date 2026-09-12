@@ -310,3 +310,92 @@ final class HomeResidencyRecoveryJourneyUITests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }
+
+/// Private first use shares the installed journey helpers and remains separately opt-in.
+extension HomeResidencyRecoveryJourneyUITests {
+    func testPrivateFirstUseKeepsSelectedHomeBeforeMail() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_HOME_PRIVATE_FIRST_USE_UI"] == "1")
+        let homeId = "ddc24100-0000-4000-8000-000000000606"
+        try openMyHomes()
+        try press(element("myHomes.row_" + homeId + ".verification"))
+        try reveal(label("Request residency review"))
+        XCTAssertFalse(app.buttons["Review mail verification"].exists)
+        XCTAssertFalse(app.buttons["Open Home"].exists)
+        keepScreen("Private Home offers ordinary residency before mail")
+        _ = try await fixture("residency-read-fault", method: "POST", body: ["kind": "error", "persistent": true])
+        try press(element("homeResidencyRefresh"))
+        try reveal(element("homeResidencyError"))
+        _ = try await fixture("residency-read-fault", method: "POST", body: ["kind": "clear"])
+        try press(element("homeResidencyRetry"))
+        try reveal(label("Request residency review"))
+        try press(app.buttons["Check address and request residency"])
+        try reveal(label("Find your home"))
+        try press(app.buttons["Add address manually"])
+        for (field, value) in [("street", street), ("unit", "603"), ("city", "Test"), ("state", "WA"), ("zip", "98607")] {
+            try fill(field, value)
+        }
+        for unit in ["603", "799"] {
+            if unit == "799" {
+                try press(element("wizardLeadingButton"))
+                try replaceUnit(unit)
+            }
+            try press(element("wizardPrimaryCTA"))
+            try reveal(label("This address does not match the Home you opened."))
+            XCTAssertFalse(element("addHomeClaimedCorrect").exists)
+            let state = try await fixture("state")
+            let database = try XCTUnwrap(state["database"] as? [String: Any])
+            XCTAssertEqual((database["commands"] as? [Any])?.count, 0)
+            XCTAssertEqual((database["submissions"] as? [Any])?.count, 0)
+            keepScreen("Different apartment cannot continue selected Home")
+        }
+        try press(element("wizardLeadingButton"))
+        try replaceUnit("606")
+        try press(element("wizardPrimaryCTA"))
+        if element("addHomeClaimedCorrect").waitForExistence(timeout: 8) {
+            try press(element("addHomeClaimedCorrect"))
+            try press(element("addHomeClaimedConfirmAddress"))
+        } else {
+            try reveal(label("Address recognized"))
+            try press(element("wizardPrimaryCTA"))
+        }
+        try press(element("addHome_role_tenant"))
+        try press(element("wizardPrimaryCTA"))
+        try reveal(label("Review and submit"))
+        _ = try await fixture("mode", method: "POST", body: ["mode": "residency_lost_reply"])
+        try press(element("wizardPrimaryCTA"))
+        try reveal(label("Recover your residency request"))
+        keepScreen("Lost reply retains private Home request")
+        app.terminate()
+        try openMyHomes()
+        try press(element("myHomes.row_" + homeId + ".continue"))
+        try reveal(label("Address verification is required"))
+        XCTAssertTrue(app.buttons["Review mail verification"].exists)
+        XCTAssertFalse(app.buttons["Open Home"].exists)
+        try press(app.navigationBars["Residency status"].buttons.firstMatch)
+        try press(app.buttons["Add a home"].firstMatch)
+        try reveal(label("Residency request saved"))
+        try press(element("wizardPrimaryCTA"))
+        let final = try await fixture("state")
+        let home = try homeRow(final, unit: "606")
+        XCTAssertEqual(home["occupancies"] as? Int, 1)
+        XCTAssertEqual(home["verified_occupancies"] as? Int, 0)
+        XCTAssertEqual((home["claims"] as? [Any])?.count, 1)
+        let events = try XCTUnwrap(final["events"] as? [[String: Any]])
+        XCTAssertEqual(
+            events
+                .filter { $0["method"] as? String == "POST" && $0["path"] as? String == "/api/homes/" + homeId + "/residency-submissions" }
+                .count,
+            1
+        )
+        XCTAssertFalse(events.contains { ($0["path"] as? String)?.contains("postcard") == true })
+        keepScreen("One saved request with mail remaining separate")
+    }
+
+    private func replaceUnit(_ value: String) throws {
+        let control = element("addHome_unit")
+        try press(control)
+        let previous = control.value as? String ?? ""
+        control.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count) + value)
+        try press(app.buttons["addHomeKeyboardDone"])
+    }
+}

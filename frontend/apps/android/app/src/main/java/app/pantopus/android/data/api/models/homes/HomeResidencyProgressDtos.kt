@@ -62,11 +62,13 @@ data class PersonalHomeResidencyProgress(
             (nextStep == "home") == (currentAccess == "shared") &&
             (request == null || (request.isValid() && request.homeId == homeId))
 
+    val needsResidencyRequest: Boolean get() = nextStep == "address_verification" && request == null
+
     val title: String get() =
         when (nextStep) {
             "home" -> "Household access is available"
             "household_review" -> "Waiting for household review"
-            "address_verification" -> "Address verification is required"
+            "address_verification" -> if (needsResidencyRequest) "Request residency review" else "Address verification is required"
             "resubmit" -> "Review your request"
             "access_review" -> "Household access needs review"
             "ownership_verification" -> "Continue ownership verification"
@@ -80,8 +82,13 @@ data class PersonalHomeResidencyProgress(
                 "Your request is saved for a household reviewer. You do not need to upload an ownership document for this step. " +
                     "Refresh to check for a decision."
             "address_verification" ->
-                "Saving a request does not request a postcard or verify residency. " +
-                    "Review mail verification to check for an existing request and its delivery status."
+                if (needsResidencyRequest) {
+                    "Confirm this Home’s address, apartment and your relationship before submitting a residency request. " +
+                        "Checking an address does not grant household access or send mail."
+                } else {
+                    "Saving a request does not request a postcard or verify residency. " +
+                        "Review mail verification to check for an existing request and its delivery status."
+                }
             "resubmit" ->
                 "Check your street, apartment and relationship before submitting again. " +
                     "A new request does not restore previous household access."

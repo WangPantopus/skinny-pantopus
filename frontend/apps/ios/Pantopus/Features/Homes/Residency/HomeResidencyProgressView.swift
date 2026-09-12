@@ -41,7 +41,12 @@ struct HomeResidencyProgressView: View {
                     if viewModel.permits(.home) { action("Open Home", .home) }
                     if viewModel.permits(.mail) { action("Review mail verification", .mail) }
                     if viewModel.permits(.ownership) { action("Continue ownership verification", .ownership) }
-                    if viewModel.permits(.addHome) { action("Review address in Add Home", .addHome) }
+                    if viewModel.permits(.addHome) {
+                        action(
+                            progress.needsResidencyRequest ? "Check address and request residency" : "Check address and resubmit",
+                            .addHome
+                        )
+                    }
                     Button("Refresh status") { Task { await viewModel.refresh() } }.frame(minHeight: 44)
                         .accessibilityIdentifier("homeResidencyRefresh")
                 }

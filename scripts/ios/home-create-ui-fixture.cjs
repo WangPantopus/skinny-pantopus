@@ -11,8 +11,9 @@ const [container, project, cli, output, portText = '18083', purpose = 'creation'
 assert.match(container || '', /^supabase_db_pantopus-home-gig-[a-z0-9_-]+$/);
 assert.match(project || '', /^\/private\/tmp\/pantopus-home-gig-[a-z0-9_-]+$/);
 assert(path.isAbsolute(output || '') && !output.startsWith(root + '/'));
-assert(['creation', 'residency'].includes(purpose));
-const residency = purpose === 'residency';
+assert(['creation', 'residency', 'private-first-use'].includes(purpose));
+const residency = purpose !== 'creation';
+const privateFirstUse = purpose === 'private-first-use';
 const port = Number(portText); assert(port >= 18083 && port <= 18089);
 const id = n => `ddc24100-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const actor = id(1), owner = id(2), q = x => `'${String(x).replaceAll("'", "''")}'`;
@@ -24,7 +25,12 @@ assert.equal(count(), 0, 'Reserved entry fixture namespace must be empty');
 const commandNames = ['home_create_command_projection','begin_home_create_command','get_home_create_command','cancel_home_create_command','finish_home_create_attempt','commit_home_create_command'];
 assert.equal(sql(`SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (${commandNames.map(q).join(',')});`), '0');
 assert.equal(sql(`SELECT to_regclass('public."HomeCreateCommand"') IS NULL;`), 't');
-const ledger = sql('SELECT max(version) FROM supabase_migrations.schema_migrations;');
+const ledgerQuery = `SELECT encode(sha256(convert_to(coalesce(jsonb_agg(to_jsonb(m) ORDER BY version),'[]')::text,'UTF8')),'hex') FROM supabase_migrations.schema_migrations m;`;
+const provenanceQuery = `SELECT coalesce(jsonb_agg(jsonb_build_object('oid',oid,'definition',pg_get_functiondef(oid),
+  'owner',proowner,'acl',proacl,'config',proconfig) ORDER BY oid),'[]') FROM pg_proc WHERE pronamespace='public'::regnamespace
+  AND proname IN ('get_home_residency_review','decide_home_residency_review','review_home_residency','home_residency_review_authority','home_record_context','home_delete_eligibility');`;
+const ledger = sql(ledgerQuery), provenance = sql(provenanceQuery);
+fs.writeFileSync(output + '.preservation-before.json', JSON.stringify({ ledger, functions: JSON.parse(provenance) }), { mode: 0o600, flag: 'wx' });
 if (residency) {
   const extra = ['home_residency_submission_projection','get_home_residency_submission','cancel_home_residency_submission','submit_home_residency'];
   assert.equal(sql(`SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (${extra.map(q)});`), '0');
@@ -249,6 +255,10 @@ if (residency) {
       INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status,access_end_at)
       VALUES(${q(id(604))},${q(actor)},'tenant','restricted_member','teen','pending_approval',now()+interval '2 days');COMMIT;`);
 }
+if (privateFirstUse) sql(`INSERT INTO public."Home"(id,created_by_user_id,address,address2,city,state,zipcode,name)
+  VALUES(${q(id(606))},${q(actor)},${q(line1)},'606','Test','WA','98607','My private Home');
+  INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,verification_status)
+  VALUES(${q(id(606))},${q(actor)},'member','member','pending_doc');`);
 initialized = true;
 server = app.listen(port, '127.0.0.1', () => console.log('Owned atomic Home-create fixture on loopback; production HTTP/SDK/SQL'));
 let stopping = false;
@@ -266,7 +276,9 @@ async function stop() {
   const signatures = sql(`SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (${commandNames.map(q).join(',')}) ORDER BY p.proname;`).split('\n');
   assert.equal(signatures.length, commandNames.length);
   sql('BEGIN;'+signatures.map(sig => 'DROP FUNCTION public.'+sig+';').join('\n')+'DROP TABLE public."HomeCreateCommand";'+(residency ? 'DROP TABLE public."HomeResidencySubmissionCommand";' : '')+"NOTIFY pgrst, 'reload schema'; COMMIT;");
-  assert.equal(sql('SELECT max(version) FROM supabase_migrations.schema_migrations;'),ledger);
+  assert.equal(sql(ledgerQuery), ledger);
+  assert.equal(sql(provenanceQuery), provenance);
+  fs.writeFileSync(output + '.cleanup.json', JSON.stringify({ fixtures_removed: true, complete_ledger_preserved: true, exact_functions_properties_preserved: true }), { mode: 0o600, flag: 'wx' });
   console.log('PASS: exact synthetic SQL and temporary command functions cleaned; migration ledger unchanged');
 }
 process.on('SIGTERM', () => stop().catch(error => { console.error(error.message); process.exitCode = 1; }));
