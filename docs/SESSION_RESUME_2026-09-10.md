@@ -1,5 +1,33 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Browser Home creation recovery — September 11
+
+The [browser creation milestone](home-browser-create-recovery-2026-09-11.md) now
+passes real Chrome → HTTP/SDK/SQL reload/cancellation fencing, committed lost-reply
+recovery, atomic optional-setup rejection/correction, explicit renter creation,
+unavailable protected storage and failed terminal-proof persistence. Encrypted
+original commands keep their UUID/JSON; only confirmed retained outcomes permit
+editing or current My Homes navigation. Both same-named units and their private
+Tasks destinations are correct. Full browser regression passes 93 suites / 1,186
+checks, eight focused fault checks pass, and types/lint/privacy pass. Exact SQL
+and temporary functions/table are cleaned; migration ledger is unchanged. Private
+browser profiles, source digests, screens and earlier failed driver runs remain.
+
+**Continue now:** transactional existing-Home claim submission/cold-start and
+resubmission (R02), ordinary member/invitation/private first use and primary
+eligibility, then native residency review and the full backlog. H07/H08 remain
+partial; 74 inventory entries remain. Broader session/provider/offline/browser/
+accessibility and old/new client-server acceptance are still bounded limits.
+
+Android predecessor `3ebbf4789` is pushed. Its [CI run 34671037286](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34671037286)
+has passed instrumented Android and other completed jobs; iOS build and Android
+lint/test/assembly are still running at this checkpoint. Verify that run and the
+new pushed head separately. #32/#34 remain unfinished drafts; #34 conflicts.
+Migrations remain 40 Home / 21 payment / 49 combined, with integration/adoption
+still open. No merge, hosted release or paid activation; paid services stay one
+final bundle. Owner checkout, databases/devices and all accepted artifacts are
+preserved. The physical iPhone remains on verified Pantopus 1.0.0 (2).
+
 ### Android Home creation and unit identity — September 11
 
 The [Android creation milestone](home-android-create-recovery-2026-09-11.md) passes

@@ -15,6 +15,9 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import AttomStructuredFields from '@/components/homes/AttomStructuredFields';
+import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
+import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
+import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -107,6 +110,15 @@ const STEPS = [
 ];
 
 export default function NewHomePage() {
+  const recovery = useHomeCreation();
+  const [lastActor, setLastActor] = useState<string | null>(null);
+  useEffect(() => { if (recovery.actorId) setLastActor(recovery.actorId); }, [recovery.actorId]);
+  // A changed account gets a fresh ordinary form. Backgrounding hides recovery
+  // details while retaining this account's unsubmitted form only in memory.
+  return <NewHomeWizard key={recovery.actorId || lastActor || 'opening'} recovery={recovery} />;
+}
+
+function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreation> }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -288,17 +300,13 @@ export default function NewHomePage() {
       attom_property_detail: attomPropertyDetail || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
+      role: isOwner ? 'owner' : 'renter',
       move_in_date: moveInDate || undefined,
       entry_instructions: entryInstructions.trim() || undefined,
       parking_instructions: parkingInstructions.trim() || undefined,
       wifi_name: wifiName.trim() || undefined,
-      wifi_password: wifiPassword.trim() || undefined,
+      wifi_password: wifiPassword.trim() ? wifiPassword : undefined,
     };
-  };
-
-  const handleCreateHomeSuccess = (res: Record<string, any> & { home?: { id?: string } }) => {
-    const id = res?.home?.id;
-    router.push(id ? `/app/homes/${id}/dashboard` : '/app/homes');
   };
 
   const handleCreateHomeError = (errorValue: unknown, options?: { fromStepUpFlow?: boolean }) => {
@@ -361,8 +369,12 @@ export default function NewHomePage() {
       return;
     }
 
-    const res = await api.homes.createHome(payload);
-    handleCreateHomeSuccess(res as Record<string, any> & { home?: { id?: string } });
+    if (!validateSetup()) return;
+    if (!validHomeCreationInput(payload)) {
+      setError('Check the address, Home details and optional setup before saving.');
+      return;
+    }
+    await recovery.submit(payload);
   };
 
   const handleAddressStepUpVerified = async () => {
@@ -380,6 +392,37 @@ export default function NewHomePage() {
     setAddressStepUpRequirement(null);
     setError('');
     setStep(1);
+  };
+
+  const validateSetup = () => {
+    if (!isClaimingExistingHome && (!!wifiName.trim() !== !!wifiPassword.trim())) {
+      setFieldErrors({ wifi: 'Enter both a network name and password, or leave both blank.' });
+      setError('Check the optional Wi-Fi details.'); setStep(3); return false;
+    }
+    return true;
+  };
+
+  const continueOriginal = async () => {
+    const original = await recovery.acknowledge();
+    if (!original) return;
+    if (original.outcome?.state === 'completed') { router.push('/app/homes'); router.refresh(); return; }
+    const input = JSON.parse(original.request_json) as HomeCreationInput;
+    setNormalized({ address: input.address, city: input.city, state: input.state,
+      zipcode: input.zip_code, latitude: input.latitude, longitude: input.longitude });
+    setAddressText(buildAddressLabel(input.address, input.city, input.state, input.zip_code));
+    setUnit(input.unit_number || ''); resetAddressValidation(); setNoUnitAttested(!!input.no_unit_attestation);
+    setHomeType(input.home_type || 'house'); setName(input.name || ''); setBedrooms(input.bedrooms?.toString() || '');
+    setBathrooms(input.bathrooms?.toString() || ''); setSqft(input.sq_ft?.toString() || '');
+    setLotSqft(input.lot_sq_ft?.toString() || ''); setYearBuilt(input.year_built?.toString() || '');
+    setDescription(input.description || ''); setAmenities(input.amenities || {});
+    setAttomPropertyDetail(input.attom_property_detail || null); setIsOwner(input.role === 'owner');
+    setMoveInDate(input.move_in_date || ''); setWifiName(input.wifi_name || ''); setWifiPassword(input.wifi_password || '');
+    setShowWifiPassword(false); setEntryInstructions(input.entry_instructions || ''); setParkingInstructions(input.parking_instructions || '');
+    setError(''); setFieldErrors({}); setStep(1);
+    if (original.outcome?.code === 'ADDRESS_STEP_UP_REQUIRED' && input.address_id) {
+      setValidatedAddressId(input.address_id);
+      setAddressStepUpRequirement({ addressId: input.address_id, reason: null });
+    }
   };
 
   const canProceedStep1 = !!normalized;
@@ -631,7 +674,6 @@ export default function NewHomePage() {
 
       await createHomeWithCurrentState();
     } catch (e: unknown) {
-      console.error(e);
       handleCreateHomeError(e);
     } finally {
       setLoading(false);
@@ -660,6 +702,10 @@ export default function NewHomePage() {
   const homeTypeLabel = HOME_TYPES.find(t => t.value === homeType)?.label || homeType;
   const homeTypeIcon = HOME_TYPES.find(t => t.value === homeType)?.icon || '🏠';
   const activeAmenities = AMENITIES_OPTIONS.filter(a => amenities[a.key]);
+
+  if (!recovery.ready || recovery.pending || recovery.busy || recovery.blocked) {
+    return <HomeCreationRecoveryView recovery={recovery} onContinue={() => void continueOriginal()} />;
+  }
 
   if (addressStepUpRequirement) {
     return (
@@ -717,7 +763,7 @@ export default function NewHomePage() {
           {visibleSteps.map((s) => (
             <button
               key={s.id}
-              onClick={() => { if (s.id <= step || (s.id === step + 1 && canProceedStep1)) setStep(s.id); }}
+              onClick={() => { if (s.id < step) setStep(s.id); }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                 s.id === step
                   ? 'bg-black text-white'
@@ -809,6 +855,8 @@ export default function NewHomePage() {
                 </label>
                 <input
                   id="home-unit"
+                  aria-label="Unit or apartment"
+                  maxLength={50}
                   value={unit}
                   onChange={e => {
                     resetAddressValidation();
@@ -941,6 +989,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Home nickname (optional)</label>
                 <input
+                  aria-label="Home nickname"
+                  maxLength={120}
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. The Camas House, My First Apartment"
@@ -1021,6 +1071,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Description (optional)</label>
                 <textarea
+                  aria-label="Description"
+                  maxLength={2000}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
@@ -1078,7 +1130,7 @@ export default function NewHomePage() {
                   ← Back
                 </button>
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(4)} className="px-4 py-3 text-app-text-secondary hover:text-app-text-strong text-sm font-medium">
+                  <button onClick={() => { if (validateSetup()) setStep(4); }} className="px-4 py-3 text-app-text-secondary hover:text-app-text-strong text-sm font-medium">
                     Skip to review
                   </button>
                   <button onClick={() => setStep(3)} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
@@ -1139,6 +1191,7 @@ export default function NewHomePage() {
                   <div className="flex gap-2">
                     <input
                       type="date"
+                      aria-label="Move-in date"
                       value={moveInDate}
                       onChange={e => setMoveInDate(e.target.value)}
                       className="flex-1 px-4 py-2 border border-app-border rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20"
@@ -1162,10 +1215,13 @@ export default function NewHomePage() {
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">📶</span>
                   <span className="text-sm font-semibold text-app-text">WiFi credentials</span>
-                  <span className="text-xs bg-app-surface-sunken text-app-text-secondary px-2 py-0.5 rounded-full">Only visible to members</span>
+                  <span className="text-xs bg-app-surface-sunken text-app-text-secondary px-2 py-0.5 rounded-full">Protected household access</span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <input
+                    aria-label="Network name (SSID)"
+                    maxLength={200}
+                    {...fieldA11y('wifi')}
                     value={wifiName}
                     onChange={e => setWifiName(e.target.value)}
                     placeholder="Network name (SSID)"
@@ -1173,6 +1229,9 @@ export default function NewHomePage() {
                   />
                   <div className="relative">
                     <input
+                      aria-label="Wi-Fi password"
+                      maxLength={200}
+                      {...fieldA11y('wifi')}
                       value={wifiPassword}
                       onChange={e => setWifiPassword(e.target.value)}
                       placeholder="Password"
@@ -1191,10 +1250,14 @@ export default function NewHomePage() {
                 </div>
               </div>
 
+              {fieldErrors.wifi && <p id="err-wifi" role="alert" className="text-sm text-red-700">{fieldErrors.wifi}</p>}
+
               {/* Entry & Parking Instructions */}
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Entry instructions (optional)</label>
                 <textarea
+                  aria-label="Entry instructions"
+                  maxLength={2000}
                   value={entryInstructions}
                   onChange={e => setEntryInstructions(e.target.value)}
                   rows={2}
@@ -1206,6 +1269,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Parking instructions (optional)</label>
                 <textarea
+                  aria-label="Parking instructions"
+                  maxLength={2000}
                   value={parkingInstructions}
                   onChange={e => setParkingInstructions(e.target.value)}
                   rows={2}
@@ -1218,7 +1283,7 @@ export default function NewHomePage() {
                 <button onClick={() => setStep(isClaimingExistingHome ? 1 : 2)} className="px-6 py-3 border border-app-border rounded-lg hover:bg-app-hover font-medium text-app-text-strong">
                   ← Back
                 </button>
-                <button onClick={() => setStep(4)} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
+                <button onClick={() => { if (validateSetup()) setStep(4); }} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
                   {isClaimingExistingHome ? 'Review claim →' : 'Review →'}
                 </button>
               </div>
@@ -1235,7 +1300,7 @@ export default function NewHomePage() {
                 <p className="text-sm text-app-text-secondary">
                   {isClaimingExistingHome
                     ? 'You are about to submit a claim for the existing home at this address.'
-                    : 'Everything looks good? You can always edit later.'}
+                    : 'This saves your Home and optional setup together. Ownership and residency still need verification.'}
                 </p>
               </div>
 
