@@ -24,7 +24,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   let propertyResult = { profile: null, source: 'fallback' };
   let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -127,7 +127,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   const express = require(path.join(root, 'backend/node_modules/express'));
   const scope = require(path.join(root, 'backend/utils/requestSessionScope'));
   Module._load = function(request, parent, isMain) {
-    if (postcard && ['/services/homePostcardService.js', '/services/homePostcardRequestService.js'].some(suffix => parent?.filename.endsWith(suffix)) && request === '../utils/postcardDispatch') {
+    if (postcard && ['/services/homePostcardService.js', '/services/homePostcardRequestService.js', '/services/homePostcardVerificationService.js'].some(suffix => parent?.filename.endsWith(suffix)) && request === '../utils/postcardDispatch') {
       const actual = load.call(this, request, parent, isMain);
       return { ...actual, dispatchPostcardCode: async (destination, code, cardId, homeId) => {
         assert(homeId.startsWith('ddc23600-')); assert.match(code, /^\d{6}$/);
@@ -150,7 +150,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
     }
     if (parent?.filename.startsWith(path.join(root, 'backend/'))) {
       if (request.endsWith('/config/supabaseAdmin')) return db;
-      if (request === '../services/notificationService') return transport;
+      if (request === '../services/notificationService' || request === './notificationService') return transport;
       if (request.endsWith('/utils/logger')) return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
     }
     if (place && parent?.filename.endsWith('/services/placeIntelligenceService.js')) {
@@ -175,7 +175,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
       if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };

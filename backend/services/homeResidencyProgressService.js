@@ -83,6 +83,11 @@ function nextStep(refs, state, actorId) {
   if (owners.length || home.owner_id === actorId
     || ['owner', 'admin', 'manager'].includes(access.role_base)) return 'ownership_verification';
   if (occupancy && !['member', 'lease_resident', 'restricted_member'].includes(access.role_base)) return 'access_review';
+  if (occupancy?.verification_status === 'provisional' && currentOccupancy(occupancy) && occupancy.end_at === null
+    && occupancy.verified_at == null && occupancy.verification_expires_at == null && request?.status === 'pending'
+    && Number.isFinite(Date.parse(occupancy.challenge_window_started_at))
+    && Number.isFinite(Date.parse(occupancy.challenge_window_ends_at))
+    && Date.parse(occupancy.challenge_window_ends_at) > Date.parse(occupancy.challenge_window_started_at)) return 'household_review';
   if (occupancy && (!currentOccupancy(occupancy) || occupancy.end_at !== null
     || !['unverified', 'pending', 'pending_approval', 'pending_doc', 'pending_postcard', 'provisional_bootstrap'].includes(occupancy.verification_status)
     || occupancy.verified_at != null || occupancy.verification_expires_at != null)) return 'access_review';

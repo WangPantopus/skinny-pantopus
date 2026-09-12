@@ -14,32 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### Postal request recovery — backend milestone; code confirmation next
+### Postal code verification — backend milestone; browser flow next
 
-The [postal request milestone](home-postcard-current-recovery-2026-09-11.md)
-passes actual HTTP/SDK/SQL original-request recovery, lost replies, selected-unit
-fencing, missing/rotated key recovery, no duplicate uncertain dispatch, receipt
-reconciliation and definite refusal/correction. Eleven observed lock races pass.
-Populated upgrade preserves every row value in 365 tables; function lint, portable
-SQL/privacy and browser SDK types pass. Backend: 317 suites / 5,170 passed (16
-skips). Exact fixtures and temporary schema are cleaned; the ledger is unchanged.
+The [verification and review milestone](home-postcard-verification-recovery-2026-09-12.md)
+passes actual HTTP/SDK/SQL exact-card/attempt recovery, wrong-code and successful
+lost replies, cancellation, late-write rollback and current-access refusal.
+Prepared household approval now completes a coherent postal review. The actual
+promotion worker preserves child restrictions/denies, passes 201 earlier blocked
+rows and recovers failure. Sixteen observed races and four SQL contracts pass.
+Populated upgrade preserves all row values in 365 tables with zero function lint
+issues. Backend: 317 suites / 5,170 passed (16 skips); types/privacy pass.
 
-**Continue now:** exact-card, retained-attempt code confirmation with fresh
-current authority and truthful personal access. Then the browser postal screen,
-native submission/status/review, invitations/private first use and full backlog.
-Legacy postal/claim mutation paths remain unaccepted until compatibility repair;
-R02/H07/H08 stay partial, with 74 inventory entries remaining. Physical mail and
-provider delivery are not certified by controlled local transport. Include the
-new dedicated code-key configuration in the single final launch bundle.
+**Continue now:** browser postal status, selected mailing address, retained
+request/code recovery, unknown delivery and truthful post-verification access.
+Then native submission/status/postal/prepared review, invitations/private first use
+and the full backlog. H07/H08/R02 stay partial; 74 inventory entries remain. Legacy
+mutation compatibility, provider delivery and native destinations remain open.
+Paid services and dedicated postal code keys stay one final launch bundle.
 
-Personal progress predecessor `edf907108` now has every CI job passing in
-[run 34677751286](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34677751286).
-Verify this new milestone's own pushed-head CI. #32/#34 remain unfinished drafts;
-#34 conflicts. Source migrations are 42 Home / 21 paid / 51 combined, with 12
-identical shared files and no timestamp collisions. Combined replay/adoption
-remains open. No merge, permanent adoption, hosted release, paid activation or
-physical-device change. iPhone remains verified Pantopus 1.0.0 (2), and all owner
-work, databases, devices and private artifacts are preserved.
+Fresh HTTP/concurrency cleanup passes exact persisted review-function restoration;
+the report records an earlier cleanup error and its restoration provenance limit.
+Fixtures and temporary schema are removed; the ledger is unchanged. Predecessor
+`f035c47ef` has every CI job passing in
+[run 34680612277](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34680612277).
+Verify this milestone's own pushed-head checks. #32/#34 remain unfinished drafts;
+#34 conflicts. Source migrations: 43 Home / 21 paid / 52 combined, 12 identical
+shared files, no timestamp collisions; combined replay/adoption remains open.
+No merge, hosted release, paid activation or physical-device change. iPhone stays
+verified Pantopus 1.0.0 (2). Owner work, data/devices and artifacts are preserved.
 
 ### Personal residency status — accepted milestone; mail verification next
 

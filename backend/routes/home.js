@@ -1886,129 +1886,14 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/challenge-member/:occupancyId
  * An authority challenges a provisional member during the challenge window.
- * Suspends the target occupancy and sets the home to disputed state.
+ * Suspends only the current target occupancy under the promotion/review lock.
  */
-router.post('/:id/challenge-member/:occupancyId', verifyToken, async (req, res) => {
-  try {
-    const { id: homeId, occupancyId } = req.params;
-    const userId = req.user.id;
-
-    // 1. Verify caller has members.manage permission
-    const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized to challenge members' });
-    }
-
-    // 2. Fetch target occupancy and verify it's challengeable
-    const { data: targetOcc } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id, home_id, user_id, verification_status, challenge_window_ends_at, role_base')
-      .eq('id', occupancyId)
-      .eq('home_id', homeId)
-      .single();
-
-    if (!targetOcc) {
-      return res.status(404).json({ error: 'Occupancy not found' });
-    }
-
-    if (targetOcc.verification_status !== 'provisional') {
-      return res.status(400).json({ error: 'Only provisional members can be challenged' });
-    }
-
-    const now = new Date();
-    if (!targetOcc.challenge_window_ends_at || new Date(targetOcc.challenge_window_ends_at) <= now) {
-      return res.status(400).json({ error: 'The challenge window for this member has expired' });
-    }
-
-    if (targetOcc.user_id === userId) {
-      return res.status(400).json({ error: 'You cannot challenge yourself' });
-    }
-
-    // 3. Suspend the target occupancy
-    const nowISO = now.toISOString();
-    const { error: updateError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .update({
-        is_active: false,
-        verification_status: 'suspended_challenged',
-        updated_at: nowISO,
-      })
-      .eq('id', occupancyId);
-
-    if (updateError) {
-      logger.error('Failed to suspend challenged member', { error: updateError.message, homeId, occupancyId });
-      return res.status(500).json({ error: 'Failed to suspend member' });
-    }
-
-    // 4. Product: do not set Home.security_state to disputed (challenge flow only suspends occupancy).
-
-    // 5. Notify the challenged user
-    try {
-      const notificationService = require('../services/notificationService');
-
-      notificationService.createNotification({
-        userId: targetOcc.user_id,
-        type: 'access_challenged',
-        title: 'Access challenged',
-        body: 'Your access has been challenged by a household member. Contact support if you believe this is an error.',
-        link: `/homes/${homeId}/dashboard`,
-        metadata: { home_id: homeId, challenged_by: userId },
-      });
-
-      // 6. Notify all authorities
-      const { data: challenger } = await supabaseAdmin
-        .from('User')
-        .select('username, name, first_name')
-        .eq('id', userId)
-        .single();
-
-      const { data: challengedUser } = await supabaseAdmin
-        .from('User')
-        .select('username, name, first_name')
-        .eq('id', targetOcc.user_id)
-        .single();
-
-      const challengerName = challenger?.name || challenger?.first_name || challenger?.username || 'A member';
-      const challengedName = challengedUser?.name || challengedUser?.first_name || challengedUser?.username || 'a member';
-
-      const { data: authorities } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('user_id')
-        .eq('home_id', homeId)
-        .eq('is_active', true)
-        .in('role_base', ['owner', 'admin', 'manager']);
-
-      const notifications = (authorities || [])
-        .filter(a => a.user_id !== userId)
-        .map(a => ({
-          userId: a.user_id,
-          type: 'member_challenged',
-          title: 'Member access challenged',
-          body: `${challengerName} has challenged ${challengedName}'s access.`,
-          link: `/homes/${homeId}/occupants`,
-          metadata: { home_id: homeId, challenger_id: userId, challenged_user_id: targetOcc.user_id },
-        }));
-
-      if (notifications.length > 0) {
-        await notificationService.createBulkNotifications(notifications);
-      }
-    } catch (notifErr) {
-      logger.warn('Failed to send challenge notifications (non-fatal)', { error: notifErr.message });
-    }
-
-    // 7. Audit log
-    await writeAuditLog(homeId, userId, 'MEMBER_CHALLENGED', 'HomeOccupancy', occupancyId, {
-      challenged_user_id: targetOcc.user_id,
-      role_base: targetOcc.role_base,
-    });
-
-    // 8. Response
-    res.json({ message: 'Member access has been suspended pending review' });
-
-  } catch (err) {
-    logger.error('Challenge member error', { error: err.message, homeId: req.params.id, occupancyId: req.params.occupancyId });
-    res.status(500).json({ error: 'Failed to challenge member' });
-  }
+const postcardReview = require('../services/homePostcardVerificationService');
+router.post('/:id/challenge-member/:occupancyId', (_req, res, next) => {
+  res.set('Cache-Control', 'private, no-store'); next();
+}, verifyToken, async (req, res) => {
+  try { res.json(await postcardReview.challenge({ homeId: req.params.id, actorId: req.user.id, occupancyId: req.params.occupancyId })); }
+  catch (error) { postcardReview.sendError(res, error); }
 });
 
 /**

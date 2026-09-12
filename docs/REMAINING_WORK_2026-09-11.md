@@ -1,32 +1,33 @@
 # Pantopus remaining work — September 11, 2026
 
-### Postal request recovery — backend milestone; code confirmation next
+### Postal code verification — backend milestone; browser flow next
 
-The [postal request milestone](home-postcard-current-recovery-2026-09-11.md)
-passes actual HTTP/SDK/SQL original-request recovery, lost replies, selected-unit
-fencing, missing/rotated key recovery, no duplicate uncertain dispatch, receipt
-reconciliation and definite refusal/correction. Eleven observed lock races pass.
-Populated upgrade preserves every row value in 365 tables; function lint, portable
-SQL/privacy and browser SDK types pass. Backend: 317 suites / 5,170 passed (16
-skips). Exact fixtures and temporary schema are cleaned; the ledger is unchanged.
+The [verification and review milestone](home-postcard-verification-recovery-2026-09-12.md)
+passes actual HTTP/SDK/SQL exact-card/attempt recovery, wrong-code and successful
+lost replies, cancellation, late-write rollback and current-access refusal.
+Prepared household approval now completes a coherent postal review. The actual
+promotion worker preserves child restrictions/denies, passes 201 earlier blocked
+rows and recovers failure. Sixteen observed races and four SQL contracts pass.
+Populated upgrade preserves all row values in 365 tables with zero function lint
+issues. Backend: 317 suites / 5,170 passed (16 skips); types/privacy pass.
 
-**Continue now:** exact-card, retained-attempt code confirmation with fresh
-current authority and truthful personal access. Then the browser postal screen,
-native submission/status/review, invitations/private first use and full backlog.
-Legacy postal/claim mutation paths remain unaccepted until compatibility repair;
-R02/H07/H08 stay partial, with 74 inventory entries remaining. Physical mail and
-provider delivery are not certified by controlled local transport. Include the
-new dedicated code-key configuration in the single final launch bundle.
+**Continue now:** browser postal status, selected mailing address, retained
+request/code recovery, unknown delivery and truthful post-verification access.
+Then native submission/status/postal/prepared review, invitations/private first use
+and the full backlog. H07/H08/R02 stay partial; 74 inventory entries remain. Legacy
+mutation compatibility, provider delivery and native destinations remain open.
+Paid services and dedicated postal code keys stay one final launch bundle.
 
-Personal progress predecessor `edf907108` now has every CI job passing in
-[run 34677751286](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34677751286).
-Verify this new milestone's own pushed-head CI. #32/#34 remain unfinished drafts;
-#34 conflicts. Source migrations are 42 Home / 21 paid / 51 combined, with 12
-identical shared files and no timestamp collisions. Combined replay/adoption
-remains open. No merge, permanent adoption, hosted release, paid activation or
-physical-device change. iPhone remains verified Pantopus 1.0.0 (2), and all owner
-work, databases, devices and private artifacts are preserved.
-
+Fresh HTTP/concurrency cleanup passes exact persisted review-function restoration;
+the report records an earlier cleanup error and its restoration provenance limit.
+Fixtures and temporary schema are removed; the ledger is unchanged. Predecessor
+`f035c47ef` has every CI job passing in
+[run 34680612277](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34680612277).
+Verify this milestone's own pushed-head checks. #32/#34 remain unfinished drafts;
+#34 conflicts. Source migrations: 43 Home / 21 paid / 52 combined, 12 identical
+shared files, no timestamp collisions; combined replay/adoption remains open.
+No merge, hosted release, paid activation or physical-device change. iPhone stays
+verified Pantopus 1.0.0 (2). Owner work, data/devices and artifacts are preserved.
 
 This is the consolidated known backlog, reconciled against the newest Home and
 payment checkpoints. Older reports retain superseded findings; their unchecked
@@ -34,20 +35,10 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [personal residency progress](home-personal-residency-progress-2026-09-11.md)
-now gives applicants distinct submitted identities, current next steps and
-recoverable paginated history. It closes the old personal-claims reader's private
-Home join. Actual browser/HTTP/SDK/SQL acceptance and full creation/joining
-regression pass. Backend 5,170 checks (16 skips), browser 1,193 checks, types,
-lint and privacy pass; exact fixtures are cleaned. Mail status/address binding,
-unknown delivery and current admission are next, followed by native submission/
-review, invitations/private first use and the full backlog. R02/H07/H08 remain
-partial. Predecessor `92c4d8072` has completed CI jobs passing; its Android
-lint/test/assembly job remains running in [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34676301600).
-Verify this milestone's own pushed-head checks independently. #32/#34 remain
-unfinished drafts, #34 conflicts at `e9ef2decb`, and source migrations remain
-41 Home / 21 payment / 50 combined. No new migration, merge, hosted release or
-paid activation. Paid services stay one final launch bundle.
+Latest local Home milestone: [postal code verification and household review](home-postcard-verification-recovery-2026-09-12.md).
+Actual backend recovery, current-access protections and promotion/challenge races
+pass. Browser postal UI, both native joining/status/review flows and legacy
+compatibility remain open. The inventory below retains those larger exit scopes.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
@@ -71,7 +62,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 ## 2. Residency, ownership and leases
 
 - [ ] R01 **Fix/Verify:** Finish installed iOS and Android prepared residency review, protected original-command/receipt storage, approve/deny, lost replies, app restart and current-access recovery. Backend and both browser review entries already have acceptance.
-- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). Finish the postal destination and both native clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
+- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. Finish the browser postal UI and both native clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
 - [ ] R03 **Verify:** Review history, needs-more-information, resubmission after a decision, later removal, expired authority and conflicting reviewers across actual native flows.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.

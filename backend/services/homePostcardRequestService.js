@@ -5,30 +5,7 @@ const { hashPostcardCode, dispatchPostcardCode } = require('../utils/postcardDis
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const STATES = ['pending', 'completed', 'rejected', 'cancelled'];
-const MESSAGES = {
-  POSTCARD_REQUEST_INVALID: 'Check the mailing address and apartment before continuing.',
-  POSTCARD_ACCOUNT_UNAVAILABLE: 'Sign in again to recover this request.',
-  POSTCARD_REQUEST_NOT_FOUND: 'This request has not been found. Retry its original details or cancel it before starting again.',
-  POSTCARD_REQUEST_CONFLICT: 'This request has different details. Recover its original request.',
-  HOME_NOT_FOUND: 'This Home is no longer available. Check your residency status.',
-  POSTCARD_HOME_UNAVAILABLE: 'Mail verification is unavailable for this Home right now.',
-  POSTCARD_RESIDENCY_REQUEST_REQUIRED: 'Submit your residency request before requesting a verification code.',
-  POSTCARD_ACCESS_REVIEW_REQUIRED: 'Your access needs household review. A mail code cannot restore it.',
-  POSTCARD_REVIEW_ALREADY_RECORDED: 'Your verification is already recorded. Check your current residency status.',
-  OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
-  POSTCARD_ADDRESS_CHANGED: 'The Home address changed. Confirm the address and apartment again before making a new request.',
-  POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is not available for this country yet.',
-  POSTCARD_ADDRESS_LIMIT: 'The mail request limit for this address has been reached. Try again later.',
-  POSTCARD_USER_LIMIT: 'Your mail request limit has been reached. Try again later.',
-  POSTCARD_NO_LONGER_AVAILABLE: 'This postcard can no longer be used. Check your current verification status.',
-  POSTCARD_CODE_KEY_UNAVAILABLE: 'Mail verification is unavailable right now. Your saved request is preserved; retry later.',
-  POSTCARD_EXPIRED: 'This code has expired. Confirm the address before requesting another postcard.',
-  POSTCARD_LOCKED: 'This code has no attempts remaining. Confirm the address before requesting another postcard.',
-};
-const STATUS_CODES = [400, 403, 404, 409, 422, 429, 503];
-function failure(code = 'POSTCARD_REQUEST_UNAVAILABLE', statusCode = 503) {
-  return Object.assign(new Error(MESSAGES[code] || 'Could not confirm the postcard request. Keep its original details and retry.'), { code, statusCode });
-}
+const { MESSAGES, STATUS_CODES, failure } = require('../utils/homePostcardErrors');
 function identity({ homeId, actorId, requestId }, requireRequest = true) {
   if (![homeId, actorId, ...(requireRequest ? [requestId] : [])].every(v => typeof v === 'string' && UUID.test(v))) throw failure('POSTCARD_REQUEST_INVALID', 400);
   return { p_home_id: homeId.toLowerCase(), p_actor_id: actorId.toLowerCase(), ...(requireRequest ? { p_request_id: requestId.toLowerCase() } : {}) };

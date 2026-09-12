@@ -1869,6 +1869,26 @@ router.get('/:id/postcard-status', postcardNoStore, verifyToken, async (req, res
   catch (error) { postcardRequests.sendError(res, error); }
 });
 
+const postcardVerification = require('../services/homePostcardVerificationService');
+const postcardVerificationInput = req => ({ homeId: req.params.id, actorId: req.user.id,
+  postcardId: req.params.postcardId, requestId: req.params.requestId || req.body?.request_id });
+router.post('/:id/postcards/:postcardId/verifications', postcardNoStore, verifyToken, verificationAttemptLimiter, async (req, res) => {
+  try {
+    if (!req.body || Object.keys(req.body).some(key => !['request_id', 'code'].includes(key))) {
+      return res.status(400).json({ code: 'POSTCARD_VERIFICATION_INVALID', error: 'Enter the code from this postcard and try again.' });
+    }
+    postcardVerification.send(res, await postcardVerification.submit({ ...postcardVerificationInput(req), code: req.body.code }));
+  } catch (error) { postcardVerification.sendError(res, error); }
+});
+router.get('/:id/postcards/:postcardId/verifications/:requestId', postcardNoStore, verifyToken, async (req, res) => {
+  try { postcardVerification.send(res, await postcardVerification.read(postcardVerificationInput(req))); }
+  catch (error) { postcardVerification.sendError(res, error); }
+});
+router.post('/:id/postcards/:postcardId/verifications/:requestId/cancel', postcardNoStore, verifyToken, async (req, res) => {
+  try { postcardVerification.send(res, await postcardVerification.cancel(postcardVerificationInput(req))); }
+  catch (error) { postcardVerification.sendError(res, error); }
+});
+
 /** POST /:id/request-postcard — atomically admit one proof and preserve uncertain mail. */
 router.post('/:id/request-postcard', postcardNoStore, verifyToken, postcardLimiter, async (req, res) => {
   try {

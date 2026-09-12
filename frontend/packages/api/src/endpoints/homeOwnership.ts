@@ -515,3 +515,28 @@ export async function cancelPostcardRequest(homeId: string, requestId: string): 
 export async function getCurrentPostcardStatus(homeId: string): Promise<CurrentPostcardStatus> {
   return get(`/api/homes/${homeId}/postcard-status`);
 }
+
+
+export interface PostcardVerificationOutcome {
+  state: 'pending' | 'completed' | 'rejected' | 'cancelled';
+  home_id: string;
+  postcard_id: string;
+  command: { actor_id: string; request_id: string; created_at: string; updated_at: string };
+  verification_status?: 'verified' | 'provisional';
+  recorded_at?: string;
+  challenge_window_ends_at?: string | null;
+  current_access?: 'not_checked';
+  code?: string;
+  error?: string;
+  attempts_remaining?: number;
+  message?: string;
+}
+export async function submitPostcardVerification(homeId: string, postcardId: string, input: { request_id: string; code: string }): Promise<PostcardVerificationOutcome> {
+  return post(`/api/homes/${homeId}/postcards/${postcardId}/verifications`, input);
+}
+export async function getPostcardVerification(homeId: string, postcardId: string, requestId: string): Promise<PostcardVerificationOutcome> {
+  return get(`/api/homes/${homeId}/postcards/${postcardId}/verifications/${requestId}`);
+}
+export async function cancelPostcardVerification(homeId: string, postcardId: string, requestId: string): Promise<PostcardVerificationOutcome> {
+  return post(`/api/homes/${homeId}/postcards/${postcardId}/verifications/${requestId}/cancel`);
+}
