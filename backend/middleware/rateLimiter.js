@@ -133,6 +133,17 @@ const homeResidencySubmissionLimiter = rateLimit({
   message: { code: 'RESIDENCY_SUBMISSION_RATE_LIMITED', error: 'Too many residency submissions. Check the original request’s status or try again later.' },
 });
 
+// SQL counts actual postcard admissions. HTTP recovery retries have a separate
+// budget so a lost reply cannot consume the three-card allowance.
+const homePostcardRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: req => req.user.id,
+  message: { code: 'POSTCARD_REQUEST_RATE_LIMITED', error: 'Too many postcard requests. Check the saved request’s status or try again later.' },
+});
+
 /**
  * Limiter for postcard and verification code endpoints.
  * 3 requests per hour per user — prevents code-request spamming.
@@ -403,6 +414,7 @@ module.exports = {
   homeDocumentUploadLimiter,
   ownershipClaimLimiter,
   homeResidencySubmissionLimiter,
+  homePostcardRequestLimiter,
   postcardLimiter,
   verificationAttemptLimiter,
   authEndpointLimiter,

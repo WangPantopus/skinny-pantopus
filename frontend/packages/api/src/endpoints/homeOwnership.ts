@@ -462,3 +462,56 @@ export async function verifyPostcardCode(homeId: string, code: string): Promise<
 }> {
   return post(`/api/homes/${homeId}/verify-postcard`, { code });
 }
+
+
+export interface PostcardMailingAddress {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
+export interface PostcardRequestOutcome {
+  state: 'pending' | 'completed' | 'rejected' | 'cancelled';
+  home_id: string;
+  command: { actor_id: string; request_id: string; created_at: string; updated_at: string };
+  postcard_id: string | null;
+  code?: string;
+  error?: string;
+  dispatch_error?: string;
+  current_access?: 'not_checked';
+  message?: string;
+}
+export interface CurrentPostcardStatus {
+  home_id: string;
+  actor_id: string;
+  checked_at: string;
+  can_request: boolean;
+  can_resume: boolean;
+  can_verify: boolean;
+  restriction: string | null;
+  restriction_message: string | null;
+  request: (PostcardRequestOutcome & { address: PostcardMailingAddress }) | null;
+  postcard: {
+    id: string;
+    requested_at: string;
+    expires_at: string;
+    status: 'pending' | 'verified' | 'expired' | 'cancelled';
+    delivery: 'not_started' | 'accepted' | 'unknown' | 'rejected';
+    attempts_remaining: number;
+  } | null;
+  current_access: 'not_checked';
+}
+export async function submitPostcardRequest(homeId: string, input: { request_id: string; address: PostcardMailingAddress }): Promise<PostcardRequestOutcome> {
+  return post(`/api/homes/${homeId}/postcard-requests`, input);
+}
+export async function getPostcardRequest(homeId: string, requestId: string): Promise<PostcardRequestOutcome> {
+  return get(`/api/homes/${homeId}/postcard-requests/${requestId}`);
+}
+export async function cancelPostcardRequest(homeId: string, requestId: string): Promise<PostcardRequestOutcome> {
+  return post(`/api/homes/${homeId}/postcard-requests/${requestId}/cancel`);
+}
+export async function getCurrentPostcardStatus(homeId: string): Promise<CurrentPostcardStatus> {
+  return get(`/api/homes/${homeId}/postcard-status`);
+}

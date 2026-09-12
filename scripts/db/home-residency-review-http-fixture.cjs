@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false } = {}) {
+module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false, postcard = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -19,10 +19,12 @@ module.exports = function(container, { summary = false, place = false, dashboard
   let rpcFailure = null; const rpcCalls = [];
   let loseReply = false, notificationFailure = false, calls = 0;
   const notifications = [], queryCalls = [], queryDetails = [], queryHooks = [], diagnostics = []; let queryFailure = null;
+  const postcardDeliveries = [];
+  let postcardResult = { success: false, deliveryUnknown: true };
   let propertyResult = { profile: null, source: 'fallback' };
   let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -125,6 +127,20 @@ module.exports = function(container, { summary = false, place = false, dashboard
   const express = require(path.join(root, 'backend/node_modules/express'));
   const scope = require(path.join(root, 'backend/utils/requestSessionScope'));
   Module._load = function(request, parent, isMain) {
+    if (postcard && ['/services/homePostcardService.js', '/services/homePostcardRequestService.js'].some(suffix => parent?.filename.endsWith(suffix)) && request === '../utils/postcardDispatch') {
+      const actual = load.call(this, request, parent, isMain);
+      return { ...actual, dispatchPostcardCode: async (destination, code, cardId, homeId) => {
+        assert(homeId.startsWith('ddc23600-')); assert.match(code, /^\d{6}$/);
+        postcardDeliveries.push({ destination, code, cardId, homeId });
+        return { ...postcardResult, ...(postcardResult.success ? { vendorJobId: 'psc_fixture_' + cardId } : {}) };
+      } };
+    }
+    if (postcard && parent?.filename.endsWith('/routes/homeOwnership.js')) {
+      if (request === '../middleware/verifyToken') return (req, _res, next) => {
+        const userId = req.headers['x-fixture-actor'] || actor; assert(users.includes(userId)); req.user = { id: userId }; next();
+      };
+      if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
+    }
     if (invitations && parent?.filename.endsWith('/services/homeInvitationService.js')) {
       if (request === './emailService') return { sendHomeInviteEmail: async () => ({ success: false, preview: true }) };
       if (request === './notificationService') return {
@@ -133,9 +149,9 @@ module.exports = function(container, { summary = false, place = false, dashboard
       };
     }
     if (parent?.filename.startsWith(path.join(root, 'backend/'))) {
-      if (request === '../config/supabaseAdmin') return db;
+      if (request.endsWith('/config/supabaseAdmin')) return db;
       if (request === '../services/notificationService') return transport;
-      if (request === '../utils/logger') return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
+      if (request.endsWith('/utils/logger')) return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
     }
     if (place && parent?.filename.endsWith('/services/placeIntelligenceService.js')) {
       if (!['../utils/geohash', '../serializers/placeIntelligenceSerializer', './homePrivacyService', './homeBillComparisonService'].includes(request)) return {};
@@ -165,6 +181,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   };
   const router = require(path.join(root, 'backend/routes/home'));
   const app = express(); app.use(express.json());
+  if (postcard) app.use('/api/homes', require(path.join(root, 'backend/routes/homeOwnership')));
   if (place) app.use('/api/homes', require(path.join(root, 'backend/routes/placeIntelligence')));
   app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
   function setup() {
@@ -200,6 +217,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
       (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
   }
   return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications,
+    postcardDeliveries, setPostcardResult(value) { assert(postcard); postcardResult = value; },
     useDatabaseClient(client) { const url = new URL(client.supabaseUrl); assert.equal(url.hostname, '127.0.0.1'); assert.equal(url.protocol, 'http:'); assert.equal(url.port, '64521'); databaseClient = client; },
     rpcCalls, failNextRpc: (name, reject = false) => { rpcFailure = { name, reject }; },
     queryCalls, queryDetails, diagnostics, interceptNextQuery: (table, handler, match = () => true) => queryHooks.push({ table, handler, match }), failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },

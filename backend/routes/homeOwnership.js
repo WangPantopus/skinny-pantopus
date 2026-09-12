@@ -24,7 +24,7 @@ const homeClaimComparisonService = require('../services/homeClaimComparisonServi
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const householdClaimConfig = require('../config/householdClaims');
-const { ownershipClaimLimiter, postcardLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
+const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
 
@@ -1845,8 +1845,32 @@ async function mayRequestPostcard(homeId, userId) {
 }
 
 
+const postcardNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+const postcardRequests = require('../services/homePostcardRequestService');
+router.post('/:id/postcard-requests', postcardNoStore, verifyToken, homePostcardRequestLimiter, async (req, res) => {
+  try {
+    if (!req.body || Object.keys(req.body).some(key => !['request_id', 'address'].includes(key))) {
+      return res.status(400).json({ code: 'POSTCARD_REQUEST_INVALID', error: 'Check the mailing address and apartment before continuing.' });
+    }
+    postcardRequests.send(res, await postcardRequests.submit({ homeId: req.params.id, actorId: req.user.id,
+      requestId: req.body.request_id, address: req.body.address }));
+  } catch (error) { postcardRequests.sendError(res, error); }
+});
+router.get('/:id/postcard-requests/:requestId', postcardNoStore, verifyToken, async (req, res) => {
+  try { postcardRequests.send(res, await postcardRequests.read({ homeId: req.params.id, actorId: req.user.id, requestId: req.params.requestId })); }
+  catch (error) { postcardRequests.sendError(res, error); }
+});
+router.post('/:id/postcard-requests/:requestId/cancel', postcardNoStore, verifyToken, async (req, res) => {
+  try { postcardRequests.send(res, await postcardRequests.cancel({ homeId: req.params.id, actorId: req.user.id, requestId: req.params.requestId })); }
+  catch (error) { postcardRequests.sendError(res, error); }
+});
+router.get('/:id/postcard-status', postcardNoStore, verifyToken, async (req, res) => {
+  try { res.status(200).json(await postcardRequests.current({ homeId: req.params.id, actorId: req.user.id })); }
+  catch (error) { postcardRequests.sendError(res, error); }
+});
+
 /** POST /:id/request-postcard — atomically admit one proof and preserve uncertain mail. */
-router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, res) => {
+router.post('/:id/request-postcard', postcardNoStore, verifyToken, postcardLimiter, async (req, res) => {
   try {
     if (!(await mayRequestPostcard(req.params.id, req.user.id))) {
       return res.status(403).json({ error: 'You do not have a pending claim on this home.' });
@@ -1860,7 +1884,7 @@ router.post('/:id/request-postcard', verifyToken, postcardLimiter, async (req, r
 });
 
 /** GET /:id/postcard — own pending metadata only; never a code, hash or provider receipt. */
-router.get('/:id/postcard', verifyToken, async (req, res) => {
+router.get('/:id/postcard', postcardNoStore, verifyToken, async (req, res) => {
   try {
     const result = await homePostcardService.status(req.params.id, req.user.id);
     return res.status(result.status).json(result.body);
@@ -1878,7 +1902,7 @@ const verifyPostcardSchema = Joi.object({
   code: Joi.string().min(6).max(8).pattern(/^[A-Z0-9]+$/i).required(),
 });
 
-router.post('/:id/verify-postcard', verifyToken, verificationAttemptLimiter, validate(verifyPostcardSchema), async (req, res) => {
+router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAttemptLimiter, validate(verifyPostcardSchema), async (req, res) => {
   try {
     const homeId = req.params.id;
     const userId = req.user.id;

@@ -1,5 +1,33 @@
 # Pantopus remaining work — September 11, 2026
 
+### Postal request recovery — backend milestone; code confirmation next
+
+The [postal request milestone](home-postcard-current-recovery-2026-09-11.md)
+passes actual HTTP/SDK/SQL original-request recovery, lost replies, selected-unit
+fencing, missing/rotated key recovery, no duplicate uncertain dispatch, receipt
+reconciliation and definite refusal/correction. Eleven observed lock races pass.
+Populated upgrade preserves every row value in 365 tables; function lint, portable
+SQL/privacy and browser SDK types pass. Backend: 317 suites / 5,170 passed (16
+skips). Exact fixtures and temporary schema are cleaned; the ledger is unchanged.
+
+**Continue now:** exact-card, retained-attempt code confirmation with fresh
+current authority and truthful personal access. Then the browser postal screen,
+native submission/status/review, invitations/private first use and full backlog.
+Legacy postal/claim mutation paths remain unaccepted until compatibility repair;
+R02/H07/H08 stay partial, with 74 inventory entries remaining. Physical mail and
+provider delivery are not certified by controlled local transport. Include the
+new dedicated code-key configuration in the single final launch bundle.
+
+Personal progress predecessor `edf907108` now has every CI job passing in
+[run 34677751286](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34677751286).
+Verify this new milestone's own pushed-head CI. #32/#34 remain unfinished drafts;
+#34 conflicts. Source migrations are 42 Home / 21 paid / 51 combined, with 12
+identical shared files and no timestamp collisions. Combined replay/adoption
+remains open. No merge, permanent adoption, hosted release, paid activation or
+physical-device change. iPhone remains verified Pantopus 1.0.0 (2), and all owner
+work, databases, devices and private artifacts are preserved.
+
+
 This is the consolidated known backlog, reconciled against the newest Home and
 payment checkpoints. Older reports retain superseded findings; their unchecked
 boxes do not automatically reopen completed work. This inventory includes both
