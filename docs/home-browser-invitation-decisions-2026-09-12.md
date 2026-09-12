@@ -61,10 +61,12 @@ These counts do not measure app completion or remaining effort.
 
 ## Git and continuation
 
-Predecessor is `ab0a6644d56440f3504fc22e10023d5655fa5caa`; its
-[CI 34712404106](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34712404106)
-currently has completed backend/database/web and iOS style jobs passing, with
-native execution/build jobs still running. Verify the new pushed head separately.
+Predecessor `ab0a6644d56440f3504fc22e10023d5655fa5caa` has every job passing in
+[CI 34712404106](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34712404106).
+Browser source milestone `b638389e16880629f67bcb1c7de9fba885ad3e7b` binds nine
+sources and 29 private evidence anchors. Push it with the documentation checkpoint
+and verify the new head separately. Native invitation work remains an unaccepted
+local candidate with first build/installed checks in progress.
 Fetched master remains `6a1013784db69bf339535a2f4b33b328f2bbf40c`. #32 is an open
 mergeable draft and #34 an unfinished conflicting draft. No merge. Migration
 inventories remain **44 Home / 21 paid / 53 combined**, 12 identical shared

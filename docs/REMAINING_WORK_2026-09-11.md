@@ -18,10 +18,13 @@ compatibility and the full backlog. H07/H08 remain partial: **7 of 80 rows close
 73 partial/open**. This is acceptance coverage, not whole-app completion or
 remaining effort. Live delivery and full dashboard services are separate limits.
 
-Predecessor `ab0a6644d56440f3504fc22e10023d5655fa5caa` has completed backend,
-database, web and iOS style checks passing in
-[CI 34712404106](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34712404106);
-native jobs remain running. Verify this milestone's pushed-head checks separately.
+Backend predecessor `ab0a6644d56440f3504fc22e10023d5655fa5caa` now has every job
+passing in [CI 34712404106](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34712404106).
+Browser source milestone `b638389e16880629f67bcb1c7de9fba885ad3e7b` is committed,
+with nine sources and 29 private evidence anchors bound. Push it with this
+checkpoint and verify the new head independently. The native invitation candidate
+is uncommitted and undergoing its first signed-build/installed acceptance; no
+native acceptance or device update is claimed yet.
 #32 remains a mergeable draft; #34 an unfinished conflicting draft. No merge or
 permanent adoption. Migrations remain **44 Home / 21 paid / 53 combined**, 12
 identical shared and zero collisions; combined replay/adoption stays open. Paid
