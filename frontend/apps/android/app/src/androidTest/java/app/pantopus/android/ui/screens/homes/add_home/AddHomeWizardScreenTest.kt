@@ -113,14 +113,13 @@ class AddHomeWizardScreenTest {
         val creations = mockk<HomeCreationFactory>()
         every { creations.create(any()) } returns creation
         return AddHomeWizardViewModel(
-            repo,
-            mockk(relaxed = true),
-            SavedStateHandle(),
-            networkMonitor,
-            mockk(relaxed = true),
-            mockk(relaxed = true),
-            sessions,
-            creations,
+            repository = repo,
+            savedStateHandle = SavedStateHandle(),
+            networkMonitor = networkMonitor,
+            geoApi = mockk(relaxed = true),
+            locationProvider = mockk(relaxed = true),
+            sessions = sessions,
+            creations = creations,
         )
     }
 

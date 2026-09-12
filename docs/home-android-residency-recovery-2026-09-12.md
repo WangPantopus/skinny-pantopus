@@ -1,9 +1,12 @@
 # Android existing-Home joining and personal status — September 12, 2026
 
-Accepted locally after `a528c54a1060d7d1ef3023d0423d912c9b366af1`. All five
+Pushed milestone `e8c3459bd5a45243ef35c5ff6097575ee1f85982`, accepted locally
+after `a528c54a1060d7d1ef3023d0423d912c9b366af1`. All five
 installed joining/status journeys and all three existing creation regressions
 pass on the preserved candidate APK. Both exact database fixtures are cleaned.
-Pushed-head CI must be checked independently before any merge.
+Its [CI run 34691789888](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34691789888)
+exposed an instrumented-test setup compilation failure; the follow-up correction
+requires passing current-head CI before any merge.
 
 ## Resulting behavior
 
@@ -77,6 +80,15 @@ remain under `/private/tmp/pantopus-home-native-artifacts-before-android-residen
 `app-r1.apk` is the retained installed binary. `source-build-r1.json` binds its
 production sources; those hashes and the APK hash still match exactly.
 `source-evidence-r2.json` binds final Android sources/driver and accepted evidence.
+
+The e8 CI instrumented job found a stale positional constructor argument in
+`AddHomeWizardScreenTest` after removal of the legacy discovery dependency.
+The fixture now uses the current named dependencies; no assertion or production
+behavior changed. Local `compileDebugAndroidTestKotlin` and instrumented-source
+Ktlint pass in 24 seconds (`ci-constructor-r1.log`). This target was not compiled
+by the earlier unit/assembly runs. The failed remote job did not execute tests;
+new-head instrumented execution remains required. Original failure logs remain
+private as `ci-e8-instrumented-r1.log`.
 
 Both `fixture-r1` and `fixture-r2` clean their exact synthetic records and temporary
 command schema/functions, preserving ledger `20260910220000`. No source migration

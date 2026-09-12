@@ -14,8 +14,8 @@ The owned Android emulator is stopped with userdata and snapshots retained.
 
 **Continue now:** installed acceptance for the separately built, uncommitted iOS
 postal recovery candidate, then Android postal and both native prepared-review
-flows. iOS signed build r6 and changed-source/privacy checks pass; installed and
-full regression are pending. Its code remains outside the Android milestone.
+flows. iOS signed build r9 passes; installed acceptance and full regression are
+pending. Sustained status failure/retry passes; keyboard accessibility was refined. Its code remains outside the Android milestone.
 Finish invitations/private first use and legacy compatibility next. H08 still
 needs a private-Home verification entry and ordinary address confirmation before
 mail when no claim exists. H07/H08/R01/R02 and the wider backlog remain open.
@@ -23,8 +23,11 @@ Six of 80 acceptance-inventory rows are closed; that is not whole-app completion
 
 Predecessor `a528c54a1060` has all checks passing in
 [CI run 34687192433](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34687192433).
-Verify this Android milestone's own pushed-head CI before merging. Fetched #32
-is a mergeable draft; #34 remains a conflicting draft. No new migration: 43 Home /
+Android milestone `e8c3459bd5a45243ef35c5ff6097575ee1f85982` is pushed; its
+[CI run 34691789888](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34691789888)
+exposed a stale constructor in the Android instrumented test setup. The corrected
+setup now compiles and passes instrumented-source lint locally; follow-up CI must
+pass before merging. Fetched #32 is a mergeable draft; #34 remains a conflicting draft. No new migration: 43 Home /
 21 paid / 52 combined, 12 identical shared migrations, no timestamp collision.
 Combined replay/adoption remains open. No merge, hosted release, physical-device
 update or paid activation. iPhone stays Pantopus 1.0.0 (2); owner work/data/devices
@@ -96,10 +99,9 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [iOS joining and personal status](home-ios-residency-recovery-2026-09-12.md).
-Browser postal and iOS joining/status acceptance pass. Android joining/status,
-both native postal/review flows, private first use and legacy compatibility remain
-open. The inventory retains those larger exit scopes.
+Latest local Home milestone: [Android joining and personal status](home-android-residency-recovery-2026-09-12.md).
+Browser postal and both native joining/status acceptance pass. Both native
+postal/review flows, private first use and legacy compatibility remain open. The inventory retains those larger exit scopes.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
