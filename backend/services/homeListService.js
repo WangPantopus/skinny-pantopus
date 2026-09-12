@@ -154,4 +154,4 @@ function sendError(res, error) {
   const safe = ['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(error?.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, sendError };
+module.exports = { read, readAccessState: state, sendError };

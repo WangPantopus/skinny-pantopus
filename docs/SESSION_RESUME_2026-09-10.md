@@ -1,5 +1,36 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Personal residency status — accepted milestone; mail verification next
+
+The [personal progress milestone](home-personal-residency-progress-2026-09-11.md)
+passes actual Chrome/HTTP/SDK/SQL distinct submitted identities, household review,
+rejected resubmission, failed/malformed reads and retry, current approval followed
+by removal/freeze, retired replies and complete paginated personal history. My
+Homes keeps personal requests after shared access ends. The older my-claims API
+also stops joining current private Home details. Saved review and current access
+remain separate; checking status sends no mail. Full joining and owner/renter
+creation recovery regressions remain green. Backend: 317 suites / 5,170 checks
+(16 skips); browser: 93 suites / 1,193 checks; types/lint/privacy pass. All owned
+fixtures and temporary command schema are cleaned, preserving the ledger.
+
+**Continue now:** repair mail verification's initial status read, selected mailing
+address, delivery-unknown and lost-reply recovery, and truthful current admission
+after code confirmation. The current postal screen remains unaccepted. Then
+finish both native submission/status clients and prepared review, invitations/
+private first use and the full backlog. R02/H07/H08 remain partial; 74 inventory
+entries remain. Broader lifecycle/provider/accessibility/version combinations
+and mounted-update delivery remain bounded acceptance limits.
+
+Browser predecessor `92c4d8072` has completed backend, database, browser, iPhone
+and Android instrumented CI jobs passing in
+[run 34676301600](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34676301600);
+its Android lint/test/assembly job is still running at this checkpoint. Verify
+this new milestone's own pushed-head CI independently. #32/#34 remain unfinished
+drafts; #34 conflicts. Source migrations remain 41 Home / 21 payment / 50 combined.
+No new migration, permanent adoption, merge or hosted/paid activation. The iPhone
+remains on verified Pantopus 1.0.0 (2); all owner work, devices/data and private
+artifacts are preserved. Paid services stay one final launch bundle.
+
 ### Browser existing-Home submission — accepted milestone; first use next
 
 The [browser joining milestone](home-browser-residency-submission-2026-09-11.md)

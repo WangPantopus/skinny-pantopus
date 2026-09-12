@@ -48,6 +48,7 @@ const client = createClient(config.API_URL, config.SERVICE_ROLE_KEY, { auth: { p
 let mode = 'current', events = [], serial = 1000, held = null, holdSuffix = null, server, initialized = false;
 const log = event => events.push(event);
 let heldProvider = null, heldSubmission = null, holdSubmission = false;
+let residencyReadFault = null;
 const db = { async rpc(name, args) {
   assert(['begin_home_create_command','get_home_create_command','cancel_home_create_command','finish_home_create_attempt','commit_home_create_command','home_record_context','home_delete_eligibility','submit_home_residency','get_home_residency_submission','cancel_home_residency_submission'].includes(name));
   assert.equal(args.p_actor_id || args.p_user_id, actor);
@@ -77,6 +78,11 @@ const db = { async rpc(name, args) {
       function wrap(value) { return new Proxy(value, { get(t, k) {
         if (k === 'then') return (resolve, reject) => t.then(result => {
           if (mode === 'lookup_error' && table === 'Home') return { data: null, error: { code: 'SYNTHETIC', message: 'Private fault' } };
+          if (residencyReadFault && table === 'HomeResidencyClaim') {
+            const kind = residencyReadFault; residencyReadFault = null;
+            if (kind === 'error') return { data: null, error: { code: 'SYNTHETIC', message: 'Private progress fault' } };
+            if (result.data) return { ...result, data: Array.isArray(result.data) ? result.data.map(row => ({ ...row, user_id: owner })) : { ...result.data, user_id: owner } };
+          }
           return result;
         }).then(resolve, reject);
         const next = Reflect.get(t, k); return typeof next === 'function' ? (...xs) => wrap(next.apply(t, xs)) : next;
@@ -128,7 +134,7 @@ Module._load = function(name, parent, isMain) {
     if (parent.filename.endsWith('/routes/home.js')) {
 
       if (name === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../utils/normalizeAddress', '../utils/requestSessionScope', '../utils/homePermissions', '../utils/addressRolloutFlags', '../services/addressValidation', '../services/homeCreateService', '../services/homeResidencySubmissionService', '../services/homeListService', '../config/addressVerification', '../services/addressValidation/addressVerificationObservability'].includes(name)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../utils/normalizeAddress', '../utils/requestSessionScope', '../utils/homePermissions', '../utils/addressRolloutFlags', '../services/addressValidation', '../services/homeCreateService', '../services/homeResidencySubmissionService', '../services/homeResidencyProgressService', '../services/homeListService', '../config/addressVerification', '../services/addressValidation/addressVerificationObservability'].includes(name)) return {};
     }
   }
   return load.call(this, name, parent, isMain);
@@ -165,6 +171,26 @@ app.use((req, res, next) => {
     assert([601,602,603,604,605].includes(req.body.home));assert(typeof req.body.unit==='string' && req.body.unit.length<30);
     sql(`UPDATE public."Home" SET address2=${q(req.body.unit)} WHERE id=${q(id(req.body.home))};`);return res.json(state());
   }
+  if (residency && p === '/fixture/residency-read-fault') {
+    assert(['error', 'malformed'].includes(req.body.kind)); residencyReadFault=req.body.kind;return res.json(state());
+  }
+  if (residency && p === '/fixture/residency-history') {
+    assert.equal(req.body.count,51);
+    sql(`INSERT INTO public."HomeResidencyClaim"(id,user_id,claimed_address) VALUES `
+      +Array.from({length:51},(_,i)=>`(${q(id(9000+i))},${q(actor)},${q('Personal historical request '+i)})`).join(',')+';');
+    return res.json(state());
+  }
+  if (residency && p === '/fixture/residency-state') {
+    assert([601,602,603,604,605].includes(req.body.home));
+    assert(['pending', 'rejected', 'verified', 'removed', 'frozen', 'restored'].includes(req.body.state));
+    const target=q(id(req.body.home)), value=req.body.state;
+    if (['pending', 'rejected', 'verified'].includes(value)) sql(`UPDATE public."HomeResidencyClaim" SET status=${q(value)},updated_at=now() WHERE home_id=${target} AND user_id=${q(actor)};`);
+    if (value==='verified') sql(`UPDATE public."HomeOccupancy" SET verification_status='verified',verified_at=now() WHERE home_id=${target} AND user_id=${q(actor)};INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${target},${q(actor)},'home.view',true) ON CONFLICT(home_id,user_id,permission) DO UPDATE SET allowed=true;`);
+    if (value==='removed') sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${target} AND user_id=${q(actor)};`);
+    if (value==='frozen') sql(`UPDATE public."Home" SET security_state='frozen' WHERE id=${target};`);
+    if (value==='restored') sql(`UPDATE public."Home" SET security_state='normal' WHERE id=${target};UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${target} AND user_id=${q(actor)};`);
+    return res.json(state());
+  }
 
   if (p === '/fixture/reject-next-access') { sql(`UPDATE public."User" SET date_of_birth='2020-01-01' WHERE id=${q(actor)};`); return res.json(state()); }
   if (p === '/fixture/restore-age') { sql(`UPDATE public."User" SET date_of_birth=NULL WHERE id=${q(actor)};`); return res.json(state()); }
@@ -173,7 +199,7 @@ app.use((req, res, next) => {
     assert(['current', 'provider_outage', 'missing_unit', 'search_error', 'search_empty', 'lookup_error', 'malformed_validation', 'hold_provider', 'lost_commit_reply', 'finish_unavailable', 'residency_lost_reply'].includes(nextMode));
     mode = nextMode; log({ event: 'mode', mode }); return res.json(state());
   }
-  if (p === '/fixture/hold') { assert(['/validate', '/check-address', '/autocomplete', '/resolve', '/property-suggestions', '/api/homes'].includes(req.body.suffix)); holdSuffix = req.body.suffix; return res.json(state()); }
+  if (p === '/fixture/hold') { assert(['/validate', '/check-address', '/autocomplete', '/resolve', '/property-suggestions', '/api/homes', '/my-residency'].includes(req.body.suffix)); holdSuffix = req.body.suffix; return res.json(state()); }
   if (p === '/fixture/release-provider') { const release = heldProvider; heldProvider = null; release?.(); return res.json(state()); }
   if (p === '/fixture/release') { const reply = held; held = null; reply?.(); return res.json(state()); }
   if (p === '/api/users/login') {
@@ -193,6 +219,7 @@ app.use((req, res, next) => {
     return json(value);
   };
   if (residency && p.includes('/residency-submissions')) return next();
+  if (p.endsWith('/my-residency')) return next();
   if (p.startsWith('/api/v1/address/') || p.startsWith('/api/geo/') || p === '/api/homes/check-address' || p.startsWith('/api/homes/create-commands/') || p === '/api/homes' || p === '/api/homes/my-homes' || p === '/api/homes/primary') return next();
   if (['/api/users/profile', '/api/users/me'].includes(p)) return res.json({ user, ...user });
   if (p === '/api/hub') return res.json({ user, context: { activeHomeId: null, activePersona: { type: 'personal' } },
@@ -229,7 +256,7 @@ async function stop() {
   let evidence;
   try { evidence = state(); } catch (error) { evidence = { mode, events, evidence_error: error.message }; }
   fs.writeFileSync(output, JSON.stringify(evidence, null, 2), { mode: 0o600 });
-  if (initialized) sql(`BEGIN; DELETE FROM public."Home" WHERE created_by_user_id=${q(actor)} OR id::text LIKE 'ddc24100-%'; DELETE FROM public."HomeCreateCommand" WHERE actor_user_id=${q(actor)};` + tables.map(t => `DELETE FROM public."${t}" WHERE id::text LIKE 'ddc24100-%';`).join('\n') + `DELETE FROM auth.users WHERE id IN (${q(actor)},${q(owner)});COMMIT;`);
+  if (initialized) sql(`BEGIN; DELETE FROM public."Home" WHERE created_by_user_id=${q(actor)} OR id::text LIKE 'ddc24100-%'; DELETE FROM public."HomeCreateCommand" WHERE actor_user_id=${q(actor)};DELETE FROM public."HomeResidencyClaim" WHERE user_id=${q(actor)};` + tables.map(t => `DELETE FROM public."${t}" WHERE id::text LIKE 'ddc24100-%';`).join('\n') + `DELETE FROM auth.users WHERE id IN (${q(actor)},${q(owner)});COMMIT;`);
   if (residency) sql(`DELETE FROM public."HomeResidencySubmissionCommand" WHERE actor_user_id=${q(actor)};`);
   assert.equal(count(), 0);
   assert.equal(sql(`SELECT count(*) FROM public."HomeCreateCommand";`), '0');

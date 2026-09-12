@@ -6,19 +6,20 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [browser retained creation](home-browser-create-recovery-2026-09-11.md),
-following both [iPhone](home-ios-create-recovery-2026-09-11.md) and
-[Android](home-android-create-recovery-2026-09-11.md) repairs. All three clients
-pass original-command recovery against actual HTTP/SDK/SQL. Browser storage
-failure/recovery and explicit renter creation also pass; regression passes
-1,186 browser checks, 4,531 Android checks per variant (80 skips), and 4,369 iPhone
-checks (168 skips). Existing-Home admission, primary eligibility and complete
-private first use/invitations remain open. Android predecessor `3ebbf4789` is
-pushed; its [CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34671037286)
-still needs final native results. Verify the next pushed head through
-[PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
-#32 remains draft; #34 remains draft/conflicted at `e9ef2decb`, with an unwired
-durable-tip draft. Earlier-head checks do not certify a final head.
+Latest local Home milestone: [personal residency progress](home-personal-residency-progress-2026-09-11.md)
+now gives applicants distinct submitted identities, current next steps and
+recoverable paginated history. It closes the old personal-claims reader's private
+Home join. Actual browser/HTTP/SDK/SQL acceptance and full creation/joining
+regression pass. Backend 5,170 checks (16 skips), browser 1,193 checks, types,
+lint and privacy pass; exact fixtures are cleaned. Mail status/address binding,
+unknown delivery and current admission are next, followed by native submission/
+review, invitations/private first use and the full backlog. R02/H07/H08 remain
+partial. Predecessor `92c4d8072` has completed CI jobs passing; its Android
+lint/test/assembly job remains running in [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34676301600).
+Verify this milestone's own pushed-head checks independently. #32/#34 remain
+unfinished drafts, #34 conflicts at `e9ef2decb`, and source migrations remain
+41 Home / 21 payment / 50 combined. No new migration, merge, hosted release or
+paid activation. Paid services stay one final launch bundle.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
@@ -42,7 +43,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 ## 2. Residency, ownership and leases
 
 - [ ] R01 **Fix/Verify:** Finish installed iOS and Android prepared residency review, protected original-command/receipt storage, approve/deny, lost replies, app restart and current-access recovery. Backend and both browser review entries already have acceptance.
-- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). Fix current applicant status/identity and verification destinations, then both native clients and legacy compatibility; older clients still use the reproduced partial-write route.
+- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). Finish the postal destination and both native clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
 - [ ] R03 **Verify:** Review history, needs-more-information, resubmission after a decision, later removal, expired authority and conflicting reviewers across actual native flows.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.

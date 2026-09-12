@@ -429,6 +429,30 @@ export async function declineInviteByToken(token: string): Promise<ApiResponse> 
 
 // ============ RESIDENCY CLAIMS ============
 
+/** Applicant-owned submitted identity and saved review, not current Home data. */
+export interface PersonalResidencyRequest {
+  id: string;
+  home_id: string | null;
+  submitted_address: string | null;
+  claimed_role: string | null;
+  status: 'pending' | 'verified' | 'rejected';
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export interface PersonalResidencyProgress {
+  home_id: string;
+  request: PersonalResidencyRequest | null;
+  current_access: 'shared' | 'private_setup' | 'none';
+  next_step: 'home' | 'household_review' | 'address_verification' | 'resubmit' | 'access_review' | 'ownership_verification' | 'unavailable';
+}
+export async function getMyResidencyRequests(after?: string): Promise<{ requests: PersonalResidencyRequest[]; next_cursor: string | null }> {
+  return get('/api/homes/my-residency', after ? { after } : undefined);
+}
+export async function getMyResidencyProgress(homeId: string): Promise<PersonalResidencyProgress> {
+  return get(`/api/homes/${homeId}/my-residency`);
+}
+
 export interface ResidencyClaim {
   id: string;
   home_id: string;
@@ -548,8 +572,9 @@ export async function rejectResidencyClaim(homeId: string, claimId: string, reas
 /**
  * Get my residency claims
  */
-export async function getMyClaims(): Promise<{ claims: ResidencyClaim[] }> {
-  return get('/api/homes/my-claims');
+/** Personal submitted fields only; current private Home metadata is never joined. */
+export async function getMyClaims(after?: string): Promise<{ claims: ResidencyClaim[]; next_cursor: string | null }> {
+  return get('/api/homes/my-claims', after ? { after } : undefined);
 }
 
 /**

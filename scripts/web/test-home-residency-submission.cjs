@@ -59,7 +59,7 @@ async function complete(n,role='renter',routing='household_review') {
  assert.equal(h.claims[0].cold_start_mode,routing==='household_review'?null:routing);assert.equal(h.occupancies,1);assert.equal(h.audit,1);
  await saved(n+'-original-completion');await page.getByRole('button',{name:'Open My Homes',exact:true}).click();
  await expect(page.getByRole('heading',{name:'My Homes',exact:true})).toBeVisible();
- await expect(page.locator(`a[href="/app/homes/${homeId(n)}/verify-residency"]`).filter({hasText:'Continue verification'})).toBeVisible();
+ await expect(page.locator(`a[href="/app/homes/${homeId(n)}/residency"]`).filter({hasText:'Check status'})).toBeVisible();
  assert.equal(await pendingCount(),0);await saved(n+'-current-my-homes');
 }
 async function main() {
@@ -72,7 +72,7 @@ async function main() {
    if(!p.startsWith('/api/'))return p.startsWith('/socket.io/')?route.fulfill({status:503,body:''}):route.continue();
    try {
     let body={},status=200;
-    if(p.startsWith('/api/geo/')||p.startsWith('/api/v1/address/')||p==='/api/homes'||p==='/api/homes/my-homes'||p==='/api/homes/primary'||p.includes('/residency-submissions')||p.startsWith('/api/homes/create-commands/')||p==='/api/homes/check-address'||p==='/api/homes/property-suggestions'||p==='/api/users/profile') {
+    if(p.startsWith('/api/geo/')||p.startsWith('/api/v1/address/')||p==='/api/homes'||p==='/api/homes/my-homes'||p.endsWith('/my-residency')||p==='/api/homes/primary'||p.includes('/residency-submissions')||p.startsWith('/api/homes/create-commands/')||p==='/api/homes/check-address'||p==='/api/homes/property-suggestions'||p==='/api/users/profile') {
      const response=await fetch(fixture+p+u.search,{method:r.method(),headers:{Authorization:'Bearer pantopus-synthetic-entry-loopback-only','Content-Type':'application/json'},body:r.postData()||undefined,signal:AbortSignal.timeout(120000)});
      status=response.status;body=await response.json();events.push({p,method:r.method(),status});
     } else if(p.includes('claims'))body={claims:[]};

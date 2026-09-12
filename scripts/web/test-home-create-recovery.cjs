@@ -98,7 +98,7 @@ async function main() {
       try {
         let body, status = 200;
         if (endpoint.startsWith('/api/geo/') || endpoint.startsWith('/api/v1/address/') || endpoint === '/api/homes'
-          || endpoint === '/api/homes/my-homes' || endpoint === '/api/homes/primary' || endpoint.startsWith('/api/homes/create-commands/')
+          || endpoint === '/api/homes/my-homes' || endpoint.endsWith('/my-residency') || endpoint === '/api/homes/primary' || endpoint.startsWith('/api/homes/create-commands/')
           || endpoint === '/api/homes/check-address' || endpoint === '/api/homes/property-suggestions' || endpoint === '/api/users/profile') {
           const response = await fetch(fixture + endpoint + parsed.search, { method: request.method(),
             headers: { Authorization: 'Bearer pantopus-synthetic-entry-loopback-only', 'Content-Type': 'application/json' },

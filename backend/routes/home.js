@@ -1339,29 +1339,20 @@ function getRolePermissions(role) {
  * GET /my-claims - Get the current user's residency claims
  * IMPORTANT: Must be before /:id to avoid route collision.
  */
-router.get('/my-claims', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
+const residencyProgress = require('../services/homeResidencyProgressService');
+const personalResidencyNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+router.get('/my-residency', personalResidencyNoStore, verifyToken, async (req, res) => {
+  try { return res.json(await residencyProgress.list(req.user.id, req.query.after)); }
+  catch (error) { return residencyProgress.sendError(res, error); }
+});
+router.get('/:id/my-residency', personalResidencyNoStore, verifyToken, async (req, res) => {
+  try { return res.json(await residencyProgress.read(req.params.id, req.user.id)); }
+  catch (error) { return residencyProgress.sendError(res, error); }
+});
 
-    const { data: claims, error } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select(`
-        *,
-        home:home_id (id, address, city, state, name)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('Error fetching my claims', { error: error.message });
-      return res.status(500).json({ error: 'Failed to fetch claims' });
-    }
-
-    res.json({ claims: claims || [] });
-  } catch (err) {
-    logger.error('My claims error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch claims' });
-  }
+router.get('/my-claims', personalResidencyNoStore, verifyToken, async (req, res) => {
+  try { return res.json(await residencyProgress.legacyList(req.user.id, req.query.after)); }
+  catch (error) { return residencyProgress.sendError(res, error); }
 });
 
 /**
