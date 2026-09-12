@@ -42,7 +42,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 ## 2. Residency, ownership and leases
 
 - [ ] R01 **Fix/Verify:** Finish installed iOS and Android prepared residency review, protected original-command/receipt storage, approve/deny, lost replies, app restart and current-access recovery. Backend and both browser review entries already have acceptance.
-- [ ] R02 **Fix:** Make residency claim submission, cold-start admission and rejected resubmission transactional and recoverable; preserve role, age, access dates and ownership restrictions.
+- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. Wire protected original commands and truthful verification next steps on all three clients, then reconcile legacy compatibility; existing clients still use the reproduced partial-write route.
 - [ ] R03 **Verify:** Review history, needs-more-information, resubmission after a decision, later removal, expired authority and conflicting reviewers across actual native flows.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.
@@ -127,7 +127,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 - [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Update their stale PR descriptions to match the final work.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile 40 Home / 21 payment / 49 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile 41 Home / 21 payment / 50 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 

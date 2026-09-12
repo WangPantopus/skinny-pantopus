@@ -593,7 +593,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (existingAddress?.id) {
       const homesByAddressId = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
+        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
         .eq('address_id', existingAddress.id)
         .eq('home_status', 'active')
         .limit(20), lookupHomes);
@@ -603,7 +603,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     // Search homes by canonical hash
     const homesByHash = await readHomeAddressLookup(supabaseAdmin
       .from('Home')
-      .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
+      .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
       .eq('address_hash', addressHash)
       .eq('home_status', 'active')
       .limit(20), lookupHomes);
@@ -615,7 +615,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (requestedAddressHash !== addressHash) {
       const homesByRequestedHash = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
+        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
         .eq('address_hash', requestedAddressHash)
         .eq('home_status', 'active')
         .limit(20), lookupHomes);
@@ -625,7 +625,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
     if (matchedHomeMap.size === 0) {
       const nearbyHomes = await readHomeAddressLookup(supabaseAdmin
         .from('Home')
-        .select('id, address, address2, city, state, zipcode, name, address_id, address_hash')
+        .select('id, address, address2, city, state, zipcode, country, name, address_id, address_hash')
         .eq('zipcode', zip_code.trim())
         .eq('home_status', 'active')
         .limit(100), lookupHomes);
@@ -670,6 +670,8 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
       home_id: firstHome.id,
       is_multi_unit: isMultiUnitAddress(existingAddress, matchedHomes),
       formatted_address: formattedAddress,
+      residency_address: { line1: firstHome.address, line2: firstHome.address2 || '',
+        city: firstHome.city, state: firstHome.state, postal_code: firstHome.zipcode, country: firstHome.country ?? 'US' },
     });
   } catch (err) {
     logger.error('Address check unavailable', { code: 'HOME_ADDRESS_LOOKUP_UNAVAILABLE' });
@@ -3920,7 +3922,29 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
 // mounts before any authentication runs — keyed on IP, shared with every other
 // home write. The cold-start branch below spends real postage per request, so
 // it gets the same 3-per-hour per-user budget as request-postcard.
-const { postcardLimiter: claimPostcardLimiter } = require('../middleware/rateLimiter');
+const { postcardLimiter: claimPostcardLimiter, homeResidencySubmissionLimiter } = require('../middleware/rateLimiter');
+const residencySubmission = require('../services/homeResidencySubmissionService');
+const residencySubmissionNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+// New clients retain the original UUID before submitting. This command saves
+// pending admission and its next step; postcard delivery has its own request.
+router.post('/:id/residency-submissions', residencySubmissionNoStore, verifyToken, homeResidencySubmissionLimiter, async (req, res) => {
+  try {
+    const { request_id, ...intent } = req.body || {};
+    residencySubmission.send(res, await residencySubmission.submit({ homeId: req.params.id,
+      actorId: req.user.id, requestId: request_id, intent }));
+  } catch (error) { residencySubmission.sendError(res, error); }
+});
+router.get('/:id/residency-submissions/:requestId', residencySubmissionNoStore, verifyToken, async (req, res) => {
+  try { residencySubmission.send(res, await residencySubmission.read({ homeId: req.params.id,
+    actorId: req.user.id, requestId: req.params.requestId })); }
+  catch (error) { residencySubmission.sendError(res, error); }
+});
+router.post('/:id/residency-submissions/:requestId/cancel', residencySubmissionNoStore, verifyToken, async (req, res) => {
+  try { residencySubmission.send(res, await residencySubmission.cancel({ homeId: req.params.id,
+    actorId: req.user.id, requestId: req.params.requestId })); }
+  catch (error) { residencySubmission.sendError(res, error); }
+});
+
 router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) => {
   try {
     const homeId = req.params.id;

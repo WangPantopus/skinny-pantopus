@@ -13,11 +13,21 @@ import type {
 
 // ============ ADDRESS CHECK ============
 
+export interface ResidencyAddressSnapshot {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
+
 export interface AddressCheckResult {
   status: 'HOME_NOT_FOUND' | 'HOME_FOUND_UNCLAIMED' | 'HOME_FOUND_CLAIMED';
   home_id?: string;
   is_multi_unit?: boolean;
   formatted_address?: string;
+  residency_address?: ResidencyAddressSnapshot;
 }
 
 /**

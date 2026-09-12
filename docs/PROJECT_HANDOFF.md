@@ -14,6 +14,34 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Existing-Home submission — backend milestone, R02 remains open
+
+The [atomic submission command](home-residency-submission-recovery-2026-09-11.md)
+passes real HTTP/SDK/SQL recovery, eleven observed lock races, selected street/unit
+fencing, current ownership routing, cancellation and late-write rollback. Rejected
+resubmission preserves occupancy/age/dates/denies and retires old postcard access
+without erasing dispatch evidence. Dedicated per-actor limits preserve recovery
+and postcard allowance. Historical proof grants no current access or delivery.
+Final backend regression passes 317 suites / 5,170 checks (16 skips); privacy,
+web types and portable SQL pass. Populated upgrade preserves all row values in
+365 tables; function lint has zero issues. Exact fixtures/schema are cleaned.
+
+**Continue now:** wire retained existing-Home submission, correction and truthful
+next steps into browser/iPhone/Android; retire the legacy partial-write path only
+after compatibility acceptance. Then invitations/private first use, native
+residency review and the full backlog. R02/H07/H08 remain partial. No merge,
+permanent migration adoption, hosted release, device update or paid activation.
+
+Browser predecessor `0813f56f6` has every CI job green in
+[run 34671902925](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34671902925).
+Verify this new backend milestone’s own CI, including fresh full-schema replay.
+#32 remains an unfinished mergeable draft; #34 is an unfinished conflicting
+draft. Fetched master is `6a1013784`; all worktrees and owner changes are preserved.
+Source inventories are **41 Home / 21 payment / 50 combined**, with 12 identical
+shared migrations and no timestamp collision. Combined replay/adoption remains
+open. The physical iPhone remains on verified Pantopus 1.0.0 (2); paid services
+remain one final launch bundle.
+
 ### Browser Home creation recovery — September 11
 
 The [browser creation milestone](home-browser-create-recovery-2026-09-11.md) now
