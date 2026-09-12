@@ -48,6 +48,7 @@ export default function HomesPage() {
       if (!current()) return;
       const list = homesRes?.homes;
       if (!Array.isArray(list) || list.some(h => !h || typeof h.id !== 'string'
+        || (h.address2 != null && typeof h.address2 !== 'string')
         || !['shared', 'private_setup', 'verification'].includes(h.access_kind || '')
         || h.has_home_access !== (h.access_kind === 'shared') || typeof h.can_delete_home !== 'boolean'
         || !(h.occupancy === null || (h.occupancy && typeof h.occupancy.id === 'string'
@@ -233,6 +234,7 @@ export default function HomesPage() {
                     const cityLine = [h.city, h.state, h.zipcode].filter(Boolean).join(' ');
                     const privateSetup = h.access_kind === 'private_setup';
                     const verification = h.access_kind === 'verification';
+                    const unit = !verification ? h.address2?.trim() : undefined;
                     const ownership = h.ownership_status === 'pending' || !!h.pending_claim_id;
                     const destination = privateSetup ? `/app/homes/${h.id}/tasks`
                       : verification ? ownership ? `/app/homes/${h.id}/claim-owner/evidence${h.pending_claim_id ? `?claimId=${encodeURIComponent(h.pending_claim_id)}` : ''}`
@@ -244,6 +246,7 @@ export default function HomesPage() {
                       <div key={h.id} className="rounded-xl border border-app-border bg-app-surface p-5 flex flex-col sm:flex-row items-start justify-between gap-4">
                         <Link href={destination} className="min-w-0 flex-1 break-words">
                           <div className="text-base font-semibold text-app-text">{label}</div>
+                          {unit && <div className="text-sm text-app-text-secondary">Unit {unit}</div>}
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full border border-app-border px-2.5 py-1 text-xs font-semibold text-app-text-strong">{occ}</div>
                           {privateSetup && <p className="mt-2 text-sm text-app-text-secondary">Start with your own tasks while verification is pending.</p>}

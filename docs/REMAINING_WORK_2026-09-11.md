@@ -9,8 +9,8 @@ cannot promise there are no undiscovered defects in the remaining audit surface.
 Latest local Home milestone: [iPhone retained Home creation](home-ios-create-recovery-2026-09-11.md),
 following the atomic creation backend and native location/address/identity work.
 Installed original-command restart/cancel and atomic optional-setup recovery pass;
-final iPhone regression passes 4,369 checks (168 skips). Visual review finds missing
-unit identifiers in Home cards; fix projection and labels next. Android/browser
+final iPhone regression passes 4,369 checks (168 skips). The [unit-label repair](home-list-unit-identity-2026-09-11.md) now passes actual
+API/browser/iPhone acceptance; Android labels and creation remain in progress. Android/browser
 retained commands, existing-Home join, primary eligibility and complete private
 first use remain open. Backend predecessor `c0d474989` has all CI checks green in
 [run 34663479661](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34663479661).
@@ -115,7 +115,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 ## 10. UI, accessibility and operating conditions
 
-- [ ] U01 **Fix/Verify:** Actual creation acceptance exposes indistinguishable cards for different units at one street: preserve authorized `address2` and show unit labels on all clients. Resolve retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
+- [ ] U01 **Fix/Verify:** The discovered indistinguishable unit cards are repaired and accepted on API/browser/iPhone; finish Android unit labels with creation acceptance. See [the repair](home-list-unit-identity-2026-09-11.md). Resolve retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
 - [ ] U02 **Verify:** Complete small screens, large text/Dynamic Type, zoom, keyboard/focus, screen readers, contrast and dark-mode checks across reachable flows.
 - [ ] U03 **Verify:** Exercise loading, empty, partial, unavailable, offline, slow response, retry, cancellation, back navigation, duplicate taps and process death with actual UI and persisted state.
 - [ ] U04 **Verify:** Validate long-lived sessions, background/foreground transitions and concurrent device/account changes beyond the bounded Home tests.

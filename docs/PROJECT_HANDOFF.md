@@ -14,6 +14,30 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Home unit identity in lists — September 11
+
+The [unit-label repair](home-list-unit-identity-2026-09-11.md) fixes the actual
+first-use defect found during iPhone creation: different units at one street
+looked identical. Authorized list projections retain `address2`; personal
+verification still hides it, and malformed units cause retryable failure.
+Actual HTTP/SDK/SQL, narrow browser cards and installed iPhone creation → current
+My Homes pass. Backend 5,170, web 1,178 and iPhone 4,369 regression checks pass,
+plus privacy/types/style/signed build. Exact fixture SQL/functions are cleaned.
+
+**Continue now:** finish Android unit labels and protected creation. Its core
+compiled earlier; wizard/recovery UI integration is in local WIP and is not part
+of this checkpoint or accepted yet. Then browser retained creation, existing-Home
+join, primary/private first use and invitations, native residency and the full
+backlog. H07/H08/R02/U01 remain partial; 74 inventory entries remain. Preserve
+accepted products and private evidence; paid services stay one final bundle.
+
+Creation predecessor `d08a26a33` is pushed; inspect its remaining native CI and
+this new head separately. #32/#34 remain drafts; #34 conflicts. Migrations remain
+40 Home / 21 paid / 49 combined; no permanent adoption, merge or paid activation.
+The old local web process was absent; its task-owned replacement runs on 18080.
+The prior stopped REST container and all database/device/owner resources remain
+preserved. Ledger remains `20260910220000`.
+
 ### iPhone Home creation recovery — September 11
 
 The [iPhone creation milestone](home-ios-create-recovery-2026-09-11.md) passes

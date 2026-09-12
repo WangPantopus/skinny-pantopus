@@ -62,7 +62,7 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
         keepScreen("Restart recovers completed original setup")
         try press(element("wizardPrimaryCTA"))
         try requirePrivateHome(home)
-        keepScreen("Fresh My Homes shows private setup and pending verification")
+        keepScreen("Fresh My Homes shows its unit and private setup without verified membership")
         let final = try await fixture("state")
         let finalHome = try homeRow(final, unit: "301")
         XCTAssertEqual(home["id"] as? String, finalHome["id"] as? String)
@@ -191,6 +191,8 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
         let destination = app.buttons["myHomes.row_" + id + ".continue"]
         try reveal(destination)
         XCTAssertEqual(destination.label, "My tasks")
+        let unit = try XCTUnwrap(home["unit"] as? String)
+        XCTAssertTrue(label("Unit " + unit).exists)
         XCTAssertTrue(label("Private setup").exists)
         XCTAssertFalse(label("Residency verified").exists)
         XCTAssertFalse(label("Ownership verified").exists)

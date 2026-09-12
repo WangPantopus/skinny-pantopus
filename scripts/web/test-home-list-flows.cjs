@@ -20,6 +20,31 @@ const update = value => sql(`UPDATE public."HomeOccupancy" SET ${value} WHERE ho
 const focus = () => page.evaluate(() => window.dispatchEvent(new Event('focus')));
 const title = () => page.getByRole('link', { name: /Private list fixture.*Owner/ });
 const screenshot = name => page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: true });
+async function verifyDifferentUnits() {
+  const second = f.id(101);
+  assert.equal(sql(`SELECT count(*) FROM public."Home" WHERE id=${q(second)};`), '0');
+  sql(`BEGIN; INSERT INTO public."Home"(id,created_by_user_id,name,address,address2,city,state,zipcode)
+    SELECT ${q(second)},${q(actor)},name,address,'303',city,state,zipcode FROM public."Home" WHERE id=${q(home)};
+    INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner,verification_tier)
+    VALUES(${q(second)},${q(actor)},'verified',true,'strong'); COMMIT;`);
+  try {
+    await focus();
+    for (const [homeId, unit] of [[home, '301'], [second, '303']]) {
+      const card = page.locator(`a[href="/app/homes/${homeId}/dashboard"]`).filter({ hasText: `Unit ${unit}` });
+      await expect(card).toBeVisible();
+    }
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect.poll(async () => (await page.getByRole('heading', { name: 'My Homes', exact: true }).boundingBox())?.x).toBeLessThan(16.5);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await screenshot('01a-distinct-units-narrow');
+    await page.setViewportSize({ width: 1100, height: 850 });
+  } finally {
+    sql(`BEGIN; DELETE FROM public."HomeOwner" WHERE home_id=${q(second)};
+      DELETE FROM public."Home" WHERE id=${q(second)} AND created_by_user_id=${q(actor)}; COMMIT;`);
+  }
+  await focus(); await title().waitFor();
+  console.log('PASS: same-named Homes at one street display their distinct SQL units and correct destinations without narrow overflow');
+}
 async function main() {
   try {
     let config;
@@ -30,7 +55,7 @@ async function main() {
     const { createClient } = require(path.join(root, 'backend/node_modules/@supabase/supabase-js'));
     f.useDatabaseClient(createClient(config.API_URL, config.SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }));
     f.setup(); initialized = true;
-    sql(`UPDATE public."Home" SET name='Private list fixture' WHERE id=${q(home)};
+    sql(`UPDATE public."Home" SET name='Private list fixture',address2='301' WHERE id=${q(home)};
       UPDATE public."HomeOccupancy" SET verified_at=now(),start_at=NULL,access_end_at=NULL WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const apiBase = `http://127.0.0.1:${server.address().port}`;
@@ -66,7 +91,9 @@ async function main() {
     page = await context.newPage(); page.setDefaultTimeout(30000); page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/app/homes', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await title().waitFor(); await expect(page.getByRole('button', { name: 'Delete home', exact: true })).toBeVisible();
+    await expect(page.getByText('Unit 301', { exact: true })).toBeVisible();
     await screenshot('01-current-owner');
+    await verifyDifferentUnits();
     sql(`INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(${q(home)},${q(actor)},'home.edit',false);`);
     await focus(); await title().waitFor(); await expect(page.getByRole('button', { name: 'Delete home', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -100,6 +127,7 @@ async function main() {
     sql(`UPDATE public."HomeOwner" SET owner_status='pending' WHERE home_id=${q(home)} AND subject_id=${q(actor)};`);
     await focus(); await page.getByRole('link', { name: 'Continue verification', exact: true }).waitFor();
     await expect(page.getByText('Private list fixture', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Unit 301', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Continue verification', exact: true })).toHaveAttribute('href', `/app/homes/${home}/claim-owner/evidence`);
     await screenshot('03-applicant-personal-progress');
@@ -107,6 +135,7 @@ async function main() {
       DELETE FROM public."HomeOccupancy" WHERE home_id=${q(home)} AND user_id<>${q(actor)};`);
     await focus(); await page.getByRole('link', { name: 'My tasks', exact: true }).waitFor();
     await expect(page.getByText('Private setup', { exact: true })).toBeVisible();
+    await expect(page.getByText('Unit 301', { exact: true })).toBeVisible();
     await expect(page.getByText('Owner', { exact: true })).toHaveCount(0);
     await page.setViewportSize({ width: 375, height: 812 });
     await expect.poll(async () => (await page.getByRole('heading', { name: 'My Homes', exact: true }).boundingBox())?.x).toBeLessThan(16.5);

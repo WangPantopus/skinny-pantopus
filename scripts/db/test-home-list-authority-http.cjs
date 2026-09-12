@@ -66,15 +66,26 @@ async function main() {
       rpc: async (name, args) => after(await client.rpc(name, args), { rpc: name, args }),
       from: table => observe(client.from(table), { table, columns: '', filters: {} }) });
     f.setup(); initialized = true; restore();
+    homeChange("address2='301'");
     server = f.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const routes = ['/my-homes', '/primary', '/'];
     for (const route of routes) {
       const card = await current(route);
       assert.equal(card.access_kind, 'shared'); assert.equal(card.occupancy.role, 'owner'); assert.equal(card.occupancy.is_active, true);
       assert.equal(card.can_delete_home, true); assert.equal(card.ownership_status, 'verified');
+      assert.equal(card.address2, '301');
       for (const key of ['owner_id', 'owner', 'occupants', 'owners', 'entry_instructions', 'parking_instructions', 'niche_data']) assert(!Object.hasOwn(card, key));
     }
     console.log('PASS: all three production lists use current authority, real occupancy and allowlisted cards without raw identity/private fields');
+    homeChange("address2='303'");
+    for (const route of routes) assert.equal((await current(route)).address2, '303');
+    homeChange("address2='301'");
+    console.log('PASS: all three authorized list projections retain the actual unit and reflect corrected unit data');
+    for (const route of routes) {
+      hook = { matches: cardQuery, handle: result => ({ ...result, data: { ...result.data, address2: { malformed: true } } }) };
+      unavailable(await request(route)); assert.equal(hook, null); await current(route);
+    }
+    console.log('PASS: malformed unit data is a retryable list failure on all three routes');
     const changes = [
       () => homeChange("security_state='frozen'"), () => homeChange("security_state='frozen_silent'"),
       () => homeChange("home_status='archived'"), () => homeChange("home_status='merged'"),
@@ -93,7 +104,7 @@ async function main() {
 
     occupancyChange("verification_status='pending_doc',verified_at=NULL"); ownerChange('pending');
     let card = await current(); assert.equal(card.access_kind, 'verification'); assert.equal(card.has_home_access, false);
-    assert.equal(card.address, null); assert.equal(card.location, null); assert.equal(card.role_base, null); assert.equal(card.can_delete_home, false);
+    assert.equal(card.address, null); assert.equal(card.address2, null); assert.equal(card.location, null); assert.equal(card.role_base, null); assert.equal(card.can_delete_home, false);
     assert.equal(cards(await request('/primary'), '/primary').length, 0);
     sql(`INSERT INTO public."HomeOwnershipClaim"(id,home_id,claimant_user_id,state,claim_phase_v2)
       VALUES(${q(id(942))},${q(home)},${q(actor)},'approved','challenged');`);
@@ -167,9 +178,10 @@ async function main() {
     ownerChange('pending'); occupancyChange("role='member',role_base='member',verification_status='pending_doc',verified_at=NULL");
     card = await current(); assert.equal(card.access_kind, 'private_setup'); assert.equal(card.has_home_access, false);
     assert.equal(card.occupancy.role, 'member'); assert.equal(card.role_base, null); assert.equal(card.can_delete_home, true);
+    assert.equal(card.address2, '301');
     assert.equal(card.address, 'Private residency fixture'); assert.equal(cards(await request('/primary'), '/primary').length, 0);
     sql(`INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action) VALUES(${q(home)},${q(actor)},'established_household_history');`);
-    card = await current(); assert.equal(card.access_kind, 'verification'); assert.equal(card.can_delete_home, false); assert.equal(card.address, null);
+    card = await current(); assert.equal(card.access_kind, 'verification'); assert.equal(card.can_delete_home, false); assert.equal(card.address, null); assert.equal(card.address2, null);
     assert.equal((await request('/my-homes', f.users[5])).body.homes.length, 0);
     console.log('PASS: private creator has useful setup without fabricated admin/membership; established history removes setup/deletion; unrelated account sees an actual empty list');
   } finally {

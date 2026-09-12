@@ -169,7 +169,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let home = entry.home
         let title = home.name?.nilIfEmpty ?? home.address?.nilIfEmpty ?? "Home"
         let locality = [home.city, home.state].compactMap { $0?.nilIfEmpty }.joined(separator: ", ").nilIfEmpty
-        let subtitle = [roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
+        let unit = entry.accessKind == "verification" ? nil : home.address2?.nilIfEmpty.map { "Unit \($0)" }
+        let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
         if entry.hasSharedAccess, entry.ownershipStatus == "verified" { chips.append(.init(

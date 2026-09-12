@@ -8,7 +8,7 @@ const parsePoint = require('../utils/parsePostGISPoint');
 
 // List entries never include access instructions, provider payloads, account
 // identity, household rosters or another person's ownership records.
-const CARD_COLUMNS = 'id, name, address, city, state, zipcode, location, home_type, primary_photo_url, cover_photo_url, visibility, home_status, created_at, updated_at';
+const CARD_COLUMNS = 'id, name, address, address2, city, state, zipcode, location, home_type, primary_photo_url, cover_photo_url, visibility, home_status, created_at, updated_at';
 const OWN_OCCUPANCY_COLUMNS = ['id', 'role', 'role_base', 'is_active', 'verification_status',
   'start_at', 'end_at', 'access_start_at', 'access_end_at'];
 const OWNER_STATUSES = ['pending', 'verified', 'disputed', 'revoked'];
@@ -95,10 +95,11 @@ async function materialize(homeId, actorId, opening, claims) {
   if (mode === 'verification') {
     // Personal progress is not shared Home access. The caller's submitted
     // evidence/address remains on its own authorized verification endpoint.
-    card = { id: homeId, name: 'Home verification', address: null, city: null, state: null, zipcode: null, location: null };
+    card = { id: homeId, name: 'Home verification', address: null, address2: null, city: null, state: null, zipcode: null, location: null };
   } else {
     card = await checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
-    if (!object(card) || card.id !== homeId || typeof card.address !== 'string') throw failure();
+    if (!object(card) || card.id !== homeId || typeof card.address !== 'string'
+      || (card.address2 != null && typeof card.address2 !== 'string')) throw failure();
     card = Object.fromEntries(CARD_COLUMNS.split(', ').map(key => [key, card[key]]));
     card.location = card.location ? parsePoint(card.location) : null;
   }

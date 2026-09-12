@@ -18,6 +18,7 @@ public struct HomeDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let name: String?
     public let address: String?
+    public var address2: String?
     public let city: String?
     public let state: String?
     public let zipcode: String?
@@ -31,7 +32,7 @@ public struct HomeDTO: Decodable, Sendable, Hashable, Identifiable {
     public let moveInDate: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, address, city, state, zipcode
+        case id, name, address, address2, city, state, zipcode
         case homeType = "home_type"
         case visibility, description
         case createdAt = "created_at"

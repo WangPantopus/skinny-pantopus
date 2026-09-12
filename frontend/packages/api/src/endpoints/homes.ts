@@ -263,6 +263,7 @@ export interface MyHomeOccupancy {
 export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'state' | 'zip_code' | 'country' | 'created_at' | 'updated_at'> {
   /** Shared fields are absent from personal verification entries. */
   address: string | null;
+  address2?: string | null;
   city: string | null;
   state: string | null;
   zipcode: string | null;
