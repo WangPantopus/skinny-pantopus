@@ -105,7 +105,87 @@ class Journey(firstuse.Journey):
             node = parents.get(node)
         raise AssertionError('Continue must be disabled in the actual accessibility hierarchy')
 
+    def deny_location(self):
+        # Android's system permission UI uses a typographic apostrophe on
+        # current images; Settings wording differs on older versions.
+        nodes = self.nodes()
+        label = next((x for x in ("Don’t allow", "Don't allow") if self.match(nodes, x) is not None), "Don’t allow")
+        self.tap(label)
+
+    def location_journey(self):
+        self.adb('shell', 'am', 'force-stop', base.PACKAGE)
+        self.adb('shell', 'pm', 'clear', base.PACKAGE)
+        self.fixture('reset', 'POST')
+        self.login()
+        self.open_list()
+        self.tap('Add a home')
+        self.wait('Find your home')
+        reverse_count = lambda: sum(e['event'] == 'reverse_boundary' for e in self.fixture('state')['events'])
+        initial = reverse_count()
+        self.tap('Use current location')
+        self.deny_location()
+        self.wait('Open app settings')
+        assert reverse_count() == initial
+        self.evidence('location-denied-settings-and-manual-recovery')
+        self.tap('Open app settings')
+        self.tap('Permissions', scroll=True)
+        self.tap('Location')
+        self.tap('Allow only while using the app')
+        self.evidence('actual-settings-location-grant')
+        self.launch()
+        self.wait('Find your home')
+        self.adb('emu', 'geo', 'fix', '-122.4', '45.6')
+        self.tap('Use current location')
+        # Feed the owned emulator after acquisition starts: the GPS HAL only
+        # emits fixes while a real client is listening. No app provider fake.
+        for _ in range(4):
+            self.adb('emu', 'geo', 'fix', '-122.4', '45.6')
+            time.sleep(0.4)
+        self.wait('Street address', seconds=30, scroll=True)
+        assert any(n.get('class') == 'android.widget.EditText' and n.get('text') == LINE for n in self.nodes())
+        self.absent('Address recognized')
+        recovered_count = reverse_count()
+        assert recovered_count > initial
+        self.evidence('device-location-resolves-editable-address')
+        # Match this journey's request to the OS record, not an earlier iPhone
+        # fixture event or the requested HAL coordinate (some emulator images
+        # emit their default fix before accepting a supplied route).
+        location_state = self.adb('shell', 'dumpsys', 'location').decode()
+        (self.output / 'actual-os-location.txt').write_text(location_state)
+        os_positions = [(float(lat), float(lon)) for lat, lon in re.findall(
+            r'last location=Location\[(?:gps|fused) (-?[0-9.]+),(-?[0-9.]+)', location_state)]
+        own_positions = [e for e in self.fixture('state')['events'] if e['event'] == 'reverse_boundary'][initial:recovered_count]
+        assert own_positions and any(abs(e['latitude'] - lat) < 0.0001 and abs(e['longitude'] - lon) < 0.0001
+                                     for e in own_positions for lat, lon in os_positions)
+
+        # Restore the real Settings page and revoke while a recent position exists.
+        self.adb('shell', 'am', 'start', '-a', 'android.settings.APPLICATION_DETAILS_SETTINGS', '-d', 'package:' + base.PACKAGE)
+        self.tap('Permissions', scroll=True)
+        self.tap('Location')
+        self.deny_location()
+        self.evidence('actual-settings-location-revocation')
+        self.launch()
+        self.wait('Find your home')
+        self.tap('Use current location', scroll=True)
+        nodes = self.nodes()
+        if any(self.match(nodes, x) is not None for x in ("Don’t allow", "Don't allow")): self.deny_location()
+        self.wait('Open app settings', seconds=15, scroll=True)
+        assert reverse_count() == recovered_count
+        self.evidence('revoked-permission-cannot-reuse-position')
+        self.tap('Continue')
+        self.contains('Address recognized', scroll=True)
+        self.evidence('manual-address-usable-after-location-denial')
+        events = self.fixture('state')['events']
+        assert not any(e['event'] == 'fixture_error' for e in events)
+        assert not any(e.get('path') == '/api/homes' and e.get('method') == 'POST' for e in events)
+        (self.output / 'result.json').write_text(json.dumps({'passed': True, 'scope': 'device location permission, Settings, revocation and manual recovery'}, indent=2))
+        self.adb('shell', 'am', 'force-stop', base.PACKAGE)
+        print('PASS installed Android real location permission, Settings and manual recovery')
+
     def run(self):
+        if self.args.location_recovery:
+            self.location_journey()
+            return
         if self.args.unit_recovery:
             self.fixture('mode', 'POST', {'mode': 'missing_unit'})
             self.launch()
@@ -259,6 +339,7 @@ if __name__ == '__main__':
     parser.add_argument('--serial', required=True)
     parser.add_argument('--output', required=True, type=Path)
     continuation = parser.add_mutually_exclusive_group()
+    continuation.add_argument('--location-recovery', action='store_true', help='Owned real permission denial, Settings recovery and revocation; resets only the owned debug app.')
     continuation.add_argument('--resume-validation', action='store_true', help='Continue an already signed-in, open owned address form; preserves prior entry evidence.')
     continuation.add_argument('--unit-recovery', action='store_true', help='Verify missing-unit edit/revalidation through the signed-in owned app.')
     journey = Journey(parser.parse_args())

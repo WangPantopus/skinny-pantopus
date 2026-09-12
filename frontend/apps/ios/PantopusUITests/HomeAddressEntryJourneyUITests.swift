@@ -141,6 +141,92 @@ final class HomeAddressEntryJourneyUITests: XCTestCase {
         XCTAssertFalse(events.contains { $0["event"] as? String == "fixture_error" })
     }
 
+    func testDeviceLocationDenialSettingsRecoveryAndRevocation() async throws {
+        try openFreshWizard()
+        let initial = try await reverseCount()
+        try press(element("addHome_useCurrentLocation"))
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let deny = springboard.buttons.matching(NSPredicate(format: "label MATCHES %@", "Don.t Allow")).firstMatch
+        XCTAssertTrue(deny.waitForExistence(timeout: 10))
+        deny.tap()
+        try reveal(app.buttons["addHomeLocationSettings"])
+        let deniedCount = try await reverseCount()
+        XCTAssertEqual(deniedCount, initial)
+        keepScreen("Denied location offers Settings and manual entry")
+        try press(app.buttons["addHomeLocationSettings"])
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        defer {
+            let hierarchy = XCTAttachment(string: settings.debugDescription)
+            hierarchy.name = "Actual location Settings hierarchy"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+        XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 10))
+        try openLocationSettings(settings)
+        try pressSettings(settings, label: "While Using the App")
+        app.activate()
+        try press(element("addHome_useCurrentLocation"))
+        try reveal(element("addHome_street"))
+        XCTAssertEqual(element("addHome_street").value as? String, street)
+        XCTAssertFalse(label("Address recognized").exists)
+        let recoveredCount = try await reverseCount()
+        XCTAssertGreaterThan(recoveredCount, initial)
+        let locatedState = try await fixture("state")
+        let locatedEvents = try XCTUnwrap(locatedState["events"] as? [[String: Any]])
+        XCTAssertTrue(locatedEvents.contains {
+            $0["event"] as? String == "reverse_boundary"
+                && abs(($0["latitude"] as? Double ?? 0) - 45.6) < 0.01
+                && abs(($0["longitude"] as? Double ?? 0) + 122.4) < 0.01
+        })
+        keepScreen("Device coordinate resolves editable address before canonical validation")
+        // Revoke through the same real Settings page while a recent coordinate exists.
+        settings.activate()
+        try pressSettings(settings, label: "Never")
+        app.activate()
+        try press(element("addHome_useCurrentLocation"))
+        try reveal(app.buttons["addHomeLocationSettings"])
+        let revokedCount = try await reverseCount()
+        XCTAssertEqual(revokedCount, recoveredCount)
+        keepScreen("Revoked location cannot reuse the previous coordinate")
+        try press(element("wizardPrimaryCTA"))
+        try reveal(label("Address recognized"))
+        keepScreen("Manual address remains usable after location revocation")
+        let state = try await fixture("state")
+        let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+        XCTAssertFalse(events.contains { $0["event"] as? String == "fixture_error" })
+        XCTAssertFalse(events.contains { $0["path"] as? String == "/api/homes" && $0["method"] as? String == "POST" })
+    }
+
+    private func openLocationSettings(_ settings: XCUIApplication) throws {
+        let location = settings.staticTexts["Location"].firstMatch
+        if !location.waitForExistence(timeout: 3) {
+            // Some simulator Settings cold starts open the root page. Exercise
+            // the navigation explained by the app's recovery guidance too.
+            try pressSettings(settings, label: "Apps")
+            try pressSettings(settings, label: "Pantopus")
+        }
+        try pressSettings(settings, label: "Location")
+    }
+
+    private func pressSettings(_ settings: XCUIApplication, label: String) throws {
+        let control = settings.staticTexts[label].firstMatch
+        _ = control.waitForExistence(timeout: 3)
+        for _ in 0..<12 {
+            if control.exists, control.isHittable { control.tap()
+                return
+            }
+            settings.swipeUp()
+        }
+        XCTFail("Missing real Settings control: " + label)
+        throw JourneyError.unavailable
+    }
+
+    private func reverseCount() async throws -> Int {
+        let state = try await fixture("state")
+        let events = try XCTUnwrap(state["events"] as? [[String: Any]])
+        return events.filter { $0["event"] as? String == "reverse_boundary" }.count
+    }
+
     private func openFreshWizard() throws {
         try openWizard()
         // Reset only the synthetic account's prior interrupted draft through UI.

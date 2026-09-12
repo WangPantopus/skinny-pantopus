@@ -77,7 +77,11 @@ const geo = { async autocomplete() {
   if (mode === 'search_error') throw new Error('Synthetic geo unavailable');
   return { suggestions: mode === 'search_empty' ? [] : [{ suggestion_id: 'entry-fixture', primary_text: line1, secondary_text: 'Test, WA 98607',
     label: line1 + ', Test, WA 98607', kind: 'address', center: { lat: 45.6, lng: -122.4 } }] };
-}, async resolve(value) { assert.equal(value, 'entry-fixture'); return normalized; }, async reverseGeocode() { return normalized; } };
+}, async resolve(value) { assert.equal(value, 'entry-fixture'); return normalized; }, async reverseGeocode(latitude, longitude) {
+  assert(Number.isFinite(latitude) && Number.isFinite(longitude));
+  log({ event: 'reverse_boundary', latitude, longitude });
+  return normalized;
+} };
 const noop = (_req, _res, next) => next();
 const load = Module._load;
 Module._load = function(name, parent, isMain) {

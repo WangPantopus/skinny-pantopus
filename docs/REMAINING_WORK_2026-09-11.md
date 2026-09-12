@@ -6,14 +6,13 @@ boxes do not automatically reopen completed work. This inventory includes both
 confirmed defects and required acceptance that has not yet been performed. It
 cannot promise there are no undiscovered defects in the remaining audit surface.
 
-Latest local Home milestone: [native identity and private first use](home-native-list-first-use-2026-09-11.md),
-following the [ordinary-member default repair](home-member-view-defaults-2026-09-11.md).
-Predecessor `69eaebea1` has passing CI safeguards and complete schema replay;
-other checks were still running at this checkpoint.
+Latest local Home milestone: [native device location recovery](home-device-location-recovery-2026-09-11.md),
+following real native address entry and identity/private first use. Address-entry
+predecessor `b40b2ba5b` has all CI jobs green in
+[run 34658007186](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34658007186).
 Verify the next pushed head separately through [PR #32 checks](https://github.com/WangPantopus/skinny-pantopus/pull/32/checks).
-#32 remains draft. #34 is draft at `e9ef2decb`, conflicts with master, and contains
-an unwired durable-tip draft. Superseded native runs may be cancelled by the
-existing concurrency rule; a cancelled aggregate is not final passing evidence.
+#32 remains draft. #34 remains draft/conflicted at `e9ef2decb`, with an unwired
+durable-tip draft. Cancelled or earlier-head checks do not certify a final head.
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
@@ -31,7 +30,7 @@ exit criterion. Actual records, UI states, retries and current access are.
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Real onboarding/verification and broader UI remain H07/H08/R01/R02/U01/U02.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Finish device location recovery, real create/save/join UI and transactional, recoverable onboarding. Address validation grants no membership.
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). Finish real create/save/join UI and transactional, recoverable onboarding. Address validation grants no membership.
 - [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Finish real onboarding, ordinary-member UI and completed verification flows. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
 
 ## 2. Residency, ownership and leases

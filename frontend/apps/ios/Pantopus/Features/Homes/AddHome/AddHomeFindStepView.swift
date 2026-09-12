@@ -26,7 +26,16 @@ struct AddressStep: View {
             }
             if let error = viewModel.addressSearchError {
                 Text(error).pantopusTextStyle(.small)
-                Button("Try search again", action: viewModel.retryAddressSearch)
+                if !viewModel.homeSearchQuery.isEmpty {
+                    Button("Try search again", action: viewModel.retryAddressSearch)
+                }
+                if viewModel.canOpenLocationSettings {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .accessibilityIdentifier("addHomeLocationSettings")
+                    Text("In Settings, find Pantopus and open Location.").pantopusTextStyle(.small)
+                }
             }
             ForEach(viewModel.searchResults) { suggestion in
                 Button { viewModel.selectSearchResult(suggestion) } label: {

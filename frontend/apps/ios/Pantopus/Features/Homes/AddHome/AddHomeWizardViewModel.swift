@@ -78,6 +78,7 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var searchResults: [GeoSuggestion] = []
     private(set) var isFindingAddress = false
     private(set) var addressSearchError: String?
+    private(set) var canOpenLocationSettings = false
     private(set) var isManualEntry = false
     private(set) var validatedAddressId: String?
     private var addressRevision = 0
@@ -329,6 +330,7 @@ final class AddHomeWizardViewModel: WizardModel {
         propertyLookupComplete = false
         isLoadingPropertySuggestions = false
         addressSearchError = nil
+        canOpenLocationSettings = false
         errorMessage = nil
     }
 
@@ -409,7 +411,8 @@ final class AddHomeWizardViewModel: WizardModel {
                 guard let coordinate = await locationProvider.requestCurrent(timeoutSeconds: 5),
                       addressIsCurrent(revision) else {
                     if addressIsCurrent(revision) {
-                        addressSearchError = "Location is unavailable. Allow location access or enter your address manually."
+                        addressSearchError = "Location is unavailable. Check location access in Settings or enter your address manually."
+                        canOpenLocationSettings = true
                     }
                     return
                 }

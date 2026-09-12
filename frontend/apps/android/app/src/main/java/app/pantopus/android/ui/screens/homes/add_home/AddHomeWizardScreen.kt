@@ -3,7 +3,10 @@
 package app.pantopus.android.ui.screens.homes.add_home
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -392,6 +395,11 @@ private fun AddressStep(
         state.addressSearchError?.let {
             Text(it, style = PantopusTextStyle.small)
             if (state.homeSearchQuery.isNotBlank()) TextButton(onClick = vm::retryAddressSearch) { Text("Try search again") }
+            if (state.canOpenLocationSettings) {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                }) { Text("Open app settings") }
+            }
         }
         state.searchResults.forEach { suggestion ->
             TextButton(onClick = { vm.selectSearchResult(suggestion) }, modifier = Modifier.fillMaxWidth()) {

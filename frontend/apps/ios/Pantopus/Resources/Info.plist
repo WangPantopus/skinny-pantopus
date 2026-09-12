@@ -53,7 +53,7 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Pantopus uses your location to show gigs and neighbors near you.</string>
+	<string>Pantopus uses your location to help find your address and show nearby activity.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Pantopus uses the microphone for voice messages in chat.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -122,7 +122,7 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         ITSAppUsesNonExemptEncryption: false
-        NSLocationWhenInUseUsageDescription: "Pantopus uses your location to show gigs and neighbors near you."
+        NSLocationWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications."
         NSCameraUsageDescription: "Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat."
         NSPhotoLibraryUsageDescription: "Pantopus uses your photo library to upload profile photos, listing images, and mail."

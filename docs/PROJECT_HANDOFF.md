@@ -14,6 +14,27 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Native device location recovery — September 11
+
+The [location milestone](home-device-location-recovery-2026-09-11.md) passes
+installed iPhone and Android denial → Settings grant → actual device location →
+revocation → manual validation. It fixes uncancellable iPhone waits, Android's
+unbounded fallback and GPS-only acquisition, stale/denied caches and Settings
+recovery. Full iPhone regression passes 4,363 checks (168 skips); each Android
+variant passes 4,524 checks (80 skips). Final builds, style/lint/snapshots and
+privacy gates pass. Exact r6 fixture SQL cleanup passes; prior products and
+owner resources remain preserved. Physical location and paid providers remain
+outside this local acceptance.
+
+Address-entry predecessor `b40b2ba5b` has every check green in
+[CI run 34658007186](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34658007186).
+Verify this location milestone's own pushed-head CI. H07/H08/R02 remain open.
+**Continue now:** atomic retained Home create/join, restart/lost-reply recovery,
+truthful primary eligibility and private first use; then native residency and
+the full backlog. No migration, permanent adoption, merge or paid activation.
+#32/#34 remain unfinished drafts; #34 conflicts. Migration inventory remains
+39 Home / 21 payment / 48 distinct combined versions.
+
 ### Native Home address entry — September 11
 
 The [native address-entry milestone](home-native-address-entry-2026-09-11.md)

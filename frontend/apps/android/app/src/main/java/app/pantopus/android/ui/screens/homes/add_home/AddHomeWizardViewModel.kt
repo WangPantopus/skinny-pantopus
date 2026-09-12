@@ -55,6 +55,7 @@ data class AddHomeUiState(
     val searchResults: List<GeoSuggestion> = emptyList(),
     val isFindingAddress: Boolean = false,
     val addressSearchError: String? = null,
+    val canOpenLocationSettings: Boolean = false,
     val isManualEntry: Boolean = false,
     val validatedAddressId: String? = null,
     val isSessionCurrent: Boolean = true,
@@ -275,7 +276,7 @@ open class AddHomeWizardViewModel
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
                     isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null,
                     propertyLookupComplete = false, isLoadingPropertySuggestions = false,
-                    addressSearchError = null, errorMessage = null,
+                    addressSearchError = null, canOpenLocationSettings = false, errorMessage = null,
                 )
             }
         }
@@ -392,7 +393,12 @@ open class AddHomeWizardViewModel
         }
 
         fun locationPermissionDenied() {
-            _state.update { it.copy(addressSearchError = "Location is unavailable. Allow location access or enter your address manually.") }
+            _state.update {
+                it.copy(
+                    addressSearchError = "Location is unavailable. Check location access in Settings or enter your address manually.",
+                    canOpenLocationSettings = true,
+                )
+            }
         }
 
         private fun applyResolvedAddress(address: NormalizedAddress) {

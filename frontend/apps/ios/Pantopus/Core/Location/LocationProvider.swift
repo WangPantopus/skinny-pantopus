@@ -2,10 +2,8 @@
 //  LocationProvider.swift
 //  Pantopus
 //
-//  Best-known coordinate hint surfaced to map / radius surfaces. T2.4
-//  ships with a hardcoded-fallback implementation; the real
-//  CLLocationManager-backed provider lands in a later pass alongside
-//  the permission-prompt flow.
+//  Coordinate hints for map and address surfaces. Production callers use
+//  DeviceLocationProvider; fixed providers are for previews and tests.
 //
 
 import Foundation
@@ -28,14 +26,15 @@ public struct UserCoordinate: Sendable, Hashable {
 /// Provider interface — abstracted so view-models can inject a fixed
 /// coordinate in tests.
 public protocol LocationProviding: AnyObject, Sendable {
-    func cachedCoordinate() -> UserCoordinate?
+    /// A recent coordinate only while device permission remains granted.
+    @MainActor func cachedCoordinate() -> UserCoordinate?
+    /// Acquisition is bounded after authorization; caller cancellation also
+    /// releases an unanswered permission wait. Denial returns no coordinate.
     func requestCurrent(timeoutSeconds: TimeInterval) async -> UserCoordinate?
 }
 
-/// Hardcoded-fallback provider. Returns a downtown Manhattan anchor so
-/// the map renders during development — replace with a
-/// CLLocationManager-backed implementation once the permission flow
-/// lands.
+/// Fixed Manhattan anchor retained for existing previews and test fixtures.
+/// Production permission flows use DeviceLocationProvider.
 public final class FallbackLocationProvider: LocationProviding, @unchecked Sendable {
     public static let shared = FallbackLocationProvider()
 
