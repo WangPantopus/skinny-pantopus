@@ -14,42 +14,50 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
-### iOS prepared residency review accepted; Android installed acceptance next
+### Native prepared residency review accepted; private first use and invitations next
 
-The [iOS prepared-review milestone](home-ios-residency-review-2026-09-12.md)
-passes the complete installed HTTP/SDK/SQL journey on signed build r8: owner and
-member entries, explicit confirmation, failed reads, lost approval and rejection,
-cold original recovery, changed claims, later move-out/resubmission, revoked
-reviewer access, background preflight and retired authorized replies. Reload and
-Close stay fixed while review content scrolls. Final SQL records six POST attempts
-and three receipts, with no duplicate decisions or held work. All saved originals
-are acknowledged through the app; final screens were visually reviewed.
+Both [iOS prepared review](home-ios-residency-review-2026-09-12.md) and
+[Android prepared review](home-android-residency-review-2026-09-12.md) pass complete
+installed HTTP/SDK/SQL journeys: owner and member entries, explicit confirmation,
+failed reads, lost approval/rejection, cold originals, stale claims, later move-out/
+resubmission, revoked authority, background preflight and retired authorized reads.
+Close and Reload stay reachable. Each final journey records six POST attempts and
+three receipts, with matching original replays, no held work and all originals
+acknowledged through the app. R01 is locally verified; **7 of 80 inventory rows
+are closed and 73 remain partial/open**. This is not whole-app completion or a
+percentage of remaining engineering effort.
 
-Full iOS regression passes **4,379 checks / 168 skips / zero failures**. Final
-style, privacy and signing pass. Source, all 27 Mach-O images and the installed
-production dylib are bound to private evidence; products are preserved in an APFS
-clone. All six exact review fixtures are cleaned. Final r6 verifies full migration
-ledger rows/columns and exact function definitions/properties before and after.
-The [iOS postal](home-ios-postal-recovery-2026-09-12.md) and
-[Android postal](home-android-postal-recovery-2026-09-12.md) milestones and their
-original creation regressions remain accepted. The physical iPhone stays 1.0.0 (2).
+Final Android r3: signed Debug/Release builds, 515 suites per variant with
+**4,545 passed / 80 skips / zero failures**, Ktlint, Detekt, full Lint and privacy
+pass. The actual optimized APK verifies saved approval/rejection serialization;
+the final installed APK hash matches the build. Final iOS r8: **4,379 passed /
+168 skips / zero failures**, style/privacy/signing and complete installed journey
+pass. Production and test images are bound to private evidence. Exact fixtures
+are cleaned with full ledger rows/columns and function definitions/properties
+preserved. Products and diagnostic history remain private. Both owned native
+runtimes are stopped with userdata retained. The physical iPhone stays 1.0.0 (2).
 
-**Continue now:** finish the separate Android prepared-review candidate. Both
-owner and member entries are wired, Debug build and five recovery checks pass;
-optimized Release build and installed acceptance are next. The owned Android
-emulator is active with retained userdata. Then finish invitations/private first
-use and legacy compatibility. H08 needs a private-Home verification entry and an
-ordinary selected-address submission before mail when no claim exists; ownership
-is separate. H07/H08/R01/R02 and the wider backlog remain open. Six of 80 inventory
-rows are closed; this is not whole-app completion or remaining engineering effort.
+**Continue now:** private first use and invitations, then legacy compatibility and
+the full backlog. H08 needs a native private-Home verification entry and ordinary
+selected-address submission before mail when no claim exists; ownership remains
+separate. A separate unaccepted browser candidate in
+`frontend/apps/web/src/app/(app)/app/homes/[id]/residency/page.tsx` now directs a
+no-request status to the existing selected-Home joining wizard. Types and lint
+pass; actual first-use acceptance and native counterparts remain. Preserve this
+candidate when staging the Android milestone. H07/H08/R02 and broader R03–R06
+remain open.
 
-Predecessor `e44981d5cbe879481176aaf0286f8ee4b753381a` has every exact-head check
-passing in [CI 34698783795](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34698783795).
-Verify this new iOS milestone's own pushed-head checks. #32 remains a mergeable
-draft; #34 remains a conflicting draft with all checks passing at
+Predecessor iOS milestone `e207b4b846cf3b002f27758a063155d2e644d0fa` is pushed;
+[CI 34704487346](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34704487346)
+has completed backend/database/web/lint/instrumented checks passing, with native
+build/test jobs still running at this observation. The earlier postal head
+`e44981d5cbe879481176aaf0286f8ee4b753381a` has every check passing in
+[CI 34698783795](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34698783795).
+Verify this Android milestone's own pushed-head CI independently. #32 remains a
+draft; #34 remains a conflicting draft with passing checks at
 `e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration: 43 Home / 21 paid /
 52 combined, 12 identical shared versions, zero timestamp collisions. Combined
-replay/adoption remains open. No merge, hosted release, physical-device update or
+replay/adoption remains open. No merge, hosted release, physical-device change or
 paid activation. Paid services remain one final launch bundle; owner work/data/
 devices and private evidence are preserved.
 

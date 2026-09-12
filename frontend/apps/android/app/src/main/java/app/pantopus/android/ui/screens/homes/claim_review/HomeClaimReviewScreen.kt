@@ -27,17 +27,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.homes.HomeRelationshipAction
+import app.pantopus.android.data.homes.HomeResidencyDecision
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
+import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewDialog
+import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Spacing
@@ -60,12 +66,6 @@ private data class RelationshipConfirm(
     val isOwnerClaim: Boolean,
 )
 
-private data class ResidencyConfirm(
-    val claimId: String,
-    val displayName: String,
-    val approve: Boolean,
-)
-
 /**
  * H6 — Per-home **owner** claim review (RN
  * `src/app/homes/[id]/owners/review-claim.tsx`). Reached from the Owners
@@ -78,23 +78,31 @@ private data class ResidencyConfirm(
  * Layout follows A08 "Review claims" (tabbed card list) with the A13.3
  * "Review Claim" verdict palette on each card's action row.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeClaimReviewScreen(
     onBack: () -> Unit,
     viewModel: HomeClaimReviewViewModel = hiltViewModel(),
     relationshipModel: HomeRelationshipViewModel = hiltViewModel(),
+    residencyModel: HomeResidencyReviewViewModel = hiltViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
     HomeClaimEvidencePanel(viewModel)
     HomeRelationshipPanel(relationshipModel, viewModel::refresh)
+    val residency by residencyModel.state.collectAsStateWithLifecycle()
+    if (residency.presented) {
+        HomeResidencyReviewDialog(residencyModel) {
+            residencyModel.dismiss()
+            viewModel.refresh()
+        }
+    }
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
 
     var verdictConfirm by remember { mutableStateOf<VerdictConfirm?>(null) }
     var relationshipConfirm by remember { mutableStateOf<RelationshipConfirm?>(null) }
-    var residencyConfirm by remember { mutableStateOf<ResidencyConfirm?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
@@ -109,12 +117,16 @@ fun HomeClaimReviewScreen(
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
-                .testTag(HOME_CLAIM_REVIEW_TAG),
+                .testTag(HOME_CLAIM_REVIEW_TAG)
+                .semantics { testTagsAsResourceId = true },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeClaimReviewTopBar(onBack = onBack)
             TextButton(onClick = { relationshipModel.open() }, modifier = Modifier.testTag("homeClaimReview.relationshipRecovery")) {
                 Text("Relationship decisions and recovery")
+            }
+            TextButton(onClick = { residencyModel.show() }, modifier = Modifier.testTag("homeClaimReview.residencyRecovery")) {
+                Text("Residency decisions and recovery")
             }
             val loaded = state as? HomeClaimReviewUiState.Loaded
             if (loaded != null) {
@@ -177,8 +189,11 @@ fun HomeClaimReviewScreen(
                                 unavailable = current.data.residencyUnavailable,
                                 onReload = viewModel::refresh,
                                 actionLoading = actionLoading,
-                                onConfirm = { claimId, name, approve ->
-                                    residencyConfirm = ResidencyConfirm(claimId, name, approve)
+                                onConfirm = { claimId, _, approve ->
+                                    residencyModel.show(
+                                        claimId,
+                                        if (approve) HomeResidencyDecision.Approve else HomeResidencyDecision.Reject,
+                                    )
                                 },
                             )
                         HomeClaimReviewTab.Compare ->
@@ -242,32 +257,6 @@ fun HomeClaimReviewScreen(
             },
             dismissButton = {
                 TextButton(onClick = { relationshipConfirm = null }) { Text("Cancel") }
-            },
-        )
-    }
-
-    residencyConfirm?.let { target ->
-        val title = if (target.approve) "Approve" else "Reject"
-        AlertDialog(
-            onDismissRequest = { residencyConfirm = null },
-            title = { Text(title) },
-            text = {
-                Text(
-                    "Are you sure you want to ${title.lowercase()} " +
-                        "${target.displayName}'s residency claim?",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.reviewResidency(target.claimId, target.approve)
-                        residencyConfirm = null
-                    },
-                    modifier = Modifier.testTag("homeClaimReview_residencyConfirm"),
-                ) { Text(title) }
-            },
-            dismissButton = {
-                TextButton(onClick = { residencyConfirm = null }) { Text("Cancel") }
             },
         )
     }

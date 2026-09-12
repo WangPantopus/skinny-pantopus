@@ -831,10 +831,13 @@ private object ChildRoutes {
     /** H6 — per-home **owner** claim review (ownership + residency
      *  claims on this home). Distinct from the admin `review-claims`
      *  queue mounted elsewhere in this file. */
-    const val HOME_CLAIM_REVIEW = "homes/{$HOME_CLAIM_REVIEW_HOME_ID_KEY}/owners/review-claims"
+    const val HOME_CLAIM_REVIEW = "homes/{$HOME_CLAIM_REVIEW_HOME_ID_KEY}/owners/review-claims?reviewTab={reviewTab}"
 
     /** Build the concrete path for the per-home claim-review screen. */
-    fun homeClaimReview(homeId: String): String = "homes/$homeId/owners/review-claims"
+    fun homeClaimReview(
+        homeId: String,
+        residency: Boolean = false,
+    ): String = "homes/$homeId/owners/review-claims?reviewTab=${if (residency) "residency" else "ownership"}"
 
     /** Members list per home (T6.3a / P9). */
     const val HOME_MEMBERS = "homes/{$MEMBERS_LIST_HOME_ID_KEY}/members"
@@ -3861,6 +3864,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(
                             navArgument(HOME_CLAIM_REVIEW_HOME_ID_KEY) { type = NavType.StringType },
+                            navArgument("reviewTab") {
+                                type = NavType.StringType
+                                defaultValue = "ownership"
+                            },
                         ),
                 ) {
                     HomeClaimReviewScreen(onBack = { navController.popBackStack() })
@@ -3899,6 +3906,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     MembersListScreen(
                         onBack = { navController.popBackStack() },
                         onAddGuest = { navController.navigate(ChildRoutes.addGuest(homeId)) },
+                        onReviewResidency = { navController.navigate(ChildRoutes.homeClaimReview(homeId, residency = true)) },
                     )
                 }
                 composable(

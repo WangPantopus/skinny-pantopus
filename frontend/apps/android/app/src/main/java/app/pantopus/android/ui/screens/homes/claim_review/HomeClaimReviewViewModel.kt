@@ -237,7 +237,14 @@ class HomeClaimReviewViewModel
         private val _toast = MutableStateFlow<HomeClaimReviewToast?>(null)
         val toast: StateFlow<HomeClaimReviewToast?> = _toast.asStateFlow()
 
-        private val _selectedTab = MutableStateFlow(HomeClaimReviewTab.Ownership)
+        private val _selectedTab =
+            MutableStateFlow(
+                if (savedStateHandle.get<String>("reviewTab") == "residency") {
+                    HomeClaimReviewTab.Residency
+                } else {
+                    HomeClaimReviewTab.Ownership
+                },
+            )
         val selectedTab: StateFlow<HomeClaimReviewTab> = _selectedTab.asStateFlow()
 
         private var loadedOnce = false
@@ -463,54 +470,6 @@ class HomeClaimReviewViewModel
                             HomeClaimReviewToast(
                                 result.error.displayMessage(
                                     "Failed to update claimant relationship",
-                                ),
-                                isError = true,
-                            )
-                }
-                _actionLoading.value = null
-            }
-        }
-
-        /** `POST /api/homes/:id/claim/:claimId/approve|reject`. */
-        fun reviewResidency(
-            claimId: String,
-            approve: Boolean,
-        ) {
-            if (_actionLoading.value != null || !session.isCurrent) return
-            _actionLoading.value = claimId
-            viewModelScope.launch {
-                if (!session.confirmCurrent()) {
-                    _actionLoading.value = null
-                    return@launch
-                }
-                val result =
-                    if (approve) {
-                        repo.approveResidencyClaim(homeId, claimId)
-                    } else {
-                        repo.rejectResidencyClaim(homeId, claimId)
-                    }
-                if (!session.confirmCurrent()) {
-                    _actionLoading.value = null
-                    return@launch
-                }
-                when (result) {
-                    is NetworkResult.Success -> {
-                        _toast.value =
-                            HomeClaimReviewToast(
-                                if (approve) "Claim approved" else "Claim rejected",
-                                isError = false,
-                            )
-                        fetch()
-                    }
-                    is NetworkResult.Failure ->
-                        _toast.value =
-                            HomeClaimReviewToast(
-                                result.error.displayMessage(
-                                    if (approve) {
-                                        "Failed to approve claim"
-                                    } else {
-                                        "Failed to reject claim"
-                                    },
                                 ),
                                 isError = true,
                             )

@@ -1,41 +1,49 @@
 # Pantopus remaining work — September 11, 2026
 
-### iOS prepared residency review accepted; Android installed acceptance next
+### Native prepared residency review accepted; private first use and invitations next
 
-The [iOS prepared-review milestone](home-ios-residency-review-2026-09-12.md)
-passes the complete installed HTTP/SDK/SQL journey on signed build r8: owner and
-member entries, explicit confirmation, failed reads, lost approval and rejection,
-cold original recovery, changed claims, later move-out/resubmission, revoked
-reviewer access, background preflight and retired authorized replies. Reload and
-Close stay fixed while review content scrolls. Final SQL records six POST attempts
-and three receipts, with no duplicate decisions or held work. All saved originals
-are acknowledged through the app; final screens were visually reviewed.
+Both [iOS prepared review](home-ios-residency-review-2026-09-12.md) and
+[Android prepared review](home-android-residency-review-2026-09-12.md) pass complete
+installed HTTP/SDK/SQL journeys: owner and member entries, explicit confirmation,
+failed reads, lost approval/rejection, cold originals, stale claims, later move-out/
+resubmission, revoked authority, background preflight and retired authorized reads.
+Close and Reload stay reachable. Each final journey records six POST attempts and
+three receipts, with matching original replays, no held work and all originals
+acknowledged through the app. R01 is locally verified; **7 of 80 inventory rows
+are closed and 73 remain partial/open**. This is not whole-app completion or a
+percentage of remaining engineering effort.
 
-Full iOS regression passes **4,379 checks / 168 skips / zero failures**. Final
-style, privacy and signing pass. Source, all 27 Mach-O images and the installed
-production dylib are bound to private evidence; products are preserved in an APFS
-clone. All six exact review fixtures are cleaned. Final r6 verifies full migration
-ledger rows/columns and exact function definitions/properties before and after.
-The [iOS postal](home-ios-postal-recovery-2026-09-12.md) and
-[Android postal](home-android-postal-recovery-2026-09-12.md) milestones and their
-original creation regressions remain accepted. The physical iPhone stays 1.0.0 (2).
+Final Android r3: signed Debug/Release builds, 515 suites per variant with
+**4,545 passed / 80 skips / zero failures**, Ktlint, Detekt, full Lint and privacy
+pass. The actual optimized APK verifies saved approval/rejection serialization;
+the final installed APK hash matches the build. Final iOS r8: **4,379 passed /
+168 skips / zero failures**, style/privacy/signing and complete installed journey
+pass. Production and test images are bound to private evidence. Exact fixtures
+are cleaned with full ledger rows/columns and function definitions/properties
+preserved. Products and diagnostic history remain private. Both owned native
+runtimes are stopped with userdata retained. The physical iPhone stays 1.0.0 (2).
 
-**Continue now:** finish the separate Android prepared-review candidate. Both
-owner and member entries are wired, Debug build and five recovery checks pass;
-optimized Release build and installed acceptance are next. The owned Android
-emulator is active with retained userdata. Then finish invitations/private first
-use and legacy compatibility. H08 needs a private-Home verification entry and an
-ordinary selected-address submission before mail when no claim exists; ownership
-is separate. H07/H08/R01/R02 and the wider backlog remain open. Six of 80 inventory
-rows are closed; this is not whole-app completion or remaining engineering effort.
+**Continue now:** private first use and invitations, then legacy compatibility and
+the full backlog. H08 needs a native private-Home verification entry and ordinary
+selected-address submission before mail when no claim exists; ownership remains
+separate. A separate unaccepted browser candidate in
+`frontend/apps/web/src/app/(app)/app/homes/[id]/residency/page.tsx` now directs a
+no-request status to the existing selected-Home joining wizard. Types and lint
+pass; actual first-use acceptance and native counterparts remain. Preserve this
+candidate when staging the Android milestone. H07/H08/R02 and broader R03–R06
+remain open.
 
-Predecessor `e44981d5cbe879481176aaf0286f8ee4b753381a` has every exact-head check
-passing in [CI 34698783795](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34698783795).
-Verify this new iOS milestone's own pushed-head checks. #32 remains a mergeable
-draft; #34 remains a conflicting draft with all checks passing at
+Predecessor iOS milestone `e207b4b846cf3b002f27758a063155d2e644d0fa` is pushed;
+[CI 34704487346](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34704487346)
+has completed backend/database/web/lint/instrumented checks passing, with native
+build/test jobs still running at this observation. The earlier postal head
+`e44981d5cbe879481176aaf0286f8ee4b753381a` has every check passing in
+[CI 34698783795](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34698783795).
+Verify this Android milestone's own pushed-head CI independently. #32 remains a
+draft; #34 remains a conflicting draft with passing checks at
 `e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration: 43 Home / 21 paid /
 52 combined, 12 identical shared versions, zero timestamp collisions. Combined
-replay/adoption remains open. No merge, hosted release, physical-device update or
+replay/adoption remains open. No merge, hosted release, physical-device change or
 paid activation. Paid services remain one final launch bundle; owner work/data/
 devices and private evidence are preserved.
 
@@ -112,7 +120,7 @@ prepared-review flows, private first use and legacy compatibility remain open. T
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
 **Verify** = execute/reconcile the actual workflow, not an assertion that it is
 broken; **Integrate** = source/schema/version gate; **Launch** = release prerequisite.
-There are 80 tracked items below, with H01–H06 locally verified and 74 remaining.
+There are 80 tracked items below, with H01–H06 and R01 locally verified and 73 remaining.
 No task is weighted equally, so the number of unchecked entries is not a percent
 of engineering effort or a reliable release date. Unit-test coverage is not an
 exit criterion. Actual records, UI states, retries and current access are.
@@ -125,13 +133,13 @@ exit criterion. Actual records, UI states, retries and current access are.
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Real onboarding/verification and broader UI remain H07/H08/R01/R02/U01/U02.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Finish prepared review, invitations/private first use and complete onboarding. Address validation grants no membership.
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Both native prepared review flows now pass; finish invitations/private first use and complete onboarding. Address validation grants no membership.
 - [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Finish real onboarding, ordinary-member UI and completed verification flows. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
 
 ## 2. Residency, ownership and leases
 
-- [ ] R01 **Fix/Verify:** Finish installed iOS and Android prepared residency review, protected original-command/receipt storage, approve/deny, lost replies, app restart and current-access recovery. Backend and both browser review entries already have acceptance.
-- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. [Browser postal recovery](home-browser-postcard-recovery-2026-09-12.md) also passes. Both native joining/status, [iOS postal recovery](home-ios-postal-recovery-2026-09-12.md) and [Android postal recovery](home-android-postal-recovery-2026-09-12.md) also pass; finish both native prepared-review clients, then legacy mutation compatibility; older clients still use the reproduced partial-write route.
+- [x] R01 **Implemented and locally verified:** Backend/browser and both installed native prepared residency review pass protected originals/receipts, approval/rejection, lost replies, restart, current-access removal/restoration and retired replies. See [iOS acceptance](home-ios-residency-review-2026-09-12.md) and [Android acceptance](home-android-residency-review-2026-09-12.md). Broader history/authority combinations remain R03; final release-wide checks remain U05/G05.
+- [ ] R02 **Fix (partial):** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. [Browser postal recovery](home-browser-postcard-recovery-2026-09-12.md) also passes. Both native joining/status, [iOS postal recovery](home-ios-postal-recovery-2026-09-12.md) and [Android postal recovery](home-android-postal-recovery-2026-09-12.md) also pass; both native prepared-review clients now pass; finish legacy mutation compatibility; older clients still use the reproduced partial-write route.
 - [ ] R03 **Verify:** Review history, needs-more-information, resubmission after a decision, later removal, expired authority and conflicting reviewers across actual native flows.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.

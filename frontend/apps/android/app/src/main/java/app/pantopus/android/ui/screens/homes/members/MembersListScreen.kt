@@ -22,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
+import app.pantopus.android.ui.theme.PantopusIcon
 
 /** Test tag on the Members list root container. */
 const val MEMBERS_LIST_TAG = "membersList"
@@ -42,6 +44,7 @@ const val MEMBERS_LIST_TAG = "membersList"
 fun MembersListScreen(
     onBack: () -> Unit,
     onAddGuest: () -> Unit = {},
+    onReviewResidency: () -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -102,6 +105,12 @@ fun MembersListScreen(
             selectedTab = selectedTab,
             onSelectTab = viewModel::selectTab,
             fab = viewModel.fab,
+            topBarAction =
+                if (viewModel.canManageMembers) {
+                    TopBarAction(PantopusIcon.Gavel, "Review residency claims", onReviewResidency, label = "Review residency claims")
+                } else {
+                    null
+                },
             onBack = onBack,
         )
     }
