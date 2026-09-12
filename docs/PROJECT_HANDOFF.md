@@ -14,6 +14,23 @@ authorizes iOS simulator use for remaining iPhone app checks. Preserve the
 recorded distinction between simulator coverage and real APNs/device delivery.
 Do not repeat completed physical iPhone Beacon preference acceptance.
 
+### Owner-requested physical iPhone refresh — September 11
+
+[Pantopus 1.0.0 (2) is installed](physical-iphone-refresh-2026-09-11.md) on the
+owner's existing iPhone 16 Pro from committed iOS source `139868c1d`. The Staging
+device build/signature and independent installed-version check pass. The update
+preserves existing integration and Keychain/app-group/APNs identities and clears
+no app data. No hosted release or repeated physical Beacon acceptance occurred.
+Private evidence and both old/new signed products are preserved.
+
+**Continue now:** Android retained creation/unit identity. Production compile,
+Debug assembly, instrumented test compilation and 29 focused recovery/wizard
+checks pass; installed acceptance is running on owned emulator 5556. The owned
+creation fixture on 18084 must be cleaned after acceptance. Android work remains
+uncommitted and unaccepted. Then browser creation, existing-Home join, private
+first use/invitations, native residency and the full backlog. Paid services stay
+one final bundle; no merge or migration adoption is implied by the app refresh.
+
 ### Home unit identity in lists — September 11
 
 The [unit-label repair](home-list-unit-identity-2026-09-11.md) fixes the actual

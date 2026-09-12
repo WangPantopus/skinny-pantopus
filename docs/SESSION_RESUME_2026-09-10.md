@@ -1,5 +1,20 @@
 # Fresh-session continuation checkpoint — September 10, 2026
 
+### Owner-requested physical iPhone refresh — September 11
+
+The [latest committed iOS build is installed](physical-iphone-refresh-2026-09-11.md)
+on the existing iPhone 16 Pro: Pantopus 1.0.0 (2), source `139868c1d`. Staging
+device build, strict signature verification and installed-version check pass;
+existing integration/Keychain/app-group/APNs identities are preserved. No app
+data clear, hosted release or repeated physical Beacon acceptance occurred.
+
+Continue uncommitted Android creation/unit work: compile, Debug assembly,
+instrumented test compilation and 29 focused checks pass; actual installed
+acceptance is in progress on owned emulator 5556. The owned creation fixture on
+18084 needs exact cleanup afterward. Then browser creation, join/private first
+use/invitations, native residency and the full backlog. Paid services remain
+one final launch bundle. See the handoff for current Git/CI verification limits.
+
 ### Home unit identity in lists — September 11
 
 The [unit-label repair](home-list-unit-identity-2026-09-11.md) fixes the actual
