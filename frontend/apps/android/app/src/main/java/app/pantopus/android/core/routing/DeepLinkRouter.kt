@@ -114,6 +114,8 @@ object DeepLinkRouter {
          */
         data class PostcardVerification(val id: String) : Destination
 
+        data class HomeResidency(val id: String) : Destination
+
         /**
          * `pantopus://chat/:roomId[?name=…]` — chat thread. `name` is an
          * optional display name for the header; chat push taps carry the
@@ -529,6 +531,10 @@ object DeepLinkRouter {
                 val id = segments.getOrNull(1)
                 if (id.isNullOrBlank()) return Destination.Unknown(raw)
                 val trailing = segments.drop(2)
+                if (trailing.firstOrNull() == "residency") {
+                    val home = HomeTaskNotificationRoute.canonicalId(id)
+                    return if (trailing.size == 1 && home != null) Destination.HomeResidency(home) else Destination.Unknown(raw)
+                }
                 if (trailing.firstOrNull() == "tasks") {
                     val home = HomeTaskNotificationRoute.canonicalId(id)
                     val task = HomeTaskNotificationRoute.canonicalId(trailing.getOrNull(1))

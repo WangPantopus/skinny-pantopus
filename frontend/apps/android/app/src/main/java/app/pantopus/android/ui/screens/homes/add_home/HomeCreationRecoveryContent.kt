@@ -29,6 +29,7 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
+@Suppress("LongMethod") // Declarative screen layout keeps state and actions together.
 @Composable
 fun HomeCreationRecoveryContent(
     state: AddHomeUiState,
@@ -49,7 +50,14 @@ fun HomeCreationRecoveryContent(
                         RoundedCornerShape(Radii.lg),
                     ).background(PantopusColors.appSurface).padding(Spacing.s4),
             ) {
-                Text(draft.form["nickname"]?.takeIf { it.isNotBlank() } ?: "Your Home request", style = PantopusTextStyle.body)
+                Text(
+                    if (draft.residencyHomeId != null) {
+                        "Your residency request"
+                    } else {
+                        draft.form["nickname"]?.takeIf { it.isNotBlank() } ?: "Your Home request"
+                    },
+                    style = PantopusTextStyle.body,
+                )
                 Text(
                     listOf("street", "unit", "city", "state", "zip").mapNotNull {
                         draft.form[it]?.takeIf(String::isNotBlank)
@@ -94,7 +102,7 @@ fun HomeCreationRecoveryContent(
             title = { Text("Cancel this Home request?") },
             text = {
                 Text(
-                    "We’ll check whether it has finished. If the Home was saved, you’ll see that result. Cancelling won’t delete the Home.",
+                    "We’ll check whether it has finished. Cancellation cannot undo a saved Home or residency request.",
                 )
             },
             confirmButton = {
@@ -111,18 +119,24 @@ fun HomeCreationRecoveryContent(
 private fun creationHeadline(state: AddHomeUiState): String =
     when {
         state.creationStorageUnavailable -> "Recover your saved request"
-        state.creationOutcome?.state == "completed" -> "Home saved"
+        state.creationOutcome?.state == "completed" ->
+            if (state.pendingCreation?.residencyHomeId != null) "Residency request saved" else "Home saved"
         state.creationOutcome?.state == "cancelled" -> "Request cancelled"
-        state.creationOutcome?.state == "rejected" -> "Review your Home details"
-        else -> "Finish adding your Home"
+        state.creationOutcome?.state == "rejected" ->
+            if (state.pendingCreation?.residencyHomeId != null) "Review your residency request" else "Review your Home details"
+        else -> if (state.pendingCreation?.residencyHomeId != null) "Recover your residency request" else "Finish adding your Home"
     }
 
 private fun creationExplanation(state: AddHomeUiState): String =
     when {
         state.creationStorageUnavailable -> "Recovery storage is unavailable. Retry recovery before making another Home request."
+        state.creationOutcome?.state == "completed" && state.pendingCreation?.residencyHomeId != null ->
+            "Your residency request is recorded. Open My Homes to check its current status, household access and verification steps."
         state.creationOutcome?.state == "completed" ->
             "Open My Homes to see your current setup and verification options. " +
                 "Saving a Home does not verify residency or ownership."
+        state.creationOutcome?.state == "cancelled" && state.pendingCreation?.residencyHomeId != null ->
+            "This request cannot submit a residency claim. Check the street, apartment and relationship before starting again."
         state.creationOutcome?.state == "cancelled" ->
             "This request can no longer create a Home. " +
                 "You can edit its details and start again."

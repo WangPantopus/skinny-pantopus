@@ -298,13 +298,13 @@ internal fun AddressClaimedModal(
                     )
                 }
                 Text(
-                    text = "This home already has verified members",
+                    text = "This address has an existing Home",
                     style = PantopusTextStyle.h3,
                     color = PantopusColors.appText,
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    text = "To protect privacy, you’ll need verification to join this home.",
+                    text = "Confirm your address and relationship to request household access.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                     textAlign = TextAlign.Center,
@@ -506,7 +506,13 @@ private fun RoleStep(
 @Composable
 private fun ReviewStep(state: AddHomeUiState) {
     HeadlineBlock("Review and submit")
-    SubcopyBlock("Make sure everything below looks right before submitting.")
+    SubcopyBlock(
+        if (state.isClaimingExistingHome && state.form.role != AddHomeRole.Owner) {
+            "Submitting saves your residency request. It does not request a postcard or grant household access."
+        } else {
+            "Make sure everything below looks right before submitting."
+        },
+    )
     val composedAddress =
         buildString {
             append(state.form.address.street)

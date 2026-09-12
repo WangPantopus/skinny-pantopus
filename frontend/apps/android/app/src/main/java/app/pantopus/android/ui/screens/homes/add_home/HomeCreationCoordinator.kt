@@ -3,7 +3,10 @@
 package app.pantopus.android.ui.screens.homes.add_home
 
 import app.pantopus.android.data.api.models.homes.CreateHomeRequest
+import app.pantopus.android.data.api.models.homes.HomeResidencyAddressSnapshot
+import app.pantopus.android.data.api.models.homes.HomeResidencySubmissionRequest
 import app.pantopus.android.data.api.services.HomeCreationApi
+import app.pantopus.android.data.api.services.HomeResidencySubmissionApi
 import app.pantopus.android.data.homes.HomeCreationCodec
 import app.pantopus.android.data.homes.HomeCreationOutcome
 import app.pantopus.android.data.homes.HomeCreationScope
@@ -42,13 +45,43 @@ class HomeCreationFactory
                 HomeCreationScope(retrofit.baseUrl().toString(), session.actorId.orEmpty()),
                 store,
                 codec,
-                APIHomeCreationTransport(retrofit.create(HomeCreationApi::class.java), codec),
+                APIHomeCreationTransport(
+                    retrofit.create(HomeCreationApi::class.java),
+                    codec,
+                    retrofit.create(HomeResidencySubmissionApi::class.java),
+                ),
                 session::requireCurrent,
             )
         }
     }
 
-class APIHomeCreationTransport(private val api: HomeCreationApi, private val codec: HomeCreationCodec) : HomeCreationTransport {
+class APIHomeCreationTransport(
+    private val api: HomeCreationApi,
+    private val codec: HomeCreationCodec,
+    private val residencyApi: HomeResidencySubmissionApi? = null,
+) : HomeCreationTransport {
+    private suspend fun send(
+        draft: PendingHomeCreation,
+        action: HomeCreationAction,
+    ) = if (draft.residencyHomeId != null) {
+        val joining = checkNotNull(residencyApi)
+        when (action) {
+            HomeCreationAction.Submit ->
+                joining.submit(
+                    draft.residencyHomeId,
+                    draft.requestJson.toRequestBody("application/json".toMediaType()),
+                )
+            HomeCreationAction.Check -> joining.status(draft.residencyHomeId, draft.requestId)
+            HomeCreationAction.Cancel -> joining.cancel(draft.residencyHomeId, draft.requestId)
+        }
+    } else {
+        when (action) {
+            HomeCreationAction.Submit -> api.submit(draft.requestJson.toRequestBody("application/json".toMediaType()))
+            HomeCreationAction.Check -> api.status(draft.requestId)
+            HomeCreationAction.Cancel -> api.cancel(draft.requestId)
+        }
+    }
+
     // Explicit HTTP codes bind retained outcomes to the server wire contract.
     @Suppress("MagicNumber")
     override suspend fun resolve(
@@ -56,12 +89,7 @@ class APIHomeCreationTransport(private val api: HomeCreationApi, private val cod
         action: HomeCreationAction,
     ): HomeCreationOutcome {
         try {
-            val response =
-                when (action) {
-                    HomeCreationAction.Submit -> api.submit(draft.requestJson.toRequestBody("application/json".toMediaType()))
-                    HomeCreationAction.Check -> api.status(draft.requestId)
-                    HomeCreationAction.Cancel -> api.cancel(draft.requestId)
-                }
+            val response = send(draft, action)
             val raw = (response.body() ?: response.errorBody())?.use { it.string() }
             val result = codec.outcome(checkNotNull(raw))
             val accepted =
@@ -72,7 +100,7 @@ class APIHomeCreationTransport(private val api: HomeCreationApi, private val cod
                     "rejected" -> response.code() in setOf(400, 403, 404, 409, 422)
                     else -> false
                 }
-            check(accepted && result.matches(draft, codec.request(draft)))
+            check(accepted && codec.matches(result, draft))
             return result
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -114,7 +142,7 @@ class HomeCreationCoordinator(
         check(pending == null || saved == null || checkNotNull(pending).sameIntent(saved)) { CHANGED }
         val known = knownOutcome
         if (known != null) {
-            check(saved != null && known.matches(saved, codec.request(saved))) { CHANGED }
+            check(saved != null && codec.matches(known, saved)) { CHANGED }
             check(!known.isTerminal || saved.outcome?.isTerminal != true || known.sameDecision(saved.outcome)) { CHANGED }
         }
         pending = saved
@@ -141,6 +169,27 @@ class HomeCreationCoordinator(
         expectedRequestId = id
     }
 
+    suspend fun prepareResidency(
+        homeId: String,
+        address: HomeResidencyAddressSnapshot,
+        form: Map<String, String>,
+    ) {
+        val openingRevision = revision
+        requireCurrent()
+        check(!isBusy && pending == null && knownOutcome == null && readSaved() == null) { CHANGED }
+        check(openingRevision == revision) { CHANGED }
+        val id = newRequestId()
+        val request = HomeResidencySubmissionRequest(id, checkNotNull(form["role"]), address)
+        val original = PendingHomeCreation(scope, id, codec.encode(request), form.toMap(), residencyHomeId = homeId.lowercase())
+        check(codec.valid(original, scope)) { "Your residency details could not be retained. Review them and try again." }
+        requireCurrent()
+        replace(null, original)
+        requireCurrent()
+        check(openingRevision == revision) { CHANGED }
+        pending = original
+        expectedRequestId = id
+    }
+
     suspend fun resolve(action: HomeCreationAction): HomeCreationOutcome {
         requireCurrent()
         check(!isBusy && activeScopes.add(scope)) { "Your original Home request is still being checked. Try again shortly." }
@@ -157,7 +206,7 @@ class HomeCreationCoordinator(
             }
             val result = transport.resolve(draft, action)
             requireCurrent()
-            check(openingRevision == revision && result.matches(draft, codec.request(draft))) { CHANGED }
+            check(openingRevision == revision && codec.matches(result, draft)) { CHANGED }
             persist(result, draft)
             return checkNotNull(outcome)
         } finally {

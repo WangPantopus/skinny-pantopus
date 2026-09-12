@@ -3,9 +3,11 @@ package app.pantopus.android.ui.screens.homes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.homes.PersonalHomeResidencyRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
+import app.pantopus.android.data.homes.HomeResidencyProgressRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -31,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val REQUEST_REFERENCE_LENGTH = 8
+
 sealed interface MyHomesListEvent {
     data class ConfirmDelete(val homeId: String, val name: String) : MyHomesListEvent
 }
@@ -54,12 +58,19 @@ class MyHomesListViewModel
         private val repo: HomesRepository,
         private val adminRepo: HomeAdminRepository,
         sessions: HomeClaimSessionScopeFactory,
+        private val residencyRepo: HomeResidencyProgressRepository,
     ) : ViewModel() {
         private val session = sessions.create(viewModelScope)
         private var generation = 0L
         private var visible = false
         private var refreshJob: Job? = null
         private var entries: List<MyHome> = emptyList()
+        private var requests: List<PersonalHomeResidencyRequest> = emptyList()
+        private var nextCursor: String? = null
+        private var homesError: String? = null
+        private var historyError: String? = null
+        private var loadingHistory = false
+        private var historyJob: Job? = null
         private var deleting = false
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state = _state.asStateFlow()
@@ -106,6 +117,13 @@ class MyHomesListViewModel
             refreshJob?.cancel()
             refreshJob = null
             entries = emptyList()
+            historyJob?.cancel()
+            historyJob = null
+            requests = emptyList()
+            nextCursor = null
+            homesError = null
+            historyError = null
+            loadingHistory = false
             _state.value = ListOfRowsUiState.Loading
             _banner.value = null
             _pendingEvent.value = null
@@ -131,16 +149,16 @@ class MyHomesListViewModel
                             is NetworkResult.Success -> {
                                 val homes = result.data.homes
                                 if (homes.any { !it.hasValidListContext } || homes.map { it.id }.distinct().size != homes.size) {
-                                    _state.value = ListOfRowsUiState.Error("Your Home list could not be verified. Retry.")
+                                    homesError = "Your Home list could not be verified. Retry."
                                 } else {
                                     entries = homes
-                                    applySuccess(homes, revision)
                                 }
                             }
                             is NetworkResult.Failure -> {
-                                _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Could not load your Homes. Retry."))
+                                homesError = result.error.displayMessage("Could not load your Homes. Retry.")
                             }
                         }
+                        loadHistory(revision, null)
                     } catch (error: CancellationException) {
                         throw error
                     } catch (_: IllegalStateException) {
@@ -187,39 +205,133 @@ class MyHomesListViewModel
             }
         }
 
-        private fun applySuccess(
-            homes: List<MyHome>,
+        fun loadMoreRequests() {
+            val revision = generation
+            if (!current(revision) || loadingHistory) return
+            historyJob = viewModelScope.launch { loadHistory(revision, nextCursor) }
+        }
+
+        private suspend fun loadHistory(
             revision: Long,
+            cursor: String?,
         ) {
-            if (homes.isEmpty()) {
-                _state.value =
+            if (!current(revision) || loadingHistory) return
+            loadingHistory = true
+            historyError = null
+            render(revision)
+            try {
+                session.requireCurrent()
+                val result = residencyRepo.requests(cursor)
+                session.requireCurrent()
+                if (!current(revision)) return
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val page = result.data
+                        check(page.follows(cursor) && requests.none { old -> page.requests.any { it.id == old.id } })
+                        requests = requests + page.requests
+                        nextCursor = page.nextCursor
+                    }
+                    is NetworkResult.Failure -> historyError = "Your residency requests could not be checked. Retry."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IllegalStateException) {
+                if (!current(revision)) return
+                historyError = "Your residency requests could not be checked. Retry."
+            }
+            if (!current(revision)) return
+            loadingHistory = false
+            render(revision)
+        }
+
+        private fun render(revision: Long) {
+            if (!current(revision)) return
+            val noUsableRows = entries.isEmpty() && requests.isEmpty()
+            if (homesError != null && historyError != null && noUsableRows) {
+                _state.value = ListOfRowsUiState.Error("Your Homes and residency requests could not be checked. Retry.")
+                return
+            }
+            val sections =
+                buildList {
+                    if (entries.isNotEmpty()) add(RowSection(id = "my-homes", rows = entries.map { rowFor(it, revision) }))
+                    homesError?.let { message ->
+                        add(
+                            RowSection(
+                                id = "homes-error",
+                                rows =
+                                    listOf(
+                                        homeResidencyRecoveryRow(
+                                            "homes-retry",
+                                            message,
+                                            "Retry saved Homes",
+                                        ) { if (current(revision)) refresh() },
+                                    ),
+                            ),
+                        )
+                    }
+                    historySection(revision)?.let { add(it) }
+                }
+            _state.value =
+                if (sections.isEmpty()) {
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Home, headline = "No saved Homes yet",
                         subcopy = "Add a Home to organize your private tasks, or continue a household invitation.",
-                        ctaTitle = "Add a home",
-                        onCta = onAddHome,
+                        ctaTitle = "Add a home", onCta = { if (current(revision)) onAddHome() },
                     )
-                return
-            }
-            _state.value =
-                ListOfRowsUiState.Loaded(
-                    sections =
-                        listOf(
-                            RowSection(
-                                id = "my-homes",
-                                rows =
-                                    homes.map {
-                                        rowFor(it, revision)
-                                    },
-                            ),
-                        ),
-                    hasMore = false,
-                )
+                } else {
+                    ListOfRowsUiState.Loaded(sections = sections, hasMore = false)
+                }
             _banner.value =
-                BannerConfig(
-                    icon = PantopusIcon.Home, title = if (homes.size == 1) "1 saved Home" else "${homes.size} saved Homes",
-                    subtitle = "Open your household, private tasks or verification progress", tint = BannerCtaTint.Home,
+                if (entries.isEmpty() && requests.isEmpty()) {
+                    null
+                } else {
+                    BannerConfig(
+                        icon = PantopusIcon.Home, title = if (entries.size == 1) "1 saved Home" else "${entries.size} saved Homes",
+                        subtitle = "Open your household, private tasks or verification progress", tint = BannerCtaTint.Home,
+                    )
+                }
+        }
+
+        private fun historySection(revision: Long): RowSection? {
+            val represented = entries.filter { pendingVerificationFor(it) == PendingVerification.Residency }.map { it.id }.toSet()
+            val history =
+                requests.filter { it.homeId !in represented }.map { request ->
+                    personalResidencyRow(request) {
+                        if (current(revision)) request.homeId?.let { onVerifyResidency?.invoke(it) }
+                    }
+                }.toMutableList()
+            when {
+                loadingHistory ->
+                    history.add(
+                        RowModel("residency-loading", "Checking residency requests…", template = RowTemplate.AvatarKebab),
+                    )
+                historyError != null ->
+                    history.add(
+                        homeResidencyRecoveryRow(
+                            "residency-retry",
+                            historyError.orEmpty(),
+                            "Retry residency requests",
+                        ) { if (current(revision)) loadMoreRequests() },
+                    )
+                nextCursor != null ->
+                    history.add(
+                        homeResidencyRecoveryRow(
+                            "residency-more",
+                            "More personal requests are available.",
+                            "Load more requests",
+                        ) { if (current(revision)) loadMoreRequests() },
+                    )
+            }
+            return if (history.isEmpty()) {
+                null
+            } else {
+                RowSection(
+                    id = "residency-history",
+                    header = "Your residency requests",
+                    footer = "Saved requests do not grant current household access.",
+                    rows = history,
                 )
+            }
         }
 
         private fun open(
@@ -241,11 +353,28 @@ class MyHomesListViewModel
             }
         }
 
+        private fun personalRequest(home: MyHome): PersonalHomeResidencyRequest? =
+            if (pendingVerificationFor(home) == PendingVerification.Residency) requests.firstOrNull { it.homeId == home.id } else null
+
+        private fun homeRowTitle(
+            home: MyHome,
+            personal: PersonalHomeResidencyRequest?,
+        ): String {
+            val fallback =
+                if (pendingVerificationFor(home) == PendingVerification.Residency) {
+                    "Residency request · ${home.id.takeLast(REQUEST_REFERENCE_LENGTH)}"
+                } else {
+                    "Home"
+                }
+            return personal?.label ?: home.name?.takeIf(String::isNotBlank) ?: home.address?.takeIf(String::isNotBlank) ?: fallback
+        }
+
         private fun rowFor(
             home: MyHome,
             revision: Long,
         ): RowModel {
-            val title = home.name?.takeIf { it.isNotBlank() } ?: home.address?.takeIf { it.isNotBlank() } ?: "Home"
+            val personal = personalRequest(home)
+            val title = homeRowTitle(home, personal)
             val locality = listOfNotNull(home.city, home.state).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
             val pending = pendingVerificationFor(home)
             val chips =
@@ -267,7 +396,11 @@ class MyHomesListViewModel
                     }
                     if (pending != null) {
                         add(
-                            RowChip("Verification in progress", PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
+                            RowChip(
+                                personal?.reviewLabel ?: "Verification in progress",
+                                PantopusIcon.Clock,
+                                RowChip.Tint.Status(StatusChipVariant.Warning),
+                            ),
                         )
                     }
                 }
@@ -276,7 +409,7 @@ class MyHomesListViewModel
                 when {
                     home.accessKind == "private_setup" -> "My tasks"
                     pending == PendingVerification.Owner -> "Continue ownership verification"
-                    pending == PendingVerification.Residency -> "Continue residency verification"
+                    pending == PendingVerification.Residency -> "Check residency status"
                     else -> null
                 }
             return RowModel(

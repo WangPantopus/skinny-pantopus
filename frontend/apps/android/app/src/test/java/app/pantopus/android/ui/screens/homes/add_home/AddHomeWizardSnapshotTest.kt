@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.SavedStateHandle
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
-import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
@@ -116,7 +115,6 @@ class AddHomeWizardSnapshotTest {
         every { creations.create(any()) } answers { fixture.coordinator(session::requireCurrent) }
         return AddHomeWizardViewModel(
             repository = mockk<HomesRepository>(relaxed = true),
-            discoveryRepository = mockk<HomeDiscoveryRepository>(relaxed = true),
             savedStateHandle = SavedStateHandle(),
             networkMonitor = networkMonitor,
             geoApi = mockk(relaxed = true),

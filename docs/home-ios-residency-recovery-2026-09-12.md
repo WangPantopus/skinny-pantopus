@@ -109,6 +109,9 @@ There is no new migration. The Home/paid/combined source inventory remains
 43/21/52, with 12 identical shared migrations and no timestamp collision;
 combined replay/adoption is separate work. The pushed predecessor's entire
 [CI run 34683643763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34683643763)
-is green. The new native source has not yet been committed or given its own CI.
+is green. The iOS milestone is committed as `a528c54a1060` and its entire
+[CI run 34687192433](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34687192433)
+also passes. Subsequent uncommitted Android and iOS postal work are not covered
+by that result.
 Both PRs remain drafts; no merge, hosted release or paid activation occurred.
 Owner work, physical devices, database archives and private evidence are preserved.

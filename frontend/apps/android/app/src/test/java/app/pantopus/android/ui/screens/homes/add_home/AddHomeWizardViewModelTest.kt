@@ -13,7 +13,6 @@ import app.pantopus.android.data.api.models.homes.ValidatedHomeAddress
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.services.GeoApi
-import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.network.NetworkMonitor
@@ -44,7 +43,6 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddHomeWizardViewModelTest {
     private val repo: HomesRepository = mockk(relaxed = true)
-    private val discoveryRepo: HomeDiscoveryRepository = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor =
         mockk<NetworkMonitor>(relaxed = true).also {
             every { it.isOnline } returns MutableStateFlow(true)
@@ -89,7 +87,7 @@ class AddHomeWizardViewModelTest {
     }
 
     private fun makeVm(savedStateHandle: SavedStateHandle = SavedStateHandle()) =
-        AddHomeWizardViewModel(repo, discoveryRepo, savedStateHandle, networkMonitor, geo, location, sessions, creations)
+        AddHomeWizardViewModel(repo, savedStateHandle, networkMonitor, geo, location, sessions, creations)
 
     private fun fillAddress(vm: AddHomeWizardViewModel) {
         vm.selectAddressCandidate(AddHomeSampleData.nearbyHomes[0])

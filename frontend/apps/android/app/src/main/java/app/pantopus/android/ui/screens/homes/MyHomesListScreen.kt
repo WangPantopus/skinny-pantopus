@@ -120,7 +120,7 @@ fun MyHomesListScreen(
             title = "My homes",
             state = state,
             onRefresh = { viewModel.refresh() },
-            onEndReached = { /* not paginated */ },
+            onEndReached = { /* Explicit history Load more avoids retry loops. */ },
             topBarAction =
                 onFindHome?.let {
                     TopBarAction(

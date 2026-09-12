@@ -22,7 +22,6 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.GeoApi
-import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.homes.HomeCreationLimits
 import app.pantopus.android.data.homes.HomeCreationOutcome
 import app.pantopus.android.data.homes.HomesRepository
@@ -128,7 +127,9 @@ data class AddHomeUiState(
      */
     val claimedAddressLabel: String
         get() =
-            addressCheck
+            addressCheck?.residencyAddress?.let {
+                listOf(it.line1, it.line2, it.city, it.state, it.postalCode).filter(String::isNotBlank).joinToString(", ")
+            } ?: addressCheck
                 ?.formattedAddress
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
@@ -193,7 +194,6 @@ open class AddHomeWizardViewModel
     @Inject
     constructor(
         private val repository: HomesRepository,
-        private val discoveryRepository: HomeDiscoveryRepository,
         private val savedStateHandle: SavedStateHandle,
         private val networkMonitor: NetworkMonitor,
         private val geoApi: GeoApi,
@@ -812,6 +812,7 @@ open class AddHomeWizardViewModel
                         ),
                 )
                 check(if (response.status == CheckAddressResponse.STATUS_NOT_FOUND) response.homeId == null else validId(response.homeId))
+                check(response.homeId == null || response.residencyAddress?.isValid() == true)
                 check(validation.verdict.status != "CONFLICT" || response.homeId != null)
                 _state.update {
                     it.copy(
@@ -819,11 +820,11 @@ open class AddHomeWizardViewModel
                         validatedAddressId = addressId,
                         geocodedAddress =
                             AddHomeGeocodedAddress(
-                                street = address.line1,
-                                unit = address.line2.orEmpty(),
-                                city = address.city,
-                                state = address.state,
-                                zipCode = address.zip,
+                                street = response.residencyAddress?.line1 ?: address.line1,
+                                unit = response.residencyAddress?.line2 ?: address.line2.orEmpty(),
+                                city = response.residencyAddress?.city ?: address.city,
+                                state = response.residencyAddress?.state ?: address.state,
+                                zipCode = response.residencyAddress?.postalCode ?: address.zip,
                                 latitude = address.lat,
                                 longitude = address.lng,
                                 isMultiUnit = response.isMultiUnit,
@@ -960,8 +961,13 @@ open class AddHomeWizardViewModel
          */
         fun confirmClaimedAddress() {
             if (!session.isCurrent || _state.value.validatedAddressId == null || _state.value.existingHomeId == null) return
+            val address = _state.value.addressCheck?.residencyAddress?.takeIf { it.isValid() } ?: return
             _state.update {
                 it.copy(
+                    form =
+                        it.form.copy(
+                            address = AddHomeAddressFields(address.line1, address.line2, address.city, address.state, address.postalCode),
+                        ),
                     showsClaimedModal = false,
                     showsConfirmAddressSheet = false,
                     isClaimingExistingHome = true,
@@ -992,24 +998,26 @@ open class AddHomeWizardViewModel
                 pendingEvent.value = AddHomeOutboundEvent.OpenClaimOwnership(homeId)
                 return
             }
-            _state.update { it.copy(isSubmitting = true, errorMessage = null) }
-            val result = discoveryRepository.submitResidencyClaim(homeId, role.claimedRole)
-            if (!session.confirmCurrent()) {
-                retireSession()
+            val address = _state.value.addressCheck?.residencyAddress?.takeIf { it.isValid() }
+            if (address == null) {
+                _state.update { it.copy(errorMessage = "Confirm the complete street and apartment again before submitting.") }
                 return
             }
-            when (result) {
-                is NetworkResult.Success -> {
-                    _state.update { it.copy(isSubmitting = false) }
-                    pendingEvent.value = AddHomeOutboundEvent.OpenWaitingRoom(homeId)
+            _state.update { it.copy(showsCreationRecovery = true, isSubmitting = true, errorMessage = null) }
+            try {
+                creation.prepareResidency(homeId, address, _state.value.form.creationSnapshot())
+                _state.update { it.copy(pendingCreation = creation.pending, accessItems = emptyList()) }
+                resolveCreation(HomeCreationAction.Submit)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (session.isCurrent) {
+                    _state.update { it.copy(creationStorageUnavailable = creation.storageFailed, errorMessage = error.message) }
+                } else {
+                    retireSession()
                 }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            isSubmitting = false,
-                            errorMessage = result.error.message ?: "Failed to submit claim",
-                        )
-                    }
+            } finally {
+                _state.update { it.copy(isSubmitting = false) }
             }
         }
 
@@ -1167,7 +1175,7 @@ open class AddHomeWizardViewModel
                         creationOutcome = result,
                         showsCreationRecovery = true,
                         creationStorageUnavailable = false,
-                        createdHomeId = result.home?.id,
+                        createdHomeId = result.residencyHomeId ?: result.home?.id,
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -1203,7 +1211,7 @@ open class AddHomeWizardViewModel
                 val original = checkNotNull(creation.pending)
                 val form = if (outcome.state == "completed") null else restoreHomeCreationForm(original.form)
                 val access =
-                    if (form == null) {
+                    if (form == null || original.residencyHomeId != null) {
                         emptyList()
                     } else {
                         creation.request(original).accessSecrets.orEmpty().mapIndexed { index, item ->

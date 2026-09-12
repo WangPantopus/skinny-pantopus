@@ -377,6 +377,7 @@ data class CheckAddressResponse(
     @Json(name = "hasVerifiedMembers") val hasVerifiedMembersRaw: Boolean? = null,
     @Json(name = "verdict_status") val verdictStatus: String? = null,
     @Json(name = "normalized_address") val normalizedAddress: NormalizedAddressDto? = null,
+    @Json(name = "residency_address") val residencyAddress: HomeResidencyAddressSnapshot? = null,
 ) {
     /**
      * `status === 'HOME_FOUND_CLAIMED'` — an existing home at this

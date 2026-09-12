@@ -3,6 +3,7 @@
 package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homes.CreateHomeRequest
+import app.pantopus.android.data.api.models.homes.HomeResidencySubmissionRequest
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -24,9 +25,11 @@ data class PendingHomeCreation(
     val requestJson: String,
     val form: Map<String, String>,
     val outcome: HomeCreationOutcome? = null,
+    val residencyHomeId: String? = null,
 ) {
     fun sameIntent(other: PendingHomeCreation): Boolean =
-        scope == other.scope && requestId == other.requestId && requestJson == other.requestJson && form == other.form
+        scope == other.scope && requestId == other.requestId && requestJson == other.requestJson && form == other.form &&
+            residencyHomeId == other.residencyHomeId
 }
 
 /** A retained command result is not a current Home or an access grant. */
@@ -44,6 +47,13 @@ data class HomeCreationOutcome(
     val code: String? = null,
     val error: String? = null,
     val message: String? = null,
+    @Json(name = "home_id") val residencyHomeId: String? = null,
+    @Json(name = "claim_id") val claimId: String? = null,
+    @Json(name = "occupancy_id") val occupancyId: String? = null,
+    @Json(name = "claimed_role") val claimedRole: String? = null,
+    val routing: String? = null,
+    @Json(name = "next_step") val nextStep: String? = null,
+    @Json(name = "postcard_requested") val postcardRequested: Boolean? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class Command(
@@ -58,20 +68,45 @@ data class HomeCreationOutcome(
 
     val isTerminal: Boolean get() = state in setOf("completed", "cancelled", "rejected")
 
+    private fun matchesCommand(draft: PendingHomeCreation): Boolean =
+        state in setOf("pending", "completed", "cancelled", "rejected") &&
+            command.actorId == draft.scope.actorId && command.requestId == draft.requestId &&
+            listOf(command.createdAt, command.updatedAt).all { runCatching { Instant.parse(it) }.isSuccess }
+
+    private fun validRejection(): Boolean = state != "rejected" || code?.matches(Regex("^[A-Z][A-Z0-9_]{1,79}$")) == true
+
+    private fun hasNoCreationRecords(): Boolean = home == null && ownershipClaimId == null && accessSecretIds == null
+
+    private fun hasNoResidencyRecords(): Boolean = listOf(residencyHomeId, claimId, occupancyId).all { it == null }
+
     fun matches(
         draft: PendingHomeCreation,
         request: CreateHomeRequest,
     ): Boolean {
-        if (state !in setOf("pending", "completed", "cancelled", "rejected")) return false
-        if (command.actorId != draft.scope.actorId || command.requestId != draft.requestId) return false
-        if (!listOf(command.createdAt, command.updatedAt).all { runCatching { Instant.parse(it) }.isSuccess }) return false
+        if (draft.residencyHomeId != null || !hasNoResidencyRecords() || !matchesCommand(draft)) return false
+        return if (state == "completed") matchesCompleted(request) else hasNoCreationRecords() && validRejection()
+    }
+
+    fun matches(
+        draft: PendingHomeCreation,
+        request: HomeResidencySubmissionRequest,
+    ): Boolean {
+        val homeMatches = residencyHomeId == draft.residencyHomeId && homeTaskUUID(residencyHomeId)
+        if (!matchesCommand(draft) || !homeMatches || !hasNoCreationRecords()) return false
         return if (state == "completed") {
-            matchesCompleted(request)
+            matchesResidencyCompletion(request)
         } else {
-            val noCommittedRecords = home == null && ownershipClaimId == null && accessSecretIds == null
-            val validRejection = state != "rejected" || code?.matches(Regex("^[A-Z][A-Z0-9_]{1,79}$")) == true
-            noCommittedRecords && validRejection
+            listOf(claimId, occupancyId, claimedRole, routing).all { it == null } && validRejection()
         }
+    }
+
+    private fun matchesResidencyCompletion(request: HomeResidencySubmissionRequest): Boolean {
+        val recordsMatch = homeTaskUUID(claimId) && homeTaskUUID(occupancyId) && claimedRole == request.claimedRole
+        val routingMatches =
+            routing in setOf("household_review", "self_bootstrap", "external_postcard", "stale_authority_postcard") &&
+                nextStep == (if (routing == "household_review") "household_review" else "address_verification")
+        val noAccessGrant = requiresVerification == true && currentAccess == "not_checked" && postcardRequested == false
+        return recordsMatch && routingMatches && noAccessGrant
     }
 
     private fun matchesCompleted(request: CreateHomeRequest): Boolean {
@@ -87,16 +122,32 @@ data class HomeCreationOutcome(
     fun sameDecision(other: HomeCreationOutcome): Boolean =
         state == other.state && command.actorId == other.command.actorId && command.requestId == other.command.requestId &&
             home == other.home && ownershipClaimId == other.ownershipClaimId && accessSecretIds == other.accessSecretIds &&
-            role == other.role && (state != "rejected" || code == other.code)
+            role == other.role && (state != "rejected" || code == other.code) &&
+            residencyHomeId == other.residencyHomeId && claimId == other.claimId && occupancyId == other.occupancyId &&
+            claimedRole == other.claimedRole && routing == other.routing && nextStep == other.nextStep &&
+            postcardRequested == other.postcardRequested
 }
 
 class HomeCreationCodec(moshi: Moshi) {
     private val requests = moshi.adapter(CreateHomeRequest::class.java)
     private val outcomes = moshi.adapter(HomeCreationOutcome::class.java)
+    private val submissions = moshi.adapter(HomeResidencySubmissionRequest::class.java).failOnUnknown()
 
     fun encode(request: CreateHomeRequest): String = requests.toJson(request)
 
     fun request(draft: PendingHomeCreation): CreateHomeRequest = checkNotNull(requests.fromJson(draft.requestJson))
+
+    fun encode(request: HomeResidencySubmissionRequest): String = submissions.toJson(request)
+
+    fun matches(
+        outcome: HomeCreationOutcome,
+        draft: PendingHomeCreation,
+    ): Boolean =
+        if (draft.residencyHomeId == null) {
+            outcome.matches(draft, request(draft))
+        } else {
+            outcome.matches(draft, checkNotNull(submissions.fromJson(draft.requestJson)))
+        }
 
     fun outcome(json: String): HomeCreationOutcome = checkNotNull(outcomes.fromJson(json))
 
@@ -106,6 +157,7 @@ class HomeCreationCodec(moshi: Moshi) {
     ): Boolean =
         runCatching {
             if (draft.scope != scope || !scope.isValid() || !homeTaskUUID(draft.requestId)) return false
+            if (draft.residencyHomeId != null) return validResidency(draft)
             val request = request(draft)
             if (request.requestId != draft.requestId || !homeTaskUUID(request.addressId) || request.address.isBlank()) return false
             if (request.role !in setOf("owner", "renter", "household") || draft.form["role"] != request.role) return false
@@ -114,6 +166,24 @@ class HomeCreationCodec(moshi: Moshi) {
             if (access.size > HomeCreationLimits.MAX_ACCESS_RECORDS || !access.all(::validAccess)) return false
             draft.outcome == null || draft.outcome.matches(draft, request)
         }.getOrDefault(false)
+
+    private fun validResidency(draft: PendingHomeCreation): Boolean {
+        val request = checkNotNull(submissions.fromJson(draft.requestJson))
+        val address = request.address
+        val identityMatches = homeTaskUUID(draft.residencyHomeId) && request.requestId == draft.requestId && address.isValid()
+        val roleMatches = request.claimedRole in setOf("renter", "household") && draft.form["role"] == request.claimedRole
+        val expectedAddress =
+            mapOf(
+                "street" to address.line1,
+                "unit" to address.line2,
+                "city" to address.city,
+                "state" to address.state,
+                "zip" to address.postalCode,
+            )
+        val formMatches = validFormMetadata(draft.form) && expectedAddress.all { (key, value) -> draft.form[key] == value }
+        val outcomeMatches = draft.outcome == null || draft.outcome.matches(draft, request)
+        return identityMatches && roleMatches && formMatches && outcomeMatches
+    }
 
     private fun validAccess(access: app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest): Boolean {
         val typeValid = access.accessType in setOf("wifi", "door_code", "gate_code", "lockbox", "garage", "alarm", "other")
@@ -126,6 +196,13 @@ class HomeCreationCodec(moshi: Moshi) {
         form: Map<String, String>,
         request: CreateHomeRequest,
     ): Boolean {
+        if (!validFormMetadata(form)) return false
+        return form["street"] == request.address && form["unit"].orEmpty() == request.unitNumber.orEmpty() &&
+            form["city"] == request.city && form["state"] == request.state && form["zip"] == request.zipCode &&
+            form["homeType"] == request.homeType
+    }
+
+    private fun validFormMetadata(form: Map<String, String>): Boolean {
         val keys =
             setOf(
                 "street", "unit", "city", "state", "zip", "role", "nickname", "homeType", "justMoved",
@@ -134,9 +211,7 @@ class HomeCreationCodec(moshi: Moshi) {
         if (form.keys != keys || form["justMoved"] !in setOf("true", "false")) return false
         val homeTypes = setOf("house", "apartment", "condo", "townhouse", "studio", "multi_unit", "mobile_home", "rv", "trailer", "other")
         if (form["homeType"] !in homeTypes) return false
-        return form["street"] == request.address && form["unit"].orEmpty() == request.unitNumber.orEmpty() &&
-            form["city"] == request.city && form["state"] == request.state && form["zip"] == request.zipCode &&
-            form["homeType"] == request.homeType
+        return true
     }
 }
 

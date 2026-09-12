@@ -198,6 +198,9 @@ import app.pantopus.android.ui.screens.homes.polls.StartPollFormScreen
 import app.pantopus.android.ui.screens.homes.property_correction.PROPERTY_CORRECTION_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.property_correction.PropertyCorrectionScreen
 import app.pantopus.android.ui.screens.homes.property_details.PropertyDetailsScreen
+import app.pantopus.android.ui.screens.homes.residency.HOME_RESIDENCY_HOME_ID_KEY
+import app.pantopus.android.ui.screens.homes.residency.HomeResidencyNavigation
+import app.pantopus.android.ui.screens.homes.residency.HomeResidencyProgressScreen
 import app.pantopus.android.ui.screens.homes.settings.HOME_SETTINGS_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.settings.HomeSettingsRoute
 import app.pantopus.android.ui.screens.homes.settings.HomeSettingsScreen
@@ -455,6 +458,7 @@ private object ChildRoutes {
 
     /** Residency-verification variant of the evidence wizard. */
     const val VERIFY_RESIDENCY = "homes/{$CLAIM_OWNERSHIP_HOME_ID_KEY}/verify-residency"
+    const val HOME_RESIDENCY = "homes/{$HOME_RESIDENCY_HOME_ID_KEY}/residency"
 
     /** Per-home issue tracker (`HomeIssue`) — distinct from maintenance. */
     const val HOME_ISSUES = "homes/{$HOME_ISSUES_HOME_ID_KEY}/issues"
@@ -1399,6 +1403,8 @@ private object ChildRoutes {
      */
     fun verifyResidency(homeId: String): String = "homes/$homeId/verify-residency"
 
+    fun homeResidency(homeId: String): String = "homes/$homeId/residency"
+
     /** Build the per-home issue-tracker path. */
     fun homeIssues(homeId: String): String = "homes/$homeId/issues"
 
@@ -2081,6 +2087,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.verifyLandlord(pending.id))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.HomeResidency -> {
+                navController.navigate(ChildRoutes.homeResidency(pending.id))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.PostcardVerification -> {
                 navController.navigate(ChildRoutes.postcardVerification(pending.id))
                 DeepLinkRouter.consume()
@@ -2549,7 +2559,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.claimOwnership(homeId))
                         },
                         onVerifyResidency = { homeId ->
-                            navController.navigate(ChildRoutes.verifyResidency(homeId))
+                            navController.navigate(ChildRoutes.homeResidency(homeId))
                         },
                     )
                 }
@@ -5940,6 +5950,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenFindHome = {
                             navController.popBackStack()
                             navController.navigate(ChildRoutes.FIND_HOME)
+                        },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.HOME_RESIDENCY,
+                    arguments = listOf(navArgument(HOME_RESIDENCY_HOME_ID_KEY) { type = NavType.StringType }),
+                ) {
+                    HomeResidencyProgressScreen(
+                        onBack = { navController.popBackStack() },
+                        onNavigate = { homeId, destination ->
+                            navController.navigate(
+                                when (destination) {
+                                    HomeResidencyNavigation.Home -> ChildRoutes.homeDashboard(homeId)
+                                    HomeResidencyNavigation.Mail -> ChildRoutes.postcardVerification(homeId)
+                                    HomeResidencyNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
+                                    HomeResidencyNavigation.AddHome -> ChildRoutes.ADD_HOME
+                                },
+                            )
                         },
                     )
                 }
