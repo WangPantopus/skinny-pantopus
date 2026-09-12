@@ -356,6 +356,10 @@ object DeepLinkRouter {
         _prefersLoginPresentation.value = false
     }
 
+    fun requestLoginPresentation() {
+        _prefersLoginPresentation.value = true
+    }
+
     fun acknowledgeLoginPresentation() {
         _prefersLoginPresentation.value = false
     }

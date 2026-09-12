@@ -1,227 +1,25 @@
-# Pantopus remaining work — September 11, 2026
+# Pantopus remaining work
 
-### iOS invitation decisions accepted; Android recovery next
+Updated September 12, 2026 after [Android invitation acceptance](home-android-invitation-decisions-2026-09-12.md).
+Start with [the current handoff](PROJECT_HANDOFF.md) and
+[resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
+acceptance inventory; older dated reports retain their historical limits.
 
-The [iOS invitation milestone](home-ios-invitation-decisions-2026-09-12.md) passes
-fresh installed UI/HTTP/SDK/SQL acceptance in **308.125 seconds**. Protected
-original accept/decline decisions survive lost replies, failed reads, restart,
-wrong accounts, changed terms and new links with late replies. Cancellation and
-acknowledgement preserve the original identity; current Home access is checked
-separately before explicit entry. Five commands end with every original
-acknowledged through the native UI.
+**7 of 80 rows closed (H01–H06 and R01); 73 partial/open.** Many open rows contain
+accepted subjourneys. The rows are not equally weighted and do not measure app
+implementation, effort remaining or a release date. Actual records, UI states,
+failures, recovery and current access establish acceptance; unit coverage alone
+does not. Further auditing may discover additional defects.
 
-Deferred invitation links now use device-only Keychain storage. All five account
-switches survive termination while the logout reply is held and return through
-normal sign-in after a cold launch. Every preference inspection finds zero owned
-invitation capabilities and no legacy handoff keys. Signed r7 source/installed
-image bindings and reviewed screens pass. Full iOS regression: **4,383 passed /
-168 skipped / zero failures**; style and privacy gates pass. All four exact
-fixtures are cleaned with complete role rows, full ledger and exact function
-provenance preserved. The owned simulator is stopped with userdata retained.
-
-**Continue now:** Android protected invitation decisions and secure sign-in
-return, then invitation management/resend/withdrawal/delivery and complete member
-onboarding, legacy compatibility and the full backlog. H07/H08 stay partial:
-**7 of 80 acceptance rows closed; 73 partial/open**. This is not a measure of app
-completion or remaining effort. Live delivery and full dashboard services remain
-separate acceptance limits.
-
-Browser predecessor `b39fb17304deb183393a93f916e0ac2d58343a1a` has every job passing
-in [CI 34714175285](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34714175285).
-Native acceptance is local; verify the new branch head's CI independently after pushing.
-#32 remains a mergeable draft; #34 an unfinished conflicting draft. No merge or
-permanent adoption. Migrations remain **44 Home / 21 paid / 53 combined**, 12
-identical shared and zero collisions; combined replay/adoption stays open. Paid
-services remain one final launch bundle. iPhone remains 1.0.0 (2); owner work/data,
-devices, accepted artifacts and private evidence are preserved.
-
-### Invitation decision backend accepted; protected client recovery next
-
-The [ordinary invitation decision protocol](home-invitation-decision-recovery-2026-09-12.md)
-adds account/session-bound context and immutable submit/read/cancel receipts.
-Actual HTTP/SDK/SQL passes lost replies, historical replay after access removal,
-wrong account/session, changed terms, failed reads, receipt rollback, concurrent
-accept/decline/cancel, viewer-only open-link decline and history after Home
-deletion. Current Home access remains separate. No client uses this contract yet.
-
-Backend regression: **5,170 passed / 16 skipped**, privacy gates pass. Populated
-upgrade preserves every value in **366 tables**, with zero function lint issues;
-rehearsal DDL rolls back. All three owned harness runs are cleaned, restoring
-complete role rows, full ledger and exact schema/function provenance. New source
-migration `20260912020000` is additive; no permanent adoption occurred.
-
-**Continue now:** browser protected original decisions, then native resolver/
-decision recovery, complete invitation delivery and ordinary-member onboarding;
-then legacy compatibility and the full backlog. H07/H08 remain partial, with
-**7 of 80 rows closed and 73 partial/open**. Notification delivery is still a
-separate best-effort boundary; the command proves the saved decision only.
-
-Browser predecessor `2da002ae8fd17cd7bb175843c80f0a37c12c920e` has every job passing in
-[CI 34710572692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34710572692).
-Backend source milestone `30958f8420cf0b50e66cae8ea950bbe5e0a41afb` is committed
-and ready to push with this checkpoint; verify that new head independently.
-The protected browser candidate is uncommitted and is undergoing final actual
-UI/storage/HTTP acceptance. Private-first-use `ff4c82609` is fully green. #32 remains a draft, #34 an unfinished conflicting draft. No merge.
-Migrations now total **44 Home / 21 paid / 53 combined**, with 12 identical shared
-versions and zero collisions; combined replay/adoption remains open. Paid services
-remain one final launch bundle. iPhone remains 1.0.0 (2), with owner work/data/
-devices and private evidence preserved.
-
-### Browser invitation recovery accepted; full decision recovery next
-
-The [browser invitation milestone](home-browser-invitation-recovery-2026-09-12.md)
-passes real Chrome/HTTP/SDK/SQL unavailable and malformed preview retry,
-nullable legacy metadata, missing/revoked/expired states, failed decline,
-wrong-recipient denial, lost acceptance reply, future-dated access and retirement
-of a held old preview. Success describes saved acceptance and offers My Homes;
-there is no unconditional dashboard redirect or full-access promise. Session and
-visibility changes retire stale reads, confirmations and result displays.
-
-Final browser r3 and narrow visual review pass. Web regression is **1,193 passed**;
-final types/style and privacy gates pass. All three owned fixtures are cleaned
-with complete role rows, full ledger and exact function provenance preserved.
-No native build/device update or new migration. iPhone remains 1.0.0 (2).
-
-**Continue now:** full account-bound invitation decision recovery, current access,
-both native resolvers/failed declines and truthful invitation delivery; then
-ordinary-member onboarding, legacy submission compatibility and the full backlog.
-This bounded milestone does not close H07/H08: **7 of 80 rows closed; 73 partial
-or open**. These counts do not measure app completion or remaining effort.
-
-Predecessor `ff4c82609e37203031df32daa3a3a9378723b2d3` has every job passing in
-[CI 34708716883](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34708716883).
-Browser milestone `9a10a7dd47329300faa26f40fa4e248fb73ea8d7` is committed and ready to
-push with this checkpoint; verify the pushed head independently. An additive
-invitation command migration is an uncommitted candidate, with transactional
-syntax/rollback preservation checked; it is not accepted or permanently installed.
-#32 remains a mergeable draft; #34 a conflicting draft. No merge. Migrations
-remain 43 Home / 21 paid / 52 combined, 12 identical shared, zero collisions;
-combined replay/adoption remains open. Paid services remain one final launch
-bundle. Owner work, devices/data and all private evidence remain preserved.
-
-### Private Home first use accepted; invitations next
-
-The [private first-use repair](home-private-first-use-2026-09-12.md) connects
-browser/iOS/Android private Home status to ordinary selected-address submission.
-Native lists keep My tasks and add Check status. No-request status offers the
-joining wizard before mail; ownership remains separate. Native status/postal
-routes keep the selected Home immutable through address editing and submission.
-Wrong existing and unknown apartments cannot continue; correction preserves the
-fields. The iOS unit label no longer crowds the adjacent City field.
-
-Actual browser final r3 and installed native journeys pass production HTTP/SDK/
-SQL status failure/retry, wrong-apartment correction, explicit submission, lost
-reply, restart and acknowledgement. Each creates one pending request/occupancy,
-with no duplicate Home, verified occupant or postcard request. Android's
-confirmation-label driver continuation is documented; production and fixture
-sources are unchanged. Its encrypted creation/joining slot is empty after native
-acknowledgement. Final iOS r3 passes in 137.285 seconds with source/production
-image binding; final iOS regression is **4,379 passed / 168 skips / zero failures**.
-Browser regression is **1,193 passed**. Android final regression passes 515
-suites per variant: **4,545 passed / 80 skips / zero failures** in both Debug and
-Release. Types, source style, Detekt, full Lint, privacy, Debug/Release signing
-and installed binary bindings pass. Completed fixtures
-preserve full ledger rows/columns and exact function definitions/properties;
-all six are cleaned. Both owned native runtimes are stopped with userdata and
-accepted products retained. The physical iPhone remains 1.0.0 (2).
-
-**Continue now:** invitations and ordinary-member first use, then legacy
-submission compatibility and the full backlog. Native invitation previews turn
-temporary failures into expired/used messages, and decline screens currently
-ignore failed responses. Reproduce and fix those recoveries, account binding,
-current access after acceptance and truthful delivery. Home invitation scope
-must preserve the separate business-seat and guest-pass flows. H07/H08/R02 and
-broader R03–R06 remain partial/open; **7 of 80 inventory rows are closed and 73
-remain**. These counts do not measure whole-app completion or remaining effort.
-
-Predecessor `40773d491c9d3c2dedec3341517d9ecdeee0a0d2` has every check passing in
-[CI 34706049139](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34706049139).
-Verify this milestone's pushed-head CI independently. #32 remains a mergeable
-draft; #34 remains a conflicting draft with passing checks at
-`e9ef2decbb7ec435589bb3b92639041cfc4618a6`. No new migration: 43 Home / 21 paid /
-52 combined, 12 identical shared versions, zero timestamp collisions. Combined
-replay/adoption remains open. No merge, hosted release, physical-device update or
-paid activation. Paid services remain one final launch bundle. Owner work/data/
-devices and private evidence are preserved.
-
-### iOS joining and personal status — accepted locally; Android next
-
-The [iOS milestone](home-ios-residency-recovery-2026-09-12.md) passes actual installed
-UI/HTTP/SDK/SQL original-request recovery, cancellation, changed apartments,
-rejected resubmission, personal history beyond 50 rows, failed/malformed reads
-and retry, later removal and held-reply retirement. It also repairs the existing
-Home modal's controls and truthful membership wording. Signed build, style,
-privacy and all three installed creation regressions pass. Full iOS regression:
-4,372 passed / 168 skipped; the report records its controlled-backend dependency.
-All three exact fixtures are cleaned; final r8 products and private evidence are
-preserved. The physical iPhone remains verified Pantopus 1.0.0 (2).
-
-**Continue now:** finish the existing uncommitted Android joining/personal-status
-candidate and installed acceptance, then both native postal/prepared-review flows.
-H08 also needs a private-Home verification entry: ordinary users without a claim
-must confirm a selected-address request before mail; ownership is separate.
-Finish invitations/private first use, legacy compatibility and the full backlog.
-H07/H08/R01/R02 remain partial; 6 of 80 inventory rows are closed and 74 remain.
-That count is not a percentage of the whole app or remaining engineering effort.
-
-Predecessor `022e3c086b60` has all checks passing in
-[CI run 34683643763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34683643763).
-iOS milestone `a528c54a1060` also has every check passing in
-[CI run 34687192433](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34687192433).
-Android joining/status remains an uncommitted candidate. PR #32 remains a draft;
-#34 remains a conflicting draft. No new migration: 43 Home / 21 paid / 52 combined,
-12 identical shared migrations, no timestamp collision. Combined replay/adoption
-remains open. No merge, hosted release, device update or paid activation. Paid
-services and postal keys stay one final launch bundle; owner work/data/devices
-and private evidence are preserved.
-
-### Browser postal recovery — accepted locally; native joining/status next
-
-The [browser postal milestone](home-browser-postcard-recovery-2026-09-12.md)
-passes actual Chrome/HTTP/SDK/SQL initial-read recovery, explicit apartment binding,
-original mailing resume, missing-key recovery, unknown delivery without resend,
-code cancellation, lost wrong/success replies and protected proof-write repair.
-Postal proof remains separate from household review and current Home access;
-removed access and retired replies cannot restore navigation. Browser diagnostics
-exclude Home requests/responses and codes. Narrow layouts were visually reviewed.
-
-**Continue now:** native existing-Home submission and personal residency status,
-then native postal/prepared review, invitations/private first use and the full
-backlog. H07/H08/R02 remain partial; 74 inventory entries remain. Legacy mutation
-compatibility and provider/device delivery still require acceptance. Paid services
-and dedicated postal code keys stay one final launch bundle.
-
-Browser regression: 93 suites / 1,193 passed. Final types, changed-surface lint and
-privacy pass; full web lint has zero errors and existing warnings. All owned
-fixtures/temporary schema are cleaned with exact review-definition/properties
-restoration and unchanged ledger. Source migrations remain 43 Home / 21 paid /
-52 combined with no timestamp collision; combined replay/adoption remains open.
-Backend predecessor `d88c9efcc` has completed backend/database/web, iOS lint/build
-and Android instrumented CI jobs passing in
-[run 34682745853](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34682745853);
-iPhone execution and Android lint/test/assembly remain unfinished at this checkpoint.
-Verify the browser milestone's own pushed-head checks. #32/#34 remain drafts;
-#34 conflicts. No merge, hosted release, paid activation or device change. iPhone
-stays verified Pantopus 1.0.0 (2). Owner work, data/devices and artifacts are preserved.
-
-This is the consolidated known backlog, reconciled against the newest Home and
-payment checkpoints. Older reports retain superseded findings; their unchecked
-boxes do not automatically reopen completed work. This inventory includes both
-confirmed defects and required acceptance that has not yet been performed. It
-cannot promise there are no undiscovered defects in the remaining audit surface.
-
-Latest accepted Home scope: [private first use](home-private-first-use-2026-09-12.md).
-Browser and both native joining/status/postal and prepared review pass. Private
-setup now leads to a selected-address request before mail. Invitation admission,
-complete onboarding and legacy compatibility retain their broader exit scopes.
+Recipient invitation recovery now passes backend/browser/iOS/Android. Next is
+sender management, resend/withdrawal and truthful delivery, followed by complete
+ordinary-member onboarding (H07/H08), then older-client residency compatibility
+(R02) and the full ordered backlog. Do not redo accepted native joining/postal/
+review/private-first-use work solely because an older report says “next.”
 
 **Legend:** **Fix** = reproduced defect or identified unfinished implementation;
-**Verify** = execute/reconcile the actual workflow, not an assertion that it is
-broken; **Integrate** = source/schema/version gate; **Launch** = release prerequisite.
-There are 80 tracked items below, with H01–H06 and R01 locally verified and 73 remaining.
-No task is weighted equally, so the number of unchecked entries is not a percent
-of engineering effort or a reliable release date. Unit-test coverage is not an
-exit criterion. Actual records, UI states, retries and current access are.
+**Verify** = actual workflow/reconciliation still required, not necessarily broken;
+**Integrate** = source/schema/version gate; **Launch** = release prerequisite.
 
 ## 1. Home identity and current access — active work
 
@@ -229,10 +27,10 @@ exit criterion. Actual records, UI states, retries and current access are.
 - [x] H02 **Implemented and locally verified:** All three lists share current authority, safe errors and held-result retirement. Real SDK/SQL/HTTP authority and recovery matrix passes; see [the list repair](home-list-authority-2026-09-11.md). Final-head CI remains G05.
 - [x] H03 **Implemented and locally verified:** Detail/list/occupants use explicit validated projections and safe retryable errors, with real SDK/SQL/HTTP and browser property recovery. See [the read repair and limits](home-detail-projection-2026-09-11.md); broader UI/settings/vendor checks remain D05/D07/I05.
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
-- [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Real onboarding/verification and broader UI remain H07/H08/R01/R02/U01/U02.
-- [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Native UI reconciliation remains H05/H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Both native prepared review flows and selected-address private first use now pass. Bounded [browser invitation recovery](home-browser-invitation-recovery-2026-09-12.md) also passes, followed by [atomic invitation decision commands](home-invitation-decision-recovery-2026-09-12.md); [protected browser decisions](home-browser-invitation-decisions-2026-09-12.md) and [iOS recovery with secure sign-in return](home-ios-invitation-decisions-2026-09-12.md) also pass. Finish Android protected recovery, invitation management/delivery and complete onboarding. Address validation grants no membership.
-- [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Private setup → selected-address submission → separate mail next step also passes on all three clients; see [private first use](home-private-first-use-2026-09-12.md). Finish invitation admission, ordinary-member UI and complete onboarding/verification exit criteria. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
+- [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Complete member onboarding, legacy compatibility and broader UI remain H07/H08/R02/U01/U02.
+- [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Broader member onboarding remains H08; see [the list report](home-list-authority-2026-09-11.md).
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Both native prepared review flows and selected-address private first use now pass. Bounded [browser invitation recovery](home-browser-invitation-recovery-2026-09-12.md) also passes, followed by [atomic invitation decision commands](home-invitation-decision-recovery-2026-09-12.md); [protected browser decisions](home-browser-invitation-decisions-2026-09-12.md) and [iOS recovery with secure sign-in return](home-ios-invitation-decisions-2026-09-12.md) also pass. [Android protected recovery and encrypted legacy sign-in return](home-android-invitation-decisions-2026-09-12.md) also pass. Finish sender invitation management/resend/withdrawal/delivery and complete ordinary-member onboarding. Address validation grants no membership.
+- [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Private setup → selected-address submission → separate mail next step also passes on all three clients; see [private first use](home-private-first-use-2026-09-12.md). Recipient decisions now pass backend/browser/iOS/Android; finish sender management, ordinary-member UI and complete onboarding/verification exit criteria. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
 
 ## 2. Residency, ownership and leases
 
@@ -320,9 +118,9 @@ exit criterion. Actual records, UI states, retries and current access are.
 
 ## 11. Integration and migration dependencies
 
-- [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Update their stale PR descriptions to match the final work.
+- [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 is updated through invitation recovery while #34 remains unfinished.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile 41 Home / 21 payment / 50 distinct combined migration versions and dependency order. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile 44 Home / 21 payment / 53 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 
@@ -366,6 +164,7 @@ its own scope decisions; it is not silently counted as a missing v1 implementati
 - [Payment branch handoff](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/PROJECT_HANDOFF.md) and [durable-tip draft](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/paid-gig-tip-draft-checkpoint-2026-09-10.md).
 - Private real SDK/SQL identity baseline: `/private/tmp/pantopus-home-identity-baseline-r1.log` (exact fixture cleanup passed). No credentials or raw operator logs are committed.
 
-Next implementation: verify the newest pushed head’s CI, then finish native Home list/verification and real onboarding/residency. Paused
-`943b08cc4` now has all checks passing. Keep this
-inventory updated as evidence closes or adds individual items.
+Next implementation: refresh the actual current-head CI, then sender invitation
+management and truthful delivery, complete ordinary-member onboarding, and R02
+legacy submission compatibility. Use the resume guide's concrete first reproduction.
+Keep this inventory updated as evidence closes or adds individual items.

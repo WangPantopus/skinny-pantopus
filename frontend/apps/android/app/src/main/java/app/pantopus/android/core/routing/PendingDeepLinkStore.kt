@@ -4,111 +4,206 @@ package app.pantopus.android.core.routing
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
 
-/**
- * SharedPreferences-backed one-shot stash for a content deep link that
- * arrived while signed out, or a post/chat arrival still awaiting its first load.
- * In-progress arrivals are bound to the original account so a server-ended
- * session can resume after reauthentication without crossing accounts.
- * Survives process death with a 24h TTL; explicit logout always clears it.
- *
- * Call [init] once from [app.pantopus.android.PantopusApplication].
- */
+@JsonClass(generateAdapter = true)
+internal data class PendingContentArrival(
+    val version: Int = 1,
+    val path: String,
+    val timestampMs: Long,
+    val expectedUserId: String?,
+    val awaitingReauthentication: Boolean = false,
+)
+
+/** Device-only encrypted handoff. Legacy links migrate without extending their original lifetime. */
 object PendingDeepLinkStore {
-    private const val PREFS = "pantopus_pending_deep_link"
-    private const val KEY_PATH = "path"
-    private const val KEY_TIMESTAMP_MS = "timestamp_ms"
-    private const val KEY_USER_ID = "expected_user_id"
-    private const val KEY_REAUTHENTICATING = "awaiting_reauthentication"
+    private val adapter = Moshi.Builder().build().adapter(PendingContentArrival::class.java).serializeNulls()
+    private val storage = PendingContentArrivalPreferences()
 
-    /** 24 hours — matches the product TTL for deferred post-login replay. */
-    private const val TTL_MS = 24L * 60L * 60L * 1000L
+    @Synchronized
+    fun init(context: Context) = storage.init(context)
 
-    @Volatile
-    private var prefs: SharedPreferences? = null
-
-    fun init(context: Context) {
-        if (prefs != null) return
-        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    }
-
-    /** Persist a normalized `pantopus://…` / `https://…` path for later replay. */
+    /** No write succeeds unless the original is durably protected. */
     @Synchronized
     fun stash(
         path: String,
         expectedUserId: String? = null,
-    ) {
-        val trimmed = path.trim()
-        if (trimmed.isEmpty()) return
-        prefsOrNull()?.edit()?.apply {
-            putString(KEY_PATH, trimmed)
-            putLong(KEY_TIMESTAMP_MS, System.currentTimeMillis())
-            putString(KEY_USER_ID, expectedUserId)
-            putBoolean(KEY_REAUTHENTICATING, false)
-            apply()
+    ): Boolean =
+        safely(false) {
+            val trimmed = path.trim()
+            if (trimmed.isEmpty()) return@safely false
+            val arrival = PendingContentArrival(path = trimmed, timestampMs = System.currentTimeMillis(), expectedUserId = expectedUserId)
+            if (!storage.write(adapter.toJson(arrival))) return@safely false
+            storage.clearLegacy()
+            true
         }
-    }
 
-    /** Non-consuming read. Returns `null` (and clears) when missing or expired. */
     @Synchronized
-    fun peek(): String? = readValidPath()
+    fun peek(now: Long = System.currentTimeMillis()): String? = safely(null) { read(now)?.path }
 
-    /** Read and clear (one-shot). Returns `null` when missing or expired. */
     @Synchronized
-    fun take(userId: String? = null): String? {
-        val path = readValidPath() ?: return null
-        val expectedUserId = prefsOrNull()?.getString(KEY_USER_ID, null)
-        clear()
-        return path.takeIf { expectedUserId == null || expectedUserId == userId }
-    }
+    fun take(
+        userId: String? = null,
+        now: Long = System.currentTimeMillis(),
+    ): String? =
+        safely(null) {
+            val arrival = read(now) ?: return@safely null
+            if (!storage.clearProtected()) return@safely null
+            arrival.path.takeIf { arrival.expectedUserId == null || arrival.expectedUserId == userId }
+        }
 
-    /** Keep only this account's explicit arrival, without extending its TTL. */
     @Synchronized
     fun retainForReauthentication(userId: String?) {
-        val path = readValidPath()
-        val expectedUserId = prefsOrNull()?.getString(KEY_USER_ID, null)
-        if (path == null || userId == null || expectedUserId != userId) {
-            clear()
-        } else {
-            prefsOrNull()?.edit()?.putBoolean(KEY_REAUTHENTICATING, true)?.apply()
+        safely(Unit) {
+            val arrival = read(System.currentTimeMillis())
+            if (arrival == null || userId == null || arrival.expectedUserId != userId) {
+                storage.clearProtected()
+            } else {
+                storage.write(adapter.toJson(arrival.copy(awaitingReauthentication = true)))
+            }
         }
     }
 
-    /** Ignore late UI completion after auth handoff, or for a newer arrival. */
     @Synchronized
     internal fun completeArrival(
         userId: String,
         matches: (String) -> Boolean,
     ) {
-        val path = readValidPath() ?: return
-        val store = prefsOrNull() ?: return
-        if (store.getString(KEY_USER_ID, null) == userId &&
-            !store.getBoolean(KEY_REAUTHENTICATING, false) && matches(path)
-        ) {
-            clear()
+        safely(Unit) {
+            val arrival = read(System.currentTimeMillis()) ?: return@safely
+            if (arrival.expectedUserId == userId && !arrival.awaitingReauthentication && matches(arrival.path)) storage.clearProtected()
         }
     }
 
     @Synchronized
     fun clear() {
-        prefsOrNull()?.edit()?.clear()?.apply()
+        safely(Unit) { storage.clearProtected() }
     }
 
-    private fun readValidPath(): String? {
-        val store = prefsOrNull() ?: return null
-        val path = store.getString(KEY_PATH, null)?.takeIf { it.isNotBlank() }
-        if (path == null) {
-            clear()
+    private fun read(now: Long): PendingContentArrival? {
+        val bytes = storage.raw()
+        val arrival =
+            if (bytes != null) {
+                // Corrupt or unavailable protected state never falls back to an older plaintext link.
+                checkNotNull(adapter.fromJson(bytes)).also { check(it.version == 1 && it.path.isNotBlank()) }
+            } else {
+                storage.migrate(adapter, now) ?: return null
+            }
+        if (!arrival.isFresh(now)) {
+            storage.clearProtected()
             return null
         }
-        val stamped = store.getLong(KEY_TIMESTAMP_MS, 0L)
-        val now = System.currentTimeMillis()
-        if (stamped <= 0L || now - stamped > TTL_MS) {
-            clear()
-            return null
-        }
-        return path
+        return arrival
     }
 
-    private fun prefsOrNull(): SharedPreferences? = prefs
+    private inline fun <T> safely(
+        fallback: T,
+        action: () -> T,
+    ): T =
+        try {
+            action()
+        } catch (_: Exception) {
+            fallback
+        }
+
+    @VisibleForTesting
+    @Synchronized
+    internal fun bindForTesting(
+        protected: SharedPreferences,
+        oldPreferences: SharedPreferences? = null,
+    ) {
+        storage.bindForTesting(protected, oldPreferences)
+    }
+}
+
+private const val ARRIVAL_TTL_MS = 24L * 60L * 60L * 1000L
+
+private fun PendingContentArrival.isFresh(now: Long): Boolean = timestampMs > 0L && now - timestampMs <= ARRIVAL_TTL_MS
+
+/** Owns durable preference writes, their uncertain memory cache and legacy migration. */
+private class PendingContentArrivalPreferences {
+    private var context: Context? = null
+    private var prefs: SharedPreferences? = null
+    private var legacy: SharedPreferences? = null
+    private var uncertain = false
+    private var uncertainValue: String? = null
+
+    fun init(context: Context) {
+        if (this.context != null) return
+        this.context = context.applicationContext
+        legacy = context.applicationContext.getSharedPreferences("pantopus_pending_deep_link", Context.MODE_PRIVATE)
+    }
+
+    fun migrate(
+        adapter: com.squareup.moshi.JsonAdapter<PendingContentArrival>,
+        now: Long,
+    ): PendingContentArrival? {
+        val old = legacy ?: return null
+        val path = old.getString("path", null)?.takeIf(String::isNotBlank) ?: return null
+        val record =
+            PendingContentArrival(
+                path = path,
+                timestampMs = old.getLong("timestamp_ms", 0L),
+                expectedUserId = old.getString("expected_user_id", null),
+                awaitingReauthentication = old.getBoolean("awaiting_reauthentication", false),
+            )
+        if (!record.isFresh(now)) {
+            clearLegacy()
+            return null
+        }
+        return if (write(adapter.toJson(record))) {
+            clearLegacy()
+            record
+        } else {
+            null
+        }
+    }
+
+    fun raw(): String? = if (uncertain) uncertainValue else protected().getString("arrival-v1", null)
+
+    fun write(value: String?): Boolean {
+        val previous = raw()
+        val edit = protected().edit()
+        if (value == null) edit.remove("arrival-v1") else edit.putString("arrival-v1", value)
+        if (!edit.commit()) {
+            // A failed commit can still replace the SharedPreferences memory cache.
+            uncertain = true
+            uncertainValue = previous
+            return false
+        }
+        uncertain = false
+        uncertainValue = null
+        return true
+    }
+
+    fun clearProtected(): Boolean = clearLegacy() && write(null)
+
+    fun clearLegacy(): Boolean = legacy?.let { if (it.all.isEmpty()) true else it.edit().clear().commit() } ?: true
+
+    private fun protected(): SharedPreferences {
+        prefs?.let { return it }
+        val app = checkNotNull(context)
+        val master = MasterKey.Builder(app).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+        return EncryptedSharedPreferences.create(
+            app,
+            "private_pending_deep_link_v1",
+            master,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        ).also { prefs = it }
+    }
+
+    fun bindForTesting(
+        protected: SharedPreferences,
+        oldPreferences: SharedPreferences?,
+    ) {
+        prefs = protected
+        legacy = oldPreferences
+        uncertain = false
+        uncertainValue = null
+    }
 }

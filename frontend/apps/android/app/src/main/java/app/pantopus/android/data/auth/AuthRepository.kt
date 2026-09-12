@@ -39,11 +39,13 @@ import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import timber.log.Timber
@@ -1180,44 +1182,63 @@ class AuthRepository
          * login screen can prefill (design §2.9).
          */
         suspend fun signOut(reason: SessionEndReason? = null) {
+            finishLocalSignOut(reason, null)
+        }
+
+        /** A failed protected handoff leaves this account signed in and allows retry. */
+        suspend fun signOutReturningToContent(path: String): Boolean = finishLocalSignOut(null, path)
+
+        private suspend fun finishLocalSignOut(
+            reason: SessionEndReason?,
+            loginArrival: String?,
+        ): Boolean {
             val manual = reason == null
             if (manual) {
-                if (!manualLogoutInProgress.compareAndSet(false, true)) return
+                if (!manualLogoutInProgress.compareAndSet(false, true)) return false
             } else if (manualLogoutInProgress.get() || _state.value == State.SignedOut) {
-                // Ignore confirmations racing with (or arriving after) a
-                // completed local logout. The session is already being ended.
-                return
+                return false
             }
-            try {
-                val access = tokenStorage.accessToken()
-                val refresh = tokenStorage.refreshToken()
-                val userId = (_state.value as? State.SignedIn)?.user?.id ?: tokenStorage.userId()
-                socketManager.disconnect()
-                if (manual && !(access.isNullOrBlank() && refresh.isNullOrBlank())) {
-                    revokeOnServer(access, refresh)
+            return try {
+                // Once explicitly chosen, local teardown must finish even if the
+                // departing screen's coroutine is cancelled by navigation.
+                withContext(NonCancellable) {
+                    if (loginArrival != null && !PendingDeepLinkStore.stash(loginArrival)) return@withContext false
+                    val access = tokenStorage.accessToken()
+                    val refresh = tokenStorage.refreshToken()
+                    val userId = (_state.value as? State.SignedIn)?.user?.id ?: tokenStorage.userId()
+                    socketManager.disconnect()
+                    tokenStorage.clear()
+                    deviceIdentity.clearRegistration()
+                    observability.identify(userId = null)
+                    Analytics.identify(userId = null)
+                    observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
+                    PlacePendingStore.clear()
+                    reconcileLoginArrival(loginArrival, manual, userId)
+                    DeepLinkRouter.clearPending()
+                    feedModeration.clear()
+                    runCatching { accountHints.clearGrant() }
+                    _rememberedAccounts.value = runCatching { accountHints.read() }.getOrNull()?.accounts.orEmpty()
+                    _lastInteractiveSignInAt.value = null
+                    _sessionEndReason.value = reason
+                    _state.value = State.SignedOut
+                    if (loginArrival != null) DeepLinkRouter.requestLoginPresentation()
+                    if (manual && !(access.isNullOrBlank() && refresh.isNullOrBlank())) revokeOnServer(access, refresh)
+                    true
                 }
-                tokenStorage.clear()
-                deviceIdentity.clearRegistration()
-                observability.identify(userId = null)
-                Analytics.identify(userId = null)
-                observability.track("auth.signed_out", mapOf("reason" to (reason?.code ?: "user")))
-                // A server-ended session may resume only this account's
-                // unfinished arrival. Explicit logout discards every link.
-                PlacePendingStore.clear()
-                if (manual) {
-                    PendingDeepLinkStore.clear()
-                } else {
-                    PendingDeepLinkStore.retainForReauthentication(userId)
-                }
-                DeepLinkRouter.clearPending()
-                feedModeration.clear()
-                runCatching { accountHints.clearGrant() }
-                _rememberedAccounts.value = runCatching { accountHints.read() }.getOrNull()?.accounts.orEmpty()
-                _lastInteractiveSignInAt.value = null
-                _sessionEndReason.value = reason
-                _state.value = State.SignedOut
             } finally {
                 if (manual) manualLogoutInProgress.set(false)
+            }
+        }
+
+        private fun reconcileLoginArrival(
+            loginArrival: String?,
+            manual: Boolean,
+            userId: String?,
+        ) {
+            when {
+                loginArrival != null && PendingDeepLinkStore.peek() == loginArrival -> Unit
+                manual -> PendingDeepLinkStore.clear()
+                else -> PendingDeepLinkStore.retainForReauthentication(userId)
             }
         }
 

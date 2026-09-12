@@ -6,21 +6,17 @@ import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.token_accept.BusinessSeatAcceptResponse
 import app.pantopus.android.data.api.models.token_accept.BusinessSeatBusinessDto
 import app.pantopus.android.data.api.models.token_accept.BusinessSeatInviteResponse
-import app.pantopus.android.data.api.models.token_accept.GenericAcknowledgement
 import app.pantopus.android.data.api.models.token_accept.GuestPassDto
 import app.pantopus.android.data.api.models.token_accept.GuestPassResponse
-import app.pantopus.android.data.api.models.token_accept.HomeAcceptResponse
-import app.pantopus.android.data.api.models.token_accept.HomeInviteDetailsDto
-import app.pantopus.android.data.api.models.token_accept.HomeInviteHomeDto
-import app.pantopus.android.data.api.models.token_accept.HomeInviteInviterDto
-import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
-import app.pantopus.android.data.api.models.token_accept.HomeOccupancyEcho
 import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.homes.HomeInvitationPreview
 import app.pantopus.android.data.token_accept.TokenAcceptRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +37,9 @@ import org.junit.Test
 class TokenAcceptViewModelTest {
     private val repository: TokenAcceptRepository = mockk()
     private val auth: AuthRepository = mockk()
+    private val invitations: HomeInvitationDecisionFactory = mockk()
+    private val session: HomeClaimSessionScope = mockk()
+    private val models = mutableListOf<TokenAcceptViewModel>()
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -49,108 +48,58 @@ class TokenAcceptViewModelTest {
                 user = UserDto(id = "u1", email = "alice@example.com", displayName = "Alice", avatarUrl = null),
             )
         every { auth.state } returns MutableStateFlow<AuthRepository.State>(signed)
+        every { invitations.session(any()) } returns session
+        every { session.isCurrent } returns true
+        every { session.invalidated } returns MutableStateFlow(false)
+        coEvery { session.requireCurrent() } returns Unit
+        coEvery { invitations.hasOriginal(any()) } returns false
+        coEvery { invitations.preview(any()) } returns HomeInvitationPreview.Missing
     }
 
     @After fun tearDown() {
+        models.forEach { it.pause() }
         Dispatchers.resetMain()
     }
 
     private fun savedState(token: String = "demo"): SavedStateHandle = SavedStateHandle(mapOf(TokenAcceptViewModel.TOKEN_KEY to token))
 
-    // MARK: - Home invite
+    private fun model(state: SavedStateHandle = savedState()): TokenAcceptViewModel =
+        TokenAcceptViewModel(repository, auth, state, invitations).also { models += it }
 
-    @Test fun home_invite_resolves() =
+    @Test fun home_invite_opens_protected_decision_recovery() =
         runTest {
-            coEvery { repository.homeInvite(any()) } returns
-                NetworkResult.Success(
-                    HomeInviteResponse(
-                        invitation =
-                            HomeInviteDetailsDto(
-                                id = "inv1",
-                                status = "pending",
-                                proposedRole = "co_owner",
-                                inviteeEmail = "alice@example.com",
-                                expiresAt = "2026-06-01T00:00:00Z",
-                            ),
-                        home = HomeInviteHomeDto(id = "h1", name = "412 Elm St", city = "Portland, OR"),
-                        inviter = HomeInviteInviterDto(name = "Maya K.", username = "mayak"),
-                    ),
-                )
-            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            coEvery { invitations.preview(any()) } returns HomeInvitationPreview.Found
+            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+            val vm = model()
             vm.load()
-            val ready = vm.state.value as TokenAcceptUiState.Ready
-            assertEquals(InviteType.HomeInvite, ready.offer.inviteType)
-            assertEquals("inv1", ready.offer.invitationId)
-            assertEquals("Co owner", ready.offer.roleOffered)
-            assertTrue(ready.offer.sender.contains("Maya"))
-            assertTrue(ready.offer.benefits.isNotEmpty())
-            assertTrue(ready.offer.primaryCtaLabel.contains("412 Elm St"))
-        }
-
-    @Test fun home_invite_accept_succeeds() =
-        runTest {
-            coEvery { repository.homeInvite(any()) } returns
-                NetworkResult.Success(
-                    HomeInviteResponse(
-                        invitation =
-                            HomeInviteDetailsDto(
-                                id = "inv1",
-                                status = "pending",
-                                proposedRole = "co_owner",
-                            ),
-                        home = HomeInviteHomeDto(id = "h1", name = "412 Elm St"),
-                        inviter = HomeInviteInviterDto(name = "Maya K."),
-                    ),
-                )
-            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.acceptHomeInvite(any()) } returns
-                NetworkResult.Success(
-                    HomeAcceptResponse(
-                        homeId = "h1",
-                        occupancy = HomeOccupancyEcho(id = "occ1", role = "co_owner"),
-                        acceptedRoleBase = "co_owner",
-                    ),
-                )
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
-            vm.load()
+            assertEquals(TokenAcceptUiState.HomeInvitation, vm.state.value)
             vm.accept()
-            val accepted = vm.state.value as TokenAcceptUiState.Accepted
-            assertEquals(InviteType.HomeInvite, accepted.offer.inviteType)
+            vm.decline()
+            coVerify(exactly = 0) { repository.acceptHomeInvite(any()) }
+            coVerify(exactly = 0) { repository.declineHomeInvite(any()) }
         }
 
-    @Test fun home_invite_expired() =
+    @Test fun saved_original_precedes_any_new_link_preview() =
         runTest {
-            coEvery { repository.homeInvite(any()) } returns
-                NetworkResult.Success(
-                    HomeInviteResponse(
-                        invitation = HomeInviteDetailsDto(id = "inv1", status = "expired"),
-                        expired = true,
-                    ),
-                )
-            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            coEvery { invitations.hasOriginal(any()) } returns true
+            val vm = model()
             vm.load()
-            assertTrue(vm.state.value is TokenAcceptUiState.Expired)
+            assertEquals(TokenAcceptUiState.HomeInvitation, vm.state.value)
+            coVerify(exactly = 0) { invitations.preview(any()) }
         }
 
-    @Test fun home_invite_already_used() =
+    @Test fun unavailable_preview_is_retryable_and_never_expired() =
         runTest {
-            coEvery { repository.homeInvite(any()) } returns
-                NetworkResult.Success(
-                    HomeInviteResponse(
-                        invitation = HomeInviteDetailsDto(id = "inv1", status = "accepted"),
-                        alreadyUsed = true,
-                    ),
-                )
-            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            coEvery { invitations.preview(any()) } returns HomeInvitationPreview.Unavailable
+            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+            val vm = model()
             vm.load()
-            assertTrue(vm.state.value is TokenAcceptUiState.Expired)
+            assertTrue(vm.state.value is TokenAcceptUiState.Error)
+            coEvery { invitations.preview(any()) } returns HomeInvitationPreview.Found
+            vm.load()
+            assertEquals(TokenAcceptUiState.HomeInvitation, vm.state.value)
         }
 
     // MARK: - Business seat
@@ -161,7 +110,7 @@ class TokenAcceptViewModelTest {
             coEvery { repository.businessSeatInvite(any()) } returns
                 NetworkResult.Success(
                     BusinessSeatInviteResponse(
-                        seatId = "s1",
+                        seatId = "ddc24300-0000-4000-8000-000000000004",
                         business = BusinessSeatBusinessDto(id = "b1", name = "Bridge Builders LLC"),
                         displayName = "Alice — Manager",
                         roleBase = "manager",
@@ -169,11 +118,11 @@ class TokenAcceptViewModelTest {
                     ),
                 )
             coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            val vm = model()
             vm.load()
             val ready = vm.state.value as TokenAcceptUiState.Ready
             assertEquals(InviteType.BusinessSeat, ready.offer.inviteType)
-            assertEquals("s1", ready.offer.invitationId)
+            assertEquals("ddc24300-0000-4000-8000-000000000004", ready.offer.invitationId)
             assertEquals("Manager", ready.offer.roleOffered)
             assertTrue(ready.offer.venue.contains("Bridge"))
         }
@@ -184,7 +133,7 @@ class TokenAcceptViewModelTest {
             coEvery { repository.businessSeatInvite(any()) } returns
                 NetworkResult.Success(
                     BusinessSeatInviteResponse(
-                        seatId = "s1",
+                        seatId = "ddc24300-0000-4000-8000-000000000004",
                         business = BusinessSeatBusinessDto(name = "Bridge Builders LLC"),
                         roleBase = "manager",
                     ),
@@ -193,12 +142,12 @@ class TokenAcceptViewModelTest {
             coEvery { repository.acceptBusinessSeat(any(), any()) } returns
                 NetworkResult.Success(
                     BusinessSeatAcceptResponse(
-                        seatId = "s1",
+                        seatId = "ddc24300-0000-4000-8000-000000000004",
                         businessUserId = "b1",
                         roleBase = "manager",
                     ),
                 )
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            val vm = model()
             vm.load()
             vm.accept()
             val accepted = vm.state.value as TokenAcceptUiState.Accepted
@@ -224,7 +173,7 @@ class TokenAcceptViewModelTest {
                             ),
                     ),
                 )
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            val vm = model()
             vm.load()
             val ready = vm.state.value as TokenAcceptUiState.Ready
             assertEquals(InviteType.GuestPass, ready.offer.inviteType)
@@ -249,7 +198,7 @@ class TokenAcceptViewModelTest {
                             ),
                     ),
                 )
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            val vm = model()
             vm.load()
             vm.accept()
             // No POST should fire — we never told the repo to expect
@@ -265,38 +214,32 @@ class TokenAcceptViewModelTest {
             coEvery { repository.homeInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
             coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
             coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            val vm = model()
             vm.load()
             assertTrue(vm.state.value is TokenAcceptUiState.Expired)
         }
 
     @Test fun blank_token_short_circuits_to_expired() =
         runTest {
-            val vm = TokenAcceptViewModel(repository, auth, savedState(token = ""))
+            val vm = model(savedState(token = ""))
             vm.load()
             assertTrue(vm.state.value is TokenAcceptUiState.Expired)
         }
 
-    @Test fun decline_transitions_to_declined_for_home_invite() =
+    @Test fun failed_business_decline_keeps_a_retryable_error() =
         runTest {
-            coEvery { repository.homeInvite(any()) } returns
+            coEvery { repository.businessSeatInvite(any()) } returns
                 NetworkResult.Success(
-                    HomeInviteResponse(
-                        invitation = HomeInviteDetailsDto(id = "inv1", status = "pending", proposedRole = "co_owner"),
-                        home = HomeInviteHomeDto(id = "h1", name = "412 Elm St"),
-                        inviter = HomeInviteInviterDto(name = "Maya K."),
-                    ),
+                    BusinessSeatInviteResponse(seatId = "ddc24300-0000-4000-8000-000000000004", roleBase = "member"),
                 )
-            coEvery { repository.businessSeatInvite(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.Server(404, null))
-            coEvery { repository.declineHomeInvite(any()) } returns NetworkResult.Success(GenericAcknowledgement(ok = true))
-            val vm = TokenAcceptViewModel(repository, auth, savedState())
+            coEvery { repository.guestPass(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repository.declineBusinessSeat(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
+            val vm = model()
             vm.load()
             vm.decline()
-            assertTrue(vm.state.value is TokenAcceptUiState.Declined)
+            assertTrue(vm.state.value is TokenAcceptUiState.Error)
+            assertEquals(0, vm.dismissEvents.value)
         }
-
-    // MARK: - Projection helpers
 
     @Test fun human_role_converts_snake_to_title_case() {
         assertEquals("Co owner", TokenAcceptViewModel.humanRole("co_owner"))

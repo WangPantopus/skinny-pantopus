@@ -8,6 +8,9 @@
     <exclude domain="sharedpref" path="private_home_creation_v1.xml" />
     <exclude domain="sharedpref" path="private_home_postal_v1.xml" />
     <exclude domain="sharedpref" path="private_home_residency_review_v1.xml" />
+        <exclude domain="sharedpref" path="private_home_invitation_decision_v1.xml" />
+        <exclude domain="sharedpref" path="private_pending_deep_link_v1.xml" />
+        <exclude domain="sharedpref" path="pantopus_pending_deep_link.xml" />
     <!-- Never back up auth tokens. The legacy v1 DataStore path is retained
          until the one-shot migration in TokenStorage drains and clears it. -->
     <exclude domain="sharedpref" path="secure_auth_tokens.xml" />

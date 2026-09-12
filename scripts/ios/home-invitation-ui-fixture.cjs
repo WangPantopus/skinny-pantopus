@@ -175,7 +175,7 @@ async function main() {
       return res.status(401).json({error:'Synthetic sign-in required'});
     if(index>=0){req.headers['x-fixture-actor']=users[index];req.headers['x-fixture-session']='local-invitation-'+index;}
     const invitationIndex = capabilities.find(c=>req.path.includes('/token/'+c.token))?.index;
-    events.push({event:'request',method:req.method,path:req.path.replace(/\/token\/[^/]+/,'/token/[redacted]'),actor:index,
+    events.push({event:'request',method:req.method,path:req.path.replace(/\/(token|guest)\/[^/]+/g,'/$1/[redacted]'),actor:index,
       ...(invitationIndex===undefined?{}:{invitation_index:invitationIndex}),
       ...(req.method==='POST'&&req.path==='/api/homes/invitations/decisions'?{request_id:req.body.request_id,request_hash:require('node:crypto').createHash('sha256').update(JSON.stringify(req.body)).digest('hex')}: {})});
     if(['/api/users/profile','/api/users/me'].includes(req.path)) return res.json({user:profile(index),...profile(index)});

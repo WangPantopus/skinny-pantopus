@@ -2,7 +2,6 @@
 
 package app.pantopus.android.core.routing
 
-import android.content.Context
 import android.content.SharedPreferences
 import io.mockk.every
 import io.mockk.mockk
@@ -989,13 +988,27 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun legacy_arrival_migrates_with_its_old_account_and_lifetime() {
+        val originalTime = System.currentTimeMillis() - 3600 * 1000L
+        legacyValues["path"] = "pantopus://post/migrated"
+        legacyValues["timestamp_ms"] = originalTime
+        legacyValues["expected_user_id"] = userId
+        assertEquals("pantopus://post/migrated", PendingDeepLinkStore.peek())
+        assertTrue(legacyValues.isEmpty())
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.take(userId, originalTime + 24 * 3600 * 1000L + 1))
+    }
+
+    @Test
     fun reauthentication_does_not_extend_the_arrival_expiry() {
         DeepLinkRouter.handle("/post/persisted")
-        val timestamp = persistedValues["timestamp_ms"]
+        val adapter = com.squareup.moshi.Moshi.Builder().build().adapter(PendingContentArrival::class.java)
+        val original = requireNotNull(adapter.fromJson(persistedValues["arrival-v1"] as String))
         PendingDeepLinkStore.retainForReauthentication(userId)
-        assertEquals(timestamp, persistedValues["timestamp_ms"])
-        persistedValues["timestamp_ms"] = 1L
-        assertNull(PendingDeepLinkStore.take(userId))
+        val retained = requireNotNull(adapter.fromJson(persistedValues["arrival-v1"] as String))
+        assertEquals(original.timestampMs, retained.timestampMs)
+        assertTrue(retained.awaitingReauthentication)
+        assertNull(PendingDeepLinkStore.take(userId, now = original.timestampMs + 24L * 3600 * 1000 + 1))
         assertNull(PendingDeepLinkStore.peek())
     }
 
@@ -1116,26 +1129,17 @@ class DeepLinkRouterTest {
         private var storeInstalled = false
         private val persistedValues = mutableMapOf<String, Any>()
 
-        /**
-         * [PendingDeepLinkStore] is SharedPreferences-backed and silently
-         * no-ops until `init`, and there is no real `Context` on the JVM — so
-         * install an in-memory stand-in. `init` is write-once per process,
-         * hence the flag plus the round-trip check.
-         */
+        private val legacyValues = mutableMapOf<String, Any>()
+
         fun installInMemoryPendingDeepLinkStore() {
             if (storeInstalled) return
             storeInstalled = true
-            PendingDeepLinkStore.init(inMemoryPrefsContext())
-            PendingDeepLinkStore.stash(PROBE_PATH)
-            check(PendingDeepLinkStore.take() == PROBE_PATH) {
-                "PendingDeepLinkStore was already initialised elsewhere in this JVM; " +
-                    "DeepLinkRouterTest needs the in-memory stand-in to observe the stash."
-            }
+            PendingDeepLinkStore.bindForTesting(inMemoryPreferences(persistedValues), inMemoryPreferences(legacyValues))
+            check(PendingDeepLinkStore.stash(PROBE_PATH))
+            check(PendingDeepLinkStore.take() == PROBE_PATH)
         }
 
-        /** A `Context` whose SharedPreferences are a plain in-memory map. */
-        fun inMemoryPrefsContext(): Context {
-            val values = persistedValues
+        fun inMemoryPreferences(values: MutableMap<String, Any>): SharedPreferences {
             val editor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { editor.putString(any(), any()) } answers {
                 val value = secondArg<String?>()
@@ -1150,27 +1154,22 @@ class DeepLinkRouterTest {
                 values[firstArg()] = secondArg<Boolean>()
                 editor
             }
+            every { editor.remove(any()) } answers {
+                values.remove(firstArg<String>())
+                editor
+            }
             every { editor.clear() } answers {
                 values.clear()
                 editor
             }
+            every { editor.commit() } returns true
             val prefs = mockk<SharedPreferences>(relaxed = true)
             every { prefs.edit() } returns editor
-            every { prefs.getString(any(), any()) } answers {
-                values[firstArg<String>()] as? String ?: secondArg<String?>()
-            }
-            every { prefs.getLong(any(), any()) } answers {
-                values[firstArg<String>()] as? Long ?: secondArg<Long>()
-            }
-            every { prefs.getBoolean(any(), any()) } answers {
-                values[firstArg<String>()] as? Boolean ?: secondArg<Boolean>()
-            }
-            val context = mockk<Context>(relaxed = true)
-            every { context.applicationContext } returns context
-            // `getSharedPreferences` is overloaded (String and File); pin the
-            // name arg so the String overload resolves.
-            every { context.getSharedPreferences(any<String>(), any()) } returns prefs
-            return context
+            every { prefs.all } answers { values.toMap() }
+            every { prefs.getString(any(), any()) } answers { values[firstArg<String>()] as? String ?: secondArg<String?>() }
+            every { prefs.getLong(any(), any()) } answers { values[firstArg<String>()] as? Long ?: secondArg<Long>() }
+            every { prefs.getBoolean(any(), any()) } answers { values[firstArg<String>()] as? Boolean ?: secondArg<Boolean>() }
+            return prefs
         }
     }
 }
