@@ -25,6 +25,20 @@ assert.equal(sql("SELECT count(*) FROM pg_trigger WHERE tgname='residency_http_r
 assert.equal(sql("SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname='residency_http_receipt_failure';"), '0');
 let initialized = false, rolesApplied = false, installed = [], introduced = [], server, stopping = false, fault = null, held = null, commandsApplied = false, installedCommands = null;
 const events = [], capabilities = [];
+function inspectOwnedNativePreferences() {
+  const simulator = 'F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8', bundle = 'app.pantopus.ios';
+  const data = execFileSync('/usr/bin/xcrun', ['simctl','get_app_container',simulator,bundle,'data'], {encoding:'utf8'}).trim();
+  assert(data.includes('/Devices/' + simulator + '/data/Containers/Data/Application/'));
+  const plist = path.join(data, 'Library/Preferences/' + bundle + '.plist');
+  const preferences = fs.existsSync(plist)
+    ? JSON.parse(execFileSync('/usr/bin/plutil', ['-convert','json','-o','-',plist], {encoding:'utf8'})) : {};
+  const encoded = JSON.stringify(preferences);
+  const result = {event:'native_preferences_checked',
+    invitation_capability_count:capabilities.filter(c=>encoded.includes(c.token)).length,
+    legacy_handoff_absent: !Object.keys(preferences).some(key=>key.startsWith('pantopus.pendingDeepLink.'))};
+  save('native-storage-check-' + (events.filter(e=>e.event===result.event).length + 1) + '.json',result);
+  events.push(result); return result;
+}
 const authToken = index => 'pantopus-synthetic-invitation-loopback-' + index;
 const profile = index => ({ id: users[index], email: `residency-http-${index + 1}@example.invalid`,
   username: 'invitation_fixture_' + index, name: index === 0 ? 'Invitation owner' : 'Invite recipient ' + index,
@@ -134,7 +148,10 @@ async function main() {
   app.use((req,res,next) => {
     res.set('Cache-Control','private, no-store');
     if (req.path === '/fixture/state') return res.json(state());
-    if (req.path === '/fixture/fault') { assert(['preview','accept','decline','context','decision_read','decision_cancel'].includes(req.body.action));
+    // Private opt-in native driver only; never copied into diagnostics or Git.
+    if (req.path === '/fixture/capabilities' && purpose === 'decision-recovery') return res.json({home,capabilities});
+    if (req.path === '/fixture/native-storage-check' && purpose === 'decision-recovery') return res.json(inspectOwnedNativePreferences());
+    if (req.path === '/fixture/fault') { assert(['preview','accept','decline','context','decision_read','decision_cancel','logout'].includes(req.body.action));
       assert(['before','after','malformed','hold','clear'].includes(req.body.kind));fault=req.body.kind==='clear'?null:req.body;return res.json({ok:true}); }
     if (req.path === '/fixture/release') { assert(held); const release = held; held = null; release(); return res.json({ok:true}); }
     if (req.path === '/fixture/scenario') {
@@ -157,7 +174,10 @@ async function main() {
     if (index<0 && !(req.method==='GET' && /^\/api\/homes\/invitations\/token\/[^/]+$/.test(req.path)))
       return res.status(401).json({error:'Synthetic sign-in required'});
     if(index>=0){req.headers['x-fixture-actor']=users[index];req.headers['x-fixture-session']='local-invitation-'+index;}
-    events.push({event:'request',method:req.method,path:req.path.replace(/\/token\/[^/]+/,'/token/[redacted]'),actor:index,...(req.method==='POST'&&req.path==='/api/homes/invitations/decisions'?{request_id:req.body.request_id,request_hash:require('node:crypto').createHash('sha256').update(JSON.stringify(req.body)).digest('hex')}: {})});
+    const invitationIndex = capabilities.find(c=>req.path.includes('/token/'+c.token))?.index;
+    events.push({event:'request',method:req.method,path:req.path.replace(/\/token\/[^/]+/,'/token/[redacted]'),actor:index,
+      ...(invitationIndex===undefined?{}:{invitation_index:invitationIndex}),
+      ...(req.method==='POST'&&req.path==='/api/homes/invitations/decisions'?{request_id:req.body.request_id,request_hash:require('node:crypto').createHash('sha256').update(JSON.stringify(req.body)).digest('hex')}: {})});
     if(['/api/users/profile','/api/users/me'].includes(req.path)) return res.json({user:profile(index),...profile(index)});
     if(req.path==='/api/hub') return res.json({user:profile(index),context:{activeHomeId:null,activePersona:{type:'personal'}},
       availability:{hasHome:false,hasBusiness:false,hasPayoutMethod:false},homes:[],businesses:[],
@@ -165,7 +185,13 @@ async function main() {
       statusItems:[],cards:{personal:{unreadChats:0,earnings:0,gigsNearby:0,rating:0,reviewCount:0}},jumpBackIn:[],activity:[]});
     if(req.path.endsWith('/unread-count'))return res.json({count:0,unread_count:0,unreadCount:0});
     if(req.path==='/api/notifications')return res.json({notifications:[],unreadCount:0,pagination:{page:1,totalPages:0,total:0}});
-    if(req.path.includes('/logout'))return res.json({success:true});
+    if(req.path.includes('/logout')) {
+      if(fault?.action==='logout' && fault.kind==='hold') {
+        assert.equal(held,null); events.push({event:'logout_reply_held',actor:index});
+        held=()=>{events.push({event:'logout_reply_released',actor:index});if(!res.destroyed)res.json({success:true});}; return;
+      }
+      return res.json({success:true});
+    }
     return next();
   });
   app.use(f.app);app.use((_req,res)=>res.status(404).json({error:'Outside invitation acceptance scope'}));
