@@ -18,3 +18,11 @@ compatibility basis: the migration adds a service-only function and changes no
 existing table, row, permission or deployed RPC. Executable SQL is unchanged.
 This documentation correction does not establish SQL/HTTP/UI acceptance or close
 the unfinished consumers. Required gates remain intact; no database was changed.
+
+CI 34769252288 passes the migration safeguard but fails the current-claims SQL
+contract: its `x` array alias conflicts with the surrounding PL/pgSQL `x` variable.
+Both exclusion assertions now use an explicit `claim_row(value)` alias and qualified
+value. The generated wrapper is synchronized; all 52 wrapper consistency checks
+pass. This changes only the contract's identifier resolution, not the migration or
+application behavior. Fresh SQL CI remains required; the exclusively leased native
+acceptance database was not used for this correction.

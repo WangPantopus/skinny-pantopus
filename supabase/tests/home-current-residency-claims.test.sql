@@ -100,14 +100,14 @@ DO $$ DECLARE h uuid:=pg_temp.rq_id(100); a uuid:=pg_temp.rq_id(1); r jsonb; aga
  r:=public.decide_home_residency_review(h,claim_id,a,'reject',NULL,'Private decision reason',pg_temp.rq_id(501),token);
  ASSERT r->>'ok'='true'; receipt:=r->'receipt';
  before_state:=pg_temp.rq_state(h); r:=public.list_home_current_residency_claims(h,a);
- ASSERT jsonb_array_length(r->'claims')=29 AND NOT EXISTS(SELECT FROM jsonb_array_elements(r->'claims') x WHERE x->>'id'=claim_id::text);
+ ASSERT jsonb_array_length(r->'claims')=29 AND NOT EXISTS(SELECT FROM jsonb_array_elements(r->'claims') AS claim_row(value) WHERE claim_row.value->>'id'=claim_id::text);
  ASSERT pg_temp.rq_state(h)=before_state;
  r:=public.submit_legacy_home_residency(h,pg_temp.rq_id(2),'{}'); ASSERT r->>'ok'='true' AND r->'claim'->>'id'=claim_id::text;
  r:=public.list_home_current_residency_claims(h,a); ASSERT jsonb_array_length(r->'claims')=30;
  SELECT public.home_residency_review_snapshot(c) INTO token FROM public."HomeResidencyClaim" c WHERE id=claim_id;
  r:=public.decide_home_residency_review(h,claim_id,a,'approve','member',NULL,pg_temp.rq_id(502),token); ASSERT r->>'ok'='true';
  before_state:=pg_temp.rq_state(h); r:=public.list_home_current_residency_claims(h,a);
- ASSERT jsonb_array_length(r->'claims')=29 AND NOT EXISTS(SELECT FROM jsonb_array_elements(r->'claims') x WHERE x->>'id'=claim_id::text);
+ ASSERT jsonb_array_length(r->'claims')=29 AND NOT EXISTS(SELECT FROM jsonb_array_elements(r->'claims') AS claim_row(value) WHERE claim_row.value->>'id'=claim_id::text);
  ASSERT pg_temp.rq_state(h)=before_state;
  ASSERT (SELECT result->>'status'='rejected' FROM public."HomeResidencyReviewReceipt" WHERE id=(receipt->>'id')::uuid), 'Queue does not rewrite earlier rejection';
 
