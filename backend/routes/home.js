@@ -11,7 +11,6 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { computeAddressHash } = require('../utils/normalizeAddress');
-const homePostcardService = require('../services/homePostcardService');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
@@ -26,9 +25,7 @@ const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const {
   checkHomePermission,
-  mapLegacyRole,
   writeAuditLog,
-  applyOccupancyTemplate,
   getActiveOccupancy,
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
@@ -3868,15 +3865,12 @@ router.get('/:id/dashboard', verifyToken, async (req, res) => {
 /**
  * POST /:id/claim - Submit a residency claim for a home
  * Allows users to claim provisional residency.
- * Provisional users get local/public discovery access.
- * Mailbox and private home surfaces remain locked until verified.
+ * Pending admission and private setup follow the current residency policy.
  */
-// postcardLimiter sits AFTER verifyToken so it keys on the user id. The only
-// limiter otherwise covering this route is homeCreationLimiter, which app.js
-// mounts before any authentication runs — keyed on IP, shared with every other
-// home write. The cold-start branch below spends real postage per request, so
-// it gets the same 3-per-hour per-user budget as request-postcard.
-const { postcardLimiter: claimPostcardLimiter, homeResidencySubmissionLimiter } = require('../middleware/rateLimiter');
+// Both submission versions use the signed-in admission budget. Saving a claim
+// requests no postage; the explicit postcard operation has its own allowance.
+const { homeResidencySubmissionLimiter } = require('../middleware/rateLimiter');
+const residencyLegacy = require('../services/homeResidencyLegacyService');
 const residencySubmission = require('../services/homeResidencySubmissionService');
 const residencySubmissionNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
 // New clients retain the original UUID before submitting. This command saves
@@ -3899,216 +3893,12 @@ router.post('/:id/residency-submissions/:requestId/cancel', residencySubmissionN
   catch (error) { residencySubmission.sendError(res, error); }
 });
 
-router.post('/:id/claim', verifyToken, claimPostcardLimiter, async (req, res) => {
-  try {
-    const homeId = req.params.id;
-    const userId = req.user.id;
-    const { claimed_address, claimed_role } = req.body;
-
-    // Verify home exists
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id, address, address2, city, state, zipcode')
-      .eq('id', homeId)
-      .single();
-
-    if (!home) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    // Check if already an active member
-    const { data: existingOccupancy } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single();
-
-    if (existingOccupancy) {
-      return res.status(400).json({ error: 'You are already a member of this home' });
-    }
-
-    // Check for existing pending claim
-    const { data: existingClaim } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select('id, status')
-      .eq('home_id', homeId)
-      .eq('user_id', userId)
-      .single();
-
-    if (existingClaim) {
-      if (existingClaim.status === 'pending') {
-        return res.status(400).json({ error: 'You already have a pending claim for this home' });
-      }
-      if (existingClaim.status === 'verified') {
-        return res.status(400).json({ error: 'Your residency has already been verified' });
-      }
-      // Rejected claim: allow re-claim by updating
-      const { data: updated, error } = await supabaseAdmin
-        .from('HomeResidencyClaim')
-        .update({
-          status: 'pending',
-          claimed_address: claimed_address || home.address,
-          claimed_role: claimed_role || existingClaim.claimed_role || 'member',
-          reviewed_by: null,
-          reviewed_at: null,
-          review_note: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingClaim.id)
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error re-submitting claim', { error: error.message });
-        return res.status(500).json({ error: 'Failed to submit claim' });
-      }
-
-      // Notify home authorities
-      await notifyHomeAuthorities(homeId, userId, 'residency_claim', claimed_role);
-
-      return res.json({ message: 'Residency claim re-submitted', claim: updated });
-    }
-
-    // Create new claim
-    const { data: claim, error } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .insert({
-        home_id: homeId,
-        user_id: userId,
-        claimed_address: claimed_address || home.address,
-        claimed_role: claimed_role || 'member',
-        status: 'pending',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      // 23505 = unique_violation from idx_residency_claim_one_pending_per_user
-      if (error.code === '23505') {
-        return res.status(409).json({
-          error: 'You already have a pending residency claim for this home',
-          code: 'DUPLICATE_CLAIM',
-        });
-      }
-      logger.error('Error creating residency claim', { error: error.message });
-      return res.status(500).json({ error: 'Failed to submit residency claim' });
-    }
-
-    // --- 3-path cold-start routing (BUG 3A fix) ---
-    // Determine how to route this claim based on authority count.
-
-    // 1. Count active authorities
-    const { data: authorities, error: authoritiesError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('user_id')
-      .eq('home_id', homeId)
-      .eq('is_active', true)
-      .in('role_base', ['owner', 'admin', 'manager']);
-    if (authoritiesError || !authorities) throw new Error('Could not check household authorities');
-    const authorityCount = authorities.length;
-
-    // 2. Get home creator
-    const { data: homeForCreator } = await supabaseAdmin
-      .from('Home')
-      .select('created_by_user_id')
-      .eq('id', homeId)
-      .single();
-
-    const effectiveRole = mapLegacyRole(claimed_role || 'member');
-
-    if (authorityCount === 0 && userId === homeForCreator?.created_by_user_id) {
-      // PATH 1 — Self-bootstrap: creator is first person at this address
-      await applyOccupancyTemplate(homeId, userId, effectiveRole, 'provisional_bootstrap');
-      await supabaseAdmin
-        .from('HomeResidencyClaim')
-        .update({ cold_start_mode: 'self_bootstrap', updated_at: new Date().toISOString() })
-        .eq('id', claim.id);
-
-      return res.status(201).json({
-        message: 'You have provisional access. Verify your address to unlock full features.',
-        claim,
-        verification_needed: true,
-        cold_start: true,
-      });
-
-    } else if (authorityCount === 0) {
-      // PATH 2 — External cold-start: no authorities, not the creator
-      const coldStartMail = await homePostcardService.request(homeId, userId);
-      if (coldStartMail.status >= 400) return res.status(coldStartMail.status).json(coldStartMail.body);
-      const postcard = coldStartMail.body.postcard;
-
-      await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
-      await supabaseAdmin
-        .from('HomeResidencyClaim')
-        .update({
-          cold_start_mode: 'external_postcard',
-          postcard_auto_routed: true,
-          postcard_code_id: postcard?.id || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', claim.id);
-
-      return res.status(201).json({
-        message: coldStartMail.body.message,
-        claim,
-        postcard_requested: true,
-        delivery_unknown: coldStartMail.body.delivery_unknown,
-      });
-
-    } else {
-      // PATH 3 — Normal: home has active authorities
-
-      // Check for stale authorities (all inactive for 30+ days).
-      //
-      // LIF-03: this used to filter `User.last_sign_in_at`, a column that does
-      // not exist on the public User table — it lives on auth.users. The query
-      // therefore errored, `activeAuthUsers` was always empty, and EVERY
-      // move-in conflict was classified "all authorities stale" and routed away
-      // from the household. Now that postcards are actually mailed, that
-      // misrouting would let a stranger bypass household approval entirely, so
-      // this reads the real source and fails closed: any uncertainty means the
-      // authorities are treated as active and the household is asked.
-      const authoritiesStale = await allAuthoritiesStale(
-        authorities.map(a => a.user_id), 30,
-      );
-
-      if (authoritiesStale) {
-        // All authorities are stale — treat as cold-start (PATH 2 fallback)
-        const staleMail = await homePostcardService.request(homeId, userId);
-        if (staleMail.status >= 400) return res.status(staleMail.status).json(staleMail.body);
-        const postcard = staleMail.body.postcard;
-
-        await applyOccupancyTemplate(homeId, userId, 'member', 'pending_postcard');
-        await supabaseAdmin
-          .from('HomeResidencyClaim')
-          .update({
-            cold_start_mode: 'stale_authority_postcard',
-            postcard_auto_routed: true,
-            postcard_code_id: postcard?.id || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', claim.id);
-
-        return res.status(201).json({
-          message: staleMail.body.message,
-          claim,
-          postcard_requested: true,
-          delivery_unknown: staleMail.body.delivery_unknown,
-        });
-      }
-
-      // At least one active authority — normal human approval path
-      await applyOccupancyTemplate(homeId, userId, effectiveRole, 'pending_approval');
-      await notifyHomeAuthorities(homeId, userId, 'residency_claim', claimed_role);
-
-      return res.status(201).json({ message: 'Residency claim submitted', claim });
-    }
-  } catch (err) {
-    logger.error('Residency claim error', { error: err.message });
-    res.status(500).json({ error: 'Failed to submit residency claim' });
-  }
+// Older clients have optional relationship/address assertions, not a protected
+// request UUID or reviewed snapshot. The service shares atomic admission policy.
+router.post('/:id/claim', residencySubmissionNoStore, verifyToken, homeResidencySubmissionLimiter, async (req, res) => {
+  try { residencyLegacy.send(res, await residencyLegacy.submit({ homeId: req.params.id,
+    actorId: req.user.id, intent: req.body })); }
+  catch (error) { residencyLegacy.sendError(res, error); }
 });
 
 /**
@@ -4229,98 +4019,6 @@ router.post('/:id/claim/:claimId/reject', verifyToken, validate(residencyRejecti
     homeResidencyReviewService.sendError(res, err);
   }
 });
-
-/**
- * Helper: Generate a safe alphanumeric code for postcard verification.
- * Excludes confusing characters: 0/O, 1/I/L.
- */
-/**
- * Are ALL of these users inactive for `days`?
- *
- * Fails closed: if any user's activity cannot be determined, they count as
- * active, so the caller keeps the household in the loop rather than falling
- * back to a self-service path.
- */
-async function allAuthoritiesStale(userIds, days) {
-  if (!Array.isArray(userIds) || userIds.length === 0) return false;
-
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-
-  for (const userId of userIds) {
-    try {
-      const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-      if (error || !data?.user) return false;
-
-      const lastSignIn = data.user.last_sign_in_at;
-      if (!lastSignIn) return false;
-      if (new Date(lastSignIn).getTime() > cutoff) return false;
-    } catch (err) {
-      logger.warn('allAuthoritiesStale: activity lookup failed, treating as active', {
-        userId, error: err.message,
-      });
-      return false;
-    }
-  }
-
-  return true;
-}
-
-
-/**
- * Helper: Notify home owners/admins about a new claim.
- */
-async function notifyHomeAuthorities(homeId, claimantId, type, claimedRole) {
-  try {
-    const notificationService = require('../services/notificationService');
-
-    // Get home name
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('name, address')
-      .eq('id', homeId)
-      .single();
-
-    // Get claimant name
-    const { data: claimant } = await supabaseAdmin
-      .from('User')
-      .select('username, name, first_name')
-      .eq('id', claimantId)
-      .single();
-
-    const claimantName = claimant?.name || claimant?.first_name || claimant?.username || 'Someone';
-    const homeName = home?.name || home?.address || 'your home';
-    const roleLabel = claimedRole ? ` as ${claimedRole}` : '';
-
-    // Get home owners/admins
-    const { data: authorities } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('user_id')
-      .eq('home_id', homeId)
-      .eq('is_active', true)
-      .in('role_base', ['owner', 'admin', 'manager']);
-
-    if (!authorities || authorities.length === 0) return;
-
-    const notifications = authorities
-      .filter(a => a.user_id !== claimantId)
-      .map(a => ({
-        userId: a.user_id,
-        type: 'residency_claim',
-        title: 'New home access request',
-        body: `${claimantName} is requesting to join ${homeName}${roleLabel}.`,
-        icon: '📩',
-        link: `/homes/${homeId}/owners/review-claim`,
-        metadata: { home_id: homeId, claimant_id: claimantId, claimed_role: claimedRole },
-      }));
-
-    if (notifications.length > 0) {
-      await notificationService.createBulkNotifications(notifications);
-    }
-  } catch (err) {
-    logger.warn('Failed to notify home authorities about claim', { error: err.message });
-  }
-}
-
 
 // ============ HOME PETS ============
 

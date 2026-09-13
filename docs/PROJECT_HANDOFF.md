@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 12, 2026, after ordinary-member Task acceptance. **This is the
+Updated September 13, 2026, after older-client residency compatibility acceptance. **This is the
 current entry point.** Old accumulated checkpoints are preserved in
 [handoff history](HANDOFF_HISTORY_THROUGH_2026-09-12.md); their old “next” actions
 are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
@@ -11,8 +11,8 @@ are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
 Continue in `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, associated with
 [PR #32 — Enforce Home permission and record boundaries](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-**Next: R02 older-client residency submission compatibility, while verifying
-the Task milestone's actual committed/pushed head and CI.**
+**Next: finish R03 native removal baselines and implement original-action recovery,
+while verifying the R02 integration commit/push and exact-head CI.**
 The [deliberate Task policy repair](home-member-task-first-use-2026-09-12.md)
 passes actual HTTP/SDK/SQL, populated preservation and all 49 raw/generated SQL
 contracts. The [browser journey](home-browser-member-first-use-2026-09-12.md)
@@ -25,10 +25,12 @@ input, edit/completion/reopen, lost-reply cold recovery and current-access chang
 Browser and Android each retain one Task/receipt through two creation attempts;
 iOS deliberately proves two originals/two receipts through four attempts.
 
-The earlier [four-form authentication repair](web-auth-form-hydration-2026-09-12.md)
-is committed/pushed at `80c702a3433193bc9aa58b48cd576ef595e321fd`, with all 16
-checks green in [CI 34737876978](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34737876978).
-That is the authentication predecessor, not CI proof for the Task milestone.
+The Task milestone is committed/pushed at
+`767fbb2278774bcd092f2e1b425cc43325bda8a9`, with all 16 checks green in
+[CI 34742973930](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34742973930).
+This is the accepted predecessor, not CI proof for later R02 source. The earlier
+[four-form authentication repair](web-auth-form-hydration-2026-09-12.md) remains
+accepted at `80c702a34`, with all 16 checks in CI 34737876978.
 H07/H08 and new-account/provider onboarding remain partial.
 First refresh local/remote Git, both PRs and exact-head CI as the resume guide
 specifies. The PR and private operator index carry the exact source/CI binding;
@@ -70,37 +72,43 @@ address, creation, joining, postal or recipient-decision milestones.
 
 ### Current next action
 
-1. Finish the Task integration commit/push if needed, then verify its clean
-   committed/pushed head, durable evidence and exact-head CI. All four
-   backend/browser/native proofs are preserved; do not
-   repeat their accepted admission or commands merely to restore context.
-   The additive policy grants ordinary `member` only `tasks.view`/`tasks.edit`;
-   explicit denies, age ceilings, restricted sources and other creators' content
-   remain protected. Household admission is not residency or ownership proof.
-   H07/H08 stay partial beyond their actual controlled existing-account journeys.
-   Independent R02 acceptance can proceed while remote CI runs, under the
-   exclusive database lease; integrate only at the verified boundary.
-2. Repair R02 older-client `POST /:id/claim` partial writes through shared atomic
-   policy, preserving its legacy response shape and separate postal intent. Old
-   clients have no protected request UUID/address snapshot; do not fabricate one
-   or claim the new-client reviewed-address protocol is present.
-3. Follow the full ordered inventory through feature/UI/payment/provider,
-   integration and launch work. Keep paid activation in one final bundle.
+1. Verify the R02 integration's clean committed/pushed head and exact-head CI.
+   Its [atomic older-client repair](home-residency-legacy-compatibility-2026-09-12.md)
+   passes populated upgrade, 53 actual HTTP/SDK calls, ten observed lock races
+   and all 50 raw plus 50 generated H07/R02 SQL contracts. The old response
+   shape, legitimate membership and protected originals are preserved.
+   Old clients still have no immutable UUID/address-review/cancellation fence;
+   notices are best effort and saving admission requests no postage.
+2. Finish the retained native Members Remove baseline, then implement reviewed
+   original-action and saved-result recovery. The [actual backend/browser
+   baseline](home-member-removal-baseline-2026-09-13.md) proves a lost committed
+   reply leaves a stale browser row and that repeating DELETE adds audits and
+   timestamp writes. Shipped re-invitation refuses ended membership; the held
+   old DELETE was discarded without SQL. Do not claim renewed-membership deletion
+   or force re-admission. iOS automatically retries transient DELETE failures, so
+   native proof must count actual attempts separately from confirmations. Keep
+   history distinct from current membership, preserve ownership/self-leave rules
+   and replace unsupported re-invitation wording. Sender withdrawal and H07
+   fixture-controlled removal remain separate accepted subjourneys.
+3. Continue R03's combined applicant/reviewer cycle, post-acknowledgement
+   reviewer history, expiry and independent reviewers, then the full ordered
+   feature/UI/payment/provider/integration/launch inventory. Preserve already
+   accepted applicant resubmission/pagination. Establish household
+   needs-more-information separately from ownership challenge.
 
-R02 is being prepared independently in
-`/private/tmp/pantopus-home-residency-legacy-compatibility`, branch
-`codex/home-residency-legacy-compatibility`, based on `80c702a34`. Its additive
-version `20260912060000` is uncommitted and is not part of the primary inventory
-below. The corrected actual legacy baseline preserves the full unique
-`(user_id, home_id)` claim constraint; do not invent multiple historical claims
-for one pair or claim expired access was effective merely because stored
-occupancy flags were improperly changed. R02 now owns the exclusive DB lease
-for candidate SQL/HTTP/upgrade acceptance after Android's exact cleanup.
-Integrate only after review and reconciled H07/R02 contracts.
+R02 was prepared in `/private/tmp/pantopus-home-residency-legacy-compatibility`,
+branch `codex/home-residency-legacy-compatibility`, based on `80c702a34`. Root
+review and an independent review found no blocking regression. Its additive
+`20260912060000` is integrated in the primary source. The H07/R02 union preserves
+all 366 populated tables, original role rows, complete 33-row ledger and function
+provenance. The full unique actor/Home claim constraint is unchanged. Improper
+stored inactive occupancy flags in the old baseline did not establish effective
+expired access. R02 fixtures are exactly cleaned; inspect the current DB lease
+before starting another writer.
 
 ## What is done
 
-**7 acceptance rows are fully closed (H01–H06 and R01); 73 are partial/open.**
+**8 acceptance rows are locally closed (H01–H06 and R01–R02); 72 are partial/open.**
 Many open rows contain substantial accepted subjourneys. These counts are **not
 percentages of app implementation, effort spent or effort left**. Do not call
 this “8% complete / 92% unfinished.” No weighted app-wide completion percentage
@@ -110,9 +118,10 @@ or reliable release date is established.
 | --- | --- |
 | Current Home authority, identity and deletion eligibility | [Detail](home-detail-authority-2026-09-11.md), [lists](home-list-authority-2026-09-11.md), [field projection](home-detail-projection-2026-09-11.md), [native identity](home-native-list-first-use-2026-09-11.md). Actual HTTP/SDK/SQL and installed native acceptance; other IAM/mutation surfaces remain open. |
 | Address, location and retained creation | [Native address](home-native-address-entry-2026-09-11.md), [location recovery](home-device-location-recovery-2026-09-11.md), [browser creation](home-browser-create-recovery-2026-09-11.md), [iOS](home-ios-create-recovery-2026-09-11.md), [Android](home-android-create-recovery-2026-09-11.md). Units, cancellation, lost replies and process recovery; address entry grants no access. |
-| Joining, postal decisions, prepared review and private first use | [Submission](home-residency-submission-recovery-2026-09-11.md), [personal progress](home-personal-residency-progress-2026-09-11.md), [iOS postal](home-ios-postal-recovery-2026-09-12.md), [Android postal](home-android-postal-recovery-2026-09-12.md), [iOS review](home-ios-residency-review-2026-09-12.md), [Android review](home-android-residency-review-2026-09-12.md), [private first use](home-private-first-use-2026-09-12.md). Older-client partial-write compatibility and broader lifecycle remain open. |
+| Joining, postal decisions, prepared review and private first use | [Submission](home-residency-submission-recovery-2026-09-11.md), [personal progress](home-personal-residency-progress-2026-09-11.md), [iOS postal](home-ios-postal-recovery-2026-09-12.md), [Android postal](home-android-postal-recovery-2026-09-12.md), [iOS review](home-ios-residency-review-2026-09-12.md), [Android review](home-android-residency-review-2026-09-12.md), [private first use](home-private-first-use-2026-09-12.md). Older-client compatibility also passes; broader lifecycle remains R03. |
 | Recipient invitation decisions on all three clients | [Atomic backend](home-invitation-decision-recovery-2026-09-12.md), [browser](home-browser-invitation-decisions-2026-09-12.md), [iOS](home-ios-invitation-decisions-2026-09-12.md), [Android](home-android-invitation-decisions-2026-09-12.md). Encrypted originals, retry/check/cancel/acknowledge, account/lifecycle retirement, legacy login-link migration and fresh access before explicit Home entry. Ordinary-member onboarding remains H07/H08. |
 | Sender invitation recovery on all three clients | [Backend](home-invitation-sender-recovery-2026-09-12.md), [browser](home-browser-invitation-sender-2026-09-12.md), [iOS](home-ios-invitation-sender-2026-09-12.md), [Android](home-android-invitation-sender-2026-09-12.md). Protected creation/resend/withdrawal, truthful delivery, current sharing, distinct recipient identities and bounded member-list ordering. Live provider delivery, broader Members/Security and complete onboarding remain separate. |
+| Older-client residency compatibility | [Atomic compatibility](home-residency-legacy-compatibility-2026-09-12.md). Optional legacy input/envelope, alias/omission, membership preservation, lost replies and current-policy races pass actual HTTP/SDK/SQL. Canonical household approval also works with omitted role. Historical client binaries, provider arrival and hosted adoption are not claimed. |
 | Ordinary-member household Task first use | [Policy/backend](home-member-task-first-use-2026-09-12.md), [browser](home-browser-member-first-use-2026-09-12.md), [iOS](home-ios-member-onboarding-2026-09-12.md), [Android](home-android-member-onboarding-2026-09-12.md). Shipped admission, truthful household identity/roster state, useful exact-text Tasks, own edits/completion, lost replies/restart and current permission/membership recovery. New-account/provider onboarding, wider accessibility and hosted readiness remain open. |
 | Earlier tasks, private files, claim relationships, recurrence and task-to-Gig | [Task recovery](home-task-create-recovery-2026-09-10.md), [media](home-task-private-media-2026-09-10.md), [claim decisions](home-claim-relationship-decisions-2026-09-10.md), [recurrence](home-task-recurrence-engine-2026-09-10.md), [publication](home-task-gig-publication-2026-09-10.md). Native/browser reports are indexed in history; broader storage/entity and paid execution remain separate. |
 | Home summaries and bill currency/history/recovery | [Dashboard](home-dashboard-current-summary-2026-09-11.md), [bills](home-bill-comparison-continuation-2026-09-11.md), [summary boundaries](home-summary-boundary-continuation-2026-09-11.md). Place finance, checklist/health lag and deeper provider acceptance remain open. |
@@ -140,11 +149,12 @@ unfinished. Preserve `/private/tmp/pantopus-staging-paid-gig`, branch
 `codex/staging-paid-gig`, its unwired tip draft and completed paid source work;
 source/build checkpoints are not full live/native payment acceptance.
 
-Primary source SQL inventory: **46 Home / 21 paid / 55 combined versions**, including 12
+Primary source SQL inventory: **47 Home / 21 paid / 56 combined versions**, including 12
 byte-identical shared versions and zero collisions. Invitation command migration
 `20260912020000` and sender migration `20260912040000` are additive source; no permanent adoption. Android adds no
-migration. The Task default migration is `20260912050000`; the authentication
-predecessor had 45 Home versions. Reserved ledger version `20260910220000` must retain every original
+migration. The Task default migration is `20260912050000`; legacy residency compatibility
+is `20260912060000`. The H07/R02 100-contract run applies Home prerequisites only;
+it is not the unfinished combined paid/Home replay. Reserved ledger version `20260910220000` must retain every original
 row/column, not merely its version number. Reserved tip migration
 `20260910190000_paid_gig_tip_receipts.sql` is not implemented. Combined dependency
 reconciliation, populated replay and per-environment ledger adoption remain open.
@@ -163,7 +173,7 @@ Verify final PR checks and merged-master checks independently.
 | Owned iOS | Simulator `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, Pantopus Bill Acceptance iPhone 17 / iOS 26.5, stopped with userdata after member first-use r3. Final signed candidate r6 is byte-bound to installed products; production/unit r4 passes 4,402 checks/168 skips. Both member fixtures are exactly cleaned; earlier sender/recipient evidence remains preserved. |
 | Owner devices | Physical iPhone remains Staging 1.0.0 (2), earlier source `139868c`; no update in this milestone. Owner simulator `EB5AD759-4699-481F-8A9F-0D650B074623` is unrelated and preserved. Never install loopback acceptance builds on the physical phone. |
 | Owned replay DB | Project `/private/tmp/pantopus-home-gig-replay`, DB `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522, retained. Sender fixture cleanups restore complete role rows, full ledger and exact function definitions/owners/ACLs/configuration/provenance. Both native list-ordering follow-ups are exactly cleaned; preserve the same exclusive ownership protocol for future fixtures. |
-| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Owned Next dev 18080 retained; inspect before reuse and do not run a competing `.next` build. Member fixture 18084 is stopped. R02 now owns the exclusive replay DB lease through its isolated ephemeral-port harness; inspect current ownership before another writer. |
+| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Owned Next dev 18080 retained; inspect before reuse and do not run a competing `.next` build. Member fixture 18084 is stopped. R02 actual and union runs are exactly restored and their lease released. R03 preparation follows; inspect the private operator index and current ownership before another writer. |
 | Staging deployment — historical, not reverified here | API/worker last recorded at `65d2cc2d9ab4857e044325315f0023a6d8f4bf54`, `https://staging-api.pantopus.com`, existing Oregon EC2; API loopback 18001 behind nginx, worker private. Source is newer. Original production container and all hosted databases preserved. |
 | Hosted release — unfinished | Last recorded staging/production deployment and migration switches false; re-read before merge/release. Production schema/ledger, external files, Auth/Storage, DNS/cutover and rollback need separate verification. Local replay is not hosted adoption. |
 
@@ -180,7 +190,8 @@ space before heavy builds and retain accepted products with APFS clones.
 
 ## Evidence and operating rules
 
-Ordinary-member evidence is durably indexed under
+R02 backend and combined H07/R02 evidence is durably indexed in the sibling
+`residency-legacy-compatibility-20260912/` directory. Ordinary-member evidence is durably indexed under
 `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/20260907/home-invitation-handoff-20260912/member-onboarding-20260912/`.
 Backend, browser and iOS final source/product/actual-journey/cleanup copies are
 verified. Android's baseline, form reproduction, final signed products/gates and

@@ -2,8 +2,8 @@
 
 The installed ordinary Member journey now proves invitation creation, recipient
 acceptance, fresh My Homes identity, matching Home entry and useful household
-Task first use. The accepted continuation edits, reopens and completes its first
-Task; current permission denial and membership removal retire access. A second
+Task first use. The accepted continuation edits and completes its first Task, then reopens its
+completed detail; current permission denial and membership removal retire access. A second
 explicitly intended Task preserves its exact title and notes through a lost
 reply, cold restart and Retry. These are bounded local H07/H08 subjourneys,
 not completion of their full exit criteria. The accepted sender milestone remains

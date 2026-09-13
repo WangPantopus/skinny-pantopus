@@ -22,13 +22,12 @@ gh run list --branch codex/home-permission-boundaries --workflow CI --limit 5 --
 ```
 
 Expected branch: `codex/home-permission-boundaries`. Compare local, remote and
-PR head. The committed/pushed authentication predecessor is
-`80c702a3433193bc9aa58b48cd576ef595e321fd`, with all 16 checks green in
-[CI 34737876978](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34737876978).
-It verifies the browser authentication readiness repair. The Task milestone has
-separate local acceptance and source/product bindings. Inspect live Git/CI and the
-private operator index for its integration commit; that predecessor run cannot
-verify a later source change.
+PR head. The committed/pushed Task predecessor is
+`767fbb2278774bcd092f2e1b425cc43325bda8a9`, with all 16 checks green in
+[CI 34742973930](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34742973930).
+The older authentication repair remains accepted at `80c702a34`. Inspect live
+Git/CI and the private operator index for the later R02 integrating commit; no
+predecessor run verifies a subsequent source change.
 #32 remains a draft; #34 is an unfinished conflicting draft. Master at handoff was
 `6a1013784db69bf339535a2f4b33b328f2bbf40c`.
 
@@ -37,9 +36,9 @@ feature branch into a new isolated worktree. Do not reconstruct code from logs
 or overwrite the owner checkout. It retains old master and three unrelated
 documentation/design changes. Do not prune other worktrees.
 
-## Next implementation: older-client residency compatibility
+## Next implementation: actual Members removal and recovery
 
-The current Task first-use candidate passes
+The committed Task first-use milestone passes
 [backend policy/HTTP/SQL](home-member-task-first-use-2026-09-12.md),
 [browser](home-browser-member-first-use-2026-09-12.md) and
 [installed iOS](home-ios-member-onboarding-2026-09-12.md) acceptance.
@@ -47,9 +46,9 @@ The [installed Android journey](home-android-member-onboarding-2026-09-12.md)
 also passes exact input, cold original retry, edit/completion/reopen and current
 access, with both full variants, lint/signing and optimized codec proof. All
 fixtures are exactly cleaned, both owned devices are stopped with userdata
-retained, and durable source/product/evidence copies are verified. Finish the
-integration commit/push if needed and verify its exact-head CI while independent
-R02 acceptance proceeds. All clients preserve their accepted segments and failed
+retained, and durable source/product/evidence copies are verified. Its exact-head
+CI is green. Verify the later R02 integration separately. All clients preserve
+their accepted segments and failed
 driver predecessors; do not describe segmented proof as an uninterrupted fresh run.
 
 The browser [authentication readiness repair](web-auth-form-hydration-2026-09-12.md)
@@ -111,19 +110,29 @@ intentionally remain an exception and can accept the new current policy. Preserv
 saved snapshots/receipts and explicitly cover this distinction in the policy
 upgrade; do not describe every pending invitation as automatically retired.
 
-R02 older-client `POST /:id/claim` follows in the isolated
-`/private/tmp/pantopus-home-residency-legacy-compatibility` worktree, branch
-`codex/home-residency-legacy-compatibility`, based on `80c702a34`. Its uncommitted
-`20260912060000` shares atomic admission and preserves the legacy envelope and
-separate postal intent. R02 now owns the exclusive replay DB lease for its
-source-bound baseline and candidate SQL/HTTP/upgrade acceptance. Do not invent a
-protected UUID or reviewed-address snapshot for old clients. The actual baseline
-proves one full unique claim per actor/Home, not
-multiple same-pair histories. It also distinguishes improper stored inactive
-occupancy changes from effective expired access. Integrate only reviewed source
-and passing actual proof, reconciling the H07/R02 contract union. Continue the
-ordered inventory afterward. **7 of 80 rows closed** does not measure app
-completion or remaining effort.
+R02 [older-client compatibility](home-residency-legacy-compatibility-2026-09-12.md)
+is integrated from the isolated worktree based on `80c702a34`. Additive
+`20260912060000` shares atomic admission, preserves existing membership and the
+legacy envelope, and keeps postage separate. Actual acceptance passes 53
+HTTP/SDK calls, ten observed lock races, populated upgrade and omitted-role
+household approval. The combined H07/R02 candidate passes all 50 raw plus 50
+generated contracts, with exact 366-table/function/role/full-ledger restoration.
+Root verifies primary bytes against those tested sources before committing.
+No immutable request UUID, reviewed-address snapshot, cancellation guarantee,
+old-binary UI coverage, live notice arrival or hosted adoption is claimed.
+
+R03 [backend/browser removal baseline](home-member-removal-baseline-2026-09-13.md)
+now proves committed-reply loss, misleading cached membership and repeated DELETE
+side effects. Shipped re-invitation refuses ended membership; an older held
+request is discarded before RPC, without forced renewal. Finish retained native
+baselines, then implement a reviewed original and recoverable result with current
+membership/authority fencing. iOS automatically retries transient DELETE
+failures; count each HTTP/SQL attempt separately from the confirmation. The old
+shared fixture stubs the service and cannot prove removal. H07 fixture removal
+and sender withdrawal remain separate accepted work. Private working evidence is
+under `pantopus-home-member-removal-r1`; inspect the operator index for the active
+DB/device lease. Continue the full R03 and ordered inventory afterward.
+**8 of 80 rows locally closed** does not measure app completion or remaining effort.
 
 ## Local setup and preservation
 
@@ -135,7 +144,7 @@ Do not print it. Private files are not available from Git alone.
 | --- | --- |
 | Replay DB | `/private/tmp/pantopus-home-gig-replay`, container `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522; CLI `/opt/homebrew/bin/supabase`. Preserve DB and full ledger; never reset it to prepare a test. |
 | REST | Preserve `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and replacement. `/private/tmp/pantopus-home-create-rest-before-recovery.json` contains private configuration: never print it. |
-| Browser | Owned Next dev 18080 retained, last PID 42758; inspect identity before reuse, no competing `.next` build. Member fixture 18084 is stopped; R02 owns the replay DB through its isolated ephemeral-port harness. Inspect ownership before another writer. |
+| Browser | Owned Next dev 18080 retained, last PID 42758; inspect identity before reuse, no competing `.next` build. Member fixture 18084 is stopped; R02 fixtures and union runs are exactly restored. R03 preparation follows; inspect current ownership before another writer. |
 | Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after final member first use with app/data retained. SDK `/Users/yingpengwang/Library/Android/sdk`; Java 17 `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`. No data clear/uninstall to simplify tests. |
 | iOS | Owned `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, stopped after member first-use r3 with signed candidate r6 and userdata retained; inspect before new work. Derived `/private/tmp/pantopus-home-documents-derived`, preserved accepted products; compiler cache is back internally after verified storage cleanup. Owner `EB5AD759-4699-481F-8A9F-0D650B074623` unrelated. |
 | Phone | Existing Staging 1.0.0 (2), earlier source `139868c`. No update in this milestone. Never install loopback acceptance binaries on it. |
