@@ -106,6 +106,23 @@ result without sending. The fresh populated upgrade again preserves all 366
 tables with zero lint issues. HTTP cleanup restores complete
 ledger/schema/function provenance and introduced role rows.
 
+Exact-head CI `34732503975` for `f8803877812021f8e702e3c26f046c8f39692754`
+replayed and linted the schema, then failed one of 48 SQL contracts. The older
+invitation contract still expected a denied original issuer to revoke an
+invitation; the accepted sender policy correctly returned
+`INVITE_EMAIL_MISMATCH` (403). The corrected source contract and generated pgTAP
+wrapper now prove token- and ID-based denial preserves complete invitation,
+occupancy and audit rows. Removing only the exact fixture deny restores authority,
+permits one revocation, preserves membership and makes a retry mutation-free.
+Both the raw contract and generated wrapper pass against the final sender SQL
+in rolled-back candidate transactions. Complete row values in 366 tables,
+roles, ledger, functions, relation properties and extensions match before/after.
+This is a contract/report-only correction: production service, migration and
+HTTP acceptance sources retain their r6 hashes. The original r6 binding remains
+predecessor evidence for this documentation change; a separate
+`ci-contract-repair-r1` binding records the correction. The follow-up pushed
+head still requires its own complete CI result.
+
 Shared browser/native fixture `scripts/ios/home-invitation-ui-fixture.cjs` gains
 `sender-recovery`, sender command faults, safe request hashes, authority changes,
 recipient acceptance, separate delivery controls, and roster failures on both

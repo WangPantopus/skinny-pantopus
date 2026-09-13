@@ -48,6 +48,12 @@ CREATE FUNCTION pg_temp.expect_invite(r jsonb,c text DEFAULT NULL) RETURNS void 
  IF (c IS NULL AND r->>'ok' IS DISTINCT FROM 'true') OR (c IS NOT NULL AND r->>'code' IS DISTINCT FROM c) THEN
   RAISE EXCEPTION 'Expected %, got %',coalesce(c,'success'),r; END IF;
 END $$;
+CREATE FUNCTION pg_temp.invitation_state(h uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object(
+  'invitations',(SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id),'[]') FROM public."HomeInvite" i WHERE home_id=h),
+  'occupancies',(SELECT coalesce(jsonb_agg(to_jsonb(o) ORDER BY id),'[]') FROM public."HomeOccupancy" o WHERE home_id=h),
+  'audit',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY id),'[]') FROM public."HomeAuditLog" a WHERE home_id=h));
+$$;
 SET LOCAL ROLE service_role;
 DO $$ DECLARE h uuid:=pg_temp.invitation_user(100); owner_id uuid:=pg_temp.invitation_user(1);
  admin_id uuid:=pg_temp.invitation_user(2); r jsonb; s jsonb; original jsonb; i uuid; n integer; state text;
@@ -116,13 +122,32 @@ DO $$ DECLARE h uuid:=pg_temp.invitation_user(100); owner_id uuid:=pg_temp.invit
  INSERT INTO public."HomeRolePermission"(role_base,permission,allowed) VALUES('member','tasks.view',true);
  PERFORM pg_temp.expect_invite(public.act_on_home_invitation(NULL,repeat('d',64),pg_temp.invitation_user(10),'accept'),'INVITE_POLICY_CHANGED');
  DELETE FROM public."HomeRolePermission" WHERE role_base='member' AND permission='tasks.view';
- -- Revoked inviter/owner deny is current, and issuer can still monotonically revoke.
+ -- Original issuers require current authority to revoke a targeted invitation.
+ i:=(r->'invitation'->>'id')::uuid;
  INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,owner_id,'members.manage',false);
+ original:=pg_temp.invitation_state(h);
  PERFORM pg_temp.expect_invite(public.act_on_home_invitation(NULL,repeat('d',64),pg_temp.invitation_user(10),'accept'),'INVITER_ACCESS_CHANGED');
  PERFORM pg_temp.expect_invite(public.act_on_home_invitation(NULL,repeat('d',64),NULL,'preview'),'INVITER_ACCESS_CHANGED');
  PERFORM pg_temp.expect_invite(public.write_home_invitation(h,owner_id,'create','{}',repeat('e',64)),'MEMBERS_MANAGE_REQUIRED');
- PERFORM pg_temp.expect_invite(public.act_on_home_invitation(NULL,repeat('d',64),owner_id,'decline'));
- DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=owner_id;
+ r:=public.act_on_home_invitation(NULL,repeat('d',64),owner_id,'decline');
+ PERFORM pg_temp.expect_invite(r,'INVITE_EMAIL_MISMATCH');
+ IF r->>'status' IS DISTINCT FROM '403' THEN RAISE EXCEPTION 'Denied issuer token response was not forbidden'; END IF;
+ r:=public.act_on_home_invitation(i,NULL,owner_id,'decline');
+ PERFORM pg_temp.expect_invite(r,'INVITE_EMAIL_MISMATCH');
+ IF r->>'status' IS DISTINCT FROM '403' OR pg_temp.invitation_state(h) IS DISTINCT FROM original THEN
+  RAISE EXCEPTION 'Denied issuer changed invitation, occupancy or audit'; END IF;
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=owner_id AND permission='members.manage' AND NOT allowed;
+ r:=public.act_on_home_invitation(NULL,repeat('d',64),owner_id,'decline'); PERFORM pg_temp.expect_invite(r);
+ s:=pg_temp.invitation_state(h);
+ IF r->>'replayed' IS DISTINCT FROM 'false' OR (SELECT status FROM public."HomeInvite" WHERE id=i) IS DISTINCT FROM 'revoked'
+  OR s->'occupancies' IS DISTINCT FROM original->'occupancies'
+  OR jsonb_array_length(s->'audit')<>jsonb_array_length(original->'audit')+1
+  OR NOT EXISTS(SELECT FROM public."HomeAuditLog" WHERE home_id=h AND actor_user_id=owner_id
+    AND target_id=i AND action='HOME_INVITE_REVOKED') THEN
+  RAISE EXCEPTION 'Authorized issuer did not revoke once with membership preserved'; END IF;
+ r:=public.act_on_home_invitation(i,NULL,owner_id,'decline'); PERFORM pg_temp.expect_invite(r);
+ IF r->>'replayed' IS DISTINCT FROM 'true' OR pg_temp.invitation_state(h) IS DISTINCT FROM s THEN
+  RAISE EXCEPTION 'Authorized issuer replay changed invitation, occupancy or audit'; END IF;
  FOREACH state IN ARRAY ARRAY['pending_doc','suspended','revoked',NULL] LOOP
   UPDATE public."HomeOccupancy" SET verification_status=state WHERE home_id=h AND user_id=owner_id;
   PERFORM pg_temp.expect_invite(public.write_home_invitation(h,owner_id,'create','{}',repeat('6',64)),'MEMBERS_MANAGE_REQUIRED');
