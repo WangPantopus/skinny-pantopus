@@ -12,6 +12,11 @@ Continue in `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, associated with
 [PR #32 — Enforce Home permission and record boundaries](https://github.com/WangPantopus/skinny-pantopus/pull/32).
 **Next: ordinary-member onboarding and household-private first use (H07/H08).**
+This journey is in progress. Its browser baseline exposed a server-rendered
+authentication form submitting credentials through native GET before hydration.
+The [four-form readiness repair](web-auth-form-hydration-2026-09-12.md) passes
+actual Chrome without/during delayed JavaScript and 1,215 web regressions.
+It does not close H07/H08 or provider onboarding; inspect live CI for this source.
 First refresh local/remote Git, both PRs and exact-head CI as the resume guide
 specifies. The PR and private operator index carry the exact source/CI binding;
 prior green runs or native candidate numbers are not substitutes for that check.

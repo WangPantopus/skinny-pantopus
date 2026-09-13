@@ -26,6 +26,11 @@ review/private-first-use work solely because an older report says “next.”
 **Verify** = actual workflow/reconciliation still required, not necessarily broken;
 **Integrate** = source/schema/version gate; **Launch** = release prerequisite.
 
+During H07/H08, [browser authentication readiness](web-auth-form-hydration-2026-09-12.md)
+was repaired after actual pre-hydration native GET leakage with synthetic data.
+All four forms pass disabled/delayed JavaScript checks. This is a bounded
+subjourney; the 7 closed / 73 partial-or-open acceptance counts are unchanged.
+
 ## 1. Home identity and current access — active work
 
 - [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05 native identity is now locally verified; H07/H08 remain partial.

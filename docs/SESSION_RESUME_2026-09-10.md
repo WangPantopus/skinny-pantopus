@@ -38,6 +38,11 @@ documentation/design changes. Do not prune other worktrees.
 
 ## Next implementation: ordinary-member onboarding and private first use
 
+The ongoing browser baseline found and repaired authentication forms' native GET
+fallback before hydration. See the [actual Chrome proof and limits](web-auth-form-hydration-2026-09-12.md).
+The full member first-use journey remains the next task; do not repeat that
+bounded authentication reproduction merely to recover context.
+
 Sender invitation creation, explicit resend/withdrawal and recovery pass backend,
 browser and both installed native clients. Backend r6 proves 25 originals and
 preservation of 366 populated tables; browser r9 proves nine commands. Each
