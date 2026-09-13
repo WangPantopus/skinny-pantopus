@@ -459,6 +459,21 @@ class LandlordAuthorityService {
       }
     }
 
+    // An unexpired token is not proof that its issuer still has authority.
+    // Recheck the exact property and subject before creating any lease/access.
+    const { data: authority, error: authorityErr } = await supabaseAdmin
+      .from('HomeAuthority')
+      .select('id')
+      .eq('home_id', invite.home_id)
+      .eq('subject_type', invite.landlord_subject_type)
+      .eq('subject_id', invite.landlord_subject_id)
+      .eq('status', 'verified')
+      .maybeSingle();
+
+    if (authorityErr || !authority) {
+      return { success: false, error: 'Current verified authority required to accept this invitation' };
+    }
+
     // ── 3. Create HomeLease (active, source: landlord_invite) ─
     const { data: lease, error: leaseErr } = await supabaseAdmin
       .from('HomeLease')

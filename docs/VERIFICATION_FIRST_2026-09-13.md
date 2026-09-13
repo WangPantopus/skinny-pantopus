@@ -116,3 +116,74 @@ The previously reported **87.4% existing-feature rework** is not a duplication,
 waste or avoidable-effort percentage. Do not use it to justify blanket deletion.
 The last-week PR audit and its qualifications remain in the private audit
 `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260913-duplication/REPORT.md`.
+
+
+## Existing landlord flow verification — September 13
+
+Source baseline: Home integration `e6e3c65f8af8201a2dd17e5d915018f539bdd902`.
+The follow-up branch `codex/landlord-existing-flow-fixes` changes one existing
+service and three existing test files. No screen, layout, service, table or
+migration is added. It remains separate from #32 while that integration CI runs.
+
+The existing path is web `components/landlord/RequestsTab.tsx` → shared
+`landlord.approveLease` → `landlordTenant.js` → `landlordAuthorityService` →
+`occupancyAttachService` / `homePermissions` → existing `HomeAuthority`,
+`HomeLease`, `HomeLeaseInvite`, `HomeLeaseResident`, `HomeOccupancy` and audit rows.
+Both native VerifyLandlord wizards already submit tenant approval requests through
+their existing repositories/endpoints. Those existing submission screens are not
+proof that every invitation-acceptance or reviewer destination is reachable.
+The shared tenant acceptance endpoint exists; installed acceptance of that
+specific landlord invitation route has not been established here.
+
+An initial check using the existing in-memory database fixture reproduced three
+failures. Actual services with the real Supabase SDK, loopback PostgREST and a
+new schema-only isolated PostgreSQL database then confirmed them:
+
+- An otherwise valid invitation still granted membership after its issuer's
+  `HomeAuthority.status` changed to `revoked`. The repair checks the exact home,
+  subject type, subject ID and verified status before any lease/access write;
+  unreadable authority also denies. Actual SQL comparison: baseline grants Home
+  access, candidate denies with no lease/occupancy and leaves the invite pending.
+  A currently verified invitation still creates a lease and grants Home access.
+- Tenant approval without a verified `AddressClaim` changes the lease to active,
+  receives a failed attachment, returns success with null occupancy and emits a
+  success notification. Retrying then refuses the already-active lease. This
+  remains **unfixed**; simply adding a method bypass or changing the return flag
+  would not repair partial writes/retry consistency.
+- A fresh landlord invitation reactivates the existing occupancy row but retains
+  an expired `access_end_at`. The service reports success while actual
+  `getUserAccess` still denies. This remains **unfixed**; blindly clearing old
+  dates would also discard the new lease's intended access period.
+
+The authority repair passes 279 tests across five existing suites (217 service/
+pipeline checks and 62 route checks), including six new red-before/green-after
+invalid-authority cases, authority-read failure/retry, business/trust subjects
+and a route-level denial. An initial root-directory test invocation could not
+resolve Express in the existing mock; running the route suite from backend
+resolved that harness issue. The route success fixture now supplies its verified
+issuer, as the service fixture does. No assertions were weakened.
+
+The SQL fixture initially copied the old in-memory fixture's invalid Home type
+`unit`; the database rejected it. Changing only the synthetic fixture to the
+supported `house` type allowed the actual comparison. All synthetic users, homes,
+authorities, leases, invites, residents and occupancies were removed afterward.
+Notifications were intercepted: no external recipient or provider was contacted.
+This is service/SDK/SQL evidence, not an authenticated HTTP or installed-screen
+acceptance claim. Concurrent authority revocation between the new read and later
+writes is still outside the guard's guarantee; the existing multi-write flow is
+not atomic and R05 remains open.
+
+Next, repair lease/occupancy consistency and retries using these existing tables,
+with current authority and lease dates enforced at the same commit boundary.
+The existing Home member/review transaction functions were compared: their
+operations cover household roles/removal/reviews, not landlord lease activation.
+Archived migrations `20260227000006_home_authority.sql`,
+`20260227000007_home_lease.sql` and `20260227000009_home_lease_invite_dispute.sql`
+already define the lease entities. This does not justify new renewal tables.
+The existing web approval modal also edits dates without passing them to its
+current SDK call; this is a source observation awaiting a bounded UI reproduction.
+
+Private evidence: owner checkout
+`.pantopus-recovery/audits/20260913-landlord-verification/`.
+Its manifest binds the regression logs, original/candidate service-chain results,
+SQL cleanup and private harness sources. Runtime credentials stay outside Git.
