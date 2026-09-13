@@ -91,7 +91,15 @@ extension HomeResidencyHistoryJourneyUITests {
             try cyclePress(app.buttons["Add address manually"].firstMatch)
         }
         for (field, key) in [("street", "street"), ("unit", "unit"), ("city", "city"), ("state", "state"), ("zip", "zip_code")] {
-            try enter(XCTUnwrap(address[key] as? String), into: "addHome_" + field)
+            let value = try XCTUnwrap(address[key] as? String)
+            if value.isEmpty {
+                let control = element("addHome_" + field)
+                try require(control)
+                let current = control.value as? String ?? ""
+                XCTAssertTrue(current.isEmpty || current == control.placeholderValue)
+                continue
+            }
+            try enter(value, into: "addHome_" + field)
             try press("addHomeKeyboardDone")
         }
         try press("wizardPrimaryCTA")
@@ -104,7 +112,7 @@ extension HomeResidencyHistoryJourneyUITests {
             try require(label("Address recognized"))
             try press("wizardPrimaryCTA")
         }
-        try press("addHome_role_household")
+        try cyclePress(app.buttons["Household member"].firstMatch)
         XCTAssertFalse(element("addHome_accessSecret").exists)
         try press("wizardPrimaryCTA")
         try require(label("Review and submit"))

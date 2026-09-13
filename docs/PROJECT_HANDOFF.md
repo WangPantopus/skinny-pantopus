@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-**Active native candidate — PR #35:** see [the current WIP report](home-native-history-wip-2026-09-13.md) and [accepted iOS reader evidence](home-ios-residency-review-history-2026-09-13.md). Primary integration remains on `codex/home-permission-boundaries` at `f14989637`; this separate branch is unfinished. Complete Android readers and separate fresh native cycles before integration. All four PRs #32/#34/#35/#36 are open drafts.
+**Active native candidate — PR #35:** see [the current WIP report](home-native-history-wip-2026-09-13.md) and [accepted iOS reader evidence](home-ios-residency-review-history-2026-09-13.md). Primary integration remains on `codex/home-permission-boundaries` at `f14989637`; this separate branch is unfinished. Both installed readers and Android optimized Release codecs pass; complete the separate fresh native cycles before integration. The populated reader fixture is exactly cleaned. Root now owns the fresh zero-command iOS cycle; Android is stopped with data retained. See [Android reader evidence](home-android-residency-review-history-2026-09-13.md). The fresh iOS submission phase passes; finish rejection/recovery, resubmission, independent approval, current access/removal and departed access/history next. All four PRs #32/#34/#35/#36 are open drafts. Reader/product source `9350896c4` passes all 16 checks in CI 34768705945.
 
 Updated September 13, 2026, after backend/browser reviewer-history acceptance. **This is the
 current entry point.** Old accumulated checkpoints are preserved in

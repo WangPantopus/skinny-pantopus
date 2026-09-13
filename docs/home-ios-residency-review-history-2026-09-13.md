@@ -33,7 +33,8 @@ does not establish the wider accessibility, device-size, or release UI matrix.
 All 679 installed app files match the retained signed product, and both app/runner
 signatures are verified. The original removal products, first history build with
 warnings, source inputs and result bundles remain separately preserved. The
-simulator is stopped with data retained. No physical phone was installed.
+simulator was stopped with data retained at the reader boundary; the later fresh
+cycle has its own lease and evidence. No physical phone was installed.
 
 Private evidence is under
 `/private/tmp/pantopus-home-residency-cycle-r1/ios-history-candidate-r2/`, including
@@ -41,9 +42,10 @@ Private evidence is under
 installed result bundles and `installed-reader-binding.json`. Raw fixture data,
 credentials, operator logs and products are excluded from Git.
 
-The populated fixture is retained under the exclusive root runtime lease for
-Android reader acceptance; final exact fixture cleanup and durable archive
-verification remain required. Fresh native cycles, Android product/installed
-acceptance, final source reconciliation and exact pushed-head CI remain open.
+The iOS durable archive independently verifies 10,260 files. The shared populated
+fixture is now exactly cleaned after [Android reader acceptance](home-android-residency-review-history-2026-09-13.md),
+restoring all 374 candidate and 366 retained tables and logical catalogs. Its
+cleanup evidence is also preserved in the Android durable archive. Fresh native
+cycles, final source reconciliation and exact pushed-head CI remain separate gates.
 These local results do not prove hosted deployment, provider delivery, renewal,
 complete R03, or launch readiness.
