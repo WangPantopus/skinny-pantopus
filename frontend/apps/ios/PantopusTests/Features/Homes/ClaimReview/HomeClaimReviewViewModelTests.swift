@@ -115,7 +115,7 @@ final class HomeClaimReviewViewModelTests: XCTestCase {
 
     // MARK: - States
 
-    func testAllThreeReadsFailingSurfacesError() async {
+    func testBothOwnershipReadsFailingSurfacesError() async {
         let vm = makeVM(
             ownership: .status(403, body: #"{"error":"Not authorized"}"#),
             residency: .status(403, body: #"{"error":"Not authorized"}"#),
@@ -138,38 +138,27 @@ final class HomeClaimReviewViewModelTests: XCTestCase {
         XCTAssertEqual(vm.state, .empty)
     }
 
-    /// The two claim collections sit behind different permission gates
-    /// (`ownership.manage` vs `members.manage`), so one 403 must not
-    /// hide the other list.
-    func testOwnershipForbiddenStillShowsResidencyClaims() async {
+    func testOwnershipDoesNotFetchResidencyOrChangeTheSelectedResidencyTab() async {
         let vm = makeVM(
-            ownership: .status(403, body: #"{"error":"Not authorized"}"#),
+            ownership: .status(200, body: Self.emptyClaimsJSON),
             residency: .status(200, body: Self.residencyClaimsJSON),
             comparison: .status(404, body: #"{"error":"off"}"#)
         )
+        vm.selectedTab = .residency
         await vm.load()
-        guard case let .loaded(data) = vm.state else {
-            XCTFail("Expected .loaded, got \(vm.state)")
-            return
-        }
-        XCTAssertTrue(data.ownership.isEmpty)
-        XCTAssertTrue(data.ownershipUnavailable)
-        XCTAssertFalse(data.residencyUnavailable)
-        XCTAssertEqual(data.residency.map(\.id), ["rc_1"])
-        XCTAssertEqual(data.residency.first?.roleLabel, "Requesting: Renter")
-        XCTAssertNil(data.comparison)
+        XCTAssertEqual(vm.state, .empty)
+        XCTAssertEqual(vm.selectedTab, .residency)
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == Self.residencyPath })
     }
 
-    func testDeniedOwnershipWithEmptyResidencyNeverClaimsAnEmptyOwnershipQueue() async {
+    func testDeniedOwnershipDoesNotBorrowAnEmptyResidencyResult() async {
         let vm = makeVM(
             ownership: .status(403, body: "{}"),
             residency: .status(200, body: Self.emptyClaimsJSON),
             comparison: .status(403, body: "{}")
         )
         await vm.load()
-        guard case let .loaded(data) = vm.state else { return XCTFail("Expected separate collection states") }
-        XCTAssertTrue(data.ownershipUnavailable)
-        XCTAssertFalse(data.residencyUnavailable)
+        guard case .error = vm.state else { return XCTFail("Ownership authority must remain unknown") }
     }
 
     func testComparisonUnavailableFallsBackToMaskedList() async {

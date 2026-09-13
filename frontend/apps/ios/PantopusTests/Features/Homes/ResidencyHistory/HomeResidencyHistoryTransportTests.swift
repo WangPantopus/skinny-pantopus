@@ -42,7 +42,7 @@ final class HomeResidencyHistoryTransportTests: XCTestCase {
         let page = try await transport.list(identity: Fixtures.identity, session: session, after: nil)
         let item = try await transport.detail(identity: Fixtures.identity, session: session, receiptId: Fixtures.id(0))
         XCTAssertEqual(page.items.first, item)
-        let requests = URLProtocolStub.capturedRequests
+        let requests = URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix(root + "/") == true }
         XCTAssertEqual(requests.count, 3)
         for request in requests {
             XCTAssertEqual(request.httpMethod, "GET")
@@ -61,7 +61,7 @@ final class HomeResidencyHistoryTransportTests: XCTestCase {
         let cursor = try HomeResidencyHistoryCursor.parse(Fixtures.cursor(1), identity: Fixtures.identity)
         try URLProtocolStub.stub(path: root + "/" + Fixtures.home, response: .json(Fixtures.text(Fixtures.page([Fixtures.item(0)]))))
         _ = try await transport.list(identity: Fixtures.identity, session: Fixtures.session, after: cursor)
-        let request = try XCTUnwrap(URLProtocolStub.capturedRequests.last)
+        let request = try XCTUnwrap(URLProtocolStub.capturedRequests.last { $0.url?.path.hasPrefix(root + "/") == true })
         let components = try XCTUnwrap(URLComponents(url: XCTUnwrap(request.url), resolvingAgainstBaseURL: false))
         XCTAssertEqual(components.queryItems, [URLQueryItem(name: "after", value: cursor.raw)])
         let foreign = HomeResidencyHistoryCursor(
@@ -73,7 +73,7 @@ final class HomeResidencyHistoryTransportTests: XCTestCase {
             _ = try await transport.list(identity: Fixtures.identity, session: Fixtures.session, after: foreign)
             XCTFail("A foreign cursor must fail before sending")
         } catch { XCTAssertEqual(error as? HomeResidencyHistoryError, .cursorInvalid) }
-        XCTAssertEqual(URLProtocolStub.capturedRequests.count, 1)
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix(root + "/") == true }.count, 1)
     }
 
     func testSafeErrorsRemainDistinctFromEmptyAndNeverDisplayServerText() async throws {
@@ -137,6 +137,6 @@ final class HomeResidencyHistoryTransportTests: XCTestCase {
             )
             XCTFail("Wrong account before sending")
         } catch { XCTAssertEqual(error as? HomeResidencyHistoryError, .sessionChanged) }
-        XCTAssertEqual(URLProtocolStub.capturedRequests.count, 1)
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix(root + "/") == true }.count, 1)
     }
 }

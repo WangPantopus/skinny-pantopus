@@ -344,7 +344,7 @@ struct HomeClaimOwnershipCard: View {
 
 /// One pending residency claim + approve / deny.
 struct HomeClaimResidencyCard: View {
-    let item: HomeClaimReviewResidencyItem
+    let item: HomeResidencyQueueClaim
     let isBusy: Bool
     let onApprove: () -> Void
     let onReject: () -> Void
@@ -352,9 +352,9 @@ struct HomeClaimResidencyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .center, spacing: Spacing.s3) {
-                HomeClaimAvatar(initials: item.initials, size: 36, tint: Theme.Color.home)
+                HomeClaimAvatar(initials: "?", size: 36, tint: Theme.Color.home)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(item.displayName)
+                    Text(item.applicantLabel)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
@@ -363,18 +363,10 @@ struct HomeClaimResidencyCard: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: Spacing.s0)
-                if let age = item.ageLabel {
-                    Text(age)
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                }
             }
-            if let address = item.addressLabel {
-                Text(address)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .lineLimit(1)
-            }
+            Text(item.dateLabel)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextMuted)
             if isBusy {
                 HStack {
                     Spacer()

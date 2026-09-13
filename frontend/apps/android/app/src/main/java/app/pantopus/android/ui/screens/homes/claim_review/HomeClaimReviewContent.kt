@@ -513,7 +513,7 @@ private fun OwnershipActionRow(
 /** One pending residency claim + approve / deny. */
 @Composable
 fun HomeClaimResidencyCard(
-    item: HomeClaimReviewResidencyItem,
+    item: app.pantopus.android.data.homes.HomeResidencyQueueClaim,
     isBusy: Boolean,
     onApprove: () -> Unit,
     onReject: () -> Unit,
@@ -524,13 +524,13 @@ fun HomeClaimResidencyCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HomeClaimAvatar(
-                initials = item.initials,
+                initials = "?",
                 size = AvatarMedium,
                 tint = PantopusColors.home,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = item.displayName,
+                    text = item.applicantLabel,
                     style = PantopusTextStyle.body,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appText,
@@ -544,26 +544,8 @@ fun HomeClaimResidencyCard(
                     color = PantopusColors.appTextSecondary,
                 )
             }
-            item.ageLabel?.let {
-                Text(
-                    text = it,
-                    style = PantopusTextStyle.caption,
-                    fontSize = 12.sp,
-                    color = PantopusColors.appTextMuted,
-                )
-            }
         }
-        item.addressLabel?.let {
-            Spacer(Modifier.height(Spacing.s2))
-            Text(
-                text = it,
-                style = PantopusTextStyle.caption,
-                fontSize = 13.sp,
-                color = PantopusColors.appTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(text = item.dateLabel, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted)
         Spacer(Modifier.height(Spacing.s3))
         if (isBusy) {
             Box(

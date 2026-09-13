@@ -14,7 +14,6 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonClaimDto
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDto
-import app.pantopus.android.data.api.models.homes.HomeResidencyClaimDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -153,16 +152,6 @@ data class HomeClaimReviewOwnershipItem(
     val inviteTitle: String get() = if (claimType == "owner") "Invite as owner" else "Invite"
 }
 
-/** One residency claim row. */
-data class HomeClaimReviewResidencyItem(
-    val id: String,
-    val displayName: String,
-    val initials: String,
-    val roleLabel: String,
-    val addressLabel: String?,
-    val ageLabel: String?,
-)
-
 /** One column entry in the side-by-side compare view. */
 data class HomeClaimReviewPartyCard(
     val id: String,
@@ -183,10 +172,8 @@ data class HomeClaimReviewComparison(
 /** Everything the loaded screen renders. */
 data class HomeClaimReviewData(
     val ownership: List<HomeClaimReviewOwnershipItem>,
-    val residency: List<HomeClaimReviewResidencyItem>,
     val comparison: HomeClaimReviewComparison?,
     val ownershipUnavailable: Boolean = false,
-    val residencyUnavailable: Boolean = false,
 )
 
 /** Four-state rule: Loading / Empty / Loaded / Error. */
@@ -489,14 +476,7 @@ class HomeClaimReviewViewModel
             viewModelScope.launch { fetch() }
         }
 
-        /**
-         * Three independent reads, each tolerated on its own — the
-         * ownership list is gated on `ownership.manage`, the residency
-         * list on `members.manage`, and `compare` additionally sits behind
-         * a server feature flag. RN uses `Promise.allSettled` for the same
-         * reason (`review-claim.tsx:34`). Only a total wipe-out surfaces
-         * the error state.
-         */
+        /** Ownership and optional comparison remain independent of the residency reader. */
         private suspend fun fetch() {
             if (!session.confirmCurrent()) {
                 _state.value = HomeClaimReviewUiState.Error(CLAIM_SESSION_CHANGED)
@@ -507,11 +487,9 @@ class HomeClaimReviewViewModel
             val results =
                 coroutineScope {
                     val ownershipDeferred = async { repo.ownershipClaims(homeId) }
-                    val residencyDeferred = async { repo.residencyClaims(homeId) }
                     val comparisonDeferred = async { repo.ownershipClaimComparison(homeId) }
-                    Triple(
+                    Pair(
                         ownershipDeferred.await(),
-                        residencyDeferred.await(),
                         comparisonDeferred.await(),
                     )
                 }
@@ -519,16 +497,13 @@ class HomeClaimReviewViewModel
             prepared = null
             pendingDecision = null
             val ownershipResult = results.first
-            val residencyResult = results.second
-            val comparisonResult = results.third
+            val comparisonResult = results.second
 
             val ownershipClaims =
                 (ownershipResult as? NetworkResult.Success)?.data?.claims
-            val residencyClaims =
-                (residencyResult as? NetworkResult.Success)?.data?.claims
             val comparisonDto = (comparisonResult as? NetworkResult.Success)?.data
 
-            if (ownershipClaims == null && residencyClaims == null && comparisonDto == null) {
+            if (ownershipClaims == null && comparisonDto == null) {
                 _state.value =
                     HomeClaimReviewUiState.Error("We couldn't load the claims on this home.")
                 return
@@ -536,15 +511,12 @@ class HomeClaimReviewViewModel
             loadedOnce = true
 
             val ownership = ownershipItems(comparisonDto, ownershipClaims.orEmpty())
-            val residency = residencyItems(residencyClaims.orEmpty())
             val comparisonModel = comparisonDto?.let { comparison(it) }
 
             val ownershipUnavailable = ownershipClaims == null && comparisonDto == null
-            val residencyUnavailable = residencyClaims == null
-            val bothCollectionsAvailable = !ownershipUnavailable && !residencyUnavailable
-            val noClaims = ownership.isEmpty() && residency.isEmpty() && comparisonModel == null
-            if (bothCollectionsAvailable && noClaims) {
-                _selectedTab.value = HomeClaimReviewTab.Ownership
+            val noClaims = ownership.isEmpty() && comparisonModel == null
+            if (!ownershipUnavailable && noClaims) {
+                if (_selectedTab.value == HomeClaimReviewTab.Compare) _selectedTab.value = HomeClaimReviewTab.Ownership
                 _state.value = HomeClaimReviewUiState.Empty
                 return
             }
@@ -555,10 +527,8 @@ class HomeClaimReviewViewModel
                 HomeClaimReviewUiState.Loaded(
                     HomeClaimReviewData(
                         ownership = ownership,
-                        residency = residency,
                         comparison = comparisonModel,
                         ownershipUnavailable = ownershipUnavailable,
-                        residencyUnavailable = residencyUnavailable,
                     ),
                 )
         }
@@ -668,26 +638,6 @@ class HomeClaimReviewViewModel
                     actionMode = HomeClaimReviewActionMode.Verdict,
                 )
             }
-
-            fun residencyItems(claims: List<HomeResidencyClaimDto>): List<HomeClaimReviewResidencyItem> =
-                claims
-                    .filter { it.status == "pending" }
-                    .map { claim ->
-                        val name =
-                            displayName(
-                                claim.claimant?.name,
-                                claim.claimant?.username,
-                                fallback = "User",
-                            )
-                        HomeClaimReviewResidencyItem(
-                            id = claim.id,
-                            displayName = name,
-                            initials = initials(name),
-                            roleLabel = "Requesting: ${roleLabel(claim.claimedRole)}",
-                            addressLabel = claim.claimedAddress?.takeIf { it.isNotEmpty() },
-                            ageLabel = dayAgeLabel(claim.createdAt),
-                        )
-                    }
 
             fun comparison(dto: HomeClaimComparisonDto): HomeClaimReviewComparison {
                 val incumbents =

@@ -56,7 +56,8 @@ export function validateQueue(value: unknown, homeId: string, session: QueueSess
     || value.residency_session.session_scope !== session.session_scope) throw invalid();
   value.claims.forEach(value => claim(value, homeId));
   const items = value.claims as QueueClaim[];
-  if (new Set(items.map(item => item.id)).size !== items.length) throw invalid();
+  if (new Set(items.map(item => item.id)).size !== items.length
+    || new Set(items.map(item => item.user_id)).size !== items.length) throw invalid();
   for (let index = 1; index < items.length; index++) if (!queueEarlier(items[index], items[index - 1])) throw invalid();
 }
 export function queueError(error: unknown): string {

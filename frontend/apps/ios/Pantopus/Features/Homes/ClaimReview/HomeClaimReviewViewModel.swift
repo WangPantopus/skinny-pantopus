@@ -7,12 +7,8 @@
 //  `/api/admin/claims*`); this screen is what a home owner sees when
 //  someone claims their address.
 //
-//  Two claim collections feed it, and they are intentionally kept apart:
-//    - Ownership claims  → `GET /api/homes/:id/ownership-claims`
-//                          (`backend/routes/homeOwnership.js:490`)
-//                          + `…/compare` (`homeOwnership.js:536`)
-//    - Residency claims  → `GET /api/homes/:id/claims`
-//                          (`backend/routes/home.js:6716`)
+//  Owns ownership claims and comparison. Residency has a separate
+//  session-bound reader in Features/Homes/ResidencyQueue.
 //
 //  Mirrors RN `src/app/homes/[id]/owners/review-claim.tsx`.
 //
@@ -67,16 +63,6 @@ public struct HomeClaimReviewOwnershipItem: Sendable, Equatable, Hashable, Ident
     }
 }
 
-/// One residency claim row.
-public struct HomeClaimReviewResidencyItem: Sendable, Equatable, Hashable, Identifiable {
-    public let id: String
-    public let displayName: String
-    public let initials: String
-    public let roleLabel: String
-    public let addressLabel: String?
-    public let ageLabel: String?
-}
-
 /// One column entry in the side-by-side compare view.
 public struct HomeClaimReviewPartyCard: Sendable, Equatable, Hashable, Identifiable {
     public let id: String
@@ -98,10 +84,8 @@ public struct HomeClaimReviewComparison: Sendable, Equatable, Hashable {
 /// Everything the loaded screen renders.
 public struct HomeClaimReviewData: Sendable, Equatable, Hashable {
     public let ownership: [HomeClaimReviewOwnershipItem]
-    public let residency: [HomeClaimReviewResidencyItem]
     public let comparison: HomeClaimReviewComparison?
     public var ownershipUnavailable = false
-    public var residencyUnavailable = false
 }
 
 /// Screen state. Four-state rule: loading / empty / loaded / error.
@@ -189,11 +173,6 @@ public final class HomeClaimReviewViewModel {
 
     public var ownershipCount: Int {
         if case let .loaded(data) = state { return data.ownership.count }
-        return 0
-    }
-
-    public var residencyCount: Int {
-        if case let .loaded(data) = state { return data.residency.count }
         return 0
     }
 
@@ -353,27 +332,17 @@ public final class HomeClaimReviewViewModel {
 
     // MARK: - Fetch
 
-    /// Three independent reads, all tolerated individually — the
-    /// ownership list is gated on `ownership.manage`, the residency list
-    /// on `members.manage`, and `compare` additionally sits behind a
-    /// server feature flag. RN uses `Promise.allSettled` for the same
-    /// reason (`review-claim.tsx:34`). Only a total wipe-out surfaces
-    /// the error state.
+    /// Ownership and optional comparison have their own permission gates.
     private func fetch() async {
         guard scope.isCurrent else { return }
         readGeneration += 1
         let revision = readGeneration
         // A refresh must not leave old claim actions available while current
-        // authority and the two independent collections are being checked.
+        // ownership authority and its comparison are being checked.
         contentState = .loading
         async let ownershipTask: HomeOwnershipClaimsResponse? = optional {
             try await self.api.request(
                 HomeClaimReviewEndpoints.ownershipClaims(homeId: self.homeId)
-            )
-        }
-        async let residencyTask: HomeResidencyClaimsResponse? = optional {
-            try await self.api.request(
-                HomeClaimReviewEndpoints.residencyClaims(homeId: self.homeId)
             )
         }
         async let comparisonTask: HomeClaimComparisonDTO? = optional {
@@ -382,12 +351,12 @@ public final class HomeClaimReviewViewModel {
             )
         }
 
-        let (ownershipResponse, residencyResponse, comparisonResponse) = await (ownershipTask, residencyTask, comparisonTask)
+        let (ownershipResponse, comparisonResponse) = await (ownershipTask, comparisonTask)
         guard revision == readGeneration, scope.isCurrent else { return }
         prepared = nil
         pendingDecision = nil
 
-        guard ownershipResponse != nil || residencyResponse != nil || comparisonResponse != nil
+        guard ownershipResponse != nil || comparisonResponse != nil
         else {
             contentState = .error(message: "We couldn't load the claims on this home.")
             return
@@ -398,14 +367,12 @@ public final class HomeClaimReviewViewModel {
             comparison: comparisonResponse,
             fallback: ownershipResponse?.claims ?? []
         )
-        let residency = Self.residencyItems(from: residencyResponse?.claims ?? [])
         let comparison = comparisonResponse.map { Self.comparison(from: $0) }
 
         let ownershipUnavailable = ownershipResponse == nil && comparisonResponse == nil
-        let residencyUnavailable = residencyResponse == nil
-        if ownership.isEmpty, residency.isEmpty, comparison == nil, !ownershipUnavailable, !residencyUnavailable {
+        if ownership.isEmpty, comparison == nil, !ownershipUnavailable {
             contentState = .empty
-            selectedTab = .ownership
+            if selectedTab == .compare { selectedTab = .ownership }
             return
         }
         if comparison == nil, selectedTab == .compare {
@@ -414,10 +381,8 @@ public final class HomeClaimReviewViewModel {
         contentState = .loaded(
             HomeClaimReviewData(
                 ownership: ownership,
-                residency: residency,
                 comparison: comparison,
-                ownershipUnavailable: ownershipUnavailable,
-                residencyUnavailable: residencyUnavailable
+                ownershipUnavailable: ownershipUnavailable
             )
         )
     }
@@ -516,28 +481,6 @@ public final class HomeClaimReviewViewModel {
             claimType: claimType,
             actionMode: .verdict
         )
-    }
-
-    static func residencyItems(
-        from claims: [HomeResidencyClaimDTO]
-    ) -> [HomeClaimReviewResidencyItem] {
-        claims
-            .filter { $0.status == "pending" }
-            .map { claim in
-                let name = displayName(
-                    name: claim.claimant?.name,
-                    username: claim.claimant?.username,
-                    fallback: "User"
-                )
-                return HomeClaimReviewResidencyItem(
-                    id: claim.id,
-                    displayName: name,
-                    initials: initials(for: name),
-                    roleLabel: "Requesting: \(roleLabel(claim.claimedRole))",
-                    addressLabel: claim.claimedAddress?.nilIfEmpty,
-                    ageLabel: dayAgeLabel(claim.createdAt)
-                )
-            }
     }
 
     static func comparison(from dto: HomeClaimComparisonDTO) -> HomeClaimReviewComparison {

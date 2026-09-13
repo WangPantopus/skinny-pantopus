@@ -135,3 +135,15 @@ test('switching away from the residency tab retires the queue and returning requ
   expect(screen.queryByText('@public_applicant')).not.toBeInTheDocument();
   expect(screen.queryByText('No pending residency claims')).not.toBeInTheDocument();
 });
+
+
+test.each(['members', 'review page'])('%s rejects duplicate applicants instead of showing two review actions', async consumer => {
+  get.mockImplementation(async path => path === QUEUE_SESSION_PATH ? bootstrap : page([
+    claim(), { ...claim(), id: home },
+  ]));
+  mount(consumer);
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Review approval' })).not.toBeInTheDocument();
+  expect(screen.queryByText('No pending residency claims')).not.toBeInTheDocument();
+});
