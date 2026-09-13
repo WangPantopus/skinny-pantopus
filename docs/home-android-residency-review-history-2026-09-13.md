@@ -2,8 +2,8 @@
 
 The installed Android reader passes on the separate native-history candidate
 `9350896c4f6a822afdc2fc5cdb8e59a4970e063d`. This is bounded local reader acceptance.
-The separate fresh applicant/reviewer cycle is still pending, so this scope is
-not ready for integration into the primary Home branch.
+The separate fresh applicant/reviewer cycle now also passes. Final source
+reconciliation and exact pushed-head CI remain required before primary integration.
 
 ## Product and installed evidence
 
@@ -69,6 +69,47 @@ Secure-window capture remains enabled. UI hierarchy, actual UI-triggered HTTP
 and SQL evidence establish these behaviors; blocked raster capture does not
 establish a broad visual or accessibility acceptance matrix. This is emulator
 coverage, not physical Android, hosted deployment, provider delivery, or
-app-wide acceptance. The fresh command cycle remains a separate gate. Reader/product source
+app-wide acceptance. Reader/product source
 `9350896c4` passes all 16 checks in [CI 34768705945](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34768705945);
 subsequent source changes require their own exact-head check. See the [native WIP report](home-native-history-wip-2026-09-13.md).
+
+## Separate fresh Android cycle
+
+A separate zero-command fixture passes actual installed selected-address household
+submission, acknowledgement and waiting without Home access. Rejection loses its
+reply after SQL commits; the device retains one protected original. Normal logout
+and cold login recover it, acknowledge it and open the reviewer's exact own-history
+receipt. Two actual rejection POST attempts have one UUID and one wire-body hash;
+SQL reports original then replay, and the complete decision row stays unchanged.
+All seven observed protected original stores are empty after acknowledgement.
+
+The applicant resubmits through the address form, retaining the same claim and
+occupancy IDs and prior rejection. An independent reviewer explicitly approves
+Member. Approval saves and acknowledges once; the driver then stops waiting for
+an offscreen no-pending-claim notice. A separate cold-login continuation verifies
+the empty recovery store and own approval history with no domain writes. The
+completed approval is not submitted again. The driver now scrolls to acknowledgement
+status; this required no production change or app rebuild.
+
+The applicant sees household access and enters the current shared Home dashboard,
+backed by actual current-authority and dashboard HTTP 200s. The owner then reviews
+the exact member, Home and role, confirms removal and acknowledges its result.
+There is one completed removal command and one removal audit. The removed applicant
+returns through normal cold login, sees that household access needs review, and has
+no Open Home action. The old dashboard link displays Home access unavailable,
+receives current-authority 403s and never requests the private dashboard. Both
+reviewers still open only their own unchanged decision. Current-entry and denied-link
+screenshots were visually inspected; transient navigation snapshots are not substituted
+for these phase-bound captures.
+
+Final SQL has two completed submissions, two immutable reviewer decisions and one
+completed removal. Ownership is unchanged; no DELETE or invitation command is issued.
+All seven observed protected stores are empty, and the installed Debug APK remains
+`c6d9b53b09e8393746e2b3798b01f8d82efeac93803e227f1d396d30d2b8bc3c`.
+The fresh fixture is exactly cleaned, restoring complete rows and logical catalogs
+for all 374 candidate and 366 retained tables. The owned emulator is stopped with
+userdata retained. Private `android-fresh-cycle-r1/final-validation.json`, phase
+captures and fixture preservation evidence are durably archived: 143 verified files,
+manifest `60cf8199eca5071809b803dfaf03f7c14a89eadee4d62edaf8b102a19b218c05`.
+The accepted products and predecessor drivers remain in the separate reader archive.
+Authentication, address providers and delivery are controlled local boundaries.

@@ -46,7 +46,7 @@ The iOS durable archive independently verifies 10,260 files. The shared populate
 fixture is now exactly cleaned after [Android reader acceptance](home-android-residency-review-history-2026-09-13.md),
 restoring all 374 candidate and 366 retained tables and logical catalogs. Its
 cleanup evidence is also preserved in the Android durable archive. The fresh Android
-cycle, final source reconciliation and exact pushed-head CI remain separate gates.
+cycle also passes separately; final source reconciliation and exact pushed-head CI remain required.
 These local results do not prove hosted deployment, provider delivery, renewal,
 complete R03, or launch readiness.
 
