@@ -9,9 +9,10 @@ The [earlier frozen checkpoint](SESSION_HANDOFF_2026-09-13.md) is historical.
 
 **Next: finish current-claims privacy acceptance in PR #36, then continue the
 ordered backlog.** Work in `/private/tmp/pantopus-home-current-residency-claims`,
-branch `codex/home-current-residency-claims`. Both browser and native consumers
-are implemented there, but actual populated HTTP/SDK/browser/native acceptance
-is unfinished. Primary still has the known raw-claims exposure until this repair
+branch `codex/home-current-residency-claims`. Both browser and native consumers are committed at `e1966d9af`; primary
+`4e966835f` is reconciled through `b64e6e255`. Actual populated HTTP/SDK and both
+browser consumers now pass. Installed native current-queue and empty-queue
+acceptance remain unfinished. Primary still has the known raw-claims exposure until this repair
 is accepted and integrated. Do not substitute unit checks for the real workflows.
 
 Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
@@ -54,25 +55,34 @@ filters history routes. It changes no accepted application or migration bytes.
 
 ## Current-claims candidate and verification limits
 
-The separately pushed browser source at `52fa96c65` has both consumers. Current
-uncommitted native work is undergoing product checks and installed acceptance.
-The isolated browser package binding resolves this candidate's API/types/utils;
-all 1,324 browser checks and zero-error web type checking pass. Standalone API
-package checking reports the same 39 existing diagnostics as primary, with no
-candidate-only diagnostics.
+See the [current-claims report](home-current-claims-wip-2026-09-13.md). The candidate
+has both browser and native consumers with strict safe projection, current session
+binding and stale-view retirement. The isolated browser package binding resolves
+this worktree's API/types/utils; all 1,324 browser checks and zero-error web type
+checking pass. The later duplicate-applicant guard passes 14 focused checks.
+Standalone API checking retains the same 39 baseline diagnostics as primary.
 
-The iOS candidate passes signed r1/r2 builds, 31 focused checks and full regression
-(4,471 passed / 168 skipped / zero failed). Its observed protected originals remain
-empty and its test simulator is stopped with userdata retained. Android formatting
-and Detekt pass; product and focused checks are running. These are source/product
-gates, not populated native queue acceptance.
+Actual HTTP/source-loaded SDK acceptance passes nine cases, including six real
+submissions, safe complete SQL ordering, service retry, current authority changes,
+delivered old200 after newer403 and expiry during observed Home/profile lock waits.
+Both actual Chrome consumers pass populated privacy, order/unknown values,
+error-versus-empty/retry, exact protected selection and delivered stale-response
+retirement. The account/lifecycle/cold-return continuation also passes. Explicit
+browser lifecycle signals are not OS window-background proof. Empty UI remains
+pending after all native populated readers.
+
+The iOS candidate passes signed r2 builds, 31 focused checks and full regression
+(4,471 passed / 168 skipped / zero failed). The actual installed run now verifies
+all 679 app files after correcting stale predecessor paths in its private test
+descriptor. Android's Debug build/lint and 44 focused checks pass; full Debug and
+Release regression/product checks are running. Installed current-queue acceptance
+is still required. Devices/API/database use the private operator leases.
 
 The additive claims migration passes a populated upgrade in one outer rollback:
 all 366 retained tables, functions, permissions and prepared originals are preserved,
-with zero SQL lint issues. A separate schema/reference candidate and REST runtime
-are prepared; this is not permanent adoption of the retained database. The private
-operator index identifies the active current-claims HTTP fixture and its lease.
-Startup metadata/port guard failures are retained separately from application results.
+with zero SQL lint issues. A separate schema/reference candidate hosts the current
+fixture. This is not permanent adoption of the retained database. Predecessor
+`52fa96c65` passes all16 CI34774733863; verify later pushed heads independently.
 
 ## Preserve and continue
 
