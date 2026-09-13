@@ -1,4 +1,4 @@
-import { apiClient } from '../client';
+import apiClient from '../client';
 
 export interface Session { actor_id: string; session_scope: string }
 export type CanonicalRole = 'owner' | 'admin' | 'manager' | 'member' | 'restricted_member' | 'guest' | 'lease_resident' | 'service_provider';

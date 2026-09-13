@@ -43,6 +43,8 @@ import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewDialog
+import app.pantopus.android.ui.screens.homes.residencyhistory.HomeResidencyHistoryDialog
+import app.pantopus.android.ui.screens.homes.residencyhistory.HomeResidencyHistoryTarget
 import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -91,11 +93,19 @@ fun HomeClaimReviewScreen(
     HomeClaimEvidencePanel(viewModel)
     HomeRelationshipPanel(relationshipModel, viewModel::refresh)
     val residency by residencyModel.state.collectAsStateWithLifecycle()
+    var historyTarget by remember { mutableStateOf<HomeResidencyHistoryTarget?>(null) }
     if (residency.presented) {
-        HomeResidencyReviewDialog(residencyModel) {
+        HomeResidencyReviewDialog(residencyModel, onHistory = { reference ->
+            residencyModel.dismiss()
+            viewModel.refresh()
+            historyTarget = HomeResidencyHistoryTarget(reference.homeId, reference)
+        }) {
             residencyModel.dismiss()
             viewModel.refresh()
         }
+    }
+    historyTarget?.let { target ->
+        HomeResidencyHistoryDialog(target = target, onClosed = { historyTarget = null })
     }
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
@@ -128,6 +138,10 @@ fun HomeClaimReviewScreen(
             TextButton(onClick = { residencyModel.show() }, modifier = Modifier.testTag("homeClaimReview.residencyRecovery")) {
                 Text("Residency decisions and recovery")
             }
+            TextButton(
+                onClick = { historyTarget = HomeResidencyHistoryTarget(viewModel.homeId.lowercase()) },
+                modifier = Modifier.testTag("homeClaimReview.residencyHistory"),
+            ) { Text("Your saved residency decisions") }
             val loaded = state as? HomeClaimReviewUiState.Loaded
             if (loaded != null) {
                 HomeClaimReviewTabStrip(

@@ -28,6 +28,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.OfflineBannerHost
+import app.pantopus.android.data.homes.HomeResidencyHistoryReference
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskResumeEffect
 import app.pantopus.android.ui.theme.PantopusColors
@@ -40,6 +41,7 @@ private const val REVIEW_PLACEHOLDER_ROWS = 6
 @Composable
 fun HomeResidencyReviewDialog(
     viewModel: HomeResidencyReviewViewModel,
+    onHistory: ((HomeResidencyHistoryReference) -> Unit)? = null,
     onClosed: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -80,6 +82,12 @@ fun HomeResidencyReviewDialog(
                         Text("Review the current claim and membership before approving or rejecting residency.")
                         state.error?.let { Text(it, Modifier.testTag("homeResidencyReview.error"), color = PantopusColors.error) }
                         HomeResidencyReviewBody(state, viewModel)
+                        if (state.acknowledgedHistory != null && !state.working && onHistory != null) {
+                            TextButton(
+                                onClick = { viewModel.openAcknowledgedHistory(onHistory) },
+                                modifier = Modifier.testTag("homeResidencyReview.history"),
+                            ) { Text("View saved decision") }
+                        }
                     }
                 }
             }
