@@ -1,35 +1,42 @@
 # Pantopus project handoff
 
-Updated September 13, 2026 after current-claims local acceptance. This is the
-current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) supplies
-the ordered backlog; dated reports preserve detailed evidence and limitations.
-The [earlier frozen checkpoint](SESSION_HANDOFF_2026-09-13.md) is historical.
+Updated September 13, 2026 after verification-first reconciliation. This is the
+current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
+the ordered backlog; dated reports preserve source-specific evidence.
 
-## Current state and next action
+## Current direction, state and next action
 
-**Next: verify final exact-head CI and integrate PR #36, then continue the remaining
-R03 lifecycle and ordered backlog.** Current-claims local acceptance is complete in
-`/private/tmp/pantopus-home-current-residency-claims`, branch
-`codex/home-current-residency-claims`. Source `4d4183a79` includes primary
-`4e966835f`; final acceptance documentation is being recorded. Both browser and
-native consumers pass populated, denied, stale-read and confirmed-empty workflows.
-All fixtures are exactly cleaned and owned servers/devices stopped. Primary still
-requires this repair integrated to remove its known raw-claims exposure.
+**Preserve working implementations and existing screen designs.** Follow the
+new rules in [AGENTS.md](../AGENTS.md) and the
+[reconciliation and inventory map](VERIFICATION_FIRST_2026-09-13.md).
+An open acceptance row does not authorize a rebuild. Locate existing code and
+establish a defect or concrete unmet requirement before application changes.
+
+**Next: reconcile PR #36's visible queue differences with the existing design
+before integration.** Preserve its accepted privacy/authority behavior. The
+primary handoff previously said actual current-claims acceptance was unfinished;
+that instruction is superseded. Do not rerun completed native/browser journeys
+merely because an older report says “next.” The reconciliation names the specific
+presentation differences and the existing components to inspect.
 
 Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-[PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35) is merged into that
-branch at `f1a92f45ad8c79ef88e89a2882a584898d3f8017`. Its exact source
-`8cfcbf2b28d95587a70fe784c81b913de688dd52` passes all executed checks in
-[CI 34775715928](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34775715928):
-ten successful checks and five unchanged-scope skips. This is source-specific
-history evidence; verify CI independently for later primary and current-claims heads.
+The inspected application head is `4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
+[CI 34777977420](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34777977420)
+passing all 16 checks. This reconciliation changes documentation only; check its
+new commit separately. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
+is already merged into #32 at `f1a92f45ad8c79ef88e89a2882a584898d3f8017`, not master.
+Its exact source `8cfcbf2b28d95587a70fe784c81b913de688dd52` passes the executed
+checks in [CI 34775715928](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34775715928).
 
 PRs #32, [#34](https://github.com/WangPantopus/skinny-pantopus/pull/34) and
-[#36](https://github.com/WangPantopus/skinny-pantopus/pull/36) remain unfinished
-drafts. No production or provider activation has occurred. **8 of 80 acceptance
-areas are locally closed; 72 remain partial/open.** These counts are not an
-implementation percentage. Native history does not close the broader R03 lifecycle.
+[#36](https://github.com/WangPantopus/skinny-pantopus/pull/36) remain drafts.
+#34 is conflicting against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`;
+its selected CI scope passes, but paid/provider journeys remain incomplete.
+Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
+No production or provider activation has occurred. **8 of 80 acceptance areas
+are locally closed; 72 remain partial/open.** These are not implementation or
+remaining-effort percentages.
 
 ## Accepted native history
 
@@ -54,38 +61,36 @@ source `9350896c4` also passed all 16 checks in CI 34768705945. The later iPhone
 failure in CI 34774032459 was a global request-count assertion; the repaired test
 filters history routes. It changes no accepted application or migration bytes.
 
-## Current-claims acceptance and verification limits
+## Current-claims acceptance and paused work
 
-See the [acceptance report](home-current-claims-wip-2026-09-13.md). Nine actual
-HTTP/source-loaded SDK cases, both populated browser consumers and both installed
-native readers pass. Original serialized old 200 responses complete after newer 403s
-without restoring retired rows on each client. Six real protected HTTP rejections
-then drain the queue; both browser consumers and both native apps confirm empty
-while preserving membership, ownership, submission and removal rows. Browser
-lifecycle signals are explicit events; native background/foreground is actual.
+PR #36 is at `1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1` in
+`/private/tmp/pantopus-home-current-residency-claims`. Final exact-head
+[CI 34781479982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34781479982)
+passes (15 successes and one unchanged Seeder skip). The unchanged accepted
+application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`.
+Read its [accepted report at the candidate head](https://github.com/WangPantopus/skinny-pantopus/blob/1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1/docs/home-current-claims-wip-2026-09-13.md).
 
-The iOS signed product passes 31 focused and 4,471 full checks, with 168 skips. All 679 installed
-app files remain unchanged and three observed original stores remain empty.
-Android passes 44 focused and 4,661 full checks, with 80 skips for each Debug/Release variant,
-Debug/Release build and lint, ktlint/Detekt, and an offline optimized twelve-record codec
-probe. Its installed Debug APK is unchanged, all 16 preference files survive update,
-and seven observed originals remain empty. Browser isolation, 1,324 full checks,
-14 later focused checks and zero-error web type checking pass; standalone API
-checking retains 39 baseline diagnostics with no candidate-only errors.
+Recorded actual HTTP/SDK/SQL, both browser consumers and both installed native
+queue journeys pass, including populated/error/retry, account/background/restart
+and stale responses after newer denial. Protected rejection commands drain the
+queue. Exact fixture cleanup, preserved products and three durable evidence
+archives are recorded. Owned current-claims REST/API/web and native devices are
+stopped with data retained and leases released. Inspect leases before reuse.
 
-The populated upgrade preserves all 366 retained tables in an outer rollback.
-Final fixture cleanup preserves all 374 candidate tables and all 366 retained tables,
-roles, ledger, functions and catalog. The candidate database is retained, with its
-REST/API/Next servers and both owned devices stopped. This is not retained-database
-permanent adoption or production/provider activation. Migration reconciliation is
-50 Home / 21 paid / 59 combined, with 12 identical shared versions and zero collisions; combined
-paid/Home populated replay/adoption remains open. Private evidence archives and
-released leases are indexed in the operator handoff.
+The additive migration creates a service-only reader over existing tables; it
+creates no tables. Populated upgrade preservation passes, but combined paid/Home
+adoption and hosted rollout remain open. Browser type checking has zero errors;
+standalone API checking retains 39 baseline diagnostics and no candidate-only
+errors. Android optimized codec verification is not Release UI acceptance. Preserve
+all other report limitations. Primary still lacks this unmerged privacy repair.
 
-Exact application source `4d4183a79` passes [CI 34779388555](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34779388555):
-15 successful checks and one unchanged Seeder skip. Verify the final documentation
-head independently before integration. The report preserves driver/preparation
-failures and each product/screenshot limitation rather than treating them as passes.
+The uncommitted renewal worktree `/private/tmp/pantopus-home-residency-renewal`
+stays paused at #36's head. Its proposed two-table renewal migration and contract
+are neither applied nor pushed. Compare existing claims, occupancy, submission
+commands and review receipts before deciding whether any new schema is needed.
+Its small storage-check/test patch is also unaccepted; larger storage consolidation
+was deferred and preserved privately. Do not treat this draft as an implementation
+requirement. The reconciliation retains exact paths and dispositions.
 
 ## Preserve and continue
 
