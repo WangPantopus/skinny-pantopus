@@ -12,19 +12,25 @@ new rules in [AGENTS.md](../AGENTS.md) and the
 An open acceptance row does not authorize a rebuild. Locate existing code and
 establish a defect or concrete unmet requirement before application changes.
 
-**Next: reconcile PR #36's visible queue differences with the existing design
-before integration.** Preserve its accepted privacy/authority behavior. The
-primary handoff previously said actual current-claims acceptance was unfinished;
-that instruction is superseded. Do not rerun completed native/browser journeys
-merely because an older report says “next.” The reconciliation names the specific
-presentation differences and the existing components to inspect.
+**Next: verify the presentation-restoration head of PR #36 in CI, then integrate
+that completed repair into #32.** Six existing views restore the distinct web
+layouts and native empty states. The accepted reader, API, SQL and recovery
+controllers are unchanged. Read the [candidate report](home-current-claims-wip-2026-09-13.md)
+for focused/rendered checks and source-specific limits. The new native view
+rendering is not claimed as fresh installed-product acceptance.
+
+During CI, compare R03 renewal/re-entry against existing claims, occupancy,
+submission commands, review receipts and invitation decisions. Keep the proposed
+renewal migration paused; a workflow gap does not establish that new tables or
+screens are necessary. Do not repeat the earlier accepted claims workflows from
+stale handoff instructions.
 
 Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
 The inspected application head is `4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
 [CI 34777977420](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34777977420)
-passing all 16 checks. This reconciliation changes documentation only; check its
-new commit separately. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
+passing all 16 checks. Documentation checkpoint `a1d278e33` records the verification-first rules.
+The subsequent #36 reconciliation changes presentation only and requires its own CI. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
 is already merged into #32 at `f1a92f45ad8c79ef88e89a2882a584898d3f8017`, not master.
 Its exact source `8cfcbf2b28d95587a70fe784c81b913de688dd52` passes the executed
 checks in [CI 34775715928](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34775715928).

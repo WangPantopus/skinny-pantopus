@@ -524,7 +524,7 @@ fun HomeClaimResidencyCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HomeClaimAvatar(
-                initials = "?",
+                initials = item.username?.firstOrNull()?.uppercase() ?: "?",
                 size = AvatarMedium,
                 tint = PantopusColors.home,
             )

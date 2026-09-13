@@ -1,6 +1,6 @@
 # Current residency-claims privacy acceptance — September 13
 
-Local acceptance is complete. PR #36 targets the primary Home branch and remains a draft until exact-head CI and integration finish. Accepted application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`; final documentation follows separately. No production/provider activation or permanent adoption of the retained database is claimed. Primary still needs this repair integrated before its raw-claims exposure is resolved.
+Privacy/recovery acceptance is complete at the source bound below. The presentation reconciliation described at the end changes six existing view files; its own checks and limitations are recorded separately. PR #36 targets the primary Home branch and remains a draft until final CI and integration finish. Accepted application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`; final documentation follows separately. No production/provider activation or permanent adoption of the retained database is claimed. Primary still needs this repair integrated before its raw-claims exposure is resolved.
 
 ## Resulting behavior
 
@@ -40,3 +40,57 @@ Exact cleanup passes: all 374 candidate tables, all 366 retained tables, full ro
 Durable evidence is beneath `.pantopus-recovery/20260907/home-invitation-handoff-20260912/residency-cycle-20260913/` in the owner's checkout. The HTTP/browser archive contains 9,103 files with manifest `6d4dfbe0c3cc151900ed0adffe983a013285bfffbde96a7f1d0e8036cc88595e`. The iOS reader archive contains 15,915 files with manifest `f545f67c9e129fafcd389ef652d068daae425143a6198cd345efe8ab878e996e`. The final acceptance archive adds Android products/readers, all empty transitions, fixture/runtime bindings and cleanup: 5,191 files, manifest `8d1ac16c0c8f57f12ece2c98f252ae2cbf9515fe3ef7966785e7ddf56967ff5d`. Source and durable destination hashes agree; the private operator index records each archive.
 
 Preparation failures remain distinct from product results. Fixture metadata/port guards rejected invalid startup; private browser drivers initially used a wrong heading and skipped the ordinary logout before a second sign-in; the private XCUI runner needed an awaited read outside an assertion autoclosure. Its initial test descriptor still named the history predecessor; an installed-binary comparison caught this, all dependency paths were corrected, and all 679 candidate app files were verified for the successful run. The first pre-run Keychain query used a wrong filename; later explicit observations are retained. Android's reduced in-process compiler heap failed before the repository memory settings succeeded, and a test encoder needed explicit JSON null serialization. No failure is silently relabeled as a pass. Credentials, raw tokens, database archives, operator logs and local dependency links remain outside Git.
+
+## Existing-design restoration — September 13
+
+The source diff against primary application head `4e966835f` showed that the
+privacy repair also unified two different web card layouts and replaced the
+native illustrated empty states with plain text and new explanatory headings.
+Those decorative changes were unnecessary to the safe-reader contract.
+
+The repair keeps the same existing components and restores the Members panel's
+yellow border, gradient initial avatar, compact review links and flat wrapping
+row. The separate review page retains its original neutral avatar, card spacing,
+relative-date position and full-width Approve/Deny actions with icons. Both
+native queues reuse the existing illustrated EmptyState and original card spacing;
+public-username initials replace the generic question mark when available.
+Unnecessary duplicate queue headings/counts are removed. Explicit reload remains.
+
+Private names, photo URLs and claimed addresses are not restored. Safe usernames,
+unknown date/relationship labels, private transport, current session/authority
+validation, stale-response retirement and exact protected-review navigation remain.
+No controller, model, API, service, SQL, receipt or command-store bytes change.
+The only test edits adapt accessible action names to the restored visible labels.
+
+Validation:
+
+- The existing 14 browser queue checks pass, including stale sessions/responses,
+  malformed results, duplicate applicants, tab changes and exact review selection.
+- Final web TypeScript checking and focused ESLint pass with zero diagnostics.
+- Actual Chrome renders of the real Next/React consumers pass eight bounded
+  checks: populated views at 320/390/1024px on both surfaces, plus unavailable
+  clearing and explicit retry to confirmed empty on both surfaces. Screenshots
+  were inspected. Responses are intercepted synthetic fixtures; this is rendering
+  proof, not another real HTTP/SQL or provider acceptance run.
+- The first renderer setup lacked a synthetic signed-in session; it is preserved
+  as a preparation failure. A later narrow-width check caught a row grouping
+  overlap introduced during restoration; restoring the original flat row fixed
+  it. The final eight checks pass. This evidence is not represented as a defect
+  in the previously accepted privacy controller.
+- Android ktlint and Debug Kotlin compilation pass after correcting four local
+  formatting diagnostics. No emulator or device is started or updated. Swift
+  parsing and formatting pass for the two changed iOS view files; final iOS
+  compilation and regressions belong to the new CI head.
+- Existing installed-native privacy/recovery evidence remains bound to its old
+  signed products. New installed-native screenshots, dark mode and Dynamic Type
+  acceptance are not claimed here; release-wide U02/U05 remain open.
+
+Private rendering/check evidence is in `/private/tmp/pantopus-claims-presentation-r1`,
+with a hash-verified durable copy under the owner checkout at
+`.pantopus-recovery/audits/20260913-claims-presentation/`.
+The temporary render-only route is removed and its source retained privately;
+Next's automatic tsconfig edit is restored. The owned server on port 18186 is
+stopped. An initial occupied-port startup was refused without touching its owner.
+Existing database state, devices, signed products and private evidence are intact.
+Final pushed-head CI must pass before integration; do not repeat accepted
+backend/database journeys for unchanged application contracts.

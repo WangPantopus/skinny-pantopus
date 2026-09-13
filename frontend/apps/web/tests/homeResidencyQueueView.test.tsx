@@ -58,7 +58,7 @@ test.each(['members', 'review page'])('%s uses the private queue and keeps missi
   expect(screen.getByText('Date unavailable')).toBeVisible();
   expect(screen.getByText('Requesting: Requested relationship unspecified')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Your past residency decisions' })).toHaveAttribute('href', `/app/homes/${home}/owners/review-claim/history`);
-  expect(screen.getByRole('link', { name: 'Review approval' })).toHaveAttribute('href',
+  expect(screen.getByRole('link', { name: consumer === 'members' ? 'Review approval' : 'Approve: review approval' })).toHaveAttribute('href',
     `/app/homes/${home}/owners/review-claim/residency?claimId=${claimId}&action=approve${consumer === 'members' ? '&from=members' : ''}`);
   expect(api.homes.getHomeClaims).not.toHaveBeenCalled();
   expect(get).toHaveBeenCalledWith(`/api/homes/${home}/claims`, expect.objectContaining({
@@ -97,7 +97,7 @@ test.each(['account', 'session marker', 'origin', 'background'])('render and an 
 });
 
 test.each(['members', 'review page'])('%s prevents an already rendered review link from using an old session', async consumer => {
-  mount(consumer); const link = await screen.findByRole('link', { name: 'Review approval' });
+  mount(consumer); const link = await screen.findByRole('link', { name: consumer === 'members' ? 'Review approval' : 'Approve: review approval' });
   jest.mocked(api.getAuthToken).mockReturnValue('another-synthetic-session');
   expect(fireEvent.click(link)).toBe(false);
   expect(screen.queryByText('@public_applicant')).not.toBeInTheDocument();
@@ -144,6 +144,6 @@ test.each(['members', 'review page'])('%s rejects duplicate applicants instead o
   mount(consumer);
   await screen.findByRole('alert');
   expect(screen.queryByRole('article')).not.toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: 'Review approval' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: consumer === 'members' ? 'Review approval' : 'Approve: review approval' })).not.toBeInTheDocument();
   expect(screen.queryByText('No pending residency claims')).not.toBeInTheDocument();
 });

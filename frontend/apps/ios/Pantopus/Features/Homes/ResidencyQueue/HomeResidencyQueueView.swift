@@ -6,24 +6,31 @@ struct HomeResidencyQueueView: View {
     let onReview: (String, HomeResidencyDecision) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.s4) {
-                Text("Current pending requests").font(.headline)
-                Text(
-                    "These are request references. Open a review to check the applicant, current authority, "
-                        + "and requested relationship before deciding."
-                )
-                .pantopusTextStyle(.caption)
-                content
-                if model.isCurrent {
-                    Button("Reload current requests") { Task { await model.refresh() } }
-                        .frame(minHeight: 44).accessibilityIdentifier("homeResidencyQueue.reload")
+        Group {
+            if case let .ready(page) = model.state, page.claims.isEmpty {
+                VStack {
+                    content
+                    reloadButton
                 }
-            }.padding(Spacing.s4).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView {
+                    VStack(spacing: Spacing.s3) {
+                        content
+                        reloadButton
+                    }.padding(Spacing.s4).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .refreshable { await model.refresh() }
+            }
         }
-        .refreshable { await model.refresh() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeResidencyQueue")
+    }
+
+    @ViewBuilder private var reloadButton: some View {
+        if model.isCurrent {
+            Button("Reload current requests") { Task { await model.refresh() } }
+                .frame(minHeight: 44).accessibilityIdentifier("homeResidencyQueue.reload")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -34,9 +41,16 @@ struct HomeResidencyQueueView: View {
             Text(error.localizedDescription).foregroundStyle(Theme.Color.error).accessibilityIdentifier("homeResidencyQueue.error")
         case let .ready(page):
             if page.claims.isEmpty {
-                Text("No pending residency claims.").accessibilityIdentifier("homeClaimReview_residencyEmpty")
+                EmptyState(
+                    icon: .checkCheck,
+                    headline: "No pending residency claims",
+                    subcopy: "Neighbors asking to join this household will show up here "
+                        + "with the role they requested.",
+                    tint: Theme.Color.successBg,
+                    accent: Theme.Color.success
+                )
+                .accessibilityIdentifier("homeClaimReview_residencyEmpty")
             } else {
-                Text("\(page.claims.count) pending requests").accessibilityIdentifier("homeResidencyQueue.count")
                 ForEach(page.claims) { claim in
                     HomeClaimResidencyCard(
                         item: claim,

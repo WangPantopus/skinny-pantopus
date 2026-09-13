@@ -92,7 +92,16 @@ verification**, **reproduced defect**, **confirmed missing requirement**, or
 **externally blocked**. Untested never means broken. An old snapshot or static
 source mapping never means the live workflow passes.
 
-## Next bounded task
+## Presentation follow-up
+
+The current #36 candidate restores the two existing web card layouts and native
+illustrated empty states in six existing view files. The controller, API and SQL
+remain unchanged. See [the candidate report](home-current-claims-wip-2026-09-13.md)
+for the rendered web checks, compile gates and installed-native limitations.
+The findings above remain the inspection record, not instructions to repeat the
+already completed restoration. Final-head CI and integration are next.
+
+## Original next bounded task (now implemented in the candidate)
 
 Reconcile #36's existing queue presentation against its #32 base. Preserve the
 accepted safe reader, authority checks and stale-response retirement. Identify

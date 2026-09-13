@@ -15,10 +15,8 @@ export default function ResidencyClaimsPanel({ homeId, canManage }: ResidencyCla
     <div className="flex items-center gap-2 mb-3">
       <Home className="w-5 h-5 text-yellow-700" /><h3 className="font-semibold text-yellow-800">Residency claims</h3>
     </div>
-    <div className="mb-3 flex flex-wrap gap-3">
-      <Link href={`${reviewPath}?from=members`} prefetch={false} className="inline-flex min-h-11 items-center text-sm underline">Residency decisions and recovery</Link>
-      <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false} className="inline-flex min-h-11 items-center text-sm underline">Your past residency decisions</Link>
-    </div>
+    <Link href={`${reviewPath}?from=members`} prefetch={false} className="mb-3 inline-block text-sm underline">Residency decisions and recovery</Link>
+      <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false} className="mb-3 ml-4 inline-block text-sm underline">Your past residency decisions</Link>
     <ResidencyQueueContent homeId={homeId} queue={queue} fromMembers />
   </section>;
 }
