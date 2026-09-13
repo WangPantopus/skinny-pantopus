@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 13, 2026 after current-claims integration and design restoration. This is the
+Updated September 13, 2026 after existing landlord-flow verification. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
 the ordered backlog; dated reports preserve source-specific evidence.
 
@@ -12,14 +12,29 @@ new rules in [AGENTS.md](../AGENTS.md) and the
 An open acceptance row does not authorize a rebuild. Locate existing code and
 establish a defect or concrete unmet requirement before application changes.
 
-**Next: verify and reuse the existing reactivation path before extending R03.**
-`occupancyAttachService._reactivateOccupancy` already exists and is called by
-landlord invite acceptance and tenant approval in `landlordTenant.js` through
-`landlordAuthorityService`. Its service/pipeline tests and shared SDK endpoints
-also exist. Trace current authority, persisted dates and recovery through those
-entrypoints before proposing an ordinary-household re-entry extension. Existing
-protected Home submission/review routes refuse ended membership; this does not
-mean the entire app lacks reactivation code. Keep the proposed renewal tables paused.
+**Next: repair the demonstrated lease/occupancy consistency and retry failures.**
+The existing reactivation and landlord services have now been checked with the
+actual SDK, PostgREST and isolated PostgreSQL. Approval can report success with
+no occupancy and refuse retry; reactivation can preserve an expired access end
+and leave the tenant locked out. Keep these concrete failures in R05 and reuse
+the existing tables. The proposed renewal tables remain paused.
+
+The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
+issuer's current verified authority before writes. Baseline SQL granted access
+after revocation; candidate SQL denies without consuming the invitation, while
+a valid invitation still works. All 279 focused service/route tests pass. See
+[the verification and limits](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-flow-verification--september-13).
+The active worktree is `/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/home-permission-boundaries`. The previous Home integration `e6e3c65f8`
+passes all 16 checks in [CI 34788091570](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34788091570).
+The landlord candidate `968e145a7369e69f48638c7d16b06bcaa88aaff7` passes all six
+executed checks in [CI 34790034952](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790034952),
+with five unchanged scopes skipped. Check the new merge's integration CI
+separately. No screen or migration changed. A rendered React component probe also
+confirms the existing lease-date modal drops edited dates before the SDK call;
+include that concrete failure in the same lease repair, preserving its design.
+Owned landlord-verification REST is stopped, fixtures are cleaned, and the
+schema-only database is retained with its private lease released.
 
 PR #36 is integrated here from `a68e8f0e52d8f2739e5a49279ae3495956d073ee`.
 Its exact [CI 34785056441](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34785056441)
@@ -30,8 +45,7 @@ See [the accepted report](home-current-claims-wip-2026-09-13.md) for rendered we
 checks and source-specific native limits. Inspect CI for the integration commit
 independently; it adds no application changes beyond the accepted candidate.
 
-Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
+The Home integration branch is `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
 The earlier primary application checkpoint was
 `4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
 [CI 34777977420](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34777977420)

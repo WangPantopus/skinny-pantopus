@@ -1064,6 +1064,7 @@ describe('POST /tenant/accept-invite', () => {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
     seedHome();
+    seedAuthority({ subject_id: 'landlord-1' });
     seedTable('HomeLeaseInvite', [{
       id: 'invite-1',
       home_id: 'home-1',
@@ -1089,6 +1090,20 @@ describe('POST /tenant/accept-invite', () => {
     expect(res._json.lease).toBeDefined();
     expect(res._json.lease.state).toBe('active');
     expect(res._json.occupancy).toBeDefined();
+  });
+
+  test('refuses a revoked issuer without consuming the invite or creating access', async () => {
+    getTable('HomeAuthority')[0].status = 'revoked';
+    const req = mockReq({ body: { token: rawToken } });
+    const res = mockRes();
+    await acceptInviteHandler(req, res);
+
+    expect(res._status).toBe(400);
+    expect(res._json.error).toContain('verified authority');
+    expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
+    expect(getTable('HomeLease')).toHaveLength(0);
+    expect(getTable('HomeLeaseResident')).toHaveLength(0);
+    expect(getTable('HomeOccupancy')).toHaveLength(0);
   });
 
   test('returns 404 when token invalid', async () => {

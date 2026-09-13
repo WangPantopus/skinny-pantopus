@@ -120,6 +120,77 @@ function seedPendingLease(overrides = {}) {
 // ============================================================
 
 describe('invite → accept → occupancy', () => {
+  test.each([
+    ['revoked', { status: 'revoked' }],
+    ['pending', { status: 'pending' }],
+    ['different home', { home_id: 'other-home' }],
+    ['different subject', { subject_id: 'other-landlord' }],
+    ['different subject type', { subject_type: 'business' }],
+    ['missing', null],
+  ])('does not consume an invite when its authority is %s', async (_label, changed) => {
+    seedHome();
+    seedVerifiedAuthority();
+    const invitation = await service.inviteTenant(
+      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
+    );
+    expect(invitation.success).toBe(true);
+    if (changed) Object.assign(getTable('HomeAuthority')[0], changed);
+    else seedTable('HomeAuthority', []);
+    jest.clearAllMocks();
+
+    const result = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('verified authority');
+    expect(getTable('HomeLease')).toHaveLength(0);
+    expect(getTable('HomeLeaseResident')).toHaveLength(0);
+    expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
+    expect(mockOccAttach).not.toHaveBeenCalled();
+    expect(writeAuditLog).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+
+  test('authority read failure preserves the invite for a later retry', async () => {
+    seedHome();
+    seedVerifiedAuthority();
+    const invitation = await service.inviteTenant(
+      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
+    );
+    const db = require('../__mocks__/supabaseAdmin');
+    const originalFrom = db.from;
+    const readFailure = jest.spyOn(db, 'from').mockImplementation((table) => {
+      const query = originalFrom(table);
+      if (table === 'HomeAuthority') {
+        query.maybeSingle = async () => ({ data: null, error: { message: 'synthetic read failure' } });
+      }
+      return query;
+    });
+    try {
+      const denied = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
+      expect(denied.success).toBe(false);
+      expect(getTable('HomeLease')).toHaveLength(0);
+      expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
+      expect(mockOccAttach).not.toHaveBeenCalled();
+    } finally {
+      readFailure.mockRestore();
+    }
+    const retried = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
+    expect(retried.success).toBe(true);
+    expect(getTable('HomeLease')).toHaveLength(1);
+    expect(getTable('HomeLeaseInvite')[0].status).toBe('accepted');
+  });
+
+  test.each(['business', 'trust'])('accepts an invite from its verified %s subject', async (subjectType) => {
+    seedHome();
+    seedVerifiedAuthority({ subject_type: subjectType });
+    const invitation = await service.inviteTenant(
+      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
+    );
+    const result = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
+    expect(result.success).toBe(true);
+    expect(result.lease.approved_by_subject_type).toBe(subjectType);
+  });
+
   test('full landlord invite flow creates active lease and occupancy', async () => {
     seedHome();
     seedVerifiedAuthority();

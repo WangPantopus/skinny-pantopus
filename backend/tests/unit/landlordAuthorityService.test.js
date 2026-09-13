@@ -492,6 +492,7 @@ describe('acceptInvite', () => {
 
   beforeEach(() => {
     seedHome();
+    seedAuthority();
     rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
