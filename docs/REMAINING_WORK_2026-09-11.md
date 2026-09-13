@@ -1,6 +1,6 @@
 # Pantopus remaining work
 
-Active September 13 continuation: separate #35 passes both installed own-review history readers, Android optimized Release codecs and both fresh native applicant/reviewer cycles. Each cycle has two submissions, two immutable decisions and one removal through actual UI/HTTP/SQL. Fixtures are exactly cleaned and devices stopped with data retained. Reconcile and integrate after exact pushed-head CI, then finish #36 current-claims privacy. Its SQL alias correction passes database replay/lint and safeguards; application/consumer acceptance remains open. All four PRs remain drafts; counts remain 8 closed and 72 partial/open.
+Native reviewer history is accepted and integrated through PR #35 into the primary Home branch (merge `f1a92f45a`, exact source `8cfcbf2b2`, passing CI 34775715928). Both installed readers and both fresh native cycles pass with preserved evidence and exact cleanup. Next complete PR #36 current-claims privacy through actual populated HTTP/SDK/browser/native acceptance, then the ordered backlog. PRs #32/#34/#36 remain drafts. Counts remain 8 closed and 72 partial/open.
 
 Updated September 13, 2026 after backend/browser reviewer-history acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
@@ -35,7 +35,7 @@ native reader follow-ups. Reviewer-history [backend](home-residency-review-histo
 and [browser](home-browser-residency-review-history-2026-09-13.md) now also pass
 actual own-history pagination/detail/current-authority recovery, real expiry
 races and the fresh post-ack combined applicant/reviewer cycle, with exact
-fixture cleanup. Finish installed native history/cycle parity and current-claims
+fixture cleanup. Both installed native history readers and fresh native cycles now pass. Finish current-claims
 privacy/read repair, then the remaining R03 lifecycle and full ordered backlog.
 No additional row is closed.
 Do not redo accepted native joining/postal/review/private-first-use work solely
