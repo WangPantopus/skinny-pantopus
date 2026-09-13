@@ -1,6 +1,6 @@
 # Pantopus remaining work
 
-Active September 13 continuation: the separate #35 candidate passes installed iOS own-review history, including actual held list/detail 200 after newer 403. Android product/installed reader gates and optimized Release codecs also pass, with explicit cancellation versus delivered-response limits. The shared reader fixture is exactly cleaned. Fresh native applicant/reviewer cycles remain open. #36 holds unfinished current-claims privacy work. All four PRs #32/#34/#35/#36 are drafts; counts remain 8 closed and 72 partial/open.
+Active September 13 continuation: separate #35 passes both installed own-review history readers, Android optimized Release codecs and the fresh iOS applicant/reviewer cycle. Its two submissions, two immutable decisions and one removal pass actual UI/HTTP/SQL; the fixture is exactly cleaned. Complete the fresh Android cycle before integration. #36 holds unfinished current-claims privacy work. All four PRs remain drafts; counts remain 8 closed and 72 partial/open.
 
 Updated September 13, 2026 after backend/browser reviewer-history acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and

@@ -343,10 +343,13 @@ extension HomeResidencyHistoryJourneyUITests {
     }
 
     func reveal(_ control: XCUIElement) throws {
-        try require(control)
-        for attempt in 0..<18 {
-            if control.isHittable { return }
-            if control.frame.midY < app.frame.midY || (6..<12).contains(attempt) { app.swipeDown() } else { app.swipeUp() }
+        if !control.exists { _ = control.waitForExistence(timeout: 3) }
+        // SwiftUI Form creates rows as they enter the viewport, including the
+        // fresh cycle's decision controls below current membership details.
+        for attempt in 0..<24 {
+            if control.exists, control.isHittable { return }
+            let towardTop = control.exists ? control.frame.midY < app.frame.midY : (6..<18).contains(attempt)
+            if towardTop { app.swipeDown() } else { app.swipeUp() }
         }
         XCTFail("History control is not reachable")
         throw JourneyError.unavailable

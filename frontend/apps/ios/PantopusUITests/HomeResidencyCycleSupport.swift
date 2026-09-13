@@ -69,7 +69,7 @@ extension HomeResidencyHistoryJourneyUITests {
     func cycleAcknowledgeReview() throws {
         try press("homeResidencyReview.acknowledge")
         let ids = ["homeResidencyReview.empty", "homeResidencyReview.noPendingClaim"]
-        try require(app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ids)).firstMatch)
+        try reveal(app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ids)).firstMatch)
         try press("homeResidencyReview.close")
         try press("homeClaimReview.residencyRecovery")
         try require(element("homeResidencyReview.empty"))

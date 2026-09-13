@@ -36,7 +36,7 @@ extension HomeResidencyHistoryJourneyUITests {
         try cycleConfirmReview()
         _ = try await fixture("fault", body: ["action": "review_reject", "kind": "after", "remaining": 1])
         try press("homeResidencyReview.submit")
-        try require(label("original decision is saved on this device"))
+        try reveal(label("original decision is saved on this device"))
         try await cycleCounts(submissions: 1, decisions: 1, removals: 0)
         let original = try await receipts(actor: 0)
         keepScreen("Lost rejection reply retains the original decision")
@@ -44,7 +44,24 @@ extension HomeResidencyHistoryJourneyUITests {
         try cycleQueue()
         try press("homeClaimReview.residencyRecovery")
         try press("homeResidencyReview.retry")
-        try require(label("original residency claim was rejected"))
+        try reveal(label("original residency claim was rejected"))
+        try await cycleEqual(digest(original), digest(receipts(actor: 0)))
+        try cycleAcknowledgeReview()
+        try await cycleOwnDecision(actor: 0, approved: false)
+        try await cycleCounts(submissions: 1, decisions: 1, removals: 0)
+    }
+
+    func testFreshCycleRejectedOriginalRecoveryContinuation() async throws {
+        try cyclePhase("rejection-recovery")
+        try await cycleCounts(submissions: 1, decisions: 1, removals: 0)
+        let original = try await receipts(actor: 0)
+        try await switchAccount(0)
+        try cycleQueue()
+        try press("homeClaimReview.residencyRecovery")
+        try reveal(label("original decision is saved on this device"))
+        keepScreen("Cold native return retains the original rejected decision awaiting confirmation")
+        try press("homeResidencyReview.retry")
+        try reveal(label("original residency claim was rejected"))
         try await cycleEqual(digest(original), digest(receipts(actor: 0)))
         try cycleAcknowledgeReview()
         try await cycleOwnDecision(actor: 0, approved: false)
@@ -87,7 +104,7 @@ extension HomeResidencyHistoryJourneyUITests {
         try cyclePress(app.buttons["Member"].firstMatch)
         try cycleConfirmReview()
         try press("homeResidencyReview.submit")
-        try require(label("original residency claim was approved"))
+        try reveal(label("original residency claim was approved"))
         try await cycleCounts(submissions: 2, decisions: 2, removals: 0)
         try await cycleEqual(digest(rejected), digest(receipts(actor: 0)))
         let membership = try await cycleMembership()
@@ -112,9 +129,20 @@ extension HomeResidencyHistoryJourneyUITests {
         try cyclePress(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch)
         try require(element("homeDashboard"))
         keepScreen("Approved applicant enters the current Home through native UI")
+        try await cycleRemoveReviewedMember()
+    }
+
+    func testFreshCycleRemovalContinuation() async throws {
+        try cyclePhase("removal-only")
+        try await cycleCounts(submissions: 2, decisions: 2, removals: 0)
+        try await cycleRemoveReviewedMember()
+    }
+
+    private func cycleRemoveReviewedMember() async throws {
         try await switchAccount(0)
-        try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members")))
+        try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
         try require(element("membersListRemovalRecovery"))
+        try press("tab.members")
         let actor = try cycleActor(2)
         let username = try XCTUnwrap(actor["username"] as? String)
         try cyclePress(app.buttons["More actions for " + username].firstMatch)
@@ -152,5 +180,32 @@ extension HomeResidencyHistoryJourneyUITests {
         try cycleEqual(cycleRows(final, "commands").count, 0)
         try cycleEqual(cycleRows(final, "ownership").count, 2)
         keepScreen("Each native reviewer retains only their own decision after removal")
+    }
+
+    func testFreshCycleDepartedApplicantHomeLink() async throws {
+        try cyclePhase("departure-link")
+        try await cycleCounts(submissions: 2, decisions: 2, removals: 1)
+        try await switchAccount(2)
+        let before = try await fixture("state")
+        let boundary = try cycleRows(before, "events").count
+        try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/dashboard")))
+        try require(label("Home access unavailable"))
+        try require(element("homeDashboard_accessRetry"))
+        XCTAssertFalse(element("homeDashboard_limitedTasks").exists)
+        XCTAssertFalse(element("homeDashboard_verifyOwnership").exists)
+        let after = try await fixture("state")
+        let events = try Array(cycleRows(after, "events").dropFirst(boundary))
+        XCTAssertTrue(events.contains {
+            $0["event"] as? String == "response" && $0["actor"] as? Int == 2
+                && $0["path"] as? String == "/api/homes/" + home + "/dashboard-access"
+                && $0["status"] as? Int == 403
+        })
+        XCTAssertFalse(events.contains {
+            $0["event"] as? String == "request" && $0["actor"] as? Int == 2
+                && $0["path"] as? String == "/api/homes/" + home + "/dashboard"
+        })
+        try cycleEqual(digest(cycleRows(before, "review_receipts")), digest(cycleRows(after, "review_receipts")))
+        try await cycleCounts(submissions: 2, decisions: 2, removals: 1)
+        keepScreen("A saved Home link checks current authority and withholds the removed household dashboard")
     }
 }
