@@ -45,9 +45,17 @@ final class BillsListViewModelTests: XCTestCase {
         // Capture the frozen value locally so the closure is trivially
         // Sendable (no Self-isolated access).
         let frozen = Self.fixedNow
+        let client = api ?? makeAPI()
         return BillsListViewModel(
             homeId: "home-1",
-            api: api ?? makeAPI()
+            api: client,
+            financeAccess: HomeFinanceAccess(
+                homeId: "home-1",
+                api: client,
+                loadAccess: { HomeAccessDTO(hasAccess: true, permissions: ["finance.view", "finance.manage"])
+                },
+                identity: { "test-session" }
+            )
         ) { frozen }
     }
 
@@ -405,8 +413,10 @@ final class BillsListViewModelTests: XCTestCase {
 
     // MARK: - FAB variant + tint
 
-    func testFabIsCanonicalCreateWithHomeTint() {
+    func testFabIsCanonicalCreateWithHomeTint() async {
+        SequencedURLProtocol.sequence = [.status(200, body: "{\"bills\":[]}")]
         let vm = makeVM()
+        await vm.load()
         guard let fab = vm.fab else {
             XCTFail("Expected FAB")
             return

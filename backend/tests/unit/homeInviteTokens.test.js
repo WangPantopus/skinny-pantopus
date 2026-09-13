@@ -1,12 +1,12 @@
 // ============================================================
 // TEST: HomeInvite Token Hashing (AUTH-3.1)
 //
-// Verifies that invite creation stores a SHA-256 hash in
-// token_hash, and that lookups work via hash comparison.
+// Route transport regression; the real hash/legacy lookup and admission
+// decisions run in scripts/db/contracts/home-invitation-transactions.sql.
 // ============================================================
 
 const crypto = require('crypto');
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 const householdClaimConfig = require('../../config/householdClaims');
 
 // ── Mock dependencies ──────────────────────────────────────
@@ -99,6 +99,7 @@ function mockRes() {
     statusCode: 200,
     body: null,
     status(code) { res.statusCode = code; return res; },
+    set: jest.fn().mockReturnThis(),
     json(data) { res.body = data; return res; },
   };
   return res;
@@ -136,12 +137,17 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     const req = mockReq({ params: { token: rawToken } });
     const res = mockRes();
 
+    const rpc=jest.fn(async()=>({data:{ok:true,invitation:{id:'inv-1',status:'pending'}}}));
+    setRpcMock(rpc);
+
     await getInviteHandler(req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.invitation).toBeDefined();
     expect(res.body.invitation.id).toBe('inv-1');
     expect(res.body.invitation.status).toBe('pending');
+    expect(rpc).toHaveBeenCalledWith('act_on_home_invitation',expect.objectContaining({p_token:rawToken,p_invite_id:null,p_actor_id:null,p_action:'preview'}));
+    expect(res.set).toHaveBeenCalledWith('Cache-Control','no-store');
   });
 
   test('invite lookup falls back to plaintext for un-migrated rows', async () => {
@@ -163,11 +169,15 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     const req = mockReq({ params: { token: rawToken } });
     const res = mockRes();
 
+    const rpc=jest.fn(async()=>({data:{ok:true,invitation:{id:'inv-2',status:'pending'}}}));
+    setRpcMock(rpc);
+
     await getInviteHandler(req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.invitation).toBeDefined();
     expect(res.body.invitation.id).toBe('inv-2');
+    expect(rpc).toHaveBeenCalledWith('act_on_home_invitation',expect.objectContaining({p_token:rawToken,p_action:'preview'}));
   });
 
   test('invalid token returns 404', async () => {
@@ -184,6 +194,7 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
 
     const req = mockReq({ params: { token: 'bad-token-value' } });
     const res = mockRes();
+    setRpcMock(async()=>({data:{ok:false,code:'INVITE_NOT_FOUND',status:404}}));
 
     await getInviteHandler(req, res);
 
@@ -210,78 +221,8 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     seedTable('Home', [{ id: 'home-1', name: 'Test Home' }]);
     seedTable('HomeOccupancy', []);
 
-    const req = mockReq({ params: { token: rawToken } });
-    const res = mockRes();
-
-    await acceptInviteHandler(req, res);
-
-    // Should either accept (200/201) or get past the token lookup
-    // (may fail downstream due to missing occupancy data, but should NOT be 404)
-    expect(res.statusCode).not.toBe(404);
-  });
-
-  test('accept-invite token route completes claim merge when the invite is merge-bound', async () => {
-    householdClaimConfig.flags.inviteMerge = true;
-
-    seedTable('HomeInvite', [
-      {
-        id: 'inv-merge-1',
-        home_id: 'home-1',
-        invited_by: 'owner-1',
-        invitee_user_id: 'user-1',
-        status: 'pending',
-        token: null,
-        token_hash: expectedHash,
-        proposed_role: 'owner',
-        proposed_role_base: 'owner',
-        proposed_preset_key: 'claim_merge:claim-2',
-        expires_at: new Date(Date.now() + 86400000).toISOString(),
-      },
-    ]);
-    seedTable('Home', [{
-      id: 'home-1',
-      name: 'Test Home',
-      owner_id: 'owner-1',
-      security_state: 'claim_window',
-      ownership_state: 'owner_verified',
-      household_resolution_state: 'verified_household',
-    }]);
-    seedTable('User', [
-      { id: 'user-1', email: 'test@example.com', name: 'Claimant User' },
-      { id: 'owner-1', email: 'owner@example.com', name: 'Owner User' },
-    ]);
-    seedTable('HomeOwner', [{
-      id: 'owner-row-1',
-      home_id: 'home-1',
-      subject_id: 'owner-1',
-      owner_status: 'verified',
-      is_primary_owner: true,
-    }]);
-    seedTable('HomeOwnershipClaim', [
-      {
-        id: 'claim-1',
-        home_id: 'home-1',
-        claimant_user_id: 'owner-1',
-        claim_type: 'owner',
-        state: 'approved',
-        claim_phase_v2: 'verified',
-        created_at: '2026-04-04T00:00:00.000Z',
-      },
-      {
-        id: 'claim-2',
-        home_id: 'home-1',
-        claimant_user_id: 'user-1',
-        claim_type: 'owner',
-        state: 'submitted',
-        claim_phase_v2: 'under_review',
-        identity_status: 'verified',
-        challenge_state: 'none',
-        routing_classification: 'parallel_claim',
-        created_at: '2026-04-04T01:00:00.000Z',
-      },
-    ]);
-    seedTable('HomeVerificationEvidence', []);
-    seedTable('HomeOccupancy', []);
+    const rpc=jest.fn(async()=>({data:{ok:true,replayed:false,homeId:'home-1',occupancy:{id:'occ-1'}}}));
+    setRpcMock(rpc);
 
     const req = mockReq({ params: { token: rawToken } });
     const res = mockRes();
@@ -289,27 +230,33 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     await acceptInviteHandler(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.merged).toBe(true);
-    expect(res.body.claim?.id).toBe('claim-2');
-    expect(res.body.claim?.claim_phase_v2).toBe('verified');
-    expect(res.body.claim?.terminal_reason).toBe('none');
-    expect(res.body.accepted_as_owner).toBe(true);
+    expect(res.body.occupancy.id).toBe('occ-1');
+    expect(rpc).toHaveBeenCalledWith('act_on_home_invitation',expect.objectContaining({p_token:rawToken,p_actor_id:'user-1',p_action:'accept'}));
+  });
 
-    const mergedClaim = getTable('HomeOwnershipClaim').find((claim) => claim.id === 'claim-2');
-    expect(mergedClaim.claim_phase_v2).toBe('verified');
-    expect(mergedClaim.terminal_reason).toBe('none');
-    expect(mergedClaim.merged_into_claim_id).toBe(null);
-    const invitedOwner = getTable('HomeOwner').find((owner) => owner.subject_id === 'user-1');
-    expect(invitedOwner).toEqual(expect.objectContaining({
-      owner_status: 'verified',
-      is_primary_owner: false,
-      verification_tier: 'weak',
-    }));
-    expect(getTable('HomeInvite')[0].status).toBe('accepted');
+  test('accept-invite token route delegates exact claim and invitation to the ownership transaction', async () => {
+    householdClaimConfig.flags.inviteMerge=true;
+    const invite={id:'inv-merge-1',home_id:'home-1',proposed_preset_key:'claim_merge:claim-2'};
+    const rpc=jest.fn(async(name)=> name==='act_on_home_invitation'
+      ? {data:{ok:true,kind:'claim_merge',invitation:invite}}
+      : {data:{ok:true,replayed:false,homeId:'home-1',claimId:'claim-2',invitation:{id:invite.id},
+        occupancy:{id:'occ-1',home_id:'home-1',user_id:'user-1',role_base:'owner'},acceptedRoleBase:'owner',
+        acceptedAsOwner:true,claimPhaseV2:'verified',terminalReason:'none',mergedIntoClaimId:null}});
+    setRpcMock(rpc);
+    const req=mockReq({params:{token:rawToken}});const res=mockRes();
+    await acceptInviteHandler(req,res);
+    expect(res.statusCode).toBe(200);expect(res.body.merged).toBe(true);
+    expect(res.body.claim).toMatchObject({id:'claim-2',claim_phase_v2:'verified',terminal_reason:'none'});
+    expect(res.body.accepted_as_owner).toBe(true);
+    expect(rpc).toHaveBeenNthCalledWith(2,'mutate_home_claim_invitation',expect.objectContaining({
+      p_home_id:'home-1',p_claim_id:'claim-2',p_actor_id:'user-1',p_action:'accept',p_invitation_id:invite.id}));
+    expect(getTable('HomeOwner')).toEqual([]);expect(getTable('HomeOccupancy')).toEqual([]);
   });
 
   test('generic invite creation rejects reserved claim-merge preset keys', async () => {
     seedTable('HomeInvite', []);
+    const rpc=jest.fn(async()=>({data:{ok:false,code:'CLAIM_MERGE_PRESET_FORBIDDEN',status:400}}));
+    setRpcMock(rpc);
 
     const req = mockReq({
       params: { id: 'home-1' },
@@ -326,6 +273,7 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body.code).toBe('CLAIM_MERGE_PRESET_FORBIDDEN');
     expect(getTable('HomeInvite')).toHaveLength(0);
+    expect(rpc).toHaveBeenCalledWith('write_home_invitation',expect.objectContaining({p_home_id:'home-1',p_actor_id:'user-1',p_action:'create',p_payload:req.body}));
   });
 
   test('decline-invite lookup works via token hash', async () => {
@@ -344,13 +292,16 @@ describe('HomeInvite token hashing (AUTH-3.1)', () => {
     const req = mockReq({ params: { token: rawToken } });
     const res = mockRes();
 
+    const rpc=jest.fn(async()=>({data:{ok:true,replayed:false}}));
+    setRpcMock(rpc);
+
     await declineInviteHandler(req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.message).toMatch(/declined/i);
 
-    // Verify status was updated
-    const invites = getTable('HomeInvite');
-    expect(invites[0].status).toBe('revoked');
+    expect(rpc).toHaveBeenCalledWith('act_on_home_invitation',expect.objectContaining({p_token:rawToken,p_actor_id:'user-1',p_action:'decline'}));
+    // SQL owns the transition; the route must not independently rewrite it.
+    expect(getTable('HomeInvite')[0].status).toBe('pending');
   });
 });

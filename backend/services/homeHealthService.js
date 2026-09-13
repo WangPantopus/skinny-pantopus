@@ -11,6 +11,29 @@ const { getSeasonalContext } = require('./ai/seasonalEngine');
 
 // ── Dimension weights ────────────────────────────────────────────────────────
 
+// This aggregate includes bill/provider, document and household details.
+const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
+function canReadHealthScore(permissions = []) { return HEALTH_READ_PERMISSIONS.every(permission => permissions.includes(permission)); }
+
+function unavailable() {
+  return Object.assign(new Error('Current home health could not be computed. Retry after the data is available.'), {
+    code: 'HOME_HEALTH_UNAVAILABLE', statusCode: 503,
+  });
+}
+const nonblank = value => typeof value === 'string' && value.trim().length > 0;
+const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
+// Optional text can legitimately be cleared to an empty string in older rows.
+const nullableText = value => value === null || typeof value === 'string';
+const day = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && instant(value) && new Date(value).toISOString().slice(0, 10) === value;
+function readRows(result, valid) {
+  const rows = result.value.data;
+  if (!Array.isArray(rows) || !rows.every(row => row && typeof row === 'object' && !Array.isArray(row) && valid(row))) {
+    throw unavailable();
+  }
+  return rows;
+}
+
 const DIMENSIONS = {
   maintenance: 25,
   bills: 20,
@@ -47,14 +70,14 @@ function scoreMaintenance(issues) {
 
 function scoreBills(bills) {
   const now = new Date();
-  const overdueBills = (bills || []).filter(b => b.status === 'due' && b.due_date && new Date(b.due_date) < now);
+  const overdueBills = bills.filter(b => b.status === 'overdue' || (b.status === 'due' && b.due_date && new Date(b.due_date) < now));
 
   if (overdueBills.length >= 2) {
     return { score: 0, issues: [`${overdueBills.length} overdue bills`] };
   }
   if (overdueBills.length === 1) {
     const bill = overdueBills[0];
-    const label = bill.provider_name || bill.bill_type || 'bill';
+    const label = nonblank(bill.provider_name) ? bill.provider_name.trim() : bill.bill_type;
     return { score: 10, issues: [`${label} bill is overdue`] };
   }
   return { score: 20, issues: [] };
@@ -92,7 +115,7 @@ function scoreHousehold(members) {
   if (memberList.length <= 1) {
     return { score: 5, issues: [] };
   }
-  const withPicture = memberList.filter(m => m.user?.profile_picture_url);
+  const withPicture = memberList.filter(m => nonblank(m.user?.profile_picture_url));
   if (withPicture.length > 0) {
     return { score: 10, issues: [] };
   }
@@ -154,20 +177,17 @@ async function computeHealthScore(homeId) {
   // ice statistics to every home in the country. The season itself is
   // month-based and resolves regardless, so the checklist query below is
   // unaffected either way.
-  let homeCoords = null;
-  try {
-    const { data: homeRow } = await supabaseAdmin
-      .from('Home')
-      .select('map_center_lat, map_center_lng')
-      .eq('id', homeId)
-      .maybeSingle();
-    if (homeRow && homeRow.map_center_lat != null && homeRow.map_center_lng != null) {
-      homeCoords = { latitude: Number(homeRow.map_center_lat), longitude: Number(homeRow.map_center_lng) };
-    }
-  } catch {
-    // Non-fatal: without coordinates the engine simply withholds the
-    // regional tip rather than guessing.
+  const { data: homeRow, error: homeError } = await supabaseAdmin
+    .from('Home')
+    .select('map_center_lat, map_center_lng')
+    .eq('id', homeId)
+    .maybeSingle();
+  const coordinate = (value, max) => value === null || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= max);
+  if (homeError || !homeRow || !coordinate(homeRow.map_center_lat, 90) || !coordinate(homeRow.map_center_lng, 180)) {
+    throw unavailable();
   }
+  const homeCoords = homeRow.map_center_lat !== null && homeRow.map_center_lng !== null
+    ? { latitude: homeRow.map_center_lat, longitude: homeRow.map_center_lng } : null;
 
   const seasonalCtx = getSeasonalContext({ ...(homeCoords || {}) });
   const currentYear = new Date().getFullYear();
@@ -189,12 +209,12 @@ async function computeHealthScore(homeId) {
       .eq('home_id', homeId)
       .in('status', ['open', 'in_progress', 'scheduled']),
 
-    // 2. Bills with status 'due'
+    // 2. Outstanding bills, including ones already explicitly marked overdue.
     supabaseAdmin
       .from('HomeBill')
       .select('id, bill_type, provider_name, due_date, status')
       .eq('home_id', homeId)
-      .eq('status', 'due'),
+      .in('status', ['due', 'overdue']),
 
     // 3. Seasonal checklist items for current season/year
     supabaseAdmin
@@ -224,18 +244,32 @@ async function computeHealthScore(homeId) {
       .eq('home_id', homeId),
   ]);
 
-  // Extract results (gracefully handle failures)
-  const extract = (r) => (r.status === 'fulfilled' ? r.value : null);
-  const extractData = (r) => extract(r)?.data || [];
-  const extractCount = (r) => extract(r)?.count ?? 0;
+  // A failed dimension cannot become a healthy/empty dimension or enter cache.
+  if ([issuesRes, billsRes, checklistRes, emergencyRes, membersRes, documentsRes]
+    .some(result => result.status !== 'fulfilled' || !result.value || result.value.error)) {
+    throw unavailable();
+  }
+
+  // A successful transport can still have missing or malformed dimension data.
+  // Do not turn it into a healthy score or a successful empty dimension.
+  const issues = readRows(issuesRes, row => nonblank(row.id)
+    && ['open', 'in_progress', 'scheduled'].includes(row.status) && instant(row.created_at));
+  const outstandingBills = readRows(billsRes, row => nonblank(row.id) && ['due', 'overdue'].includes(row.status)
+    && (row.due_date === null || day(row.due_date)) && nullableText(row.provider_name) && nonblank(row.bill_type));
+  const checklist = readRows(checklistRes, row => nonblank(row.id) && ['pending', 'completed', 'skipped', 'hired'].includes(row.status));
+  const contacts = readRows(emergencyRes, row => nonblank(row.id));
+  const members = readRows(membersRes, row => nonblank(row.user_id) && (row.user === null
+    || (row.user && row.user.id === row.user_id && nullableText(row.user.profile_picture_url))));
+  const documentCount = documentsRes.value.count;
+  if (!Number.isSafeInteger(documentCount) || documentCount < 0) throw unavailable();
 
   // Score each dimension
-  const maintenance = scoreMaintenance(extractData(issuesRes));
-  const bills = scoreBills(extractData(billsRes));
-  const seasonal = scoreSeasonal(extractData(checklistRes));
-  const emergency = scoreEmergency(extractData(emergencyRes));
-  const household = scoreHousehold(extractData(membersRes));
-  const documents = scoreDocuments(extractCount(documentsRes));
+  const maintenance = scoreMaintenance(issues);
+  const bills = scoreBills(outstandingBills);
+  const seasonal = scoreSeasonal(checklist);
+  const emergency = scoreEmergency(contacts);
+  const household = scoreHousehold(members);
+  const documents = scoreDocuments(documentCount);
 
   const breakdown = {
     maintenance: { score: maintenance.score, max: DIMENSIONS.maintenance, issues: maintenance.issues },
@@ -288,4 +322,4 @@ async function getHealthScore(homeId, { force = false } = {}) {
   return result;
 }
 
-module.exports = { computeHealthScore, getHealthScore, invalidateHealthScoreCache };
+module.exports = { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadHealthScore };

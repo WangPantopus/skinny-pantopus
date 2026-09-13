@@ -2,11 +2,18 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskDeleteResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -21,11 +28,36 @@ import retrofit2.http.Path
  * via `me.gigs`.
  */
 interface HomeTasksApi {
+    @GET("api/homes/{id}/tasks/{taskId}/recurrence")
+    @Headers("Cache-Control: no-store")
+    suspend fun getRecurrence(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskRecurrenceState
+
+    @POST("api/homes/{id}/tasks/{taskId}/recurrence")
+    @Headers("Cache-Control: no-store")
+    suspend fun changeRecurrence(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Body request: HomeTaskRecurrenceRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskRecurrenceState
+
     /** `GET /api/homes/:id/tasks` — route `backend/routes/home.js:4170`. */
     @GET("api/homes/{id}/tasks")
     suspend fun getHomeTasks(
         @Path("id") homeId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): GetHomeTasksResponse
+
+    @GET("api/homes/{id}/tasks/{taskId}")
+    suspend fun getHomeTask(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
+    ): HomeTaskResponse
 
     /** `POST /api/homes/:id/tasks` — route `backend/routes/home.js:4238`. */
     @POST("api/homes/{id}/tasks")
@@ -34,12 +66,28 @@ interface HomeTasksApi {
         @Body body: CreateHomeTaskRequest,
     ): HomeTaskResponse
 
+    @POST("api/homes/{id}/tasks")
+    suspend fun createHomeTaskWithReceipt(
+        @Path("id") homeId: String,
+        @Body body: CreateHomeTaskRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskCreationResponse
+
+    @PUT("api/homes/{id}/tasks/{taskId}")
+    suspend fun patchHomeTask(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Body body: RequestBody,
+        @Header("x-pantopus-session-scope") expectedSession: String,
+    ): HomeTaskResponse
+
     /** `PUT /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4308`. */
     @PUT("api/homes/{id}/tasks/{taskId}")
     suspend fun updateHomeTask(
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
         @Body body: UpdateHomeTaskRequest,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): HomeTaskResponse
 
     /** `DELETE /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4354`. */
@@ -47,5 +95,6 @@ interface HomeTasksApi {
     suspend fun deleteHomeTask(
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
-    )
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
+    ): HomeTaskDeleteResponse
 }

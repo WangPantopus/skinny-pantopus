@@ -82,10 +82,19 @@ export interface ApiRequestConfig extends AxiosRequestConfig {
 
 type TokenChangeHandler = (token: string | null) => void;
 const _tokenChangeHandlers = new Set<TokenChangeHandler>();
+export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
+let _authChangeSequence = 0;
 
 function _emitTokenChange(token: string | null): void {
   for (const handler of _tokenChangeHandlers) {
     try { handler(token); } catch { /* listener must not break caller */ }
+  }
+  if (_isWeb) {
+    try {
+      // Other tabs cannot observe httpOnly cookie replacement. Broadcast only
+      // a nonsecret change marker, never the token or account identity.
+      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${++_authChangeSequence}`);
+    } catch { /* Session mutation must still complete when storage is disabled. */ }
   }
 }
 
@@ -186,6 +195,15 @@ let _storage: TokenStorage = defaultStorage;
 let _onUnauthorized: (() => void | Promise<void>) | null = null;
 let _onAuthEvent: ((event: AuthClientEvent) => void) | null = null;
 const isDev = process.env.NODE_ENV !== 'production';
+
+// Home requests can contain private addresses, access records and postal codes,
+// including JSON strings retained for exact retries. Keep the entire exchange
+// out of development diagnostics; recursive field redaction cannot cover it.
+function isPrivateHomeRequest(url?: string): boolean {
+  try { return /^\/api\/homes(?:\/|$)/.test(new URL(url || '', 'http://localhost').pathname); }
+  catch { return true; }
+}
+
 
 function redactSensitive(value: any): any {
   if (!value || typeof value !== 'object') return value;
@@ -409,7 +427,7 @@ apiClient.interceptors.request.use(
       }
     }
 
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(config.url)) {
       console.info('[API request]', {
         method: config.method?.toUpperCase(),
         url: `${config.baseURL || ''}${config.url || ''}`,
@@ -532,7 +550,7 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
 
 apiClient.interceptors.response.use(
   (response) => {
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(response.config.url)) {
       console.info('[API response]', {
         status: response.status,
         url: `${response.config.baseURL || ''}${response.config.url || ''}`,
@@ -665,7 +683,10 @@ apiClient.interceptors.response.use(
     const status = error.response?.status;
     const requestUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
     const isNetworkError = !error.response;
-    const errorCode = typeof responseData?.error === 'string' ? responseData.error : error.code;
+    // Newer endpoints separate their stable recovery code from human copy.
+    // Keep the legacy error-field fallback for older response envelopes.
+    const errorCode = typeof responseData?.code === 'string' ? responseData.code
+      : typeof responseData?.error === 'string' ? responseData.error : error.code;
     const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
     const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
     const errorMessage = isValidationError && validationErrors.length > 0
@@ -678,7 +699,7 @@ apiClient.interceptors.response.use(
           'An error occurred'
         );
 
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(error.config?.url)) {
       let responseSafe: unknown;
       try {
         responseSafe = redactSensitive(error.response?.data);

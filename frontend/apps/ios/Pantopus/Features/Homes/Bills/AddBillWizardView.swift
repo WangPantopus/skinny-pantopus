@@ -30,11 +30,17 @@ struct AddBillWizardView: View {
 
     var body: some View {
         WizardShell(model: viewModel) {
-            switch viewModel.currentStep {
-            case .details: DetailsStep(viewModel: viewModel)
-            case .schedule: ScheduleStep(viewModel: viewModel)
-            case .review: ReviewStep(viewModel: viewModel)
-            case .success: SuccessStep(isEditing: viewModel.isEditing)
+            if !viewModel.canManageFinance {
+                Text(viewModel.loadError ?? (viewModel.isCheckingAccess || viewModel.isSubmitting
+                        ? "Checking bill permissions…" : "Reopen Bills to check your access."))
+                    .padding()
+            } else {
+                switch viewModel.currentStep {
+                case .details: DetailsStep(viewModel: viewModel)
+                case .schedule: ScheduleStep(viewModel: viewModel)
+                case .review: ReviewStep(viewModel: viewModel)
+                case .success: SuccessStep(isEditing: viewModel.isEditing)
+                }
             }
         }
         .accessibilityIdentifier("addBillWizard")

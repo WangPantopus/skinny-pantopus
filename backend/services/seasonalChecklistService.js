@@ -70,12 +70,13 @@ const SEASON_CHECKLISTS = {
  */
 async function getHomeContext(homeId) {
   // Try cache first for richer data
-  const { data: cached } = await supabaseAdmin
+  const { data: cached, error: cacheError } = await supabaseAdmin
     .from('PropertyIntelligenceCache')
     .select('profile')
     .eq('home_id', homeId)
     .maybeSingle();
 
+  if (cacheError) throw new Error('Current home characteristics could not be loaded.');
   if (cached?.profile) {
     return {
       home_type: cached.profile.property_type || null,
@@ -84,12 +85,13 @@ async function getHomeContext(homeId) {
   }
 
   // Fall back to Home table
-  const { data: home } = await supabaseAdmin
+  const { data: home, error: homeError } = await supabaseAdmin
     .from('Home')
     .select('home_type, year_built')
     .eq('id', homeId)
     .maybeSingle();
 
+  if (homeError || !home) throw new Error('Current home characteristics could not be loaded.');
   return {
     home_type: home?.home_type || null,
     year_built: home?.year_built || null,
@@ -166,9 +168,9 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
     .eq('year', year)
     .order('sort_order', { ascending: true });
 
-  if (fetchError) {
-    logger.error('Failed to fetch seasonal checklist', { homeId, seasonKey, year, error: fetchError.message });
-    return [];
+  if (fetchError || !Array.isArray(existing)) {
+    logger.error('Failed to fetch seasonal checklist', { homeId, seasonKey, year, error: fetchError?.message || 'Missing checklist rows' });
+    throw new Error('Current seasonal checklist could not be loaded.');
   }
 
   let items;
@@ -210,21 +212,23 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
           // Handle race condition: another request may have inserted concurrently
           if (insertError.code === '23505') {
             logger.info('Seasonal checklist race — fetching existing', { homeId, seasonKey, year });
-            const { data: reFetched } = await supabaseAdmin
+            const { data: reFetched, error: retryError } = await supabaseAdmin
               .from('HomeSeasonalChecklistItem')
               .select('*')
               .eq('home_id', homeId)
               .eq('season_key', seasonKey)
               .eq('year', year)
               .order('sort_order', { ascending: true });
+            if (retryError || !Array.isArray(reFetched) || reFetched.length === 0) throw new Error('Current seasonal checklist could not be loaded after concurrent creation.');
             items = reFetched || [];
           } else {
             logger.error('Failed to insert seasonal checklist', { homeId, seasonKey, year, error: insertError.message });
-            items = [];
+            throw new Error('The seasonal checklist could not be created.');
           }
         } else {
           // Sort before returning (insert may not preserve order)
-          items = (inserted || []).sort((a, b) => a.sort_order - b.sort_order);
+          if (!Array.isArray(inserted) || inserted.length === 0) throw new Error('The seasonal checklist creation could not be confirmed.');
+          items = inserted.sort((a, b) => a.sort_order - b.sort_order);
         }
       }
     }
@@ -245,9 +249,9 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
     .eq('status', 'pending')
     .order('sort_order', { ascending: true });
 
-  if (prevError) {
-    logger.warn('Failed to fetch previous season carryover', { homeId, prevKey: prev.key, error: prevError.message });
-    return { items, carryover: [] };
+  if (prevError || !Array.isArray(prevItems)) {
+    logger.warn('Failed to fetch previous season carryover', { homeId, prevKey: prev.key, error: prevError?.message || 'Missing previous checklist rows' });
+    throw new Error('Previous seasonal checklist items could not be loaded.');
   }
 
   return { items, carryover: prevItems || [] };
@@ -256,35 +260,41 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
 /**
  * Update a checklist item's status.
  *
+ * @param {string} homeId  Exact requested Home
  * @param {string} itemId  UUID of the HomeSeasonalChecklistItem
- * @param {string} status  'completed', 'skipped', or 'hired'
+ * @param {string} status  'completed' or 'skipped'
  * @param {string} userId  UUID of the user performing the action
- * @returns {Promise<object|null>}  Updated item or null on error
+ * @returns {Promise<object|null>}  Confirmed current item; throws on unavailable or denied changes
  */
-async function updateChecklistItem(itemId, status, userId) {
-  const updates = { status };
-
-  if (status === 'completed') {
-    updates.completed_at = new Date().toISOString();
-    updates.completed_by = userId;
-  } else if (status === 'skipped') {
-    updates.completed_at = new Date().toISOString();
-    updates.completed_by = userId;
+async function updateChecklistItem(homeId, itemId, status, userId) {
+  const { data, error } = await supabaseAdmin.rpc('update_home_seasonal_item', {
+    p_home_id: homeId, p_actor_id: userId, p_item_id: itemId, p_status: status,
+  }).catch(() => ({ data: null, error: true }));
+  if (error || !data || typeof data.ok !== 'boolean') {
+    throw Object.assign(new Error('The checklist change could not be confirmed. Reload before retrying.'), {
+      code: 'HOME_CHECKLIST_UNAVAILABLE', statusCode: 503,
+    });
   }
-
-  const { data, error } = await supabaseAdmin
-    .from('HomeSeasonalChecklistItem')
-    .update(updates)
-    .eq('id', itemId)
-    .select('*')
-    .single();
-
-  if (error) {
-    logger.error('Failed to update checklist item', { itemId, status, error: error.message });
-    return null;
+  if (!data.ok) {
+    const errors = {
+      HOME_CHECKLIST_INVALID: [400, 'Invalid checklist change.'],
+      HOME_NOT_FOUND: [404, 'Home not found.'],
+      HOME_CHECKLIST_NOT_FOUND: [404, 'Checklist item not found in this home.'],
+      HOME_CHECKLIST_DENIED: [403, 'Current permission to edit this checklist is unavailable.'],
+      HOME_CHECKLIST_CHANGED: [409, 'This checklist item changed. Reload its current state before continuing.'],
+      HOME_CHECKLIST_LINKED: [409, 'This checklist item is linked to hired help. Open the current gig before changing it.'],
+    };
+    const known = errors[data.code];
+    throw Object.assign(new Error(known?.[1] || 'The checklist change could not be confirmed. Reload before retrying.'), {
+      code: known ? data.code : 'HOME_CHECKLIST_UNAVAILABLE', statusCode: known?.[0] || 503,
+    });
   }
-
-  return data;
+  if (data.item?.home_id !== homeId || data.item?.id !== itemId || data.item?.status !== status) {
+    throw Object.assign(new Error('The checklist confirmation did not match this item. Reload before retrying.'), {
+      code: 'HOME_CHECKLIST_UNAVAILABLE', statusCode: 503,
+    });
+  }
+  return data.item;
 }
 
 /**
@@ -292,7 +302,7 @@ async function updateChecklistItem(itemId, status, userId) {
  *
  * @param {string} itemId  UUID of the HomeSeasonalChecklistItem
  * @param {string} gigId   UUID of the created Gig
- * @returns {Promise<object|null>}  Updated item or null on error
+ * @returns {Promise<object|null>}  Confirmed current item; throws on unavailable or denied changes
  */
 async function linkGigToChecklist(itemId, gigId) {
   const { data, error } = await supabaseAdmin
@@ -326,10 +336,11 @@ async function getChecklistHistory(homeId) {
 
   if (error) {
     logger.error('Failed to fetch checklist history', { homeId, error: error.message });
-    return [];
+    throw new Error('Seasonal checklist history could not be loaded.');
   }
 
-  if (!data || data.length === 0) return [];
+  if (!Array.isArray(data)) throw new Error('Seasonal checklist history could not be loaded.');
+  if (data.length === 0) return [];
 
   // Group by season_key + year
   const groups = {};

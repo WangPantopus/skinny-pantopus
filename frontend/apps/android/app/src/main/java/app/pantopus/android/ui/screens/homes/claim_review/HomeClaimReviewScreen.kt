@@ -24,21 +24,31 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.homes.HomeRelationshipAction
+import app.pantopus.android.data.homes.HomeResidencyDecision
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
+import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewDialog
+import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Test tag on the claim-review root. Mirrors iOS `homeClaimReview`. */
 const val HOME_CLAIM_REVIEW_TAG = "homeClaimReview"
@@ -46,7 +56,7 @@ const val HOME_CLAIM_REVIEW_TAG = "homeClaimReview"
 private const val TOAST_DURATION_MS = 2_000L
 
 private data class VerdictConfirm(
-    val claimId: String,
+    val snapshot: HomeClaimReviewSnapshot,
     val verdict: HomeClaimReviewVerdict,
 )
 
@@ -54,12 +64,6 @@ private data class RelationshipConfirm(
     val claimId: String,
     val action: HomeClaimRelationshipAction,
     val isOwnerClaim: Boolean,
-)
-
-private data class ResidencyConfirm(
-    val claimId: String,
-    val displayName: String,
-    val approve: Boolean,
 )
 
 /**
@@ -74,19 +78,31 @@ private data class ResidencyConfirm(
  * Layout follows A08 "Review claims" (tabbed card list) with the A13.3
  * "Review Claim" verdict palette on each card's action row.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun HomeClaimReviewScreen(
     onBack: () -> Unit,
     viewModel: HomeClaimReviewViewModel = hiltViewModel(),
+    relationshipModel: HomeRelationshipViewModel = hiltViewModel(),
+    residencyModel: HomeResidencyReviewViewModel = hiltViewModel(),
 ) {
+    val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    HomeClaimEvidencePanel(viewModel)
+    HomeRelationshipPanel(relationshipModel, viewModel::refresh)
+    val residency by residencyModel.state.collectAsStateWithLifecycle()
+    if (residency.presented) {
+        HomeResidencyReviewDialog(residencyModel) {
+            residencyModel.dismiss()
+            viewModel.refresh()
+        }
+    }
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
 
     var verdictConfirm by remember { mutableStateOf<VerdictConfirm?>(null) }
     var relationshipConfirm by remember { mutableStateOf<RelationshipConfirm?>(null) }
-    var residencyConfirm by remember { mutableStateOf<ResidencyConfirm?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
@@ -101,10 +117,17 @@ fun HomeClaimReviewScreen(
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
-                .testTag(HOME_CLAIM_REVIEW_TAG),
+                .testTag(HOME_CLAIM_REVIEW_TAG)
+                .semantics { testTagsAsResourceId = true },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeClaimReviewTopBar(onBack = onBack)
+            TextButton(onClick = { relationshipModel.open() }, modifier = Modifier.testTag("homeClaimReview.relationshipRecovery")) {
+                Text("Relationship decisions and recovery")
+            }
+            TextButton(onClick = { residencyModel.show() }, modifier = Modifier.testTag("homeClaimReview.residencyRecovery")) {
+                Text("Residency decisions and recovery")
+            }
             val loaded = state as? HomeClaimReviewUiState.Loaded
             if (loaded != null) {
                 HomeClaimReviewTabStrip(
@@ -147,21 +170,30 @@ fun HomeClaimReviewScreen(
                         HomeClaimReviewTab.Ownership ->
                             OwnershipTab(
                                 items = current.data.ownership,
+                                unavailable = current.data.ownershipUnavailable,
+                                onReload = viewModel::refresh,
+                                onOpenEvidence = viewModel::openEvidence,
                                 actionLoading = actionLoading,
                                 onVerdict = { claimId, verdict ->
-                                    verdictConfirm = VerdictConfirm(claimId, verdict)
+                                    scope.launch {
+                                        viewModel.prepareReview(claimId, verdict)?.let { verdictConfirm = VerdictConfirm(it, verdict) }
+                                    }
                                 },
                                 onRelationship = { claimId, action, isOwnerClaim ->
-                                    relationshipConfirm =
-                                        RelationshipConfirm(claimId, action, isOwnerClaim)
+                                    relationshipConfirm = prepareRelationship(claimId, action, isOwnerClaim, relationshipModel)
                                 },
                             )
                         HomeClaimReviewTab.Residency ->
                             ResidencyTab(
                                 items = current.data.residency,
+                                unavailable = current.data.residencyUnavailable,
+                                onReload = viewModel::refresh,
                                 actionLoading = actionLoading,
-                                onConfirm = { claimId, name, approve ->
-                                    residencyConfirm = ResidencyConfirm(claimId, name, approve)
+                                onConfirm = { claimId, _, approve ->
+                                    residencyModel.show(
+                                        claimId,
+                                        if (approve) HomeResidencyDecision.Approve else HomeResidencyDecision.Reject,
+                                    )
                                 },
                             )
                         HomeClaimReviewTab.Compare ->
@@ -193,11 +225,11 @@ fun HomeClaimReviewScreen(
         AlertDialog(
             onDismissRequest = { verdictConfirm = null },
             title = { Text(target.verdict.title) },
-            text = { Text(target.verdict.confirmBody) },
+            text = { Text(target.verdict.confirmBody + "\n\n" + target.snapshot.summary) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.review(target.claimId, target.verdict)
+                        viewModel.review(target.snapshot, target.verdict)
                         verdictConfirm = null
                     },
                     modifier = Modifier.testTag("homeClaimReview_verdictConfirm"),
@@ -225,32 +257,6 @@ fun HomeClaimReviewScreen(
             },
             dismissButton = {
                 TextButton(onClick = { relationshipConfirm = null }) { Text("Cancel") }
-            },
-        )
-    }
-
-    residencyConfirm?.let { target ->
-        val title = if (target.approve) "Approve" else "Reject"
-        AlertDialog(
-            onDismissRequest = { residencyConfirm = null },
-            title = { Text(title) },
-            text = {
-                Text(
-                    "Are you sure you want to ${title.lowercase()} " +
-                        "${target.displayName}'s residency claim?",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.reviewResidency(target.claimId, target.approve)
-                        residencyConfirm = null
-                    },
-                    modifier = Modifier.testTag("homeClaimReview_residencyConfirm"),
-                ) { Text(title) }
-            },
-            dismissButton = {
-                TextButton(onClick = { residencyConfirm = null }) { Text("Cancel") }
             },
         )
     }
@@ -287,10 +293,17 @@ private fun tabItems(data: HomeClaimReviewData): List<HomeClaimReviewTabItem> {
 @Composable
 private fun OwnershipTab(
     items: List<HomeClaimReviewOwnershipItem>,
+    unavailable: Boolean,
+    onReload: () -> Unit,
+    onOpenEvidence: (String) -> Unit,
     actionLoading: String?,
     onVerdict: (String, HomeClaimReviewVerdict) -> Unit,
     onRelationship: (String, HomeClaimRelationshipAction, Boolean) -> Unit,
 ) {
+    if (unavailable) {
+        UnavailableClaimCollection("ownership", onReload)
+        return
+    }
     if (items.isEmpty()) {
         EmptyState(
             icon = PantopusIcon.CheckCheck,
@@ -317,6 +330,7 @@ private fun OwnershipTab(
                 item = item,
                 isBusy = actionLoading?.startsWith("${item.id}:") == true,
                 onVerdict = { verdict -> onVerdict(item.id, verdict) },
+                onOpenEvidence = { onOpenEvidence(item.id) },
                 onRelationship = { action ->
                     onRelationship(item.id, action, item.claimType == "owner")
                 },
@@ -328,9 +342,15 @@ private fun OwnershipTab(
 @Composable
 private fun ResidencyTab(
     items: List<HomeClaimReviewResidencyItem>,
+    unavailable: Boolean,
+    onReload: () -> Unit,
     actionLoading: String?,
     onConfirm: (String, String, Boolean) -> Unit,
 ) {
+    if (unavailable) {
+        UnavailableClaimCollection("residency", onReload)
+        return
+    }
     if (items.isEmpty()) {
         EmptyState(
             icon = PantopusIcon.CheckCheck,
@@ -385,4 +405,51 @@ private fun CompareTab(comparison: HomeClaimReviewComparison?) {
     ) {
         HomeClaimComparePanel(comparison = comparison)
     }
+}
+
+@Composable
+private fun HomeClaimEvidencePanel(viewModel: HomeClaimReviewViewModel) {
+    val panel by viewModel.evidencePanel.collectAsStateWithLifecycle()
+    panel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
+}
+
+@Composable
+private fun UnavailableClaimCollection(
+    collection: String,
+    onReload: () -> Unit,
+) {
+    ErrorState(
+        headline = "Couldn't load $collection claims",
+        message = "Current access or claim data could not be verified. Reload to try again.",
+        modifier = Modifier.testTag("homeClaimReview_${collection}Unavailable"),
+        onRetry = onReload,
+    )
+}
+
+@Composable
+private fun HomeRelationshipPanel(
+    model: HomeRelationshipViewModel,
+    onClosed: () -> Unit,
+) {
+    val panel by model.panel.collectAsStateWithLifecycle()
+    panel?.let { controller ->
+        HomeRelationshipDialog(controller) {
+            model.dismiss()
+            onClosed()
+        }
+    }
+}
+
+private fun prepareRelationship(
+    claimId: String,
+    action: HomeClaimRelationshipAction,
+    isOwnerClaim: Boolean,
+    model: HomeRelationshipViewModel,
+): RelationshipConfirm? {
+    if (action == HomeClaimRelationshipAction.InviteToHousehold) return RelationshipConfirm(claimId, action, isOwnerClaim)
+    model.open(
+        claimId,
+        if (action == HomeClaimRelationshipAction.DeclineRelationship) HomeRelationshipAction.Decline else HomeRelationshipAction.Flag,
+    )
+    return null
 }

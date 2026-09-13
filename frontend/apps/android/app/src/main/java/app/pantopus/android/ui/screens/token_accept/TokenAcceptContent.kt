@@ -40,6 +40,8 @@ data class TokenAcceptOffer(
 )
 
 sealed interface TokenAcceptUiState {
+    data object HomeInvitation : TokenAcceptUiState
+
     data object Loading : TokenAcceptUiState
 
     data class Ready(val offer: TokenAcceptOffer) : TokenAcceptUiState

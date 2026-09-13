@@ -28,10 +28,7 @@ extension AddHouseholdTaskFormView {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             PantopusTextField(
                 "Title",
-                text: Binding(
-                    get: { snapshot.value },
-                    set: { viewModel.update(.title, to: $0) }
-                ),
+                text: viewModel.textBinding(for: .title),
                 placeholder: "e.g. Take out the trash",
                 state: fieldState(for: snapshot, allowEmptyValid: false),
                 identifier: "field_title"
@@ -108,7 +105,7 @@ extension AddHouseholdTaskFormView {
             // See top-of-file comment on the form ViewModel.
             assigneeRow(
                 id: nil,
-                title: "Unassigned (any member)",
+                title: "Unassigned",
                 subtitle: nil
             )
             ForEach(viewModel.assignableMembers) { member in
@@ -119,11 +116,11 @@ extension AddHouseholdTaskFormView {
                     initials: member.initials
                 )
             }
-            if viewModel.assignableMembers.isEmpty {
-                Text("No members found in this home.")
+            if let message = viewModel.assigneeStatusMessage {
+                Text(message)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
-                    .accessibilityHidden(true)
+                    .accessibilityIdentifier("homeTask.assigneeStatus")
             }
         }
         .accessibilityIdentifier("field_assignedTo")
@@ -198,5 +195,16 @@ extension AddHouseholdTaskFormView {
             i += size
         }
         return result
+    }
+}
+
+/// The text system can write several characters before SwiftUI redraws. Read
+/// the current model on every binding access, never a render-time snapshot.
+extension AddHouseholdTaskFormViewModel {
+    func textBinding(for field: AddHouseholdTaskField) -> Binding<String> {
+        Binding(
+            get: { self.fields[field]?.value ?? "" },
+            set: { self.update(field, to: $0) }
+        )
     }
 }

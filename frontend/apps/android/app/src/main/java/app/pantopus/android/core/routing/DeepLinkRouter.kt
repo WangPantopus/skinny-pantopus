@@ -91,6 +91,8 @@ object DeepLinkRouter {
 
         data class HomeDashboard(val id: String) : Destination
 
+        data class HomeTask(val homeId: String, val taskId: String) : Destination
+
         data class HomeMemberRequests(val id: String) : Destination
 
         /**
@@ -111,6 +113,8 @@ object DeepLinkRouter {
          * sibling status screen directly.
          */
         data class PostcardVerification(val id: String) : Destination
+
+        data class HomeResidency(val id: String) : Destination
 
         /**
          * `pantopus://chat/:roomId[?name=…]` — chat thread. `name` is an
@@ -335,7 +339,7 @@ object DeepLinkRouter {
 
     /** Navigation consumed the link; finish it only after load or departure. */
     fun completeArrival(destination: Destination) {
-        if (destination !is Destination.Post && destination !is Destination.Conversation) return
+        if (!retainsArrival(destination)) return
         val userId = signedInUserIdProvider() ?: return
         PendingDeepLinkStore.completeArrival(userId) {
             val stored = resolveString(it)
@@ -350,6 +354,10 @@ object DeepLinkRouter {
     fun clearPending() {
         _pending.value = null
         _prefersLoginPresentation.value = false
+    }
+
+    fun requestLoginPresentation() {
+        _prefersLoginPresentation.value = true
     }
 
     fun acknowledgeLoginPresentation() {
@@ -381,7 +389,7 @@ object DeepLinkRouter {
                 // signed-out content browser — so we still persist these for
                 // post-login replay rather than dropping them.
                 if (userId != null) {
-                    if (destination is Destination.Post || destination is Destination.Conversation) {
+                    if (retainsArrival(destination)) {
                         PendingDeepLinkStore.stash(persistencePath, expectedUserId = userId)
                     } else {
                         PendingDeepLinkStore.clear()
@@ -413,6 +421,9 @@ object DeepLinkRouter {
             is Destination.JoinInvite -> RoutingKind.AuthOwned
             else -> RoutingKind.Content
         }
+
+    private fun retainsArrival(destination: Destination): Boolean =
+        destination is Destination.Post || destination is Destination.Conversation || destination is Destination.HomeTask
 
     internal fun resolve(uri: Uri): Destination = resolveString(uri.toString())
 
@@ -524,6 +535,19 @@ object DeepLinkRouter {
                 val id = segments.getOrNull(1)
                 if (id.isNullOrBlank()) return Destination.Unknown(raw)
                 val trailing = segments.drop(2)
+                if (trailing.firstOrNull() == "residency") {
+                    val home = HomeTaskNotificationRoute.canonicalId(id)
+                    return if (trailing.size == 1 && home != null) Destination.HomeResidency(home) else Destination.Unknown(raw)
+                }
+                if (trailing.firstOrNull() == "tasks") {
+                    val home = HomeTaskNotificationRoute.canonicalId(id)
+                    val task = HomeTaskNotificationRoute.canonicalId(trailing.getOrNull(1))
+                    return if (trailing.size == 2 && home != null && task != null) {
+                        Destination.HomeTask(home, task)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                }
                 when (trailing.firstOrNull()) {
                     "dashboard" -> Destination.HomeDashboard(id)
                     "members" ->

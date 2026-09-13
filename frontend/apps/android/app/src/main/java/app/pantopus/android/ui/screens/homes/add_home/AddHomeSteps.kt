@@ -159,9 +159,8 @@ enum class AddHomeAccessType(
 }
 
 /**
- * One "Networks & codes" row on the Setup step. Filled rows are POSTed to
- * `POST /api/homes/:id/access` once the home exists — RN does the same in
- * `finalizeCreatedHome` (`useHomeForm.ts:321-336`).
+ * One "Networks & codes" row on the Setup step. Filled rows are retained
+ * in encrypted command storage and committed atomically with the Home.
  *
  * Deliberately **not** part of [AddHomeFormState]: the secret value is a
  * Wi-Fi / alarm / gate password and must never reach `SavedStateHandle`.
@@ -252,10 +251,8 @@ sealed interface AddHomeOutboundEvent {
     /** Pop the wizard with no further navigation. */
     data object Dismiss : AddHomeOutboundEvent
 
-    /** Pop the wizard and navigate to the new home dashboard. */
-    data class OpenHomeDashboard(
-        val homeId: String,
-    ) : AddHomeOutboundEvent
+    /** Reload current list authority after acknowledging the saved command. */
+    data object OpenHomes : AddHomeOutboundEvent
 
     /**
      * `check-address` matched an already-claimed home and the user

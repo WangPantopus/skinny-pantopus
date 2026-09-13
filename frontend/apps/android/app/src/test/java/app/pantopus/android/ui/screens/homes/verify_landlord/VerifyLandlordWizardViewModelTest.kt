@@ -3,15 +3,12 @@
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
 import androidx.lifecycle.SavedStateHandle
-import app.pantopus.android.data.api.models.homes.PostcardInfoDto
-import app.pantopus.android.data.api.models.homes.RequestPostcardResponse
 import app.pantopus.android.data.api.models.tenant.TenantLeaseDto
 import app.pantopus.android.data.api.models.tenant.TenantLeaseMetadataDto
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homes.HomeVerificationRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.tenant.TenantRepository
 import io.mockk.coEvery
@@ -41,7 +38,6 @@ class VerifyLandlordWizardViewModelTest {
             every { it.isOnline } returns MutableStateFlow(true)
         }
 
-    private val verificationRepository: HomeVerificationRepository = mockk(relaxed = true)
     private val tenantRepository: TenantRepository = mockk(relaxed = true)
 
     private val stubLease =
@@ -57,8 +53,6 @@ class VerifyLandlordWizardViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        coEvery { verificationRepository.requestPostcard(any()) } returns
-            NetworkResult.Success(RequestPostcardResponse("ok", PostcardInfoDto("p1")))
         coEvery { tenantRepository.requestApproval(any()) } returns
             NetworkResult.Success(TenantRequestApprovalResponse(stubLease))
     }
@@ -70,9 +64,8 @@ class VerifyLandlordWizardViewModelTest {
     private class TestVm(
         networkMonitor: NetworkMonitor,
         handle: SavedStateHandle,
-        verificationRepository: HomeVerificationRepository,
         tenantRepository: TenantRepository,
-    ) : VerifyLandlordWizardViewModel(networkMonitor, handle, verificationRepository, tenantRepository) {
+    ) : VerifyLandlordWizardViewModel(networkMonitor, handle, tenantRepository) {
         override val submitDelayMillis: Long = 0L
     }
 
@@ -80,7 +73,6 @@ class VerifyLandlordWizardViewModelTest {
         TestVm(
             networkMonitor = networkMonitor,
             handle = SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to homeId)),
-            verificationRepository = verificationRepository,
             tenantRepository = tenantRepository,
         )
 
@@ -262,7 +254,7 @@ class VerifyLandlordWizardViewModelTest {
                 VerifyLandlordOutboundEvent.OpenPostcardVerification("home-42"),
                 vm.pendingEvent.value,
             )
-            assertEquals(VerifyLandlordSubmitState.Submitted, vm.state.value.submitState)
+            assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
         }
 
     @Test fun submit_surfaces_existing_pending_request() =
@@ -315,7 +307,7 @@ class VerifyLandlordWizardViewModelTest {
             vm.seedPopulatedForm()
             vm.onPrimary() // submit -> Sent
             assertEquals(VerifyLandlordStep.Sent, vm.state.value.currentStep)
-            assertEquals("Mail me a code", vm.chrome.secondaryCta?.label)
+            assertEquals("Review mail verification", vm.chrome.secondaryCta?.label)
             vm.onSecondary()
             assertEquals(
                 VerifyLandlordOutboundEvent.OpenPostcardVerification("home-9"),
@@ -374,15 +366,12 @@ class VerifyLandlordWizardViewModelTest {
         assertNull(vm.state.value.errors)
     }
 
-    @Test fun postcard_request_failure_does_not_claim_mail_was_sent() =
-        runTest {
-            for (status in listOf(400, 429)) {
-                coEvery { verificationRepository.requestPostcard(any()) } returns
-                    NetworkResult.Failure(NetworkError.Server(status, "Request rejected"))
-                val vm = makeVm()
-                vm.startPostcardFallback()
-                assertNull(vm.pendingEvent.value)
-                assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
-            }
-        }
+    @Test fun mail_fallback_opens_review_without_claiming_a_mailing_or_approval() {
+        val vm = makeVm("home-42")
+        vm.startPostcardFallback()
+        assertEquals(VerifyLandlordOutboundEvent.OpenPostcardVerification("home-42"), vm.pendingEvent.value)
+        assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
+        assertNull(vm.state.value.approvalResult)
+        io.mockk.coVerify(exactly = 0) { tenantRepository.requestApproval(any()) }
+    }
 }

@@ -21,19 +21,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -42,6 +49,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TokenAcceptScreen(
     onDismiss: () -> Unit = {},
@@ -50,6 +58,22 @@ fun TokenAcceptScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val dismissEvents by viewModel.dismissEvents.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(viewModel, lifecycle) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) {
+                    viewModel.pause()
+                } else if (event == Lifecycle.Event.ON_RESUME) {
+                    viewModel.load()
+                }
+            }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.pause()
+        }
+    }
     LaunchedEffect(dismissEvents) {
         if (dismissEvents > 0) onDismiss()
     }
@@ -59,10 +83,21 @@ fun TokenAcceptScreen(
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
-                .testTag("tokenAccept"),
+                .testTag("tokenAccept")
+                .semantics { testTagsAsResourceId = true },
     ) {
-        TopBar()
+        TopBar(viewModel::dismiss)
         when (val current = state) {
+            TokenAcceptUiState.HomeInvitation ->
+                HomeInvitationDecisionScreen(
+                    onDismiss = {
+                        // Finish this navigation before an acknowledged invitation
+                        // requests Home entry. A deferred dismiss can pop the new Home.
+                        viewModel.pause()
+                        onDismiss()
+                    },
+                    onReopen = viewModel::load,
+                )
             is TokenAcceptUiState.Loading -> LoadingFrame()
             is TokenAcceptUiState.Ready ->
                 OfferBody(
@@ -89,13 +124,13 @@ fun TokenAcceptScreen(
 }
 
 @Composable
-private fun TopBar() {
+private fun TopBar(onClose: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
         Row(
             modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Spacing.s3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(modifier = Modifier.size(36.dp))
+            TextButton(onClick = onClose, modifier = Modifier.testTag("tokenAcceptClose")) { Text("Close") }
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = "Invitation",
@@ -446,7 +481,7 @@ private fun StickyCtas(
                         )
                     }
                     Text(
-                        text = if (submitting) "Accepting…" else offer.primaryCtaLabel,
+                        text = if (submitting) "Saving…" else offer.primaryCtaLabel,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = PantopusColors.appTextInverse,

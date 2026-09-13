@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * SlidePanel — slides in from the right.
@@ -22,29 +23,44 @@ export default function SlidePanel({
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  // Close on Escape
+  // Keep keyboard navigation inside the visible modal and return focus on close.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !mounted) return;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const controls = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]'
+    ) || []).filter(element => element.getClientRects().length > 0);
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { e.preventDefault(); closeRef.current(); }
+      if (e.key === 'Tab') {
+        const items = controls(); const first = items[0]; const last = items[items.length - 1];
+        if (!first) { e.preventDefault(); return; }
+        if (e.shiftKey && (document.activeElement === first || !panelRef.current?.contains(document.activeElement))) {
+          e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || !panelRef.current?.contains(document.activeElement))) {
+          e.preventDefault(); first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+    const timer = setTimeout(() => controls()[0]?.focus(), 200);
+    return () => {
+      clearTimeout(timer); document.removeEventListener('keydown', handler);
+      document.body.style.overflow = overflow;
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, [open, mounted]);
 
-  // Trap focus inside panel when open
-  useEffect(() => {
-    if (open) {
-      // Small delay to let the panel animate in
-      const timer = setTimeout(() => {
-        panelRef.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  return (
+  if (!mounted || !open) return null;
+  // The app shell creates a stacking context below its fixed header. A body
+  // portal keeps the modal's close button and backdrop above that header.
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -56,6 +72,9 @@ export default function SlidePanel({
 
       {/* Panel */}
       <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         ref={panelRef}
         className={`fixed top-0 right-0 bottom-0 z-[61] w-full ${width} bg-app-surface shadow-2xl transform transition-transform duration-250 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
@@ -70,6 +89,7 @@ export default function SlidePanel({
             )}
           </div>
           <button
+            aria-label="Close panel"
             onClick={onClose}
             className="p-2 hover:bg-app-hover rounded-lg transition text-app-text-secondary hover:text-app-text-strong"
           >
@@ -84,6 +104,6 @@ export default function SlidePanel({
           {children}
         </div>
       </aside>
-    </>
+    </>, document.body
   );
 }

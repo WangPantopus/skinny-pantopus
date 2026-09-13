@@ -29,7 +29,7 @@ async function gatedHome(req, res) {
   const userId = req.user.id;
   const access = await checkHomePermission(id, userId);
   if (!access.hasAccess) {
-    res.status(403).json({ error: 'You do not have access to this place.' });
+    res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     return null;
   }
   if (!isVerifiedResident(access)) {

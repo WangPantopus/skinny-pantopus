@@ -343,15 +343,7 @@ extension AuthManager {
     func signOut(scope: LogoutScope, stepUpToken: String? = nil) async throws -> LogoutResponse? {
         switch scope {
         case .local:
-            let access = accessToken ?? store.get(SecureStoreKey.accessToken)
-            let refresh = nonEmpty(store.get(SecureStoreKey.refreshToken))
-            let hadSession = clearLocalSession()
-            if hadSession {
-                Observability.shared.track("auth.signed_out", properties: ["scope": "local"])
-            }
-            guard access != nil || refresh != nil else { return nil }
-            scheduleLocalLogout(accessToken: access, refreshToken: refresh)
-            await logoutTask?.value
+            await signOutLocally()
             return nil
         case .others, .global:
             var headers: [String: String] = [:]
@@ -370,6 +362,25 @@ extension AuthManager {
             }
             return response
         }
+    }
+
+    /// Save the invitation before ending this session. If the protected write
+    /// fails, leave the account signed in so the user can retry the handoff.
+    func signOutReturningToContent(_ path: String) async -> Bool {
+        guard PendingDeepLinkStore.stash(path) else { return false }
+        await signOutLocally(preservingLoginArrival: path)
+        return true
+    }
+
+    private func signOutLocally(preservingLoginArrival: String? = nil) async {
+        let access = accessToken ?? store.get(SecureStoreKey.accessToken)
+        let refresh = nonEmpty(store.get(SecureStoreKey.refreshToken))
+        let hadSession = clearLocalSession(preservingLoginArrival: preservingLoginArrival)
+        if preservingLoginArrival != nil { DeepLinkRouter.shared.requestLoginPresentation() }
+        if hadSession { Observability.shared.track("auth.signed_out", properties: ["scope": "local"]) }
+        guard access != nil || refresh != nil else { return }
+        scheduleLocalLogout(accessToken: access, refreshToken: refresh)
+        await logoutTask?.value
     }
 
     /// Fire the local logout for a (possibly already superseded) session in

@@ -55,5 +55,8 @@ open class HomeDashboardRepository
         open suspend fun propertyValue(homeId: String): NetworkResult<HomePropertyValueDto> = safeApiCall { api.propertyValue(homeId) }
 
         /** `GET /api/homes/:id/bill-trends`. 403s without finance permission. */
-        open suspend fun billTrends(homeId: String): NetworkResult<HomeBillTrendsDto> = safeApiCall { api.billTrends(homeId) }
+        open suspend fun billTrends(
+            homeId: String,
+            currency: String = "USD",
+        ): NetworkResult<HomeBillTrendsDto> = safeApiCall { api.billTrends(homeId, currency) }
     }

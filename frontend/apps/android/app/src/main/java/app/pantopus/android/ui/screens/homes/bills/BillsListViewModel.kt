@@ -27,6 +27,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -145,17 +147,23 @@ class BillsListViewModel
         private val repo: HomesRepository,
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
+        createAccess: (String, CoroutineScope) -> HomeFinanceAccess,
     ) : ViewModel() {
         @Inject
         constructor(
             repo: HomesRepository,
             savedStateHandle: SavedStateHandle,
-        ) : this(repo, savedStateHandle, Instant::now)
+            finance: HomeFinanceAccessFactory,
+        ) : this(repo, savedStateHandle, Instant::now, finance::create)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(BILLS_HOME_ID_KEY)) {
                 "BillsListViewModel requires a $BILLS_HOME_ID_KEY nav argument"
             }
+
+        private val finance = createAccess(homeId, viewModelScope)
+        val financeRights = finance.rights
+        private var generation = 0
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -185,15 +193,46 @@ class BillsListViewModel
             refresh()
         }
 
+        init {
+            viewModelScope.launch {
+                financeRights.collect { rights ->
+                    if (rights.invalidated) {
+                        generation++
+                        clearBills()
+                        _state.value = ListOfRowsUiState.Error(FINANCE_SESSION_CHANGED)
+                    }
+                }
+            }
+        }
+
+        private fun clearBills() {
+            bills = null
+            _banner.value = null
+            _tabs.value = initialTabs()
+        }
+
         fun refresh() {
+            val revision = ++generation
+            clearBills()
             _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.getHomeBills(homeId)) {
-                    is NetworkResult.Success -> applySuccess(result.data.bills)
-                    is NetworkResult.Failure -> {
-                        bills = null
-                        _banner.value = null
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                try {
+                    finance.refresh()
+                    when (val result = repo.getHomeBills(homeId)) {
+                        is NetworkResult.Success -> {
+                            finance.require()
+                            if (revision != generation) return@launch
+                            check(result.data.bills.all { it.homeId == homeId }) { "Bill response could not be verified." }
+                            applySuccess(result.data.bills)
+                        }
+                        is NetworkResult.Failure -> error(result.error.displayMessage("Couldn't load the list."))
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: IllegalStateException) {
+                    if (revision == generation) {
+                        clearBills()
+                        _state.value = ListOfRowsUiState.Error(error.message ?: "Couldn't load your bills.")
                     }
                 }
             }
@@ -204,14 +243,31 @@ class BillsListViewModel
             bills?.let(::renderForCurrentTab)
         }
 
-        fun fab(): FabAction =
-            FabAction(
-                icon = PantopusIcon.Plus,
-                contentDescription = "Add a bill",
-                variant = FabVariant.CanonicalCreate,
-                tint = FabTint.Home,
-                onClick = { onAddBill() },
-            )
+        fun fab(): FabAction? =
+            if (!financeRights.value.canManage) {
+                null
+            } else {
+                FabAction(
+                    icon = PantopusIcon.Plus,
+                    contentDescription = "Add a bill",
+                    variant = FabVariant.CanonicalCreate,
+                    tint = FabTint.Home,
+                    onClick = { openAddBill() },
+                )
+            }
+
+        private fun openAddBill() {
+            viewModelScope.launch {
+                try {
+                    finance.require(managing = true)
+                    onAddBill()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // The access observer hides stale content.
+                }
+            }
+        }
 
         /**
          * T6.0a: top-bar action is `null` by design. The design's filter
@@ -249,10 +305,13 @@ class BillsListViewModel
                         icon = PantopusIcon.Receipt,
                         headline = "No bills tracked yet",
                         subcopy =
-                            "Add the utilities, insurance, and HOA dues for this home. " +
-                                "Schedule auto-pay or split between household members.",
-                        ctaTitle = "Add a bill",
-                        onCta = { onAddBill() },
+                            if (financeRights.value.canManage) {
+                                "Track the utilities, insurance, and HOA dues for this home."
+                            } else {
+                                "Bills shared with you will appear here."
+                            },
+                        ctaTitle = if (financeRights.value.canManage) "Add a bill" else null,
+                        onCta = if (financeRights.value.canManage) ({ openAddBill() }) else null,
                     )
                 return
             }
@@ -321,7 +380,18 @@ class BillsListViewModel
                         chipVariant = projection.chipVariant,
                         chipIcon = projection.chipIcon,
                     ),
-                onTap = { onOpenBill(bill.id) },
+                onTap = {
+                    viewModelScope.launch {
+                        try {
+                            finance.require()
+                            onOpenBill(bill.id)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            // Stale navigation stays closed.
+                        }
+                    }
+                },
                 inlineChip = projection.inlineChip,
                 highlight = projection.highlight,
             )

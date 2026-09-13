@@ -138,8 +138,8 @@ class HouseholdAvailabilityViewModel
             return when (val result = homes.myHomes()) {
                 is NetworkResult.Success -> {
                     val home =
-                        result.data.homes.firstOrNull { it.occupancy?.isActive == true }
-                            ?: result.data.homes.firstOrNull()
+                        result.data.sharedHomes.firstOrNull { it.occupancy?.isActive == true }
+                            ?: result.data.sharedHomes.firstOrNull()
                     if (home != null) {
                         homeId = home.id
                         home.name ?: "This household"

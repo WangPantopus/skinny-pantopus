@@ -65,6 +65,7 @@ fun AddBillWizardScreen(
     viewModel: AddBillWizardViewModel = hiltViewModel(),
 ) {
     val currentStep by viewModel.currentStep.collectAsStateWithLifecycle()
+    val financeRights by viewModel.financeRights.collectAsStateWithLifecycle()
     val event by viewModel.events.collectAsStateWithLifecycle()
     val submitError by viewModel.submitError.collectAsStateWithLifecycle()
     // Collected so the screen recomposes when hydration completes —
@@ -85,27 +86,35 @@ fun AddBillWizardScreen(
                 onClose()
             }
             is AddBillEvent.Created -> {
-                viewModel.consumeEvent()
-                onCreated(current.billId)
+                if (viewModel.confirmEvent(current)) {
+                    viewModel.consumeEvent()
+                    onCreated(current.billId)
+                }
             }
             is AddBillEvent.Updated -> {
-                viewModel.consumeEvent()
-                onUpdated(current.billId)
+                if (viewModel.confirmEvent(current)) {
+                    viewModel.consumeEvent()
+                    onUpdated(current.billId)
+                }
             }
         }
     }
 
     WizardShell(model = viewModel, modifier = Modifier.testTag("addBillWizard")) {
-        when (currentStep) {
-            AddBillStep.Details ->
-                DetailsStep(
-                    viewModel = viewModel,
-                    isLoadingExisting = isLoadingExisting,
-                    loadError = loadError,
-                )
-            AddBillStep.Schedule -> ScheduleStep(viewModel)
-            AddBillStep.Review -> ReviewStep(viewModel, submitError)
-            AddBillStep.Success -> SuccessStep(isEditing = viewModel.isEditing)
+        if (!financeRights.canManage) {
+            Text(loadError ?: if (isLoadingExisting) "Checking bill permissions…" else "Reopen Bills to check your access.")
+        } else {
+            when (currentStep) {
+                AddBillStep.Details ->
+                    DetailsStep(
+                        viewModel = viewModel,
+                        isLoadingExisting = isLoadingExisting,
+                        loadError = loadError,
+                    )
+                AddBillStep.Schedule -> ScheduleStep(viewModel)
+                AddBillStep.Review -> ReviewStep(viewModel, submitError)
+                AddBillStep.Success -> SuccessStep(isEditing = viewModel.isEditing)
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import { Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { useBadges } from '@/contexts/BadgeContext';
 import { useSocket } from '@/contexts/SocketContext';
+import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { Notification } from '@pantopus/types';
@@ -32,6 +33,7 @@ export default function NotificationBell({
   const router = useRouter();
   const socket = useSocket();
   const [open, setOpen] = useState(false);
+  const tapNotification = useNotificationTap(open);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { notifications: totalUnread, notificationsByContext } = useBadges();
   const [loading, setLoading] = useState(false);
@@ -153,23 +155,12 @@ export default function NotificationBell({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const handleNotificationClick = async (notif: Notification) => {
-    // Mark as read
-    if (!notif.is_read) {
-      try {
-        await api.notifications.markAsRead(notif.id);
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-        );
-      } catch {}
-    }
-
-    // Navigate through authenticated app routes when available.
-    if (notif.link) {
-      setOpen(false);
-      router.push(resolveWebNotificationPath(notif.link) || notif.link);
-    }
-  };
+  const handleNotificationClick = (notif: Notification) => tapNotification(notif,
+    () => setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n)),
+    () => {
+      const path = resolveWebNotificationPath(notif.link, notif);
+      if (path) { setOpen(false); router.push(path); }
+    });
 
   const handleMarkAllRead = async () => {
     try {

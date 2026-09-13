@@ -49,7 +49,7 @@ enum class ClaimVerificationType(
     val slots: List<ClaimEvidenceSlot>
         get() =
             when (this) {
-                Owner -> listOf(ClaimEvidenceSlot.Identity, ClaimEvidenceSlot.Ownership)
+                Owner -> listOf(ClaimEvidenceSlot.Ownership)
                 Residency -> listOf(ClaimEvidenceSlot.Residency)
             }
 
@@ -85,8 +85,6 @@ enum class ClaimEvidenceSlot(
     val fixedBackendType: String?,
     val title: String,
 ) {
-    Identity("idv", "Government ID"),
-
     /**
      * Ownership proof — the claimant declares which of the five
      * ownership documents they are attaching (RN
@@ -111,7 +109,6 @@ enum class ClaimEvidenceSlot(
     val documentOptions: List<ClaimDocumentOption>
         get() =
             when (this) {
-                Identity -> emptyList()
                 Ownership ->
                     listOf(
                         ClaimDocumentOption(
@@ -131,18 +128,6 @@ enum class ClaimEvidenceSlot(
                             label = "Property Tax Statement",
                             detail = "Tax bill showing property owner",
                             icon = PantopusIcon.Receipt,
-                        ),
-                        ClaimDocumentOption(
-                            id = "escrow_attestation",
-                            label = "Title/Escrow Attestation",
-                            detail = "Letter from title or escrow company",
-                            icon = PantopusIcon.ShieldCheck,
-                        ),
-                        ClaimDocumentOption(
-                            id = "title_match",
-                            label = "Title Record Match",
-                            detail = "Public record title match",
-                            icon = PantopusIcon.CheckCircle,
                         ),
                     )
                 Residency ->
@@ -168,7 +153,7 @@ enum class ClaimEvidenceSlot(
                     )
             }
 
-    val acceptHint: String get() = "JPG, PNG, or PDF up to 10 MB"
+    val acceptHint: String get() = "Images, PDF, or text up to 25 MB"
 }
 
 /** Copy shared with the iOS screen — keep both platforms word-for-word. */
@@ -176,7 +161,8 @@ object ClaimUploadCopy {
     const val STATEMENT_PLACEHOLDER: String =
         "Add a short statement to help the reviewer (e.g. how long you've owned, anyone else on title)…"
     const val ENCRYPTION_FOOTER: String =
-        "Encrypted in transit. Visible only to the reviewer assigned to your claim."
+        "Private documents are available to you and currently authorized reviewers. " +
+            "Uploading does not verify identity or grant Home access."
 }
 
 /** Per-slot upload state surfaced to the UI. */
@@ -187,7 +173,7 @@ sealed interface ClaimSlotState {
 
     data class Uploading(val file: ClaimPickedFile, val fraction: Float) : ClaimSlotState
 
-    data class Uploaded(val file: ClaimPickedFile, val fileUrl: String) : ClaimSlotState
+    data class Uploaded(val file: ClaimPickedFile, val uploadId: String) : ClaimSlotState
 
     data class Failed(val file: ClaimPickedFile, val message: String) : ClaimSlotState
 

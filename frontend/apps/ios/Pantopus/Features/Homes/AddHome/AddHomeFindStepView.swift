@@ -11,31 +11,72 @@ import SwiftUI
 
 struct AddressStep: View {
     @Bindable var viewModel: AddHomeWizardViewModel
+    @FocusState private var focusedField: AddressField?
 
     var body: some View {
         HeadlineBlock("Where do you live?")
-        SubcopyBlock("Pick your address to start. You'll verify it next.")
+        SubcopyBlock("Enter your address. We'll check the address before you choose how to join or set up your Home.")
         VStack(alignment: .leading, spacing: Spacing.s3) {
             AddHomeSearchField(
                 query: searchBinding,
                 onClear: viewModel.clearSearchQuery
             )
-            if viewModel.showsAutocomplete {
-                AddHomeAutocompleteDropdown(
-                    query: viewModel.homeSearchQuery,
-                    results: viewModel.autocompleteResults,
-                    onSelect: viewModel.selectAddressCandidate,
-                    onAddManually: viewModel.addManuallyTapped
-                )
-            } else {
-                UseCurrentLocationPill(action: viewModel.useCurrentLocation)
-                NearbyHomesSection(
-                    homes: viewModel.nearbyHomes,
-                    selectedHomeID: viewModel.selectedHomeID,
-                    onSelect: viewModel.selectAddressCandidate
-                )
-                ManualAddressButton(action: viewModel.addManuallyTapped)
+            if viewModel.isFindingAddress {
+                ProgressView("Finding your address…")
             }
+            if let error = viewModel.addressSearchError {
+                Text(error).pantopusTextStyle(.small)
+                if !viewModel.homeSearchQuery.isEmpty {
+                    Button("Try search again", action: viewModel.retryAddressSearch)
+                }
+                if viewModel.canOpenLocationSettings {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .accessibilityIdentifier("addHomeLocationSettings")
+                    Text("In Settings, find Pantopus and open Location.").pantopusTextStyle(.small)
+                }
+            }
+            ForEach(viewModel.searchResults) { suggestion in
+                Button { viewModel.selectSearchResult(suggestion) } label: {
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text(suggestion.primaryText).font(Theme.Font.body)
+                        Text(suggestion.secondaryText ?? suggestion.label).pantopusTextStyle(.small)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                }
+                .accessibilityIdentifier("addHome_searchResult_\(suggestion.suggestionId)")
+            }
+            UseCurrentLocationPill(action: viewModel.useCurrentLocation)
+                .disabled(viewModel.isFindingAddress || !viewModel.isCurrent)
+            ManualAddressButton(action: viewModel.addManuallyTapped)
+            if viewModel.isManualEntry {
+                manualField("Street address", .street, viewModel.form.address.street)
+                manualField("Unit or apartment (optional)", .unit, viewModel.form.address.unit)
+                manualField("City", .city, viewModel.form.address.city)
+                manualField("State", .state, viewModel.form.address.state)
+                manualField("ZIP code", .zip, viewModel.form.address.zipCode)
+            }
+        }
+    }
+
+    private func manualField(_ label: String, _ field: AddressField, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            Text(label).pantopusTextStyle(.small)
+            TextField(label, text: Binding(get: { value }, set: { viewModel.update(field, to: $0) }))
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .focused($focusedField, equals: field)
+                .submitLabel(field == .zip ? .done : .next)
+                .onSubmit {
+                    let fields: [AddressField] = [.street, .unit, .city, .state, .zip]
+                    focusedField = fields.firstIndex(of: field).flatMap { index in
+                        index + 1 < fields.count ? fields[index + 1] : nil
+                    }
+                }
+                .frame(minHeight: 44)
+                .accessibilityLabel(label)
+                .accessibilityIdentifier("addHome_\(field.rawValue)")
         }
     }
 
@@ -87,6 +128,7 @@ private struct AddHomeSearchField: View {
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .stroke(query.isEmpty ? Theme.Color.appBorder : Theme.Color.primary600, lineWidth: query.isEmpty ? 1 : 2)
         )
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeSearchField")
     }
 }

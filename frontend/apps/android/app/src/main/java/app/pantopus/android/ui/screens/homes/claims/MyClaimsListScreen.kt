@@ -9,6 +9,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 
 /**
@@ -29,6 +30,8 @@ fun MyClaimsListScreen(
     viewModel: MyClaimsListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val evidencePanel by viewModel.evidencePanel.collectAsStateWithLifecycle()
+    evidencePanel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(
             onStartNewClaim = onStartNewClaim,

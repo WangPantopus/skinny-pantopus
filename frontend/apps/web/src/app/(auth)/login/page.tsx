@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
+import AuthForm from '@/components/auth/AuthForm';
 import {
   authPageHref,
   extractApiError,
@@ -125,7 +126,7 @@ function LoginContent() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-app-surface/90 backdrop-blur py-8 px-4 shadow-lg shadow-black/5 dark:shadow-black/30 rounded-2xl border border-app-border-subtle sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <AuthForm fieldsClassName="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div role="alert" className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg whitespace-pre-line">
                 {error}
@@ -243,7 +244,7 @@ function LoginContent() {
                 </button>
               </div>
             )}
-          </form>
+          </AuthForm>
 
           <div className="mt-6">
             <div className="relative">

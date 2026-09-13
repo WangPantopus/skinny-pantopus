@@ -13,17 +13,25 @@ import XCTest
 
 @MainActor
 final class PublicProfileViewModelTests: XCTestCase {
+    /// Retain each isolated auth provider: APIClient intentionally holds it weakly.
+    private var authProviders: [AuthManager] = []
+
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        authProviders = []
     }
 
     private func makeAPI() -> APIClient {
-        APIClient(
+        let client = APIClient(
             environment: .current,
             session: SequencedURLProtocol.makeSession(),
             retryPolicy: .none
         )
+        let auth = AuthManager(store: InMemorySecureStore(), apiClient: client, allowSecureEnclave: false)
+        auth.setState(.signedOut)
+        authProviders.append(auth)
+        return client
     }
 
     private static let profileWithReviews = """
@@ -160,7 +168,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testLoadHappyPath() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -182,7 +190,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testTabSwitchingDoesNotRefetch() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         let initialRequestCount = SequencedURLProtocol.capturedRequests.count
         vm.selectedTab = .reviews
@@ -198,7 +206,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testEmptyReviewsState() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileNoReviews)]
-        let vm = PublicProfileViewModel(userId: "u2", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u2", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -212,7 +220,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testNotFoundEmitsFriendlyMessage() async {
         SequencedURLProtocol.sequence = [.status(404, body: "{\"error\":\"missing\"}")]
-        let vm = PublicProfileViewModel(userId: "nope", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "nope", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .error(message) = vm.state else {
             XCTFail("Expected .error")
@@ -228,7 +236,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileWithReviews),
             .status(201, body: "{\"message\":\"Connection request sent\"}")
         ]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         await vm.connect()
         XCTAssertEqual(vm.connectState, .succeeded)
@@ -240,7 +248,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileWithReviews),
             .status(400, body: "{\"error\":\"Connection request already exists\"}")
         ]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         await vm.connect()
         if case .failed = vm.connectState { /* ok */ } else {
@@ -254,7 +262,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileWithReviews),
             .status(200, body: "{}")
         ]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         await vm.block()
         XCTAssertEqual(vm.blockState, .succeeded)
@@ -263,7 +271,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testOverflowFlagToggles() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         XCTAssertFalse(vm.showOverflow)
         vm.showOverflow = true
@@ -274,7 +282,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testProfileWithoutResidencyIsPersonaKind() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -287,7 +295,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testProfileWithVerifiedResidencyIsLocalKind() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileLocalNeighbor)]
-        let vm = PublicProfileViewModel(userId: "u3", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u3", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -305,7 +313,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileLocalNeighbor),
             .status(200, body: Self.userPosts)
         ]
-        let vm = PublicProfileViewModel(userId: "u3", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u3", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -332,7 +340,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileLocalNeighbor),
             .status(500, body: "{\"error\":\"boom\"}")
         ]
-        let vm = PublicProfileViewModel(userId: "u3", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u3", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -344,7 +352,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testPersonaProfileDoesNotFetchUserPosts() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected .loaded")
@@ -362,7 +370,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             .status(200, body: Self.profileLocalNeighbor),
             .status(200, body: Self.userPosts)
         ]
-        let vm = PublicProfileViewModel(userId: "u3", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u3", currentUserId: nil, client: makeAPI())
         await vm.load()
         XCTAssertEqual(vm.selectedLocalTab, .posts)
         let requestCount = SequencedURLProtocol.capturedRequests.count
@@ -378,7 +386,7 @@ final class PublicProfileViewModelTests: XCTestCase {
     /// handshake must not open against a handle we can't attribute.
     func testFollowDoesNotUseUsernameAsBeaconHandle() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         XCTAssertFalse(vm.showFollowHandshake)
         vm.follow()
@@ -396,7 +404,7 @@ final class PublicProfileViewModelTests: XCTestCase {
     /// `GET /api/users/username/:username`, not `/api/users/id/:id`.
     func testHandleRouteResolvesThroughUsernameEndpoint() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "@mariak", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "@mariak", currentUserId: nil, client: makeAPI())
         await vm.load()
         guard case .loaded = vm.state else { return XCTFail("expected loaded") }
         let paths = SequencedURLProtocol.capturedRequests.compactMap(\.url?.path)
@@ -406,7 +414,7 @@ final class PublicProfileViewModelTests: XCTestCase {
     func testUuidRouteStillResolvesThroughIdEndpoint() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
         let uuid = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
-        let vm = PublicProfileViewModel(userId: uuid, client: makeAPI())
+        let vm = PublicProfileViewModel(userId: uuid, currentUserId: nil, client: makeAPI())
         await vm.load()
         let paths = SequencedURLProtocol.capturedRequests.compactMap(\.url?.path)
         XCTAssertEqual(paths.first, "/api/users/id/\(uuid)")
@@ -462,7 +470,7 @@ final class PublicProfileViewModelTests: XCTestCase {
 
     func testUnlockBroadcastWithoutBeaconHandleStaysClosed() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.profileWithReviews)]
-        let vm = PublicProfileViewModel(userId: "u1", client: makeAPI())
+        let vm = PublicProfileViewModel(userId: "u1", currentUserId: nil, client: makeAPI())
         await vm.load()
         vm.unlockBroadcast(tierRank: 2)
         XCTAssertFalse(vm.showFollowHandshake)

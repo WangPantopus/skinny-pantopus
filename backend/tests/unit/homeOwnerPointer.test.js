@@ -11,7 +11,8 @@
 
 const express = require('express');
 const request = require('supertest');
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const createBoundary = require('../__mocks__/homeCreateBoundary');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 
 jest.setTimeout(15000);
 
@@ -95,9 +96,12 @@ const CREATE_BODY = {
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  createBoundary.install();
+  require('../../utils/homePermissions').applyOccupancyTemplate.mockImplementation(
+    jest.requireActual('../../utils/homePermissions').applyOccupancyTemplate);
   pipelineService.runValidationPipeline.mockResolvedValue({
     verdict: { status: 'OK', confidence: 1.0, reasons: [] },
-    canonical_address: null,
+    canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
     address_id: null,
   });
 });
@@ -109,14 +113,14 @@ describe('POST /api/homes with is_owner', () => {
 
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home).toBeTruthy();
     // The pointer is what checkHomePermission's isLegacyOwner branch reads.
     // It must only ever be written by claim approval.
     expect(home.owner_id).toBeNull();
   });
 
-  test('still records the pending claim and the pending_doc occupancy', async () => {
+  test('delegates the pending ownership setup with capped occupancy templates', async () => {
     const app = createApp();
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
 
@@ -124,20 +128,21 @@ describe('POST /api/homes with is_owner', () => {
     expect(res.body.requires_verification).toBe(true);
     expect(res.body.verification_type).toBe('ownership');
 
-    const ownerRow = getTable('HomeOwner').find((o) => o.subject_id === TEST_USER);
-    expect(ownerRow).toBeTruthy();
-    expect(ownerRow.owner_status).toBe('pending');
-
-    expect(applyOccupancyTemplate).toHaveBeenCalledWith(
-      expect.anything(), TEST_USER, 'admin', 'pending_doc',
-    );
+    expect(createBoundary.commits()).toHaveLength(1);
+    expect(createBoundary.commits()[0].p_intent).toMatchObject({ is_owner: true, role: 'owner' });
+    for (const ageBand of ['adult', 'teen', 'child']) {
+      expect(applyOccupancyTemplate).toHaveBeenCalledWith(null, TEST_USER, 'admin', 'pending_doc', { ageBand, dryRun: true });
+      expect(createBoundary.commits()[0].p_templates[ageBand]).toMatchObject({ role_base: 'restricted_member',
+        verification_status: 'pending_doc', can_manage_home: false, can_manage_access: false, can_manage_finance: false });
+    }
+    expect(getTable('HomeOwner')).toHaveLength(0); // The route makes no independent writes.
   });
 });
 
 describe('DELETE /api/homes/:id after the pointer change', () => {
   function seedCreatedHome(extraMembers = []) {
     seedTable('Home', [{
-      id: 'home-del-1',
+      id: 'ddf10001-0000-4000-8000-000000000100',
       owner_id: null,
       created_by_user_id: TEST_USER,
       name: 'Mistake Home',
@@ -145,7 +150,7 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     seedTable('HomeOccupancy', [
       {
         id: 'occ-creator',
-        home_id: 'home-del-1',
+        home_id: 'ddf10001-0000-4000-8000-000000000100',
         user_id: TEST_USER,
         is_active: true,
         role_base: 'admin',
@@ -157,19 +162,27 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     seedTable('HomeOwner', []);
   }
 
-  test('the sole creator can still delete a home they created by mistake', async () => {
+  test('the sole creator deletion uses the exact atomic transaction without route-level partial writes', async () => {
     seedCreatedHome();
+    const rpc = jest.fn(async name => ({ data: name === 'prepare_home_task_media_home_delete'
+      ? { allowed: true, deleted: false, home_id: 'ddf10001-0000-4000-8000-000000000100', cleanup: [] }
+      : { allowed: true, deleted: true, code: 'HOME_DELETED' }, error: null }));
+    setRpcMock(rpc);
     const app = createApp();
 
-    const res = await request(app).delete('/api/homes/home-del-1');
+    const res = await request(app).delete('/api/homes/ddf10001-0000-4000-8000-000000000100');
     expect(res.status).toBe(200);
-    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('delete_home_authorized', { p_home_id: 'ddf10001-0000-4000-8000-000000000100', p_user_id: TEST_USER });
+    // The real SQL contract proves deletion/cascades. This HTTP transport test
+    // proves the route itself does not unlink payments or delete independently.
+    expect(getTable('Home').find((h) => h.id === 'ddf10001-0000-4000-8000-000000000100')).toBeTruthy();
   });
 
   test('a creator with other household members cannot delete without verifying ownership', async () => {
+    setRpcMock(async () => ({ data: { allowed: false, deleted: false, code: 'DELETE_HOME_NOT_PRIMARY' }, error: null }));
     seedCreatedHome([{
       id: 'occ-roommate',
-      home_id: 'home-del-1',
+      home_id: 'ddf10001-0000-4000-8000-000000000100',
       user_id: 'user-roommate',
       is_active: true,
       role_base: 'member',
@@ -177,17 +190,18 @@ describe('DELETE /api/homes/:id after the pointer change', () => {
     }]);
     const app = createApp();
 
-    const res = await request(app).delete('/api/homes/home-del-1');
+    const res = await request(app).delete('/api/homes/ddf10001-0000-4000-8000-000000000100');
     expect(res.status).toBe(403);
-    expect(getTable('Home').find((h) => h.id === 'home-del-1')).toBeTruthy();
+    expect(getTable('Home').find((h) => h.id === 'ddf10001-0000-4000-8000-000000000100')).toBeTruthy();
   });
 
   test('a stranger cannot delete someone else\'s home', async () => {
     seedCreatedHome();
+    setRpcMock(async () => ({ data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }));
     const app = createApp();
 
     const res = await request(app)
-      .delete('/api/homes/home-del-1')
+      .delete('/api/homes/ddf10001-0000-4000-8000-000000000100')
       .set('x-test-user-id', 'user-stranger');
     expect(res.status).toBe(403);
   });
@@ -223,6 +237,7 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
 
   test('an admin cannot remove the owner', async () => {
     seedOwnerAndAdmin();
+    setRpcMock(async () => ({ data: { ok: false, code: 'TARGET_RANK_FORBIDDEN', status: 403 }, error: null }));
     checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: false, occupancy: null });
     const app = createApp();
 
@@ -237,8 +252,9 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
     expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBe(OWNER_ID);
   });
 
-  test('detaching the pointer-owner deactivates the row and clears the pointer', async () => {
+  test('detaching the primary pointer-owner requires ownership transfer and changes nothing', async () => {
     seedOwnerAndAdmin();
+    setRpcMock(async () => ({ data: { ok: false, code: 'TRANSFER_REQUIRED', status: 409 }, error: null }));
     checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: true, occupancy: null });
     const app = createApp();
 
@@ -247,13 +263,12 @@ describe('POST /api/homes/:id/detach goes through the chokepoint', () => {
       .set('x-test-user-id', OWNER_ID)
       .send({ userId: OWNER_ID });
 
-    expect(res.status).toBe(200);
-    // Deactivated, not hard-deleted: history and audit trail survive.
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('TRANSFER_REQUIRED');
     const occ = getTable('HomeOccupancy').find((o) => o.id === 'occ-owner');
     expect(occ).toBeTruthy();
-    expect(occ.is_active).toBe(false);
-    // The pointer goes with the occupancy, exactly as move-out does it.
-    expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBeNull();
+    expect(occ.is_active).toBe(true);
+    expect(getTable('Home').find((h) => h.id === 'home-det-1').owner_id).toBe(OWNER_ID);
   });
 });
 
@@ -263,7 +278,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
   beforeEach(() => {
     pipelineService.runValidationPipeline.mockResolvedValue({
       verdict: { status: 'MISSING_UNIT', confidence: 0.3, reasons: ['missing_secondary'] },
-      canonical_address: null,
+      canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
       address_id: null,
     });
   });
@@ -284,7 +299,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
       .send({ ...CREATE_BODY, no_unit_attestation: true });
 
     expect(res.status).toBe(201);
-    expect(getTable('Home')).toHaveLength(1);
+    expect(createBoundary.commits()).toHaveLength(1);
 
     const created = recordCreateHomeOutcome.mock.calls
       .map(([o]) => o)
@@ -296,7 +311,7 @@ describe('MISSING_UNIT with the no-unit attestation', () => {
   test('the attestation does not clear any other refusal', async () => {
     pipelineService.runValidationPipeline.mockResolvedValue({
       verdict: { status: 'UNDELIVERABLE', confidence: 0.1, reasons: [] },
-      canonical_address: null,
+      canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: '123 Verification Ln', city_norm: 'Portland', state: 'OR', postal_code: '97201', country: 'US', address_hash: 'canonicalhash' },
       address_id: null,
     });
     const app = createApp();
@@ -316,7 +331,7 @@ describe('coordinate provenance at create', () => {
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     // A fake 'verified' stamp here would make shouldBlockCoordinateOverwrite
     // protect the attacker's pin from later correction.
     expect(home.geocode_mode).toBe('user_asserted');
@@ -332,7 +347,7 @@ describe('coordinate provenance at create', () => {
     });
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home.geocode_mode).toBe('user_asserted');
     expect(home.geocode_provider).toBe('client');
     expect(home.geocode_accuracy).toBeNull();
@@ -353,7 +368,7 @@ describe('coordinate provenance at create', () => {
     const res = await request(app).post('/api/homes').send(CREATE_BODY);
     expect(res.status).toBe(201);
 
-    const home = getTable('Home').find((h) => h.created_by_user_id === TEST_USER);
+    const home = createBoundary.preparedHome();
     expect(home.geocode_mode).toBe('verified');
     expect(home.geocode_provider).toBe('google_validation');
     expect(home.map_center_lat).toBe(45.52);

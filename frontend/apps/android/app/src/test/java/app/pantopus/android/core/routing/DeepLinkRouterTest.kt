@@ -2,7 +2,6 @@
 
 package app.pantopus.android.core.routing
 
-import android.content.Context
 import android.content.SharedPreferences
 import io.mockk.every
 import io.mockk.mockk
@@ -74,6 +73,76 @@ class DeepLinkRouterTest {
     @Test
     fun feed_custom_scheme() {
         assertEquals(DeepLinkRouter.Destination.Feed, DeepLinkRouter.resolveString("pantopus://feed"))
+    }
+
+    @Test
+    fun exact_home_task_paths_keep_both_canonical_ids() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        for (path in listOf("pantopus://homes/$home/tasks/$task", "https://pantopus.app/app/homes/$home/tasks/$task")) {
+            assertEquals(DeepLinkRouter.Destination.HomeTask(home, task), DeepLinkRouter.resolveString(path))
+        }
+        assertEquals(
+            DeepLinkRouter.Destination.HomeTask(home, task),
+            DeepLinkRouter.resolveString("/app/homes/${home.uppercase()}/tasks/${task.uppercase()}"),
+        )
+    }
+
+    @Test
+    fun malformed_task_paths_never_open_an_unrelated_home_or_form() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        val paths =
+            listOf(
+                "/homes/$home/tasks",
+                "/homes/$home/tasks/no-id",
+                "/homes/$home/tasks/$task/edit",
+                "/homes/invalid/tasks/$task",
+            )
+        for (path in paths) {
+            assertTrue(DeepLinkRouter.resolveString(path) is DeepLinkRouter.Destination.Unknown)
+        }
+    }
+
+    @Test
+    fun task_arrival_survives_navigation_until_exact_task_completion() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        val target = DeepLinkRouter.Destination.HomeTask(home, task)
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        assertEquals(target, DeepLinkRouter.consume())
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        DeepLinkRouter.completeArrival(target.copy(taskId = home))
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        DeepLinkRouter.completeArrival(target)
+        assertNull(PendingDeepLinkStore.peek())
+    }
+
+    @Test
+    fun signed_out_task_waits_for_login_and_keeps_exact_pending_arrival() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        signedIn = false
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        assertNull(DeepLinkRouter.pending.value)
+        assertTrue(DeepLinkRouter.prefersLoginPresentation.value)
+        val path = requireNotNull(PendingDeepLinkStore.take(userId))
+        signedIn = true
+        DeepLinkRouter.handle(path)
+        assertEquals(DeepLinkRouter.Destination.HomeTask(home, task), DeepLinkRouter.consume())
+        assertTrue(PendingDeepLinkStore.peek() != null)
+    }
+
+    @Test
+    fun task_arrival_reauthentication_rejects_a_replacement_account_and_late_completion() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        DeepLinkRouter.handle("/app/homes/$home/tasks/$task")
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.HomeTask(home, task))
+        assertTrue(PendingDeepLinkStore.peek() != null)
+        assertNull(PendingDeepLinkStore.take("replacement-account"))
+        assertNull(PendingDeepLinkStore.peek())
     }
 
     @Test
@@ -919,13 +988,27 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun legacy_arrival_migrates_with_its_old_account_and_lifetime() {
+        val originalTime = System.currentTimeMillis() - 3600 * 1000L
+        legacyValues["path"] = "pantopus://post/migrated"
+        legacyValues["timestamp_ms"] = originalTime
+        legacyValues["expected_user_id"] = userId
+        assertEquals("pantopus://post/migrated", PendingDeepLinkStore.peek())
+        assertTrue(legacyValues.isEmpty())
+        PendingDeepLinkStore.retainForReauthentication(userId)
+        assertNull(PendingDeepLinkStore.take(userId, originalTime + 24 * 3600 * 1000L + 1))
+    }
+
+    @Test
     fun reauthentication_does_not_extend_the_arrival_expiry() {
         DeepLinkRouter.handle("/post/persisted")
-        val timestamp = persistedValues["timestamp_ms"]
+        val adapter = com.squareup.moshi.Moshi.Builder().build().adapter(PendingContentArrival::class.java)
+        val original = requireNotNull(adapter.fromJson(persistedValues["arrival-v1"] as String))
         PendingDeepLinkStore.retainForReauthentication(userId)
-        assertEquals(timestamp, persistedValues["timestamp_ms"])
-        persistedValues["timestamp_ms"] = 1L
-        assertNull(PendingDeepLinkStore.take(userId))
+        val retained = requireNotNull(adapter.fromJson(persistedValues["arrival-v1"] as String))
+        assertEquals(original.timestampMs, retained.timestampMs)
+        assertTrue(retained.awaitingReauthentication)
+        assertNull(PendingDeepLinkStore.take(userId, now = original.timestampMs + 24L * 3600 * 1000 + 1))
         assertNull(PendingDeepLinkStore.peek())
     }
 
@@ -1046,26 +1129,17 @@ class DeepLinkRouterTest {
         private var storeInstalled = false
         private val persistedValues = mutableMapOf<String, Any>()
 
-        /**
-         * [PendingDeepLinkStore] is SharedPreferences-backed and silently
-         * no-ops until `init`, and there is no real `Context` on the JVM — so
-         * install an in-memory stand-in. `init` is write-once per process,
-         * hence the flag plus the round-trip check.
-         */
+        private val legacyValues = mutableMapOf<String, Any>()
+
         fun installInMemoryPendingDeepLinkStore() {
             if (storeInstalled) return
             storeInstalled = true
-            PendingDeepLinkStore.init(inMemoryPrefsContext())
-            PendingDeepLinkStore.stash(PROBE_PATH)
-            check(PendingDeepLinkStore.take() == PROBE_PATH) {
-                "PendingDeepLinkStore was already initialised elsewhere in this JVM; " +
-                    "DeepLinkRouterTest needs the in-memory stand-in to observe the stash."
-            }
+            PendingDeepLinkStore.bindForTesting(inMemoryPreferences(persistedValues), inMemoryPreferences(legacyValues))
+            check(PendingDeepLinkStore.stash(PROBE_PATH))
+            check(PendingDeepLinkStore.take() == PROBE_PATH)
         }
 
-        /** A `Context` whose SharedPreferences are a plain in-memory map. */
-        fun inMemoryPrefsContext(): Context {
-            val values = persistedValues
+        fun inMemoryPreferences(values: MutableMap<String, Any>): SharedPreferences {
             val editor = mockk<SharedPreferences.Editor>(relaxed = true)
             every { editor.putString(any(), any()) } answers {
                 val value = secondArg<String?>()
@@ -1080,27 +1154,22 @@ class DeepLinkRouterTest {
                 values[firstArg()] = secondArg<Boolean>()
                 editor
             }
+            every { editor.remove(any()) } answers {
+                values.remove(firstArg<String>())
+                editor
+            }
             every { editor.clear() } answers {
                 values.clear()
                 editor
             }
+            every { editor.commit() } returns true
             val prefs = mockk<SharedPreferences>(relaxed = true)
             every { prefs.edit() } returns editor
-            every { prefs.getString(any(), any()) } answers {
-                values[firstArg<String>()] as? String ?: secondArg<String?>()
-            }
-            every { prefs.getLong(any(), any()) } answers {
-                values[firstArg<String>()] as? Long ?: secondArg<Long>()
-            }
-            every { prefs.getBoolean(any(), any()) } answers {
-                values[firstArg<String>()] as? Boolean ?: secondArg<Boolean>()
-            }
-            val context = mockk<Context>(relaxed = true)
-            every { context.applicationContext } returns context
-            // `getSharedPreferences` is overloaded (String and File); pin the
-            // name arg so the String overload resolves.
-            every { context.getSharedPreferences(any<String>(), any()) } returns prefs
-            return context
+            every { prefs.all } answers { values.toMap() }
+            every { prefs.getString(any(), any()) } answers { values[firstArg<String>()] as? String ?: secondArg<String?>() }
+            every { prefs.getLong(any(), any()) } answers { values[firstArg<String>()] as? Long ?: secondArg<Long>() }
+            every { prefs.getBoolean(any(), any()) } answers { values[firstArg<String>()] as? Boolean ?: secondArg<Boolean>() }
+            return prefs
         }
     }
 }

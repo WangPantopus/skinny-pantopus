@@ -14,6 +14,7 @@
 import SwiftUI
 
 struct PlaceDashboardView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel: PlaceDashboardViewModel
     @State private var showSwitcher = false
     @State private var showVerify = false
@@ -47,7 +48,19 @@ struct PlaceDashboardView: View {
         // With the navigation bar hidden the scroll content slid under the
         // status bar; this zero-height inset paints the app background there.
         .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: 0).background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
+            if case .loaded = viewModel.state {
+                Color.clear.frame(height: 0).background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
+            } else {
+                HStack {
+                    Button { dismiss() } label: { Label("Back", systemImage: "chevron.left") }
+                        .frame(minHeight: 44).accessibilityIdentifier("place.back")
+                    Spacer()
+                    Button(action: onOpenMenu) { Label("Menu", systemImage: "line.3.horizontal") }
+                        .frame(minHeight: 44).accessibilityIdentifier("place.menu")
+                }
+                .padding(.horizontal, Spacing.s4)
+                .background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)

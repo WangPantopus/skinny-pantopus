@@ -18,10 +18,11 @@ public extension View {
         onDiscard: @escaping () -> Void,
         onSaveDraft: (() -> Void)? = nil
     ) -> some View {
-        confirmationDialog(
+        // Keep the safe action explicit. Popover-style confirmation dialogs
+        // can omit cancel buttons and expose only the destructive action.
+        alert(
             "Discard your progress?",
-            isPresented: isPresented,
-            titleVisibility: .visible
+            isPresented: isPresented
         ) {
             if let onSaveDraft {
                 Button("Save draft", action: onSaveDraft)

@@ -71,7 +71,7 @@ class PulsePostTargetPickerViewModel
                         return@launch
                     }
                     is NetworkResult.Success -> {
-                        _homes.value = mapHomes(homesResult.data.homes)
+                        _homes.value = mapHomes(homesResult.data.sharedHomes)
                     }
                 }
 

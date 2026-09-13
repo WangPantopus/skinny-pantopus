@@ -23,7 +23,7 @@ jest.mock('../../services/notificationService', () => ({
   notifyOwnershipClaimNeedsMoreInfo: jest.fn(async () => ({ id: 'notif-4' })),
 }));
 
-const { resetTables, seedTable, getTable, setAuthMocks } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setAuthMocks, setRpcMock } = require('../__mocks__/supabaseAdmin');
 const occupancyAttachService = require('../../services/occupancyAttachService');
 const verifyToken = require('../../middleware/verifyToken');
 
@@ -67,159 +67,42 @@ describe('admin challenge adjudication', () => {
     }]);
   });
 
-  test('approving a challenged ownership claim verifies challenger without revoking incumbents', async () => {
-    seedTable('Home', [{
-      id: 'home-1',
-      security_state: 'disputed',
-      ownership_state: 'disputed',
-      claim_window_ends_at: null,
-      owner_id: 'owner-old',
-    }]);
-    seedTable('HomeOwner', [{
-      id: 'owner-row-1',
-      home_id: 'home-1',
-      subject_id: 'owner-old',
-      owner_status: 'verified',
-      is_primary_owner: true,
-      verification_tier: 'strong',
-    }]);
+  test.each(['approve', 'reject'])('%s keeps disputed claims in the dedicated challenge flow', async (action) => {
+    seedTable('Home', [{ id: 'home-1', owner_id: 'owner-old', security_state: 'disputed', ownership_state: 'disputed' }]);
+    seedTable('HomeOwner', [{ id: 'owner-row-1', home_id: 'home-1', subject_id: 'owner-old',
+      owner_status: 'verified', is_primary_owner: true, verification_tier: 'strong' }]);
     seedTable('HomeOwnershipClaim', [
-      {
-        id: 'incumbent-claim',
-        home_id: 'home-1',
-        claimant_user_id: 'owner-old',
-        claim_type: 'owner',
-        state: 'approved',
-        method: 'doc_upload',
-        claim_phase_v2: 'verified',
-        terminal_reason: 'none',
-        challenge_state: 'challenged',
-        routing_classification: 'standalone_claim',
-      },
-      {
-        id: 'challenger-claim',
-        home_id: 'home-1',
-        claimant_user_id: 'owner-new',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'challenged',
-        terminal_reason: 'none',
-        challenge_state: 'challenged',
-        routing_classification: 'challenge_claim',
-      },
+      { id: 'incumbent-claim', home_id: 'home-1', claimant_user_id: 'owner-old', state: 'approved',
+        claim_phase_v2: 'verified', challenge_state: 'challenged', routing_classification: 'standalone_claim' },
+      { id: 'challenger-claim', home_id: 'home-1', claimant_user_id: 'owner-new', state: 'submitted',
+        claim_phase_v2: 'challenged', challenge_state: 'challenged', routing_classification: 'challenge_claim' },
     ]);
-    seedTable('HomeVerificationEvidence', [{
-      id: 'ev-1',
-      claim_id: 'challenger-claim',
-      evidence_type: 'deed',
-      status: 'pending',
-    }]);
+    seedTable('HomeVerificationEvidence', [{ id: 'ev-1', claim_id: 'challenger-claim', evidence_type: 'deed', status: 'pending' }]);
+    const protectedTables = ['Home', 'HomeOwner', 'HomeOccupancy', 'HomeOwnershipClaim', 'HomeVerificationEvidence'];
+    const before = protectedTables.map((table) => JSON.parse(JSON.stringify(getTable(table))));
+    const rpc = jest.fn(async () => ({ data: { ok: false, code: 'CLAIM_CHALLENGE_REVIEW_REQUIRED', status: 409 }, error: null }));
+    setRpcMock(rpc);
 
     const res = await request(app)
       .post('/api/admin/claims/challenger-claim/review')
       .set('Authorization', 'Bearer test-token')
       .set('x-test-user-id', 'admin-1')
       .set('x-test-role', 'admin')
-      .send({
-        action: 'approve',
-        note: 'Deed is conclusive',
-      });
+      .send({ action, note: 'Current evidence requires dispute review', review_token: 'a'.repeat(64) });
 
-    expect(res.status).toBe(200);
-
-    const home = getTable('Home')[0];
-    const owners = getTable('HomeOwner');
-    const challengerClaim = getTable('HomeOwnershipClaim').find((claim) => claim.id === 'challenger-claim');
-    const incumbentClaim = getTable('HomeOwnershipClaim').find((claim) => claim.id === 'incumbent-claim');
-
-    expect(home.owner_id).toBe('owner-new');
-    expect(home.ownership_state).toBe('owner_verified');
-
-    expect(owners.find((owner) => owner.subject_id === 'owner-old')?.owner_status).toBe('verified');
-    expect(owners.find((owner) => owner.subject_id === 'owner-new')?.owner_status).toBe('verified');
-
-    expect(challengerClaim.state).toBe('approved');
-    expect(challengerClaim.claim_phase_v2).toBe('verified');
-    expect(challengerClaim.challenge_state).toBe('none');
-
-    expect(incumbentClaim.state).toBe('approved');
-    expect(incumbentClaim.terminal_reason).toBe('none');
-
-    expect(occupancyAttachService.attach).toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('CLAIM_CHALLENGE_REVIEW_REQUIRED');
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', expect.objectContaining({
+      p_home_id: null, p_claim_id: 'challenger-claim', p_actor_id: 'admin-1', p_action: action,
+      p_review_token: 'a'.repeat(64), p_note: 'Current evidence requires dispute review', p_platform_admin: true,
+    }));
+    expect(protectedTables.map((table) => getTable(table))).toEqual(before);
+    expect(occupancyAttachService.attach).not.toHaveBeenCalled();
     expect(occupancyAttachService.detach).not.toHaveBeenCalled();
-  });
-
-  test('rejecting a challenged claim upholds incumbents and clears disputed state', async () => {
-    seedTable('Home', [{
-      id: 'home-1',
-      security_state: 'disputed',
-      ownership_state: 'disputed',
-      claim_window_ends_at: null,
-      owner_id: 'owner-old',
-    }]);
-    seedTable('HomeOwner', [{
-      id: 'owner-row-1',
-      home_id: 'home-1',
-      subject_id: 'owner-old',
-      owner_status: 'verified',
-      is_primary_owner: true,
-      verification_tier: 'strong',
-    }]);
-    seedTable('HomeOwnershipClaim', [
-      {
-        id: 'incumbent-claim',
-        home_id: 'home-1',
-        claimant_user_id: 'owner-old',
-        claim_type: 'owner',
-        state: 'disputed',
-        method: 'doc_upload',
-        claim_phase_v2: 'challenged',
-        terminal_reason: 'none',
-        challenge_state: 'challenged',
-        routing_classification: 'standalone_claim',
-      },
-      {
-        id: 'challenger-claim',
-        home_id: 'home-1',
-        claimant_user_id: 'owner-new',
-        claim_type: 'owner',
-        state: 'submitted',
-        method: 'doc_upload',
-        claim_phase_v2: 'challenged',
-        terminal_reason: 'none',
-        challenge_state: 'challenged',
-        routing_classification: 'challenge_claim',
-      },
-    ]);
-
-    const res = await request(app)
-      .post('/api/admin/claims/challenger-claim/review')
-      .set('Authorization', 'Bearer test-token')
-      .set('x-test-user-id', 'admin-1')
-      .set('x-test-role', 'admin')
-      .send({
-        action: 'reject',
-        note: 'Claimant documents are insufficient',
-      });
-
-    expect(res.status).toBe(200);
-
-    const home = getTable('Home')[0];
-    const incumbentClaim = getTable('HomeOwnershipClaim').find((claim) => claim.id === 'incumbent-claim');
-    const challengerClaim = getTable('HomeOwnershipClaim').find((claim) => claim.id === 'challenger-claim');
-
-    expect(home.security_state).toBe('normal');
-    expect(home.ownership_state).toBe('owner_verified');
-    expect(home.household_resolution_state).toBe('verified_household');
-
-    expect(challengerClaim.state).toBe('rejected');
-    expect(challengerClaim.claim_phase_v2).toBe('rejected');
-
-    expect(incumbentClaim.state).toBe('approved');
-    expect(incumbentClaim.claim_phase_v2).toBe('verified');
-    expect(incumbentClaim.challenge_state).toBe('resolved_upheld');
-    expect(occupancyAttachService.detach).not.toHaveBeenCalled();
+    expect(require('../../services/notificationService').notifyOwnershipClaimApproved).not.toHaveBeenCalled();
+    expect(require('../../services/notificationService').notifyOwnershipClaimRejected).not.toHaveBeenCalled();
+    expect(require('../../services/s3Service').getPresignedDownloadUrl).not.toHaveBeenCalled();
   });
 
   test('pending claims list includes disputed challenge claims for admin review', async () => {

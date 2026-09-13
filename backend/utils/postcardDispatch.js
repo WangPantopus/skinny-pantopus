@@ -40,14 +40,14 @@ function hashPostcardCode(code) {
  * @returns {Promise<{success: boolean, vendorJobId?: string, error?: string}>}
  */
 async function dispatchPostcardCode(home, code, homePostcardId, homeId) {
-  if (!homePostcardId || !homeId) return { success: false, error: 'Postcard admission is required' };
+  if (!homePostcardId || !homeId) return { success: false, deliveryUnknown: false, error: 'Postcard admission is required' };
   if (!home || !home.address || !home.city || !home.state || !home.zipcode) {
-    return { success: false, error: 'Home is missing a mailable address' };
+    return { success: false, deliveryUnknown: false, error: 'Home is missing a mailable address' };
   }
 
   if ((process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV))
     && !lobMailProvider.isAvailable()) {
-    return { success: false, error: 'Mail provider is not configured' };
+    return { success: false, deliveryUnknown: false, error: 'Mail provider is not configured' };
   }
 
   try {

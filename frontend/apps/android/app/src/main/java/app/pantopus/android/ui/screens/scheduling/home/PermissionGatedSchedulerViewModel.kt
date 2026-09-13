@@ -134,8 +134,8 @@ class PermissionGatedSchedulerViewModel
             when (val result = homes.myHomes()) {
                 is NetworkResult.Success -> {
                     val home =
-                        result.data.homes.firstOrNull { it.occupancy?.isActive == true }
-                            ?: result.data.homes.firstOrNull()
+                        result.data.sharedHomes.firstOrNull { it.occupancy?.isActive == true }
+                            ?: result.data.sharedHomes.firstOrNull()
                     home?.id
                 }
                 is NetworkResult.Failure -> null

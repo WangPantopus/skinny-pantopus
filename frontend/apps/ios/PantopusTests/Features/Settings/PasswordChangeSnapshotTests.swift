@@ -16,9 +16,13 @@ import XCTest
 
 @MainActor
 final class PasswordChangeSnapshotTests: XCTestCase {
+    /// Retain each isolated auth provider: APIClient intentionally holds it weakly.
+    private var authProviders: [AuthManager] = []
+
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        authProviders = []
     }
 
     func test_a13_14_ready_frame_renders() async {
@@ -66,11 +70,15 @@ final class PasswordChangeSnapshotTests: XCTestCase {
     }
 
     private func makeAPI() -> APIClient {
-        APIClient(
+        let client = APIClient(
             environment: .current,
             session: SequencedURLProtocol.makeSession(),
             retryPolicy: .none
         )
+        let auth = AuthManager(store: InMemorySecureStore(), apiClient: client, allowSecureEnclave: false)
+        auth.setState(.signedOut)
+        authProviders.append(auth)
+        return client
     }
 
     private func assertRenders(

@@ -29,8 +29,16 @@ export default function DashboardCard({
   return (
     <div
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? title : undefined}
+      onKeyDown={onClick ? (event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault(); onClick();
+        }
+      } : undefined}
       className={`rounded-xl border border-app-border bg-app-surface shadow-sm p-4 transition ${
-        onClick ? 'hover:shadow-md cursor-pointer' : ''
+        onClick ? 'hover:shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500' : ''
       }`}
     >
       {/* Header row */}

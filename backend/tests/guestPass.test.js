@@ -67,14 +67,14 @@ function seedPermissions() {
     id: 'owner-rec',
     home_id: homeId,
     subject_id: ownerId,
-    owner_status: 'verified',
+    owner_status: 'verified', subject_type: 'user',
     tier: 'standard',
     is_primary: true,
   }]);
   seedTable('HomeOccupancy', [
-    { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, start_at: null, end_at: null },
-    { id: 'occ-mgr', home_id: homeId, user_id: managerId, role: 'manager', role_base: 'manager', is_active: true, start_at: null, end_at: null },
-    { id: 'occ-member', home_id: homeId, user_id: memberId, role: 'member', role_base: 'member', is_active: true, start_at: null, end_at: null },
+    { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
+    { id: 'occ-mgr', home_id: homeId, user_id: managerId, role: 'manager', role_base: 'manager', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
+    { id: 'occ-member', home_id: homeId, user_id: memberId, role: 'member', role_base: 'member', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
   ]);
   seedTable('HomeRolePermission', [
     { id: 'rp-1', role_base: 'owner', permission: 'members.manage', allowed: true },

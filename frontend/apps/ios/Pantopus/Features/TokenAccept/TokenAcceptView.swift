@@ -12,7 +12,9 @@
 import SwiftUI
 
 public struct TokenAcceptView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: TokenAcceptViewModel
+    @State private var visible = false
 
     public init(viewModel: TokenAcceptViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -24,13 +26,28 @@ public struct TokenAcceptView: View {
             content
         }
         .background(Theme.Color.appBg)
-        .task { await viewModel.load() }
+        .task { visible = true
+            await viewModel.load()
+        }
+        .onDisappear { visible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard visible else { return }
+            if phase == .active { Task { await viewModel.load() } } else { viewModel.suspend() }
+        }
+        .onChange(of: viewModel.sessionIsCurrent) { _, current in
+            if !current, visible { viewModel.suspend()
+                Task { await viewModel.load() }
+            }
+        }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tokenAccept")
     }
 
     private var topBar: some View {
         HStack {
-            Color.clear.frame(width: 36, height: 36)
+            Button("Close") { viewModel.close() }.frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("tokenAcceptClose")
             Spacer()
             Text("Invitation")
                 .font(.system(size: 16, weight: .semibold))
@@ -49,21 +66,26 @@ public struct TokenAcceptView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch viewModel.state {
-        case .loading:
-            loadingFrame
-        case let .ready(offer):
-            offerBody(offer, submitting: false)
-        case let .accepting(offer):
-            offerBody(offer, submitting: true)
-        case let .accepted(offer, message):
-            acceptedFrame(offer: offer, message: message)
-        case .declined:
-            declinedFrame
-        case let .expired(message):
-            expiredFrame(message: message)
-        case let .error(message):
-            errorFrame(message: message)
+        if let model = viewModel.homeDecision {
+            HomeInvitationDecisionView(model: model, onClose: viewModel.close) { await viewModel.load() }
+                .id(ObjectIdentifier(model))
+        } else {
+            switch viewModel.state {
+            case .loading:
+                loadingFrame
+            case let .ready(offer):
+                offerBody(offer, submitting: false)
+            case let .accepting(offer):
+                offerBody(offer, submitting: true)
+            case let .accepted(offer, message):
+                acceptedFrame(offer: offer, message: message)
+            case .declined:
+                declinedFrame
+            case let .expired(message):
+                expiredFrame(message: message)
+            case let .error(message):
+                errorFrame(message: message)
+            }
         }
     }
 
@@ -250,7 +272,7 @@ public struct TokenAcceptView: View {
                         if submitting {
                             ProgressView().tint(Theme.Color.appTextInverse)
                         }
-                        Text(submitting ? "Accepting…" : offer.primaryCtaLabel)
+                        Text(submitting ? "Saving…" : offer.primaryCtaLabel)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Theme.Color.appTextInverse)
                     }
@@ -310,7 +332,7 @@ public struct TokenAcceptView: View {
             Text("Invitation declined")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("We told the sender you're not joining. You can always be invited again.")
+            Text("The decision is recorded. Message delivery is separate; you can be invited again.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -363,6 +385,7 @@ public struct TokenAcceptView: View {
             .accessibilityIdentifier("tokenAcceptRetry")
             Spacer()
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tokenAcceptError")
     }
 

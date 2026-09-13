@@ -87,8 +87,18 @@ async function preference() {
     console.log(`Payment method concurrency passed across ${connections} PostgreSQL connections: first cards, explicit preference, replay/removal, early detach, rollback and retry.`);
   } finally {
     if (created) {
-      await query(`BEGIN; DELETE FROM auth.users WHERE id='${user}';
+      // Canonical public.User is independent of auth.users. Remove only this
+      // run's exact fixture; its card/removal rows cascade from public.User.
+      await query(`BEGIN; DELETE FROM public."User" WHERE id='${user}';
+        DELETE FROM auth.users WHERE id='${user}';
         DELETE FROM public."PaymentMethodRemoval" WHERE stripe_payment_method_id='pm_concurrentUnknown' AND user_id IS NULL; COMMIT;`).done;
+      assert.equal(await query(`SELECT
+        (SELECT count(*) FROM auth.users WHERE id='${user}') +
+        (SELECT count(*) FROM public."User" WHERE id='${user}') +
+        (SELECT count(*) FROM public."PaymentMethod" WHERE user_id='${user}') +
+        (SELECT count(*) FROM public."PaymentMethodRemoval" WHERE user_id='${user}'
+          OR (stripe_payment_method_id='pm_concurrentUnknown' AND user_id IS NULL));`).done, '0',
+      'Payment concurrency fixtures must be fully retired');
     }
   }
 })().catch((error) => { console.error(error.message); process.exitCode = 1; });

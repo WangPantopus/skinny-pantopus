@@ -26,13 +26,22 @@ final class BillDetailViewModel {
         case error(message: String)
     }
 
-    private(set) var state: State = .loading
+    private var contentState: State = .loading
+    var state: State {
+        financeAccess.isCurrentScope ? contentState : .error(message: "Your session changed. Reopen Bills to continue.")
+    }
+
+    var canManageFinance: Bool {
+        financeAccess.canManage
+    }
+
     private(set) var isSaving: Bool = false
     private(set) var saveError: String?
 
     private let homeId: String
     private let billId: String
     private let api: APIClient
+    private let financeAccess: HomeFinanceAccess
     private let onChanged: @Sendable () -> Void
     private let onClose: @Sendable () -> Void
 
@@ -40,19 +49,22 @@ final class BillDetailViewModel {
         homeId: String,
         billId: String,
         api: APIClient = .shared,
+        financeAccess: HomeFinanceAccess? = nil,
         onChanged: @escaping @Sendable () -> Void = {},
         onClose: @escaping @Sendable () -> Void = {}
     ) {
         self.homeId = homeId
         self.billId = billId
         self.api = api
+        self.financeAccess = financeAccess ?? HomeFinanceAccess(homeId: homeId, api: api)
         self.onChanged = onChanged
         self.onClose = onClose
     }
 
     func load() async {
-        state = .loading
+        contentState = .loading
         do {
+            try await financeAccess.refresh()
             // Fetch the parent list + the splits in parallel. Backend
             // doesn't expose a GET-by-id for bills today; the list is
             // small (typical < ~100 rows) so re-fetching is cheap.
@@ -62,15 +74,17 @@ final class BillDetailViewModel {
                 api.request(HomesEndpoints.billSplits(homeId: homeId, billId: billId))
 
             let bills = try await billsTask.bills
-            let splits = await (try? splitsTask.splits) ?? []
-            guard let bill = bills.first(where: { $0.id == billId }) else {
-                state = .error(message: "This bill is no longer available.")
+            let splits = try await splitsTask.splits
+            try financeAccess.require()
+            guard splits.allSatisfy({ $0.billId == billId }) else { throw APIError.invalidResponse }
+            guard let bill = bills.first(where: { $0.id == billId && $0.homeId == homeId }) else {
+                contentState = .error(message: "This bill is no longer available.")
                 return
             }
-            state = .loaded(bill, splits)
+            contentState = .loaded(bill, splits)
         } catch {
-            state = .error(
-                message: (error as? APIError)?.errorDescription
+            contentState = .error(
+                message: (error as? LocalizedError)?.errorDescription
                     ?? "Couldn't load this bill."
             )
         }
@@ -85,29 +99,41 @@ final class BillDetailViewModel {
 
     /// Soft-delete — backend has no DELETE handler for bills.
     func remove() async {
-        await update(request: UpdateBillRequest(status: "cancelled"))
-        if case .loaded = state {
+        if await update(request: UpdateBillRequest(status: "cancelled")) {
             onClose()
         }
     }
 
-    private func update(request: UpdateBillRequest) async {
-        guard !isSaving else { return }
+    @discardableResult
+    private func update(request: UpdateBillRequest) async -> Bool {
+        guard !isSaving, case .loaded = state else { return false }
         isSaving = true
         saveError = nil
         defer { isSaving = false }
         do {
+            try await financeAccess.refresh(managing: true)
             let response: HomeBillResponse = try await api.request(
                 HomesEndpoints.updateBill(homeId: homeId, billId: billId, request: request)
             )
+            try financeAccess.require(managing: true)
+            guard response.bill.id == billId, response.bill.homeId == homeId,
+                  request.status == nil || response.bill.status == request.status else { throw APIError.invalidResponse }
             onChanged()
             if case let .loaded(_, splits) = state {
-                state = .loaded(response.bill, splits)
+                contentState = .loaded(response.bill, splits)
             }
+            return true
         } catch {
-            saveError = (error as? APIError)?.errorDescription
+            saveError = (error as? LocalizedError)?.errorDescription
                 ?? "Couldn't update this bill."
+            if !financeAccess.canView { contentState = .error(message: saveError ?? "Bill access changed.") }
+            return false
         }
+    }
+
+    func edit(_ action: @Sendable () -> Void) {
+        guard canManageFinance, !isSaving else { return }
+        action()
     }
 }
 
@@ -145,8 +171,9 @@ struct BillDetailView: View {
                     splits: splits,
                     saving: viewModel.isSaving,
                     saveError: viewModel.saveError,
+                    canManage: viewModel.canManageFinance,
                     onBack: onBack,
-                    onEdit: { onEdit() },
+                    onEdit: { viewModel.edit(onEdit) },
                     onMarkPaid: markPaid,
                     onRemove: removeBill
                 )
@@ -224,6 +251,7 @@ private struct LoadedShell: View {
     let splits: [BillSplitDTO]
     let saving: Bool
     let saveError: String?
+    let canManage: Bool
     let onBack: () -> Void
     let onEdit: () -> Void
     let onMarkPaid: () -> Void
@@ -259,44 +287,48 @@ private struct LoadedShell: View {
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.error)
                     }
-                    Button(action: onEdit) {
-                        HStack(spacing: Spacing.s2) {
-                            Icon(.pencil, size: 16, color: Theme.Color.primary600)
-                            Text("Edit bill")
-                                .pantopusTextStyle(.small)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Theme.Color.primary600)
+                    if canManage {
+                        Button(action: onEdit) {
+                            HStack(spacing: Spacing.s2) {
+                                Icon(.pencil, size: 16, color: Theme.Color.primary600)
+                                Text("Edit bill")
+                                    .pantopusTextStyle(.small)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Theme.Color.primary600)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(Theme.Color.primary50)
+                            .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                         }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Theme.Color.primary50)
-                        .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(saving)
-                    .accessibilityIdentifier("billDetail_edit")
-                    Button(role: .destructive, action: onRemove) {
-                        HStack(spacing: Spacing.s2) {
-                            Icon(.trash2, size: 16, color: Theme.Color.error)
-                            Text("Remove bill")
-                                .pantopusTextStyle(.small)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Theme.Color.error)
+                        .buttonStyle(.plain)
+                        .disabled(saving)
+                        .accessibilityIdentifier("billDetail_edit")
+                        Button(role: .destructive, action: onRemove) {
+                            HStack(spacing: Spacing.s2) {
+                                Icon(.trash2, size: 16, color: Theme.Color.error)
+                                Text("Remove bill")
+                                    .pantopusTextStyle(.small)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Theme.Color.error)
+                            }
                         }
+                        .accessibilityIdentifier("billDetail_remove")
+                        .disabled(saving)
                     }
-                    .accessibilityIdentifier("billDetail_remove")
-                    .disabled(saving)
                 }
                 .padding(.horizontal, Spacing.s4)
             },
             cta: {
-                PrimaryButton(
-                    title: isPaid ? "Already paid" : "Mark paid",
-                    isLoading: saving,
-                    isEnabled: !isPaid && !saving
-                ) {
-                    await MainActor.run { onMarkPaid() }
+                if canManage {
+                    PrimaryButton(
+                        title: isPaid ? "Already paid" : "Mark paid",
+                        isLoading: saving,
+                        isEnabled: !isPaid && !saving
+                    ) {
+                        await MainActor.run { onMarkPaid() }
+                    }
+                    .accessibilityIdentifier("billDetail_markPaid")
                 }
-                .accessibilityIdentifier("billDetail_markPaid")
             }
         )
     }

@@ -1,0 +1,238 @@
+-- Canonical shipped roles; current claim/identity/authority and atomic acceptance.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+SET LOCAL search_path=public,extensions,pg_catalog;
+CREATE TEMP TABLE claim_merge_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows FROM public."HomeRolePermission"r;
+CREATE FUNCTION pg_temp.cm_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('ddc45000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.cm_expect(r jsonb,c text DEFAULT NULL) RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+ IF (c IS NULL AND r->>'ok' IS DISTINCT FROM 'true') OR (c IS NOT NULL AND r->>'code' IS DISTINCT FROM c) THEN
+  RAISE EXCEPTION 'Expected %, got %',coalesce(c,'success'),r; END IF;
+END $$;
+DO $$ DECLARE t text; f text; BEGIN
+ IF (SELECT count(*) FROM public."HomeRolePermission")<>31 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+ FOREACH t IN ARRAY ARRAY['HomeOwnershipClaim','HomeVerificationEvidence'] LOOP
+  IF has_table_privilege('authenticated','public.'||quote_ident(t),'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_table_privilege('anon','public.'||quote_ident(t),'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+   RAISE EXCEPTION 'Direct claim/evidence authority remains: %',t; END IF;
+ END LOOP;
+ f:='public.mutate_home_claim_invitation(uuid,uuid,uuid,text,uuid,text,text,integer)';
+ IF has_function_privilege('anon',f,'EXECUTE') OR has_function_privilege('authenticated',f,'EXECUTE')
+  OR NOT has_function_privilege('service_role',f,'EXECUTE') THEN RAISE EXCEPTION 'Unsafe claim RPC ACL'; END IF;
+END $$;
+INSERT INTO auth.users(id,email,email_confirmed_at)
+ SELECT pg_temp.cm_id(n),'home-claim-merge-'||n||'@example.invalid',now() FROM generate_series(1,25)n;
+INSERT INTO public."User"(id,email,username,name)
+ SELECT id,email,'home_claim_merge_'||right(id::text,2),'Claim merge fixture' FROM auth.users
+ WHERE id::text LIKE 'ddc45000-0000-4000-8000-%';
+INSERT INTO public."Home"(id,owner_id,address,city,state,zipcode,name) VALUES
+ (pg_temp.cm_id(100),pg_temp.cm_id(1),'450 Secret Street','Test','WA','98607','Claim fixture'),
+ (pg_temp.cm_id(101),pg_temp.cm_id(20),'451 Secret Street','Test','WA','98607','Legacy claim fixture');
+INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner,verification_tier)
+ VALUES(pg_temp.cm_id(100),pg_temp.cm_id(1),'verified',true,'strong');
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,is_active,verification_status,
+ start_at,end_at,access_start_at,access_end_at)
+ SELECT pg_temp.cm_id(100),pg_temp.cm_id(n),role,base::public.home_role_base,age::public.home_age_band,true,status,
+ now()-interval '2 days',now()+interval '3 days',now()-interval '1 day',now()+interval '2 days'
+ FROM (VALUES(1,'owner','owner','adult','verified'),(2,'admin','admin','adult','verified'),
+ (3,'member','member',NULL,'pending_doc'),(4,'restricted_member','restricted_member','child','pending_doc'),
+ (5,'member','member','teen','verified'),(6,'member','member','adult','revoked'),
+ (7,NULL,NULL,'adult','pending_doc'),(8,'member','member','adult','pending_doc'),
+ (9,'member','member','adult','verified'),(10,'member','member','adult','pending_doc'))f(n,role,base,age,status);
+UPDATE public."HomeOccupancy" SET verified_at=now()-interval '1 day' WHERE home_id=pg_temp.cm_id(100) AND user_id=pg_temp.cm_id(8);
+INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES
+ (pg_temp.cm_id(100),pg_temp.cm_id(2),'members.manage',true),
+ (pg_temp.cm_id(100),pg_temp.cm_id(2),'ownership.manage',true),
+ (pg_temp.cm_id(100),pg_temp.cm_id(3),'finance.manage',false);
+INSERT INTO public."HomeOwnershipClaim"(id,home_id,claimant_user_id,claim_type,state,method,claim_phase_v2,
+ identity_status,expires_at)
+ SELECT pg_temp.cm_id(200+n),pg_temp.cm_id(100),pg_temp.cm_id(n),
+ CASE n WHEN 16 THEN 'resident' WHEN 17 THEN 'admin' ELSE 'owner' END,'submitted','doc_upload','under_review',
+ CASE WHEN n IN (18,19) THEN 'not_started' ELSE 'verified' END::public.identity_status,
+ now()+interval '3 days' FROM generate_series(3,19)n;
+INSERT INTO public."HomeVerificationEvidence"(id,claim_id,evidence_type,status,storage_ref)
+ VALUES(pg_temp.cm_id(303),pg_temp.cm_id(203),'deed','pending','synthetic-private-evidence'),
+ (pg_temp.cm_id(319),pg_temp.cm_id(219),'idv','verified',NULL);
+CREATE TEMP TABLE claim_merge_evidence_before AS SELECT jsonb_agg(to_jsonb(e) ORDER BY id) rows FROM public."HomeVerificationEvidence"e;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:=pg_temp.cm_id(100); o uuid:=pg_temp.cm_id(1); r jsonb; s jsonb; i uuid; n integer;
+ original jsonb; next_state text; tok text:=repeat('a',64); BEGIN
+ -- A current owner may invite before identity completion; only that claimant accepts.
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),o,'issue',NULL,tok,'Join'); PERFORM pg_temp.cm_expect(r);
+ i:=(r->'invitation'->>'id')::uuid;
+ IF r->>'token'<>tok OR r->'invitation' ?| ARRAY['token','token_hash','admission_policy'] OR r::text LIKE '%Secret Street%'
+  OR NOT EXISTS(SELECT FROM public."HomeInvite" WHERE id=i AND token=token_hash
+   AND token=encode(sha256(convert_to(tok,'UTF8')),'hex')) THEN RAISE EXCEPTION 'Claim invite token/storage projection leaked'; END IF;
+ SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=h;
+ s:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),o,'issue',NULL,repeat('b',64)); PERFORM pg_temp.cm_expect(s);
+ IF s->>'replayed'<>'true' OR s->'invitation'->>'id'<>i::text OR s->>'token' IS NOT NULL
+  OR (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h)<>n THEN RAISE EXCEPTION 'Issue retry duplicated invitation/audit'; END IF;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),pg_temp.cm_id(4),'accept',i),'CLAIM_RECIPIENT_MISMATCH');
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(pg_temp.cm_id(101),pg_temp.cm_id(203),pg_temp.cm_id(3),'accept',i),'CLAIM_NOT_FOUND');
+ SELECT to_jsonb(c) INTO original FROM public."HomeOccupancy"c WHERE home_id=h AND user_id=pg_temp.cm_id(3);
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),pg_temp.cm_id(3),'accept',i); PERFORM pg_temp.cm_expect(r);
+ IF r->>'acceptedRoleBase'<>'owner' OR r->>'claimPhaseV2'<>'verified' OR r->>'terminalReason'<>'none'
+  OR r->'occupancy'->>'age_band' IS NOT NULL OR r->'occupancy'->>'role_base'<>'owner'
+  OR (r->'occupancy'->>'start_at')::timestamptz<>(original->>'start_at')::timestamptz
+  OR (r->'occupancy'->>'end_at')::timestamptz<>(original->>'end_at')::timestamptz
+  OR (r->'occupancy'->>'access_start_at')::timestamptz<>(original->>'access_start_at')::timestamptz
+  OR (r->'occupancy'->>'access_end_at')::timestamptz<>(original->>'access_end_at')::timestamptz
+  OR public.home_has_permission(h,'finance.manage',pg_temp.cm_id(3))
+  OR (SELECT owner_id FROM public."Home" WHERE id=h)<>o
+  OR NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=pg_temp.cm_id(3)
+   AND owner_status='verified' AND NOT is_primary_owner AND verification_tier='weak')
+  OR NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=o
+   AND owner_status='verified' AND is_primary_owner AND verification_tier='strong') THEN
+  RAISE EXCEPTION 'Atomic co-owner acceptance changed restrictions or incumbent ownership'; END IF;
+ SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=h;
+ s:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),pg_temp.cm_id(3),'accept',i); PERFORM pg_temp.cm_expect(s);
+ IF s->>'replayed'<>'true' OR s->'occupancy' IS DISTINCT FROM r->'occupancy'
+  OR (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h)<>n THEN RAISE EXCEPTION 'Acceptance retry reapplied authority'; END IF;
+ UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=h AND user_id=pg_temp.cm_id(3);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(203),pg_temp.cm_id(3),'accept',i),'CLAIM_INVITE_ALREADY_USED');
+ -- Explicit minors, invalid role/status and prior verification cannot be reset.
+ FOREACH n IN ARRAY ARRAY[4,5] LOOP
+  PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(200+n),o,'issue',NULL,repeat('c',64)),'PROPOSED_ROLE_FORBIDDEN');
+ END LOOP;
+ FOREACH n IN ARRAY ARRAY[6,7,8] LOOP
+  PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(200+n),o,'issue',NULL,repeat('c',64)),'MEMBERSHIP_RENEWAL_REQUIRED');
+ END LOOP;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),pg_temp.cm_id(2),'issue',NULL,repeat('c',64)),'OWNER_INVITE_AUTHORITY_REQUIRED');
+ -- An occupancy owner without proof or a genuine legacy primary is not a co-owner issuer.
+ UPDATE public."HomeOccupancy" SET role='owner',role_base='owner' WHERE home_id=h AND user_id=pg_temp.cm_id(2);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),pg_temp.cm_id(2),'issue',NULL,repeat('c',64)),'OWNER_INVITE_AUTHORITY_REQUIRED');
+ UPDATE public."HomeOccupancy" SET role='admin',role_base='admin' WHERE home_id=h AND user_id=pg_temp.cm_id(2);
+ -- Effective explicit deny, future windows, proof revocation and age fence the inviter.
+ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,o,'ownership.manage',false);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('c',64)),'OWNERSHIP_MANAGE_REQUIRED');
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=o AND permission='ownership.manage';
+ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,o,'finance.manage',false);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('c',64)),'PERMISSION_DELEGATION_FORBIDDEN');
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=o AND permission='finance.manage';
+ UPDATE public."HomeOccupancy" SET access_start_at=now()+interval '1 day' WHERE home_id=h AND user_id=o;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('c',64)),'OWNERSHIP_MANAGE_REQUIRED');
+ UPDATE public."HomeOccupancy" SET access_start_at=now()-interval '1 day' WHERE home_id=h AND user_id=o;
+ UPDATE public."HomeOwner" SET owner_status='revoked' WHERE home_id=h AND subject_id=o;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('c',64)),'OWNERSHIP_MANAGE_REQUIRED');
+ UPDATE public."HomeOwner" SET owner_status='verified' WHERE home_id=h AND subject_id=o;
+ UPDATE public."HomeOccupancy" SET age_band='teen' WHERE home_id=h AND user_id=o;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('c',64)),'OWNERSHIP_MANAGE_REQUIRED');
+ UPDATE public."HomeOccupancy" SET age_band='adult' WHERE home_id=h AND user_id=o;
+ -- Current claim role never silently rewrites a sent invitation into ownership.
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(216),o,'issue',NULL,repeat('d',64)); PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ UPDATE public."HomeOwnershipClaim" SET claim_type='owner' WHERE id=pg_temp.cm_id(216);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(216),pg_temp.cm_id(16),'accept',i),'CLAIM_INVITE_CHANGED');
+ UPDATE public."HomeOwnershipClaim" SET claim_type='resident' WHERE id=pg_temp.cm_id(216);
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(216),pg_temp.cm_id(16),'accept',i); PERFORM pg_temp.cm_expect(r);
+ IF r->>'acceptedRoleBase'<>'lease_resident' OR r->>'acceptedAsOwner'<>'false' OR r->>'claimPhaseV2'<>'merged_into_household'
+  OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=pg_temp.cm_id(16)) THEN RAISE EXCEPTION 'Residency was converted to ownership'; END IF;
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(217),o,'issue',NULL,repeat('e',64)); PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(217),pg_temp.cm_id(17),'accept',i);PERFORM pg_temp.cm_expect(r);
+ IF r->>'acceptedRoleBase'<>'admin' OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=pg_temp.cm_id(17)) THEN RAISE EXCEPTION 'Admin was converted to ownership'; END IF;
+ -- Claim identity shortcut does not substitute for confirmed identity.
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(218),o,'issue',NULL,repeat('f',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(218),pg_temp.cm_id(18),'accept',i),'IDENTITY_CONFIRMATION_REQUIRED');
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(219),o,'issue',NULL,repeat('1',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(219),pg_temp.cm_id(19),'accept',i);PERFORM pg_temp.cm_expect(r);
+
+ -- A current failed identity cannot use older verified evidence as a bypass.
+ INSERT INTO public."HomeVerificationEvidence"(id,claim_id,evidence_type,status)
+  VALUES(pg_temp.cm_id(318),pg_temp.cm_id(218),'idv','verified');
+ UPDATE public."HomeOwnershipClaim" SET identity_status='failed' WHERE id=pg_temp.cm_id(218);
+ SELECT id INTO i FROM public."HomeInvite" WHERE home_id=h AND invitee_user_id=pg_temp.cm_id(18) AND status='pending';
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(218),pg_temp.cm_id(18),'accept',i),'IDENTITY_CONFIRMATION_REQUIRED');
+ DELETE FROM public."HomeVerificationEvidence" WHERE id=pg_temp.cm_id(318);
+ -- Home proof source/method changes require the issuer to reconsider the claim.
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(213),o,'issue',NULL,repeat('6',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ UPDATE public."HomeOwnershipClaim" SET method='vouch' WHERE id=pg_temp.cm_id(213);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(213),pg_temp.cm_id(13),'accept',i),'CLAIM_INVITE_CHANGED');
+ -- Co-owner admission waits for existing future windows without deleting them.
+ INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,verification_status,access_start_at,access_end_at)
+  VALUES(h,pg_temp.cm_id(14),'member','member','pending_doc',now()+interval '1 day',now()+interval '2 days');
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(214),o,'issue',NULL,repeat('7',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(214),pg_temp.cm_id(14),'accept',i),'CLAIM_ACCESS_NOT_STARTED');
+ IF EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=pg_temp.cm_id(14))
+  OR (SELECT verification_status FROM public."HomeOccupancy" WHERE home_id=h AND user_id=pg_temp.cm_id(14))<>'pending_doc'
+  OR (SELECT access_start_at FROM public."HomeOccupancy" WHERE home_id=h AND user_id=pg_temp.cm_id(14))<>now()+interval '1 day' THEN
+  RAISE EXCEPTION 'Future access activated ownership or changed the schedule'; END IF;
+ -- A legitimate legacy primary with no ownership history stays compatible.
+ INSERT INTO public."HomeOwnershipClaim"(id,home_id,claimant_user_id,claim_type,state,method,claim_phase_v2,identity_status)
+  VALUES(pg_temp.cm_id(221),pg_temp.cm_id(101),pg_temp.cm_id(21),'owner','submitted','doc_upload','under_review','verified');
+ r:=public.mutate_home_claim_invitation(pg_temp.cm_id(101),pg_temp.cm_id(221),pg_temp.cm_id(20),'issue',NULL,repeat('8',64));PERFORM pg_temp.cm_expect(r);
+ r:=public.mutate_home_claim_invitation(pg_temp.cm_id(101),pg_temp.cm_id(221),pg_temp.cm_id(21),'accept',(r->'invitation'->>'id')::uuid);PERFORM pg_temp.cm_expect(r);
+ IF (SELECT owner_id FROM public."Home" WHERE id=pg_temp.cm_id(101))<>pg_temp.cm_id(20)
+  OR NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=pg_temp.cm_id(101) AND subject_id=pg_temp.cm_id(21)
+   AND owner_status='verified' AND NOT is_primary_owner) THEN RAISE EXCEPTION 'Legacy primary ownership was reassigned'; END IF;
+ -- Pending co-owner evidence tier and an already verified member's timestamps
+ -- survive promotion, rather than being flattened by occupancy templates.
+ INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,verification_tier)
+  VALUES(h,pg_temp.cm_id(15),'pending','strong');
+ INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status,verified_at,verification_expires_at)
+  VALUES(h,pg_temp.cm_id(15),'member','member','adult','verified',now()-interval '2 days',now()+interval '20 days');
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(215),o,'issue',NULL,repeat('9',64));PERFORM pg_temp.cm_expect(r);
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(215),pg_temp.cm_id(15),'accept',(r->'invitation'->>'id')::uuid);PERFORM pg_temp.cm_expect(r);
+ IF NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_id=pg_temp.cm_id(15) AND owner_status='verified' AND verification_tier='strong')
+  OR (r->'occupancy'->>'verified_at')::timestamptz<>now()-interval '2 days'
+  OR (r->'occupancy'->>'verification_expires_at')::timestamptz<>now()+interval '20 days' THEN RAISE EXCEPTION 'Promotion reset historical proof or verification dates'; END IF;
+
+ -- A missing current occupancy or contradictory terminal outcome cannot make
+ -- an accepted token look like a valid current receipt.
+ SELECT id INTO i FROM public."HomeInvite" WHERE home_id=h AND invitee_user_id=pg_temp.cm_id(15) AND status='accepted';
+ DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=pg_temp.cm_id(15);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(215),pg_temp.cm_id(15),'accept',i),'CLAIM_INVITE_ALREADY_USED');
+ SELECT id INTO i FROM public."HomeInvite" WHERE home_id=h AND invitee_user_id=pg_temp.cm_id(19) AND status='accepted';
+ UPDATE public."HomeOwnershipClaim" SET terminal_reason='revoked_after_challenge' WHERE id=pg_temp.cm_id(219);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(219),pg_temp.cm_id(19),'accept',i),'CLAIM_INVITE_ALREADY_USED');
+ -- Legacy or malformed owner-role intent requires explicit reissue, no field repair.
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('2',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ UPDATE public."HomeInvite" SET admission_policy=NULL,proposed_role='member',proposed_role_base='member' WHERE id=i;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),pg_temp.cm_id(9),'accept',i),'CLAIM_INVITE_CHANGED');
+ r:=public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),o,'issue',NULL,repeat('3',64));PERFORM pg_temp.cm_expect(r);
+ IF r->'invitation'->>'id'=i::text OR (SELECT status FROM public."HomeInvite" WHERE id=i)<>'revoked' THEN RAISE EXCEPTION 'Legacy invitation was repaired in place'; END IF;
+ i:=(r->'invitation'->>'id')::uuid;
+ UPDATE public."HomeRolePermission" SET allowed=false WHERE role_base='owner' AND permission='ownership.transfer';
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),pg_temp.cm_id(9),'accept',i),'CLAIM_INVITE_CHANGED');
+ UPDATE public."HomeRolePermission" SET allowed=true WHERE role_base='owner' AND permission='ownership.transfer';
+ UPDATE public."HomeInvite" SET expires_at=now()-interval '1 second' WHERE id=i;
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(209),pg_temp.cm_id(9),'accept',i),'CLAIM_INVITE_EXPIRED');
+ -- Known inactive source states, terminal outcomes and expiry cannot reenter.
+ FOREACH next_state IN ARRAY ARRAY['approved','rejected','revoked'] LOOP
+  UPDATE public."HomeOwnershipClaim" SET state=next_state::public.ownership_claim_state WHERE id=pg_temp.cm_id(210);
+  PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(210),o,'issue',NULL,repeat('4',64)),'CLAIM_NOT_ELIGIBLE');
+ END LOOP;
+ UPDATE public."HomeOwnershipClaim" SET state='submitted',expires_at=now()-interval '1 second' WHERE id=pg_temp.cm_id(210);
+ PERFORM pg_temp.cm_expect(public.mutate_home_claim_invitation(h,pg_temp.cm_id(210),o,'issue',NULL,repeat('4',64)),'CLAIM_NOT_ELIGIBLE');
+END $$;
+RESET ROLE;
+-- Any late write failure rolls back HomeOwner, occupancy, claim, invite and audit.
+CREATE FUNCTION pg_temp.cm_abort_accept() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.status='accepted' AND NEW.invitee_user_id=pg_temp.cm_id(12) THEN RAISE EXCEPTION 'synthetic late acceptance failure'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER cm_abort_accept BEFORE UPDATE ON public."HomeInvite" FOR EACH ROW EXECUTE FUNCTION pg_temp.cm_abort_accept();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE r jsonb; i uuid; before_claim jsonb; n integer; BEGIN
+ r:=public.mutate_home_claim_invitation(pg_temp.cm_id(100),pg_temp.cm_id(212),pg_temp.cm_id(1),'issue',NULL,repeat('5',64));PERFORM pg_temp.cm_expect(r);i:=(r->'invitation'->>'id')::uuid;
+ SELECT to_jsonb(c) INTO before_claim FROM public."HomeOwnershipClaim"c WHERE id=pg_temp.cm_id(212);
+ SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=pg_temp.cm_id(100);
+ BEGIN
+  PERFORM public.mutate_home_claim_invitation(pg_temp.cm_id(100),pg_temp.cm_id(212),pg_temp.cm_id(12),'accept',i);
+  RAISE EXCEPTION 'Expected synthetic failure';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'synthetic late acceptance failure' THEN RAISE; END IF; END;
+ IF EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=pg_temp.cm_id(100) AND subject_id=pg_temp.cm_id(12))
+  OR EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=pg_temp.cm_id(100) AND user_id=pg_temp.cm_id(12))
+  OR (SELECT to_jsonb(c) FROM public."HomeOwnershipClaim"c WHERE id=pg_temp.cm_id(212)) IS DISTINCT FROM before_claim
+  OR (SELECT status FROM public."HomeInvite" WHERE id=i)<>'pending'
+  OR (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=pg_temp.cm_id(100))<>n THEN RAISE EXCEPTION 'Late failure left partial ownership'; END IF;
+END $$;
+RESET ROLE;
+DROP TRIGGER cm_abort_accept ON public."HomeInvite";
+DO $$ BEGIN
+ IF (SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM public."HomeVerificationEvidence"e)
+  IS DISTINCT FROM (SELECT rows FROM claim_merge_evidence_before) THEN RAISE EXCEPTION 'Evidence was transferred, rewritten or deleted'; END IF;
+ IF (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission"r)
+  IS DISTINCT FROM (SELECT rows FROM claim_merge_roles_before) THEN RAISE EXCEPTION 'Claim merge changed role defaults'; END IF;
+END $$;
+ROLLBACK;

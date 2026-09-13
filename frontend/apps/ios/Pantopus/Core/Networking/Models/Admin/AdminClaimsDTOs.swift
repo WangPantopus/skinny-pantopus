@@ -33,7 +33,7 @@ public enum AdminClaimBucket: String, Sendable, Hashable {
 /// A13.3 reshape renamed the reviewer-facing verdict from "Request more
 /// info" to "Challenge" (an inline composer with reason chips), but the
 /// backend route still classifies it as `request_more_info` and flips the
-/// claim into the `challenged` phase. See `backend/routes/admin.js:399`.
+/// ordinary claim into `needs_more_info`; dispute adjudication is separate.
 public enum AdminClaimReviewAction: String, Codable, Sendable, Hashable {
     case approve
     case reject
@@ -123,7 +123,7 @@ public struct AdminClaimCountsResponse: Decodable, Sendable, Hashable {
 }
 
 /// Single evidence item attached to a claim. Mirrors the projection
-/// built in `/api/admin/claims/:claimId` — file URL is presigned.
+/// built in `/api/admin/claims/:claimId`; legacy object references are withheld.
 public struct AdminClaimEvidenceDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let evidenceType: String
@@ -134,6 +134,8 @@ public struct AdminClaimEvidenceDTO: Decodable, Sendable, Hashable, Identifiable
     public let fileName: String?
     public let fileSize: Int?
     public let mimeType: String?
+    public let eligibleForReview: Bool?
+    public let availabilityCode: String?
     public let createdAt: String
 
     private enum CodingKeys: String, CodingKey {
@@ -144,6 +146,8 @@ public struct AdminClaimEvidenceDTO: Decodable, Sendable, Hashable, Identifiable
         case fileName = "file_name"
         case fileSize = "file_size"
         case mimeType = "mime_type"
+        case eligibleForReview = "eligible_for_review"
+        case availabilityCode = "availability_code"
         case createdAt = "created_at"
     }
 }
@@ -167,6 +171,15 @@ public struct AdminClaimRecordDTO: Decodable, Sendable, Hashable, Identifiable {
     /// verified | failed`. Drives the "Verified ID" trust chip on the
     /// A13.3 claimant card.
     public let identityStatus: String?
+    public let reviewToken: String?
+    public let claimPhaseV2: String?
+    public let challengeState: String?
+    public let routingClassification: String?
+
+    var requiresDisputeReview: Bool {
+        state == "disputed" || claimPhaseV2 == "challenged" || challengeState == "challenged"
+            || routingClassification == "challenge_claim"
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id, state, method
@@ -180,6 +193,10 @@ public struct AdminClaimRecordDTO: Decodable, Sendable, Hashable, Identifiable {
         case reviewedAt = "reviewed_at"
         case reviewNote = "review_note"
         case identityStatus = "identity_status"
+        case reviewToken = "review_token"
+        case claimPhaseV2 = "claim_phase_v2"
+        case challengeState = "challenge_state"
+        case routingClassification = "routing_classification"
     }
 }
 
@@ -195,22 +212,18 @@ public struct AdminClaimDetailResponse: Decodable, Sendable, Hashable {
 public struct AdminClaimReviewRequest: Encodable, Sendable, Hashable {
     public let action: AdminClaimReviewAction
     public let note: String?
+    public let reviewToken: String
 
-    public init(action: AdminClaimReviewAction, note: String? = nil) {
+    public init(action: AdminClaimReviewAction, reviewToken: String, note: String? = nil) {
         self.action = action
         self.note = note
+        self.reviewToken = reviewToken
     }
-}
-
-/// Generic ack returned by the review endpoint — we ignore the body and
-/// refetch the bucket / counts on success.
-public struct AdminClaimReviewResponse: Decodable, Sendable, Hashable {
-    public let action: String?
-    public let newState: String?
-    public let claimId: String?
-    public let homeId: String?
 
     private enum CodingKeys: String, CodingKey {
-        case action, newState, claimId, homeId
+        case action, note
+        case reviewToken = "review_token"
     }
 }
+
+public typealias AdminClaimReviewResponse = HomeClaimDecisionReceipt

@@ -42,6 +42,7 @@ public enum YouRoute: Hashable {
     case legal
     case legalContent(LegalDocument)
     case addHome
+    case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Mirrors RN
     /// `src/app/homes/find.tsx`.
     case findHome
@@ -53,6 +54,7 @@ public enum YouRoute: Hashable {
     /// tax-bill document set (RN
     /// `homes/[id]/claim-owner/evidence.tsx?verificationType=residency`).
     case verifyResidency(homeId: String)
+    case residencyStatus(homeId: String)
     /// T5.2.4 — cross-listing Offers (incoming + outgoing).
     case offers
     /// T5.3.1 — My bids. The "me.bids" action tile pushes here.
@@ -245,6 +247,7 @@ public enum YouRoute: Hashable {
     /// home id resolved by the Me VM. Distinct from `.myTasks` which is
     /// the posted-to-neighbours gig list.
     case homeTasks(homeId: String)
+    case householdTaskDetail(homeId: String, taskId: String)
     /// P2.4 — Add a new household task. Reached from the household
     /// tasks list FAB.
     case addHouseholdTask(homeId: String)
@@ -366,8 +369,7 @@ public enum YouRoute: Hashable {
     /// A12.7 — Postcard verification / code entry. Reached from the
     /// waiting room's Verification Center action cards.
     case postcardVerification(homeId: String)
-    /// "This isn't my home" — the Leave home confirm, which owns
-    /// `POST /api/homes/:id/move-out`.
+    /// "This isn't my home" — review and recover protected self-removal.
     case leaveHome(homeId: String)
     /// Four-moment Ceremonial Mail compose wizard. Production entry point
     /// is the Mailbox root's compose FAB.
@@ -1110,18 +1112,19 @@ public struct YouTabRoot: View {
             LegalContentView(document: doc) {
                 if !path.isEmpty { path.removeLast() }
             }
-        case .addHome:
+        case .addHome, .joinHome:
             AddHomeWizardView(
-                onOpenHomeDashboard: { homeId in
-                    path.removeAll { $0 == .addHome }
-                    path.append(.homeDashboard(homeId: homeId))
+                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
+                onOpenHomes: {
+                    path.removeAll { $0.isHomeEntry || $0 == .myHomes }
+                    path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.claimOwnership(homeId: homeId))
                 },
                 onOpenWaitingRoom: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.waitingRoom(homeId: homeId))
                 }
             )
@@ -1145,20 +1148,7 @@ public struct YouTabRoot: View {
                 )
             )
         case let .claimStatus(claimId):
-            StatusWaitingView(
-                content: .underReview(homeName: nil),
-                onAction: { card in
-                    if card.id == "addEvidence", !path.isEmpty {
-                        path.removeLast()
-                    }
-                },
-                onPrimary: { _ in
-                    if !path.isEmpty { path.removeLast() }
-                },
-                onSecondary: { _ in
-                    if !claimId.isEmpty, !path.isEmpty { path.removeLast() }
-                }
-            )
+            ClaimEvidenceDestinationView(claimId: claimId)
         case let .claimOwnership(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,
@@ -1180,6 +1170,15 @@ public struct YouTabRoot: View {
                     path.append(.findHome)
                 }
             )
+        case let .residencyStatus(homeId):
+            HomeResidencyProgressView(viewModel: HomeResidencyProgressViewModel(homeId: homeId)) { destination in
+                switch destination {
+                case .home: path.append(.homeDashboard(homeId: homeId))
+                case .mail: path.append(.postcardVerification(homeId: homeId))
+                case .ownership: path.append(.claimOwnership(homeId: homeId))
+                case .addHome: path.append(.joinHome(homeId: homeId))
+                }
+            }
         case let .verifyResidency(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,
@@ -2149,6 +2148,7 @@ public struct YouTabRoot: View {
                     onOpenHome: { homeId in
                         Task { @MainActor in path.append(.homeDashboard(homeId: homeId)) }
                     },
+                    onOpenTasks: { homeId in Task { @MainActor in path.append(.homeTasks(homeId: homeId)) } },
                     onAddHome: {
                         Task { @MainActor in path.append(.addHome) }
                     },
@@ -2159,7 +2159,7 @@ public struct YouTabRoot: View {
                         Task { @MainActor in path.append(.claimOwnership(homeId: homeId)) }
                     },
                     onVerifyResidency: { homeId in
-                        Task { @MainActor in path.append(.verifyResidency(homeId: homeId)) }
+                        Task { @MainActor in path.append(.residencyStatus(homeId: homeId)) }
                     }
                 )
             )
@@ -2274,27 +2274,21 @@ public struct YouTabRoot: View {
             HouseholdTasksListView(
                 viewModel: HouseholdTasksListViewModel(
                     homeId: homeId,
-                    onOpenTask: { taskId in
-                        Task { @MainActor in
-                            path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    },
-                    onAddTask: {
-                        Task { @MainActor in path.append(.addHouseholdTask(homeId: homeId)) }
-                    },
-                    onEditRecurring: { taskId in
-                        Task { @MainActor in
-                            path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    }
+                    onOpenTask: { taskId in path.append(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
+                    onAddTask: { path.append(.addHouseholdTask(homeId: homeId)) }
                 )
             )
+        case let .householdTaskDetail(homeId, taskId):
+            HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
+                path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
+            }
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
-                onClose: { Task { @MainActor in pop() } },
-                onCreated: { _ in
+                onClose: { pop() },
+                onCreated: { taskId in
                     if !path.isEmpty { path.removeLast() }
+                    path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
                 }
             )
         case let .editHouseholdTask(homeId, taskId):
@@ -2631,13 +2625,18 @@ public struct YouTabRoot: View {
                 }
             )
         case let .postcardVerification(homeId):
-            PostcardVerificationView(
-                homeId: homeId,
+            HomePostalVerificationView(
+                viewModel: .live(homeId: homeId),
                 onClose: { if !path.isEmpty { path.removeLast() } },
-                onVerified: { _ in
-                    // Pop the tracker — the room refreshes its
-                    // verification status on next appearance.
+                onNavigate: { destination in
                     if !path.isEmpty { path.removeLast() }
+                    switch destination {
+                    case .home: path.append(.homeDashboard(homeId: homeId))
+                    case .residency:
+                        if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
+                    case .ownership: path.append(.claimOwnership(homeId: homeId))
+                    case .addHome: path.append(.joinHome(homeId: homeId))
+                    }
                 }
             )
         case let .leaveHome(homeId):
@@ -2645,8 +2644,8 @@ public struct YouTabRoot: View {
                 viewModel: LeaveHomeViewModel(homeId: homeId),
                 onBack: { pop() },
                 onLeft: {
-                    // Move-out revokes membership, so the waiting room
-                    // and dashboard for this home now 403 — drop both.
+                    // Leave old Home screens after acknowledging the original.
+                    // Its receipt does not establish current Home access.
                     path.removeAll { route in
                         switch route {
                         case let .leaveHome(id) where id == homeId: true
@@ -2694,4 +2693,19 @@ public struct YouTabRoot: View {
 #Preview {
     YouTabRoot()
         .environment(AuthManager.previewSignedIn)
+}
+
+/// The selected Home survives address editing and original-request recovery.
+extension YouRoute {
+    var homeEntryTarget: String? {
+        if case let .joinHome(homeId) = self { return homeId }
+        return nil
+    }
+
+    var isHomeEntry: Bool {
+        switch self {
+        case .addHome, .joinHome: true
+        default: false
+        }
+    }
 }

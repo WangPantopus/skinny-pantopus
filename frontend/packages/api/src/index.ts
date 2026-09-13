@@ -18,6 +18,7 @@ export {
   refreshAuthSession,
   setTokenCache,
   onTokenChange,
+  AUTH_SESSION_CHANGE_KEY,
   configureApiClient,
   apiRequest,
   get,
@@ -76,6 +77,8 @@ export * as hub from './endpoints/hub';                     // Hub (Mission Cont
 export * as location from './endpoints/location';           // Viewing Location
 export * as listings from './endpoints/listings';           // Marketplace Listings
 export * as savedPlaces from './endpoints/savedPlaces';    // Saved Places
+export type { RelationshipAction, RelationshipCommand, RelationshipReceipt, RelationshipReview, RelationshipResponse } from './endpoints/homeOwnership';
+export type { ResidencyReviewAction, ResidencyReviewRole, ResidencyReviewCommand, ResidencyReviewReceipt, ResidencyReview, ResidencyReviewResponse } from './endpoints/homes';
 export * as homeOwnership from './endpoints/homeOwnership'; // Home Ownership (claims, owners, quorum, disputes)
 export * as homeGuest from './endpoints/homeGuest';         // Public guest pass & shared resource views
 export * as admin from './endpoints/admin';                 // Platform admin
@@ -130,6 +133,9 @@ export {
   getGigMedia,
   deleteGigMedia,
   uploadHomeTaskMedia,
+  getHomeTaskMedia,
+  downloadHomeTaskMedia,
+  deleteHomeTaskMedia,
   uploadChatMedia,
   uploadOwnershipEvidence,
   uploadPostMedia,
@@ -140,6 +146,7 @@ export {
   uploadMailAttachments,
   uploadPersonaMedia,
 } from './endpoints/upload';  // NEW
+export type { HomeTaskMedia } from './endpoints/upload';
 export { createReview, getUserReviews, getGigReviews, getPendingReviews } from './endpoints/reviews';   // NEW
 export { createBusiness, getMyBusinesses, getBusiness, getBusinessDashboard, updateBusiness, getVerificationStatus, selfAttest, uploadVerificationEvidence, reviewVerificationEvidence, getFoundingOfferStatus, claimFoundingOffer } from './endpoints/businesses';
 export { getMyBusinessAccess, getTeamMembers, addTeamMember } from './endpoints/businessIam';
@@ -483,3 +490,12 @@ export type {
   HomeCalendarUnionEvent,
   DecodedSchedulingError,
 } from '@pantopus/types';
+
+export { assertHomeTaskSession, taskSessionChanged } from './taskSessionScope';
+export type { HomeTaskSessionScope } from './taskSessionScope';
+export { taskSessionHeaders } from './taskSessionScope';
+
+export * as claimEvidence from './endpoints/claimEvidence';
+export type { ClaimEvidenceSession } from './endpoints/claimEvidence';
+
+export * as homeMemberRemovals from './endpoints/homeMemberRemovals';

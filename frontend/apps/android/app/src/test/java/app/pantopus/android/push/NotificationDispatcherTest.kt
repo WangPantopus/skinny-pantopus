@@ -72,6 +72,32 @@ class NotificationDispatcherTest {
     // MARK: - route
 
     @Test
+    fun task_push_metadata_opens_exact_task_before_legacy_dashboard_link() {
+        val home = "a1000000-0000-4000-8000-000000000001"
+        val task = "b1000000-0000-4000-8000-000000000002"
+        for (type in listOf("task_assigned", "task_completed")) {
+            val result =
+                dispatcher.route(
+                    mapOf(
+                        "type" to type,
+                        "home_id" to home,
+                        "task_id" to task,
+                        "link" to "/app/homes/legacy/dashboard?tab=tasks",
+                    ),
+                )
+            assertEquals("/app/homes/$home/tasks/$task", result.deepLink)
+            assertEquals(NotificationDispatcher.Channel.SYSTEM, result.channel)
+        }
+    }
+
+    @Test
+    fun legacy_task_push_without_exact_metadata_keeps_its_existing_destination() {
+        val link = "/app/homes/legacy/dashboard?tab=tasks"
+        assertEquals(link, dispatcher.route(mapOf("type" to "task_assigned", "link" to link)).deepLink)
+        assertEquals(link, dispatcher.route(mapOf("type" to "task_completed", "link" to link, "task_id" to "wrong")).deepLink)
+    }
+
+    @Test
     fun route_carries_title_body_and_deep_link_from_data() {
         val routing =
             dispatcher.route(

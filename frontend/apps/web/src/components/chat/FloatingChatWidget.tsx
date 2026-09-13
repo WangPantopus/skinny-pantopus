@@ -23,8 +23,9 @@ export default function FloatingChatWidget() {
   const [view, setView] = useState<WidgetView>('closed');
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
 
-  // Don't render on chat pages
-  if (pathname?.startsWith('/app/chat')) return null;
+  // Keep destructive review/recovery text unobstructed. Messages remain in
+  // the app header while this focused flow is open.
+  if (pathname?.startsWith('/app/chat') || pathname === '/app/homes/member-removals') return null;
 
   const handleSelectConversation = (chat: ActiveChat) => {
     setActiveChat(chat);
@@ -58,6 +59,7 @@ export default function FloatingChatWidget() {
     return (
       <button
         type="button"
+        aria-label="Open messages panel"
         onClick={() => setView('list')}
         className="fixed bottom-[calc(6rem+var(--fab-lift,0px))] right-6 z-40 w-14 h-14 rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 hover:shadow-xl transition-all duration-200 flex items-center justify-center"
       >

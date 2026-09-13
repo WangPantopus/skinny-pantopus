@@ -28,7 +28,8 @@ struct ClaimSuccessStep: View {
         // so the full `StatusWaitingView` would stack a second one. Mirrors
         // Android's `ClaimOwnershipWizardScreen` using `StatusWaitingBody`.
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            StatusWaitingBodyView(content: .claimSubmitted(homeName: homeName))
+            Text("Document saved for review").font(.title2)
+            Text("Your claim is pending. You can reopen its documents from My claims. Uploading does not change household access.")
             if let outcomeNote {
                 Text(outcomeNote)
                     .pantopusTextStyle(.caption)

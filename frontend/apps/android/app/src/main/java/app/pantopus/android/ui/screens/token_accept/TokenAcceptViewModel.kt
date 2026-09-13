@@ -10,10 +10,18 @@ import app.pantopus.android.data.api.models.token_accept.HomeInviteDetailsDto
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.homes.HomeInvitationPreview
+import app.pantopus.android.data.homes.homeTaskUUID
 import app.pantopus.android.data.token_accept.TokenAcceptRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +42,7 @@ class TokenAcceptViewModel
         private val repository: TokenAcceptRepository,
         private val auth: AuthRepository,
         savedStateHandle: SavedStateHandle,
+        private val invitations: HomeInvitationDecisionFactory,
     ) : ViewModel() {
         private val token: String = savedStateHandle.get<String>(TOKEN_KEY) ?: ""
 
@@ -45,98 +54,166 @@ class TokenAcceptViewModel
         private val _dismissEvents = MutableStateFlow(0)
         val dismissEvents: StateFlow<Int> = _dismissEvents.asStateFlow()
 
+        private var generation = 0L
+        private var visible = false
+        private var lifetime: Job? = null
+        private var session: HomeClaimSessionScope? = null
+
+        fun pause() {
+            generation++
+            visible = false
+            lifetime?.cancel()
+            lifetime = null
+            session = null
+            _state.value = TokenAcceptUiState.Loading
+        }
+
         fun load() {
-            if (token.isBlank()) {
-                _state.value = TokenAcceptUiState.Expired("Missing invite token.")
+            pause()
+            visible = true
+            val revision = generation
+            val job = SupervisorJob(viewModelScope.coroutineContext[Job])
+            lifetime = job
+            val scope = CoroutineScope(viewModelScope.coroutineContext + job)
+            val current = invitations.session(scope)
+            session = current
+            if (token.isBlank() || token.length > 512) {
+                _state.value = TokenAcceptUiState.Expired("Missing or invalid invitation link.")
                 return
             }
-            _state.value = TokenAcceptUiState.Loading
-            viewModelScope.launch {
-                val identity = identityChip()
-                val homeAsync = async { repository.homeInvite(token) }
+            scope.launch {
+                current.invalidated.collect { invalidated ->
+                    if (invalidated && visible && generation == revision) {
+                        pause()
+                        _state.value = TokenAcceptUiState.Error("Your session changed. Reopen the invitation to continue.")
+                    }
+                }
+            }
+            scope.launch {
+                try {
+                    current.requireCurrent()
+                    val original =
+                        try {
+                            invitations.hasOriginal(current)
+                        } catch (
+                            cancelled: CancellationException,
+                        ) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            true
+                        }
+                    current.requireCurrent()
+                    if (!isCurrent(revision)) return@launch
+                    if (original) {
+                        _state.value = TokenAcceptUiState.HomeInvitation
+                        return@launch
+                    }
+                    val resolved = resolveOffer()
+                    current.requireCurrent()
+                    if (isCurrent(revision)) _state.value = resolved
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (visible && generation == revision) {
+                        _state.value = TokenAcceptUiState.Error("The invitation could not be checked right now. Try again.")
+                    }
+                }
+            }
+        }
+
+        private suspend fun resolveOffer(): TokenAcceptUiState =
+            coroutineScope {
+                val homeAsync = async { invitations.preview(token) }
                 val seatAsync = async { repository.businessSeatInvite(token) }
                 val guestAsync = async { repository.guestPass(token) }
                 val home = homeAsync.await()
                 val seat = seatAsync.await()
                 val guest = guestAsync.await()
-
-                if (home is NetworkResult.Success && home.data.invitation != null) {
-                    val response = home.data
-                    val invitation = response.invitation
-                    if (response.expired == true || invitation?.status == "expired") {
-                        _state.value =
-                            TokenAcceptUiState.Expired("This invitation has expired. Ask the sender for a new link.")
-                        return@launch
-                    }
-                    if (response.alreadyUsed == true || invitation?.status == "accepted") {
-                        _state.value = TokenAcceptUiState.Expired("This invitation has already been used.")
-                        return@launch
-                    }
-                    if (invitation != null) {
-                        _state.value =
-                            TokenAcceptUiState.Ready(makeHomeOffer(response, invitation, identity))
-                        return@launch
-                    }
+                when {
+                    home == HomeInvitationPreview.Found -> TokenAcceptUiState.HomeInvitation
+                    seat is NetworkResult.Success && homeTaskUUID(seat.data.seatId) ->
+                        TokenAcceptUiState.Ready(makeSeatOffer(seat.data, identityChip()))
+                    guest is NetworkResult.Success && guest.data.pass != null ->
+                        TokenAcceptUiState.Ready(makeGuestOffer(guest.data.pass, identityChip()))
+                    home == HomeInvitationPreview.Missing && missing(seat) && missing(guest) ->
+                        TokenAcceptUiState.Expired("This invitation could not be found. Check the complete link with the sender.")
+                    else -> TokenAcceptUiState.Error("The invitation could not be checked right now. Try again.")
                 }
-                if (seat is NetworkResult.Success && seat.data.seatId != null) {
-                    _state.value = TokenAcceptUiState.Ready(makeSeatOffer(seat.data, identity))
-                    return@launch
-                }
-                if (guest is NetworkResult.Success && guest.data.pass != null) {
-                    _state.value = TokenAcceptUiState.Ready(makeGuestOffer(guest.data.pass, identity))
-                    return@launch
-                }
-                _state.value =
-                    TokenAcceptUiState.Expired("We couldn't find this invitation. It might have expired or been used.")
             }
-        }
+
+        private fun isCurrent(revision: Long): Boolean = visible && generation == revision && session?.isCurrent == true
+
+        private fun missing(result: NetworkResult<*>): Boolean = result is NetworkResult.Failure && result.error.code == 404
 
         fun accept() {
             val ready = _state.value as? TokenAcceptUiState.Ready ?: return
+            val revision = generation
+            if (!isCurrent(revision)) return
             val offer = ready.offer
+            if (offer.inviteType == InviteType.HomeInvite) {
+                _state.value = TokenAcceptUiState.HomeInvitation
+                return
+            }
             _state.value = TokenAcceptUiState.Accepting(offer)
             viewModelScope.launch {
                 val result =
                     when (offer.inviteType) {
-                        InviteType.HomeInvite -> repository.acceptHomeInvite(token)
                         InviteType.BusinessSeat -> repository.acceptBusinessSeat(token)
-                        InviteType.GuestPass -> NetworkResult.Success(Unit)
+                        else -> NetworkResult.Success(Unit)
                     }
-                when (result) {
-                    is NetworkResult.Success<*> -> {
-                        val message =
-                            when (offer.inviteType) {
-                                InviteType.HomeInvite ->
-                                    "You're now a member of ${offer.venue}."
-                                InviteType.BusinessSeat ->
-                                    "Welcome to ${offer.venue} — your seat is active."
-                                InviteType.GuestPass ->
-                                    "Your guest pass is active. Welcome to ${offer.venue}."
-                            }
-                        _state.value = TokenAcceptUiState.Accepted(offer, message)
+                if (!isCurrent(revision)) return@launch
+                _state.value =
+                    when (result) {
+                        is NetworkResult.Success<*> ->
+                            TokenAcceptUiState.Accepted(
+                                offer,
+                                if (offer.inviteType == InviteType.GuestPass) {
+                                    "Your guest pass is ready to view."
+                                } else {
+                                    "Your business seat acceptance is saved."
+                                },
+                            )
+                        is NetworkResult.Failure ->
+                            TokenAcceptUiState.Error(
+                                "The acceptance could not be confirmed. Retry to check the invitation's current status.",
+                            )
                     }
-                    is NetworkResult.Failure ->
-                        _state.value = TokenAcceptUiState.Error("Couldn't accept this invitation.")
-                }
             }
         }
 
         fun decline() {
             val ready = _state.value as? TokenAcceptUiState.Ready ?: return
+            val revision = generation
+            if (!isCurrent(revision)) return
             val offer = ready.offer
+            if (offer.inviteType == InviteType.HomeInvite) {
+                _state.value = TokenAcceptUiState.HomeInvitation
+                return
+            }
+            _state.value = TokenAcceptUiState.Accepting(offer)
             viewModelScope.launch {
-                when (offer.inviteType) {
-                    InviteType.HomeInvite ->
-                        offer.invitationId?.let { repository.declineHomeInvite(it) }
-                    InviteType.BusinessSeat ->
-                        repository.declineBusinessSeat(token)
-                    InviteType.GuestPass -> Unit
-                }
-                _state.value = TokenAcceptUiState.Declined
+                val result =
+                    if (offer.inviteType == InviteType.BusinessSeat) {
+                        repository.declineBusinessSeat(
+                            token,
+                        )
+                    } else {
+                        NetworkResult.Success(Unit)
+                    }
+                if (!isCurrent(revision)) return@launch
+                _state.value =
+                    when (result) {
+                        is NetworkResult.Success<*> -> TokenAcceptUiState.Declined
+                        is NetworkResult.Failure ->
+                            TokenAcceptUiState.Error(
+                                "The decline could not be confirmed. Retry to check the invitation's current status.",
+                            )
+                    }
             }
         }
 
         fun dismiss() {
+            pause()
             _dismissEvents.value = _dismissEvents.value + 1
         }
 

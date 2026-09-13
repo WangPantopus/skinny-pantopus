@@ -78,7 +78,7 @@ class ContentDetailProjectionTest {
         val content = GigDetailViewModel.Projection.project(gig, emptyList())
         assertEquals("Open · No bids yet", content.statusPill?.label)
         assertNotNull(content.hero.categoryChip)
-        assertEquals("budget · cash or transfer", content.hero.priceCaption)
+        assertEquals("budget", content.hero.priceCaption)
         assertTrue(content.statStrip.isNotEmpty())
         assertTrue(content.modules.filterIsInstance<ContentDetailModule.Description>().any { it.title == "What needs doing" })
     }
@@ -193,7 +193,7 @@ class ContentDetailProjectionTest {
         assertEquals("Message", content.dock.secondary?.label)
     }
 
-    @Test fun task_v2_without_worker_keeps_bid_dock() {
+    @Test fun task_v2_without_worker_closes_bidding_during_work() {
         val gig =
             baseGig.copy(
                 title = "Move a mattress",
@@ -204,9 +204,10 @@ class ContentDetailProjectionTest {
                 acceptedBy = "me",
                 bidCount = 1,
             )
-        // canMarkDelivered defaults false — the bidder dock holds.
+        // A viewer who cannot deliver must not be offered another bid after assignment.
         val content = GigDetailViewModel.Projection.project(gig, emptyList())
-        assertEquals("Place bid", content.dock.primary.label)
+        assertEquals("Bidding closed", content.dock.primary.label)
+        assertFalse(content.dock.primary.enabled)
     }
 
     @Test fun viewer_can_mark_delivered_gate() {

@@ -45,14 +45,14 @@ function seedFullHome() {
     id: 'ho-1',
     home_id: homeId,
     subject_id: ownerId,
-    owner_status: 'verified',
+    owner_status: 'verified', subject_type: 'user',
     tier: 'standard',
     is_primary: true,
   }]);
   seedTable('HomeOccupancy', [
-    { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, start_at: null, end_at: null },
-    { id: 'occ-admin', home_id: homeId, user_id: adminId, role: 'admin', role_base: 'admin', is_active: true, start_at: null, end_at: null },
-    { id: 'occ-member', home_id: homeId, user_id: memberId, role: 'member', role_base: 'member', is_active: true, start_at: null, end_at: null },
+    { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
+    { id: 'occ-admin', home_id: homeId, user_id: adminId, role: 'admin', role_base: 'admin', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
+    { id: 'occ-member', home_id: homeId, user_id: memberId, role: 'member', role_base: 'member', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
   ]);
   seedTable('HomeRolePermission', [
     { id: 'rp-1', role_base: 'owner', permission: 'security.manage', allowed: true },
@@ -367,7 +367,7 @@ describe('Lockdown edge cases', () => {
   test('lockdown on home with no occupants still works', async () => {
     // Remove all occupants except owner
     seedTable('HomeOccupancy', [
-      { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, start_at: null, end_at: null },
+      { id: 'occ-owner', home_id: homeId, user_id: ownerId, role: 'owner', role_base: 'owner', is_active: true, verification_status: 'verified', start_at: null, end_at: null },
     ]);
 
     const access = await checkHomePermission(homeId, ownerId, 'security.manage');

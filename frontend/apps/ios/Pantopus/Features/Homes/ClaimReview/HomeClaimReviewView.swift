@@ -23,18 +23,34 @@ public struct HomeClaimReviewView: View {
     @State private var viewModel: HomeClaimReviewViewModel
     @State private var verdictConfirm: VerdictConfirm?
     @State private var relationshipConfirm: RelationshipConfirm?
-    @State private var residencyConfirm: ResidencyConfirm?
+    @State private var residencyTarget: HomeResidencyReviewViewModel?
+    @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
+    @State private var relationshipTarget: HomeRelationshipViewModel?
 
     private let onBack: @MainActor () -> Void
 
-    public init(homeId: String, onBack: @escaping @MainActor () -> Void) {
-        _viewModel = State(initialValue: HomeClaimReviewViewModel(homeId: homeId))
+    public init(homeId: String, initialTab: HomeClaimReviewTab = .ownership, onBack: @escaping @MainActor () -> Void) {
+        let model = HomeClaimReviewViewModel(homeId: homeId)
+        model.selectedTab = initialTab
+        _viewModel = State(initialValue: model)
         self.onBack = onBack
     }
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             topBar
+            Button("Relationship decisions and recovery") {
+                relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
+            }
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
+            Button("Residency decisions and recovery") {
+                residencyTarget = .live(homeId: viewModel.homeId)
+            }
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.residencyRecovery")
             if case .loaded = viewModel.state {
                 HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             }
@@ -42,9 +58,19 @@ public struct HomeClaimReviewView: View {
         }
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeClaimReview")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            PrivateClaimEvidenceView(model: target)
+        })
+        .sheet(item: $relationshipTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            HomeRelationshipView(model: target)
+        })
+        .sheet(item: $residencyTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
+            HomeResidencyReviewView(model: target)
+        })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -65,13 +91,13 @@ public struct HomeClaimReviewView: View {
                 target.verdict.title,
                 role: target.verdict.isDestructive ? ButtonRole.destructive : nil
             ) {
-                Task { await viewModel.review(claimId: target.claimId, action: target.verdict) }
+                Task { await viewModel.review(target.snapshot, action: target.verdict) }
                 verdictConfirm = nil
             }
             .accessibilityIdentifier("homeClaimReview_verdictConfirm")
             Button("Cancel", role: .cancel) { verdictConfirm = nil }
         } message: { target in
-            Text(target.verdict.confirmBody)
+            Text(target.verdict.confirmBody + "\n\n" + target.snapshot.summary)
         }
         .confirmationDialog(
             relationshipConfirm?.title ?? "",
@@ -96,26 +122,6 @@ public struct HomeClaimReviewView: View {
         } message: { target in
             Text(target.body)
         }
-        .confirmationDialog(
-            residencyConfirm?.title ?? "",
-            isPresented: residencyDialogBinding,
-            titleVisibility: .visible,
-            presenting: residencyConfirm
-        ) { target in
-            Button(target.title, role: target.approve ? nil : ButtonRole.destructive) {
-                Task {
-                    await viewModel.reviewResidency(
-                        claimId: target.claimId,
-                        approve: target.approve
-                    )
-                }
-                residencyConfirm = nil
-            }
-            .accessibilityIdentifier("homeClaimReview_residencyConfirm")
-            Button("Cancel", role: .cancel) { residencyConfirm = nil }
-        } message: { target in
-            Text(target.body)
-        }
     }
 
     // MARK: - Chrome
@@ -124,7 +130,7 @@ public struct HomeClaimReviewView: View {
         HStack(spacing: Spacing.s0) {
             Button(action: onBack) {
                 Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
@@ -135,7 +141,7 @@ public struct HomeClaimReviewView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity)
 
-            Color.clear.frame(width: 36, height: 36)
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 52)
@@ -204,11 +210,21 @@ public struct HomeClaimReviewView: View {
             .accessibilityIdentifier("homeClaimReview_error")
         case let .loaded(data):
             switch viewModel.selectedTab {
-            case .ownership: ownershipTab(data.ownership)
-            case .residency: residencyTab(data.residency)
+            case .ownership:
+                if data.ownershipUnavailable { unavailableCollection("ownership") } else { ownershipTab(data.ownership) }
+            case .residency:
+                if data.residencyUnavailable { unavailableCollection("residency") } else { residencyTab(data.residency) }
             case .compare: compareTab(data.comparison)
             }
         }
+    }
+
+    private func unavailableCollection(_ collection: String) -> some View {
+        ErrorState(
+            headline: "Couldn't load \(collection) claims",
+            message: "Current access or claim data could not be verified. Reload to try again."
+        ) { await viewModel.refresh() }
+            .accessibilityIdentifier("homeClaimReview_\(collection)Unavailable")
     }
 
     @ViewBuilder
@@ -232,16 +248,29 @@ public struct HomeClaimReviewView: View {
                             item: item,
                             isBusy: viewModel.actionLoading?.hasPrefix("\(item.id):") ?? false,
                             onVerdict: { verdict in
-                                verdictConfirm = VerdictConfirm(claimId: item.id, verdict: verdict)
+                                Task {
+                                    if let snapshot = await viewModel.prepareReview(claimId: item.id, action: verdict) {
+                                        verdictConfirm = VerdictConfirm(snapshot: snapshot, verdict: verdict)
+                                    }
+                                }
                             },
                             onRelationship: { action in
-                                relationshipConfirm = RelationshipConfirm(
-                                    claimId: item.id,
-                                    action: action,
-                                    isOwnerClaim: item.claimType == "owner"
-                                )
+                                if action == .inviteToHousehold {
+                                    relationshipConfirm = RelationshipConfirm(
+                                        claimId: item.id, action: action, isOwnerClaim: item.claimType == "owner"
+                                    )
+                                } else {
+                                    relationshipTarget = HomeRelationshipViewModel(
+                                        homeId: viewModel.homeId,
+                                        claimId: item.id,
+                                        action: action == .flagUnknownPerson ? .flag : .decline
+                                    )
+                                }
                             }
                         )
+                        Button("Review private documents") {
+                            Task { evidenceTarget = await viewModel.makeEvidenceViewModel(claimId: item.id) }
+                        }.disabled(viewModel.actionLoading != nil)
                     }
                 }
                 .padding(Spacing.s4)
@@ -271,18 +300,10 @@ public struct HomeClaimReviewView: View {
                             item: item,
                             isBusy: viewModel.actionLoading == item.id,
                             onApprove: {
-                                residencyConfirm = ResidencyConfirm(
-                                    claimId: item.id,
-                                    displayName: item.displayName,
-                                    approve: true
-                                )
+                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .approve)
                             },
                             onReject: {
-                                residencyConfirm = ResidencyConfirm(
-                                    claimId: item.id,
-                                    displayName: item.displayName,
-                                    approve: false
-                                )
+                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .reject)
                             }
                         )
                     }
@@ -316,7 +337,11 @@ public struct HomeClaimReviewView: View {
     // MARK: - Confirm payloads
 
     private struct VerdictConfirm: Identifiable, Equatable {
-        let claimId: String
+        let snapshot: HomeClaimReviewSnapshot
+        var claimId: String {
+            snapshot.claimId
+        }
+
         let verdict: HomeClaimReviewVerdict
         var id: String {
             "\(claimId):\(verdict.rawValue)"
@@ -340,25 +365,6 @@ public struct HomeClaimReviewView: View {
         }
     }
 
-    private struct ResidencyConfirm: Identifiable, Equatable {
-        let claimId: String
-        let displayName: String
-        let approve: Bool
-        var id: String {
-            "\(claimId):\(approve)"
-        }
-
-        var title: String {
-            approve ? "Approve" : "Reject"
-        }
-
-        var body: String {
-            approve
-                ? "Are you sure you want to approve \(displayName)'s residency claim?"
-                : "Are you sure you want to reject \(displayName)'s residency claim?"
-        }
-    }
-
     private var verdictDialogBinding: Binding<Bool> {
         Binding(
             get: { verdictConfirm != nil },
@@ -370,13 +376,6 @@ public struct HomeClaimReviewView: View {
         Binding(
             get: { relationshipConfirm != nil },
             set: { if !$0 { relationshipConfirm = nil } }
-        )
-    }
-
-    private var residencyDialogBinding: Binding<Bool> {
-        Binding(
-            get: { residencyConfirm != nil },
-            set: { if !$0 { residencyConfirm = nil } }
         )
     }
 }

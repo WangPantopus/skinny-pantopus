@@ -49,7 +49,9 @@ import app.pantopus.android.data.api.services.HomeOwnershipClaimApi
 import app.pantopus.android.data.api.services.HomeOwnershipSecurityApi
 import app.pantopus.android.data.api.services.HomePetsApi
 import app.pantopus.android.data.api.services.HomePrivacyApi
+import app.pantopus.android.data.api.services.HomePrivateEvidenceApi
 import app.pantopus.android.data.api.services.HomeSettingsApi
+import app.pantopus.android.data.api.services.HomeTaskMediaApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
@@ -419,6 +421,10 @@ object NetworkModule {
     @Provides @Singleton
     fun provideHomesApi(retrofit: Retrofit): HomesApi = retrofit.create(HomesApi::class.java)
 
+    @Provides
+    @Singleton
+    fun provideHomePrivateEvidenceApi(retrofit: Retrofit): HomePrivateEvidenceApi = retrofit.create(HomePrivateEvidenceApi::class.java)
+
     /** H6 — per-home owner claim review (ownership + residency claims). */
     @Provides @Singleton
     fun provideHomeClaimReviewApi(retrofit: Retrofit): HomeClaimReviewApi = retrofit.create(HomeClaimReviewApi::class.java)
@@ -432,6 +438,10 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideHomeTasksApi(retrofit: Retrofit): HomeTasksApi = retrofit.create(HomeTasksApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideHomeTaskMediaApi(retrofit: Retrofit): HomeTaskMediaApi = retrofit.create(HomeTaskMediaApi::class.java)
 
     @Provides @Singleton
     fun provideHomeIssuesApi(retrofit: Retrofit): HomeIssuesApi = retrofit.create(HomeIssuesApi::class.java)

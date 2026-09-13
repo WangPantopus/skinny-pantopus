@@ -65,7 +65,9 @@ class SchedulingHubViewModelTest {
     fun setup() {
         Dispatchers.setMain(dispatcher)
         every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedIn(user()))
-        coEvery { homes.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = listOf(home("home-7")), message = null))
+        coEvery {
+            homes.myHomes()
+        } returns NetworkResult.Success(MyHomesResponse(homes = listOf(home("00000000-0000-4000-8000-000000000007")), message = null))
         coEvery { homeMembers.listOccupants(any()) } returns NetworkResult.Success(OccupantsResponse())
         coEvery { businessTeam.members(any()) } returns NetworkResult.Success(BusinessTeamMembersResponse())
     }
@@ -81,6 +83,7 @@ class SchedulingHubViewModelTest {
             homeType = null, visibility = null, description = null, createdAt = null, updatedAt = null,
             occupancy = null, ownershipStatus = null, verificationTier = null, isPrimaryOwner = null,
             pendingClaimId = null,
+            accessKind = "shared", hasHomeAccess = true, roleBase = "member", canDeleteHome = false,
         )
 
     private fun page(
@@ -149,7 +152,7 @@ class SchedulingHubViewModelTest {
             vm.selectPillar(SchedulingPillar.Home)
             advanceUntilIdle()
             assertEquals(SchedulingPillar.Home, vm.pillar.value)
-            coVerify { repo.getBookingPage(SchedulingOwner.Home("home-7")) }
+            coVerify { repo.getBookingPage(SchedulingOwner.Home("00000000-0000-4000-8000-000000000007")) }
         }
 
     @Test
@@ -187,7 +190,7 @@ class SchedulingHubViewModelTest {
     fun `home pillar attributes agenda rows to the host member's first name`() =
         runTest(dispatcher) {
             stubFetch(listOf(et("e1")))
-            coEvery { homeMembers.listOccupants("home-7") } returns
+            coEvery { homeMembers.listOccupants("00000000-0000-4000-8000-000000000007") } returns
                 NetworkResult.Success(
                     OccupantsResponse(occupants = listOf(OccupantDto(id = "o1", userId = "u-9", displayName = "John Smith"))),
                 )
@@ -254,6 +257,9 @@ class SchedulingHubViewModelTest {
 
             vm.selectPillar(SchedulingPillar.Home)
             advanceUntilIdle()
-            assertEquals("scheduling/onboarding?flow=home&ownerKind=home&ownerId=home-7", vm.startSetupRoute())
+            assertEquals(
+                "scheduling/onboarding?flow=home&ownerKind=home&ownerId=00000000-0000-4000-8000-000000000007",
+                vm.startSetupRoute(),
+            )
         }
 }

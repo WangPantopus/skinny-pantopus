@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
@@ -9,6 +10,7 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemD
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -20,6 +22,12 @@ import retrofit2.http.Query
  * `TooManyFunctions` threshold and is edited by every Homes surface).
  */
 interface HomeDashboardApi {
+    @Headers("Cache-Control: no-cache, no-store")
+    @GET("api/homes/{id}/dashboard-access")
+    suspend fun dashboardAuthority(
+        @Path("id") homeId: String,
+    ): retrofit2.Response<HomeDashboardAuthorityDto>
+
     /**
      * `GET /api/homes/:id/dashboard` — route `backend/routes/home.js:6224`.
      *
@@ -78,8 +86,9 @@ interface HomeDashboardApi {
      * `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.
      * 403s for members without `finance.view` / `finance.manage`.
      */
-    @GET("api/homes/{id}/bill-trends")
+    @GET("api/homes/{id}/bill-trends?format=2")
     suspend fun billTrends(
         @Path("id") homeId: String,
+        @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
 }

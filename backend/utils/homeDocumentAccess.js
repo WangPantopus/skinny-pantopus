@@ -4,11 +4,11 @@ const HOME_DOCUMENT_VISIBILITIES = ['public', 'members', 'managers', 'sensitive'
 const HOME_DOCUMENT_TYPES = ['lease', 'insurance', 'warranty', 'manual', 'permit', 'floor_plan', 'receipt', 'photo', 'paint_color', 'other'];
 
 async function homeDocumentVisibilities(homeId, userId, access) {
-  if (access.isOwner) return { allowed: HOME_DOCUMENT_VISIBILITIES };
   // Match home_can_see_visibility: manager scope follows the current role,
   // while sensitive scope follows its explicit IAM permission/overrides.
   const allowed = ['public', 'members'];
-  const role = access.occupancy?.role_base || mapLegacyRole(access.occupancy?.role);
+  const role = access.effective_role_base || (access.isOwner ? 'owner' : null)
+    || access.occupancy?.role_base || mapLegacyRole(access.occupancy?.role);
   if ((ROLE_RANK[role] || 0) >= ROLE_RANK.manager) allowed.push('managers');
   const sensitive = await checkHomePermission(homeId, userId, 'sensitive.view');
   if (sensitive.readFailed) return { allowed: [], readFailed: true };

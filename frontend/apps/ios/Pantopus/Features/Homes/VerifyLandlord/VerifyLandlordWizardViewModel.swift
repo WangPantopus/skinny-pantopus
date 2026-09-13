@@ -16,9 +16,8 @@
 //  (`tenantRequestSchema` has no structured column for them). When the
 //  home has no verified landlord authority the backend answers 400 —
 //  that is RN's "no landlord on file" branch, and we fall back to the
-//  mailed-code path: `POST /api/homes/:id/request-postcard` (route
-//  `backend/routes/homeOwnership.js:2452`) followed by the outbound
-//  `openPostcardVerification` event.
+//  mailed-code review screen through `openPostcardVerification`. The
+//  user confirms the complete address there before a protected mail command.
 //
 
 import Foundation
@@ -51,12 +50,6 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     private let submitDelayNanos: UInt64
     private let api: APIClient
 
-    /// Test/offline seam for the postcard request. When non-nil,
-    /// `submit()` calls this instead of
-    /// `POST /api/homes/:id/request-postcard`.
-    typealias PostcardRequester = @MainActor () async -> Result<Void, any Error>
-    private let postcardRequester: PostcardRequester?
-
     /// Test/offline seam for the tenant approval request. When non-nil,
     /// `submit()` calls this instead of
     /// `POST /api/v1/tenant/request-approval`.
@@ -70,7 +63,6 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         form: VerifyLandlordForm? = nil,
         api: APIClient = .shared,
         submitDelayNanos: UInt64 = 800_000_000,
-        postcardRequester: PostcardRequester? = nil,
         approvalRequester: ApprovalRequester? = nil
     ) {
         self.homeId = homeId
@@ -79,7 +71,6 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         self.form = form ?? VerifyLandlordSampleData.formSeed(for: homeId)
         self.api = api
         self.submitDelayNanos = submitDelayNanos
-        self.postcardRequester = postcardRequester
         self.approvalRequester = approvalRequester
     }
 
@@ -129,7 +120,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 primaryCTALabel: "Done",
                 primaryCTAEnabled: !isSubmitting,
                 secondaryCTA: WizardSecondaryCTA(
-                    label: "Mail me a code",
+                    label: "Review mail verification",
                     identifier: "verifyLandlordMailCodeCTA"
                 ),
                 isSubmitting: isSubmitting,
@@ -304,21 +295,11 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         }
     }
 
-    /// Mails the verification postcard and hands the user off to the
-    /// A12.7 tracker. Used both as the no-landlord fallback and as the
-    /// `.sent` step's secondary CTA.
+    /// Opens address review without admitting a mail request. The postal
+    /// screen owns confirmation, the protected original and failure recovery.
     func startPostcardFallback() async {
-        submitState = .submitting
-        switch await requestPostcard() {
-        case .success:
-            submitState = .submitted
-            pendingEvent = .openPostcardVerification(homeId: homeId)
-        case let .failure(error):
-            submitState = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't request the verification postcard. Try again."
-            )
-        }
+        pendingEvent = .openPostcardVerification(homeId: homeId)
+        submitState = approvalResult == nil ? .idle : .submitted
     }
 
     /// Submits the tenant approval request. Uses the injected
@@ -339,25 +320,6 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 TenantEndpoints.requestApproval(request)
             )
             return .success(response.lease)
-        } catch {
-            return .failure(error)
-        }
-    }
-
-    /// Mails the verification postcard. Uses the injected
-    /// `postcardRequester` seam when present (previews/tests); otherwise
-    /// calls `POST /api/homes/:id/request-postcard`.
-    private func requestPostcard() async -> Result<Void, any Error> {
-        if let postcardRequester {
-            try? await Task.sleep(nanoseconds: submitDelayNanos)
-            return await postcardRequester()
-        }
-        do {
-            _ = try await api.request(
-                HomesEndpoints.requestPostcard(homeId: homeId),
-                as: RequestPostcardResponse.self
-            )
-            return .success(())
         } catch {
             return .failure(error)
         }

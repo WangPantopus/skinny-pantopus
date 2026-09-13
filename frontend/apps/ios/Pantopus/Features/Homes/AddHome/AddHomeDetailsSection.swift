@@ -34,6 +34,7 @@ struct AddHomeDetailsSection: View {
             editableFields
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeDetailsSection")
     }
 
@@ -379,6 +380,7 @@ struct AddHomeTextField: View {
             }
             HStack(spacing: Spacing.s2) {
                 field
+                    .accessibilityLabel(label)
                 if let trailing { trailing }
             }
             .padding(.horizontal, Spacing.s3)

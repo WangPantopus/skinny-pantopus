@@ -21,7 +21,6 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         homeId: String = "home-1",
         form: VerifyLandlordForm? = nil,
         startContent: VerifyLandlordStartContent? = nil,
-        postcardRequester: VerifyLandlordWizardViewModel.PostcardRequester? = nil,
         approvalRequester: VerifyLandlordWizardViewModel.ApprovalRequester? = nil
     ) -> VerifyLandlordWizardViewModel {
         VerifyLandlordWizardViewModel(
@@ -29,7 +28,6 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
             startContent: startContent,
             form: form,
             submitDelayNanos: 0,
-            postcardRequester: postcardRequester,
             approvalRequester: approvalRequester ?? { _ in .success(Self.stubLease) }
         )
     }
@@ -213,23 +211,21 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
     func testSubmitWithoutVerifiedLandlordFallsBackToPostcard() async {
         let vm = makeVM(
             homeId: "home-1",
-            form: VerifyLandlordSampleData.populatedForm,
-            postcardRequester: { .success(()) },
-            approvalRequester: { _ in
-                .failure(
-                    APIError.clientError(
-                        status: 400,
-                        message: "{\"error\":\"This property has no verified landlord. Cannot submit a lease request.\"}"
-                    )
+            form: VerifyLandlordSampleData.populatedForm
+        ) { _ in
+            .failure(
+                APIError.clientError(
+                    status: 400,
+                    message: "{\"error\":\"This property has no verified landlord. Cannot submit a lease request.\"}"
                 )
-            }
-        )
+            )
+        }
         vm.primaryTapped()
         await vm.submit()
         await waitFor("pendingEvent == .openPostcardVerification") {
             vm.pendingEvent == .openPostcardVerification(homeId: "home-1")
         }
-        XCTAssertEqual(vm.submitState, .submitted)
+        XCTAssertEqual(vm.submitState, .idle)
     }
 
     func testSubmitSurfacesExistingPendingRequest() async {
@@ -271,11 +267,11 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         let vm = makeVM(
             homeId: "home-9",
             form: VerifyLandlordSampleData.populatedForm
-        ) { .success(()) }
+        )
         vm.primaryTapped()
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .sent)
-        XCTAssertEqual(vm.chrome.secondaryCTA?.label, "Mail me a code")
+        XCTAssertEqual(vm.chrome.secondaryCTA?.label, "Review mail verification")
         await vm.startPostcardFallback()
         XCTAssertEqual(vm.pendingEvent, .openPostcardVerification(homeId: "home-9"))
     }
@@ -327,17 +323,17 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         XCTAssertNil(vm.errors, "Errors must not materialise until the user attempts submit")
     }
 
-    func testPostcardInputAndRateFailuresDoNotClaimMailWasSent() async {
-        for status in [400, 429] {
-            let requester: VerifyLandlordWizardViewModel.PostcardRequester = {
-                .failure(APIError.clientError(status: status, message: "Request rejected"))
-            }
-            let vm = makeVM(postcardRequester: requester)
-            await vm.startPostcardFallback()
-            XCTAssertNil(vm.pendingEvent)
-            guard case .error = vm.submitState else {
-                return XCTFail("Request failures must stay actionable")
-            }
-        }
+    func testPostcardFallbackOnlyOpensReviewWithoutSendingMail() async {
+        URLProtocolStub.reset()
+        defer { URLProtocolStub.reset() }
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            api: APIClient(environment: .current, session: TestSession.make()),
+            submitDelayNanos: 0
+        )
+        await vm.startPostcardFallback()
+        XCTAssertEqual(vm.pendingEvent, .openPostcardVerification(homeId: "home-1"))
+        XCTAssertEqual(vm.submitState, .idle, "Opening review must not claim a mailing or approval was submitted")
+        XCTAssertTrue(URLProtocolStub.capturedRequests.isEmpty, "Address confirmation must precede every mailing command")
     }
 }

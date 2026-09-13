@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,9 +85,14 @@ fun AddHouseholdTaskFormScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val members by viewModel.assignableMembers.collectAsStateWithLifecycle()
+    val memberListUnavailable by viewModel.memberListUnavailable.collectAsStateWithLifecycle()
     val createdId by viewModel.createdTaskId.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeTaskResumeEffect(onResume = viewModel::resume, onPause = viewModel::pause)
+    val close = {
+        viewModel.pause()
+        onClose()
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -96,10 +102,8 @@ fun AddHouseholdTaskFormScreen(
     }
 
     LaunchedEffect(shouldDismiss) {
-        if (shouldDismiss) {
-            viewModel.acknowledgeDismiss()
-            // Hold the success toast on screen briefly before popping.
-            delay(700)
+        if (shouldDismiss && viewModel.consumeCompletion()) {
+            viewModel.pause()
             if (createdId != null && onCreated != null) {
                 onCreated(createdId!!)
             } else {
@@ -124,6 +128,7 @@ fun AddHouseholdTaskFormScreen(
                         AddHouseholdTaskLoadedState(
                             fields = fields,
                             members = members,
+                            memberListUnavailable = memberListUnavailable,
                             isEditing = viewModel.isEditing,
                             isValid = viewModel.isValid,
                             isDirty = viewModel.isDirty,
@@ -134,7 +139,7 @@ fun AddHouseholdTaskFormScreen(
                             selectedAssigneeId = viewModel.selectedAssigneeId,
                             showsCustomRecurrenceSubForm = viewModel.showsCustomRecurrenceSubForm,
                         ),
-                    onClose = onClose,
+                    onClose = close,
                     onCommit = viewModel::save,
                     onUpdate = viewModel::update,
                     onSelectCategory = viewModel::selectCategory,
@@ -143,14 +148,38 @@ fun AddHouseholdTaskFormScreen(
                     onSelectAssignee = viewModel::selectAssignee,
                     onSetDueDate = viewModel::setDueDate,
                 )
-            is AddHouseholdTaskFormUiState.Error ->
-                EmptyState(
-                    icon = PantopusIcon.AlertCircle,
-                    headline = "Couldn't load the task",
-                    subcopy = current.message,
-                    ctaTitle = "Try again",
-                    onCta = viewModel::refresh,
+            is AddHouseholdTaskFormUiState.Recovery ->
+                HomeTaskRecoveryPanel(
+                    title = "Saved task request",
+                    message =
+                        current.message ?: "A task request is saved. Retry that same request to confirm its result. " +
+                            "Closing keeps it; reopen Add task in this Home to recover it.",
+                    busy = isSaving,
+                    onRetry = viewModel::retryCreation,
+                    onClose = close,
+                    onClear = if (current.canClear) viewModel::clearRejectedCreation else null,
                 )
+            is AddHouseholdTaskFormUiState.EditRecovery ->
+                HomeTaskRecoveryPanel(
+                    title = "Saved task edit",
+                    message =
+                        current.message ?: "This edit is not confirmed. Retry its original changes after a current access check. " +
+                            "Closing the app discards this local edit; reopen the task to check its current values.",
+                    busy = isSaving,
+                    onRetry = viewModel::retryEdit,
+                    onClose = close,
+                )
+            is AddHouseholdTaskFormUiState.Error ->
+                Column {
+                    TextButton(onClick = close) { Text("Close") }
+                    EmptyState(
+                        icon = PantopusIcon.AlertCircle,
+                        headline = "Couldn't load the task",
+                        subcopy = current.message,
+                        ctaTitle = "Try again",
+                        onCta = viewModel::refresh,
+                    )
+                }
         }
 
         toast?.let { payload ->
@@ -179,6 +208,7 @@ internal data class AddHouseholdTaskLoadedState(
     val selectedCustomUnit: AddHouseholdTaskCustomUnit,
     val selectedAssigneeId: String?,
     val showsCustomRecurrenceSubForm: Boolean,
+    val memberListUnavailable: Boolean = false,
 )
 
 @Composable
@@ -209,6 +239,7 @@ internal fun AddHouseholdTaskLoaded(
         FormFieldGroup("Assigned to") {
             AssigneePicker(
                 members = state.members,
+                memberListUnavailable = state.memberListUnavailable,
                 selectedId = state.selectedAssigneeId,
                 onSelect = onSelectAssignee,
             )
@@ -340,6 +371,7 @@ private fun CategoryChip(
 @Composable
 private fun AssigneePicker(
     members: List<HouseholdTaskAssignableMember>,
+    memberListUnavailable: Boolean,
     selectedId: String?,
     onSelect: (String?) -> Unit,
 ) {
@@ -349,7 +381,7 @@ private fun AssigneePicker(
     ) {
         AssigneeRow(
             id = null,
-            title = "Unassigned (any member)",
+            title = "Unassigned",
             initials = "··",
             selected = selectedId == null,
             onClick = { onSelect(null) },
@@ -365,7 +397,12 @@ private fun AssigneePicker(
         }
         if (members.isEmpty()) {
             Text(
-                text = "No members found in this home.",
+                text =
+                    if (memberListUnavailable) {
+                        "Member list unavailable. You can leave this task unassigned."
+                    } else {
+                        "No assignable members are available."
+                    },
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextMuted,
             )
@@ -442,7 +479,12 @@ private fun RecurrencePicker(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Text(
-            text = "Repeats",
+            text = "Saved recurrence",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+        Text(
+            text = "This saves a preference. To start or change automatic repeats, open Repeat schedule on the saved task.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )

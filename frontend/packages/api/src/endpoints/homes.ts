@@ -13,11 +13,21 @@ import type {
 
 // ============ ADDRESS CHECK ============
 
+export interface ResidencyAddressSnapshot {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
+
 export interface AddressCheckResult {
   status: 'HOME_NOT_FOUND' | 'HOME_FOUND_UNCLAIMED' | 'HOME_FOUND_CLAIMED';
   home_id?: string;
   is_multi_unit?: boolean;
   formatted_address?: string;
+  residency_address?: ResidencyAddressSnapshot;
 }
 
 /**
@@ -120,6 +130,7 @@ export async function getHomePropertyDetail(homeId: string): Promise<HomePropert
  * Create a new home profile
  */
 export async function createHome(data: {
+  request_id?: string;
   address: string;
   address_id?: string;
   unit_number?: string;
@@ -206,15 +217,38 @@ export async function leaveHome(homeId: string): Promise<ApiResponse> {
 /**
  * Get home occupants
  */
-export async function getHomeOccupants(homeId: string): Promise<{ 
-  occupants: (HomeOccupancy & { 
-    user: { 
-      id: string; 
-      username: string; 
-      name: string; 
-      profile_picture_url?: string; 
-    } 
-  })[] 
+export interface HomeMemberReference {
+  id: string;
+  home_id: string;
+  user_id: string;
+  role: string;
+  role_base: string | null;
+  is_active: boolean;
+  verification_status: string;
+  start_at: string | null;
+  end_at: string | null;
+  access_start_at: string | null;
+  access_end_at: string | null;
+  created_at: string;
+  user: { id: string; username: string; name: null; profile_picture_url: string | null };
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+  joined_at: string;
+}
+export interface HomePendingInviteReference {
+  id: string;
+  user_id: string | null;
+  role: string;
+  is_active: false;
+  email: string | null;
+  name: string;
+  invited_by: string | null;
+  created_at: string;
+}
+export async function getHomeOccupants(homeId: string): Promise<{
+  occupants: HomeMemberReference[];
+  pendingInvites: HomePendingInviteReference[];
 }> {
   return get(`/api/homes/${homeId}/occupants`);
 }
@@ -237,12 +271,25 @@ export interface MyHomeOccupancy {
 }
 
 /** One of the current user's places (GET /api/homes/my-homes). */
-export interface MyHome extends Omit<Home, 'location'> {
+export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'state' | 'zip_code' | 'country' | 'created_at' | 'updated_at'> {
+  /** Shared fields are absent from personal verification entries. */
+  address: string | null;
+  address2?: string | null;
+  city: string | null;
+  state: string | null;
+  zipcode: string | null;
+  created_at?: string;
+  updated_at?: string;
   /** PostGIS point parsed by the endpoint; null when unset. */
   location: Home['location'] | null;
   /** Optional display name (Home column not in the base Home type). */
   name?: string | null;
-  occupancy: MyHomeOccupancy;
+  occupancy: MyHomeOccupancy | null;
+  /** Shared household access, exact private setup, or personal verification progress. */
+  access_kind?: 'shared' | 'private_setup' | 'verification';
+  has_home_access?: boolean;
+  /** Effective authority; independent from the caller's residency/ownership record. */
+  role_base?: string | null;
   /** HomeOwner status — distinguishes verified owners from pending. */
   ownership_status?: 'verified' | 'pending' | 'rejected' | null;
   verification_tier?: string | null;
@@ -309,6 +356,11 @@ export async function getNearbyHomes(params: {
 /**
  * Invite someone to a home
  */
+export interface HomeInvitationCreated {
+  invitation: { id: string; token: string; home_id: string; proposed_role: string };
+  emailSent: boolean;
+}
+
 export async function inviteToHome(homeId: string, data: {
   email?: string;
   user_id?: string;
@@ -318,8 +370,8 @@ export async function inviteToHome(homeId: string, data: {
   message?: string;
   start_at?: string;
   end_at?: string;
-}): Promise<ApiResponse> {
-  return post<ApiResponse>(`/api/homes/${homeId}/invite`, data);
+}): Promise<HomeInvitationCreated> {
+  return post<HomeInvitationCreated>(`/api/homes/${homeId}/invite`, data);
 }
 
 /**
@@ -376,6 +428,30 @@ export async function declineInviteByToken(token: string): Promise<ApiResponse> 
 }
 
 // ============ RESIDENCY CLAIMS ============
+
+/** Applicant-owned submitted identity and saved review, not current Home data. */
+export interface PersonalResidencyRequest {
+  id: string;
+  home_id: string | null;
+  submitted_address: string | null;
+  claimed_role: string | null;
+  status: 'pending' | 'verified' | 'rejected';
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export interface PersonalResidencyProgress {
+  home_id: string;
+  request: PersonalResidencyRequest | null;
+  current_access: 'shared' | 'private_setup' | 'none';
+  next_step: 'home' | 'household_review' | 'address_verification' | 'resubmit' | 'access_review' | 'ownership_verification' | 'unavailable';
+}
+export async function getMyResidencyRequests(after?: string): Promise<{ requests: PersonalResidencyRequest[]; next_cursor: string | null }> {
+  return get('/api/homes/my-residency', after ? { after } : undefined);
+}
+export async function getMyResidencyProgress(homeId: string): Promise<PersonalResidencyProgress> {
+  return get(`/api/homes/${homeId}/my-residency`);
+}
 
 export interface ResidencyClaim {
   id: string;
@@ -435,6 +511,43 @@ export async function getHomeClaims(homeId: string): Promise<{ claims: Residency
   return get(`/api/homes/${homeId}/claims`);
 }
 
+export type ResidencyReviewAction = 'approve' | 'reject';
+export type ResidencyReviewRole = 'lease_resident' | 'member' | 'restricted_member' | 'guest' | 'service_provider';
+export interface ResidencyReviewCommand {
+  action: ResidencyReviewAction; role: ResidencyReviewRole | null; reason: string | null;
+  request_id: string; review_token: string;
+}
+export interface ResidencyReviewReceipt {
+  id: string; home_id: string; claim_id: string; actor_id: string; request_id: string;
+  action: ResidencyReviewAction; legacy_request: boolean; request_hash: string; review_token: string;
+  created_at: string; result: { status: 'verified' | 'rejected'; reviewed_at: string; occupancy_id: string | null; role_base: string | null };
+}
+export interface ResidencyReview {
+  ok: true; home_id: string;
+  residency_session: { actor_id: string; home_id: string; session_scope: string };
+  claim: { id: string; home_id: string; user_id: string; status: string; claimed_role: string | null;
+    claimed_address: string | null; reviewed_by: string | null; reviewed_at: string | null; review_note: string | null;
+    created_at: string; updated_at: string; review_token: string };
+  occupancy: { id: string; user_id: string; role: string | null; role_base: string | null; age_band: string | null;
+    is_active: boolean; verification_status: string | null; start_at: string | null; end_at: string | null;
+    access_start_at: string | null; access_end_at: string | null; verified_at: string | null; verification_expires_at: string | null } | null;
+}
+export interface ResidencyReviewResponse extends ResidencyReview {
+  claim_id: string; target_id: string; action: ResidencyReviewAction; replayed: boolean;
+  receipt: ResidencyReviewReceipt; message: string;
+}
+export async function getResidencyReview(homeId: string, claimId: string, sessionScope?: string): Promise<ResidencyReview> {
+  return get(`/api/homes/${homeId}/claim/${claimId}/review`, undefined,
+    sessionScope ? { headers: { 'X-Pantopus-Session-Scope': sessionScope } } : undefined);
+}
+export async function decideResidencyReview(homeId: string, claimId: string, command: ResidencyReviewCommand,
+  sessionScope: string): Promise<ResidencyReviewResponse> {
+  return post(`/api/homes/${homeId}/claim/${claimId}/${command.action}`, {
+    request_id: command.request_id, review_token: command.review_token,
+    ...(command.action === 'approve' ? { proposed_role: command.role } : { reason: command.reason }),
+  }, { headers: { 'X-Pantopus-Session-Scope': sessionScope } });
+}
+
 /**
  * Approve a residency claim
  */
@@ -459,8 +572,9 @@ export async function rejectResidencyClaim(homeId: string, claimId: string, reas
 /**
  * Get my residency claims
  */
-export async function getMyClaims(): Promise<{ claims: ResidencyClaim[] }> {
-  return get('/api/homes/my-claims');
+/** Personal submitted fields only; current private Home metadata is never joined. */
+export async function getMyClaims(after?: string): Promise<{ claims: ResidencyClaim[]; next_cursor: string | null }> {
+  return get('/api/homes/my-claims', after ? { after } : undefined);
 }
 
 /**

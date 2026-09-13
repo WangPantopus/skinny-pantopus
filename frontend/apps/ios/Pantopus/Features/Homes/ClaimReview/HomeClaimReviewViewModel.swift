@@ -100,6 +100,8 @@ public struct HomeClaimReviewData: Sendable, Equatable, Hashable {
     public let ownership: [HomeClaimReviewOwnershipItem]
     public let residency: [HomeClaimReviewResidencyItem]
     public let comparison: HomeClaimReviewComparison?
+    public var ownershipUnavailable = false
+    public var residencyUnavailable = false
 }
 
 /// Screen state. Four-state rule: loading / empty / loaded / error.
@@ -135,7 +137,11 @@ public final class HomeClaimReviewViewModel {
         "initiated", "evidence_submitted", "under_review"
     ]
 
-    public private(set) var state: HomeClaimReviewState = .loading
+    private var contentState: HomeClaimReviewState = .loading
+    public var state: HomeClaimReviewState {
+        scope.isCurrent ? contentState : .error(message: HomeClaimReviewError.sessionChanged.localizedDescription)
+    }
+
     /// `"<claimId>:<action>"` while a mutation is in flight, so the row
     /// can swap its action row for a spinner (RN `actionLoading`).
     public private(set) var actionLoading: String?
@@ -148,20 +154,26 @@ public final class HomeClaimReviewViewModel {
     let homeId: String
     private let api: APIClient
     private var loadedOnce = false
+    private let scope: HomeClaimSessionScope
+    private var readGeneration = 0
+    private var prepared: HomeClaimReviewSnapshot?
+    private var pendingDecision: (snapshot: HomeClaimReviewSnapshot, action: HomeClaimReviewVerdict)?
 
-    init(homeId: String, api: APIClient = .shared) {
+    init(homeId: String, api: APIClient = .shared, identity: (() -> String?)? = nil) {
         self.homeId = homeId
         self.api = api
+        scope = HomeClaimSessionScope(api: api, identity: identity)
     }
 
     // MARK: - Load
 
     public func load() async {
-        guard !loadedOnce else { return }
+        guard !loadedOnce, actionLoading == nil else { return }
         await fetch()
     }
 
     public func refresh() async {
+        guard actionLoading == nil else { return }
         await fetch()
     }
 
@@ -187,26 +199,123 @@ public final class HomeClaimReviewViewModel {
 
     // MARK: - Mutations
 
-    /// `POST /api/homes/:id/ownership-claims/:claimId/review`
-    /// (`backend/routes/homeOwnership.js:665`).
-    public func review(claimId: String, action: HomeClaimReviewVerdict) async {
-        actionLoading = "\(claimId):\(action.rawValue)"
+    func makeEvidenceViewModel(claimId: String) async -> PrivateClaimEvidenceViewModel? {
+        guard scope.isCurrent, actionLoading == nil, pendingDecision == nil,
+              case let .loaded(data) = state, data.ownership.contains(where: { $0.id == claimId }) else { return nil }
+        readGeneration += 1
+        let revision = readGeneration
+        actionLoading = "\(claimId):evidence"
         defer { actionLoading = nil }
         do {
-            let _: HomeOwnershipClaimActionResponse = try await api.request(
+            try scope.requireCurrent()
+            let response: HomeOwnershipClaimDetailResponse = try await api.request(
+                HomeClaimReviewEndpoints.ownershipClaimDetail(homeId: homeId, claimId: claimId)
+            )
+            try scope.requireCurrent()
+            guard revision == readGeneration, response.claim.id == claimId, response.claim.homeId == homeId,
+                  let token = response.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token) else {
+                throw HomeClaimReviewError.snapshotChanged
+            }
+            guard response.claim.claimPhaseV2 != "challenged", response.claim.challengeState != "challenged",
+                  response.claim.routingClassification != "challenge_claim" else { throw HomeClaimReviewError.disputeReview }
+            return PrivateClaimEvidenceViewModel(
+                homeId: homeId,
+                claimId: claimId,
+                expectedReviewToken: token,
+                client: PrivateClaimEvidenceClient(api: api)
+            )
+        } catch {
+            toast = ToastMessage(text: HomeClaimReviewError.message(for: error), kind: .error)
+            return nil
+        }
+    }
+
+    /// `POST /api/homes/:id/ownership-claims/:claimId/review`
+    /// (`backend/routes/homeOwnership.js:665`).
+    func prepareReview(claimId: String, action: HomeClaimReviewVerdict) async -> HomeClaimReviewSnapshot? {
+        guard actionLoading == nil else { return nil }
+        do {
+            try scope.requireCurrent()
+            if let pendingDecision {
+                guard pendingDecision.snapshot.claimId == claimId, pendingDecision.action == action else {
+                    throw HomeClaimReviewError.pendingDecision
+                }
+                prepared = pendingDecision.snapshot
+                return pendingDecision.snapshot
+            }
+            readGeneration += 1
+            let revision = readGeneration
+            prepared = nil
+            actionLoading = "\(claimId):prepare"
+            defer { actionLoading = nil }
+            let response: HomeOwnershipClaimDetailResponse = try await api.request(
+                HomeClaimReviewEndpoints.ownershipClaimDetail(homeId: homeId, claimId: claimId)
+            )
+            try scope.requireCurrent()
+            guard revision == readGeneration, response.claim.id == claimId, response.claim.homeId == homeId,
+                  let claimantId = response.claim.claimantUserId, !claimantId.isEmpty,
+                  let token = response.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token),
+                  Self.pendingLegacyStates.contains(response.claim.state) else {
+                throw HomeClaimReviewError.snapshotChanged
+            }
+            guard response.claim.claimPhaseV2 != "challenged", response.claim.challengeState != "challenged",
+                  response.claim.routingClassification != "challenge_claim" else { throw HomeClaimReviewError.disputeReview }
+            let snapshot = HomeClaimReviewSnapshot(
+                homeId: homeId,
+                claimId: claimId,
+                claimantId: claimantId,
+                reviewToken: token,
+                claimType: response.claim.claimType ?? "Claim",
+                eligibleEvidenceCount: response.claim.evidence?.filter { $0.eligibleForReview == true }
+                    .count ?? 0,
+                evidenceCount: response.claim.evidence?.count ?? 0
+            )
+            prepared = snapshot
+            return snapshot
+        } catch {
+            toast = ToastMessage(text: HomeClaimReviewError.message(for: error), kind: .error)
+            return nil
+        }
+    }
+
+    func review(_ snapshot: HomeClaimReviewSnapshot, action: HomeClaimReviewVerdict) async {
+        guard actionLoading == nil else { return }
+        actionLoading = "\(snapshot.claimId):\(action.rawValue)"
+        defer { actionLoading = nil }
+        do {
+            try scope.requireCurrent()
+            guard prepared == snapshot, snapshot.homeId == homeId else { throw HomeClaimReviewError.snapshotChanged }
+            if let pendingDecision, pendingDecision.snapshot != snapshot || pendingDecision.action != action {
+                throw HomeClaimReviewError.pendingDecision
+            }
+            pendingDecision = (snapshot, action)
+            let receipt: HomeClaimDecisionReceipt = try await api.request(
                 HomeClaimReviewEndpoints.reviewOwnershipClaim(
                     homeId: homeId,
-                    claimId: claimId,
-                    request: HomeOwnershipClaimReviewRequest(action: action.rawValue)
+                    claimId: snapshot.claimId,
+                    request: HomeOwnershipClaimReviewRequest(
+                        action: action.rawValue,
+                        reviewToken: snapshot.reviewToken
+                    )
                 )
             )
+            try scope.requireCurrent()
+            guard receipt.matches(
+                homeId: homeId,
+                claimId: snapshot.claimId,
+                claimantId: snapshot.claimantId,
+                action: action.rawValue
+            ) else { throw APIError.invalidResponse }
+            pendingDecision = nil
+            prepared = nil
             toast = ToastMessage(text: action.doneCopy, kind: .success)
             await fetch()
         } catch {
-            toast = ToastMessage(
-                text: (error as? APIError)?.errorDescription ?? "Failed to review claim",
-                kind: .error
-            )
+            if HomeClaimReviewError.isFinalClientFailure(error) || !scope.isCurrent {
+                pendingDecision = nil
+                prepared = nil
+            }
+            toast = ToastMessage(text: HomeClaimReviewError.message(for: error), kind: .error)
         }
     }
 
@@ -216,6 +325,7 @@ public final class HomeClaimReviewViewModel {
         claimId: String,
         action: HomeClaimRelationshipAction
     ) async {
+        guard actionLoading == nil, scope.isCurrent else { return }
         actionLoading = "\(claimId):\(action.rawValue)"
         defer { actionLoading = nil }
         do {
@@ -226,8 +336,9 @@ public final class HomeClaimReviewViewModel {
                     request: HomeClaimRelationshipResolveRequest(action: action.rawValue)
                 )
             )
+            try scope.requireCurrent()
             toast = ToastMessage(
-                text: action == .inviteToHousehold ? "Invitation sent." : "Claim updated.",
+                text: action == .inviteToHousehold ? "Invitation created." : "Claim updated.",
                 kind: .success
             )
             await fetch()
@@ -235,30 +346,6 @@ public final class HomeClaimReviewViewModel {
             toast = ToastMessage(
                 text: (error as? APIError)?.errorDescription
                     ?? "Failed to update claimant relationship",
-                kind: .error
-            )
-        }
-    }
-
-    /// `POST /api/homes/:id/claim/:claimId/approve|reject`
-    /// (`backend/routes/home.js:6752` / `:6838`).
-    public func reviewResidency(claimId: String, approve: Bool) async {
-        actionLoading = claimId
-        defer { actionLoading = nil }
-        do {
-            let endpoint = approve
-                ? HomeClaimReviewEndpoints.approveResidencyClaim(homeId: homeId, claimId: claimId)
-                : HomeClaimReviewEndpoints.rejectResidencyClaim(homeId: homeId, claimId: claimId)
-            let _: HomeResidencyClaimActionResponse = try await api.request(endpoint)
-            toast = ToastMessage(
-                text: approve ? "Claim approved" : "Claim rejected",
-                kind: .success
-            )
-            await fetch()
-        } catch {
-            toast = ToastMessage(
-                text: (error as? APIError)?.errorDescription
-                    ?? (approve ? "Failed to approve claim" : "Failed to reject claim"),
                 kind: .error
             )
         }
@@ -273,6 +360,12 @@ public final class HomeClaimReviewViewModel {
     /// reason (`review-claim.tsx:34`). Only a total wipe-out surfaces
     /// the error state.
     private func fetch() async {
+        guard scope.isCurrent else { return }
+        readGeneration += 1
+        let revision = readGeneration
+        // A refresh must not leave old claim actions available while current
+        // authority and the two independent collections are being checked.
+        contentState = .loading
         async let ownershipTask: HomeOwnershipClaimsResponse? = optional {
             try await self.api.request(
                 HomeClaimReviewEndpoints.ownershipClaims(homeId: self.homeId)
@@ -289,13 +382,14 @@ public final class HomeClaimReviewViewModel {
             )
         }
 
-        let ownershipResponse = await ownershipTask
-        let residencyResponse = await residencyTask
-        let comparisonResponse = await comparisonTask
+        let (ownershipResponse, residencyResponse, comparisonResponse) = await (ownershipTask, residencyTask, comparisonTask)
+        guard revision == readGeneration, scope.isCurrent else { return }
+        prepared = nil
+        pendingDecision = nil
 
         guard ownershipResponse != nil || residencyResponse != nil || comparisonResponse != nil
         else {
-            state = .error(message: "We couldn't load the claims on this home.")
+            contentState = .error(message: "We couldn't load the claims on this home.")
             return
         }
         loadedOnce = true
@@ -307,19 +401,23 @@ public final class HomeClaimReviewViewModel {
         let residency = Self.residencyItems(from: residencyResponse?.claims ?? [])
         let comparison = comparisonResponse.map { Self.comparison(from: $0) }
 
-        if ownership.isEmpty, residency.isEmpty, comparison == nil {
-            state = .empty
+        let ownershipUnavailable = ownershipResponse == nil && comparisonResponse == nil
+        let residencyUnavailable = residencyResponse == nil
+        if ownership.isEmpty, residency.isEmpty, comparison == nil, !ownershipUnavailable, !residencyUnavailable {
+            contentState = .empty
             selectedTab = .ownership
             return
         }
         if comparison == nil, selectedTab == .compare {
             selectedTab = .ownership
         }
-        state = .loaded(
+        contentState = .loaded(
             HomeClaimReviewData(
                 ownership: ownership,
                 residency: residency,
-                comparison: comparison
+                comparison: comparison,
+                ownershipUnavailable: ownershipUnavailable,
+                residencyUnavailable: residencyUnavailable
             )
         )
     }

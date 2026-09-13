@@ -1,234 +1,360 @@
-//
-//  InviteMemberWizardViewModel.swift
-//  Pantopus
-//
-//  T6.3a / P9 — Three-step wizard for inviting a new member or guest:
-//
-//    1. Role     — segmented Member / Guest (drives `relationship`).
-//    2. Identify — email field (the canonical channel for first-time
-//                  invites). Future steps may add username search +
-//                  QR codes; the design's "By handle / By text / QR
-//                  code" tiles map to alternate channels we'll add
-//                  incrementally.
-//    3. Review   — summary of the role + recipient + submit.
-//
-//  On submit, POSTs `/api/homes/:id/invite` with an
-//  `InviteMemberRequest`. The returned `InvitationDTO` is emitted via
-//  `pendingEvent` so the host view can dismiss + feed the list VM.
-//
-
+import CryptoKit
 import Foundation
 import Observation
 
-/// Discrete steps in the wizard.
-public enum InviteMemberStep: Int, CaseIterable, Sendable, Equatable {
-    case role
-    case identify
-    case review
-
-    public var title: String {
-        switch self {
-        case .role: "Pick a role"
-        case .identify: "Who are you inviting?"
-        case .review: "Send invite"
-        }
-    }
-
-    public var subcopy: String {
-        switch self {
-        case .role: "Members get full access. Guests are short-term — sitters, visitors, contractors."
-        case .identify: "We'll send them a link to verify their address and join the household."
-        case .review: "Confirm the details below. You can resend or cancel later from the Pending tab."
-        }
-    }
-
-    /// 1-of-3 readout in the top bar.
-    public var stepNumber: Int {
-        rawValue + 1
-    }
-}
-
-/// Form snapshot. Lives on the VM and is sent over the wire on submit.
-public struct InviteMemberForm: Sendable, Equatable {
-    public var role: MemberRole
-    public var email: String
-    public var message: String
-
-    public init(
-        role: MemberRole = .member,
-        email: String = "",
-        message: String = ""
-    ) {
-        self.role = role
-        self.email = email
-        self.message = message
-    }
-}
-
-/// Outbound event the host view reacts to.
-public enum InviteMemberEvent: Sendable, Equatable {
-    case submitted(InvitationDTO)
-    case dismiss
-}
-
-/// Drives the Invite Member wizard.
+/// Sender actions retain their exact original before HTTP. Historical completion
+/// is separate from current authority, roster freshness, and delivery proof.
 @Observable
 @MainActor
-public final class InviteMemberWizardViewModel: WizardModel {
-    private(set) var currentStep: InviteMemberStep = .role
-    var form: InviteMemberForm
-    private(set) var errorMessage: String?
-    var pendingEvent: InviteMemberEvent?
-
-    private let homeId: String
+final class InviteMemberWizardViewModel {
+    let homeId: String
+    let target: HomeInvitationSenderTarget
+    let accountLabel: String
+    var email = ""
+    var role = "member"
+    var message = ""
     private let api: APIClient
-    private var isSubmitting = false
+    private let scope: HomeCreationScope
+    private let session: HomeClaimSessionScope
+    private let store: any PendingHomeInvitationSenderStoring
+    private var serverSession: String?
+    private var saved: PendingHomeInvitationSender?
+    private var observed: HomeInvitationSenderOutcome?
+    private var visible = false
+    private var attempted = false
+    private(set) var generation = 0
+    private(set) var isWorking = false
+    private(set) var opened = false
+    private(set) var errorMessage: String?
+    private(set) var context: HomeInvitationSenderContext?
+    private(set) var sharingChecked = false
+    private(set) var sharingExpiresAt: Date?
 
-    init(homeId: String, api: APIClient = .shared) {
+    init(
+        homeId: String,
+        target: HomeInvitationSenderTarget = .init(action: .create, invitationId: nil),
+        api: APIClient = .shared,
+        store: any PendingHomeInvitationSenderStoring = PendingHomeInvitationSenderStore()
+    ) {
         self.homeId = homeId
+        self.target = target
         self.api = api
-        form = InviteMemberForm()
-    }
-
-    /// True when the form has any user-entered data — guards the
-    /// discard-confirm.
-    var isDirty: Bool {
-        form != InviteMemberForm()
-    }
-
-    // MARK: - Chrome
-
-    public var chrome: WizardChrome {
-        WizardChrome(
-            title: "Invite member",
-            progressLabel: .stepOf(
-                current: currentStep.stepNumber,
-                total: InviteMemberStep.allCases.count
-            ),
-            progressFraction: Double(currentStep.stepNumber)
-                / Double(InviteMemberStep.allCases.count),
-            leading: currentStep == .role ? .close : .back,
-            primaryCTALabel: primaryLabel,
-            primaryCTAEnabled: primaryEnabled,
-            secondaryCTA: nil,
-            isSubmitting: isSubmitting,
-            dirty: isDirty,
-            showsProgressBar: true
-        )
-    }
-
-    private var primaryLabel: String {
-        switch currentStep {
-        case .role, .identify: "Next"
-        case .review: "Send invite"
+        self.store = store
+        scope = HomeInvitationDecisionViewModel.scope(api: api)
+        session = HomeClaimSessionScope(api: api)
+        let auth = api.authProvider ?? AuthManager.shared
+        if case let .signedIn(user) = auth.state {
+            accountLabel = user.displayName ?? user.username
+        } else {
+            accountLabel = "Sign in to manage invitations"
         }
     }
 
-    private var primaryEnabled: Bool {
-        switch currentStep {
-        case .role: true
-        case .identify: Self.isValidEmail(form.email)
-        case .review: Self.isValidEmail(form.email)
-        }
+    var isCurrent: Bool {
+        session.isCurrent && scope.isValid
     }
 
-    // MARK: - WizardModel
+    var pending: PendingHomeInvitationSender? {
+        visible && isCurrent ? saved : nil
+    }
 
-    public func leadingTapped() {
+    var canPrepare: Bool {
+        visible && isCurrent && opened && !isWorking && !attempted && saved == nil
+    }
+
+    var canSubmit: Bool {
+        canPrepare && context != nil
+    }
+
+    var canAcknowledge: Bool {
+        !isWorking && pending?.outcome?.isTerminal == true
+    }
+
+    func suspend() {
+        retireSharing()
+        generation += 1
+        visible = false
+        opened = false
+        context = nil
         errorMessage = nil
-        if currentStep == .role {
-            pendingEvent = .dismiss
+    }
+
+    func open() async {
+        guard !isWorking else { return }
+        visible = true
+        await run { revision in
+            self.context = nil
+            self.opened = false
+            let restored = try self.store.load(scope: self.scope)
+            if let saved = self.saved, restored?.bodyData != saved.bodyData { throw HomeInvitationSenderError.changed }
+            self.saved = restored
+            self.attempted = restored != nil
+            self.serverSession = try await self.readSession(revision)
+            self.opened = true
+            if restored != nil { try await self.resolve(.check, revision: revision) }
+        }
+        if canPrepare && target.action != .create { await prepare() }
+    }
+
+    func prepare() async {
+        guard canPrepare else { return }
+        if target.action == .create && !Self.isValidEmail(email) { errorMessage = "Enter a complete email address."
             return
         }
-        guard let previous = InviteMemberStep(rawValue: currentStep.rawValue - 1) else { return }
-        currentStep = previous
-        Analytics.track(.screenMembersWizardStepViewed(
-            stepNumber: currentStep.stepNumber,
-            stepName: String(describing: currentStep)
-        ))
-    }
-
-    public func discardConfirmed() {
-        pendingEvent = .dismiss
-    }
-
-    public func primaryTapped() {
-        errorMessage = nil
-        if currentStep != .review {
-            guard let next = InviteMemberStep(rawValue: currentStep.rawValue + 1) else { return }
-            currentStep = next
-            Analytics.track(.screenMembersWizardStepViewed(
-                stepNumber: currentStep.stepNumber,
-                stepName: String(describing: currentStep)
-            ))
-            return
+        await run { revision in
+            self.context = nil
+            _ = try await self.readSession(revision)
+            let intent = self.currentIntent
+            guard HomeInvitationSenderValidation.intent(intent) else { throw HomeInvitationSenderError.changed }
+            let response = try await self.read(Endpoint(method: .post, path: self.base + "/context", body: intent, headers: self.headers))
+            try self.current(revision)
+            guard response.status == 200 else { throw HomeInvitationSenderError.refusal(response.value.dictValue?["code"]?.stringValue) }
+            let context = HomeInvitationSenderContext(intent: intent, value: response.value)
+            guard let serverSession = self.serverSession, context.matches(self.scope, session: serverSession)
+            else { throw HomeInvitationSenderError.unavailable }
+            self.context = context
         }
-        Task { await submit() }
     }
 
-    // MARK: - Form mutations
-
-    public func setRole(_ role: MemberRole) {
-        form.role = role
+    var currentIntent: JSONValue {
+        var fields: [String: JSONValue] = ["home_id": .string(homeId), "action": .string(target.action.rawValue)]
+        if target.action == .create {
+            fields["payload"] = .object([
+                "email": .string(email.trimmingCharacters(in: .whitespacesAndNewlines)),
+                "relationship": .string(role),
+                "message": message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .null
+                    : .string(message.trimmingCharacters(in: .whitespacesAndNewlines))
+            ])
+        } else { fields["invitation_id"] = target.invitationId.map(JSONValue.string) ?? .null }
+        return .object(fields)
     }
 
-    public func setEmail(_ value: String) {
-        form.email = value
+    func edit() {
+        guard canPrepare else { return }
+        context = nil
+        generation += 1
     }
 
-    public func setMessage(_ value: String) {
-        form.message = value
-    }
-
-    // MARK: - Submit
-
-    private func submit() async {
-        guard !isSubmitting else { return }
-        isSubmitting = true
-        defer { isSubmitting = false }
-        let trimmedEmail = form.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedMessage = form.message.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The backend's `relationship` field maps to the wire role.
-        // Guests are routed via the literal "guest"; everything else
-        // sends the role's raw value (owner / admin / member / …).
-        let relationship = switch form.role {
-        case .guest: "guest"
-        case .owner: "owner"
-        case .admin: "admin"
-        case .manager: "manager"
-        case .restricted: "restricted_member"
-        case .tenant: "lease_resident"
-        case .member: "member"
-        }
-        let request = InviteMemberRequest(
-            email: trimmedEmail,
-            userId: nil,
-            relationship: relationship,
-            message: trimmedMessage.isEmpty ? nil : trimmedMessage
-        )
-        do {
-            let response: InviteMemberResponse = try await api.request(
-                HomesEndpoints.inviteMember(homeId: homeId, request: request)
+    func submit(reviewedToken: String, lifetime: Int) async {
+        guard canSubmit, generation == lifetime, let context, context.token == reviewedToken,
+              context.intent == currentIntent else { return }
+        await run { revision in
+            _ = try await self.readSession(revision)
+            var fields = context.intent.dictValue ?? [:]
+            fields["request_id"] = .string(UUID().uuidString.lowercased())
+            fields["decision_token"] = .string(reviewedToken)
+            fields["token"] = self.target.action == .withdraw ? .null
+                : .string(SymmetricKey(size: .bits256).withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() })
+            var review = context.invitation.filter {
+                [
+                    "invitee_email",
+                    "proposed_role",
+                    "proposed_role_base",
+                    "proposed_preset_key",
+                    "expires_at",
+                    "access_start_at",
+                    "access_end_at"
+                ].contains($0.key)
+            }
+            if let profile = context.invitation["invitee"]?.dictValue {
+                review["recipient_label"] = .string(HomeInvitationSenderValidation.profileLabel(profile))
+            }
+            let original = try PendingHomeInvitationSender(
+                scope: self.scope,
+                bodyData: HomeInvitationSenderValidation.encode(.object(fields)),
+                review: .object(review)
             )
-            pendingEvent = .submitted(response.invitation)
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription
-                ?? "Couldn't send the invite. Try again."
+            guard original.matches(self.scope) else { throw HomeInvitationSenderError.changed }
+            self.attempted = true
+            try self.current(revision)
+            try self.store.replace(scope: self.scope, expected: nil, next: original)
+            self.saved = original
+            self.context = nil
+            try await self.resolve(.retry, revision: revision)
         }
     }
 
-    // MARK: - Validation
+    func recover(_ action: HomeInvitationRecoveryAction, requestId: String, lifetime: Int) async {
+        guard pending?.requestId == requestId, generation == lifetime else { return }
+        await run { revision in try await self.resolve(action, revision: revision) }
+    }
 
-    /// Loose email validation — backend re-validates. Just enough to
-    /// gate the Next CTA on the Identify step.
-    public static func isValidEmail(_ raw: String) -> Bool {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 254 else { return false }
-        let parts = trimmed.split(separator: "@")
-        guard parts.count == 2 else { return false }
-        let local = parts[0]
-        let domain = parts[1]
-        guard !local.isEmpty, domain.contains(".") else { return false }
-        return true
+    func acknowledge(requestId: String) async -> PendingHomeInvitationSender? {
+        guard canAcknowledge, pending?.requestId == requestId else { return nil }
+        var result: PendingHomeInvitationSender?
+        await run { revision in
+            guard let original = self.saved, original.requestId == requestId else { throw HomeInvitationSenderError.changed }
+            try self.current(revision)
+            do {
+                try self.store.replace(scope: self.scope, expected: original, next: nil)
+            } catch {
+                guard try self.store.load(scope: self.scope) == nil else { throw error }
+            }
+            try self.current(revision)
+            self.saved = nil
+            self.observed = nil
+            self.attempted = false
+            self.context = nil
+            result = original
+        }
+        return result
+    }
+
+    var shareURL: URL? {
+        guard sharingChecked, sharingExpiresAt == nil || (sharingExpiresAt.map { $0 > Date() } ?? true), let original = pending,
+              original.outcome?.state == "completed", original.action != .withdraw,
+              let token = original.token else { return nil }
+        return HomeInvitationShareURL.make(
+            token: token,
+            apiOrigin: api.apiBaseURL,
+            configuredWebOrigin: Bundle.main.object(forInfoDictionaryKey: "PantopusPublicWebURL") as? String
+        )
+    }
+
+    func retireSharing() {
+        sharingChecked = false
+        sharingExpiresAt = nil
+    }
+
+    func checkSharing(requestId: String) async {
+        guard let original = pending, original.requestId == requestId, original.outcome?.state == "completed",
+              original.action != .withdraw, let invitationId = original.outcome?.invitationId else { return }
+        await run { revision in
+            guard try self.store.load(scope: self.scope) == original else { throw HomeInvitationSenderError.changed }
+            _ = try await self.readSession(revision)
+            let intent: JSONValue = .object([
+                "home_id": .string(original.homeId),
+                "action": .string("resend"),
+                "invitation_id": .string(invitationId)
+            ])
+            let response = try await self.read(Endpoint(
+                method: .post,
+                path: self.base + "/context",
+                body: intent,
+                headers: self.headers,
+                cachePolicy: .reloadIgnoringLocalCacheData
+            ))
+            try self.current(revision)
+            let current = HomeInvitationSenderContext(intent: intent, value: response.value)
+            guard response.status == 200, let session = self.serverSession, current.matches(self.scope, session: session),
+                  try self.store.load(scope: self.scope) == original else { throw HomeInvitationSenderError.unavailable }
+            let expiry = current.invitation["expires_at"]?.stringValue.flatMap(HomeInvitationValidation.date)
+            guard expiry == nil || (expiry.map { $0 > Date() } ?? true) else { throw HomeInvitationSenderError.unavailable }
+            self.sharingExpiresAt = min(expiry ?? Date().addingTimeInterval(60), Date().addingTimeInterval(60))
+            self.sharingChecked = true
+        }
+    }
+
+    func prepareShare(requestId: String, lifetime: Int) async -> URL? {
+        guard generation == lifetime, pending?.requestId == requestId else { return nil }
+        await checkSharing(requestId: requestId)
+        guard generation == lifetime else { return nil }
+        return shareURL
+    }
+
+    private func run(_ action: (Int) async throws -> Void) async {
+        guard visible, isCurrent else { errorMessage = HomeInvitationSenderError.sessionChanged.localizedDescription
+            return
+        }
+        guard !isWorking else { return }
+        let revision = generation
+        retireSharing()
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+        do {
+            try await action(revision)
+        } catch {
+            guard visible, isCurrent, generation == revision else { return }
+            errorMessage = (error as? HomeInvitationSenderError)?.localizedDescription ?? HomeInvitationSenderError.storage
+                .localizedDescription
+        }
+    }
+
+    private func current(_ revision: Int) throws {
+        guard visible, isCurrent, generation == revision, !Task.isCancelled else { throw HomeInvitationSenderError.sessionChanged }
+    }
+
+    private var base: String {
+        "/api/homes/invitations/sender"
+    }
+
+    private var headers: [String: String] {
+        ["X-Pantopus-Session-Scope": serverSession ?? "", "Cache-Control": "no-cache, no-store"]
+    }
+
+    private func resolve(_ action: HomeInvitationRecoveryAction, revision: Int) async throws {
+        guard let original = saved, let serverSession,
+              try store.load(scope: scope) == original else { throw HomeInvitationSenderError.changed }
+        try current(revision)
+        if let known = observed ?? original.outcome, known.isTerminal { try persist(known, original: original)
+            return
+        }
+        _ = try await readSession(revision)
+        let path = base + "/commands" + (action == .retry ? "" : "/" + original.requestId + (action == .cancel ? "/cancel" : ""))
+        let bytes: Data? = action == .check ? nil : action == .retry ? original.bodyData
+            : try HomeInvitationSenderValidation.encode(.object(original.fields.filter { $0.key != "request_id" }))
+        let response: (status: Int, value: JSONValue)
+        do { response = try await read(Endpoint(
+            method: action == .check ? .get : .post,
+            path: path,
+            bodyData: bytes,
+            headers: headers,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )) } catch { throw HomeInvitationSenderError.unknown }
+        try current(revision)
+        let result = HomeInvitationSenderOutcome(value: response.value)
+        let allowed = ["completed": [200, 201], "pending": [202], "cancelled": [200], "rejected": [400, 403, 404, 409, 410, 422]]
+        guard HomeInvitationValidation.session(response.value.dictValue?["session"], scope: scope) == serverSession,
+              result.matches(original),
+              allowed[result.state]?.contains(response.status) == true else { throw HomeInvitationSenderError.unknown }
+        try persist(result.projected(), original: original)
+    }
+
+    private func persist(_ outcome: HomeInvitationSenderOutcome, original: PendingHomeInvitationSender) throws {
+        guard outcome.matches(original) else { throw HomeInvitationSenderError.unknown }
+        if outcome.isTerminal { observed = outcome }
+        var next = original
+        next.outcome = outcome
+        try store.replace(scope: scope, expected: original, next: next)
+        saved = next
+    }
+
+    static func isValidEmail(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = value.split(separator: "@")
+        return !value.isEmpty && value.utf16.count <= 254 && parts.count == 2 && parts[1].contains(".")
+            && !value.contains(where: \.isWhitespace)
+    }
+}
+
+@MainActor
+private extension InviteMemberWizardViewModel {
+    func readSession(_ revision: Int) async throws -> String {
+        let response = try await read(Endpoint(method: .get, path: base + "/session", cachePolicy: .reloadIgnoringLocalCacheData))
+        try current(revision)
+        guard response.status == 200, let value = HomeInvitationValidation.session(response.value.dictValue?["session"], scope: scope),
+              serverSession == nil || serverSession == value else { throw HomeInvitationSenderError.sessionChanged }
+        return value
+    }
+
+    func read(_ endpoint: Endpoint) async throws -> (status: Int, value: JSONValue) {
+        let data: Data
+        let status: Int
+        do {
+            let response = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
+            data = response.data
+            status = response.response.statusCode
+        } catch let APIError.clientError(code, body) {
+            guard let bytes = body?.data(using: .utf8) else { throw HomeInvitationSenderError.unavailable }
+            data = bytes
+            status = code
+        } catch APIError.unauthorized {
+            throw HomeInvitationSenderError.sessionChanged
+        } catch {
+            throw HomeInvitationSenderError.unavailable
+        }
+        guard let value = try? JSONDecoder().decode(JSONValue.self, from: data) else { throw HomeInvitationSenderError.unavailable }
+        return (status, value)
     }
 }

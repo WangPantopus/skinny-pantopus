@@ -46,3 +46,12 @@ signed-out and restoration assertions. Strict SwiftLint/SwiftFormat pass on the
 repair. PR #24's documentation-only merge `cd764458f` is also integrated; its
 handoff conflict was resolved by preserving both current checkpoints. Required
 CI on this final head remains necessary before merge.
+
+## Final merge — September 11
+
+Final PR head `8c2eaa1104ef065cbb24d8ea291b2828dc16f545` passed all required
+checks, including iOS build, Swift quality and all three iOS device jobs:
+[CI run](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34570652476).
+PR #7 merged as `6a1013784`. The Home branch integrates that merge while retaining
+its new task routes. Its resulting integration CI is a separate gate. Local
+rebuilds were interrupted for resource pressure; they are not local build passes.

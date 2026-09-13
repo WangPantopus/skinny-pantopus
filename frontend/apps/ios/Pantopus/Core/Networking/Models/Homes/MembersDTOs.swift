@@ -113,6 +113,7 @@ public struct PendingInviteDTO: Decodable, Sendable, Hashable, Identifiable {
     /// Inviter's display name, for the "Invited by …" sub-line.
     public let invitedBy: String?
     public let createdAt: String?
+    public let expiresAt: String?
 
     public init(
         id: String,
@@ -121,7 +122,8 @@ public struct PendingInviteDTO: Decodable, Sendable, Hashable, Identifiable {
         email: String? = nil,
         name: String,
         invitedBy: String? = nil,
-        createdAt: String? = nil
+        createdAt: String? = nil,
+        expiresAt: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -130,6 +132,7 @@ public struct PendingInviteDTO: Decodable, Sendable, Hashable, Identifiable {
         self.name = name
         self.invitedBy = invitedBy
         self.createdAt = createdAt
+        self.expiresAt = expiresAt
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -140,6 +143,7 @@ public struct PendingInviteDTO: Decodable, Sendable, Hashable, Identifiable {
         case name
         case invitedBy = "invited_by"
         case createdAt = "created_at"
+        case expiresAt = "expires_at"
     }
 }
 

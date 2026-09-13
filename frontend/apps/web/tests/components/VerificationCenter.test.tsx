@@ -226,33 +226,30 @@ describe('button actions', () => {
     expect(mockPush).toHaveBeenCalledWith(`/app/homes/${HOME_ID}/verify-postcard`);
   });
 
-  test('"This isn\'t my home" calls move-out API', async () => {
+  test('"This isn\'t my home" opens reviewed self-leave without a mutation', async () => {
     mockAccess = buildAccess({ verification_status: 'pending_postcard' });
-    mockConfirmOpen.mockResolvedValueOnce(true);
-    mockPost.mockResolvedValueOnce({});
 
     render(<VerificationCenter homeId={HOME_ID} />);
 
     fireEvent.click(screen.getByText(/isn.*t my home/i));
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(`/api/homes/${HOME_ID}/move-out`);
+      expect(mockPush).toHaveBeenCalledWith(`/app/homes/member-removals?home=${HOME_ID}&self=1`);
     });
-
-    // Should redirect to /app after move-out
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/app');
-    });
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockConfirmOpen).not.toHaveBeenCalled();
   });
 
-  test('"This isn\'t my home" does nothing if user cancels confirm', async () => {
-    mockAccess = buildAccess({ verification_status: 'pending_postcard' });
-    mockConfirmOpen.mockResolvedValueOnce(false);
+  test('self-leave selection retains current membership and delegates confirmation to recovery', async () => {
+    mockAccess = buildAccess({ verification_status: 'pending_approval' });
+    const before = { ...mockAccess };
 
     render(<VerificationCenter homeId={HOME_ID} />);
 
     fireEvent.click(screen.getByText(/isn.*t my home/i));
-    await waitFor(() => expect(mockConfirmOpen).toHaveBeenCalled());
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(mockAccess).toEqual(before);
+    expect(mockReload).not.toHaveBeenCalled();
     expect(mockPost).not.toHaveBeenCalled();
   });
 

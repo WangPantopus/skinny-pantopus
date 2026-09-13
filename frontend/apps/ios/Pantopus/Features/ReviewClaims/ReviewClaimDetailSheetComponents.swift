@@ -55,11 +55,11 @@ struct ChallengeComposerSheet: View {
                 Icon(.messageCircle, size: 17, color: Theme.Color.warmAmber)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text("Challenge this claim")
+                Text("Request more information")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
-                Text("\(claimantFirstName) gets your questions and 14 days to respond.")
+                Text("Save questions for this claim review.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -118,8 +118,8 @@ struct ChallengeComposerSheet: View {
 
     private var visibilityCard: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            visibilityRow(icon: .eye, text: "Sent to claimant + \(coOwnerCount) co-owners")
-            visibilityRow(icon: .clock, text: "14-day window")
+            visibilityRow(icon: .eye, text: "Saved with the claim review")
+            visibilityRow(icon: .clock, text: "The claim stays under review")
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, 10)
@@ -168,7 +168,7 @@ struct ChallengeComposerSheet: View {
                     } else {
                         Icon(.send, size: 15, color: Theme.Color.appTextInverse)
                     }
-                    Text(isSubmitting ? "Sending…" : "Send challenge")
+                    Text(isSubmitting ? "Saving…" : "Save request")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }

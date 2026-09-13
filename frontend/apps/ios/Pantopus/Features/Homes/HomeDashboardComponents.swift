@@ -204,7 +204,7 @@ struct BrandNewHomeSection: View {
                             Text("Welcome home")
                                 .pantopusTextStyle(.h3)
                                 .foregroundStyle(Theme.Color.appText)
-                            Text("Set up the essentials for this verified address.")
+                            Text("Set up the essentials for your Home.")
                                 .pantopusTextStyle(.caption)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
@@ -279,12 +279,14 @@ struct HomeOverviewSection: View {
     let content: HomeDashboardContent
     let onOpenEmergency: () -> Void
     let onOpenPropertyDetails: () -> Void
+    var canViewActivity = true
+    var canViewEmergency = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            DashboardCard(title: "Upcoming", action: "See all", accent: Theme.Color.warning) {
+            DashboardCard(title: "Upcoming", accent: Theme.Color.warning) {
                 if content.overview.upcoming.isEmpty {
-                    OverviewEmptyRow(text: "Nothing due today. You're all clear.")
+                    OverviewEmptyRow(text: "No upcoming items in the Home sections you can view.")
                 } else {
                     VStack(spacing: Spacing.s0) {
                         ForEach(content.overview.upcoming) { item in
@@ -299,24 +301,28 @@ struct HomeOverviewSection: View {
                 }
             }
 
-            DashboardCard(title: "Recent activity", action: "See all") {
-                if content.overview.activity.isEmpty {
-                    OverviewEmptyRow(text: "No household activity yet.")
-                } else {
-                    VStack(spacing: Spacing.s0) {
-                        ForEach(content.overview.activity) { item in
-                            ActivityRow(item: item)
-                            if item.id != content.overview.activity.last?.id {
-                                Rectangle()
-                                    .fill(Theme.Color.appBorderSubtle)
-                                    .frame(height: 1)
+            if canViewActivity {
+                DashboardCard(title: "Recent activity") {
+                    if content.overview.activity.isEmpty {
+                        OverviewEmptyRow(text: "No recent household activity.")
+                    } else {
+                        VStack(spacing: Spacing.s0) {
+                            ForEach(content.overview.activity) { item in
+                                ActivityRow(item: item)
+                                if item.id != content.overview.activity.last?.id {
+                                    Rectangle()
+                                        .fill(Theme.Color.appBorderSubtle)
+                                        .frame(height: 1)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            EmergencyInfoRow(info: content.overview.emergency, onOpen: onOpenEmergency)
+            if canViewEmergency {
+                EmergencyInfoRow(info: content.overview.emergency, onOpen: onOpenEmergency)
+            }
 
             Button(action: onOpenPropertyDetails) {
                 HStack(spacing: Spacing.s2) {
@@ -387,6 +393,7 @@ struct DashboardCard<Content: View>: View {
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
     }
 }
 

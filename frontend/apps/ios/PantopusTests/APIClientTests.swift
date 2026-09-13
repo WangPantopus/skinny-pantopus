@@ -13,16 +13,30 @@ import XCTest
 @MainActor
 final class APIClientTests: XCTestCase {
     private var client: APIClient!
+    private var auth: AuthManager!
+    private var markerDirectory: URL!
 
     override func setUp() {
         super.setUp()
         URLProtocolStub.reset()
         client = APIClient(environment: .current, session: TestSession.make())
+        markerDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("api-client-tests-" + UUID().uuidString)
+        auth = AuthManager(
+            store: InMemorySecureStore(),
+            apiClient: client,
+            installMarker: InstallMarker(directory: markerDirectory),
+            allowSecureEnclave: false
+        )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
+        await auth.awaitBackgroundWork()
+        auth = nil
+        client = nil
+        try? FileManager.default.removeItem(at: markerDirectory)
+        markerDirectory = nil
         URLProtocolStub.reset()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testDecodesSnakeCaseUser() async throws {
@@ -46,6 +60,29 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(headers["Authorization"], "Unauthenticated requests must not carry a Bearer token")
         XCTAssertEqual(headers["X-Client-Platform"]?.hasPrefix("ios-"), true)
         XCTAssertEqual(headers["Content-Type"], "application/json")
+    }
+
+    func testNotFoundReceiptRequiresExplicitOptIn() async throws {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/command-recovery", authenticated: false)
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{\"state\":\"rejected\"}", status: 404))
+        do {
+            _ = try await client.requestDataResponse(endpoint)
+            XCTFail("The default not-found behavior must be preserved")
+        } catch APIError.notFound {}
+        let response = try await client.requestDataResponse(endpoint, includingNotFound: true)
+        XCTAssertEqual(response.response.statusCode, 404)
+        XCTAssertEqual(String(data: response.data, encoding: .utf8), "{\"state\":\"rejected\"}")
+    }
+
+    func testNotFoundReceiptOptInStillRejectsUnauthorizedResponse() async {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/command-recovery", authenticated: false)
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{\"state\":\"completed\"}", status: 401))
+        do {
+            _ = try await client.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
+            XCTFail("Receipt options cannot expose an unauthorized response as success")
+        } catch APIError.unauthorized {} catch {
+            XCTFail("Expected unauthorized response")
+        }
     }
 
     func test401TriggersUnauthorizedError() async {
@@ -80,6 +117,28 @@ final class APIClientTests: XCTestCase {
         } catch {
             XCTFail("Expected APIError.server, got \(error)")
         }
+    }
+
+    func testExplicitForbiddenBodyRetainsStatusAndDefaultDenial() async throws {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/current/dashboard-access")
+        let body = "{\"hasAccess\":false,\"verification_required\":true}"
+        URLProtocolStub.stub(path: endpoint.path, response: .json(body, status: 403))
+        let response = try await client.requestDataResponse(endpoint, includingForbidden: true)
+        XCTAssertEqual(response.response.statusCode, 403)
+        XCTAssertEqual(String(data: response.data, encoding: .utf8), body)
+        do {
+            _ = try await client.requestDataResponse(endpoint)
+            XCTFail("Ordinary callers must still receive a forbidden error")
+        } catch APIError.forbidden {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testForbiddenBodyOptInDoesNotBypassUnauthorizedResponse() async {
+        let endpoint = Endpoint(method: .get, path: "/api/homes/current/dashboard-access")
+        URLProtocolStub.stub(path: endpoint.path, response: .json("{}", status: 401))
+        do {
+            _ = try await client.requestDataResponse(endpoint, includingForbidden: true)
+            XCTFail("Authentication failure cannot be treated as applicant context")
+        } catch APIError.unauthorized {} catch { XCTFail("Unexpected error: \(error)") }
     }
 
     func testDecodeFailureSurfacesDecodingError() async {

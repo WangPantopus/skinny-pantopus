@@ -1,19 +1,5 @@
-// ============================================================
-// EVIDENCE RETENTION SWEEP — the safety net under the promise
-// "verification documents are deleted once your claim is decided".
-//
-// routes/admin.js and routes/homeOwnership.js purge a claim's documents
-// the moment it is approved, rejected, or withdrawn (services/evidencePurge).
-// This job catches what that path can miss: an S3 delete that failed and
-// was left unstamped, a claim decided by any other code path (revoked,
-// expired by a job, migrated), or a decision made before the purge
-// existed. Every evidence row that still points at an object whose claim
-// is decided gets purged; undecided claims are left alone.
-//
-// Only rows are visible here — an object whose row was cascade-deleted
-// with its claim cannot be found without listing the bucket, which is a
-// separate, manual clean-up.
-// ============================================================
+// Inventory decided claims and delegate exact evidence retirement. Legacy refs
+// are quarantined; a plausible path is never authority to delete an object.
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
@@ -41,7 +27,7 @@ async function evidenceRetentionSweep(options = {}) {
   }
   const live = (rows || []).filter((r) => isS3Key(r.storage_ref) && !(r.metadata && r.metadata.purged_at));
   const claimIds = [...new Set(live.map((r) => r.claim_id).filter(Boolean))];
-  const out = { scanned: (rows || []).length, live_objects: live.length, claims_checked: claimIds.length, claims_purged: 0, objects_purged: 0, failed: 0, dry_run: dryRun };
+  const out = { scanned: (rows || []).length, live_objects: live.length, claims_checked: claimIds.length, claims_purged: 0, objects_purged: 0, quarantined: 0, candidate_claims: 0, failed: 0, dry_run: dryRun };
   if (!claimIds.length) return out;
 
   const { data: claims, error: cErr } = await supabaseAdmin
@@ -56,9 +42,11 @@ async function evidenceRetentionSweep(options = {}) {
   const decided = claimIds.filter((id) => isDecided(byId.get(id)));
 
   for (const claimId of decided) {
-    if (dryRun) { out.claims_purged += 1; continue; }
+    out.candidate_claims += 1;
+    if (dryRun) continue;
     const r = await purgeClaimEvidence(claimId, 'retention');
-    out.claims_purged += 1;
+    if (r.purged > 0) out.claims_purged += 1;
+    out.quarantined += r.quarantined || 0;
     out.objects_purged += r.purged;
     out.failed += r.failed;
   }

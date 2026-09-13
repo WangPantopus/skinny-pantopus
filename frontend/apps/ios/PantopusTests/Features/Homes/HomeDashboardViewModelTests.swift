@@ -3,7 +3,7 @@
 //  PantopusTests
 //
 //  State-transition coverage for `HomeDashboardViewModel`. Covers the
-//  private-detail happy path, the 403 → public-profile fallback, the
+//  private-detail happy path, current access denial without a fallback, the
 //  final 500 error state, and the Home Intelligence stack (health score,
 //  seasonal checklist + its PATCH, property value, bill trends).
 //
@@ -11,7 +11,7 @@
 //  route rather than by FIFO sequence.
 //
 
-// swiftlint:disable multiline_literal_brackets type_body_length
+// swiftlint:disable type_body_length
 
 import XCTest
 @testable import Pantopus
@@ -28,19 +28,31 @@ final class HomeDashboardViewModelTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeAPI() -> APIClient {
+    private func makeAPI(session: URLSession? = nil) -> APIClient {
         APIClient(
             environment: .current,
-            session: SequencedURLProtocol.makeSession(),
+            session: session ?? SequencedURLProtocol.makeSession(),
             retryPolicy: .none
         )
     }
 
     // MARK: - Fixtures
 
+    private static let authorityBody = """
+    {"hasAccess":true,"home_id":"ddc23600-0000-4000-8000-000000000100","is_owner":true,"role_base":"owner",
+     "access_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "permissions":["home.view","home.edit","tasks.view","finance.view","packages.view",
+      "members.view","ownership.view","docs.view","maintenance.view","sensitive.view"]}
+    """
+    private static let deniedBody = """
+    {"hasAccess":false,"home_id":"ddc23600-0000-4000-8000-000000000100","permissions":[],
+     "access_revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "verification_required":false,"verification_kind":null,"verification_status":null}
+    """
+
     private static let detailBody = """
     {"home":{
-      "id":"h1","name":"Main","address":"1 Main","city":"X","state":"CA","zipcode":"90000",
+      "id":"ddc23600-0000-4000-8000-000000000100","name":"Main","address":"1 Main","city":"X","state":"CA","zipcode":"90000",
       "owner":{"id":"u1","username":"alice","name":"Alice"},
       "occupants":[],"location":null,"isOwner":true,"isPendingOwner":false,
       "pendingClaimId":null,"isOccupant":false,
@@ -52,21 +64,23 @@ final class HomeDashboardViewModelTests: XCTestCase {
 
     private static let dashboardBody = """
     {
-      "home":{"id":"h1","name":"Main","address":"1 Main"},
-      "myAccess":{"permissions":["home.view","finance.view"],"role_base":"owner","isOwner":true},
+      "home":{"id":"ddc23600-0000-4000-8000-000000000100","name":"Main","address":"1 Main"},
+      "myAccess":{"permissions":["home.view","home.edit","tasks.view","finance.view","packages.view",
+      "members.view","ownership.view","docs.view","maintenance.view","sensitive.view"],
+      "role_base":"owner","isOwner":true},
       "today":{
-        "next_events":[{"id":"e1","home_id":"h1","event_type":"maintenance","title":"Plumber",
+        "next_events":[{"id":"e1","home_id":"ddc23600-0000-4000-8000-000000000100","event_type":"maintenance","title":"Plumber",
                         "description":null,"start_at":"2999-01-01T16:00:00Z","end_at":null,
                         "location_notes":"Kitchen sink","recurrence_rule":null,"assigned_to":null,
                         "alerts_enabled":true,"created_by":"u1",
                         "created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}],
-        "tasks_due":[{"id":"t1","home_id":"h1","task_type":"chore","title":"Take out trash",
+        "tasks_due":[{"id":"t1","home_id":"ddc23600-0000-4000-8000-000000000100","task_type":"chore","title":"Take out trash",
                       "description":null,"assigned_to":null,"due_at":"2999-01-01T00:00:00Z",
                       "status":"open","priority":"normal","budget":null,"completed_at":null,
                       "linked_gig_id":null,"converted_to_gig_id":null,"created_by":"u1",
                       "created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z",
                       "visibility":"household","mail_id":null}],
-        "next_bill":{"id":"b1","home_id":"h1","bill_type":"electric","provider_name":"ConEd",
+        "next_bill":{"id":"b1","home_id":"ddc23600-0000-4000-8000-000000000100","bill_type":"electric","provider_name":"ConEd",
                      "amount":"142.80","currency":"USD","period_start":null,"period_end":null,
                      "due_date":"2999-01-03T00:00:00Z","status":"due","paid_at":null,"paid_by":null,
                      "created_by":"u1","created_at":"2025-01-01T00:00:00Z",
@@ -80,7 +94,7 @@ final class HomeDashboardViewModelTests: XCTestCase {
       "members":[{"user_id":"u2","role":"member","display_role":"owner",
                   "user":{"id":"u2","username":"maria","name":"Maria Kim",
                           "profile_picture_url":null}}],
-      "recent_activity":[{"id":"a1","home_id":"h1","actor_user_id":"u2",
+      "recent_activity":[{"id":"a1","home_id":"ddc23600-0000-4000-8000-000000000100","actor_user_id":"u2",
                           "action":"guest_pass_created","target_type":"guest_pass",
                           "target_id":"g1","metadata":{},
                           "created_at":"2025-01-01T00:00:00Z"}]
@@ -97,18 +111,18 @@ final class HomeDashboardViewModelTests: XCTestCase {
        "household":{"score":5,"max":10,"issues":[]},
        "documents":{"score":2,"max":10,"issues":[]}},
      "topIssue":"3 of 4 seasonal tasks incomplete",
-     "topAction":{"type":"navigate","label":"View checklist","route":"/homes/h1/dashboard"}}
+     "topAction":{"type":"navigate","label":"View checklist","route":"/homes/ddc23600-0000-4000-8000-000000000100/dashboard"}}
     """
 
     private static let checklistBody = """
     {"season":{"key":"fall_prep","label":"Fall prep"},
      "items":[
-       {"id":"i1","home_id":"h1","season_key":"fall_prep","year":2026,
+       {"id":"i1","home_id":"ddc23600-0000-4000-8000-000000000100","season_key":"fall_prep","year":2026,
         "item_key":"gutter_cleaning","title":"Clean gutters before rain season",
         "description":null,"gig_category":"Cleaning",
         "gig_title_suggestion":"Gutter cleaning needed","status":"pending",
         "completed_at":null,"gig_id":null,"sort_order":1},
-       {"id":"i2","home_id":"h1","season_key":"fall_prep","year":2026,
+       {"id":"i2","home_id":"ddc23600-0000-4000-8000-000000000100","season_key":"fall_prep","year":2026,
         "item_key":"furnace_inspection","title":"Inspect and service furnace",
         "description":null,"gig_category":"Handyman",
         "gig_title_suggestion":"Furnace inspection","status":"completed",
@@ -135,23 +149,52 @@ final class HomeDashboardViewModelTests: XCTestCase {
         health: [SequencedURLProtocol.Response]? = nil,
         checklist: [SequencedURLProtocol.Response]? = nil,
         propertyValue: [SequencedURLProtocol.Response]? = nil,
-        billTrends: [SequencedURLProtocol.Response]? = nil
+        billTrends: [SequencedURLProtocol.Response]? = nil,
+        access: [SequencedURLProtocol.Response]? = nil
     ) {
         SequencedURLProtocol.routeResponses = [
-            "/api/homes/h1": detail ?? [.status(200, body: Self.detailBody)],
-            "/api/homes/h1/dashboard": dashboard ?? [.status(200, body: Self.dashboardBody)],
-            "/api/homes/h1/health-score": health ?? [.status(200, body: Self.healthBody)],
-            "/api/homes/h1/seasonal-checklist": checklist ?? [.status(200, body: Self.checklistBody)],
-            "/api/homes/h1/property-value": propertyValue ?? [.status(200, body: Self.propertyValueBody)],
-            "/api/homes/h1/bill-trends": billTrends ?? [.status(200, body: Self.billTrendsBody)]
+            "/api/homes/ddc23600-0000-4000-8000-000000000100": detail ?? [.status(200, body: Self.detailBody)],
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/dashboard-access": access ?? Array(
+                repeating: .status(200, body: Self.authorityBody),
+                count: 64
+            ),
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/dashboard": dashboard ?? [.status(200, body: Self.dashboardBody)],
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/health-score": health ?? [.status(200, body: Self.healthBody)],
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/seasonal-checklist": checklist ?? [.status(200, body: Self.checklistBody)],
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/property-value": propertyValue ?? [.status(200, body: Self.propertyValueBody)],
+            "/api/homes/ddc23600-0000-4000-8000-000000000100/bill-trends": billTrends ?? [.status(200, body: Self.billTrendsBody)]
         ]
     }
 
     // MARK: - Core dashboard
 
+    func testAccessLossRemovesPrivateNavigationAndResetsSelectedTab() async {
+        stubHappyPath()
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
+        await vm.load()
+        vm.selectTab("bills")
+        XCTAssertEqual(vm.selectedTab, "bills")
+        stubHappyPath(access: Array(repeating: .status(403, body: Self.deniedBody), count: 2))
+        await vm.refresh()
+        guard case let .limited(content) = vm.state else { return XCTFail("Expected current limited entry") }
+        XCTAssertNil(content.verificationKind)
+        XCTAssertFalse(content.canOpenTasks)
+        XCTAssertNil(vm.access)
+        XCTAssertNil(vm.checklist.value)
+        XCTAssertEqual(vm.selectedTab, "overview")
+        vm.selectTab("bills")
+        XCTAssertEqual(vm.selectedTab, "overview")
+    }
+
     func testHeroStatsComeFromTheDashboardAggregate() async {
         stubHappyPath()
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected loaded, got \(vm.state)")
@@ -167,7 +210,10 @@ final class HomeDashboardViewModelTests: XCTestCase {
 
     func testQuickActionBadgesComeFromCounts() async {
         stubHappyPath()
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected loaded, got \(vm.state)")
@@ -183,7 +229,10 @@ final class HomeDashboardViewModelTests: XCTestCase {
 
     func testOverviewIsBuiltFromTheAggregateNotFixtures() async {
         stubHappyPath()
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             XCTFail("Expected loaded, got \(vm.state)")
@@ -204,38 +253,27 @@ final class HomeDashboardViewModelTests: XCTestCase {
         XCTAssertTrue(content.overview.emergency.isConfigured)
     }
 
-    func testForbiddenFallsBackToPublicProfile() async {
-        SequencedURLProtocol.routeResponses = [
-            "/api/homes/h1": [.status(403, body: "{\"error\":\"no access\"}")],
-            "/api/homes/h1/public-profile": [.status(200, body: """
-            {"home":{
-              "id":"h1","name":null,"address":"200 Public St","city":"Y","state":"CA","zipcode":"90000",
-              "home_type":"single_family","visibility":"public","description":null,
-              "created_at":"2025-01-01T00:00:00Z","hasVerifiedOwner":true,"verifiedOwner":null,
-              "userMembershipStatus":"none","userResidencyClaim":null,"memberCount":2,"nearbyGigs":5
-            }}
-            """)],
-            "/api/homes/h1/dashboard": [.status(403, body: "{}")],
-            "/api/homes/h1/health-score": [.status(403, body: "{}")],
-            "/api/homes/h1/seasonal-checklist": [.status(403, body: "{}")],
-            "/api/homes/h1/property-value": [.status(403, body: "{}")],
-            "/api/homes/h1/bill-trends": [.status(403, body: "{}")]
-        ]
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+    func testDeniedDashboardDoesNotLoadPublicFallbackOrInventEmptyPrivateData() async {
+        stubHappyPath(access: Array(repeating: .status(403, body: Self.deniedBody), count: 2))
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
-        guard case let .loaded(content) = vm.state else {
-            XCTFail("Expected loaded, got \(vm.state)")
-            return
-        }
-        XCTAssertEqual(content.address, "200 Public St")
-        XCTAssertTrue(content.verified, "Public profile with a verified owner should flip verified=true")
-        // No dashboard access → zeroed hero stats, never fixtures.
-        XCTAssertEqual(content.stats.map(\.value), ["0", "0", "0"])
+        guard case .limited = vm.state else { return XCTFail("Expected limited Home entry") }
+        XCTAssertNil(vm.access)
+        XCTAssertNil(vm.healthScore.value)
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains {
+            $0.url?.path.hasSuffix("/public-profile") == true || $0.url?.path.hasSuffix("/dashboard") == true
+        })
     }
 
     func testServerErrorSurfacesError() async {
-        SequencedURLProtocol.routeResponses = ["/api/homes/h1": [.status(500, body: "{}")]]
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        SequencedURLProtocol.routeResponses = ["/api/homes/ddc23600-0000-4000-8000-000000000100": [.status(500, body: "{}")]]
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         if case .error = vm.state {
             // pass
@@ -248,15 +286,21 @@ final class HomeDashboardViewModelTests: XCTestCase {
         stubHappyPath(detail: [
             .status(500, body: "{}"),
             .status(200, body: Self.detailBody)
-        ])
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        ], dashboard: Array(repeating: .status(200, body: Self.dashboardBody), count: 2))
+        // The first detail failure can cancel its concurrent dashboard read
+        // before URLProtocol consumes that response. Keep both attempts in one
+        // session-scoped queue; replacing the shared queue between attempts lets
+        // that cancelled sibling consume the retry's only dashboard response.
+        let session = SequencedURLProtocol.makeSession(routeResponses: SequencedURLProtocol.routeResponses)
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI(session: session)
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case .error = vm.state else {
             XCTFail("Expected error first")
             return
         }
-        // Re-stub the one-shot intelligence routes for the retry pass.
-        stubHappyPath(detail: [.status(200, body: Self.detailBody)])
         await vm.refresh()
         guard case .loaded = vm.state else {
             XCTFail("Expected loaded after retry")
@@ -269,9 +313,12 @@ final class HomeDashboardViewModelTests: XCTestCase {
     func testIntelligenceCardsLoadIndependently() async {
         stubHappyPath(
             health: [.status(500, body: "{}")],
-            billTrends: [.status(403, body: "{}")]
+            billTrends: [.status(500, body: "{}")]
         )
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
 
         // A failed health score must not blank the screen.
@@ -284,10 +331,10 @@ final class HomeDashboardViewModelTests: XCTestCase {
         } else {
             XCTFail("Expected the health-score card to be in its error state")
         }
-        if case .forbidden = vm.billTrends {
+        if case .failed = vm.billTrends {
             // pass
         } else {
-            XCTFail("Expected bill trends to be forbidden without finance access")
+            XCTFail("Expected bill trends to show its own unavailable state")
         }
         XCTAssertEqual(vm.checklist.value?.items.count, 2)
         XCTAssertEqual(vm.propertyValue.value?.estimatedValue, 812_000)
@@ -298,16 +345,19 @@ final class HomeDashboardViewModelTests: XCTestCase {
             .status(200, body: Self.healthBody),
             .status(200, body: Self.healthBody)
         ])
-        SequencedURLProtocol.routeResponses["/api/homes/h1/seasonal-checklist/i1"] = [
+        SequencedURLProtocol.routeResponses["/api/homes/ddc23600-0000-4000-8000-000000000100/seasonal-checklist/i1"] = [
             .status(200, body: """
-            {"id":"i1","home_id":"h1","season_key":"fall_prep","year":2026,
+            {"id":"i1","home_id":"ddc23600-0000-4000-8000-000000000100","season_key":"fall_prep","year":2026,
              "item_key":"gutter_cleaning","title":"Clean gutters before rain season",
              "description":null,"gig_category":"Cleaning",
              "gig_title_suggestion":"Gutter cleaning needed","status":"completed",
              "completed_at":"2026-02-01T00:00:00Z","gig_id":null,"sort_order":1}
             """)
         ]
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         XCTAssertEqual(vm.checklist.value?.items.first?.status, "pending")
 
@@ -324,39 +374,45 @@ final class HomeDashboardViewModelTests: XCTestCase {
             .status(200, body: Self.healthBody),
             .status(200, body: Self.healthBody)
         ])
-        SequencedURLProtocol.routeResponses["/api/homes/h1/seasonal-checklist/i1"] = [
+        SequencedURLProtocol.routeResponses["/api/homes/ddc23600-0000-4000-8000-000000000100/seasonal-checklist/i1"] = [
             .status(200, body: """
-            {"id":"i1","home_id":"h1","season_key":"fall_prep","year":2026,
+            {"id":"i1","home_id":"ddc23600-0000-4000-8000-000000000100","season_key":"fall_prep","year":2026,
              "item_key":"gutter_cleaning","title":"Clean gutters before rain season",
              "description":null,"gig_category":"Cleaning",
              "gig_title_suggestion":"Gutter cleaning needed","status":"skipped",
              "completed_at":"2026-02-01T00:00:00Z","gig_id":null,"sort_order":1}
             """)
         ]
-        let vm = HomeDashboardViewModel(homeId: "h1", api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: "ddc23600-0000-4000-8000-000000000100",
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         await vm.skipChecklistItem("i1")
 
         XCTAssertEqual(vm.checklist.value?.items.first?.status, "skipped")
         let patch = SequencedURLProtocol.capturedRequests.last {
-            $0.url?.path == "/api/homes/h1/seasonal-checklist/i1"
+            $0.url?.path == "/api/homes/ddc23600-0000-4000-8000-000000000100/seasonal-checklist/i1"
         }
         XCTAssertEqual(patch?.httpMethod, "PATCH")
     }
 
     func testTopActionRouteMapsToADashboardActionId() {
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/h1/maintenance"), "view_maintenance")
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/h1/bills"), "view_bills")
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/h1/emergency"), "view_emergency")
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/h1/members"), "add_member")
-        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/h1/documents"), "view_docs")
-        XCTAssertNil(HealthScoreRingCard.actionId(for: "/homes/h1/dashboard"))
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/maintenance"), "view_maintenance")
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/bills"), "view_bills")
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/emergency"), "view_emergency")
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/members"), "add_member")
+        XCTAssertEqual(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/documents"), "view_docs")
+        XCTAssertNil(HealthScoreRingCard.actionId(for: "/homes/ddc23600-0000-4000-8000-000000000100/dashboard"))
     }
 
     // MARK: - Sample-id shortcuts (QA fixtures, not live data)
 
     func testBrandNewSampleRendersEmptyState() async {
-        let vm = HomeDashboardViewModel(homeId: HomeDashboardSampleData.emptyHomeId, api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: HomeDashboardSampleData.emptyHomeId,
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case let .empty(brandNew) = vm.state else {
             XCTFail("Expected empty brand-new sample, got \(vm.state)")
@@ -371,7 +427,10 @@ final class HomeDashboardViewModelTests: XCTestCase {
     }
 
     func testNeedsAttentionSampleRendersAttentionState() async {
-        let vm = HomeDashboardViewModel(homeId: HomeDashboardSampleData.needsAttentionHomeId, api: makeAPI())
+        let vm = HomeDashboardViewModel(
+            homeId: HomeDashboardSampleData.needsAttentionHomeId,
+            api: makeAPI()
+        ) { "current-dashboard-test-session" }
         await vm.load()
         guard case let .needsAttention(content) = vm.state else {
             XCTFail("Expected needsAttention sample, got \(vm.state)")
@@ -379,7 +438,7 @@ final class HomeDashboardViewModelTests: XCTestCase {
         }
         XCTAssertEqual(
             content.attentionSummary?.message,
-            "3 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim"
+            "4 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim"
         )
         XCTAssertEqual(content.attentionSummary?.chips.map(\.actionId), [
             "view_bills",

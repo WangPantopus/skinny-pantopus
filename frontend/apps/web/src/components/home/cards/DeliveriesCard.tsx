@@ -29,8 +29,8 @@ export function DeliveriesCardPreview({
   pendingPkgs: number;
   onExpand: () => void;
 }) {
-  const arriving = packages.filter(
-    (p) => p.status === 'in_transit' || p.status === 'out_for_delivery' || p.status === 'expected'
+  const pending = packages.filter(
+    (p) => p.status === 'out_for_delivery' || p.status === 'expected'
   );
 
   return (
@@ -39,16 +39,16 @@ export function DeliveriesCardPreview({
       icon={<Package className="w-5 h-5" />}
       visibility="members"
       count={pendingPkgs}
-      badge={arriving.length > 0 ? `${arriving.length} arriving` : undefined}
+      badge={pendingPkgs > 0 ? `${pendingPkgs} pending` : undefined}
       onClick={onExpand}
     >
-      {arriving.length > 0 ? (
+      {pending.length > 0 ? (
         <div className="space-y-2">
-          {arriving.slice(0, 3).map((p) => {
+          {pending.slice(0, 3).map((p) => {
             const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.expected;
             return (
               <div key={p.id} className="flex items-center justify-between text-sm">
-                <span className="text-app-text-strong truncate">{p.description || p.carrier || 'Package'}</span>
+                <span className="text-app-text-strong truncate">{p.description || p.vendor_name || p.carrier || 'Package'}</span>
                 <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cfg.color}`}>
                   {cfg.label}
                 </span>

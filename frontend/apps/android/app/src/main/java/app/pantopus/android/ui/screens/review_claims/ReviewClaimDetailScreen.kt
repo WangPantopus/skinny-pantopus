@@ -11,15 +11,12 @@
 
 package app.pantopus.android.ui.screens.review_claims
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +27,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -38,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,11 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -78,6 +71,7 @@ import app.pantopus.android.data.api.models.admin.AdminClaimRecordDto
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewAction
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -106,27 +100,12 @@ private val REVIEWABLE_STATES =
         "disputed",
     )
 
-private const val DEFAULT_CLAIM_STATEMENT =
-    "I bought a 25% stake from Mateo when he moved out in 2018. We never got around to " +
-        "recording the transfer on Pantopus, but the deed is on file with Kings County and " +
-        "ConEd has been in my name since."
-
 private enum class TrustChipTone { Success, Warn, Neutral }
 
 private data class TrustChipModel(
     val icon: PantopusIcon,
     val label: String,
     val tone: TrustChipTone,
-)
-
-private enum class EvidenceKind { Deed, Photo, Utility, SignedStatement }
-
-private data class EvidenceItemModel(
-    val id: String,
-    val kind: EvidenceKind,
-    val title: String,
-    val meta: String,
-    val badge: String?,
 )
 
 private data class ClaimantCardModel(
@@ -150,6 +129,8 @@ fun ReviewClaimDetailScreen(
     viewModel: ReviewClaimDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val evidencePanel by viewModel.evidencePanel.collectAsStateWithLifecycle()
+    evidencePanel?.let { HomePrivateEvidenceDialog(it, onClose = viewModel::closeEvidence) }
     val reviewingAction by viewModel.reviewingAction.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val selectedReasons by viewModel.selectedReasons.collectAsStateWithLifecycle()
@@ -177,6 +158,7 @@ fun ReviewClaimDetailScreen(
             is ReviewClaimDetailUiState.Loaded ->
                 LoadedShell(
                     detail = current.detail,
+                    onOpenEvidence = viewModel::openEvidence,
                     reviewingAction = reviewingAction,
                     onBack = onBack,
                     onAccept = {
@@ -209,7 +191,7 @@ fun ReviewClaimDetailScreen(
     if (showRejectSheet) {
         NoteCaptureSheet(
             title = "Reject claim",
-            body = "Optionally include a reason — the claimant sees this in their notification.",
+            body = "Optionally include a reason to save with this review.",
             placeholder = "e.g. The deed doesn't match the address.",
             primaryTitle = "Reject claim",
             primaryDestructive = true,
@@ -239,7 +221,6 @@ fun ReviewClaimDetailScreen(
     if (showChallengeSheet) {
         ChallengeComposerSheet(
             claimantFirstName = claimantFirstName(state),
-            coOwnerCount = 2,
             question = challengeQuestion,
             selectedReasons = selectedReasons,
             isSubmitting = reviewingAction == AdminClaimReviewAction.Challenge,
@@ -319,13 +300,14 @@ private fun ErrorShell(
 @Composable
 private fun LoadedShell(
     detail: AdminClaimDetailResponse,
+    onOpenEvidence: () -> Unit,
     reviewingAction: AdminClaimReviewAction?,
     onBack: () -> Unit,
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onChallenge: () -> Unit,
 ) {
-    val isReviewable = detail.claim.state in REVIEWABLE_STATES
+    val isReviewable = detail.claim.state in REVIEWABLE_STATES && !detail.claim.requiresDisputeReview
     ContentDetailShell(
         title = "Review claim",
         onBack = onBack,
@@ -350,21 +332,26 @@ private fun LoadedShell(
                     )
                 }
                 OverlineSection(title = evidenceOverline(detail.evidence.size)) {
+                    TextButton(onClick = onOpenEvidence, modifier = Modifier.testTag("reviewClaimDetail_openPrivateEvidence")) {
+                        Text("Open private documents")
+                    }
                     EvidenceContent(
                         evidence = detail.evidence,
                         modifier = Modifier.testTag("reviewClaimDetail_evidence"),
                     )
                 }
                 statementFor(detail.claim)?.let { statement ->
-                    OverlineSection(title = "Claim statement") {
+                    OverlineSection(title = "Review note") {
                         StatementBlock(
                             statement = statement,
-                            attribution = statementAttribution(detail),
+                            attribution = null,
                             modifier = Modifier.testTag("reviewClaimDetail_statement"),
                         )
                     }
                 }
-                if (!isReviewable) {
+                if (detail.claim.requiresDisputeReview) {
+                    Text("This disputed claim needs the dedicated dispute review flow.", color = PantopusColors.appTextSecondary)
+                } else if (!isReviewable) {
                     TerminalStateBanner(
                         state = detail.claim.state,
                         modifier = Modifier.testTag("reviewClaimDetail_terminal"),
@@ -385,7 +372,7 @@ private fun LoadedShell(
     )
 }
 
-private fun evidenceOverline(count: Int): String = "Evidence · $count ${if (count == 1) "file" else "files"}"
+private fun evidenceOverline(count: Int): String = "Evidence · $count ${if (count == 1) "item" else "items"}"
 
 // MARK: - Section header
 
@@ -484,7 +471,7 @@ private fun claimantModel(
         email = claimant?.email,
         pendingLabel = if (reviewable) pendingLabel(detail.claim) else null,
         gradient = AdminClaimAvatarGradient.gradient(claimant?.id ?: name),
-        shareValue = if (detail.claim.claimType == "owner") "25%" else "—",
+        shareValue = "—",
         shareDescriptor =
             when (detail.claim.claimType) {
                 "resident" -> "residency claim"
@@ -492,11 +479,11 @@ private fun claimantModel(
                 else -> "ownership share"
             },
         trustChips =
-            listOf(
-                TrustChipModel(PantopusIcon.BadgeCheck, "Verified ID", TrustChipTone.Success),
-                TrustChipModel(PantopusIcon.Phone, "Phone verified", TrustChipTone.Success),
-                TrustChipModel(PantopusIcon.ShieldAlert, "No mutual owners", TrustChipTone.Warn),
-            ),
+            if (detail.claim.identityStatus == "verified") {
+                listOf(TrustChipModel(PantopusIcon.BadgeCheck, "Identity confirmed", TrustChipTone.Success))
+            } else {
+                listOf(TrustChipModel(PantopusIcon.ShieldAlert, "Identity not confirmed", TrustChipTone.Warn))
+            },
     )
 }
 
@@ -773,364 +760,34 @@ private fun EvidenceContent(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        EvidenceStrip(items = evidenceItems(evidence), extraCount = maxOf(0, evidence.size - 4))
-        Row(
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.BadgeCheck,
-                contentDescription = null,
-                size = 12.dp,
-                tint = PantopusColors.success,
-            )
-            Text(
-                text = "County recorder cross-check ran on these files. Tap any file to open.",
-                fontSize = 11.sp,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EvidenceStrip(
-    items: List<EvidenceItemModel>,
-    extraCount: Int,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items.forEach { item ->
-            EvidenceThumb(item)
-        }
-        if (extraCount > 0) {
-            EvidenceMoreTile(extraCount)
-        }
-    }
-}
-
-@Composable
-private fun EvidenceThumb(item: EvidenceItemModel) {
-    Column(
-        modifier = Modifier.width(96.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .width(96.dp)
-                    .height(128.dp)
-                    .shadow(2.dp, RoundedCornerShape(Radii.md))
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.appSurfaceSunken)
-                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md)),
-        ) {
-            EvidencePreview(kind = item.kind)
-            item.badge?.let { badge ->
-                Text(
-                    text = badge.uppercase(),
-                    fontSize = 8.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PantopusColors.appTextInverse,
-                    modifier =
-                        Modifier
-                            .padding(5.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(PantopusColors.appText.copy(alpha = 0.78f))
-                            .padding(horizontal = 5.dp, vertical = 2.dp),
-                )
+        evidence.forEach { item ->
+            Column(
+                modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurfaceMuted).padding(Spacing.s3),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+            ) {
+                Text(AdminClaimEvidenceLabel.display(item.evidenceType), fontWeight = FontWeight.SemiBold)
+                Text(evidenceMeta(item), color = PantopusColors.appTextSecondary)
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = item.title,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = item.meta,
-                fontSize = 10.sp,
-                color = PantopusColors.appTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EvidenceMoreTile(count: Int) {
-    Box(
-        modifier =
-            Modifier
-                .width(96.dp)
-                .height(128.dp)
-                .clip(RoundedCornerShape(Radii.md))
-                .border(1.5.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.md)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Plus,
-                contentDescription = null,
-                size = 18.dp,
-                tint = PantopusColors.appTextSecondary,
-            )
-            Text(
-                text = "+$count more",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EvidencePreview(kind: EvidenceKind) {
-    when (kind) {
-        EvidenceKind.Deed -> DeedPreview()
-        EvidenceKind.Photo -> PhotoPreview()
-        EvidenceKind.Utility -> UtilityPreview()
-        EvidenceKind.SignedStatement -> SignedStatementPreview()
-    }
-}
-
-@Composable
-private fun DocumentPreviewFrame(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(Spacing.s2)
-                .clip(RoundedCornerShape(Radii.sm))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.sm))
-                .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-        content = content,
-    )
-}
-
-@Composable
-private fun DeedPreview() {
-    DocumentPreviewFrame {
-        PreviewLine(width = 0.6f, color = PantopusColors.appTextStrong, height = 4.dp)
-        PreviewLine(0.85f)
-        PreviewLine(0.78f)
-        PreviewLine(0.9f)
-        PreviewLine(0.4f)
-        Spacer(Modifier.weight(1f))
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.End)
-                    .width(22.dp)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(PantopusColors.primary50)
-                    .border(1.dp, PantopusColors.primary100, RoundedCornerShape(2.dp)),
-        )
-    }
-}
-
-@Composable
-private fun PhotoPreview() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors =
-                            listOf(
-                                PantopusColors.warningLight,
-                                PantopusColors.handyman,
-                                PantopusColors.warmAmber,
-                            ),
-                    ),
-                ),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 22.dp)
-                    .width(58.dp)
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                    .background(PantopusColors.appText),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 22.dp)
-                    .width(22.dp)
-                    .height(26.dp)
-                    .background(PantopusColors.paperCream),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 18.dp, end = 20.dp)
-                    .size(11.dp)
-                    .clip(CircleShape)
-                    .background(PantopusColors.appTextInverse),
-        )
-    }
-}
-
-@Composable
-private fun UtilityPreview() {
-    DocumentPreviewFrame {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier =
-                    Modifier
-                        .width(16.dp)
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(PantopusColors.primary600),
-            )
-            Spacer(Modifier.weight(1f))
-            Box(
-                modifier =
-                    Modifier
-                        .width(10.dp)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(PantopusColors.appTextMuted),
-            )
-        }
-        PreviewLine(0.7f)
-        PreviewLine(0.55f)
-        PreviewLine(0.45f, color = PantopusColors.primary100)
-        Spacer(Modifier.weight(1f))
         Text(
-            text = "$184.20",
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            color = PantopusColors.appTextStrong,
-            modifier = Modifier.align(Alignment.End),
+            "Open private documents to inspect exact files and explicitly verify pending evidence. " +
+                "Legacy documents require a private re-upload.",
+            color = PantopusColors.appTextSecondary,
         )
-    }
-}
-
-@Composable
-private fun SignedStatementPreview() {
-    DocumentPreviewFrame {
-        PreviewLine(0.85f)
-        PreviewLine(0.7f)
-        PreviewLine(0.9f)
-        PreviewLine(0.5f)
-        Spacer(Modifier.weight(1f))
-        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) {
-            val path =
-                Path().apply {
-                    moveTo(0f, size.height * 0.8f)
-                    cubicTo(
-                        size.width * 0.05f,
-                        size.height * 0.2f,
-                        size.width * 0.2f,
-                        0f,
-                        size.width * 0.32f,
-                        size.height * 0.1f,
-                    )
-                    cubicTo(
-                        size.width * 0.42f,
-                        size.height * 0.2f,
-                        size.width * 0.4f,
-                        size.height * 0.95f,
-                        size.width * 0.5f,
-                        size.height * 0.9f,
-                    )
-                    cubicTo(
-                        size.width * 0.62f,
-                        size.height * 0.85f,
-                        size.width * 0.66f,
-                        size.height * 0.1f,
-                        size.width * 0.78f,
-                        size.height * 0.25f,
-                    )
-                    lineTo(size.width * 0.95f, size.height * 0.55f)
-                }
-            drawPath(
-                path = path,
-                color = PantopusColors.primary700,
-                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderStrong))
-    }
-}
-
-@Composable
-private fun PreviewLine(
-    width: Float,
-    color: Color = PantopusColors.appBorderStrong,
-    height: androidx.compose.ui.unit.Dp = 2.dp,
-) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth(width)
-                .height(height)
-                .clip(RoundedCornerShape(1.dp))
-                .background(color),
-    )
-}
-
-private fun evidenceItems(evidence: List<AdminClaimEvidenceDto>): List<EvidenceItemModel> =
-    evidence.take(4).map { item ->
-        EvidenceItemModel(
-            id = item.id,
-            kind = evidenceKind(item),
-            title = AdminClaimEvidenceLabel.display(item.evidenceType),
-            meta = evidenceMeta(item),
-            badge = yearBadge(item.createdAt),
-        )
-    }
-
-private fun evidenceKind(item: AdminClaimEvidenceDto): EvidenceKind {
-    if (item.mimeType?.startsWith("image/") == true) return EvidenceKind.Photo
-    val type = item.evidenceType.lowercase()
-    return when {
-        type.contains("utility") || type.contains("bill") -> EvidenceKind.Utility
-        type.contains("statement") || type.contains("signature") ||
-            type.contains("signed") || type.contains("affidavit") -> EvidenceKind.SignedStatement
-        type.contains("deed") || type.contains("title") -> EvidenceKind.Deed
-        else -> EvidenceKind.Deed
     }
 }
 
 private fun evidenceMeta(item: AdminClaimEvidenceDto): String {
     val parts = mutableListOf<String>()
-    parts.add(fileTypeLabel(item))
+    parts.add(
+        when {
+            item.eligibleForReview == true -> "Eligible verified evidence"
+            item.availabilityCode == "CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED" -> "Private re-upload required"
+            else -> "Not verified for approval"
+        },
+    )
     item.fileSize?.takeIf { it > 0 }?.let { parts.add(sizeLabel(it)) }
     return parts.joinToString(" · ")
-}
-
-private fun fileTypeLabel(item: AdminClaimEvidenceDto): String {
-    val mime = item.mimeType
-    if (mime?.contains("pdf") == true) return "PDF"
-    if (mime?.startsWith("image/") == true) return "JPG"
-    return item.fileName?.substringAfterLast('.', missingDelimiterValue = "")?.takeIf { it.isNotBlank() }?.uppercase()
-        ?: "FILE"
 }
 
 private fun sizeLabel(bytes: Int): String =
@@ -1140,19 +797,11 @@ private fun sizeLabel(bytes: Int): String =
         "${maxOf(1, bytes / 1024)} KB"
     }
 
-private fun yearBadge(iso: String): String? =
-    runCatching { Instant.parse(iso).atZone(java.time.ZoneId.systemDefault()).year.toString() }.getOrNull()
-
 // MARK: - Statement block
 
 private fun statementFor(claim: AdminClaimRecordDto): String? {
     val note = claim.reviewNote?.trim()
-    return note?.takeIf { it.isNotEmpty() } ?: DEFAULT_CLAIM_STATEMENT
-}
-
-private fun statementAttribution(detail: AdminClaimDetailResponse): String? {
-    val name = detail.claimant?.name ?: return null
-    return "Signed · $name"
+    return note?.takeIf { it.isNotEmpty() }
 }
 
 @Composable
@@ -1172,7 +821,7 @@ private fun StatementBlock(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Text(
-            text = "\"$statement\"",
+            text = statement,
             fontSize = 13.5.sp,
             lineHeight = 20.sp,
             fontStyle = FontStyle.Italic,
@@ -1268,7 +917,7 @@ private fun VerdictBar(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             FooterSecondaryButton(
-                label = "Challenge",
+                label = "Request info",
                 icon = PantopusIcon.MessageCircle,
                 tintFg = PantopusColors.warmAmber,
                 tintBg = PantopusColors.warningBg,
@@ -1398,7 +1047,6 @@ private fun FooterSecondaryButton(
 @Composable
 private fun ChallengeComposerSheet(
     claimantFirstName: String,
-    coOwnerCount: Int,
     question: String,
     selectedReasons: Set<ChallengeReason>,
     isSubmitting: Boolean,
@@ -1447,14 +1095,14 @@ private fun ChallengeComposerSheet(
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
-                        text = "Challenge this claim",
+                        text = "Request more information",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = PantopusColors.appText,
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        text = "$claimantFirstName gets your questions and 14 days to respond.",
+                        text = "Save questions for this claim review.",
                         fontSize = 11.5.sp,
                         color = PantopusColors.appTextSecondary,
                     )
@@ -1509,8 +1157,8 @@ private fun ChallengeComposerSheet(
                             .padding(horizontal = Spacing.s3, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
-                    VisibilityRow(icon = PantopusIcon.Eye, text = "Sent to claimant + $coOwnerCount co-owners")
-                    VisibilityRow(icon = PantopusIcon.Clock, text = "14-day window")
+                    VisibilityRow(icon = PantopusIcon.Eye, text = "Saved with the claim review")
+                    VisibilityRow(icon = PantopusIcon.Clock, text = "The claim stays under review")
                 }
             }
 
@@ -1522,7 +1170,7 @@ private fun ChallengeComposerSheet(
                     modifier = Modifier.weight(1f),
                 )
                 SheetPrimaryButton(
-                    label = if (isSubmitting) "Sending…" else "Send challenge",
+                    label = if (isSubmitting) "Saving…" else "Save request",
                     icon = PantopusIcon.Send,
                     isSubmitting = isSubmitting,
                     enabled = canSend && !isSubmitting,

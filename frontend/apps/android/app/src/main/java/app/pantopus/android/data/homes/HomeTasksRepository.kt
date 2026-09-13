@@ -2,11 +2,15 @@ package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
+import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeTasksApi
+import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,8 +25,30 @@ open class HomeTasksRepository
     constructor(
         private val api: HomeTasksApi,
     ) {
+        open suspend fun getRecurrence(
+            homeId: String,
+            taskId: String,
+            session: String,
+        ): NetworkResult<HomeTaskRecurrenceState> = safeApiCall { api.getRecurrence(homeId, taskId, session) }
+
+        open suspend fun changeRecurrence(
+            homeId: String,
+            taskId: String,
+            request: HomeTaskRecurrenceRequest,
+            session: String,
+        ): NetworkResult<HomeTaskRecurrenceState> = safeApiCall { api.changeRecurrence(homeId, taskId, request, session) }
+
         /** `GET /api/homes/:id/tasks`. */
-        open suspend fun getHomeTasks(homeId: String): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId) }
+        open suspend fun getHomeTasks(
+            homeId: String,
+            expectedSession: String? = null,
+        ): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId, expectedSession) }
+
+        open suspend fun getHomeTask(
+            homeId: String,
+            taskId: String,
+            expectedSession: String? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.getHomeTask(homeId, taskId, expectedSession) }
 
         /** `POST /api/homes/:id/tasks`. */
         open suspend fun createHomeTask(
@@ -30,16 +56,35 @@ open class HomeTasksRepository
             request: CreateHomeTaskRequest,
         ): NetworkResult<HomeTaskResponse> = safeApiCall { api.createHomeTask(homeId, request) }
 
+        open suspend fun createHomeTaskWithReceipt(
+            homeId: String,
+            request: CreateHomeTaskRequest,
+            expectedSession: String,
+        ): NetworkResult<HomeTaskCreationResponse> = safeApiCall { api.createHomeTaskWithReceipt(homeId, request, expectedSession) }
+
+        open suspend fun patchHomeTask(
+            homeId: String,
+            taskId: String,
+            patch: HomeTaskEditPatch,
+            expectedSession: String,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.patchHomeTask(homeId, taskId, patch.body(), expectedSession) }
+
         /** `PUT /api/homes/:id/tasks/:taskId`. */
         open suspend fun updateHomeTask(
             homeId: String,
             taskId: String,
             request: UpdateHomeTaskRequest,
-        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request) }
+            expectedSession: String? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request, expectedSession) }
 
         /** `DELETE /api/homes/:id/tasks/:taskId`. */
         open suspend fun deleteHomeTask(
             homeId: String,
             taskId: String,
-        ): NetworkResult<Unit> = safeApiCall { api.deleteHomeTask(homeId, taskId) }
+            expectedSession: String? = null,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                val response = api.deleteHomeTask(homeId, taskId, expectedSession)
+                if (response.message != "Task deleted") throw JsonDataException("The task deletion was not confirmed.")
+            }
     }

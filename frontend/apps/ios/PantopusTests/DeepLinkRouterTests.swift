@@ -851,23 +851,49 @@ final class DeepLinkRouterSessionReturnTests: XCTestCase {
         XCTAssertNil(PendingDeepLinkStore.peek())
     }
 
-    func testReauthenticationDoesNotExtendExpiry() throws {
+    func testReauthenticationMigratesLegacyArrivalWithoutExtendingExpiry() throws {
         let manager = try makeManager()
-        beginArrival()
-        let original = Int64(Date().addingTimeInterval(-3600).timeIntervalSince1970 * 1000)
-        UserDefaults.standard.set(original, forKey: "pantopus.pendingDeepLink.timestampMs")
+        let original = Date().addingTimeInterval(-3600)
+        UserDefaults.standard.set("pantopus://post/session-return", forKey: "pantopus.pendingDeepLink.path")
+        UserDefaults.standard.set("original-user", forKey: "pantopus.pendingDeepLink.expectedUserID")
+        UserDefaults.standard.set(Int64(original.timeIntervalSince1970 * 1000), forKey: "pantopus.pendingDeepLink.timestampMs")
         manager.endSession(reason: .sessionRevoked)
-        XCTAssertEqual(UserDefaults.standard.object(forKey: "pantopus.pendingDeepLink.timestampMs") as? Int64, original)
-        XCTAssertNotNil(PendingDeepLinkStore.take(userID: "original-user"))
+        XCTAssertNil(UserDefaults.standard.string(forKey: "pantopus.pendingDeepLink.path"))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/session-return")
+        XCTAssertNil(PendingDeepLinkStore.take(userID: "original-user", at: original.addingTimeInterval(24 * 3600 + 1)))
     }
 
-    func testExpiredArrivalCannotBeRevivedBySessionEnd() throws {
+    func testExpiredLegacyArrivalCannotBeRevivedBySessionEnd() throws {
         let manager = try makeManager()
-        beginArrival()
+        UserDefaults.standard.set("pantopus://post/session-return", forKey: "pantopus.pendingDeepLink.path")
+        UserDefaults.standard.set("original-user", forKey: "pantopus.pendingDeepLink.expectedUserID")
         let expired = Int64(Date().addingTimeInterval(-25 * 3600).timeIntervalSince1970 * 1000)
         UserDefaults.standard.set(expired, forKey: "pantopus.pendingDeepLink.timestampMs")
         manager.endSession(reason: .expired)
         XCTAssertNil(PendingDeepLinkStore.take(userID: "original-user"))
+    }
+
+    func testInvitationHandoffNeverWritesPlaintextPreferences() {
+        let path = "pantopus://invite/synthetic-invitation-capability"
+        XCTAssertTrue(PendingDeepLinkStore.stash(path))
+        XCTAssertNil(UserDefaults.standard.string(forKey: "pantopus.pendingDeepLink.path"))
+        XCTAssertNil(UserDefaults.standard.object(forKey: "pantopus.pendingDeepLink.timestampMs"))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), path)
+        XCTAssertEqual(PendingDeepLinkStore.take(userID: "new-user"), path)
+        XCTAssertNil(PendingDeepLinkStore.peek())
+    }
+
+    func testExplicitAccountSwitchPreservesOnlyThePreparedLoginArrival() throws {
+        let manager = try makeManager()
+        let path = "/invite/synthetic-invitation-capability"
+        XCTAssertTrue(PendingDeepLinkStore.stash(path))
+        manager.clearLocalSession(preservingLoginArrival: path)
+        XCTAssertEqual(manager.state, .signedOut)
+        XCTAssertEqual(PendingDeepLinkStore.take(userID: "another-user"), path)
+
+        XCTAssertTrue(PendingDeepLinkStore.stash("/post/unrelated"))
+        manager.clearLocalSession(preservingLoginArrival: path)
+        XCTAssertNil(PendingDeepLinkStore.peek())
     }
 
     func testUnboundOrWrongOwnerArrivalIsNotRetainedAtServerTeardown() throws {

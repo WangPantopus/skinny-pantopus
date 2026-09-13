@@ -57,8 +57,12 @@ fun HouseholdTasksListScreen(
             onAddTask = onAddTask,
             onEditRecurring = onEditRecurring,
         )
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenHouseholdTasksViewed)
+    }
+    HomeTaskResumeEffect(viewModel::resume, viewModel::pause)
+
+    LaunchedEffect(state) {
+        if (state !is app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState.Loaded) deleteTarget = null
     }
 
     LaunchedEffect(pendingEvent) {
@@ -110,7 +114,7 @@ fun HouseholdTasksListScreen(
     actionError?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.clearActionError() },
-            title = { Text("Couldn’t delete task") },
+            title = { Text("Task access could not be refreshed") },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { viewModel.clearActionError() }) { Text("OK") }

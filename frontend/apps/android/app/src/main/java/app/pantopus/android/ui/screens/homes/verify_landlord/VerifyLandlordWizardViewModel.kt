@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homes.HomeVerificationRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
@@ -76,9 +75,8 @@ data class VerifyLandlordUiState(
  * (`tenantRequestSchema` has no structured column for them). When the
  * home has no verified landlord authority the backend answers 400 —
  * that is RN's "no landlord on file" branch, and we fall back to the
- * mailed-code path: `POST /api/homes/:id/request-postcard` (route
- * `backend/routes/homeOwnership.js:2452`) followed by the outbound
- * `OpenPostcardVerification` event.
+ * mail-verification review. The user confirms their complete address there
+ * before a postcard request is retained and submitted.
  */
 @HiltViewModel
 open class VerifyLandlordWizardViewModel
@@ -86,7 +84,6 @@ open class VerifyLandlordWizardViewModel
     constructor(
         private val networkMonitor: NetworkMonitor,
         savedStateHandle: SavedStateHandle,
-        private val verificationRepository: HomeVerificationRepository,
         private val tenantRepository: TenantRepository,
     ) : ViewModel(),
         WizardModel {
@@ -301,29 +298,10 @@ open class VerifyLandlordWizardViewModel
             }
         }
 
-        /**
-         * Mails the verification postcard and hands the user off to the
-         * A12.7 tracker. Used both as the no-landlord fallback and as the
-         * Sent step's secondary CTA.
-         */
-        suspend fun startPostcardFallback() {
-            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Submitting) }
-            when (val result = verificationRepository.requestPostcard(homeId)) {
-                is NetworkResult.Success -> {
-                    _state.update { it.copy(submitState = VerifyLandlordSubmitState.Submitted) }
-                    pendingEvent.value = VerifyLandlordOutboundEvent.OpenPostcardVerification(homeId)
-                }
-                is NetworkResult.Failure -> {
-                    _state.update {
-                        it.copy(
-                            submitState =
-                                VerifyLandlordSubmitState.Error(
-                                    result.error.message.ifEmpty { "Couldn't request the verification postcard. Try again." },
-                                ),
-                        )
-                    }
-                }
-            }
+        /** Opens address review; this navigation never requests a mailing. */
+        fun startPostcardFallback() {
+            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle) }
+            pendingEvent.value = VerifyLandlordOutboundEvent.OpenPostcardVerification(homeId)
         }
 
         // MARK: - Chrome derivation
@@ -369,7 +347,7 @@ open class VerifyLandlordWizardViewModel
                         primaryCtaEnabled = !state.isSubmitting,
                         secondaryCta =
                             WizardSecondaryCta(
-                                label = "Mail me a code",
+                                label = "Review mail verification",
                                 testTag = "verifyLandlordMailCodeCTA",
                             ),
                         isSubmitting = state.isSubmitting,

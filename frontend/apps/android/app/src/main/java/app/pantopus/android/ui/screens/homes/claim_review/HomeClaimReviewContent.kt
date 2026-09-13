@@ -27,12 +27,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -299,6 +302,7 @@ fun RowScope.HomeClaimActionButton(
     icon: PantopusIcon,
     tone: HomeClaimActionTone,
     tag: String,
+    voiceLabel: String = "Flag claim for review",
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(Radii.md)
@@ -310,13 +314,14 @@ fun RowScope.HomeClaimActionButton(
                 .background(toneBackground(tone))
                 .border(HairlineHeight, toneBorder(tone), shape)
                 .clickable(onClick = onClick)
-                .testTag(tag),
+                .testTag(tag)
+                .semantics { contentDescription = title ?: voiceLabel },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PantopusIconImage(
             icon = icon,
-            contentDescription = title,
+            contentDescription = null,
             size = GlyphSmall,
             tint = toneForeground(tone),
         )
@@ -341,9 +346,13 @@ fun HomeClaimOwnershipCard(
     item: HomeClaimReviewOwnershipItem,
     isBusy: Boolean,
     onVerdict: (HomeClaimReviewVerdict) -> Unit,
+    onOpenEvidence: () -> Unit = {},
     onRelationship: (HomeClaimRelationshipAction) -> Unit,
 ) {
     ClaimCardSurface(tag = "homeClaimReview_ownershipCard") {
+        TextButton(onClick = onOpenEvidence, enabled = !isBusy, modifier = Modifier.testTag("homeClaimReview_privateEvidence_${item.id}")) {
+            Text("Private documents")
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             HomeClaimAvatar(initials = item.initials)
             Column(modifier = Modifier.weight(1f)) {
@@ -449,6 +458,7 @@ private fun OwnershipActionRow(
                     icon = PantopusIcon.Flag,
                     tone = HomeClaimActionTone.Flag,
                     tag = "homeClaimReview_flagUnknown",
+                    voiceLabel = "Flag unknown claimant",
                 ) { onRelationship(HomeClaimRelationshipAction.FlagUnknownPerson) }
             }
         HomeClaimReviewActionMode.AdminReviewRequired ->

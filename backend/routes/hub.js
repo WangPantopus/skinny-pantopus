@@ -13,6 +13,7 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homeRecordService = require('../services/homeRecordService');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
@@ -268,16 +269,10 @@ router.get('/', verifyToken, async (req, res) => {
           .order('due_date', { ascending: true })
           .limit(3)
       ).catch(() => ({ data: null }));
-      batch2.dueTasks = Promise.resolve(
-        supabaseAdmin
-          .from('HomeTask')
-          .select('id, title, due_at')
-          .eq('home_id', primaryHome.id)
-          .not('due_at', 'is', null)
-          .lte('due_at', weekFromNow.toISOString())
-          .order('due_at', { ascending: true })
-          .limit(2)
-      ).catch(() => ({ data: null }));
+      batch2.dueTasks = homeRecordService.visibleRecords({ homeId: primaryHome.id, actorId: userId, kind: 'task' })
+        .then(tasks => ({ data: tasks.filter(t => t.due_at && Date.parse(t.due_at) <= weekFromNow.getTime()
+          && !['done', 'canceled'].includes(t.status))
+          .sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 2) }));
       batch2.memberCount = Promise.resolve(
         supabaseAdmin
           .from('HomeOccupancy')
@@ -597,6 +592,7 @@ router.get('/', verifyToken, async (req, res) => {
     res.json(payload);
   } catch (err) {
     logger.error('Hub endpoint error', { error: err.message, stack: err.stack });
+    if (err.code === 'HOME_RECORD_UNAVAILABLE') return homeRecordService.sendError(res, err);
     res.status(500).json({ error: 'Failed to load hub data' });
   }
 });

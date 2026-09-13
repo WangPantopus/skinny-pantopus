@@ -7,15 +7,17 @@ import { post } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import LandlordVerificationFlow from './LandlordVerificationFlow';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
+import { removalLink } from './member-removals/removalModel';
 
 interface VerificationCenterProps {
   homeId: string;
+  onRefresh?: () => Promise<void>;
 }
 
-export default function VerificationCenter({ homeId }: VerificationCenterProps) {
+export default function VerificationCenter({ homeId, onRefresh }: VerificationCenterProps) {
   const router = useRouter();
-  const { access, reload } = useHomePermissions();
+  const { access, reload: reloadPermissions } = useHomePermissions();
+  const reload = onRefresh ?? reloadPermissions;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // ── Landlord check ──────────────────────────────────────
@@ -25,18 +27,8 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
     hasLease: boolean;
   }>({ checked: false, hasLandlord: false, hasLease: false });
 
-  const handleMoveOut = useCallback(async () => {
-    const yes = await confirmStore.open({ title: 'Move out', description: 'This will remove you from this home. You can request to join again later. Continue?', confirmLabel: 'Move out', variant: 'destructive' });
-    if (!yes) return;
-    setActionLoading('move-out');
-    try {
-      await post(`/api/homes/${homeId}/move-out`);
-      router.push('/app');
-    } catch {
-      toast.error('Failed to process move-out. Please try again.');
-    } finally {
-      setActionLoading(null);
-    }
+  const handleMoveOut = useCallback(() => {
+    router.push(removalLink(homeId, 'self'));
   }, [homeId, router]);
 
   const handleResendPostcard = useCallback(async () => {
@@ -90,7 +82,11 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
     : access?.ownership_claim_state === 'needs_more_info'
       ? 'claim_needs_more_info'
       : status;
-  const config = getStatusConfig(effectiveStatus, access);
+  const isResidency = access?.verification_kind === 'residency';
+  const config = isResidency ? {
+    icon: '\u23F3', iconBg: 'bg-blue-100', title: 'Your residency request is under review',
+    body: 'A household reviewer must confirm your request before you can open this home. Check for updates below.',
+  } : getStatusConfig(effectiveStatus, access);
 
   return (
     <div className="max-w-lg mx-auto px-4 py-12">
@@ -161,7 +157,7 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
       )}
 
       {/* Action buttons */}
-      <div className="space-y-3">
+      {!isResidency && <div className="space-y-3">
         {/* Enter postcard code */}
         {status === 'pending_postcard' && (
           <>
@@ -210,20 +206,15 @@ export default function VerificationCenter({ homeId }: VerificationCenterProps) 
             onClick={() => router.push(`/app/homes/${homeId}/verify-postcard`)}
           />
         )}
-      </div>
+      </div>}
 
       {/* Always-visible actions */}
       <div className="mt-8 space-y-2">
         <button
           onClick={handleMoveOut}
-          disabled={actionLoading === 'move-out'}
           className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:text-red-700 text-sm font-medium disabled:opacity-50"
         >
-          {actionLoading === 'move-out' ? (
-            <span className="animate-spin inline-block w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full" />
-          ) : (
-            <span>&#128682;</span>
-          )}
+          <span>&#128682;</span>
           This isn&apos;t my home / I made a mistake
         </button>
 

@@ -28,12 +28,12 @@ import com.squareup.moshi.JsonClass
 /** Response of `GET /api/homes/:id/dashboard`. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardResponse(
-    val home: HomeDashboardHomeDto? = null,
-    val myAccess: HomeDashboardAccessDto? = null,
-    val today: HomeDashboardTodayDto = HomeDashboardTodayDto(),
-    val counts: HomeDashboardCountsDto = HomeDashboardCountsDto(),
-    val members: List<HomeDashboardMemberDto> = emptyList(),
-    @Json(name = "recent_activity") val recentActivity: List<HomeAuditLogEntryDto> = emptyList(),
+    val home: HomeDashboardHomeDto,
+    val myAccess: HomeDashboardAccessDto,
+    val today: HomeDashboardTodayDto,
+    val counts: HomeDashboardCountsDto,
+    val members: List<HomeDashboardMemberDto>,
+    @Json(name = "recent_activity") val recentActivity: List<HomeAuditLogEntryDto>,
     /** Only present when the caller passed `?include_health_score=true`. */
     @Json(name = "health_score") val healthScore: HomeHealthScoreDto? = null,
 )
@@ -55,40 +55,56 @@ data class HomeDashboardHomeDto(
 /** `myAccess` — the caller's permission bag for this home. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardAccessDto(
-    val permissions: List<String>? = null,
+    val permissions: List<String>,
     @Json(name = "role_base") val roleBase: String? = null,
-    val isOwner: Boolean? = null,
+    val isOwner: Boolean,
 ) {
     /** Mirrors the backend's `canFinance` gate (`home.js:6238`). */
     val canViewFinance: Boolean
         get() =
-            isOwner == true ||
-                permissions.orEmpty().any { it == "finance.view" || it == "finance.manage" }
+            "finance.view" in permissions
 }
 
 /** `today` block — the "what's happening now" slice. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardTodayDto(
-    @Json(name = "next_events") val nextEvents: List<CalendarEventDto> = emptyList(),
-    @Json(name = "tasks_due") val tasksDue: List<HomeTaskDto> = emptyList(),
+    @Json(name = "next_events") val nextEvents: List<CalendarEventDto>,
+    @Json(name = "tasks_due") val tasksDue: List<HomeTaskDto>,
     @Json(name = "next_bill") val nextBill: BillDto? = null,
-    @Json(name = "unread_mail_count") val unreadMailCount: Int = 0,
-    @Json(name = "active_guest_passes") val activeGuestPasses: Int = 0,
-    @Json(name = "deliveries_arriving") val deliveriesArriving: Int = 0,
-)
+    @Json(name = "unread_mail_count") val unreadMailCount: Int,
+    @Json(name = "active_guest_passes") val activeGuestPasses: Int,
+    @Json(name = "deliveries_arriving") val deliveriesArriving: Int,
+) {
+    init {
+        if (listOf(unreadMailCount, activeGuestPasses, deliveriesArriving).any { it < 0 }) {
+            throw com.squareup.moshi.JsonDataException("Invalid Home summary count.")
+        }
+    }
+}
 
 /** `counts` block — the hero-stat / quick-action badge source. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardCountsDto(
-    @Json(name = "tasks_open") val tasksOpen: Int = 0,
-    @Json(name = "issues_open") val issuesOpen: Int = 0,
-    @Json(name = "bills_due") val billsDue: Int = 0,
-    @Json(name = "packages_expected") val packagesExpected: Int = 0,
-    val documents: Int = 0,
-    @Json(name = "events_upcoming") val eventsUpcoming: Int = 0,
-    @Json(name = "members_active") val membersActive: Int = 0,
-    val pets: Int = 0,
-)
+    @Json(name = "tasks_open") val tasksOpen: Int,
+    @Json(name = "issues_open") val issuesOpen: Int,
+    @Json(name = "bills_due") val billsDue: Int,
+    @Json(name = "packages_expected") val packagesExpected: Int,
+    val documents: Int,
+    @Json(name = "events_upcoming") val eventsUpcoming: Int,
+    @Json(name = "members_active") val membersActive: Int,
+    val pets: Int,
+) {
+    init {
+        if (listOf(tasksOpen, issuesOpen, billsDue, packagesExpected, documents, eventsUpcoming, membersActive, pets).any { it < 0 }) {
+            throw com.squareup.moshi.JsonDataException("Invalid Home summary count.")
+        }
+    }
+
+    companion object {
+        /** Explicit presentation placeholder; absent wire values never decode to this. */
+        fun empty() = HomeDashboardCountsDto(0, 0, 0, 0, 0, 0, 0, 0)
+    }
+}
 
 /** One entry of the dashboard `members` array (HomeOccupancy + user join). */
 @JsonClass(generateAdapter = true)
@@ -102,6 +118,9 @@ data class HomeDashboardMemberDto(
 /** Nested `user` join on a dashboard member row. */
 @JsonClass(generateAdapter = true)
 data class HomeDashboardMemberUserDto(
+    val displayName: String? = null,
+    val handle: String? = null,
+    val avatarUrl: String? = null,
     val id: String? = null,
     val username: String? = null,
     val name: String? = null,
@@ -128,8 +147,8 @@ data class HomeAuditLogEntryDto(
  */
 @JsonClass(generateAdapter = true)
 data class HomeHealthScoreDto(
-    val score: Int = 0,
-    val breakdown: Map<String, HomeHealthDimensionDto> = emptyMap(),
+    val score: Int,
+    val breakdown: Map<String, HomeHealthDimensionDto>,
     val topIssue: String? = null,
     val topAction: HomeHealthActionDto? = null,
 ) {
@@ -144,18 +163,18 @@ data class HomeHealthScoreDto(
 /** One dimension of the health-score breakdown. */
 @JsonClass(generateAdapter = true)
 data class HomeHealthDimensionDto(
-    val score: Int = 0,
-    val max: Int = 0,
-    val issues: List<String> = emptyList(),
+    val score: Int,
+    val max: Int,
+    val issues: List<String>,
 )
 
 /** `topAction` — the single highest-leverage next step. */
 @JsonClass(generateAdapter = true)
 data class HomeHealthActionDto(
-    val type: String = "navigate",
-    val label: String = "",
+    val type: String,
+    val label: String,
     /** App route such as `/homes/<id>/maintenance`. */
-    val route: String = "",
+    val route: String,
 )
 
 // ── Seasonal checklist ──────────────────────────────────────────────
@@ -163,29 +182,29 @@ data class HomeHealthActionDto(
 /** Response of `GET /api/homes/:id/seasonal-checklist`. */
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistDto(
-    val season: SeasonalChecklistSeasonDto = SeasonalChecklistSeasonDto(),
-    val items: List<SeasonalChecklistItemDto> = emptyList(),
-    val progress: SeasonalChecklistProgressDto = SeasonalChecklistProgressDto(),
+    val season: SeasonalChecklistSeasonDto,
+    val items: List<SeasonalChecklistItemDto>,
+    val progress: SeasonalChecklistProgressDto,
     val carryover: SeasonalChecklistCarryoverDto? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistSeasonDto(
-    val key: String = "",
-    val label: String = "",
+    val key: String,
+    val label: String,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistProgressDto(
-    val total: Int = 0,
-    val completed: Int = 0,
-    val percentage: Int = 0,
+    val total: Int,
+    val completed: Int,
+    val percentage: Int,
 )
 
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistCarryoverDto(
-    val season: SeasonalChecklistSeasonDto = SeasonalChecklistSeasonDto(),
-    val items: List<SeasonalChecklistItemDto> = emptyList(),
+    val season: SeasonalChecklistSeasonDto,
+    val items: List<SeasonalChecklistItemDto>,
 )
 
 /**
@@ -195,18 +214,19 @@ data class SeasonalChecklistCarryoverDto(
 @JsonClass(generateAdapter = true)
 data class SeasonalChecklistItemDto(
     val id: String,
+    @Json(name = "home_id") val homeId: String? = null,
     @Json(name = "season_key") val seasonKey: String? = null,
     val year: Int? = null,
     @Json(name = "item_key") val itemKey: String? = null,
-    val title: String = "",
+    val title: String,
     val description: String? = null,
     @Json(name = "gig_category") val gigCategory: String? = null,
     @Json(name = "gig_title_suggestion") val gigTitleSuggestion: String? = null,
     /** `pending` / `completed` / `skipped` / `hired`. */
-    val status: String = "pending",
+    val status: String,
     @Json(name = "completed_at") val completedAt: String? = null,
     @Json(name = "gig_id") val gigId: String? = null,
-    @Json(name = "sort_order") val sortOrder: Int = 0,
+    @Json(name = "sort_order") val sortOrder: Int,
 ) {
     /** Items that are done in any sense — completed, skipped, or hired out. */
     val isResolved: Boolean
@@ -246,11 +266,14 @@ data class HomeBillTrendsDto(
     @Json(name = "bills_by_type") val billsByType: Map<String, HomeBillTrendSeriesDto> = emptyMap(),
     @Json(name = "benchmarks") val benchmarks: Map<String, HomeBillBenchmarkDto> = emptyMap(),
     @Json(name = "bill_benchmark_opt_in") val billBenchmarkOptIn: Boolean = false,
+    val currency: String? = null,
+    @Json(name = "available_currencies") val availableCurrencies: List<String> = emptyList(),
+    @Json(name = "format_version") val formatVersion: Int? = null,
+    @Json(name = "calculation_version") val calculationVersion: Int? = null,
 )
 
 /**
- * One `bills_by_type` series. `months` are `YYYY-MM` keys, newest first
- * (the query orders `period_start` descending).
+ * Format 2 uses unique chronological `YYYY-MM` keys and decimal major units.
  */
 @JsonClass(generateAdapter = true)
 data class HomeBillTrendSeriesDto(
@@ -266,7 +289,7 @@ data class HomeBillTrendSeriesDto(
 @JsonClass(generateAdapter = true)
 data class HomeBillBenchmarkDto(
     val months: List<String> = emptyList(),
-    /** Neighbourhood average in **cents** (`BillBenchmark.avg_amount_cents`). */
+    /** Format 2 neighbourhood average in decimal major units, in the response currency. */
     @Json(name = "avg_amounts") val avgAmounts: List<Double> = emptyList(),
     @Json(name = "household_count") val householdCount: Int? = null,
     @Json(name = "insufficient_data") val insufficientData: Boolean = false,

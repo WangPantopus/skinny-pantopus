@@ -15,7 +15,6 @@
 //   - earnRiskReview             → every 15 minutes (Phase 2)
 //   - vaultWeeklyDigest          → Mondays at 9:00 AM (Phase 2)
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
-//   - billBenchmarkRefresh       → every 6 hours at :05 (Home Intelligence)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
 // ============================================================
@@ -60,6 +59,10 @@ const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
 const evidenceRetentionSweep = require('./evidenceRetentionSweep');
 const homeDocumentRecovery = require('./homeDocumentRecovery');
+const homeClaimEvidenceRecovery = require('./homeClaimEvidenceRecovery');
+const homeTaskMediaRecovery = require('./homeTaskMediaRecovery');
+const deliverHomeTaskAssignments = require('./deliverHomeTaskAssignments');
+const generateHomeTaskRecurrences = require('./generateHomeTaskRecurrences');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
@@ -74,7 +77,6 @@ const draftBusinessReminder = require('./draftBusinessReminder');
 // Mail escrow expiry
 const mailEscrowExpiry = require('./mailEscrowExpiry');
 // Home intelligence jobs
-const billBenchmarkRefresh = require('./billBenchmarkRefresh');
 const nfipTractWarm = require('./nfipTractWarm');
 const rateWatchEvaluate = require('./rateWatchEvaluate');
 // Monthly receipt
@@ -118,6 +120,8 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'validateHomeCoordinates',
   'mailInterruptNotification',
   'communityModeration',
+  'deliverHomeTaskAssignments',
+  'generateHomeTaskRecurrences',
 ]);
 
 function envFlagEnabled(name, defaultValue = true) {
@@ -424,6 +428,22 @@ function startJobs(options = {}) {
     scheduled: true,
     timezone: 'UTC',
   });
+  scheduleCron('*/5 * * * *', wrapJob('homeClaimEvidenceRecovery', homeClaimEvidenceRecovery), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('* * * * *', wrapJob('deliverHomeTaskAssignments', deliverHomeTaskAssignments), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('* * * * *', wrapJob('generateHomeTaskRecurrences', generateHomeTaskRecurrences), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('*/5 * * * *', wrapJob('homeTaskMediaRecovery', homeTaskMediaRecovery), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
 
   // ─── Evidence Retention Sweep (Wedge privacy promise) ───
   // Runs daily at 04:17 UTC.
@@ -525,14 +545,7 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
-  // ─── Bill Benchmark Refresh (Home Intelligence) ───
-  // Runs every 6 hours at :05.
-  // Pre-computes anonymous neighborhood bill averages from paid HomeBill
-  // records. Groups by geohash-6, bill_type, month/year. Privacy: min 3 households.
-  scheduleCron('5 */6 * * *', wrapJob('billBenchmarkRefresh', billBenchmarkRefresh), {
-    scheduled: true,
-    timezone: 'UTC',
-  });
+  // Bill comparisons use current SQL snapshots; the legacy cache writer is retired.
 
   // ─── NFIP Tract Warm (Home Intelligence) ───
   // Runs every 15 minutes at :08/:23/:38/:53.

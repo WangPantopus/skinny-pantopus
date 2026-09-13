@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, FileText, Upload, X } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { useClaimUploadSession } from '@/components/home/useClaimUploadSession';
 import { toast } from '@/components/ui/toast-store';
 
-type EvidenceType = 'deed' | 'closing_disclosure' | 'tax_bill' | 'utility_bill' | 'lease' | 'escrow_attestation' | 'title_match';
+type EvidenceType = 'deed' | 'closing_disclosure' | 'tax_bill' | 'utility_bill' | 'lease';
 
 const DOC_OPTIONS: { id: EvidenceType; label: string; desc: string }[] = [
   { id: 'deed', label: 'Deed', desc: 'Property deed or title document' },
@@ -15,13 +16,10 @@ const DOC_OPTIONS: { id: EvidenceType; label: string; desc: string }[] = [
   { id: 'tax_bill', label: 'Property Tax Statement', desc: 'Tax bill showing property owner' },
   { id: 'utility_bill', label: 'Utility Bill', desc: 'Electric, gas, water, or internet bill at this address' },
   { id: 'lease', label: 'Lease Agreement', desc: 'Current rental or lease agreement' },
-  { id: 'escrow_attestation', label: 'Title/Escrow Attestation', desc: 'Letter from title or escrow company' },
-  { id: 'title_match', label: 'Title Record Match', desc: 'Public record title match' },
 ];
 
 const ACCEPT_TYPES = 'application/pdf,image/jpeg,image/png,image/webp,image/heic';
 const MAX_SIZE_MB = 25;
-const STRONG_CHALLENGE_DOCS: EvidenceType[] = ['deed', 'closing_disclosure', 'escrow_attestation', 'title_match'];
 
 function sameHomeId(a: string | undefined, b: string | undefined): boolean {
   if (!a || !b) return false;
@@ -30,7 +28,7 @@ function sameHomeId(a: string | undefined, b: string | undefined): boolean {
 
 function isClaimUsableForEvidence(status: string | undefined): boolean {
   if (!status) return false;
-  return !['rejected', 'revoked', 'approved'].includes(status);
+  return ['draft', 'submitted', 'under_review', 'pending', 'initiated', 'needs_more_info'].includes(status);
 }
 
 function formatFileSize(bytes: number): string {
@@ -44,6 +42,10 @@ export default function ClaimEvidencePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const homeId = params.id as string;
+  const uploadSession = useClaimUploadSession(homeId);
+  const uploadOperation = useRef<{ file: File; type: string; id: string } | null>(null);
+  const submitInFlight = useRef(false);
+  const savedClaim = useRef<string | undefined>(undefined);
   const existingClaimId = searchParams.get('claimId') || undefined;
 
   const [selectedDoc, setSelectedDoc] = useState<EvidenceType | null>(null);
@@ -51,27 +53,32 @@ export default function ClaimEvidencePage() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    savedClaim.current = undefined; uploadOperation.current = null;
+    setPickedFile(null); setSelectedDoc(null);
+  }, [homeId, existingClaimId, uploadSession.scope?.actor_id, uploadSession.scope?.session_scope]);
 
   const pickDocument = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+    if (uploadSession.scope) fileInputRef.current?.click();
+  }, [uploadSession.scope]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !uploadSession.scope) return;
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       toast.error(`Please select a file smaller than ${MAX_SIZE_MB} MB.`);
       return;
     }
     setPickedFile(file);
     e.target.value = '';
-  }, []);
+  }, [uploadSession.scope]);
 
   const removeFile = useCallback(() => {
     setPickedFile(null);
   }, []);
 
   const handleSubmit = useCallback(async () => {
+    if (submitInFlight.current || !uploadSession.scope) return;
     if (!selectedDoc) {
       toast.error('Please select what kind of document you are uploading.');
       return;
@@ -81,9 +88,11 @@ export default function ClaimEvidencePage() {
       return;
     }
 
+    submitInFlight.current = true;
     setSubmitting(true);
     try {
-      let claimId = existingClaimId;
+      await uploadSession.assertCurrent();
+      let claimId = savedClaim.current || existingClaimId;
       let claimCreateErr: { statusCode?: number; data?: { code?: string } } | null = null;
       let routingClassification: string | undefined;
 
@@ -92,8 +101,10 @@ export default function ClaimEvidencePage() {
           const claimRes = await api.homeOwnership.submitOwnershipClaim(homeId, {
             claim_type: 'owner',
             method: 'doc_upload',
-          });
+          }, uploadSession.scope.session_scope);
           claimId = claimRes.claim?.id;
+          await uploadSession.assertCurrent();
+          savedClaim.current = claimId;
           routingClassification = claimRes.claim?.routing_classification || undefined;
         } catch (claimErr: unknown) {
           claimCreateErr = claimErr as { statusCode?: number; data?: { code?: string } };
@@ -103,10 +114,10 @@ export default function ClaimEvidencePage() {
 
       if (!claimId) {
         try {
-          const claimsRes = await api.homeOwnership.getMyOwnershipClaims();
+          const claimsRes = await api.homeOwnership.getMyOwnershipClaims(uploadSession.scope.session_scope);
           const matchingClaim = claimsRes?.claims?.find(
-            (c: { home_id: string; status: string }) =>
-              sameHomeId(c.home_id, homeId) && isClaimUsableForEvidence(c.status)
+            (c: { home_id: string; status: string; claim_type?: string }) =>
+              sameHomeId(c.home_id, homeId) && c.claim_type === 'owner' && isClaimUsableForEvidence(c.status)
           );
           if (matchingClaim?.id) claimId = matchingClaim.id;
         } catch {
@@ -137,46 +148,21 @@ export default function ClaimEvidencePage() {
       }
 
       if (routingClassification === 'challenge_claim') {
-        toast.warning(
-          'This address already has a verified household. You can still submit ownership proof, and stronger documents can open a challenge review.',
-          6000,
-        );
+        throw new Error('This claim needs the dedicated household challenge review. Private evidence upload is unavailable for that flow yet.');
       }
 
+      savedClaim.current = claimId;
+      await uploadSession.assertCurrent();
+      if (!uploadOperation.current || uploadOperation.current.file !== pickedFile || uploadOperation.current.type !== selectedDoc) {
+        uploadOperation.current = { file: pickedFile, type: selectedDoc, id: crypto.randomUUID() };
+      }
       setUploading(true);
-      const uploadRes = await api.upload.uploadOwnershipEvidence(homeId, claimId, pickedFile, selectedDoc);
+      await api.upload.uploadOwnershipEvidence(homeId, claimId, pickedFile, selectedDoc, uploadOperation.current.id, uploadSession.scope.session_scope);
+      await uploadSession.assertCurrent();
       setUploading(false);
 
-      if (uploadRes?.evidence?.id) {
-        try {
-          await api.homeOwnership.uploadClaimEvidence(homeId, claimId, {
-            evidence_type: selectedDoc,
-            provider: 'manual',
-            storage_ref: uploadRes.evidence.file_url || null,
-          });
-        } catch {
-          // Non-fatal
-        }
-      }
-
-      let challengeOpened = false;
-      if (routingClassification === 'challenge_claim' && STRONG_CHALLENGE_DOCS.includes(selectedDoc)) {
-        try {
-          await api.homeOwnership.challengeOwnershipClaim(homeId, claimId, {});
-          challengeOpened = true;
-        } catch (challengeErr) {
-          console.warn('[Evidence] Challenge activation skipped:', challengeErr);
-        }
-      }
-
       const submittedParams = new URLSearchParams();
-      if (routingClassification === 'parallel_claim') {
-        submittedParams.set('parallel', '1');
-      }
-      if (challengeOpened) {
-        submittedParams.set('challenge', '1');
-      }
-
+      if (routingClassification === 'parallel_claim') submittedParams.set('parallel', '1');
       const submittedPath = submittedParams.toString()
         ? `/app/homes/${homeId}/claim-owner/submitted?${submittedParams.toString()}`
         : `/app/homes/${homeId}/claim-owner/submitted`;
@@ -185,9 +171,13 @@ export default function ClaimEvidencePage() {
       setUploading(false);
       toast.error(err instanceof Error ? err.message : 'Could not upload evidence. Please try again.');
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
-  }, [homeId, existingClaimId, selectedDoc, pickedFile, router]);
+  }, [homeId, existingClaimId, selectedDoc, pickedFile, uploadSession, router]);
+
+  if (!uploadSession.scope) return <div className="p-6"><p role="status">{uploadSession.error || 'Verifying your current session…'}</p>
+    {uploadSession.error && <button type="button" onClick={uploadSession.retry}>Retry</button>}</div>;
 
   return (
     <div className="min-h-screen bg-app-surface-raised">
@@ -202,7 +192,7 @@ export default function ClaimEvidencePage() {
 
         <h1 className="text-2xl font-bold text-app-text mb-2">Upload evidence</h1>
         <p className="text-app-text-secondary text-[15px] leading-relaxed mb-6">
-          Upload a document showing ownership. We recommend a closing disclosure or title record for fastest approval.
+          Upload a document that supports your ownership claim. A reviewer must inspect and verify it before deciding the claim.
         </p>
 
         <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl mb-6">
@@ -310,7 +300,7 @@ export default function ClaimEvidencePage() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!selectedDoc || !pickedFile || submitting}
+          disabled={!uploadSession.scope || !selectedDoc || !pickedFile || submitting}
           className="mt-6 w-full py-3 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2"
         >
           {submitting ? (

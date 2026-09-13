@@ -108,7 +108,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
 
     /// Tabs with live counts. Rebuilt whenever `bills` changes.
     var tabs: [ListOfRowsTab] {
-        let summary = bills.map(counts) ?? BillsTabCounts(upcoming: nil, paid: nil, all: nil)
+        let summary = (financeAccess.canView ? bills : nil).map(counts) ?? BillsTabCounts(upcoming: nil, paid: nil, all: nil)
         return [
             ListOfRowsTab(id: BillsTab.upcoming.rawValue, label: "Upcoming", count: summary.upcoming),
             ListOfRowsTab(id: BillsTab.paid.rawValue, label: "Paid", count: summary.paid),
@@ -121,12 +121,13 @@ final class BillsListViewModel: ListOfRowsDataSource {
     }
 
     var fab: FABAction? {
-        FABAction(
+        guard financeAccess.canManage else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Add a bill",
             variant: .canonicalCreate,
             tint: .home
-        ) { [onAddBill] in onAddBill() }
+        ) { [weak self] in Task { @MainActor in self?.openAddBill() } }
     }
 
     /// Optional summary banner above the rows. Nil on the Paid tab,
@@ -146,7 +147,10 @@ final class BillsListViewModel: ListOfRowsDataSource {
         )
     }
 
-    private(set) var state: ListOfRowsState = .loading
+    private var contentState: ListOfRowsState = .loading
+    var state: ListOfRowsState {
+        financeAccess.isCurrentScope ? contentState : .error(message: "Your session changed. Reopen Bills to continue.")
+    }
 
     /// Last successful payload — held so a tab change can re-filter
     /// without re-fetching.
@@ -154,6 +158,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
 
     private let homeId: String
     private let api: APIClient
+    private let financeAccess: HomeFinanceAccess
     private let onOpenBill: @Sendable (String) -> Void
     private let onAddBill: @Sendable () -> Void
     /// Inject a stable "now" for tests; production uses `Date()`.
@@ -162,19 +167,21 @@ final class BillsListViewModel: ListOfRowsDataSource {
     init(
         homeId: String,
         api: APIClient = .shared,
+        financeAccess: HomeFinanceAccess? = nil,
         onOpenBill: @escaping @Sendable (String) -> Void = { _ in },
         onAddBill: @escaping @Sendable () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.homeId = homeId
         self.api = api
+        self.financeAccess = financeAccess ?? HomeFinanceAccess(homeId: homeId, api: api)
         self.onOpenBill = onOpenBill
         self.onAddBill = onAddBill
         self.now = now
     }
 
     func load() async {
-        if case .loading = state {} else { state = .loading }
+        if case .loading = state {} else { contentState = .loading }
         await fetch()
     }
 
@@ -193,17 +200,21 @@ final class BillsListViewModel: ListOfRowsDataSource {
     }
 
     private func fetch() async {
+        bills = nil
+        contentState = .loading
         do {
+            try await financeAccess.refresh()
             let response: GetHomeBillsResponse = try await api.request(
                 HomesEndpoints.bills(homeId: homeId)
             )
+            try financeAccess.require()
+            guard response.bills.allSatisfy({ $0.homeId == homeId }) else { throw APIError.invalidResponse }
             bills = response.bills
             rebuildState()
         } catch {
             bills = nil
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load your bills."
+            contentState = .error(
+                message: (error as? LocalizedError)?.errorDescription ?? "Couldn't load your bills."
             )
         }
     }
@@ -214,19 +225,36 @@ final class BillsListViewModel: ListOfRowsDataSource {
         let tab = BillsTab(rawValue: selectedTab) ?? .upcoming
         let filtered = bills.filter { passes($0, tab: tab, now: nowDate) }
         if filtered.isEmpty {
-            state = .empty(
+            contentState = .empty(
                 ListOfRowsState.EmptyContent(
                     icon: .receipt,
                     headline: "No bills tracked yet",
-                    subcopy: "Add the utilities, insurance, and HOA dues for this home. " +
-                        "Schedule auto-pay or split between household members.",
-                    ctaTitle: "Add a bill"
-                ) { [onAddBill] in onAddBill() }
+                    subcopy: financeAccess.canManage
+                        ? "Track the utilities, insurance, and HOA dues for this home."
+                        : "Bills shared with you will appear here.",
+                    ctaTitle: financeAccess.canManage ? "Add a bill" : nil,
+                    onCTA: makeAddBillAction()
+                )
             )
             return
         }
         let rows = filtered.map { row(for: $0, now: nowDate) }
-        state = .loaded(sections: [RowSection(rows: rows)], hasMore: false)
+        contentState = .loaded(sections: [RowSection(rows: rows)], hasMore: false)
+    }
+
+    private func makeAddBillAction() -> (@Sendable () -> Void)? {
+        guard financeAccess.canManage else { return nil }
+        return { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.openAddBill()
+            }
+        }
+    }
+
+    private func openAddBill() {
+        guard financeAccess.canManage else { return }
+        onAddBill()
     }
 
     // MARK: - Row + chip mapping
@@ -251,7 +279,12 @@ final class BillsListViewModel: ListOfRowsDataSource {
                 chipVariant: projection.chipVariant,
                 chipIcon: projection.chipIcon
             ),
-            onTap: { [onOpenBill] in onOpenBill(billId) },
+            onTap: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.financeAccess.canView else { return }
+                    self.onOpenBill(billId)
+                }
+            },
             inlineChip: projection.inlineChip,
             highlight: projection.highlight
         )
@@ -411,7 +444,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
     /// Exposed `internal` so tests can exercise it without going through
     /// the SwiftUI view body.
     func currentBannerSummary() -> BillsBannerSummary {
-        guard let bills else {
+        guard financeAccess.canView, let bills else {
             return BillsBannerSummary(
                 totalDueLabel: nil,
                 overdueCount: 0,

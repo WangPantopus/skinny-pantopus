@@ -3,7 +3,7 @@ const request = require('supertest');
 
 jest.mock('../../config/supabaseAdmin', () => jest.requireActual('../__mocks__/supabaseAdmin'));
 jest.mock('../../middleware/verifyToken', () => (req, _res, next) => {
-  req.user = { id: req.headers['x-test-user-id'] || 'user-1', role: 'user' };
+  req.user = { id: req.headers['x-test-user-id'] || 'ddc23700-0000-4000-8000-000000000001', role: 'user' };
   next();
 });
 jest.mock('../../utils/homePermissions', () => ({
@@ -12,6 +12,11 @@ jest.mock('../../utils/homePermissions', () => ({
   mapLegacyRole: jest.fn((role) => role),
   writeAuditLog: jest.fn(),
   applyOccupancyTemplate: jest.fn(),
+}));
+// These tests isolate legacy/v2 claim selection after current Home admission.
+// Production admission and held-query denial are exercised against actual SQL.
+jest.mock('../../services/homeDashboardService', () => ({
+  withCurrentAccess: jest.fn(async (_context, read) => read({ hasAccess: true, isOwner: false, occupancy: null, permissions: ['home.view'] })),
 }));
 jest.mock('../../utils/homeSecurityPolicy', () => ({
   getClaimRiskScore: jest.fn(async () => 0),
@@ -63,7 +68,12 @@ describe('home claim read path flags', () => {
     });
 
     seedTable('Home', [{
-      id: 'home-1',
+      id: 'ddc23700-0000-4000-8000-000000000100',
+      name: null, address2: null, country: 'US', is_owner: false, home_type: null, description: null,
+      visibility: 'private', bedrooms: null, bathrooms: null, sq_ft: null, lot_sq_ft: null,
+      year_built: null, move_in_date: null, primary_photo_url: null, cover_photo_url: null,
+      updated_at: null, home_status: 'active', security_state: 'normal',
+      claim_window_ends_at: null, tenure_mode: null,
       address: '123 Test St',
       city: 'Testville',
       state: 'CA',
@@ -72,17 +82,18 @@ describe('home claim read path flags', () => {
       created_at: '2026-04-04T00:00:00.000Z',
     }]);
     seedTable('HomeOwner', [{
-      id: 'owner-1',
-      home_id: 'home-1',
-      subject_id: 'user-1',
+      id: 'ddc23700-0000-4000-8000-000000000201',
+      home_id: 'ddc23700-0000-4000-8000-000000000100',
+      subject_type: 'user',
+      subject_id: 'ddc23700-0000-4000-8000-000000000001',
       owner_status: 'pending',
       is_primary_owner: false,
       verification_tier: 'standard',
     }]);
     seedTable('HomeOwnershipClaim', [{
-      id: 'claim-1',
-      home_id: 'home-1',
-      claimant_user_id: 'user-1',
+      id: 'ddc23700-0000-4000-8000-000000000301',
+      home_id: 'ddc23700-0000-4000-8000-000000000100',
+      claimant_user_id: 'ddc23700-0000-4000-8000-000000000001',
       state: 'approved',
       claim_phase_v2: 'challenged',
       merged_into_claim_id: null,
@@ -93,8 +104,8 @@ describe('home claim read path flags', () => {
 
   test('flag-off home detail lookup stays on legacy pending-claim states', async () => {
     const res = await request(app)
-      .get('/api/homes/home-1')
-      .set('x-test-user-id', 'user-1');
+      .get('/api/homes/ddc23700-0000-4000-8000-000000000100')
+      .set('x-test-user-id', 'ddc23700-0000-4000-8000-000000000001');
 
     expect(res.status).toBe(200);
     expect(res.body.home.isPendingOwner).toBe(true);
@@ -105,11 +116,11 @@ describe('home claim read path flags', () => {
     householdClaimConfig.flags.v2ReadPaths = true;
 
     const res = await request(app)
-      .get('/api/homes/home-1')
-      .set('x-test-user-id', 'user-1');
+      .get('/api/homes/ddc23700-0000-4000-8000-000000000100')
+      .set('x-test-user-id', 'ddc23700-0000-4000-8000-000000000001');
 
     expect(res.status).toBe(200);
     expect(res.body.home.isPendingOwner).toBe(true);
-    expect(res.body.home.pendingClaimId).toBe('claim-1');
+    expect(res.body.home.pendingClaimId).toBe('ddc23700-0000-4000-8000-000000000301');
   });
 });

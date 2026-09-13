@@ -981,7 +981,7 @@ class GigDetailViewModel
             onResult: (Boolean) -> Unit = {},
         ) {
             val bidId = _viewerBid.value?.id
-            if (bidId == null || _viewerBidActionInFlight.value) {
+            if (!viewerCanEditBid() || bidId == null || _viewerBidActionInFlight.value) {
                 onResult(false)
                 return
             }
@@ -1416,6 +1416,10 @@ class GigDetailViewModel
             proposedTime: String? = null,
             onResult: (Boolean) -> Unit = {},
         ) {
+            if (rawGig?.status?.lowercase() != "open" || viewerIsOwner || viewerHasActiveBid()) {
+                onResult(false)
+                return
+            }
             viewModelScope.launch {
                 val result =
                     repo.placeBid(
@@ -2153,20 +2157,22 @@ class GigDetailViewModel
                 suppressBidsModule: Boolean = false,
                 viewerCanUpdateBid: Boolean = false,
             ): ContentDetailContent {
-                return if (shouldProjectTaskV2(gig)) {
-                    projectTaskV2(
-                        gig,
-                        bids,
-                        canMarkDelivered,
-                        canTip,
-                        viewerUserId,
-                        canInstantAccept,
-                        suppressBidsModule,
-                        viewerCanUpdateBid,
-                    )
-                } else {
-                    projectGigV1(gig, bids, canTip, viewerUserId, suppressBidsModule, viewerCanUpdateBid)
-                }
+                val content =
+                    if (shouldProjectTaskV2(gig)) {
+                        projectTaskV2(
+                            gig,
+                            bids,
+                            canMarkDelivered,
+                            canTip,
+                            viewerUserId,
+                            canInstantAccept,
+                            suppressBidsModule,
+                            viewerCanUpdateBid,
+                        )
+                    } else {
+                        projectGigV1(gig, bids, canTip, viewerUserId, suppressBidsModule, viewerCanUpdateBid)
+                    }
+                return currentGigDetail(content, gig, viewerUserId, canMarkDelivered, canTip)
             }
 
             /**
@@ -2248,16 +2254,20 @@ class GigDetailViewModel
                 val metaPieces =
                     listOfNotNull(
                         distanceLabel(gig.distanceMiles),
-                        relativeAge(gig.createdAt)?.let { "posted $it ago" },
+                        relativeAge(gig.createdAt)?.let { if (it == "now") "Just posted" else "posted $it ago" },
                     )
                 val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
-                        categoryChip = ContentDetailCategoryChip(category.label, category),
+                        categoryChip =
+                            ContentDetailCategoryChip(
+                                gig.category?.trim()?.takeIf(String::isNotEmpty) ?: category.label,
+                                category,
+                            ),
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = if (priceLine != null) "budget · cash or transfer" else null,
+                        priceCaption = if (priceLine != null) "budget" else null,
                     )
                 val statStrip = statRows(gig)
                 val modules =
@@ -2294,26 +2304,6 @@ class GigDetailViewModel
                             )
                         }
                         photoStripModule(gig)?.let { add(it) }
-                        add(
-                            ContentDetailModule.CapsuleRow(
-                                id = "trust",
-                                capsules =
-                                    listOf(
-                                        ContentDetailPill(
-                                            id = "addr",
-                                            label = "Verified address",
-                                            icon = PantopusIcon.ShieldCheck,
-                                            tone = ContentDetailPill.Tone.Info,
-                                        ),
-                                        ContentDetailPill(
-                                            id = "local",
-                                            label = "Local Pantopus job",
-                                            icon = PantopusIcon.Check,
-                                            tone = ContentDetailPill.Tone.Success,
-                                        ),
-                                    ),
-                            ),
-                        )
                         if (suppressBidsModule) {
                             // Owner sees the interactive panel below — skip
                             // both the read-only module and the bidder callout.
@@ -2326,7 +2316,7 @@ class GigDetailViewModel
                                     bids = bids.map { projectBid(it) },
                                 ),
                             )
-                        } else {
+                        } else if (gig.status?.lowercase() == "open" && (viewerUserId == null || viewerUserId != gig.userId)) {
                             add(
                                 ContentDetailModule.Callout(
                                     id = "be-first",
@@ -2335,10 +2325,7 @@ class GigDetailViewModel
                                     icon = PantopusIcon.HandCoins,
                                     iconTone = ContentDetailModule.Callout.IconTone.Primary,
                                     title = "Be the first to bid",
-                                    subtitle =
-                                        "Fresh posts usually get a hire in the first hour. " +
-                                            "First three bids land at the top of the list.",
-                                    footerPill = "neighbors viewing",
+                                    subtitle = "Review the task and send an offer if you can help.",
                                 ),
                             )
                         }

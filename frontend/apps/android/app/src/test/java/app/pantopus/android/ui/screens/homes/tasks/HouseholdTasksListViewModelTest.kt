@@ -4,12 +4,17 @@ package app.pantopus.android.ui.screens.homes.tasks
 
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskCapabilitiesDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCollectionCapabilitiesDto
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
+import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -18,13 +23,17 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,6 +69,10 @@ class HouseholdTasksListViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { repo.getHomeTasks(any(), any()) } returns NetworkResult.Success(response(emptyList()))
+        coEvery { repo.getHomeTask(any(), any(), any()) } answers {
+            NetworkResult.Success(HomeTaskResponse(makeTask(id = secondArg()), server))
+        }
     }
 
     @After fun tearDown() {
@@ -87,21 +100,31 @@ class HouseholdTasksListViewModelTest {
         status = status,
         completedAt = completedAt,
         updatedAt = updatedAt,
+        capabilities = HomeTaskCapabilitiesDto(true, true, true),
     )
 
     private fun makeVm(): HouseholdTasksListViewModel =
         HouseholdTasksListViewModel(
-            repo = repo,
+            accessFactory = HomeTaskAccessFactory(repo, claimScopeFactory(HomeClaimScopeTestFixture())),
             savedStateHandle = SavedStateHandle(mapOf(HOUSEHOLD_TASKS_HOME_ID_KEY to "home-1")),
             clock = { fixedNow },
+        )
+
+    private val server = HomeTaskSessionDto("user-1", "home-1", "a".repeat(64))
+
+    private fun response(tasks: List<HomeTaskDto>) =
+        GetHomeTasksResponse(
+            tasks,
+            HomeTaskCollectionCapabilitiesDto(true),
+            server,
         )
 
     // ─── Four states ───────────────────────────────────────────
 
     @Test fun empty_response_renders_empty_state() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
-                NetworkResult.Success(GetHomeTasksResponse(tasks = emptyList()))
+            coEvery { repo.getHomeTasks(any(), any()) } returns
+                NetworkResult.Success(response(tasks = emptyList()))
             val vm = makeVm()
             vm.load()
             val empty = vm.state.value as ListOfRowsUiState.Empty
@@ -111,7 +134,7 @@ class HouseholdTasksListViewModelTest {
 
     @Test fun error_response_renders_error_state() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
+            coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
@@ -120,9 +143,9 @@ class HouseholdTasksListViewModelTest {
 
     @Test fun loaded_response_maps_to_circular_action_trailing_on_active() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
+            coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
-                    GetHomeTasksResponse(
+                    response(
                         tasks = listOf(makeTask(id = "t1", title = "Vacuum living room")),
                     ),
                 )
@@ -356,11 +379,11 @@ class HouseholdTasksListViewModelTest {
 
     // ─── Optimistic toggle ─────────────────────────────────────
 
-    @Test fun toggle_done_rolls_back_on_failure() =
+    @Test fun failed_mutation_hides_stale_rows_until_current_reload() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
+            coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
-                    GetHomeTasksResponse(
+                    response(
                         tasks =
                             listOf(
                                 makeTask(
@@ -372,24 +395,23 @@ class HouseholdTasksListViewModelTest {
                             ),
                     ),
                 )
-            coEvery { repo.updateHomeTask(any(), any(), any()) } returns
+            coEvery { repo.updateHomeTask(any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
             vm.toggleDone("t1")
-            // After roll-back the row should still be on Active.
-            val loaded = vm.state.value as ListOfRowsUiState.Loaded
-            assertEquals(1, loaded.sections[0].rows.size)
-            assertEquals("t1", loaded.sections[0].rows[0].id)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertNull(vm.fab())
+            assertNotNull(vm.actionError.value)
         }
 
     // ─── Tab counts + FAB ──────────────────────────────────────
 
     @Test fun tab_counts_reflect_status_buckets() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
+            coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
-                    GetHomeTasksResponse(
+                    response(
                         tasks =
                             listOf(
                                 makeTask(
@@ -418,7 +440,8 @@ class HouseholdTasksListViewModelTest {
 
     @Test fun fab_uses_secondary_create_variant_and_home_tint() {
         val vm = makeVm()
-        val fab = vm.fab()
+        vm.load()
+        val fab = checkNotNull(vm.fab())
         assertEquals(FabVariant.SecondaryCreate, fab.variant)
         assertEquals(FabTint.Home, fab.tint)
     }
@@ -432,9 +455,9 @@ class HouseholdTasksListViewModelTest {
 
     @Test fun toggle_done_success_response_persists_through_round_trip() =
         runTest {
-            coEvery { repo.getHomeTasks(any()) } returns
+            coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
-                    GetHomeTasksResponse(
+                    response(
                         tasks =
                             listOf(
                                 makeTask(
@@ -445,12 +468,12 @@ class HouseholdTasksListViewModelTest {
                             ),
                     ),
                 )
-            coEvery { repo.updateHomeTask(any(), any(), any()) } returns
-                NetworkResult.Success(
-                    HomeTaskResponse(
-                        task = makeTask(id = "t1", title = "Vacuum", status = "done"),
-                    ),
-                )
+            coEvery { repo.updateHomeTask(any(), any(), any(), any()) } answers {
+                val done = makeTask(id = "t1", title = "Vacuum", status = "done")
+                coEvery { repo.getHomeTasks(any(), any()) } returns NetworkResult.Success(response(listOf(done)))
+                coEvery { repo.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(done, server))
+                NetworkResult.Success(HomeTaskResponse(done))
+            }
             val vm = makeVm()
             vm.load()
             vm.toggleDone("t1")
@@ -460,5 +483,100 @@ class HouseholdTasksListViewModelTest {
             vm.selectTab(HouseholdTasksTab.Done.id)
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals("t1", loaded.sections[0].rows[0].id)
+        }
+
+    @Test fun read_only_collection_keeps_rows_navigable_without_write_controls() =
+        runTest {
+            val task = makeTask().copy(capabilities = HomeTaskCapabilitiesDto())
+            coEvery { repo.getHomeTasks(any(), any()) } returns
+                NetworkResult.Success(
+                    response(listOf(task)).copy(collectionCapabilities = HomeTaskCollectionCapabilitiesDto(false)),
+                )
+            val vm = makeVm()
+            var opened = ""
+            vm.configureNavigation(onOpenTask = { opened = it })
+            vm.load()
+            val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.single().rows.single()
+            assertEquals(RowTrailing.Chevron, row.trailing)
+            row.onTap?.invoke()
+            assertEquals(task.id, opened)
+            assertNull(vm.fab())
+            vm.toggleDone(task.id)
+            vm.deleteTask(task.id)
+            vm.requestDelete(task.id)
+            assertNull(vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.updateHomeTask(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { repo.deleteHomeTask(any(), any(), any()) }
+        }
+
+    @Test fun missing_collection_permission_hides_empty_create_cta() =
+        runTest {
+            coEvery { repo.getHomeTasks(any(), any()) } returns
+                NetworkResult.Success(
+                    response(emptyList()).copy(collectionCapabilities = null),
+                )
+            val vm = makeVm()
+            vm.load()
+            assertNull((vm.state.value as ListOfRowsUiState.Empty).ctaTitle)
+            assertNull(vm.fab())
+        }
+
+    @Test fun create_callback_rechecks_current_permission() =
+        runTest {
+            val vm = makeVm()
+            var opened = false
+            vm.configureNavigation(onAddTask = { opened = true })
+            vm.load()
+            val old = checkNotNull(vm.fab())
+            coEvery { repo.getHomeTasks(any(), any()) } returns
+                NetworkResult.Success(
+                    response(emptyList()).copy(collectionCapabilities = HomeTaskCollectionCapabilitiesDto(false)),
+                )
+            old.onClick()
+            assertFalse(opened)
+            assertNull(vm.fab())
+        }
+
+    @Test fun leaving_list_during_create_authorization_prevents_late_navigation() =
+        runTest {
+            val vm = makeVm()
+            var opened = false
+            vm.configureNavigation(onAddTask = { opened = true })
+            vm.load()
+            val pending = CompletableDeferred<NetworkResult<GetHomeTasksResponse>>()
+            coEvery { repo.getHomeTasks(any(), any()) } coAnswers { withContext(NonCancellable) { pending.await() } }
+            checkNotNull(vm.fab()).onClick()
+            vm.pause()
+            pending.complete(NetworkResult.Success(response(emptyList())))
+            assertFalse(opened)
+            assertNull(vm.fab())
+            assertTrue(vm.state.value is ListOfRowsUiState.Loading)
+        }
+
+    @Test fun old_list_read_cannot_repopulate_after_leaving_and_resuming() =
+        runTest {
+            val vm = makeVm()
+            val pending = CompletableDeferred<NetworkResult<GetHomeTasksResponse>>()
+            coEvery { repo.getHomeTasks(any(), any()) } coAnswers { withContext(NonCancellable) { pending.await() } }
+            vm.load()
+            vm.pause()
+            coEvery { repo.getHomeTasks(any(), any()) } returns NetworkResult.Success(response(emptyList()))
+            vm.resume()
+            pending.complete(NetworkResult.Success(response(listOf(makeTask(title = "Stale title")))))
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+        }
+
+    @Test fun leaving_list_while_completion_authorizes_prevents_the_write() =
+        runTest {
+            coEvery { repo.getHomeTasks(any(), any()) } returns NetworkResult.Success(response(listOf(makeTask())))
+            val vm = makeVm()
+            vm.load()
+            val pending = CompletableDeferred<NetworkResult<HomeTaskResponse>>()
+            coEvery { repo.getHomeTask(any(), any(), any()) } coAnswers { withContext(NonCancellable) { pending.await() } }
+            vm.toggleDone("t")
+            vm.pause()
+            pending.complete(NetworkResult.Success(HomeTaskResponse(makeTask(), server)))
+            coVerify(exactly = 0) { repo.updateHomeTask(any(), any(), any(), any()) }
+            assertTrue(vm.state.value is ListOfRowsUiState.Loading)
         }
 }

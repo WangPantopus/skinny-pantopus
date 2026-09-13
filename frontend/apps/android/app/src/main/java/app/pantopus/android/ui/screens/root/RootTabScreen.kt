@@ -7,11 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
@@ -24,11 +22,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.invisibleToUser
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -200,9 +195,14 @@ import app.pantopus.android.ui.screens.homes.polls.PollDetailScreen
 import app.pantopus.android.ui.screens.homes.polls.PollsListScreen
 import app.pantopus.android.ui.screens.homes.polls.START_POLL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.polls.StartPollFormScreen
+import app.pantopus.android.ui.screens.homes.postal.HomePostalNavigation
+import app.pantopus.android.ui.screens.homes.postal.HomePostalScreen
 import app.pantopus.android.ui.screens.homes.property_correction.PROPERTY_CORRECTION_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.property_correction.PropertyCorrectionScreen
 import app.pantopus.android.ui.screens.homes.property_details.PropertyDetailsScreen
+import app.pantopus.android.ui.screens.homes.residency.HOME_RESIDENCY_HOME_ID_KEY
+import app.pantopus.android.ui.screens.homes.residency.HomeResidencyNavigation
+import app.pantopus.android.ui.screens.homes.residency.HomeResidencyProgressScreen
 import app.pantopus.android.ui.screens.homes.settings.HOME_SETTINGS_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.settings.HomeSettingsRoute
 import app.pantopus.android.ui.screens.homes.settings.HomeSettingsScreen
@@ -221,11 +221,11 @@ import app.pantopus.android.ui.screens.homes.tasks.ADD_HOUSEHOLD_TASK_HOME_ID_KE
 import app.pantopus.android.ui.screens.homes.tasks.ADD_HOUSEHOLD_TASK_TASK_ID_KEY
 import app.pantopus.android.ui.screens.homes.tasks.AddHouseholdTaskFormScreen
 import app.pantopus.android.ui.screens.homes.tasks.HOUSEHOLD_TASKS_HOME_ID_KEY
+import app.pantopus.android.ui.screens.homes.tasks.HouseholdTaskDetailScreen
 import app.pantopus.android.ui.screens.homes.tasks.HouseholdTasksListScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.VERIFY_LANDLORD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.verify_landlord.VerifyLandlordWizardScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.postcard.POSTCARD_VERIFICATION_HOME_ID_KEY
-import app.pantopus.android.ui.screens.homes.verify_landlord.postcard.PostcardVerificationScreen
 import app.pantopus.android.ui.screens.hub.ActionChipContent
 import app.pantopus.android.ui.screens.hub.DiscoveryCardContent
 import app.pantopus.android.ui.screens.hub.DiscoveryKind
@@ -442,6 +442,9 @@ private object ChildRoutes {
     const val MY_HOMES = "homes/my-homes"
     const val MY_CLAIMS = "homes/my-claims"
     const val ADD_HOME = "homes/add"
+    const val ADD_HOME_WITH_TARGET = "$ADD_HOME?joinHome={joinHome}"
+
+    fun joinHome(homeId: String): String = "$ADD_HOME?joinHome=$homeId"
 
     /**
      * A12.1 — "Find or Add Home" discovery. Search public-preview homes,
@@ -459,6 +462,7 @@ private object ChildRoutes {
 
     /** Residency-verification variant of the evidence wizard. */
     const val VERIFY_RESIDENCY = "homes/{$CLAIM_OWNERSHIP_HOME_ID_KEY}/verify-residency"
+    const val HOME_RESIDENCY = "homes/{$HOME_RESIDENCY_HOME_ID_KEY}/residency"
 
     /** Per-home issue tracker (`HomeIssue`) — distinct from maintenance. */
     const val HOME_ISSUES = "homes/{$HOME_ISSUES_HOME_ID_KEY}/issues"
@@ -758,6 +762,14 @@ private object ChildRoutes {
     /** Household tasks list per home (T6.3c / P11). */
     const val HOME_TASKS = "homes/{$HOUSEHOLD_TASKS_HOME_ID_KEY}/tasks"
 
+    const val HOUSEHOLD_TASK_DETAIL =
+        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/detail"
+
+    fun householdTaskDetail(
+        homeId: String,
+        taskId: String,
+    ): String = "homes/$homeId/tasks/$taskId/detail"
+
     /** Build the concrete path for a home household tasks list. */
     fun homeTasks(homeId: String): String = "homes/$homeId/tasks"
 
@@ -822,10 +834,13 @@ private object ChildRoutes {
     /** H6 — per-home **owner** claim review (ownership + residency
      *  claims on this home). Distinct from the admin `review-claims`
      *  queue mounted elsewhere in this file. */
-    const val HOME_CLAIM_REVIEW = "homes/{$HOME_CLAIM_REVIEW_HOME_ID_KEY}/owners/review-claims"
+    const val HOME_CLAIM_REVIEW = "homes/{$HOME_CLAIM_REVIEW_HOME_ID_KEY}/owners/review-claims?reviewTab={reviewTab}"
 
     /** Build the concrete path for the per-home claim-review screen. */
-    fun homeClaimReview(homeId: String): String = "homes/$homeId/owners/review-claims"
+    fun homeClaimReview(
+        homeId: String,
+        residency: Boolean = false,
+    ): String = "homes/$homeId/owners/review-claims?reviewTab=${if (residency) "residency" else "ownership"}"
 
     /** Members list per home (T6.3a / P9). */
     const val HOME_MEMBERS = "homes/{$MEMBERS_LIST_HOME_ID_KEY}/members"
@@ -1394,6 +1409,8 @@ private object ChildRoutes {
      * and offers the lease / utility-bill / tax-bill document set.
      */
     fun verifyResidency(homeId: String): String = "homes/$homeId/verify-residency"
+
+    fun homeResidency(homeId: String): String = "homes/$homeId/residency"
 
     /** Build the per-home issue-tracker path. */
     fun homeIssues(homeId: String): String = "homes/$homeId/issues"
@@ -2057,6 +2074,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.homeDashboard(pending.id))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.HomeTask -> {
+                navController.navigate(ChildRoutes.householdTaskDetail(pending.homeId, pending.taskId))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.HomeMemberRequests -> {
                 navController.navigate(ChildRoutes.homeMembers(pending.id))
                 DeepLinkRouter.consume()
@@ -2071,6 +2092,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.VerifyLandlord -> {
                 navController.navigate(ChildRoutes.verifyLandlord(pending.id))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.HomeResidency -> {
+                navController.navigate(ChildRoutes.homeResidency(pending.id))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.PostcardVerification -> {
@@ -2533,6 +2558,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.MY_HOMES) {
                     MyHomesListScreen(
                         onOpenHome = { homeId -> navController.navigate(ChildRoutes.homeDashboard(homeId)) },
+                        onOpenTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
                         onAddHome = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onFindHome = { navController.navigate(ChildRoutes.FIND_HOME) },
                         onBack = { navController.popBackStack() },
@@ -2540,7 +2566,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.claimOwnership(homeId))
                         },
                         onVerifyResidency = { homeId ->
-                            navController.navigate(ChildRoutes.verifyResidency(homeId))
+                            navController.navigate(ChildRoutes.homeResidency(homeId))
                         },
                     )
                 }
@@ -3700,8 +3726,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) { entry ->
                     val homeId = entry.arguments?.getString(HOUSEHOLD_TASKS_HOME_ID_KEY).orEmpty()
                     HouseholdTasksListScreen(
-                        onOpenTask = { _ ->
-                            navController.navigate(ChildRoutes.placeholder("Task detail"))
+                        onOpenTask = { taskId ->
+                            navController.navigate(ChildRoutes.householdTaskDetail(homeId, taskId))
                         },
                         onAddTask = {
                             navController.navigate(ChildRoutes.addHouseholdTask(homeId))
@@ -3710,6 +3736,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.editHouseholdTask(homeId, taskId))
                         },
                         onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.HOUSEHOLD_TASK_DETAIL,
+                    arguments =
+                        listOf(
+                            navArgument(ADD_HOUSEHOLD_TASK_HOME_ID_KEY) { type = NavType.StringType },
+                            navArgument(ADD_HOUSEHOLD_TASK_TASK_ID_KEY) { type = NavType.StringType },
+                        ),
+                ) { entry ->
+                    val homeId = entry.arguments?.getString(ADD_HOUSEHOLD_TASK_HOME_ID_KEY).orEmpty()
+                    val taskId = entry.arguments?.getString(ADD_HOUSEHOLD_TASK_TASK_ID_KEY).orEmpty()
+                    HouseholdTaskDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onEdit = { navController.navigate(ChildRoutes.editHouseholdTask(homeId, taskId)) },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                     )
                 }
                 composable(
@@ -3825,6 +3867,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(
                             navArgument(HOME_CLAIM_REVIEW_HOME_ID_KEY) { type = NavType.StringType },
+                            navArgument("reviewTab") {
+                                type = NavType.StringType
+                                defaultValue = "ownership"
+                            },
                         ),
                 ) {
                     HomeClaimReviewScreen(onBack = { navController.popBackStack() })
@@ -3863,6 +3909,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     MembersListScreen(
                         onBack = { navController.popBackStack() },
                         onAddGuest = { navController.navigate(ChildRoutes.addGuest(homeId)) },
+                        onReviewResidency = { navController.navigate(ChildRoutes.homeClaimReview(homeId, residency = true)) },
                     )
                 }
                 composable(
@@ -3927,9 +3974,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     LeaveHomeScreen(
                         onBack = { navController.popBackStack() },
                         onLeft = {
-                            // Move-out revokes membership, so the dashboard for
-                            // this home now 403s — drop it along with the
-                            // settings stack. Mirrors iOS `HubTabRoot`.
+                            // Acknowledgement leaves the historical-removal view.
+                            // Navigation changes no membership; destination readers
+                            // determine current access independently of this receipt.
                             val poppedToHomes =
                                 navController.popBackStack(ChildRoutes.HOME_DASHBOARD, inclusive = true)
                             if (!poppedToHomes) {
@@ -5862,14 +5909,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                     )
                 }
-                composable(ChildRoutes.ADD_HOME) {
+                composable(
+                    route = ChildRoutes.ADD_HOME_WITH_TARGET,
+                    arguments =
+                        listOf(
+                            navArgument("joinHome") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
                     AddHomeWizardScreen(
                         onDismiss = { navController.popBackStack() },
-                        onOpenHomeDashboard = { homeId ->
-                            // Pop the wizard then push the dashboard so Back
-                            // returns to MyHomes, not the success screen.
+                        onOpenHomes = {
                             navController.popBackStack()
-                            navController.navigate(ChildRoutes.homeDashboard(homeId))
+                            navController.navigate(ChildRoutes.MY_HOMES) {
+                                popUpTo(ChildRoutes.MY_HOMES) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         },
                         onOpenClaimOwnership = { homeId ->
                             navController.popBackStack()
@@ -5914,6 +5972,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenFindHome = {
                             navController.popBackStack()
                             navController.navigate(ChildRoutes.FIND_HOME)
+                        },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.HOME_RESIDENCY,
+                    arguments = listOf(navArgument(HOME_RESIDENCY_HOME_ID_KEY) { type = NavType.StringType }),
+                ) {
+                    HomeResidencyProgressScreen(
+                        onBack = { navController.popBackStack() },
+                        onNavigate = { homeId, destination ->
+                            navController.navigate(
+                                when (destination) {
+                                    HomeResidencyNavigation.Home -> ChildRoutes.homeDashboard(homeId)
+                                    HomeResidencyNavigation.Mail -> ChildRoutes.postcardVerification(homeId)
+                                    HomeResidencyNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
+                                    HomeResidencyNavigation.AddHome -> ChildRoutes.joinHome(homeId)
+                                },
+                            )
                         },
                     )
                 }
@@ -5972,12 +6048,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(POSTCARD_VERIFICATION_HOME_ID_KEY) { type = NavType.StringType },
                         ),
                 ) {
-                    PostcardVerificationScreen(
-                        onDismiss = { navController.popBackStack() },
-                        onVerified = { _ ->
-                            // Pop the tracker — the underlying home dashboard
-                            // refreshes on next visit.
-                            navController.popBackStack()
+                    HomePostalScreen(
+                        onBack = { navController.popBackStack() },
+                        onNavigate = { homeId, destination ->
+                            navController.navigate(
+                                when (destination) {
+                                    HomePostalNavigation.Home -> ChildRoutes.homeDashboard(homeId)
+                                    HomePostalNavigation.Residency -> ChildRoutes.homeResidency(homeId)
+                                    HomePostalNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
+                                    HomePostalNavigation.AddHome -> ChildRoutes.joinHome(homeId)
+                                },
+                            ) { launchSingleTop = true }
                         },
                     )
                 }
@@ -6016,13 +6097,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     }
 }
 
-/**
- * Wraps [HubScreen] with a 44dp invisible 5-tap target in the top-leading
- * corner so debug builds can jump to the token gallery — the production
- * hub hides its toolbar so there's no visible title to attach to. No-op in
- * release builds; semantically hidden so TalkBack can't trip it.
- */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+/** Observe the developer gesture without putting a touch target over Profile. */
 @Composable
 @Suppress("ModifierMissing")
 private fun HubWithDebugFiveTap(
@@ -6033,31 +6108,51 @@ private fun HubWithDebugFiveTap(
         content()
         return
     }
-    Box {
+    Box(Modifier.observeHubDebugTaps { navController.navigate(ChildRoutes.TOKEN_GALLERY) }) {
         content()
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .size(44.dp)
-                    .semantics { invisibleToUser() }
-                    .pointerInput(Unit) {
-                        var taps = 0
-                        var lastTap = 0L
-                        detectTapGestures(onTap = {
-                            val now = System.currentTimeMillis()
-                            taps = if (now - lastTap < FIVE_TAP_WINDOW_MS) taps + 1 else 1
-                            lastTap = now
-                            if (taps >= 5) {
-                                taps = 0
-                                navController.navigate(ChildRoutes.TOKEN_GALLERY)
-                            }
-                        })
-                    },
-        )
     }
 }
 
+/** Initial-pass observation deliberately never consumes a pointer change. */
+private fun Modifier.observeHubDebugTaps(onFifthTap: () -> Unit): Modifier =
+    pointerInput(Unit) {
+        val target = 44.dp.toPx()
+        awaitPointerEventScope {
+            var taps = 0
+            var lastTap = 0L
+            var started = 0L
+            var origin = androidx.compose.ui.geometry.Offset.Zero
+            var candidate = false
+            while (true) {
+                val change = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.singleOrNull()
+                if (change == null) {
+                    candidate = false
+                    taps = 0
+                    continue
+                }
+                if (change.pressed && !change.previousPressed) {
+                    origin = change.position
+                    started = change.uptimeMillis
+                    candidate = origin.x in 0f..target && origin.y in 0f..target
+                }
+                if ((change.position - origin).getDistance() > viewConfiguration.touchSlop) candidate = false
+                if (!change.pressed && change.previousPressed) {
+                    if (candidate && change.uptimeMillis - started < viewConfiguration.longPressTimeoutMillis) {
+                        val now = change.uptimeMillis
+                        taps = if (now - lastTap < FIVE_TAP_WINDOW_MS) taps + 1 else 1
+                        lastTap = now
+                        if (taps >= DEBUG_GALLERY_TAP_COUNT) {
+                            taps = 0
+                            onFifthTap()
+                        }
+                    }
+                    candidate = false
+                }
+            }
+        }
+    }
+
+private const val DEBUG_GALLERY_TAP_COUNT = 5
 private const val FIVE_TAP_WINDOW_MS: Long = 1_500L
 
 /**

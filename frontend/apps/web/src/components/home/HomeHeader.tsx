@@ -55,7 +55,7 @@ export default function HomeHeader({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {roleBadge && (
+          {roleBadge && !(isOwner && roleBadge === 'owner') && (
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-app-surface-sunken text-app-text-secondary capitalize">
               {roleBadge}
             </span>

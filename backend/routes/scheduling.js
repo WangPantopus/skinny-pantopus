@@ -10,6 +10,7 @@ const Joi = require('joi');
 
 const router = express.Router({ mergeParams: true });
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homeRecordService = require('../services/homeRecordService');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const { asyncHandler } = require('../errorHandler');
@@ -1046,10 +1047,10 @@ router.post('/visits', withOwner('edit'), validate(visitSchema), asyncHandler(as
   if (spanMs > 30 * 24 * 60 * 60 * 1000) {
     return res.status(400).json({ error: 'BAD_RANGE', message: 'A visit cannot span more than 30 days.' });
   }
-  const { data, error } = await supabaseAdmin
-    .from('HomeCalendarEvent')
-    .insert({
-      home_id: req.scheduling.ownerId,
+  let result;
+  try {
+    result = await homeRecordService.mutate({ homeId: req.scheduling.ownerId, actorId: req.user.id,
+      kind: 'event', action: 'create', payload: {
       event_type: req.body.visit_type,
       title: req.body.title,
       description: req.body.description || null,
@@ -1057,12 +1058,9 @@ router.post('/visits', withOwner('edit'), validate(visitSchema), asyncHandler(as
       end_at,
       location_notes: req.body.location_notes || null,
       assigned_to: req.body.who_is_home && req.body.who_is_home.length ? req.body.who_is_home : null,
-      created_by: req.user.id,
-    })
-    .select('*')
-    .single();
-  if (error) throw error;
-  res.status(201).json({ visit: data });
+    } });
+  } catch (error) { return homeRecordService.sendError(res, error); }
+  res.status(201).json({ visit: result.record });
 }));
 
 // ============================================================

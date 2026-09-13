@@ -8,6 +8,8 @@ type GeoSuggestion = geo.GeoSuggestion;
 type Props = {
   value: string;
   onChange: (v: string) => void;
+  /** Caller-owned address/session lifetime, captured when resolution starts. */
+  onResolveStart?: () => () => boolean;
 
   // Called when user selects a suggestion.
   onSelectNormalized: (n: {
@@ -25,6 +27,7 @@ type Props = {
   placeholder?: string;
   /** Id of the visible <label> for this field, so the combobox is named. */
   labelId?: string;
+  hintText?: string;
 };
 
 function useDebounced<T>(value: T, delayMs: number) {
@@ -57,7 +60,9 @@ export default function AddressAutocomplete({
   value,
   onChange,
   onSelectNormalized,
+  onResolveStart,
   placeholder = '123 Main St',
+  hintText = 'Start typing, then pick a suggestion to verify.',
   labelId,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -65,6 +70,7 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
   const [error, setError] = useState<string>('');
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [reopen, setReopen] = useState(0);
 
   const reactId = useId();
   const listboxId = `${reactId}-listbox`;
@@ -76,35 +82,45 @@ export default function AddressAutocomplete({
   const debounced = useDebounced(value, 300);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const revision = useRef(0);
+  const alive = useRef(true);
+  const latestValue = useRef(value);
+  latestValue.current = value;
+  const suggestedFor = useRef<string | null>(null);
+  useEffect(() => {
+    alive.current = true;
+    const cancel = () => { revision.current++; abortRef.current?.abort(); };
+    const retire = () => { cancel(); suggestedFor.current = null;
+      setLoading(false); setSuggestions([]); setActiveIndex(-1); setOpen(false); };
+    const visible = () => setReopen(value => value + 1);
+    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else visible(); };
+    window.addEventListener('pageshow', visible); window.addEventListener('pagehide', retire); document.addEventListener('visibilitychange', visibility);
+    return () => { alive.current = false; cancel();
+      window.removeEventListener('pageshow', visible); window.removeEventListener('pagehide', retire); document.removeEventListener('visibilitychange', visibility); };
+  }, []);
+
 
   useEffect(() => {
-    setError('');
-    if ((debounced || '').trim().length < 4) {
-      setSuggestions([]);
-      setActiveIndex(-1);
-      return;
-    }
-
+    setError(''); setSuggestions([]); setActiveIndex(-1); suggestedFor.current = null;
+    abortRef.current?.abort();
+    const operation = ++revision.current;
+    if ((debounced || '').trim().length < 4 || debounced !== value) { setLoading(false); return; }
+    const ac = new AbortController(); abortRef.current = ac;
+    const current = () => alive.current && operation === revision.current && !ac.signal.aborted
+      && debounced === latestValue.current && document.visibilityState !== 'hidden';
     const run = async () => {
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
-
       setLoading(true);
       try {
         const data = await geo.autocompleteWithAbort(debounced, ac.signal);
-        setSuggestions(data.suggestions || []);
-        setActiveIndex(-1);
-        setOpen(true);
-      } catch (e: unknown) {
-        if (!(e instanceof DOMException) || e.name !== 'AbortError') setError('Failed to load suggestions');
-      } finally {
-        setLoading(false);
-      }
+        if (!current()) return;
+        suggestedFor.current = debounced;
+        setSuggestions(data.suggestions || []); setActiveIndex(-1); setOpen(true);
+      } catch { if (current()) setError('Failed to load suggestions'); }
+      finally { if (current()) setLoading(false); }
     };
-
-    run();
-  }, [debounced]);
+    void run();
+    return () => ac.abort();
+  }, [debounced, value, reopen]);
 
   // Keep the active option scrolled into view for sighted keyboard users.
   useEffect(() => {
@@ -118,18 +134,24 @@ export default function AddressAutocomplete({
   }, [activeIndex]);
 
   const selectSuggestion = async (s: GeoSuggestion) => {
-    setOpen(false);
-    setSuggestions([]);
-    setActiveIndex(-1);
-
+    const selectedFor = suggestedFor.current;
+    if (selectedFor === null || selectedFor !== latestValue.current) return;
+    const operation = ++revision.current;
+    abortRef.current?.abort(); suggestedFor.current = null;
+    const parentCurrent = onResolveStart?.() ?? (() => true);
+    const current = () => alive.current && operation === revision.current && selectedFor === latestValue.current
+      && document.visibilityState !== 'hidden' && parentCurrent();
+    setOpen(false); setSuggestions([]); setActiveIndex(-1);
+    if (!current()) return;
+    setLoading(true);
     try {
       const data = await geo.resolve(s.suggestion_id);
+      if (!current()) return;
       const n = data.normalized;
-      onChange(n.address);
-      onSelectNormalized(n);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to resolve address');
-    }
+      setLoading(false);
+      onChange(n.address); onSelectNormalized(n);
+    } catch { if (current()) setError('Failed to resolve address. Please select it again.'); }
+    finally { if (current()) setLoading(false); }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -205,6 +227,7 @@ export default function AddressAutocomplete({
         aria-invalid={error ? true : undefined}
         value={value}
         onChange={(e) => {
+          revision.current++; abortRef.current?.abort(); suggestedFor.current = null; setSuggestions([]); setLoading(false);
           onChange(e.target.value);
           setActiveIndex(-1);
           setOpen(true);
@@ -281,7 +304,7 @@ export default function AddressAutocomplete({
         </p>
       )}
       <p id={hintId} className="mt-1 text-xs text-app-text-secondary">
-        Start typing, then pick a suggestion to verify.
+        {hintText}
       </p>
     </div>
   );
