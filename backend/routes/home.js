@@ -3901,41 +3901,8 @@ router.post('/:id/claim', residencySubmissionNoStore, verifyToken, homeResidency
   catch (error) { residencyLegacy.sendError(res, error); }
 });
 
-/**
- * GET /:id/claims - List pending residency claims for a home
- * Only home owners/admins/managers can view.
- */
-router.get('/:id/claims', verifyToken, async (req, res) => {
-  try {
-    const homeId = req.params.id;
-    const userId = req.user.id;
-
-    const { checkHomePermission } = require('../utils/homePermissions');
-    const access = await checkHomePermission(homeId, userId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'Not authorized to view claims' });
-    }
-
-    const { data: claims, error } = await supabaseAdmin
-      .from('HomeResidencyClaim')
-      .select(`
-        *,
-        claimant:user_id (id, username, name, first_name, last_name, profile_picture_url, city, state)
-      `)
-      .eq('home_id', homeId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('Error fetching claims', { error: error.message });
-      return res.status(500).json({ error: 'Failed to fetch claims' });
-    }
-
-    res.json({ claims: claims || [] });
-  } catch (err) {
-    logger.error('List claims error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch claims' });
-  }
-});
+// GET /:id/claims is mounted by homeIam/homeResidencyClaims before this
+// router. Its safe pending projection and current authority share one SQL scope.
 
 /** Prepared current review; this session proof never grants membership authority. */
 router.get('/:id/claim/:claimId/review', verifyToken, async (req, res) => {
