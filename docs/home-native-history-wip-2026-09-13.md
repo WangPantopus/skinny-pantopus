@@ -15,3 +15,14 @@ PR #35 now tracks this branch as an explicitly labelled unfinished draft. PR #36
 The reader/product source `9350896c4f6a822afdc2fc5cdb8e59a4970e063d` passes all 16 checks in [CI 34768705945](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34768705945). Later documentation and UI-only cycle-driver corrections require their own pushed-head CI; the retained application binaries remain unchanged.
 
 The native branch now incorporates primary `f14989637` before integration. Only the two current handoff paragraphs conflicted; their latest acceptance state is preserved, along with the primary session/evidence documents. The SDK import was already identical and no application or migration bytes changed during this reconciliation. PR #35 targets the primary Home branch so its completed bounded scope can be reviewed independently; exact pushed-head CI remains required before merging.
+
+
+### Exact-head CI follow-up
+
+Run [34774032459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34774032459)
+on `8c3f7a6c6` caught one iPhone 16 test-isolation failure: the cursor transport
+assertion counted three global URL-protocol requests instead of its one history
+request. Other tests' background requests shared that capture. The assertion now
+counts only history routes, retaining the check that an invalid cursor dispatches
+no history request. Application and migration bytes are unchanged. The failed run
+is retained as evidence; integration waits for the repaired pushed head's CI.
