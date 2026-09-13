@@ -24,6 +24,7 @@ public struct HomeClaimReviewView: View {
     @State private var verdictConfirm: VerdictConfirm?
     @State private var relationshipConfirm: RelationshipConfirm?
     @State private var residencyTarget: HomeResidencyReviewViewModel?
+    @State private var showingResidencyHistory = false
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
     @State private var relationshipTarget: HomeRelationshipViewModel?
 
@@ -51,6 +52,10 @@ public struct HomeClaimReviewView: View {
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.residencyRecovery")
+            Button("Your past residency decisions") { showingResidencyHistory = true }
+                .frame(minHeight: 44)
+                .padding(Spacing.s3)
+                .accessibilityIdentifier("homeClaimReview.residencyHistory")
             if case .loaded = viewModel.state {
                 HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             }
@@ -70,6 +75,9 @@ public struct HomeClaimReviewView: View {
         })
         .sheet(item: $residencyTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
             HomeResidencyReviewView(model: target)
+        })
+        .sheet(isPresented: $showingResidencyHistory, onDismiss: { Task { await viewModel.refresh() } }, content: {
+            HomeResidencyHistoryView(homeId: viewModel.homeId) { showingResidencyHistory = false }
         })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {

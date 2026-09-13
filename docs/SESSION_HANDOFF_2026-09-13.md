@@ -1,5 +1,9 @@
 # Pantopus verified-boundary handoff — September 13, 2026
 
+**Historical frozen checkpoint.** Native history has since been accepted and merged through PR #35. Follow [the current project handoff](PROJECT_HANDOFF.md) for live source, leases, verification limits and the next current-claims task. The remainder records the earlier boundary.
+
+**Current continuation:** native history now passes both installed readers, both fresh native cycles and exact fixture cleanup. Both devices are stopped with data retained. See [the current project handoff](PROJECT_HANDOFF.md) and [native evidence/CI limits](home-native-history-wip-2026-09-13.md). The frozen source/next-step details below are historical; native integration awaits its exact-head CI. Current-claims alias correction passes SQL CI, while its consumers and populated acceptance remain unfinished.
+
 This is the current session boundary. Read PROJECT_HANDOFF.md, SESSION_RESUME_2026-09-10.md and REMAINING_WORK_2026-09-11.md; historical “next” instructions are superseded. The owner requested a smooth handoff with all source committed/pushed. No new feature scope should be inferred from this checkpoint.
 
 ## Source and verification
