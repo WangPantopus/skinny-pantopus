@@ -552,9 +552,10 @@ class LandlordAuthorityService {
    *
    * @param {string} leaseId
    * @param {string} authorityId
+   * @param {{start_at?: string, end_at?: string|null}} [dates] - Reviewed dates; omitted fields retain existing values.
    * @returns {Promise<{success: boolean, error?: string, lease?: object, occupancy?: object}>}
    */
-  async approveTenantRequest(leaseId, authorityId) {
+  async approveTenantRequest(leaseId, authorityId, dates = {}) {
     // ── 1. Verify authority ───────────────────────────────────
     const { data: authority } = await supabaseAdmin
       .from('HomeAuthority')
@@ -586,10 +587,26 @@ class LandlordAuthorityService {
       return { success: false, error: 'Authority does not match lease home' };
     }
 
+    const dateChanges = {};
+    if (dates.start_at !== undefined || dates.end_at !== undefined) {
+      const start = Date.parse(dates.start_at !== undefined ? dates.start_at : lease.start_at);
+      const endValue = dates.end_at !== undefined ? dates.end_at : lease.end_at;
+      const end = endValue == null ? null : Date.parse(endValue);
+      if (!Number.isFinite(start) || (end !== null && !Number.isFinite(end))) {
+        return { success: false, error: 'Lease dates must be valid dates' };
+      }
+      if (end !== null && end <= start) {
+        return { success: false, error: 'End date must be after start date' };
+      }
+      if (dates.start_at !== undefined) dateChanges.start_at = new Date(start).toISOString();
+      if (dates.end_at !== undefined) dateChanges.end_at = end === null ? null : new Date(end).toISOString();
+    }
+
     // ── 4. Activate lease ─────────────────────────────────────
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('HomeLease')
       .update({
+        ...dateChanges,
         state: 'active',
         approved_by_subject_type: authority.subject_type,
         approved_by_subject_id: authority.subject_id,

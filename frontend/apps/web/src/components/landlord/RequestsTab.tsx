@@ -30,20 +30,32 @@ function ApproveModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [startAt, setStartAt] = useState(
-    request.start_at ? new Date(request.start_at).toISOString().split('T')[0] : '',
-  );
-  const [endAt, setEndAt] = useState(
-    request.end_at ? new Date(request.end_at).toISOString().split('T')[0] : '',
-  );
+  const originalStartDate = request.start_at ? new Date(request.start_at).toISOString().split('T')[0] : '';
+  const originalEndDate = request.end_at ? new Date(request.end_at).toISOString().split('T')[0] : '';
+  const [startAt, setStartAt] = useState(originalStartDate);
+  const [endAt, setEndAt] = useState(originalEndDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleApprove = async () => {
+    if (!startAt) {
+      setError('Enter a start date.');
+      return;
+    }
+    // Preserve times already stored on dates the reviewer did not change.
+    const startValue = startAt === originalStartDate ? request.start_at : startAt;
+    const endValue = !endAt ? null : endAt === originalEndDate ? request.end_at : endAt;
+    if (endValue && Date.parse(endValue) <= Date.parse(startValue)) {
+      setError('End date must be after start date.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await api.landlord.approveLease(request.id, authorityId);
+      await api.landlord.approveLease(request.id, authorityId, {
+        start_at: startValue,
+        end_at: endValue,
+      });
       onSuccess();
       onClose();
     } catch (err: unknown) {

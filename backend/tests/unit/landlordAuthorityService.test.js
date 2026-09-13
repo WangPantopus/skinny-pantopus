@@ -675,6 +675,39 @@ describe('acceptInvite', () => {
 // ============================================================
 
 describe('approveTenantRequest', () => {
+  test('persists reviewed dates on the existing lease', async () => {
+    seedHome(); seedAuthority(); seedLease();
+    const result = await service.approveTenantRequest('lease-1', 'auth-1', {
+      start_at: '2026-10-01', end_at: '2027-09-30',
+    });
+    expect(result.success).toBe(true);
+    expect(new Date(getTable('HomeLease')[0].start_at).toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    expect(new Date(getTable('HomeLease')[0].end_at).toISOString()).toBe('2027-09-30T00:00:00.000Z');
+  });
+
+  test('explicit null clears an end date, omission preserves it', async () => {
+    seedHome(); seedAuthority(); seedLease({ start_at: '2026-09-01', end_at: '2027-09-01' });
+    await service.approveTenantRequest('lease-1', 'auth-1', { start_at: '2026-10-01' });
+    expect(getTable('HomeLease')[0].end_at).toBe('2027-09-01');
+    seedLease({ start_at: '2026-09-01', end_at: '2027-09-01' });
+    await service.approveTenantRequest('lease-1', 'auth-1', { end_at: null });
+    expect(getTable('HomeLease')[0].end_at).toBeNull();
+  });
+
+  test.each([
+    { start_at: '' }, { start_at: 'invalid' }, { end_at: 'invalid' },
+    { start_at: '2027-10-01' }, { end_at: '2026-08-31' },
+    { start_at: '2026-10-01', end_at: '2026-10-01' },
+  ])('rejects invalid reviewed dates before any activation: %j', async (dates) => {
+    seedHome(); seedAuthority(); seedLease({ start_at: '2026-09-01', end_at: '2027-09-01' });
+    const before = JSON.parse(JSON.stringify(getTable('HomeLease')));
+    const result = await service.approveTenantRequest('lease-1', 'auth-1', dates);
+    expect(result.success).toBe(false);
+    expect(getTable('HomeLease')).toEqual(before);
+    expect(mockOccAttach).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     seedHome();
     seedAuthority({ status: 'verified' });

@@ -50,7 +50,10 @@ const inviteTenantSchema = Joi.object({
   end_at: Joi.string().isoDate().allow(null),
 });
 
-const approveDenySchema = Joi.object({});
+const approveDenySchema = Joi.object({
+  start_at: Joi.string().isoDate(),
+  end_at: Joi.string().isoDate().allow(null),
+});
 
 const denySchema = Joi.object({
   reason: Joi.string().max(500).allow(null, ''),
@@ -327,7 +330,10 @@ router.post(
         return res.status(403).json({ error: 'No verified authority for this property' });
       }
 
-      const result = await landlordAuthorityService.approveTenantRequest(leaseId, authResult.authority.id);
+      const result = await landlordAuthorityService.approveTenantRequest(leaseId, authResult.authority.id, {
+        start_at: req.body.start_at,
+        end_at: req.body.end_at,
+      });
 
       if (!result.success) {
         const status = result.error.includes('not found') ? 404 : 400;

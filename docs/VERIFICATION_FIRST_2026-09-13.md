@@ -196,3 +196,59 @@ Private evidence: owner checkout
 `.pantopus-recovery/audits/20260913-landlord-verification/`.
 Its manifest binds the regression logs, original/candidate service-chain results,
 SQL cleanup and private harness sources. Runtime credentials stay outside Git.
+
+
+## Existing lease-date controls — September 13 draft
+
+The follow-up branch `codex/lease-approval-dates`, based on `7f2a5e6d6`, repairs
+the reproduced date-discard defect through four existing production files:
+`RequestsTab.tsx`, the shared landlord SDK, `landlordTenant.js`, and
+`landlordAuthorityService.js`. It changes no markup, classes, screen, layout or
+schema. One focused web/SDK regression file is added; backend cases extend the
+existing service and route test files.
+
+Edited dates reach the existing lease update. Explicit null clears the optional
+end date; omission preserves stored values for existing API callers. Unchanged
+calendar dates retain their stored times, including a valid same-day lease.
+Invalid date ranges remain visible in the existing modal and fail server-side
+before activation. Request errors preserve the edits in the mounted modal;
+this does not establish recovery after the server commits but its reply is lost.
+
+Eight rendered React/shared-SDK tests and 187 existing/extended backend service,
+pipeline and route tests pass. Five UI/SDK cases and eight service cases failed
+before the repair. Web TypeScript passes; scoped ESLint has zero errors and one
+pre-existing `any` warning. The new test initially used an unsupported Testing
+Library option; removing that redundant option resolved its only type error.
+
+Seven actual HTTP route → validation → authority resolver → service → Supabase
+SDK → PostgREST → isolated PostgreSQL checks pass: edited values persist, null
+clears the end while preserving the start time, old callers retain both dates,
+malformed/equal/reversed dates do not activate or change the lease, and an
+unrelated actor cannot change the dates. Authentication is controlled synthetic
+middleware and notification delivery is intercepted; real login/provider or
+installed-native acceptance is not claimed. Synthetic rows are cleaned; only
+reference tables remain populated in the isolated database, and its owned
+HTTP/REST runtimes are stopped with the lease released.
+
+**Keep this patch in draft until lease and membership consistency is repaired.**
+A separate real HTTP/SQL probe reproduced a future-start lease granting Home
+access immediately. The same failure occurs when the lease already contains
+the future dates and the caller submits no date edits, confirming that this is
+in the existing activation path. Date persistence alone does not enforce the
+lease window. Existing false approval success/blocked retry and expired
+reactivation access also remain open; R05 is not closed.
+
+The next repair must commit current authority, lease state/dates and the
+appropriate membership change together; preserve an independently valid
+household membership; prevent old completed approvals/invitations from reviving
+removed membership; and make retry distinguish saved, rejected and incomplete
+outcomes. Reuse the existing lease/invitation/occupancy/audit records and current
+permission helpers. Separate PostgREST writes and a JavaScript return-flag change
+cannot establish that transaction guarantee. The compared household transaction
+functions cover different operations, so any necessary additive transaction
+function should extend the existing entities, not create renewal tables or
+replacement screens. Do not overwrite applied migration history.
+
+Private source bindings, red/green logs, HTTP/SQL outcomes, access-window failure
+probes and runtime cleanup are preserved in the owner checkout at
+`.pantopus-recovery/audits/20260913-lease-dates/MANIFEST.json`.

@@ -167,11 +167,15 @@ export async function inviteTenant(data: {
 }
 
 /** Approve a pending tenant lease request */
-export async function approveLease(leaseId: string, authorityId: string): Promise<{
+export async function approveLease(
+  leaseId: string,
+  authorityId: string,
+  dates: { start_at?: string; end_at?: string | null } = {},
+): Promise<{
   lease: HomeLease;
   occupancy: any;
 }> {
-  return post(`/api/v1/landlord/lease/${leaseId}/approve`, { authority_id: authorityId });
+  return post(`/api/v1/landlord/lease/${leaseId}/approve`, { authority_id: authorityId, ...dates });
 }
 
 /** Deny a pending tenant lease request */

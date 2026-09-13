@@ -12,6 +12,17 @@ new rules in [AGENTS.md](../AGENTS.md) and the
 An open acceptance row does not authorize a rebuild. Locate existing code and
 establish a defect or concrete unmet requirement before application changes.
 
+**Active draft: `codex/lease-approval-dates` in the existing worktree.**
+It fixes the reproduced date-discard path using the existing modal, SDK, route
+and service; markup/styles/schema stay unchanged. Eight web/SDK checks, 187
+backend checks, seven actual HTTP/SQL checks and web TypeScript pass. Keep it in
+draft while the related lease/membership failures are repaired. A separate
+HTTP/SQL probe confirms a future-start lease grants access immediately, even
+without date edits. See [the draft evidence and next boundary](VERIFICATION_FIRST_2026-09-13.md#existing-lease-date-controls--september-13-draft).
+The Home branch remains at `7f2a5e6d6`; integration CI34790255357 is still running
+at this checkpoint. Do not cancel it by pushing this draft onto that branch.
+Owned date-verification HTTP/REST runtimes are stopped and synthetic rows cleaned.
+
 **Next: repair the demonstrated lease/occupancy consistency and retry failures.**
 The existing reactivation and landlord services have now been checked with the
 actual SDK, PostgREST and isolated PostgreSQL. Approval can report success with
@@ -24,8 +35,8 @@ issuer's current verified authority before writes. Baseline SQL granted access
 after revocation; candidate SQL denies without consuming the invitation, while
 a valid invitation still works. All 279 focused service/route tests pass. See
 [the verification and limits](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-flow-verification--september-13).
-The active worktree is `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/home-permission-boundaries`. The previous Home integration `e6e3c65f8`
+The active worktree is `/private/tmp/pantopus-home-permission-boundaries`;
+the integrated Home branch is `codex/home-permission-boundaries`. The previous Home integration `e6e3c65f8`
 passes all 16 checks in [CI 34788091570](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34788091570).
 The landlord candidate `968e145a7369e69f48638c7d16b06bcaa88aaff7` passes all six
 executed checks in [CI 34790034952](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790034952),

@@ -498,6 +498,20 @@ describe('POST /landlord/lease/invite', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/approve', () => {
+  test('forwards reviewed dates while resolving authority from the actor', async () => {
+    seedHome(); seedAuthority(); seedLease({ state: 'pending', end_at: '2027-09-01' });
+    const req = mockReq({ params: { leaseId: 'lease-1' }, body: {
+      authority_id: 'untrusted-authority', start_at: '2026-08-01', end_at: null,
+    } });
+    const res = mockRes();
+    await approveLeaseHandler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._json.lease.start_at).toBe('2026-08-01T00:00:00.000Z');
+    expect(res._json.lease.end_at).toBeNull();
+    expect(res._json.lease.approved_by_subject_id).toBe('test-user-id');
+  });
+
   test('returns lease and occupancy on success', async () => {
     seedHome();
     seedAuthority();
