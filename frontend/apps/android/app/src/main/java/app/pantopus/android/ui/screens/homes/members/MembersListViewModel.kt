@@ -162,6 +162,7 @@ class MembersListViewModel
         private var accessRequests: List<HouseholdAccessRequestDto> = emptyList()
         private var auditEntries: List<HomeAuditEntryDto> = emptyList()
         private var access: HomeAccessDto? = null
+        private var rosterConfirmed = false
         private var loadedOnce = false
         private var readGeneration = 0L
         private var loadInFlight = false
@@ -225,6 +226,13 @@ class MembersListViewModel
         /** Pull-to-refresh / retry. */
         fun refresh() = reload()
 
+        /** Recovery has its own protected original; retire the current list before presenting it. */
+        fun retireForRemovalRecovery() {
+            readGeneration++
+            loadInFlight = false
+            retireSnapshot()
+        }
+
         /** Backend doesn't paginate /occupants. */
         fun loadMoreIfNeeded() = Unit
 
@@ -274,23 +282,12 @@ class MembersListViewModel
             applyState()
         }
 
-        /**
-         * Optimistic remove with rollback on failure. The confirm dialog
-         * has already fired by the time this is invoked.
-         */
-        fun remove(userId: String) {
-            val previous = occupants
-            occupants = previous.filterNot { it.userId == userId }
-            applyState()
-            viewModelScope.launch {
-                when (repo.remove(homeId, userId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        occupants = previous
-                        applyState()
-                    }
-                }
-            }
+        /** Open a current protected review; never optimistically remove or dispatch a legacy DELETE. */
+        fun requestRemoval(userId: String) {
+            val occupant = occupants.singleOrNull { it.userId == userId } ?: return
+            val target = actionTarget(occupant, displayName(occupant))
+            if (!target.canRemove) return
+            _pendingEvent.value = MembersListEvent.ConfirmRemove(target.userId, target.name)
         }
 
         /** Review an explicit withdrawal; current server authority is checked before submission. */
@@ -367,14 +364,29 @@ class MembersListViewModel
 
         private fun reload() {
             val generation = ++readGeneration
+            retireSnapshot()
             loadInFlight = true
-            _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch { fetch(generation) }
+        }
+
+        private fun retireSnapshot() {
+            rosterConfirmed = false
+            access = null
+            occupants = emptyList()
+            pendingInvites = emptyList()
+            invitationReadError = null
+            accessRequests = emptyList()
+            auditEntries = emptyList()
+            readError = null
+            loadedOnce = false
+            applyState()
         }
 
         /** Every endpoint contributes to one current-session snapshot, published only by the latest read. */
         private suspend fun fetch(generation: Long = ++readGeneration) =
             coroutineScope {
+                if (generation != readGeneration) return@coroutineScope
+                retireSnapshot()
                 loadInFlight = true
                 val session = sender.session(this)
                 try {
@@ -405,6 +417,7 @@ class MembersListViewModel
                     accessRequests = nextRequests
                     auditEntries = nextAudit
                     readError = null
+                    rosterConfirmed = true
                     loadedOnce = true
                     if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) && !confirmedManage) {
                         _selectedTab.value = MembersTab.MEMBERS
@@ -421,6 +434,7 @@ class MembersListViewModel
             }
 
         private fun publishReadFailure(message: String) {
+            rosterConfirmed = false
             access = null
             occupants = emptyList()
             pendingInvites = emptyList()
@@ -474,13 +488,13 @@ class MembersListViewModel
 
         private fun makeTabs(): List<ListOfRowsTab> =
             buildList {
-                add(ListOfRowsTab(id = MembersTab.MEMBERS, label = "Members", count = membersBucket().size))
-                add(ListOfRowsTab(id = MembersTab.GUESTS, label = "Guests", count = guestsBucket().size))
+                add(ListOfRowsTab(id = MembersTab.MEMBERS, label = "Members", count = membersBucket().size.takeIf { rosterConfirmed }))
+                add(ListOfRowsTab(id = MembersTab.GUESTS, label = "Guests", count = guestsBucket().size.takeIf { rosterConfirmed }))
                 add(
                     ListOfRowsTab(
                         id = MembersTab.PENDING,
                         label = "Pending",
-                        count = pendingInvites.size.takeIf { invitationReadError == null },
+                        count = pendingInvites.size.takeIf { rosterConfirmed && invitationReadError == null },
                     ),
                 )
                 if (canManageMembers) {
@@ -504,6 +518,11 @@ class MembersListViewModel
         // ─── State projection ─────────────────────────────────────
 
         private fun applyState() {
+            if (!rosterConfirmed && readError == null) {
+                _tabs.value = makeTabs()
+                _state.value = ListOfRowsUiState.Loading
+                return
+            }
             if (readError != null) {
                 _tabs.value = makeTabs()
                 _state.value = ListOfRowsUiState.Error(checkNotNull(readError))

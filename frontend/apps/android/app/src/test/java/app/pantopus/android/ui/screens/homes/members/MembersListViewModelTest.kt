@@ -59,7 +59,7 @@ import org.junit.Test
  *    comes from `/household-access-requests` and only exists for viewers
  *    who can manage the roster)
  *  - tab switching mutates the loaded section without a refetch
- *  - optimistic remove + rollback
+ *  - protected removal review never dispatches legacy DELETE or hides a member
  *  - explicit reviewed withdrawal without hiding rows or removing members
  *  - handleInvited(_:) folds a new pending invite at top
  *  - role-change + approve/decline call the right repository methods
@@ -249,6 +249,92 @@ class MembersListViewModelTest {
         }
 
     @Test
+    fun unknown_or_failed_roster_has_no_counts_but_confirmed_empty_has_zero() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "unavailable"))
+            val vm = makeVm()
+            assertTrue(vm.tabs.value.all { it.count == null })
+            vm.load()
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            vm.selectTab(MembersTab.GUESTS)
+            vm.selectTab(MembersTab.MEMBERS)
+            assertTrue(vm.tabs.value.all { it.count == null })
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(OccupantsResponse())
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.MEMBERS }.count)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.GUESTS }.count)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+        }
+
+    @Test
+    fun held_current_read_cannot_restore_cached_rows_counts_or_authority_through_tabs() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val vm = makeVm()
+            vm.load()
+            assertTrue(vm.canManageMembers)
+            val held = CompletableDeferred<NetworkResult<OccupantsResponse>>()
+            coEvery { repo.listOccupants("home_1") } coAnswers { held.await() }
+            vm.refresh()
+            for (tab in listOf(MembersTab.PENDING, MembersTab.GUESTS, MembersTab.MEMBERS)) {
+                vm.selectTab(tab)
+                assertTrue(vm.state.value is ListOfRowsUiState.Loading)
+                assertTrue(vm.tabs.value.all { it.count == null })
+                assertEquals(false, vm.canManageMembers)
+            }
+            vm.requestRemoval("u_admin")
+            assertNull(vm.pendingEvent.value)
+            vm.requestInvite()
+            assertEquals(MembersListEvent.OpenInvite, vm.pendingEvent.value)
+            vm.acknowledgeEvent()
+            held.complete(NetworkResult.Success(populated()))
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+            assertTrue(vm.canManageMembers)
+            assertEquals(2, vm.tabs.value.single { it.id == MembersTab.MEMBERS }.count)
+            assertEquals(1, vm.tabs.value.single { it.id == MembersTab.GUESTS }.count)
+        }
+
+    @Test
+    fun entering_removal_recovery_retires_loaded_roster_without_a_mutation() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val vm = makeVm()
+            vm.load()
+            vm.retireForRemovalRecovery()
+            vm.selectTab(MembersTab.PENDING)
+            vm.selectTab(MembersTab.MEMBERS)
+            assertTrue(vm.state.value is ListOfRowsUiState.Loading)
+            assertTrue(vm.tabs.value.all { it.count == null })
+            assertEquals(false, vm.canManageMembers)
+            vm.requestRemoval("u_admin")
+            assertNull(vm.pendingEvent.value)
+            coVerify(exactly = 1) { repo.listOccupants("home_1") }
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
+        }
+
+    @Test
+    fun pre_recovery_reply_is_retired_until_close_starts_a_fresh_roster_read() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val vm = makeVm()
+            vm.load()
+            val held = CompletableDeferred<List<PendingInviteDto>>()
+            coEvery { sender.list("home_1") } coAnswers { held.await() }
+            vm.refresh()
+            vm.retireForRemovalRecovery()
+            held.complete(listOf(invite()))
+            assertTrue(vm.state.value is ListOfRowsUiState.Loading)
+            assertTrue(vm.tabs.value.all { it.count == null })
+            assertEquals(false, vm.canManageMembers)
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(OccupantsResponse())
+            coEvery { sender.list("home_1") } returns emptyList()
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.MEMBERS }.count)
+        }
+
+    @Test
     fun load_is_idempotent_after_loaded() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
@@ -323,14 +409,17 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun empty_guests_tab_shows_guest_empty_state_after_removing_only_guest() =
+    fun empty_guests_tab_uses_fresh_roster_after_saved_removal() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             coEvery { repo.remove("home_1", "u_guest") } returns
                 NetworkResult.Success(RemoveMemberResponse(message = "ok"))
             val vm = makeVm()
             vm.load()
-            vm.remove(userId = "u_guest")
+            coEvery {
+                repo.listOccupants("home_1")
+            } returns NetworkResult.Success(populated().copy(occupants = populated().occupants.filterNot { it.userId == "u_guest" }))
+            vm.refresh()
             vm.selectTab(MembersTab.GUESTS)
             val empty = vm.state.value as ListOfRowsUiState.Empty
             assertEquals("No active guests", empty.headline)
@@ -560,32 +649,33 @@ class MembersListViewModelTest {
     // ─── Mutations ────────────────────────────────────────────────
 
     @Test
-    fun remove_optimistically_removes_row() =
+    fun removal_review_preserves_current_row_and_never_sends_legacy_delete() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
-            coEvery { repo.remove("home_1", "u_admin") } returns
-                NetworkResult.Success(RemoveMemberResponse(message = "ok"))
             val vm = makeVm()
             vm.load()
-            vm.remove(userId = "u_admin")
-            val loaded = vm.state.value as ListOfRowsUiState.Loaded
-            assertEquals(1, loaded.sections.first().rows.size)
-            assertNull(loaded.sections.first().rows.firstOrNull { it.id == "u_admin" })
-            coVerify { repo.remove("home_1", "u_admin") }
+            val before = vm.state.value
+            vm.requestRemoval("u_admin")
+            assertEquals(before, vm.state.value)
+            assertEquals("u_admin", (vm.pendingEvent.value as MembersListEvent.ConfirmRemove).userId)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
         }
 
     @Test
-    fun remove_failure_rolls_back_the_row() =
+    fun unavailable_or_denied_roster_cannot_start_a_new_removal_review() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
-            coEvery { repo.remove("home_1", "u_admin") } returns
-                NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
-            vm.remove(userId = "u_admin")
-            val loaded = vm.state.value as ListOfRowsUiState.Loaded
-            assertEquals(2, loaded.sections.first().rows.size)
-            assertNotNull(loaded.sections.first().rows.firstOrNull { it.id == "u_admin" })
+            stubMemberAccess()
+            vm.refresh()
+            vm.requestRemoval("u_admin")
+            assertNull(vm.pendingEvent.value)
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "unavailable"))
+            vm.refresh()
+            vm.requestRemoval("u_admin")
+            assertNull(vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
         }
 
     @Test
@@ -802,7 +892,7 @@ class MembersListViewModelTest {
             val vm = makeVm()
             vm.load()
             vm.selectTab(MembersTab.PENDING)
-            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            assertNull(vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "Current read failed"))
             vm.refresh()
             held.complete(NetworkResult.Success(HomeAuditLogResponse(entries = emptyList())))

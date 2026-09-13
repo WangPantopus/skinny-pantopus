@@ -39,7 +39,7 @@ const val MEMBERS_LIST_TAG = "membersList"
  * the current-session sender list and prepared sender commands,
  * `POST …/members/:userId/role`,
  * `POST …/household-access-requests/:requestId/(approve|reject)`, and
- * `DELETE …/members/:userId`.
+ * prepared member-removal commands and separate historical recovery.
  */
 @Composable
 fun MembersListScreen(
@@ -55,7 +55,7 @@ fun MembersListScreen(
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
     var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
-    var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var removeTarget by remember { mutableStateOf<HomeMemberRemovalTarget?>(null) }
     var actionsTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var roleTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var approveTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -86,7 +86,8 @@ fun MembersListScreen(
                 viewModel.acknowledgeEvent()
             }
             is MembersListEvent.ConfirmRemove -> {
-                removeTarget = event.userId to event.name
+                viewModel.retireForRemovalRecovery()
+                removeTarget = HomeMemberRemovalTarget(viewModel.homeId, event.userId)
                 viewModel.acknowledgeEvent()
             }
             is MembersListEvent.ConfirmApproveRequest -> {
@@ -103,6 +104,15 @@ fun MembersListScreen(
     Box(modifier = Modifier.fillMaxSize().testTag(MEMBERS_LIST_TAG)) {
         ListOfRowsScreen(
             title = "Members",
+            customHeader = {
+                TextButton(
+                    onClick = {
+                        viewModel.retireForRemovalRecovery()
+                        removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
+                    },
+                    modifier = Modifier.testTag("membersList_removalRecovery"),
+                ) { Text("Recover a member removal") }
+            },
             state = state,
             onRefresh = { viewModel.refresh() },
             onEndReached = { viewModel.loadMoreIfNeeded() },
@@ -140,7 +150,7 @@ fun MembersListScreen(
             },
             onRemove = {
                 actionsTarget = null
-                removeTarget = target.userId to target.name
+                viewModel.requestRemoval(target.userId)
             },
             onDismiss = { actionsTarget = null },
         )
@@ -157,22 +167,16 @@ fun MembersListScreen(
         )
     }
 
-    removeTarget?.let { (userId, name) ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text("Remove member?") },
-            text = { Text("$name will lose access to this home. They can be re-invited later.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.remove(userId)
-                        removeTarget = null
-                    },
-                    modifier = Modifier.testTag("membersList_removeConfirm"),
-                ) { Text("Remove $name") }
+    removeTarget?.let { target ->
+        HomeMemberRemovalDialog(
+            target = target,
+            onClose = {
+                removeTarget = null
+                viewModel.refresh()
             },
-            dismissButton = {
-                TextButton(onClick = { removeTarget = null }) { Text("Cancel") }
+            onAcknowledged = {
+                removeTarget = null
+                viewModel.refresh()
             },
         )
     }

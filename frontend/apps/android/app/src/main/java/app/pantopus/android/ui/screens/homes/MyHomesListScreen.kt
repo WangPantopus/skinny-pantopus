@@ -26,6 +26,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
+import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -68,6 +70,7 @@ fun MyHomesListScreen(
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
+    var removalRecovery by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) {
@@ -118,6 +121,11 @@ fun MyHomesListScreen(
     Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
+            customHeader = {
+                TextButton(onClick = { removalRecovery = true }, modifier = Modifier.testTag("myHomes_removalRecovery")) {
+                    Text("Recover a member removal")
+                }
+            },
             state = state,
             onRefresh = { viewModel.refresh() },
             onEndReached = { /* Explicit history Load more avoids retry loops. */ },
@@ -139,6 +147,20 @@ fun MyHomesListScreen(
                 ),
             onBack = onBack,
             banner = banner,
+        )
+    }
+
+    if (removalRecovery) {
+        HomeMemberRemovalDialog(
+            target = HomeMemberRemovalTarget(),
+            onClose = {
+                removalRecovery = false
+                viewModel.refresh()
+            },
+            onAcknowledged = {
+                removalRecovery = false
+                viewModel.refresh()
+            },
         )
     }
 

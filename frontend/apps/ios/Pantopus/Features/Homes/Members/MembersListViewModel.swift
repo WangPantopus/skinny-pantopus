@@ -3,6 +3,8 @@
 // pending invitations remain withdrawable. Pending identities wrap fully above
 // explicit Resend/Withdraw review actions. Access requests and audit are separate
 // best-effort reads. Only the newest fetch in the opening session may publish.
+// Opening removal recovery or starting a fresh read retires cached membership
+// and authority; tab changes cannot restore an unconfirmed roster.
 
 import Foundation
 import Observation
@@ -58,6 +60,7 @@ enum MembersListEvent: Equatable {
     case openResidencyReview
     case openInvite
     case openInvitationSender(HomeInvitationSenderTarget)
+    case openMemberRemoval(HomeMemberRemovalTarget)
     /// A13.1 — open the Add Guest form (issue a short-term guest pass).
     /// Fired from the Guests tab's FAB + empty-state CTA.
     case openAddGuest
@@ -88,8 +91,12 @@ public final class MembersListViewModel: ListOfRowsDataSource {
 
     public var tabs: [ListOfRowsTab] {
         var out = [
-            ListOfRowsTab(id: MembersTab.members, label: "Members", count: members.count),
-            ListOfRowsTab(id: MembersTab.guests, label: "Guests", count: guests.count),
+            ListOfRowsTab(
+                id: MembersTab.members,
+                label: "Members",
+                count: isCurrent && loadedOnce && fetchError == nil ? members.count : nil
+            ),
+            ListOfRowsTab(id: MembersTab.guests, label: "Guests", count: isCurrent && loadedOnce && fetchError == nil ? guests.count : nil),
             ListOfRowsTab(
                 id: MembersTab.pending,
                 label: "Pending",
@@ -261,20 +268,12 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         applyState()
     }
 
-    /// Optimistic remove with rollback on failure. The confirm dialog
-    /// has already fired by the time this is invoked.
+    /// Opens a fresh reviewed command for another member or self leave.
+    /// No membership write occurs until that protected review is confirmed.
     public func remove(userId: String) async {
-        let previousOccupants = occupants
-        occupants.removeAll { $0.userId == userId }
-        applyState()
-        do {
-            let _: EmptyResponse = try await api.request(
-                HomesEndpoints.removeMember(homeId: homeId, userId: userId)
-            )
-        } catch {
-            occupants = previousOccupants
-            applyState()
-        }
+        guard isCurrent, loadedOnce, fetchError == nil, let occupant = occupants.first(where: { $0.userId == userId }),
+              actionTarget(for: occupant, name: Self.displayName(for: occupant)).canRemove else { return }
+        pendingEvent = .openMemberRemoval(.init(homeId: homeId, userId: userId))
     }
 
     /// Withdrawal is an explicit invitation command. It never removes membership.
@@ -360,9 +359,22 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         session.isCurrent
     }
 
-    func retire() {
+    /// A removal sheet may commit even when its reply is lost or the user
+    /// closes without acknowledging. Keep its protected original separate from
+    /// this reader, and require a new read before exposing membership again.
+    func suspend() {
         fetchGeneration += 1
         isFetching = false
+        clearCurrentRead()
+    }
+
+    func retire() {
+        suspend()
+        fetchError = HomeInvitationSenderError.sessionChanged.localizedDescription
+        applyState()
+    }
+
+    private func clearCurrentRead() {
         loadedOnce = false
         access = nil
         occupants = []
@@ -370,8 +382,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         invitationsConfirmed = false
         accessRequests = []
         auditEntries = []
-        fetchError = HomeInvitationSenderError.sessionChanged.localizedDescription
-        applyState()
+        fetchError = nil
+        pendingEvent = nil
+        state = .loading
     }
 
     private func requireCurrentFetch(_ generation: Int) throws {
@@ -383,6 +396,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         fetchGeneration += 1
         let generation = fetchGeneration
         isFetching = true
+        clearCurrentRead()
         defer { if generation == fetchGeneration { isFetching = false } }
         do {
             try requireCurrentFetch(generation)
@@ -462,6 +476,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
 
     private func applyState() {
         if let fetchError { state = .error(message: fetchError)
+            return
+        }
+        guard loadedOnce else { state = .loading
             return
         }
         switch selectedTab {
@@ -552,9 +569,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     ///
     ///  - role change: `members.manage` + `assertCanMutateTarget`
     ///    (`backend/routes/homeIam.js:218`, `:224`)
-    ///  - remove: self-leave is always allowed
-    ///    (`backend/routes/homeIam.js:517`); otherwise `members.manage`
-    ///    + rank, and the owner can never be removed (`:559`).
+    ///  - removal: self may open a review; others require cached manage/rank.
+    ///    The prepared server review and command enforce current permission,
+    ///    target membership and ownership/transfer restrictions.
     public func actionTarget(for occ: OccupantDTO, name: String) -> MemberActionTarget {
         let isSelf = currentUserId != nil && occ.userId == currentUserId
         let assignable = canManageMembers

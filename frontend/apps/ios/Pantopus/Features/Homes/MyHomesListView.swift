@@ -15,71 +15,83 @@ struct MyHomesListView: View {
     @State private var isVisible = false
     @State private var viewModel: MyHomesListViewModel
     @State private var deleteTarget: DeleteTarget?
+    @State private var showingRemovalRecovery = false
 
     init(viewModel: MyHomesListViewModel = MyHomesListViewModel()) {
         _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
-        ListOfRowsView(dataSource: viewModel)
-            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            .accessibilityIdentifier("myHomesList")
-            .onAppear { isVisible = true
-                Analytics.track(.screenMyHomesViewed)
-            }
-            .onDisappear { isVisible = false
-                deleteTarget = nil
+        VStack(spacing: Spacing.s0) {
+            Button("Member removal recovery") { showingRemovalRecovery = true }
+                .frame(minHeight: 44).accessibilityIdentifier("myHomesRemovalRecovery")
+            ListOfRowsView(dataSource: viewModel)
+        }
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityIdentifier("myHomesList")
+        .accessibilityElement(children: .contain)
+        .onChange(of: showingRemovalRecovery) { _, presented in
+            if presented { viewModel.suspend() }
+        }
+        .sheet(isPresented: $showingRemovalRecovery, onDismiss: { Task { await viewModel.refresh() } }, content: {
+            HomeMemberRemovalView { _ in showingRemovalRecovery = false }
+        })
+        .onAppear { isVisible = true
+            Analytics.track(.screenMyHomesViewed)
+        }
+        .onDisappear { isVisible = false
+            deleteTarget = nil
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            deleteTarget = nil
+            if phase == .active {
+                Task { await viewModel.refresh() }
+            } else {
                 viewModel.suspend()
             }
-            .onChange(of: scenePhase) { _, phase in
-                guard isVisible else { return }
+        }
+        .onChange(of: viewModel.isCurrent) { _, current in
+            if !current { deleteTarget = nil
+                viewModel.retireSession()
+            }
+        }
+        .onChange(of: viewModel.pendingEvent) { _, event in
+            handle(event)
+        }
+        .confirmationDialog(
+            "Delete home",
+            isPresented: Binding(
+                get: { deleteTarget != nil },
+                set: { if !$0 { deleteTarget = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deleteTarget
+        ) { target in
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteHome(homeId: target.homeId) }
                 deleteTarget = nil
-                if phase == .active {
-                    Task { await viewModel.refresh() }
-                } else {
-                    viewModel.suspend()
-                }
             }
-            .onChange(of: viewModel.isCurrent) { _, current in
-                if !current { deleteTarget = nil
-                    viewModel.retireSession()
-                }
-            }
-            .onChange(of: viewModel.pendingEvent) { _, event in
-                handle(event)
-            }
-            .confirmationDialog(
-                "Delete home",
-                isPresented: Binding(
-                    get: { deleteTarget != nil },
-                    set: { if !$0 { deleteTarget = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: deleteTarget
-            ) { target in
-                Button("Delete", role: .destructive) {
-                    Task { await viewModel.deleteHome(homeId: target.homeId) }
-                    deleteTarget = nil
-                }
-                .accessibilityIdentifier("myHomesList_deleteConfirm")
-                Button("Cancel", role: .cancel) { deleteTarget = nil }
-            } message: { target in
-                Text(
-                    "Are you sure you want to permanently delete “\(target.name)”? "
-                        + "This removes it for all members."
-                )
-            }
-            .alert(
-                "Couldn’t delete home",
-                isPresented: Binding(
-                    get: { viewModel.actionError != nil },
-                    set: { if !$0 { viewModel.actionError = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) { viewModel.actionError = nil }
-            } message: {
-                Text(viewModel.actionError ?? "")
-            }
+            .accessibilityIdentifier("myHomesList_deleteConfirm")
+            Button("Cancel", role: .cancel) { deleteTarget = nil }
+        } message: { target in
+            Text(
+                "Are you sure you want to permanently delete “\(target.name)”? "
+                    + "This removes it for all members."
+            )
+        }
+        .alert(
+            "Couldn’t delete home",
+            isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.actionError = nil }
+        } message: {
+            Text(viewModel.actionError ?? "")
+        }
     }
 
     private func handle(_ event: MyHomesListEvent?) {

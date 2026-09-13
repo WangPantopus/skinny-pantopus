@@ -25,13 +25,20 @@ Expected branch: `codex/home-permission-boundaries`. Compare local, remote and
 PR head. The committed/pushed Task predecessor is
 `767fbb2278774bcd092f2e1b425cc43325bda8a9`, with all 16 checks green in
 [CI 34742973930](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34742973930).
-The last fully CI-verified R02 checkpoint is `d3c3e0fac3b90e7e0d468ba421cffd5bb0e9475c`,
+The earlier fully CI-verified R02 checkpoint is `d3c3e0fac3b90e7e0d468ba421cffd5bb0e9475c`,
 with all 16 checks green in [CI 34744758908](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34744758908).
 The older authentication repair remains accepted at `80c702a34`. Backend/browser
-R03 recovery is locally accepted and being committed separately from native work.
-Native candidates intentionally remain uncommitted while their product and
-installed gates finish. Inspect live Git/CI and the private operator index before
-relying on any checkpoint.
+R03 recovery is committed/pushed at `1a475708468c1f7e46583c476301f3a106117d77`.
+Its original PR run stayed queued without jobs; a separately dispatched exact-head
+[CI 34750247001](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34750247001)
+passes 15 jobs including CI OK; Detect changes is skipped for the manual full
+run. Local, remote, PR and successful run heads match. The original queued run
+and the earlier R02 run do not verify this source. Refresh actual Git and CI
+before relying on this checkpoint.
+The native removal milestone now passes product and installed gates and is
+integrated separately from the history candidate. Its exact pushed-head CI must
+be verified independently of 1a. Inspect live Git/CI, the PR and private operator
+index for the current source/CI binding before relying on any checkpoint.
 #32 remains a draft; #34 is an unfinished conflicting draft. Master at handoff was
 `6a1013784db69bf339535a2f4b33b328f2bbf40c`.
 
@@ -40,7 +47,7 @@ feature branch into a new isolated worktree. Do not reconstruct code from logs
 or overwrite the owner checkout. It retains old master and three unrelated
 documentation/design changes. Do not prune other worktrees.
 
-## Next acceptance: native Members removal and recovery
+## Next acceptance: reviewer history and current claims privacy
 
 The committed Task first-use milestone passes
 [backend policy/HTTP/SQL](home-member-task-first-use-2026-09-12.md),
@@ -143,11 +150,23 @@ upgrade, 51 raw/51 generated contracts, 15 actual HTTP/SDK groups and seven
 observed-lock groups; browser regression passes 1,260 checks in 100 suites.
 Their integrated pushed-head CI remains separate from the predecessor R02 run.
 
-Finish native product/signing/regression and installed five-original acceptance.
-iOS final generic build passes and focused/full units are running; Android's
-focused 85 checks pass but full variants and installed proof are pending. Native
-source is intentionally uncommitted on the primary branch. Inspect actual build,
-DB and device leases rather than repeating accepted baselines or overwriting it.
+Both native five-original journeys now pass two completed, one cancelled and two
+rejected originals, with all acknowledged and exact cleanup. Their bounded
+reader follow-ups also pass: actual iOS Close and Android held-read tab switching exposed
+stale roster restoration; Android also showed false zero counts on read failure.
+iOS app9 passes its signed build, 81 focused checks and 4,428 full checks with
+168 skips. Its same-original installed continuation passes and is exactly
+cleaned. Android's predecessor passes 4,622 checks with 80 skips per variant;
+its reader/count repair passes 48 focused Members checks, 4,626 full checks with
+80 skips per variant, signing/optimization and actual installed held/tab/Close,
+503/Retry and unknown-versus-confirmed-zero checks. iOS's follow-up uses one
+additional deliberate original across app6 to app9 without another submit;
+Android's follow-up creates zero originals. Both owned devices are stopped with
+userdata retained. See the [iOS report](home-ios-member-removal-recovery-2026-09-13.md)
+and [Android report](home-android-member-removal-recovery-2026-09-13.md).
+Inspect actual build, DB and device leases rather than repeating accepted
+baselines or overwriting source. Failed driver predecessors remain distinct
+from accepted proof.
 Committed candidate HTTP/SDK/UI acceptance uses a separately owned database to
 preserve the retained column/catalog provenance. Browser fixtures are cleaned;
 runtime-r5 REST 18085 remains available for the next owned native fixture.
@@ -158,9 +177,23 @@ and old occupancy column values remain preserved. Legacy no-UUID callers retain
 no fence against a future legitimate renewed membership; current shipped renewal
 is refused. H07 controlled removal and sender withdrawal remain separate proof.
 
-After native recovery, continue the combined applicant/reviewer cycle,
-post-acknowledgement reviewer history, expiry and independent reviewers, then the
-ordered inventory. Private evidence is under `pantopus-home-member-removal-r1`
+The [combined applicant/reviewer baseline](home-residency-cycle-baseline-2026-09-13.md)
+passes ten actual HTTP/SDK/SQL groups and 128 requests, actual Chrome submission,
+rejection, resubmission, independent approval, acknowledgement, removal and cold
+applicant return. Conflicting independent reviewers and real authority expiry
+during observed SQL waits also pass. Both fixtures are exactly restored. Current
+claims responses expose broad private fields and omit explicit no-store headers;
+the shared queue visibly displays a raw account name. Acknowledged reviewer
+decisions have no supported history entry. Continue the isolated history candidate
+and this observed claims-queue repair after native reader acceptance, then the
+ordered inventory. The isolated history candidate now passes populated upgrade,
+zero SQL lint issues and 104 raw/generated contracts, with exact restoration.
+Its first upgrade caught an inherited service-role helper grant; the additive
+candidate now revokes it and directly tests the denied helper call. Preserve
+that failed predecessor and use private preparation-r3 for the corrected
+history-runtime port guard. History HTTP/browser/native acceptance remains
+unrun. Do not repeat the completed primary baseline.
+Private evidence is under `pantopus-home-member-removal-r1`
 and durable `member-removal-20260913/{backend-recovery-r1,browser-recovery-r1}`.
 Inspect the operator index and current ownership before another writer.
 **8 of 80 rows locally closed** does not measure app completion or remaining effort.
@@ -175,9 +208,9 @@ Do not print it. Private files are not available from Git alone.
 | --- | --- |
 | Replay DB | `/private/tmp/pantopus-home-gig-replay`, container `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522; CLI `/opt/homebrew/bin/supabase`. Preserve DB and full ledger; never reset it to prepare a test. |
 | REST | Preserve `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and replacement. `/private/tmp/pantopus-home-create-rest-before-recovery.json` contains private configuration: never print it. |
-| Browser | Owned Next dev 18080 retained, last PID 42758; inspect identity before reuse, no competing `.next` build. Member fixture 18084 is stopped; R02 fixtures and union runs are exactly restored. R03 backend/browser fixtures are cleaned; candidate runtime-r5/REST 18085 is retained for native acceptance. Inspect current ownership before another writer. |
-| Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after final member first use with app/data retained. SDK `/Users/yingpengwang/Library/Android/sdk`; Java 17 `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`. No data clear/uninstall to simplify tests. |
-| iOS | Owned `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, active for R03 unit gates after the final generic build; inspect the lease before new work. Accepted member-first-use signed r6 and userdata remain retained. Derived `/private/tmp/pantopus-home-documents-derived`, preserved accepted products; compiler cache is back internally after verified storage cleanup. Owner `EB5AD759-4699-481F-8A9F-0D650B074623` unrelated. |
+| Browser | Primary Next dev 18080, last PID 42758, is retained. Isolated history Next 18081, last PID 59774/session 27247, has not run history UI acceptance. Inspect identity before reuse; no competing builds. Native runtime-r5/REST 18085 and data are retained after exact fixture cleanup. Backend history acceptance owns runtime-r2/REST 18086 and fixture port 18084 after 104 passing contracts. |
+| Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after accepted R03 reader candidate r2 with app/data retained. SDK `/Users/yingpengwang/Library/Android/sdk`; Java 17 `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`. No data clear/uninstall to simplify tests; inspect the lease before reuse. |
+| iOS | Owned `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, stopped after accepted R03 app9/driver10 follow-up, with userdata retained. Both native removal journeys and failed predecessors have verified durable copies. Derived `/private/tmp/pantopus-home-documents-derived`, preserved products; compiler cache is back internally after verified storage cleanup. Owner `EB5AD759-4699-481F-8A9F-0D650B074623` unrelated. |
 | Phone | Existing Staging 1.0.0 (2), earlier source `139868c`. No update in this milestone. Never install loopback acceptance binaries on it. |
 | Node | Backend acceptance uses Node 20 `/Users/yingpengwang/.nvm/versions/node/v20.20.0/bin/node`. Inspect package scripts/configuration before reuse. |
 

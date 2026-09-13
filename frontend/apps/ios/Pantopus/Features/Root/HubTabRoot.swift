@@ -105,7 +105,7 @@ public enum HubRoute: Hashable {
     /// (`GET/PATCH /api/homes/:id/security`). Reached from the per-home
     /// Settings `Ownership & Security` row.
     case homeOwnershipSecurity(homeId: String)
-    /// Leave this home (`POST /api/homes/:id/move-out`).
+    /// Review and recover a protected original self-removal.
     case leaveHome(homeId: String)
     /// Cancel ownership claim (`DELETE …/ownership-claims/:claimId`).
     case cancelClaim(homeId: String)
@@ -1726,8 +1726,8 @@ public struct HubTabRoot: View {
                 viewModel: LeaveHomeViewModel(homeId: homeId),
                 onBack: { pop() },
                 onLeft: {
-                    // Move-out revokes membership, so the dashboard for this
-                    // home now 403s — drop it along with the settings stack.
+                    // Leave old Home screens after acknowledging the original.
+                    // A later Home entry must establish current access again.
                     path.removeAll { route in
                         switch route {
                         case let .leaveHome(id) where id == homeId: true

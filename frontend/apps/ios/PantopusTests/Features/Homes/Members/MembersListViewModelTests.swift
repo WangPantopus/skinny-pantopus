@@ -300,15 +300,12 @@ final class MembersListViewModelTests: XCTestCase {
     }
 
     func testEmptyGuestsTabShowsGuestEmptyState() async {
-        stubOwner()
-        SequencedURLProtocol.sequence = [.status(200, body: "{}")]
+        stubOwner(occupantsBody: Self.emptyJSON)
         let vm = makeVM()
         await vm.load()
-        // Remove the guest occupant via the same code path the UI uses.
-        await vm.remove(userId: "u_guest")
         vm.selectedTab = MembersTab.guests
         guard case let .empty(content) = vm.state else {
-            XCTFail("Expected .empty for Guests tab after removal")
+            XCTFail("Expected .empty for a confirmed current roster without guests")
             return
         }
         XCTAssertEqual(content.headline, "No active guests")
@@ -599,9 +596,8 @@ final class MembersListViewModelTests: XCTestCase {
 
     // MARK: - Mutations
 
-    func testRemoveOptimisticallyRemovesRow() async {
+    func testRemoveOpensProtectedReviewWithoutDeletingOrRemovingCachedRow() async {
         stubOwner()
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"message\":\"Member removed\"}")]
         let vm = makeVM()
         await vm.load()
         await vm.remove(userId: "u_admin")
@@ -609,23 +605,23 @@ final class MembersListViewModelTests: XCTestCase {
             XCTFail("Expected .loaded after remove")
             return
         }
-        // Members tab now has just the owner; admin row is gone.
-        XCTAssertEqual(sections.first?.rows.count, 1)
-        XCTAssertNil(sections.first?.rows.first { $0.id == "u_admin" })
-    }
-
-    func testRemoveFailureRollsBack() async {
-        stubOwner()
-        SequencedURLProtocol.sequence = [.status(500, body: "{}")]
-        let vm = makeVM()
-        await vm.load()
-        await vm.remove(userId: "u_admin")
-        guard case let .loaded(sections, _) = vm.state else {
-            XCTFail("Expected .loaded after rollback")
-            return
-        }
         XCTAssertEqual(sections.first?.rows.count, 2)
         XCTAssertNotNil(sections.first?.rows.first { $0.id == "u_admin" })
+        XCTAssertEqual(vm.pendingEvent, .openMemberRemoval(.init(homeId: "home_1", userId: "u_admin")))
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "DELETE" })
+    }
+
+    func testRemovalAfterReaderRetirementCannotOpenReviewOrRestoreRows() async {
+        stubOwner()
+        let vm = makeVM()
+        await vm.load()
+        vm.retire()
+        await vm.remove(userId: "u_admin")
+        guard case .error = vm.state else { return XCTFail("The current roster remains unconfirmed") }
+        XCTAssertNil(vm.pendingEvent)
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.members }?.count)
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.guests }?.count)
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "DELETE" })
     }
 
     func testWithdrawalKeepsResolvedRecipientRowAndOpensInvitationReviewWithoutDeletingMembership() async {
@@ -748,6 +744,8 @@ final class MembersListViewModelTests: XCTestCase {
         await vm.refresh()
         guard case let .error(message) = vm.state else { return XCTFail("Newer denial must be visible") }
         XCTAssertFalse(vm.canManageMembers)
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.members }?.count)
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.guests }?.count)
         XCTAssertNil(vm.tabs.first { $0.id == MembersTab.pending }?.count)
         vm.selectedTab = MembersTab.pending
         guard case .error = vm.state else { return XCTFail("Tab change must not publish a refused queue") }
@@ -840,5 +838,94 @@ final class MembersListViewModelTests: XCTestCase {
         XCTAssertNil(vm.tabs.first { $0.id == MembersTab.pending }?.count)
         vm.selectedTab = MembersTab.pending
         guard case .error = vm.state else { return XCTFail("Legacy occupants are not current sender-list proof") }
+    }
+
+    func testRefreshRetiresCachedRowsCountsAndActionsAcrossTabChangesUntilCurrentReadFinishes() async throws {
+        stubOwner(requestsBody: Self.populatedRequestsJSON, auditBody: Self.populatedAuditJSON)
+        let rows = senderRows
+        let held = expectation(description: "Fresh invitation read held after current occupant response")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            if calls == 2 { return await withCheckedContinuation { release = $0
+                held.fulfill()
+            } }
+            return rows
+        }
+        await vm.load()
+        XCTAssertTrue(vm.canManageMembers)
+        XCTAssertEqual(vm.tabs.first { $0.id == MembersTab.members }?.count, 2)
+        let refresh = Task { await vm.refresh() }
+        await fulfillment(of: [held], timeout: 3)
+        XCTAssertFalse(vm.canManageMembers)
+        XCTAssertNil(vm.fab)
+        XCTAssertNil(vm.topBarAction)
+        XCTAssertTrue(vm.tabs.allSatisfy { $0.count == nil })
+        for tab in [MembersTab.guests, MembersTab.pending, MembersTab.requests, MembersTab.audit, MembersTab.members] {
+            vm.selectedTab = tab
+            guard case .loading = vm.state else { return XCTFail("Tab \(tab) restored an unconfirmed cached list") }
+        }
+        await vm.remove(userId: "u_admin")
+        await vm.resendInvite(inviteId: "inv_1")
+        XCTAssertNil(vm.pendingEvent, "Unconfirmed cached identities cannot open another command")
+        try XCTUnwrap(release).resume(returning: rows)
+        await refresh.value
+        guard case .loaded = vm.state else { return XCTFail("Fresh confirmed roster did not return") }
+        XCTAssertTrue(vm.canManageMembers)
+        XCTAssertEqual(vm.tabs.first { $0.id == MembersTab.members }?.count, 2)
+    }
+
+    func testOpeningRemovalRecoveryRetiresAnInFlightRosterUntilDismissalRefresh() async throws {
+        stubOwner()
+        let rows = senderRows
+        let held = expectation(description: "Read predating removal recovery held")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            if calls == 2 { return await withCheckedContinuation { release = $0
+                held.fulfill()
+            } }
+            return rows
+        }
+        await vm.load()
+        let older = Task { await vm.refresh() }
+        await fulfillment(of: [held], timeout: 3)
+        vm.suspend()
+        try XCTUnwrap(release).resume(returning: rows)
+        await older.value
+        vm.selectedTab = MembersTab.guests
+        vm.selectedTab = MembersTab.members
+        guard case .loading = vm.state else { return XCTFail("A pre-removal read republished old membership") }
+        XCTAssertFalse(vm.canManageMembers)
+        XCTAssertTrue(vm.tabs.allSatisfy { $0.count == nil })
+        await vm.remove(userId: "u_admin")
+        XCTAssertNil(vm.pendingEvent)
+        stubOwner(occupantsBody: Self.emptyJSON)
+        await vm.refresh()
+        guard case .empty = vm.state else { return XCTFail("Dismissal must display the new current roster") }
+        XCTAssertEqual(vm.tabs.first { $0.id == MembersTab.members }?.count, 0)
+    }
+
+    func testRemovalDismissalReadFailureKeepsMembershipUnknownUntilExplicitRetry() async {
+        stubOwner()
+        let vm = makeVM()
+        await vm.load()
+        vm.suspend()
+        stub(occupants: .status(503, body: "{}"), access: .status(200, body: Self.ownerAccessJSON))
+        await vm.refresh()
+        for tab in [MembersTab.guests, MembersTab.pending, MembersTab.members] {
+            vm.selectedTab = tab
+            guard case .error = vm.state else { return XCTFail("Dismissal failure restored cached membership") }
+        }
+        XCTAssertFalse(vm.canManageMembers)
+        XCTAssertTrue(vm.tabs.allSatisfy { $0.count == nil })
+        await vm.remove(userId: "u_admin")
+        XCTAssertNil(vm.pendingEvent)
+        stubOwner(occupantsBody: Self.emptyJSON)
+        await vm.load()
+        guard case .empty = vm.state else { return XCTFail("Explicit current read did not recover") }
+        XCTAssertEqual(vm.tabs.first { $0.id == MembersTab.members }?.count, 0)
     }
 }

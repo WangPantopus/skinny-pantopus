@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 13, 2026, after backend/browser member-removal recovery acceptance. **This is the
+Updated September 13, 2026, after native member-removal recovery and reader acceptance. **This is the
 current entry point.** Old accumulated checkpoints are preserved in
 [handoff history](HANDOFF_HISTORY_THROUGH_2026-09-12.md); their old “next” actions
 are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
@@ -11,7 +11,11 @@ are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
 Continue in `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, associated with
 [PR #32 — Enforce Home permission and record boundaries](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-**Next: finish native R03 product and installed member-removal recovery acceptance.**
+**Next: complete actual reviewer-history HTTP/browser/native acceptance, then
+repair the observed current-claims privacy and reader failures.** Native removal
+and its bounded reader follow-ups are accepted; preserve their distinct evidence
+instead of rerunning them. Verify the current pushed native head's CI separately
+from the accepted backend/browser predecessor.
 The [deliberate Task policy repair](home-member-task-first-use-2026-09-12.md)
 passes actual HTTP/SDK/SQL, populated preservation and all 49 raw/generated SQL
 contracts. The [browser journey](home-browser-member-first-use-2026-09-12.md)
@@ -87,18 +91,42 @@ current authority and history after self-leave pass. Browser r2 finishes five
 originals (two completed, one cancelled, two rejected), all acknowledged. Current
 roster failures stay unknown beside historical receipts. Populated upgrade and
 all 51 raw plus 51 generated SQL contracts pass; integrated browser regression
-passes 1,260 checks in 100 suites. This later scope requires its own pushed-head
-CI; the R02 run does not verify it.
+passes 1,260 checks in 100 suites. This scope is committed/pushed at
+`1a475708468c1f7e46583c476301f3a106117d77`. Exact-head
+[CI 34750247001](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34750247001)
+passes 15 jobs including CI OK; Detect changes is skipped for the manually
+dispatched full run. The original PR run stayed queued without jobs. Neither
+that queued run nor the earlier R02 run substitutes for this successful binding.
 
-1. Finish native product/signing/regression and installed five-original journeys.
-   The correct branch intentionally retains uncommitted native candidates; do not
-   overwrite them when refreshing Git. iOS final generic build passes and unit
-   gates are running on the owned simulator. Android's focused 85 checks pass;
-   full variants/products and installed acceptance remain open. Inspect the
-   current heavy-build and database leases before starting work. The [four-platform
-   baseline](home-member-removal-baseline-2026-09-13.md) is complete; do not repeat it.
-2. Continue R03's combined applicant/reviewer cycle, post-acknowledgement
-   reviewer history, expiry and independent reviewers, then the full ordered
+1. Both native five-original
+   journeys now pass two completed, one cancelled and two rejected originals,
+   with all acknowledged and exact fixture cleanup. Closing iOS recovery without
+   acknowledgement and switching Android tabs during a held read exposed stale
+   roster state; Android also displayed zero counts during an unavailable read.
+   iOS reader app9 passes its signed build, 81 focused checks and 4,428 full checks
+   with 168 skips; its installed same-original dismissal/held-reader follow-up
+   also passes and is exactly cleaned. Android's predecessor products pass 4,622
+   checks with 80 skips per variant; final reader candidate r2 passes 4,626 checks
+   with 80 skips per variant, signing/optimization and installed held-read,
+   tab/Close, 503/Retry and unknown-versus-confirmed-zero acceptance. The iOS
+   follow-up preserves one additional original across app6 to app9, without an
+   extra submit; Android's reader follow-up creates zero originals. Both owned
+   devices are stopped with data retained. Source/product/installed bindings,
+   failed driver predecessors and durable copies remain separate. See the
+   [iOS report](home-ios-member-removal-recovery-2026-09-13.md) and
+   [Android report](home-android-member-removal-recovery-2026-09-13.md).
+   Inspect current build/database leases before the next writer.
+   The [four-platform baseline](home-member-removal-baseline-2026-09-13.md) is
+   complete; do not repeat it.
+2. The [combined applicant/reviewer baseline](home-residency-cycle-baseline-2026-09-13.md)
+   now passes actual HTTP/SDK/SQL and Chrome, including resubmission, independent
+   review, removal, immutable history, observed conflicts and clock expiry.
+   Continue post-acknowledgement reviewer history and the observed claims-queue
+   privacy repair. The isolated history candidate passes populated upgrade,
+   zero SQL lint issues and all 52 raw plus 52 generated contracts after fixing
+   an inherited internal-helper execution grant. Both the failed predecessor and
+   final exact restorations are retained; actual history HTTP/browser/native
+   acceptance remains ahead. Then continue the full ordered
    feature/UI/payment/provider/integration/launch inventory. Preserve accepted
    applicant resubmission/pagination. Establish household needs-more-information
    separately from ownership challenge. Current applicant history lists the
@@ -137,7 +165,7 @@ or reliable release date is established.
 | Joining, postal decisions, prepared review and private first use | [Submission](home-residency-submission-recovery-2026-09-11.md), [personal progress](home-personal-residency-progress-2026-09-11.md), [iOS postal](home-ios-postal-recovery-2026-09-12.md), [Android postal](home-android-postal-recovery-2026-09-12.md), [iOS review](home-ios-residency-review-2026-09-12.md), [Android review](home-android-residency-review-2026-09-12.md), [private first use](home-private-first-use-2026-09-12.md). Older-client compatibility also passes; broader lifecycle remains R03. |
 | Recipient invitation decisions on all three clients | [Atomic backend](home-invitation-decision-recovery-2026-09-12.md), [browser](home-browser-invitation-decisions-2026-09-12.md), [iOS](home-ios-invitation-decisions-2026-09-12.md), [Android](home-android-invitation-decisions-2026-09-12.md). Encrypted originals, retry/check/cancel/acknowledge, account/lifecycle retirement, legacy login-link migration and fresh access before explicit Home entry. Ordinary-member onboarding remains H07/H08. |
 | Sender invitation recovery on all three clients | [Backend](home-invitation-sender-recovery-2026-09-12.md), [browser](home-browser-invitation-sender-2026-09-12.md), [iOS](home-ios-invitation-sender-2026-09-12.md), [Android](home-android-invitation-sender-2026-09-12.md). Protected creation/resend/withdrawal, truthful delivery, current sharing, distinct recipient identities and bounded member-list ordering. Live provider delivery, broader Members/Security and complete onboarding remain separate. |
-| Backend and browser member removal recovery | [Backend](home-member-removal-recovery-backend-2026-09-13.md), [browser](home-browser-member-removal-recovery-2026-09-13.md). Reviewed immutable originals, lost-reply recovery, unseen cancellation, current authority and separate historical/current state pass. Native products/installed acceptance and the broader R03 lifecycle remain open. |
+| Member removal and self-leave recovery | [Backend](home-member-removal-recovery-backend-2026-09-13.md), [browser](home-browser-member-removal-recovery-2026-09-13.md), [iOS](home-ios-member-removal-recovery-2026-09-13.md), [Android](home-android-member-removal-recovery-2026-09-13.md). Reviewed originals, lost-reply recovery, unseen cancellation, current authority and history after departure pass. Both native five-original matrices and separate roster-reader follow-ups pass, with exact cleanup and retained products. Reviewer history, renewal and broader R03 lifecycle remain open. |
 | Older-client residency compatibility | [Atomic compatibility](home-residency-legacy-compatibility-2026-09-12.md). Optional legacy input/envelope, alias/omission, membership preservation, lost replies and current-policy races pass actual HTTP/SDK/SQL. Canonical household approval also works with omitted role. Historical client binaries, provider arrival and hosted adoption are not claimed. |
 | Ordinary-member household Task first use | [Policy/backend](home-member-task-first-use-2026-09-12.md), [browser](home-browser-member-first-use-2026-09-12.md), [iOS](home-ios-member-onboarding-2026-09-12.md), [Android](home-android-member-onboarding-2026-09-12.md). Shipped admission, truthful household identity/roster state, useful exact-text Tasks, own edits/completion, lost replies/restart and current permission/membership recovery. New-account/provider onboarding, wider accessibility and hosted readiness remain open. |
 | Earlier tasks, private files, claim relationships, recurrence and task-to-Gig | [Task recovery](home-task-create-recovery-2026-09-10.md), [media](home-task-private-media-2026-09-10.md), [claim decisions](home-claim-relationship-decisions-2026-09-10.md), [recurrence](home-task-recurrence-engine-2026-09-10.md), [publication](home-task-gig-publication-2026-09-10.md). Native/browser reports are indexed in history; broader storage/entity and paid execution remain separate. |
@@ -187,11 +215,11 @@ Verify final PR checks and merged-master checks independently.
 | Surface | Current or explicitly historical state |
 | --- | --- |
 | Owner checkout | `/Users/yingpengwang/skinny-pantopus`, master `939878b4f6cd1c3084b1d2811cb98270ab38a440`, intentionally behind origin. Modified `docs/PROJECT_HANDOFF.md` and untracked Place concept HTML/design Markdown remain untouched. No reset/clean/stash wholesale or incidental commits. |
-| Owned Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after ordinary-member first use on signed candidate r1, with app/userdata retained. Both variants pass 4,581 checks/80 skips, builds/lint/signing and optimized codec proof. Admission/creation/continuation segments are distinguished; all member fixtures are exactly cleaned. Earlier sender r11 and evidence remain preserved. |
-| Owned iOS | Simulator `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, Pantopus Bill Acceptance iPhone 17 / iOS 26.5, active for R03 candidate unit gates after final generic build; inspect current ownership before reuse. Accepted member-first-use signed r6 and production/unit r4 (4,402 checks/168 skips) remain separately retained. Live R03 installed acceptance is pending; earlier fixtures and evidence remain preserved. |
+| Owned Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after accepted final R03 reader candidate r2 with app/data retained. Both variants pass 4,626 checks/80 skips, lint/signing and optimized codec proof. The earlier five-original matrix and final zero-command reader fixture are exactly cleaned and durably retained separately. Inspect ownership before reuse; no data clear or uninstall. |
+| Owned iOS | Simulator `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, Pantopus Bill Acceptance iPhone 17 / iOS 26.5, stopped after accepted R03 app9/driver10 dismissal follow-up with data retained. The five-original app6 matrix, separate one-original app9 reader proof, signed products and failed predecessors are durably preserved. Final units pass 4,428 checks/168 skips. Owner and earlier Task/sender products remain separate. |
 | Owner devices | Physical iPhone remains Staging 1.0.0 (2), earlier source `139868c`; no update in this milestone. Owner simulator `EB5AD759-4699-481F-8A9F-0D650B074623` is unrelated and preserved. Never install loopback acceptance builds on the physical phone. |
 | Owned replay DB | Project `/private/tmp/pantopus-home-gig-replay`, DB `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522, retained. Sender fixture cleanups restore complete role rows, full ledger and exact function definitions/owners/ACLs/configuration/provenance. Both native list-ordering follow-ups are exactly cleaned; preserve the same exclusive ownership protocol for future fixtures. |
-| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Owned Next dev 18080 retained; inspect before reuse and do not run a competing `.next` build. Member fixture 18084 is stopped. R02 actual and union runs are exactly restored and their lease released. R03 backend/browser fixtures are exactly cleaned; candidate runtime-r5 on REST 18085 is retained for native acceptance. Inspect the private operator index and current ownership before another writer. |
+| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Primary Next dev 18080 is retained. Isolated history Next 18081, last PID 59774, is separately owned; no history browser acceptance yet. R03 runtime-r5/REST 18085 is retained and its native fixtures are cleaned. Backend history acceptance now owns runtime-r2/REST 18086 and fixture port 18084 after passing 104 contracts. Inspect the private operator index and current ownership before another writer; no competing build in either Next output directory. |
 | Staging deployment — historical, not reverified here | API/worker last recorded at `65d2cc2d9ab4857e044325315f0023a6d8f4bf54`, `https://staging-api.pantopus.com`, existing Oregon EC2; API loopback 18001 behind nginx, worker private. Source is newer. Original production container and all hosted databases preserved. |
 | Hosted release — unfinished | Last recorded staging/production deployment and migration switches false; re-read before merge/release. Production schema/ledger, external files, Auth/Storage, DNS/cutover and rollback need separate verification. Local replay is not hosted adoption. |
 
@@ -212,8 +240,15 @@ R03 backend and browser recovery have independently verified durable source,
 HTTP/SQL results, screenshots and cleanup under
 `home-invitation-handoff-20260912/member-removal-20260913/` in the private recovery
 area. Their `backend-recovery-r1` and `browser-recovery-r1` indexes distinguish
-failed predecessors, final source bindings and verification limits. Native
-candidates are a separate unfinished acceptance boundary.
+failed predecessors, final source bindings and verification limits. The iOS
+`ios-recovery-r1` archive verifies 30,290 files, including signed products, both
+accepted journeys and failed predecessors. Android's accepted five-original
+`installed-candidate-r1` archive verifies 117 additional evidence files beside
+its separately retained signed products; final reader source/products/installed
+evidence is in the separate `reader-candidate-r2` archive.
+Exact1a CI and its queued/failed predecessors are retained in
+`ci-1a475708-green-r1`. The combined primary HTTP/browser baseline is durably
+indexed in the sibling `residency-cycle-20260913/baseline-r1` archive.
 
 R02 backend and combined H07/R02 evidence is durably indexed in the sibling
 `residency-legacy-compatibility-20260912/` directory. Ordinary-member evidence is durably indexed under

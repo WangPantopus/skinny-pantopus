@@ -369,8 +369,7 @@ public enum YouRoute: Hashable {
     /// A12.7 — Postcard verification / code entry. Reached from the
     /// waiting room's Verification Center action cards.
     case postcardVerification(homeId: String)
-    /// "This isn't my home" — the Leave home confirm, which owns
-    /// `POST /api/homes/:id/move-out`.
+    /// "This isn't my home" — review and recover protected self-removal.
     case leaveHome(homeId: String)
     /// Four-moment Ceremonial Mail compose wizard. Production entry point
     /// is the Mailbox root's compose FAB.
@@ -2645,8 +2644,8 @@ public struct YouTabRoot: View {
                 viewModel: LeaveHomeViewModel(homeId: homeId),
                 onBack: { pop() },
                 onLeft: {
-                    // Move-out revokes membership, so the waiting room
-                    // and dashboard for this home now 403 — drop both.
+                    // Leave old Home screens after acknowledging the original.
+                    // Its receipt does not establish current Home access.
                     path.removeAll { route in
                         switch route {
                         case let .leaveHome(id) where id == homeId: true

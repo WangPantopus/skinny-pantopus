@@ -3974,9 +3974,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     LeaveHomeScreen(
                         onBack = { navController.popBackStack() },
                         onLeft = {
-                            // Move-out revokes membership, so the dashboard for
-                            // this home now 403s — drop it along with the
-                            // settings stack. Mirrors iOS `HubTabRoot`.
+                            // Acknowledgement leaves the historical-removal view.
+                            // Navigation changes no membership; destination readers
+                            // determine current access independently of this receipt.
                             val poppedToHomes =
                                 navController.popBackStack(ChildRoutes.HOME_DASHBOARD, inclusive = true)
                             if (!poppedToHomes) {
