@@ -1,4 +1,6 @@
--- Backwards compatible pending-queue envelope; no claim/receipt/role backfill.
+-- Backwards compatible: yes. Adds a service-only reader function without changing
+-- existing tables, records, permissions or RPCs used by the deployed app.
+-- The pending-queue envelope is retained; no claim/receipt/role backfill.
 -- Current claim descriptions are not immutable review history or access proof.
 SET LOCAL lock_timeout='5s';
 
