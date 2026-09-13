@@ -4,8 +4,8 @@ import * as api from '@pantopus/api';
 import { QueueController } from './QueueController';
 import { queueError, type QueueClaim } from './queueModel';
 
-interface View { homeId: string; phase: 'loading' | 'ready' | 'error'; claims: QueueClaim[]; error: string }
-const empty = (homeId: string): View => ({ homeId, phase: 'loading', claims: [], error: '' });
+interface View { homeId: string; owner: QueueController | null; phase: 'loading' | 'ready' | 'error'; claims: QueueClaim[]; error: string }
+const empty = (homeId: string): View => ({ homeId, owner: null, phase: 'loading', claims: [], error: '' });
 export function useResidencyQueue(homeId: string, enabled = true) {
   const [view, setView] = useState<View>(() => empty(homeId)), [reload, setReload] = useState(0);
   const controller = useRef<QueueController | null>(null), generation = useRef(0);
@@ -21,7 +21,7 @@ export function useResidencyQueue(homeId: string, enabled = true) {
       try {
         const current = new QueueController(homeId); controller.current = current; await current.open();
         if (!disposed && revision === generation.current && controller.current === current && current.current() && current.ready)
-          setView({ homeId, phase: 'ready', claims: structuredClone(current.claims), error: '' });
+          setView({ homeId, owner: current, phase: 'ready', claims: structuredClone(current.claims), error: '' });
       } catch (error) {
         if (!disposed && revision === generation.current) setView({ ...empty(homeId), phase: 'error', error: queueError(error) });
       }
@@ -37,7 +37,11 @@ export function useResidencyQueue(homeId: string, enabled = true) {
       window.removeEventListener('pageshow', visibility); window.removeEventListener('pagehide', retire);
       window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility); };
   }, [homeId, enabled, reload, retire]);
-  // Props can change before effects run; never render a previous Home's rows.
-  const currentView = enabled && view.homeId === homeId ? view : empty(homeId);
-  return { ...currentView, refresh, retire };
+  // A new Home/session can render before effect cleanup. Only the controller
+  // that loaded these rows may authorize their display or a later click.
+  const current = useCallback(() => enabled && view.homeId === homeId && view.phase === 'ready'
+    && view.owner === controller.current && view.owner?.current() === true, [enabled, homeId, view]);
+  const canReview = useCallback((claimId: string) => current() && view.claims.some(claim => claim.id === claimId), [current, view.claims]);
+  const currentView = enabled && view.homeId === homeId && (view.phase !== 'ready' || current()) ? view : empty(homeId);
+  return { ...currentView, refresh, retire, canReview };
 }

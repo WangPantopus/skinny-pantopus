@@ -1,30 +1,15 @@
-# Current residency claims — frozen WIP, September 13
+# Current residency claims — active WIP, September 13
 
-Branch codex/home-current-residency-claims now includes native-history head `8c3f7a6c6`, which incorporates verified primary `f14989637`; primary integration of native history still awaits exact-head CI. This is source preservation, not accepted or integrated behavior. History and current-claims router mounts/SDK exports coexist, and the private queue panel retains the accepted history link. Migration 20260913020000 is retained alongside the new additive migration; application and populated adoption remain unaccepted. The new candidate migration is 20260913030000_home_current_residency_claims.sql; it has not been applied or accepted.
+Branch `codex/home-current-residency-claims` includes native-history `8c3f7a6c6`, which incorporates verified primary `f14989637`. PR #35 now targets primary and awaits exact-head CI before integration. PR #36 remains a separate unfinished draft; the combined candidate is not accepted or integrated into primary.
 
-Twelve backend/SQL/SDK files add a current-authority pending-only private projection, no-store/session binding and default SDK client import. Fifteen focused tests in two suites pass, six JavaScript syntax checks and 52 generated-wrapper consistency checks pass. SQL contracts, populated upgrade, actual HTTP/SDK/SQL and UI are unexecuted. Legacy NULL claim dates are preserved and sorted last; never fabricate dates or backfill stranded claims. Public claimant projection deliberately has name:null.
+The backend/SQL/SDK candidate adds a current-authority pending-only projection, private no-store responses and session binding. Public claimant name is deliberately null. Legitimate legacy null dates and requested roles remain null, with dates sorted last; no fabricated dates or claim backfill is permitted. The additive migration `20260913030000_home_current_residency_claims.sql` coexists with retained history migration `20260913020000`. It has not undergone the required populated upgrade/adoption acceptance.
 
-Four browser files prepare a strict queue model, transport/controller, lifecycle hook and Members panel. Type checking and focused ESLint pass after correcting a missing final brace; the failed initial checks are retained privately. Shared dependency symlinks point to primary packages, so this is not a fully isolated SDK integration gate. Browser tests and actual UI acceptance are unrun. The owners/review-claim page remains untouched and must be migrated; complete both consumers and assess render-time session retirement before claiming privacy repair complete. Native consumers also remain pending.
+The migration compatibility declaration now states its service-only additive basis. CI 34772951015 on `d9c6b1c9d` passes schema replay/lint and migration safeguards after fixing the contract's ambiguous `x` alias; both assertions use `claim_row(value)`. This is bounded SQL CI evidence, not actual HTTP/UI or populated preservation. After reconciliation, all 53 generated wrappers are consistent and migration versions are unique. Combined claims/history backend checks pass 77 tests in four suites. Both specific route mounts precede dynamic Home routes, both SDK namespaces remain exported, and the browser queue retains history navigation.
 
-Next after native history acceptance: reconcile this branch with current primary, finish the second browser consumer and meaningful lifecycle/contract tests, run populated SQL and real HTTP/SDK acceptance, then browser/native UI and failure/recovery. Existing raw claims read remains a known observed privacy/reader defect on primary. Do not merge WIP merely because it is pushed.
+Both browser consumers are now implemented: the Members panel and the owners/review-claim page share validated queue content. Residency loading no longer waits for ownership/comparison loading. Missing dates and requested roles stay explicit; raw claimed addresses and hydrated private names are not rendered. Rendered rows retain their loading controller, and stale review links check that controller's current Home/session before navigation. Disabled tabs, account/session-marker/origin changes, backgrounding, failed reloads and held responses retire the old queue.
 
-Private source/check maps: /private/tmp/pantopus-home-residency-cycle-r1/current-claims-backend-source-r1; browser checks: /private/tmp/pantopus-home-current-residency-claims-web-r1. No fixture, database, API, device or provider action was performed for this candidate. Dependency symlinks are local-only and excluded from Git.
+Twelve focused browser checks and all 1,324 web regression checks in 103 suites pass. Type checking has zero errors. Targeted ESLint has no errors and eight existing ownership `any` warnings; residency rows are typed. These checks do not establish actual populated browser acceptance. Local dependency symlinks still point to shared packages, so the full isolated SDK/application binding remains a required acceptance gate.
 
+Next finish dedicated native queue consumers and their privacy/lifecycle checks, then execute populated SQL/HTTP/SDK and actual browser/iOS/Android acceptance with new explicit runtime/database/device ownership. Preserve accepted native-history products and fixtures; both native fresh-cycle fixtures are exactly cleaned and devices stopped with userdata retained. Existing primary raw-claims exposure remains a known defect until this candidate is accepted and integrated. The broader R03 lifecycle and ordered backlog remain open.
 
-PR #36 now tracks this branch as an explicit unfinished draft. Its initial
-safeguard job failed because the additive migration lacked the required
-`Backwards compatible: yes` declaration. The header now states the concrete
-compatibility basis: the migration adds a service-only function and changes no
-existing table, row, permission or deployed RPC. Executable SQL is unchanged.
-This documentation correction does not establish SQL/HTTP/UI acceptance or close
-the unfinished consumers. Required gates remain intact; no database was changed.
-
-CI 34769252288 passes the migration safeguard but fails the current-claims SQL
-contract: its `x` array alias conflicts with the surrounding PL/pgSQL `x` variable.
-Both exclusion assertions now use an explicit `claim_row(value)` alias and qualified
-value. The generated wrapper is synchronized; all 52 wrapper consistency checks
-pass. This changes only the contract's identifier resolution, not the migration or
-application behavior. Fresh SQL CI remains required; the exclusively leased native
-acceptance database was not used for this correction.
-
-The reconciliation preserves both specific route mounts before dynamic Home routes, both SDK namespaces, and the queue panel’s safe projection plus history navigation. This is still a WIP combination; complete the second browser consumer, session/render retirement and native consumers before actual populated acceptance. Neither the native acceptance fixture nor its archived products were changed.
+Private evidence: `/private/tmp/pantopus-home-residency-cycle-r1/current-claims-backend-source-r1/` contains reconciliation checks and browser consumer gate logs; earlier browser preparation is `/private/tmp/pantopus-home-current-residency-claims-web-r1`. No current-claims fixture, database, API, device or provider acceptance has been performed. Keep credentials, raw tokens, database archives and operator logs out of Git; local dependency symlinks are not source.
