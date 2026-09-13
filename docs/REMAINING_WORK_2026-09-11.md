@@ -1,6 +1,6 @@
 # Pantopus remaining work
 
-Updated September 13, 2026 after native member-removal recovery and reader acceptance.
+Updated September 13, 2026 after backend/browser reviewer-history acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
@@ -29,8 +29,13 @@ R03 [backend](home-member-removal-recovery-backend-2026-09-13.md) and
 [browser removal recovery](home-browser-member-removal-recovery-2026-09-13.md) now
 pass actual acceptance. Both native five-original removal journeys and the
 combined applicant/reviewer HTTP/browser baseline also pass, as do both bounded
-native reader follow-ups. Finish reviewer history and the remaining R03 lifecycle, then the
-full ordered backlog. No additional row is closed.
+native reader follow-ups. Reviewer-history [backend](home-residency-review-history-backend-2026-09-13.md)
+and [browser](home-browser-residency-review-history-2026-09-13.md) now also pass
+actual own-history pagination/detail/current-authority recovery, real expiry
+races and the fresh post-ack combined applicant/reviewer cycle, with exact
+fixture cleanup. Finish installed native history/cycle parity and current-claims
+privacy/read repair, then the remaining R03 lifecycle and full ordered backlog.
+No additional row is closed.
 Do not redo accepted native joining/postal/review/private-first-use work solely
 because an older report says “next.”
 
@@ -142,7 +147,7 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 - [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 includes accepted Task/R02 and backend/browser removal recovery while #34 remains unfinished.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile the primary source’s 48 Home / 21 payment / 57 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The source includes Task defaults `20260912050000` R02 compatibility `20260912060000` and removal recovery `20260913010000`. The latest 102-contract Home proof applies Home prerequisites only and does not complete combined paid/Home replay or adoption. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile the primary source’s 49 Home / 21 payment / 58 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The source includes Task defaults `20260912050000` R02 compatibility `20260912060000` removal recovery `20260913010000` and reviewer history `20260913020000`. The latest 104-contract Home proof applies Home prerequisites only and does not complete combined paid/Home replay or adoption. The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 

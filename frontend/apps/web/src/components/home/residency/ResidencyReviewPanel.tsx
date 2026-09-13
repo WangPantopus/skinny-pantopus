@@ -88,6 +88,7 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
   return <main aria-label="Residency review" className="mx-auto max-w-2xl space-y-5 px-4 py-8 text-app-text">
     <Link href={back} prefetch={false} className="text-sm underline">{fromMembers ? 'Back to household members' : 'Back to residency claims'}</Link>
     <h1 className="text-2xl font-semibold">Residency review</h1>
+    <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false} className="inline-flex min-h-11 items-center text-sm underline">Your past residency decisions</Link>
     <p className="text-sm text-app-text-secondary">Review the current claim and membership before approving or rejecting residency.</p>
     {loading && <p role="status">Checking current residency access…</p>}
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}

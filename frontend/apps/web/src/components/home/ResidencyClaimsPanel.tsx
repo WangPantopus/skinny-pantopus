@@ -62,6 +62,7 @@ export default function ResidencyClaimsPanel({ homeId, canManage }: ResidencyCla
       </div>
 
       <Link href={`${reviewPath}?from=members`} prefetch={false} className="mb-3 inline-block text-sm underline">Residency decisions and recovery</Link>
+      <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false} className="mb-3 ml-4 inline-block text-sm underline">Your past residency decisions</Link>
       {loading ? <p role="status" className="text-sm">Checking current residency claims…</p>
         : loadError ? <div role="alert" className="space-y-2 text-sm text-red-800"><p>{loadError}</p>
           <button className="underline" onClick={() => setReload(n => n + 1)}>Reload residency claims</button></div>

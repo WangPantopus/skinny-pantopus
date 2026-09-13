@@ -47,7 +47,7 @@ feature branch into a new isolated worktree. Do not reconstruct code from logs
 or overwrite the owner checkout. It retains old master and three unrelated
 documentation/design changes. Do not prune other worktrees.
 
-## Next acceptance: reviewer history and current claims privacy
+## Next acceptance: native reviewer history and current claims privacy
 
 The committed Task first-use milestone passes
 [backend policy/HTTP/SQL](home-member-task-first-use-2026-09-12.md),
@@ -178,21 +178,31 @@ no fence against a future legitimate renewed membership; current shipped renewal
 is refused. H07 controlled removal and sender withdrawal remain separate proof.
 
 The [combined applicant/reviewer baseline](home-residency-cycle-baseline-2026-09-13.md)
-passes ten actual HTTP/SDK/SQL groups and 128 requests, actual Chrome submission,
-rejection, resubmission, independent approval, acknowledgement, removal and cold
-applicant return. Conflicting independent reviewers and real authority expiry
-during observed SQL waits also pass. Both fixtures are exactly restored. Current
-claims responses expose broad private fields and omit explicit no-store headers;
-the shared queue visibly displays a raw account name. Acknowledged reviewer
-decisions have no supported history entry. Continue the isolated history candidate
-and this observed claims-queue repair after native reader acceptance, then the
-ordered inventory. The isolated history candidate now passes populated upgrade,
-zero SQL lint issues and 104 raw/generated contracts, with exact restoration.
-Its first upgrade caught an inherited service-role helper grant; the additive
-candidate now revokes it and directly tests the denied helper call. Preserve
-that failed predecessor and use private preparation-r3 for the corrected
-history-runtime port guard. History HTTP/browser/native acceptance remains
-unrun. Do not repeat the completed primary baseline.
+remains accepted and exactly cleaned. The new reviewer-history
+[backend](home-residency-review-history-backend-2026-09-13.md) now passes populated
+upgrade, zero SQL lint issues, all 104 raw/generated contracts, nine actual
+HTTP/SDK/SQL groups and both Home/profile expiry cases. The same real 23+1
+receipt population passes [browser reader acceptance](home-browser-residency-review-history-2026-09-13.md):
+20+3 pagination, own detail, cold account return, actual 503/Retry and held old200
+against current403. A separate fresh browser cycle passes actual
+submission/rejection/resubmission/independent approval/removal and post-ack own
+history, with both foreign receipt refusals. Narrow 320/390px layouts also pass.
+All four actual history fixtures are exactly cleaned; history REST is stopped
+with its database/configuration retained. Preserve the failed ACL predecessor,
+private path/alert-driver failures, source revisions and documented catalog
+maintenance exclusions rather than repeating accepted work.
+
+Next: finish native history source/product/installed-reader gates and native
+combined-cycle parity. Their source candidates are in the isolated
+`/private/tmp/pantopus-home-residency-review-history` worktree. Inspect actual
+native build/device/DB leases; source preparation is not installed acceptance.
+The separately observed excessive current-claims projection and false-empty/
+lifetime behavior are being repaired on backend/SQL/SDK source in
+`/private/tmp/pantopus-home-current-residency-claims`, based on a389001a. That
+candidate is not integrated or SQL/HTTP accepted. Reconcile its additive later
+migration with history, then finish web/native current-claims consumers and
+actual acceptance. Do not repeat the accepted primary combined baseline.
+
 Private evidence is under `pantopus-home-member-removal-r1`
 and durable `member-removal-20260913/{backend-recovery-r1,browser-recovery-r1}`.
 Inspect the operator index and current ownership before another writer.
