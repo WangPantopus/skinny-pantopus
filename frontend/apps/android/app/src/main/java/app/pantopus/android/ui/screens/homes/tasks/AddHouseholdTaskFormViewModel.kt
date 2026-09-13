@@ -344,6 +344,9 @@ class AddHouseholdTaskFormViewModel
         private val _assignableMembers = MutableStateFlow<List<HouseholdTaskAssignableMember>>(emptyList())
         val assignableMembers: StateFlow<List<HouseholdTaskAssignableMember>> = _assignableMembers.asStateFlow()
 
+        private val _memberListUnavailable = MutableStateFlow(false)
+        val memberListUnavailable: StateFlow<Boolean> = _memberListUnavailable.asStateFlow()
+
         val aggregate: FormAggregate
             get() = FormAggregate.from(AddHouseholdTaskField.entries.mapNotNull { _fields.value[it] })
 
@@ -383,6 +386,7 @@ class AddHouseholdTaskFormViewModel
         fun load() {
             if (!active || _isSaving.value) return
             _state.value = AddHouseholdTaskFormUiState.Loading
+            _memberListUnavailable.value = false
             runAction {
                 if (taskId == null) {
                     val pending = creation.load()
@@ -430,6 +434,7 @@ class AddHouseholdTaskFormViewModel
             completionGeneration = null
             _state.value = AddHouseholdTaskFormUiState.Loading
             _assignableMembers.value = emptyList()
+            _memberListUnavailable.value = false
             _toast.value = null
         }
 
@@ -487,7 +492,7 @@ class AddHouseholdTaskFormViewModel
             update(AddHouseholdTaskField.CustomUnit, unit.rawValue)
         }
 
-        /** Single-select assignee; pass `null` for "Unassigned (any member)". */
+        /** Single-select assignee; pass `null` for "Unassigned". */
         fun selectAssignee(memberId: String?) {
             update(AddHouseholdTaskField.AssignedTo, memberId.orEmpty())
         }
@@ -619,6 +624,7 @@ class AddHouseholdTaskFormViewModel
         ) {
             if (!active || generation != revision) return
             _assignableMembers.value = emptyList()
+            _memberListUnavailable.value = false
             _toast.value = null
             _state.value =
                 if (!access.isCurrent) {
@@ -638,11 +644,13 @@ class AddHouseholdTaskFormViewModel
                 is NetworkResult.Success -> {
                     access.requireCurrent()
                     _assignableMembers.value = result.data.occupants.mapNotNull(HouseholdTaskAssignableMember::from)
+                    _memberListUnavailable.value = false
                 }
                 is NetworkResult.Failure -> {
-                    // Picker shows only "Unassigned (any member)" — editor
-                    // doesn't gate on the roster.
+                    // Task authority is independent of member-roster access.
+                    // Keep unassigned creation available without claiming the Home is empty.
                     _assignableMembers.value = emptyList()
+                    _memberListUnavailable.value = true
                 }
             }
         }

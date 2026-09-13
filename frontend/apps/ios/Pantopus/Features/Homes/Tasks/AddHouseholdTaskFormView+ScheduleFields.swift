@@ -92,10 +92,7 @@ extension AddHouseholdTaskFormView {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 PantopusTextField(
                     "",
-                    text: Binding(
-                        get: { intervalSnapshot.value },
-                        set: { viewModel.update(.customInterval, to: $0) }
-                    ),
+                    text: viewModel.textBinding(for: .customInterval),
                     placeholder: "3",
                     state: fieldState(for: intervalSnapshot, allowEmptyValid: false),
                     keyboardType: .numberPad,
@@ -181,26 +178,21 @@ extension AddHouseholdTaskFormView {
         }
     }
 
-    @ViewBuilder private var notesField: some View {
-        let snapshot = viewModel.fields[.notes]
-            ?? FormFieldState(id: AddHouseholdTaskField.notes.rawValue, originalValue: "")
+    private var notesField: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             Text("Notes (optional)")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            TextEditor(text: Binding(
-                get: { snapshot.value },
-                set: { viewModel.update(.notes, to: $0) }
-            ))
-            .frame(minHeight: 96)
-            .padding(Spacing.s2)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .accessibilityIdentifier("field_notes")
+            TextEditor(text: viewModel.textBinding(for: .notes))
+                .frame(minHeight: 96)
+                .padding(Spacing.s2)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .accessibilityIdentifier("field_notes")
         }
     }
 

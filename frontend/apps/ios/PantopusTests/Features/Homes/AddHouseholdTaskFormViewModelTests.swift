@@ -16,7 +16,7 @@
 import XCTest
 @testable import Pantopus
 
-private enum AddHouseholdTaskFormFixtures {
+enum AddHouseholdTaskFormFixtures {
     static let collectionJSON = """
     {
       "tasks": [],
@@ -159,7 +159,7 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         )
     }
 
-    private func makeVM(taskId: String? = nil) -> AddHouseholdTaskFormViewModel {
+    func makeVM(taskId: String? = nil) -> AddHouseholdTaskFormViewModel {
         let api = makeAPI()
         return AddHouseholdTaskFormViewModel(
             homeId: "30000000-0000-4000-8000-000000000001",

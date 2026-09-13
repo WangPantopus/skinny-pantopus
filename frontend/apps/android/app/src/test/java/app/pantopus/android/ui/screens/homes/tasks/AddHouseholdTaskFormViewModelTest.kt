@@ -98,6 +98,49 @@ class AddHouseholdTaskFormViewModelTest {
             assertTrue(vm.isDirty)
         }
 
+    @Test fun denied_member_roster_keeps_authorized_unassigned_creation_available() =
+        runTest {
+            coEvery { members.listOccupants("home") } returns NetworkResult.Failure(NetworkError.ClientError(403, "Denied"))
+            val body = slot<CreateHomeTaskRequest>()
+            coEvery { creation.submit(capture(body)) } returns task
+            val vm = vm()
+            assertEquals(AddHouseholdTaskFormUiState.Editing, vm.state.value)
+            assertTrue(vm.memberListUnavailable.value)
+            assertTrue(vm.assignableMembers.value.isEmpty())
+            assertNull(vm.selectedAssigneeId)
+            vm.update(AddHouseholdTaskField.Title, "Restock towels")
+            vm.save()
+            assertNull(body.captured.assignedTo)
+            assertEquals("Restock towels", body.captured.title)
+        }
+
+    @Test fun member_roster_failure_is_distinct_from_a_successful_empty_roster_and_retires_on_pause() =
+        runTest {
+            coEvery { members.listOccupants("home") } returns NetworkResult.Failure(NetworkError.Server(503, "Unavailable"))
+            val vm = vm()
+            assertTrue(vm.memberListUnavailable.value)
+            vm.pause()
+            assertFalse(vm.memberListUnavailable.value)
+            coEvery { members.listOccupants("home") } returns NetworkResult.Success(OccupantsResponse(emptyList(), emptyList()))
+            vm.resume()
+            assertEquals(AddHouseholdTaskFormUiState.Editing, vm.state.value)
+            assertFalse(vm.memberListUnavailable.value)
+            assertTrue(vm.assignableMembers.value.isEmpty())
+        }
+
+    @Test fun denied_member_roster_preserves_an_existing_task_assignment_on_title_only_edit() =
+        runTest {
+            coEvery { members.listOccupants("home") } returns NetworkResult.Failure(NetworkError.ClientError(403, "Denied"))
+            val body = slot<HomeTaskEditPatch>()
+            coEvery { access.edit("task", capture(body)) } returns task.copy(title = "Restock towels")
+            val vm = vm(edit = true)
+            assertTrue(vm.memberListUnavailable.value)
+            assertEquals(task.assignedTo, vm.selectedAssigneeId)
+            vm.update(AddHouseholdTaskField.Title, "Restock towels")
+            vm.save()
+            assertEquals(mapOf("title" to "Restock towels"), body.captured.fields)
+        }
+
     @Test fun title_and_custom_interval_validation() =
         runTest {
             val vm = vm()

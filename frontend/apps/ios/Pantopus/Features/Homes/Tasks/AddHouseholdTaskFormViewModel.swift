@@ -32,6 +32,9 @@ public final class AddHouseholdTaskFormViewModel {
     /// recurrence editor.
     public private(set) var assignableMembers: [HouseholdTaskAssignableMember] = []
 
+    enum AssigneeReadState { case loading, loaded, unavailable }
+    private(set) var assigneeReadState: AssigneeReadState = .loading
+
     public let homeId: String
     public let taskId: String?
     private let api: APIClient
@@ -118,6 +121,7 @@ public final class AddHouseholdTaskFormViewModel {
         state = .loading
         canSave = false
         assignableMembers = []
+        assigneeReadState = .loading
         do {
             if let taskId {
                 try await loadEditableTask(taskId, revision: revision)
@@ -170,6 +174,7 @@ public final class AddHouseholdTaskFormViewModel {
         access.invalidatePending()
         canSave = false
         assignableMembers = []
+        assigneeReadState = .loading
         shouldDismiss = false
         toast = nil
         state = .loading
@@ -381,9 +386,11 @@ public final class AddHouseholdTaskFormViewModel {
             try access.requireCurrent()
             guard revision == generation else { return }
             assignableMembers = response.occupants.compactMap(HouseholdTaskAssignableMember.from)
+            assigneeReadState = .loaded
         } catch {
             guard revision == generation else { return }
             assignableMembers = []
+            assigneeReadState = .unavailable
             if !isCurrent { accessChanged() }
         }
     }

@@ -33,6 +33,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -132,7 +133,7 @@ class MyHomesListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             val rows = loaded.sections.first().rows
             assertEquals(2, rows.size)
-            // Ownership is explicit; this owner fixture has no residency row.
+            // Ownership is explicit; this owner fixture has no occupancy row.
             assertEquals("Birch Lane", rows[0].title)
             assertEquals("Owner role · Elm Park, CA", rows[0].subtitle)
             val chips = rows[0].chips
@@ -142,13 +143,32 @@ class MyHomesListViewModelTest {
             assertTrue(rows[0].leading is RowLeading.TypeIcon)
             assertEquals("1 Main", rows[1].title)
             assertEquals("Tenant · Sellwood, CA", rows[1].subtitle)
-            assertEquals(listOf("Residency verified"), rows[1].chips?.map { it.text })
+            assertEquals(listOf("Household access"), rows[1].chips?.map { it.text })
             assertTrue(rows[1].leading is RowLeading.TypeIcon)
             // Banner shows count + home tint when populated.
             val banner = vm.banner.value
             assertNotNull(banner)
             assertEquals("2 saved Homes", banner!!.title)
             assertEquals(BannerCtaTint.Home, banner.tint)
+        }
+
+    @Test
+    fun ordinary_membership_confirms_household_access_without_claiming_residency_or_ownership() =
+        runTest {
+            val member =
+                makeHome(
+                    "00000000-0000-4000-8000-000000000002",
+                    ownership = null,
+                    roleBase = "member",
+                    isPrimary = false,
+                )
+            coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(member), null))
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            vm.load()
+            val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.single()
+            assertEquals("Member · X, CA", row.subtitle)
+            assertEquals(listOf("Household access"), row.chips?.map { it.text })
+            assertFalse(row.chips.orEmpty().any { it.text in listOf("Residency verified", "Ownership verified") })
         }
 
     @Test

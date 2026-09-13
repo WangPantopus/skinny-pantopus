@@ -1,4 +1,4 @@
--- Actual shipped 29 role rows, trusted provider evidence, no local role grants.
+-- Actual shipped 31 role rows, trusted provider evidence, no local role grants.
 BEGIN;
 SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s';
 SET LOCAL search_path=public,extensions,pg_catalog;
@@ -18,7 +18,7 @@ DO $$ DECLARE f text; t text; BEGIN
  IF has_table_privilege('authenticated','public."HomeClaimReviewReceipt"','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
   OR has_table_privilege('anon','public."HomeClaimReviewReceipt"','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') THEN
   RAISE EXCEPTION 'Review provenance table is client accessible'; END IF;
- IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+ IF (SELECT count(*) FROM public."HomeRolePermission")<>31 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
  FOREACH f IN ARRAY ARRAY['public.get_home_claim_review(uuid,uuid,uuid,boolean)',
  'public.mutate_home_claim_review(uuid,uuid,uuid,text,text,text,boolean,integer)',
  'public.record_home_claim_provider_evidence(uuid,uuid,uuid,text,boolean,numeric,jsonb,text)'] LOOP

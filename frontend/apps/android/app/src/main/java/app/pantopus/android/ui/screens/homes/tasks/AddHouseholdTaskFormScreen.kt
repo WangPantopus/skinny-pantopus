@@ -85,6 +85,7 @@ fun AddHouseholdTaskFormScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val members by viewModel.assignableMembers.collectAsStateWithLifecycle()
+    val memberListUnavailable by viewModel.memberListUnavailable.collectAsStateWithLifecycle()
     val createdId by viewModel.createdTaskId.collectAsStateWithLifecycle()
 
     HomeTaskResumeEffect(onResume = viewModel::resume, onPause = viewModel::pause)
@@ -127,6 +128,7 @@ fun AddHouseholdTaskFormScreen(
                         AddHouseholdTaskLoadedState(
                             fields = fields,
                             members = members,
+                            memberListUnavailable = memberListUnavailable,
                             isEditing = viewModel.isEditing,
                             isValid = viewModel.isValid,
                             isDirty = viewModel.isDirty,
@@ -206,6 +208,7 @@ internal data class AddHouseholdTaskLoadedState(
     val selectedCustomUnit: AddHouseholdTaskCustomUnit,
     val selectedAssigneeId: String?,
     val showsCustomRecurrenceSubForm: Boolean,
+    val memberListUnavailable: Boolean = false,
 )
 
 @Composable
@@ -236,6 +239,7 @@ internal fun AddHouseholdTaskLoaded(
         FormFieldGroup("Assigned to") {
             AssigneePicker(
                 members = state.members,
+                memberListUnavailable = state.memberListUnavailable,
                 selectedId = state.selectedAssigneeId,
                 onSelect = onSelectAssignee,
             )
@@ -367,6 +371,7 @@ private fun CategoryChip(
 @Composable
 private fun AssigneePicker(
     members: List<HouseholdTaskAssignableMember>,
+    memberListUnavailable: Boolean,
     selectedId: String?,
     onSelect: (String?) -> Unit,
 ) {
@@ -376,7 +381,7 @@ private fun AssigneePicker(
     ) {
         AssigneeRow(
             id = null,
-            title = "Unassigned (any member)",
+            title = "Unassigned",
             initials = "··",
             selected = selectedId == null,
             onClick = { onSelect(null) },
@@ -392,7 +397,12 @@ private fun AssigneePicker(
         }
         if (members.isEmpty()) {
             Text(
-                text = "No members found in this home.",
+                text =
+                    if (memberListUnavailable) {
+                        "Member list unavailable. You can leave this task unassigned."
+                    } else {
+                        "No assignable members are available."
+                    },
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextMuted,
             )

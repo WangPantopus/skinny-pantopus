@@ -24,6 +24,9 @@ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed)
  SELECT 'ddf15000-0000-4000-8000-000000000100',('ddf15000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,p::public.home_permission,true
  FROM generate_series(2,7)n CROSS JOIN unnest(ARRAY['tasks.view','tasks.edit','tasks.manage'])p
  WHERE n<>2 OR p='tasks.view';
+-- Read-only is now an explicit decision, not absence of an ordinary default.
+INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES
+ ('ddf15000-0000-4000-8000-000000000100','ddf15000-0000-4000-8000-000000000002','tasks.edit',false);
 CREATE FUNCTION pg_temp.collection_ok(r jsonb) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
  IF r->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Expected success, got %',r; END IF; RETURN r; END $$;
 CREATE FUNCTION pg_temp.collection_code(r jsonb,c text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN
@@ -64,7 +67,7 @@ BEGIN
  PERFORM pg_temp.collection_capability(h,historical,true);
  PERFORM pg_temp.collection_ok(public.mutate_home_record(h,historical,'task','create',NULL,'{"title":"Historical task"}'));
  -- An editor or manager grant independently matches the existing create rule.
- INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,viewer,'tasks.edit',true);
+ UPDATE public."HomePermissionOverride" SET allowed=true WHERE home_id=h AND user_id=viewer AND permission='tasks.edit';
  PERFORM pg_temp.collection_capability(h,viewer,true);
  PERFORM pg_temp.collection_ok(public.mutate_home_record(h,viewer,'task','create',NULL,'{"title":"Editor task"}'));
  UPDATE public."HomePermissionOverride" SET allowed=false WHERE home_id=h AND user_id=viewer AND permission='tasks.edit';

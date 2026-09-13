@@ -390,8 +390,10 @@ class MyHomesListViewModel
                         )
                     }
                     if (home.hasSharedAccess && home.occupancy?.verificationStatus == "verified") {
+                        // Verified occupancy confirms household admission. The
+                        // list contract carries no independent residency proof.
                         add(
-                            RowChip("Residency verified", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Success)),
+                            RowChip("Household access", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Success)),
                         )
                     }
                     if (pending != null) {

@@ -168,6 +168,6 @@ END $$;
 RESET ROLE;
 DO $$ BEGIN
   IF (SELECT rows FROM ce_roles) IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission"r)
-    OR (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Changed shipped role defaults'; END IF;
+    OR (SELECT count(*) FROM public."HomeRolePermission")<>31 THEN RAISE EXCEPTION 'Changed shipped role defaults'; END IF;
 END $$;
 ROLLBACK;

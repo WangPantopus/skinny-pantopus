@@ -1,6 +1,6 @@
 // Production residency router/Joi/service + actual isolated SQL. Synthetic auth
 // and notification transport only; never accepts a hosted database or provider.
-module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false, postcard = false } = {}) {
+module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false, postcard = false, tasks = false } = {}) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const Module = require('node:module');
@@ -27,7 +27,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
   let propertyResult = { profile: null, source: 'fallback' };
   let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests', 'prepare_home_invitation_decision', 'get_home_invitation_decision', 'resolve_home_invitation_decision', 'prepare_home_invitation_sender','list_home_invitation_sender', 'get_home_invitation_sender', 'resolve_home_invitation_sender', 'claim_home_invitation_sender_delivery', 'record_home_invitation_sender_delivery'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests', 'prepare_home_invitation_decision', 'get_home_invitation_decision', 'resolve_home_invitation_decision', 'prepare_home_invitation_sender','list_home_invitation_sender', 'get_home_invitation_sender', 'resolve_home_invitation_sender', 'claim_home_invitation_sender_delivery', 'record_home_invitation_sender_delivery'] : []), ...(tasks ? ['create_home_task_with_receipt','mutate_home_record','get_home_task_recurrence','get_home_task_gig_publication','get_home_task_media'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -138,9 +138,10 @@ module.exports = function(container, { summary = false, place = false, dashboard
         return { ...postcardResult, ...(postcardResult.success ? { vendorJobId: 'psc_fixture_' + cardId } : {}) };
       } };
     }
-    if (postcard && parent?.filename.endsWith('/routes/homeOwnership.js')) {
+    if ((postcard || tasks) && parent?.filename.endsWith('/routes/homeOwnership.js')) {
       if (request === '../middleware/verifyToken') return (req, _res, next) => {
-        const userId = req.headers['x-fixture-actor'] || actor; assert(users.includes(userId)); req.user = { id: userId }; next();
+        const userId = req.headers['x-fixture-actor'] || actor; assert(users.includes(userId)); req.user = { id: userId };
+        req.session = { id: req.headers['x-fixture-session'] || 'local-residency-review' }; next();
       };
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
     }
@@ -181,14 +182,34 @@ module.exports = function(container, { summary = false, place = false, dashboard
       // that actual IAM read when exercising dashboard-backed navigation.
       if (dashboard && request === '../utils/homePermissions') return load.call(this, request, parent, isMain);
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService', '../services/homeInvitationDecisionService', '../services/homeInvitationSenderService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService', '../services/homeInvitationDecisionService', '../services/homeInvitationSenderService'] : []), ...(tasks ? ['../services/homeTaskRecurrenceService','../services/homeTaskGigService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
   const router = require(path.join(root, 'backend/routes/home'));
   const app = express(); app.use(express.json());
   if (postcard) app.use('/api/homes', require(path.join(root, 'backend/routes/homeOwnership')));
+  else if (tasks) {
+    const ownershipRouter = require(path.join(root, 'backend/routes/homeOwnership'));
+    // My Homes reads the actor's real claim inventory independently of cards.
+    // Keep the production static route ahead of home.js's dynamic /:id route;
+    // this mode exposes no ownership or provider mutation routes.
+    app.use('/api/homes', (req,res,next) => req.method==='GET' && req.path==='/my-ownership-claims'
+      ? ownershipRouter(req,res,next) : next());
+  }
   if (place) app.use('/api/homes', require(path.join(root, 'backend/routes/placeIntelligence')));
+  if (tasks) {
+    const mediaRouter=express.Router();
+    require(path.join(root,'backend/routes/homeTaskMediaRoutes'))(mediaRouter,{
+      verifyToken(req,_res,next){const userId=req.headers['x-fixture-actor'];assert(users.includes(userId));req.user={id:userId};req.session={id:req.headers['x-fixture-session']||'local-residency-review'};next();},
+      uploadLimiter(_req,_res,next){next();},
+    });
+    // Task detail reads actual media/current capabilities. Provider storage
+    // writes and downloads are outside ordinary first-use acceptance.
+    app.use('/api/upload',(req,res,next)=>req.method==='GET'&&
+      (req.path===`/home-task-media-session/${home}`||new RegExp(`^/home-task-media/${home}/[a-f0-9-]{36}$`).test(req.path))
+      ?mediaRouter(req,res,next):next());
+  }
   app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
   function setup() {
     assert.equal(sql(`SELECT (SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}))+(SELECT count(*) FROM public."Home" WHERE id=${q(home)});`), '0');

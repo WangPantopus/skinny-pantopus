@@ -22,12 +22,13 @@ gh run list --branch codex/home-permission-boundaries --workflow CI --limit 5 --
 ```
 
 Expected branch: `codex/home-permission-boundaries`. Compare local, remote and
-PR head. A prior green run is insufficient. The historical incoming sender-work head
-`253d5c6cf2108076781c709b1baf563a8c2874e6` has all 16 checks green in
-[CI 34721540576](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34721540576).
-The sender milestone has separate source/product acceptance below. Inspect live
-Git/CI and the private operator index for its exact committed/pushed binding; do
-not treat that historical incoming run as current verification.
+PR head. The committed/pushed authentication predecessor is
+`80c702a3433193bc9aa58b48cd576ef595e321fd`, with all 16 checks green in
+[CI 34737876978](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34737876978).
+It verifies the browser authentication readiness repair. The Task milestone has
+separate local acceptance and source/product bindings. Inspect live Git/CI and the
+private operator index for its integration commit; that predecessor run cannot
+verify a later source change.
 #32 remains a draft; #34 is an unfinished conflicting draft. Master at handoff was
 `6a1013784db69bf339535a2f4b33b328f2bbf40c`.
 
@@ -36,12 +37,23 @@ feature branch into a new isolated worktree. Do not reconstruct code from logs
 or overwrite the owner checkout. It retains old master and three unrelated
 documentation/design changes. Do not prune other worktrees.
 
-## Next implementation: ordinary-member onboarding and private first use
+## Next implementation: older-client residency compatibility
 
-The ongoing browser baseline found and repaired authentication forms' native GET
-fallback before hydration. See the [actual Chrome proof and limits](web-auth-form-hydration-2026-09-12.md).
-The full member first-use journey remains the next task; do not repeat that
-bounded authentication reproduction merely to recover context.
+The current Task first-use candidate passes
+[backend policy/HTTP/SQL](home-member-task-first-use-2026-09-12.md),
+[browser](home-browser-member-first-use-2026-09-12.md) and
+[installed iOS](home-ios-member-onboarding-2026-09-12.md) acceptance.
+The [installed Android journey](home-android-member-onboarding-2026-09-12.md)
+also passes exact input, cold original retry, edit/completion/reopen and current
+access, with both full variants, lint/signing and optimized codec proof. All
+fixtures are exactly cleaned, both owned devices are stopped with userdata
+retained, and durable source/product/evidence copies are verified. Finish the
+integration commit/push if needed and verify its exact-head CI while independent
+R02 acceptance proceeds. All clients preserve their accepted segments and failed
+driver predecessors; do not describe segmented proof as an uninterrupted fresh run.
+
+The browser [authentication readiness repair](web-auth-form-hydration-2026-09-12.md)
+is already committed and verified. Do not repeat that bounded reproduction.
 
 Sender invitation creation, explicit resend/withdrawal and recovery pass backend,
 browser and both installed native clients. Backend r6 proves 25 originals and
@@ -62,25 +74,25 @@ Legacy approved requests use current canonical role/source checks, and delivery
 copy matches the effective role. Retained command/layout predecessors are bound
 separately from the final native reader repair; do not repeat them blindly.
 
-Complete ordinary-member sender → recipient → current My Homes identity →
-matching Home → useful household-private Task on all three clients, including
-current access denial/removal and recovery, without fixture permission overrides.
+The member journey uses ordinary sender → recipient → current My Homes identity →
+matching Home → useful household-private Task, including current access
+denial/removal and recovery, without positive fixture permission overrides.
 Keep household admission separate from residency/ownership. Preserve accepted
 address/creation/join/postal/recipient subjourneys and their verification limits.
 Broader new-account/provider onboarding still needs its own proof. H07/H08 remain
 partial; only close their complete exit criteria.
 
-First capture the real role preset/default policy and create through shipped UI.
-Web defaults to member/tenant and native to member; the recorded baseline has no
-Home role presets, and the member-default repair intentionally grants only
-`home.view`. Task reads need `tasks.view`; creation also needs edit/manage.
-Reproduce current behavior before a deliberate permission-policy repair. Do not
-insert synthetic grants, reinterpret tenant as lease resident, or describe
-household-private tasks as personally private. The existing member-default HTTP
-script proves admission/list/detail; extend the invitation fixture narrowly for
-real Task commands rather than using older mocked-task fixtures.
+Actual baseline capture is complete. Web defaults to member/tenant and native
+to member; the retained replay has no Home role presets and originally grants
+ordinary members only `home.view`. Both shipped admissions succeed but eight
+ordinary Task operations fail. The additive `20260912050000` candidate grants
+only missing `tasks.view`/`tasks.edit` defaults. All 49 raw and 49 generated SQL
+contracts, populated upgrade and real HTTP/SDK/SQL pass. Do not reinterpret
+tenant as lease resident or household-private Tasks as personally private.
+The shared invitation fixture uses explicit `member-onboarding member-tasks`
+arguments and actual Task routes; its default remains the preserved baseline.
 
-Any policy repair has wider consequences than one onboarding task. Existing
+The deliberate policy repair has wider consequences than one onboarding Task. Existing
 `tasks.edit` permits creating and changing one's own readable tasks, plus
 status-only changes on another author's task when assigned; broader edits need
 `tasks.manage`. It also enables own media/recurrence and can make an explicit
@@ -99,10 +111,18 @@ intentionally remain an exception and can accept the new current policy. Preserv
 saved snapshots/receipts and explicitly cover this distinction in the policy
 upgrade; do not describe every pending invitation as automatically retired.
 
-R02 older-client `POST /:id/claim` partial writes follow: share atomic policy and
-preserve the legacy response shape and separate postal intent. Do not invent a
-protected original UUID or reviewed-address snapshot for old clients. Continue
-the ordered inventory after that. **7 of 80 rows closed** does not measure app
+R02 older-client `POST /:id/claim` follows in the isolated
+`/private/tmp/pantopus-home-residency-legacy-compatibility` worktree, branch
+`codex/home-residency-legacy-compatibility`, based on `80c702a34`. Its uncommitted
+`20260912060000` shares atomic admission and preserves the legacy envelope and
+separate postal intent. R02 now owns the exclusive replay DB lease for its
+source-bound baseline and candidate SQL/HTTP/upgrade acceptance. Do not invent a
+protected UUID or reviewed-address snapshot for old clients. The actual baseline
+proves one full unique claim per actor/Home, not
+multiple same-pair histories. It also distinguishes improper stored inactive
+occupancy changes from effective expired access. Integrate only reviewed source
+and passing actual proof, reconciling the H07/R02 contract union. Continue the
+ordered inventory afterward. **7 of 80 rows closed** does not measure app
 completion or remaining effort.
 
 ## Local setup and preservation
@@ -115,9 +135,9 @@ Do not print it. Private files are not available from Git alone.
 | --- | --- |
 | Replay DB | `/private/tmp/pantopus-home-gig-replay`, container `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522; CLI `/opt/homebrew/bin/supabase`. Preserve DB and full ledger; never reset it to prepare a test. |
 | REST | Preserve `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and replacement. `/private/tmp/pantopus-home-create-rest-before-recovery.json` contains private configuration: never print it. |
-| Browser | Owned Next dev 18080 retained, last PID 42758; inspect identity before reuse, no competing `.next` build. Invitation fixture 18084 stopped. |
-| Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped with app/data retained. SDK `/Users/yingpengwang/Library/Android/sdk`; Java 17 `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`. No data clear/uninstall to simplify tests. |
-| iOS | Owned `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, stopped with signed sender r19 and userdata retained; inspect before new work. Derived `/private/tmp/pantopus-home-documents-derived`, preserved accepted products; compiler cache is back internally after verified storage cleanup. Owner `EB5AD759-4699-481F-8A9F-0D650B074623` unrelated. |
+| Browser | Owned Next dev 18080 retained, last PID 42758; inspect identity before reuse, no competing `.next` build. Member fixture 18084 is stopped; R02 owns the replay DB through its isolated ephemeral-port harness. Inspect ownership before another writer. |
+| Android | AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556, stopped after final member first use with app/data retained. SDK `/Users/yingpengwang/Library/Android/sdk`; Java 17 `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`. No data clear/uninstall to simplify tests. |
+| iOS | Owned `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, stopped after member first-use r3 with signed candidate r6 and userdata retained; inspect before new work. Derived `/private/tmp/pantopus-home-documents-derived`, preserved accepted products; compiler cache is back internally after verified storage cleanup. Owner `EB5AD759-4699-481F-8A9F-0D650B074623` unrelated. |
 | Phone | Existing Staging 1.0.0 (2), earlier source `139868c`. No update in this milestone. Never install loopback acceptance binaries on it. |
 | Node | Backend acceptance uses Node 20 `/Users/yingpengwang/.nvm/versions/node/v20.20.0/bin/node`. Inspect package scripts/configuration before reuse. |
 
@@ -129,15 +149,18 @@ release. Final command from `frontend/apps/android`:
 JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew -Ppantopus.envFile=/private/tmp/pantopus-home-create-android.env :app:ktlintCheck :app:detekt :app:assembleDebug :app:lintDebug :app:lintRelease :app:testDebugUnitTest :app:testReleaseUnitTest :app:assembleRelease
 ```
 
-Final sender r11 passed in 18m 34s, including both full variants/Lints and
-optimized Release. The exact final optimized APK codec probe also passed. Do not
+Member candidate r1 passes both full variants (4,581 checks/80 skips each),
+both Lints, signing and optimized Release. The exact optimized APK codec probe
+also passes, as does installed first use. Sender r11 remains
+a separately accepted predecessor. Do not
 run Gradle concurrently or repeat full acceptance merely to recover context. Run checks justified by the
 next change. Owner-requested cache cleanup removed 52.7 GiB of regenerable cache
 data and left 61.4 GiB free before resumed builds. The iOS cache is back on the
 internal disk; no external drive is needed. Inspect space before heavy builds and
 use APFS clones to retain accepted artifacts.
 
-Current sender driver: `scripts/android/home-invitation-sender-journey.py`.
+Current member driver: `scripts/android/home-member-onboarding-journey.py`.
+Preserved sender driver: `scripts/android/home-invitation-sender-journey.py`.
 Preserved recipient driver: `scripts/android/home-invitation-decisions-journey.py`.
 Shared fixture: `scripts/ios/home-invitation-ui-fixture.cjs`. Inspect guards,
 arguments and ownership before starting. These use real production routes/SDK/

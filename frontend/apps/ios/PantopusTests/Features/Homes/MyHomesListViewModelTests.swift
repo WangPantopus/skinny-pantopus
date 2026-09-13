@@ -55,16 +55,16 @@ final class MyHomesListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(rows.count, 2)
-        // Role, ownership and residency are independent facts.
+        // Role, independently verified ownership and household access are distinct.
         XCTAssertEqual(rows[0].id, "00000000-0000-4000-8000-000000000001")
         XCTAssertEqual(rows[0].title, "Birch Lane")
         XCTAssertEqual(rows[0].subtitle, "Owner role · Elm Park, NY")
-        XCTAssertEqual(rows[0].chips?.map(\.text), ["Ownership verified", "Residency verified"])
+        XCTAssertEqual(rows[0].chips?.map(\.text), ["Ownership verified", "Household access"])
         if case .typeIcon = rows[0].leading {} else { XCTFail("Expected Home icon without fabricated progress") }
-        // A tenant has residency; ownership stays absent.
+        // A lease-resident role and verified occupancy do not invent ownership.
         XCTAssertEqual(rows[1].title, "88 Greenwood Ave")
         XCTAssertEqual(rows[1].subtitle, "Tenant · Sellwood, OR")
-        XCTAssertEqual(rows[1].chips?.map(\.text), ["Residency verified"])
+        XCTAssertEqual(rows[1].chips?.map(\.text), ["Household access"])
         if case .typeIcon = rows[1].leading {} else { XCTFail("Expected Home icon") }
         // Banner shows count + tap hint when populated.
         XCTAssertNotNil(vm.banner)
@@ -72,6 +72,34 @@ final class MyHomesListViewModelTests: XCTestCase {
         let renderedSource: any ListOfRowsDataSource = vm
         XCTAssertEqual(renderedSource.banner?.title, "2 saved Homes")
         XCTAssertEqual(vm.banner?.tint, .home)
+    }
+
+    func testVerifiedMemberAdmissionDoesNotInventResidencyOrOwnershipProof() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"homes":[
+              {"id":"00000000-0000-4000-8000-000000000001","name":"Invited household",
+               "access_kind":"shared","has_home_access":true,"role_base":"member","can_delete_home":false,
+               "ownership_status":null,"verification_tier":null,
+               "occupancy":{"id":"membership","role":"member","role_base":"member","is_active":true,
+                            "verification_status":"verified"}},
+              {"id":"00000000-0000-4000-8000-000000000002","name":"Independent owner proof",
+               "access_kind":"shared","has_home_access":true,"role_base":"owner","can_delete_home":true,
+               "ownership_status":"verified","verification_tier":"legal","occupancy":null}
+            ]}
+            """),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
+        ]
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
+        await vm.load()
+        guard case let .loaded(sections, _) = vm.state, let rows = sections.first?.rows else {
+            return XCTFail("Expected current household identities")
+        }
+        XCTAssertEqual(rows[0].subtitle, "Member")
+        XCTAssertEqual(rows[0].chips?.map(\.text), ["Household access"])
+        XCTAssertFalse(rows[0].chips?.contains { $0.text.contains("verified") } ?? true)
+        XCTAssertEqual(rows[1].subtitle, "Owner role")
+        XCTAssertEqual(rows[1].chips?.map(\.text), ["Ownership verified"])
     }
 
     func testLoadFailureTransitionsToErrorWhenCold() async {

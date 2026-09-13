@@ -31,7 +31,10 @@ All four fit a 390-pixel viewport; the login layout was visually inspected.
 
 Web regression: 1,215 tests in 95 suites pass, including four server-rendering
 regressions and existing authentication/return-link tests. Type check passes
-with zero errors; changed production-source lint passes. These local results do not replace exact pushed-head CI.
+with zero errors; changed production-source lint passes. Committed and pushed
+source `80c702a3433193bc9aa58b48cd576ef595e321fd` has all 16 jobs passing in
+[CI run 34737876978](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34737876978).
+That run binds this auth repair, not later member first-use changes.
 
 Private evidence: `/private/tmp/pantopus-home-member-first-use-r1/auth-form-hydration/`.
 `before.json` records only safe query keys and source hashes. Original owned

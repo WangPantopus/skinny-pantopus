@@ -215,8 +215,10 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             icon: .shieldCheck,
             tint: .status(.success)
         )) }
+        // A verified occupancy confirms household admission. Invitation
+        // acceptance can create it without independent residency evidence.
         if entry.hasSharedAccess, entry.occupancy?.verificationStatus == "verified" { chips.append(.init(
-            text: "Residency verified",
+            text: "Household access",
             icon: .home,
             tint: .status(.success)
         )) }

@@ -53,8 +53,9 @@ BEGIN
       IS DISTINCT FROM original->>'age_band'
     THEN RAISE EXCEPTION 'Accepted role lost exact defaults/age: %',role_name; END IF;
   IF role_name IN ('member','restricted_member','guest') AND
-    public.home_get_user_permissions(h,u) IS DISTINCT FROM ARRAY['home.view']::text[]
-    THEN RAISE EXCEPTION 'Overview default widened entity/write permissions: %',role_name; END IF;
+    public.home_get_user_permissions(h,u) IS DISTINCT FROM (CASE WHEN role_name='member'
+      THEN ARRAY['home.view','tasks.edit','tasks.view']::text[] ELSE ARRAY['home.view']::text[] END)
+    THEN RAISE EXCEPTION 'Admission differs from shipped role permissions: %',role_name; END IF;
   FOREACH state IN ARRAY ARRAY['pending_doc','provisional_bootstrap','revoked','suspended','moved_out'] LOOP
    UPDATE public."HomeOccupancy" SET verification_status=state WHERE home_id=h AND user_id=u;
    IF public.home_has_permission(h,'home.view',u) THEN RAISE EXCEPTION 'Status bypassed current admission: %',state; END IF;

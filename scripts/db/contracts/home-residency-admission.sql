@@ -7,7 +7,7 @@ SET LOCAL search_path=public,extensions,pg_catalog;
 CREATE TEMP TABLE admission_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows
   FROM public."HomeRolePermission" r;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+  IF (SELECT count(*) FROM public."HomeRolePermission")<>31 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
   IF has_function_privilege('authenticated','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE')
     OR has_function_privilege('anon','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE')
     OR NOT has_function_privilege('service_role','public.review_home_residency(uuid,uuid,text,jsonb,integer)','EXECUTE') THEN
@@ -60,8 +60,9 @@ BEGIN
    IS DISTINCT FROM (original - ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks'])
    OR after_row->>'verification_status'<>'verified' OR after_row->>'verified_at' IS NULL
    OR (after_row->>'verification_expires_at')::timestamptz-(after_row->>'verified_at')::timestamptz<>interval '365 days'
-   OR public.home_has_permission(h,'finance.manage',pending_id) OR (after_row->>'can_manage_tasks')::boolean THEN
-   RAISE EXCEPTION 'Approval reset age/window/deny/provenance or manufactured unseeded permission'; END IF;
+   OR public.home_has_permission(h,'finance.manage',pending_id) OR (after_row->>'can_manage_tasks')::boolean IS DISTINCT FROM true
+   OR public.home_get_user_permissions(h,pending_id) IS DISTINCT FROM ARRAY['home.view','tasks.edit','tasks.view']::text[] THEN
+   RAISE EXCEPTION 'Approval reset age/window/deny/provenance or changed intended member permissions'; END IF;
  SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=h;
  r:=public.review_home_residency(h,owner_id,'approve',jsonb_build_object('claim_id',claim_id,'role','lease_resident'));
  IF r->>'replayed'<>'true' OR r->'occupancy' IS DISTINCT FROM after_row
@@ -129,7 +130,8 @@ BEGIN
  PERFORM pg_temp.expect_admission(public.review_home_residency(h,owner_id,'attach',jsonb_build_object('target_id',new_id)), 'MEMBERS_MANAGE_REQUIRED');
  UPDATE public."Home" SET security_state='normal' WHERE id=h;
  PERFORM pg_temp.expect_admission(public.review_home_residency(h,owner_id,'attach',jsonb_build_object('target_id',new_id)), 'MEMBERSHIP_CONFIRMED');
- IF NOT public.home_is_active_member(h,new_id) OR public.home_has_permission(h,'tasks.edit',new_id) THEN
+ IF NOT public.home_is_active_member(h,new_id) OR public.home_get_user_permissions(h,new_id)
+   IS DISTINCT FROM ARRAY['home.view','tasks.edit','tasks.view']::text[] THEN
    RAISE EXCEPTION 'New unknown-age compatibility changed shipped ordinary grants'; END IF;
  PERFORM pg_temp.expect_admission(public.review_home_residency(h,owner_id,'approve',jsonb_build_object('claim_id','dde00000-0000-4000-8000-000000000999')), 'CLAIM_NOT_FOUND');
  PERFORM pg_temp.expect_admission(public.review_home_residency(h,owner_id,'reject',jsonb_build_object('claim_id',claim_id)), 'CLAIM_NOT_PENDING');

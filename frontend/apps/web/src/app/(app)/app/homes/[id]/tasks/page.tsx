@@ -22,6 +22,7 @@ function TasksContent() {
   const [panel, setPanel] = useState<{ open: boolean; task: HomeTask | null }>({ open: false, task: null });
   const action = useRef(false);
   const [busy, setBusy] = useState(false);
+  const collectionReady = !!collection.scope && !loading && !collection.error && !collection.retired;
   useEffect(() => { if (collection.retired) setPanel({ open: false, task: null }); }, [collection.retired]);
   const activeTasks = tasks.filter(task => task.status === 'open' || task.status === 'in_progress');
   const completedTasks = tasks.filter(task => task.status === 'done');
@@ -57,10 +58,10 @@ function TasksContent() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+          <button aria-label="Go back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Tasks</h1>
         </div>
-        <button disabled={!collection.canCreate || busy} onClick={() => setPanel({ open: true, task: null })} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
+        <button disabled={!collectionReady || !collection.canCreate || busy} onClick={() => setPanel({ open: true, task: null })} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
           <Plus className="w-4 h-4" /> Add Task
         </button>
       </div>
@@ -70,7 +71,7 @@ function TasksContent() {
       {collection.retired && <p role="alert">Your account changed. Refresh the page to load current tasks.</p>}
       {collection.error && <p role="alert">{collection.error} <button type="button" onClick={collection.reload}>Reload tasks</button></p>}
 
-      <div className="flex border-b border-app-border mb-4">
+      {collectionReady && <><div className="flex border-b border-app-border mb-4">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2.5 text-sm font-medium transition ${tab === t.key ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
             {t.label} ({t.count})
@@ -114,7 +115,7 @@ function TasksContent() {
             );
           })}
         </div>
-      )}
+      )}</>}
     </div>
   );
 }

@@ -12,7 +12,7 @@ SET LOCAL search_path=public,extensions,pg_catalog;
 CREATE TEMP TABLE invitation_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows
  FROM public."HomeRolePermission" r;
 DO $$ DECLARE f text; t text; BEGIN
- IF (SELECT count(*) FROM public."HomeRolePermission")<>29 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
+ IF (SELECT count(*) FROM public."HomeRolePermission")<>31 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
  FOREACH f IN ARRAY ARRAY['write_home_invitation(uuid,uuid,text,jsonb,text)',
   'act_on_home_invitation(uuid,text,uuid,text,integer)','list_home_invitations(uuid,uuid)',
   'list_home_household_requests(uuid,uuid,text)'] LOOP
@@ -85,7 +85,7 @@ DO $$ DECLARE h uuid:=pg_temp.invitation_user(100); owner_id uuid:=pg_temp.invit
   OR (r->'occupancy'->>'start_at')::timestamptz<>(original->>'start_at')::timestamptz
   OR (r->'occupancy'->>'end_at')::timestamptz<>(original->>'end_at')::timestamptz
   OR public.home_has_permission(h,'finance.manage',pg_temp.invitation_user(3))
-  OR public.home_has_permission(h,'tasks.edit',pg_temp.invitation_user(3)) THEN RAISE EXCEPTION 'Admission widened dates, age, denies or shipped member grants'; END IF;
+  OR public.home_get_user_permissions(h,pg_temp.invitation_user(3)) IS DISTINCT FROM ARRAY['home.view','tasks.edit','tasks.view']::text[] THEN RAISE EXCEPTION 'Admission widened dates, age, denies or shipped member grants'; END IF;
  SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=h;
  s:=public.act_on_home_invitation(NULL,tok,pg_temp.invitation_user(3),'accept');
  IF s->>'replayed'<>'true' OR s->'occupancy' IS DISTINCT FROM r->'occupancy'
@@ -125,9 +125,10 @@ DO $$ DECLARE h uuid:=pg_temp.invitation_user(100); owner_id uuid:=pg_temp.invit
   OR (r->'occupancy'->>'access_end_at')::timestamptz>now()+interval '1 day' THEN RAISE EXCEPTION 'Future/window restriction widened'; END IF;
  -- Policy changes after issue cannot silently add grants to a sent token.
  r:=public.write_home_invitation(h,owner_id,'create',jsonb_build_object('user_id',pg_temp.invitation_user(10)),repeat('d',64)); PERFORM pg_temp.expect_invite(r);
- INSERT INTO public."HomeRolePermission"(role_base,permission,allowed) VALUES('member','tasks.view',true);
+ -- A real change to an installed default must invalidate the old snapshot.
+ UPDATE public."HomeRolePermission" SET allowed=false WHERE role_base='member' AND permission='tasks.view';
  PERFORM pg_temp.expect_invite(public.act_on_home_invitation(NULL,repeat('d',64),pg_temp.invitation_user(10),'accept'),'INVITE_POLICY_CHANGED');
- DELETE FROM public."HomeRolePermission" WHERE role_base='member' AND permission='tasks.view';
+ UPDATE public."HomeRolePermission" SET allowed=true WHERE role_base='member' AND permission='tasks.view';
  -- Original issuers require current authority to revoke a targeted invitation.
  i:=(r->'invitation'->>'id')::uuid;
  INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,owner_id,'members.manage',false);

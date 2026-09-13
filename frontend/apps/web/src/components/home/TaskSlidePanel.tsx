@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useId, type ReactNode } from 'react';
 import * as api from '@pantopus/api';
 import Link from 'next/link';
 import TaskAttachmentList from './TaskAttachmentList';
@@ -50,6 +50,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
   openingScope: api.HomeTaskSessionScope | null;
 }) {
   const form = useHomeTaskForm(open, homeId, task?.id, openingScope);
+  const fieldId = useId();
   const { taskType, title, description, assignedTo, priority, status, dueAt, budget } = form.fields;
   const savedTaskId = form.task?.id;
   const isEdit = !!savedTaskId;
@@ -250,7 +251,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
           <button type="button" disabled={saving || !form.canEdit} onClick={() => void startAnother()} className="underline">Start another task</button>
         </div>}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">
+          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg">
             {error}
           </div>
         )}
@@ -259,13 +260,14 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
         {form.canAcknowledge && <button type="button" disabled={saving} onClick={() => void acknowledge(null)}>Acknowledge unavailable request</button>}
         {retiredUpload && <button type="button" disabled={saving} onClick={() => void acknowledge(retiredUpload)}>Acknowledge removed upload</button>}
         {/* Task Type */}
-        <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-2">Type</label>
+        <fieldset>
+          <legend className="block text-sm font-medium text-app-text-strong mb-2">Type</legend>
           <div className="flex flex-wrap gap-2">
             {TASK_TYPES.map((t) => (
               <button
                 key={t.value}
                 type="button"
+                aria-pressed={taskType === t.value}
                 disabled={!canChangeFields} onClick={() => form.change('taskType', t.value)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
                   taskType === t.value
@@ -277,12 +279,13 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-1">Title *</label>
+          <label htmlFor={`${fieldId}-title`} className="block text-sm font-medium text-app-text-strong mb-1">Title *</label>
           <input
+            id={`${fieldId}-title`}
             disabled={!canChangeFields} value={title}
             onChange={(e) => form.change('title', e.target.value)}
             placeholder="e.g., Fix leaky faucet"
@@ -294,8 +297,9 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-app-text-strong mb-1">Description</label>
+          <label htmlFor={`${fieldId}-description`} className="block text-sm font-medium text-app-text-strong mb-1">Description</label>
           <textarea
+            id={`${fieldId}-description`}
             disabled={!canChangeFields} value={description}
             onChange={(e) => form.change('description', e.target.value)}
             placeholder="Add details, notes, or instructions..."
@@ -307,8 +311,9 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
         {/* Assign + Priority row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Assign to</label>
+            <label htmlFor={`${fieldId}-assignee`} className="block text-sm font-medium text-app-text-strong mb-1">Assign to</label>
             <select
+              id={`${fieldId}-assignee`}
               disabled={!canChangeFields} value={assignedTo}
               onChange={(e) => form.change('assignedTo', e.target.value)}
               className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -323,13 +328,14 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Priority</label>
+          <fieldset>
+            <legend className="block text-sm font-medium text-app-text-strong mb-1">Priority</legend>
             <div className="grid grid-cols-2 gap-1">
               {PRIORITIES.map((p) => (
                 <button
                   key={p.value}
                   type="button"
+                  aria-pressed={priority === p.value}
                   disabled={!canChangeFields} onClick={() => form.change('priority', p.value)}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium border transition ${
                     priority === p.value
@@ -342,14 +348,15 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         </div>
 
         {/* Due date + Budget row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Due date</label>
+            <label htmlFor={`${fieldId}-due`} className="block text-sm font-medium text-app-text-strong mb-1">Due date</label>
             <input
+              id={`${fieldId}-due`}
               type="date"
               disabled={!canChangeFields} value={dueAt}
               onChange={(e) => form.change('dueAt', e.target.value)}
@@ -357,8 +364,9 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Budget ($)</label>
+            <label htmlFor={`${fieldId}-budget`} className="block text-sm font-medium text-app-text-strong mb-1">Budget ($)</label>
             <input
+              id={`${fieldId}-budget`}
               type="number"
               disabled={!canChangeFields} value={budget}
               onChange={(e) => form.change('budget', e.target.value)}
@@ -410,13 +418,14 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
 
         {/* Status (edit only) */}
         {isEdit && (
-          <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Status</label>
+          <fieldset>
+            <legend className="block text-sm font-medium text-app-text-strong mb-1">Status</legend>
             <div className="flex gap-2">
               {STATUSES.map((s) => (
                 <button
                   key={s.value}
                   type="button"
+                  aria-pressed={status === s.value}
                   disabled={!form.canComplete || saving} onClick={() => form.change('status', s.value)}
                   className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition ${
                     status === s.value
@@ -428,7 +437,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* Actions */}

@@ -6,6 +6,14 @@
 import Foundation
 
 extension AddHouseholdTaskFormViewModel {
+    var assigneeStatusMessage: String? {
+        switch assigneeReadState {
+        case .loading: "Checking household members…"
+        case .unavailable: "Household members could not be loaded. You can leave this task unassigned."
+        case .loaded: assignableMembers.isEmpty ? "No assignable members are available." : nil
+        }
+    }
+
     // MARK: - Hydration
 
     func hydrate(from task: HomeTaskDTO) {
