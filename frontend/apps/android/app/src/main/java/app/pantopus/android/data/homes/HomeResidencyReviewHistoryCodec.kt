@@ -5,6 +5,7 @@ import com.squareup.moshi.Types
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Base64
 
 /** Strict fresh history data, separate from the protected-original decision codec. */
@@ -13,7 +14,10 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
 
     fun objectFrom(json: String): Map<String, Any?> = checkNotNull(objects.fromJson(json))
 
-    fun session(value: Any?, actorId: String): HomeResidencyHistorySession {
+    fun session(
+        value: Any?,
+        actorId: String,
+    ): HomeResidencyHistorySession {
         val row = objectValue(value)
         check(uuid(actorId) && row["actor_id"] == actorId)
         val session = row["session_scope"] as? String
@@ -39,27 +43,37 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
             if (previousTime != null && previousId != null) check(earlier(value.createdAt, value.id, previousTime, previousId))
         }
         check(row.containsKey("next_cursor"))
-        val next = row["next_cursor"]?.let {
-            check(it is String)
-            cursor(it, homeId, session.actorId).also { next ->
-                check(items.size == PAGE_SIZE && items.last().id == next.id && items.last().createdAt == next.createdAt)
+        val next =
+            row["next_cursor"]?.let {
+                check(it is String)
+                cursor(it, homeId, session.actorId).also { next ->
+                    check(items.size == PAGE_SIZE && items.last().id == next.id && items.last().createdAt == next.createdAt)
+                }
             }
-        }
         return HomeResidencyHistoryPage(items, next)
     }
 
-    fun detail(json: String, reference: HomeResidencyHistoryReference, session: HomeResidencyHistorySession): HomeResidencyHistoryItem {
+    fun detail(
+        json: String,
+        reference: HomeResidencyHistoryReference,
+        session: HomeResidencyHistorySession,
+    ): HomeResidencyHistoryItem {
         check(uuid(reference.receiptId) && reference.actorId == session.actorId)
         return item(envelope(json, reference.homeId, session)["item"], reference.homeId, session.actorId).also {
             check(it.id == reference.receiptId)
         }
     }
 
-    fun cursor(encoded: String, homeId: String, actorId: String): HomeResidencyHistoryCursor {
+    fun cursor(
+        encoded: String,
+        homeId: String,
+        actorId: String,
+    ): HomeResidencyHistoryCursor {
         check(uuid(homeId) && uuid(actorId) && encoded.length in 1..MAX_CURSOR && encoded.matches(BASE64))
         val bytes = Base64.getUrlDecoder().decode(encoded)
-        val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-            .decode(ByteBuffer.wrap(bytes)).toString()
+        val text =
+            Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes)).toString()
         val row = objectFrom(text)
         check(row.keys == setOf("version", "actor_id", "home_id", "created_at", "id"))
         check(row["version"] == 1.0 && row["actor_id"] == actorId && row["home_id"] == homeId)
@@ -71,14 +85,22 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
         return HomeResidencyHistoryCursor(encoded, checkNotNull(created), checkNotNull(id))
     }
 
-    private fun envelope(json: String, homeId: String, expected: HomeResidencyHistorySession): Map<String, Any?> {
+    private fun envelope(
+        json: String,
+        homeId: String,
+        expected: HomeResidencyHistorySession,
+    ): Map<String, Any?> {
         val row = objectFrom(json)
         check(uuid(homeId) && row["home_id"] == homeId && row["actor_id"] == expected.actorId)
         check(session(row["session"], expected.actorId) == expected)
         return row
     }
 
-    private fun item(value: Any?, homeId: String, actorId: String): HomeResidencyHistoryItem {
+    private fun item(
+        value: Any?,
+        homeId: String,
+        actorId: String,
+    ): HomeResidencyHistoryItem {
         val row = objectValue(value)
         val decision = objectValue(row["decision"])
         val result = objectValue(decision["result"])
@@ -101,13 +123,14 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
         check(claimStatus in setOf("pending", "verified", "rejected"))
         check(current["applicant_lookup"] == "current_claim_reference" && current["household_access"] == "not_checked")
         check(current.containsKey("applicant"))
-        val applicant = current["applicant"]?.let {
-            val profile = objectValue(it)
-            val profileId = profile["id"] as? String
-            check(uuid(profileId) && profile.containsKey("name") && profile["name"] == null)
-            check(nullable(profile, "username") { name -> name is String && name.length <= MAX_USERNAME })
-            HomeResidencyHistoryApplicant(checkNotNull(profileId), profile["username"] as? String)
-        }
+        val applicant =
+            current["applicant"]?.let {
+                val profile = objectValue(it)
+                val profileId = profile["id"] as? String
+                check(uuid(profileId) && profile.containsKey("name") && profile["name"] == null)
+                check(nullable(profile, "username") { name -> name is String && name.length <= MAX_USERNAME })
+                HomeResidencyHistoryApplicant(checkNotNull(profileId), profile["username"] as? String)
+            }
         return HomeResidencyHistoryItem(
             checkNotNull(id), homeId, checkNotNull(claim), actorId, checkNotNull(action), checkNotNull(created),
             decision["legacy_request"] as Boolean, checkNotNull(status), checkNotNull(reviewed), occupancy, role,
@@ -115,11 +138,15 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
         )
     }
 
-    private fun objectValue(value: Any?): Map<*, *> = (value as? Map<*, *>)?.also { check(it.keys.all { key -> key is String }) }
-        ?: error("History must contain objects")
+    private fun objectValue(value: Any?): Map<*, *> =
+        (value as? Map<*, *>)?.also { check(it.keys.all { key -> key is String }) }
+            ?: error("History must contain objects")
 
-    private fun nullable(row: Map<*, *>, key: String, valid: (Any) -> Boolean): Boolean =
-        row.containsKey(key) && (row[key] == null || valid(checkNotNull(row[key])))
+    private fun nullable(
+        row: Map<*, *>,
+        key: String,
+        valid: (Any) -> Boolean,
+    ): Boolean = row.containsKey(key) && (row[key] == null || valid(checkNotNull(row[key])))
 
     companion object {
         const val PAGE_SIZE = 20
@@ -128,24 +155,42 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
         private val UUID = Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
         private val SESSION = Regex("^[a-f0-9]{64}$")
         private val BASE64 = Regex("^[A-Za-z0-9_-]+$")
-        private val DATE = Regex("^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,6}))?(Z|[+-]\\d{2}:\\d{2})$")
+        private val DATE =
+            Regex(
+                "^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})T" +
+                    "(?<hour>\\d{2}):(?<minute>\\d{2}):(?<second>\\d{2})" +
+                    "(?:\\.(\\d{1,6}))?(?<offset>Z|[+-]\\d{2}:\\d{2})$",
+            )
         private val CANONICAL_DATE = Regex("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$")
         val ROLES = setOf("owner", "admin", "manager", "member", "restricted_member", "guest", "lease_resident", "service_provider")
 
         fun uuid(value: String?): Boolean = value?.matches(UUID) == true
 
-        fun earlier(time: String, id: String, previousTime: String, previousId: String): Boolean =
-            time < previousTime || (time == previousTime && id < previousId)
+        fun earlier(
+            time: String,
+            id: String,
+            previousTime: String,
+            previousId: String,
+        ): Boolean = time < previousTime || (time == previousTime && id < previousId)
 
-        fun timestamp(value: String?, canonical: Boolean = false): Boolean = runCatching {
-            val match = DATE.matchEntire(value ?: return false) ?: return false
-            if (canonical && !CANONICAL_DATE.matches(value)) return false
-            val parts = match.groupValues.drop(1).take(6).map(String::toInt)
-            check(parts[0] > 0 && parts[3] < 24 && parts[4] < 60 && parts[5] < 60)
-            LocalDate.of(parts[0], parts[1], parts[2])
-            val offset = match.groupValues[8]
-            if (offset != "Z") check(offset.substring(1, 3).toInt() < 24 && offset.substring(4, 6).toInt() < 60)
-            true
-        }.getOrDefault(false)
+        fun timestamp(
+            value: String?,
+            canonical: Boolean = false,
+        ): Boolean =
+            runCatching {
+                val match = DATE.matchEntire(value ?: return false) ?: return false
+                if (canonical && !CANONICAL_DATE.matches(value)) return false
+
+                fun field(name: String) = checkNotNull(match.groups[name]).value.toInt()
+                val date = LocalDate.of(field("year"), field("month"), field("day"))
+                check(date.year > 0)
+                LocalTime.of(field("hour"), field("minute"), field("second"))
+                val offset = checkNotNull(match.groups["offset"]).value
+                if (offset != "Z") {
+                    val parts = offset.drop(1).split(':').map(String::toInt)
+                    LocalTime.of(parts[0], parts[1])
+                }
+                true
+            }.getOrDefault(false)
     }
 }

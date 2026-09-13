@@ -154,14 +154,15 @@ class HomeResidencyReviewViewModel
             if (!selected.canAcknowledge) return
             // Only the existing verified receipt's actual ID enters this ephemeral
             // navigation reference. Request IDs and original capability bytes do not.
-            val reference = selected.pending?.let { draft ->
-                draft.receiptJson?.let { proof ->
-                    runCatching {
-                        val row = codec.objectFrom(codec.receipt(proof, draft))
-                        HomeResidencyHistoryReference(draft.scope.homeId, draft.scope.actorId, row["id"] as String)
-                    }.getOrNull()
+            val reference =
+                selected.pending?.let { draft ->
+                    draft.receiptJson?.let { proof ->
+                        runCatching {
+                            val row = codec.objectFrom(codec.receipt(proof, draft))
+                            HomeResidencyHistoryReference(draft.scope.homeId, draft.scope.actorId, row["id"] as String)
+                        }.getOrNull()
+                    }
                 }
-            }
             val revision = generation
             _state.update { it.copy(action = initialAction, role = HomeResidencyReviewRole.Member, reason = "", reviewed = false) }
             perform {
@@ -181,7 +182,17 @@ class HomeResidencyReviewViewModel
         private fun perform(action: suspend () -> Unit) {
             if (!visible || _state.value.working) return
             val revision = generation
-            _state.update { it.copy(working = true, error = null, claimant = null, review = null, pending = null, receiptJson = null, acknowledgedHistory = null) }
+            _state.update {
+                it.copy(
+                    working = true,
+                    error = null,
+                    claimant = null,
+                    review = null,
+                    pending = null,
+                    receiptJson = null,
+                    acknowledgedHistory = null,
+                )
+            }
             job =
                 viewModelScope.launch {
                     var claimant: String? = null

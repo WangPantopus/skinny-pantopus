@@ -5,11 +5,11 @@ import XCTest
 /// Its real HTTP-created receipts are input data, not native admission/UI proof.
 @MainActor
 final class HomeResidencyHistoryJourneyUITests: XCTestCase {
-    private var app: XCUIApplication!
+    var app: XCUIApplication!
     private let origin = "http://127.0.0.1:18084"
-    private var home = ""
+    var home = ""
     private var authorityToken = ""
-    private var actors: [[String: Any]] = []
+    var actors: [[String: Any]] = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -137,7 +137,7 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
         try await assertHistoryRequestsAreReads()
     }
 
-    private func switchAccount(_ index: Int) async throws {
+    func switchAccount(_ index: Int) async throws {
         app.terminate()
         app.launch()
         if try ready(["tab.place", "loginEmailField", "placeLaunchSignIn"]).identifier == "tab.place" {
@@ -172,7 +172,7 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
         try require(element("tab.place"))
     }
 
-    private func openHistory() throws {
+    func openHistory() throws {
         try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
         try require(element("membersListInvitationRecovery"))
         let review = app.buttons["Review residency claims"].firstMatch
@@ -213,7 +213,7 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
 }
 
 @MainActor
-private extension HomeResidencyHistoryJourneyUITests {
+extension HomeResidencyHistoryJourneyUITests {
     func receipts(actor: Int) async throws -> [[String: Any]] {
         let id = try XCTUnwrap(actors.first { $0["index"] as? Int == actor }?["id"] as? String)
         let state = try await fixture("state")
@@ -234,7 +234,7 @@ private extension HomeResidencyHistoryJourneyUITests {
         }
     }
 
-    private func expectCount(_ count: Int) throws {
+    func expectCount(_ count: Int) throws {
         try require(element("homeResidencyHistory.count"))
         XCTAssertEqual(element("homeResidencyHistory.count").label, "\(count) recorded decisions loaded")
         XCTAssertFalse(element("homeResidencyHistory.error").exists)
@@ -267,7 +267,7 @@ private extension HomeResidencyHistoryJourneyUITests {
         }
     }
 
-    private func digest(_ value: Any) throws -> String {
+    func digest(_ value: Any) throws -> String {
         let bytes = try JSONSerialization.data(withJSONObject: value, options: .sortedKeys)
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
@@ -310,7 +310,7 @@ private extension HomeResidencyHistoryJourneyUITests {
         }.count
     }
 
-    private func fixture(_ action: String, body: [String: Any]? = nil) async throws -> [String: Any] {
+    func fixture(_ action: String, body: [String: Any]? = nil) async throws -> [String: Any] {
         var request = try URLRequest(url: XCTUnwrap(URL(string: origin + "/fixture/" + action)))
         if let body {
             request.httpMethod = "POST"
@@ -322,11 +322,11 @@ private extension HomeResidencyHistoryJourneyUITests {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    private func element(_ id: String) -> XCUIElement {
+    func element(_ id: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 
-    private func label(_ text: String) -> XCUIElement {
+    func label(_ text: String) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
 
@@ -336,13 +336,13 @@ private extension HomeResidencyHistoryJourneyUITests {
         return control
     }
 
-    private func require(_ control: XCUIElement) throws {
+    func require(_ control: XCUIElement) throws {
         guard control.waitForExistence(timeout: 35) else { XCTFail("Expected reviewer history control")
             throw JourneyError.unavailable
         }
     }
 
-    private func reveal(_ control: XCUIElement) throws {
+    func reveal(_ control: XCUIElement) throws {
         try require(control)
         for attempt in 0..<18 {
             if control.isHittable { return }
@@ -352,14 +352,14 @@ private extension HomeResidencyHistoryJourneyUITests {
         throw JourneyError.unavailable
     }
 
-    private func press(_ id: String) throws {
+    func press(_ id: String) throws {
         let control = element(id)
         try reveal(control)
         XCTAssertTrue(control.isEnabled)
         control.tap()
     }
 
-    private func enter(_ value: String, into id: String) throws {
+    func enter(_ value: String, into id: String) throws {
         let control = element(id)
         try reveal(control)
         control.tap()
@@ -369,7 +369,7 @@ private extension HomeResidencyHistoryJourneyUITests {
                 value)
     }
 
-    private func keepScreen(_ name: String) {
+    func keepScreen(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways

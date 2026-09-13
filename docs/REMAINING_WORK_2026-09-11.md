@@ -1,5 +1,7 @@
 # Pantopus remaining work
 
+Active September 13 continuation: the separate #35 candidate passes installed iOS own-review history, including actual held list/detail 200 after newer 403. Android product/installed gates and fresh native applicant/reviewer cycles remain open. #36 holds unfinished current-claims privacy work. All four PRs #32/#34/#35/#36 are drafts; counts remain 8 closed and 72 partial/open.
+
 Updated September 13, 2026 after backend/browser reviewer-history acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered

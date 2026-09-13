@@ -81,29 +81,26 @@ fun HomeResidencyHistoryDialog(
                         state.failure != null -> {
                             Text(
                                 HomeResidencyHistoryFailure(checkNotNull(state.failure)).message.orEmpty(),
-                                Modifier.testTag("homeResidencyHistory.error"), color = PantopusColors.error,
+                                Modifier.testTag("homeResidencyHistory.error"),
+                                color = PantopusColors.error,
                             )
-                            TextButton(onClick = { viewModel.resume(location) }, modifier = Modifier.testTag("homeResidencyHistory.retry")) {
+                            TextButton(
+                                onClick = { viewModel.resume(location) },
+                                modifier = Modifier.testTag("homeResidencyHistory.retry"),
+                            ) {
                                 Text(if (location.reference == null) "Reload recent decisions" else "Retry saved decision")
                             }
                         }
                         state.detail != null -> HistoryDetail(checkNotNull(state.detail))
-                        state.confirmed && state.items.isEmpty() -> Text(
-                            "You have no saved residency decisions for this Home.", Modifier.testTag("homeResidencyHistory.empty"),
-                        )
+                        state.confirmed && state.items.isEmpty() ->
+                            Text(
+                                "You have no saved residency decisions for this Home.",
+                                Modifier.testTag("homeResidencyHistory.empty"),
+                            )
                         state.confirmed -> {
-                            state.items.forEach { item ->
-                                TextButton(onClick = {
-                                    location = HomeResidencyHistoryTarget(item.homeId, item.reference)
-                                    viewModel.resume(location)
-                                }, modifier = Modifier.fillMaxWidth().testTag("homeResidencyHistory.receipt.${item.id}")) {
-                                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                                        Text(if (item.action == "approve") "Approved residency" else "Rejected residency")
-                                        Text("Recorded ${historyDate(item.createdAt)}")
-                                        Text(currentApplicant(item))
-                                    }
-                                }
-                                HorizontalDivider()
+                            HistoryRows(state.items) { item ->
+                                location = HomeResidencyHistoryTarget(item.homeId, item.reference)
+                                viewModel.resume(location)
                             }
                             if (state.nextCursor != null) {
                                 TextButton(onClick = viewModel::nextPage, modifier = Modifier.testTag("homeResidencyHistory.more")) {
@@ -115,6 +112,26 @@ fun HomeResidencyHistoryDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HistoryRows(
+    items: List<HomeResidencyHistoryItem>,
+    onOpen: (HomeResidencyHistoryItem) -> Unit,
+) {
+    items.forEach { item ->
+        TextButton(
+            onClick = { onOpen(item) },
+            modifier = Modifier.fillMaxWidth().testTag("homeResidencyHistory.receipt.${item.id}"),
+        ) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                Text(if (item.action == "approve") "Approved residency" else "Rejected residency")
+                Text("Recorded ${historyDate(item.createdAt)}")
+                Text(currentApplicant(item))
+            }
+        }
+        HorizontalDivider()
     }
 }
 
@@ -144,16 +161,17 @@ private fun currentApplicant(item: HomeResidencyHistoryItem): String =
 private fun historyDate(value: String): String =
     DateTimeFormatter.ofPattern("MMM d, uuuu HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
 
-internal fun historyRole(role: String?): String = when (role) {
-    "owner" -> "Owner"
-    "admin" -> "Admin"
-    "manager" -> "Manager"
-    "member" -> "Member"
-    "restricted_member" -> "Restricted member"
-    "guest" -> "Guest"
-    "lease_resident" -> "Lease resident"
-    "service_provider" -> "Service provider"
-    else -> "Not recorded"
-}
+internal fun historyRole(role: String?): String =
+    when (role) {
+        "owner" -> "Owner"
+        "admin" -> "Admin"
+        "manager" -> "Manager"
+        "member" -> "Member"
+        "restricted_member" -> "Restricted member"
+        "guest" -> "Guest"
+        "lease_resident" -> "Lease resident"
+        "service_provider" -> "Service provider"
+        else -> "Not recorded"
+    }
 
 private const val HISTORY_HEIGHT = 0.94f

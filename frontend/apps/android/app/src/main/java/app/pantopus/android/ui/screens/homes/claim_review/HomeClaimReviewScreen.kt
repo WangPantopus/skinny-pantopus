@@ -42,9 +42,9 @@ import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
-import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewDialog
 import app.pantopus.android.ui.screens.homes.residencyhistory.HomeResidencyHistoryDialog
 import app.pantopus.android.ui.screens.homes.residencyhistory.HomeResidencyHistoryTarget
+import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewDialog
 import app.pantopus.android.ui.screens.homes.residencyreview.HomeResidencyReviewViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -92,21 +92,8 @@ fun HomeClaimReviewScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     HomeClaimEvidencePanel(viewModel)
     HomeRelationshipPanel(relationshipModel, viewModel::refresh)
-    val residency by residencyModel.state.collectAsStateWithLifecycle()
     var historyTarget by remember { mutableStateOf<HomeResidencyHistoryTarget?>(null) }
-    if (residency.presented) {
-        HomeResidencyReviewDialog(residencyModel, onHistory = { reference ->
-            residencyModel.dismiss()
-            viewModel.refresh()
-            historyTarget = HomeResidencyHistoryTarget(reference.homeId, reference)
-        }) {
-            residencyModel.dismiss()
-            viewModel.refresh()
-        }
-    }
-    historyTarget?.let { target ->
-        HomeResidencyHistoryDialog(target = target, onClosed = { historyTarget = null })
-    }
+    ResidencyReviewDialogs(residencyModel, historyTarget, { historyTarget = it }, viewModel::refresh)
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val actionLoading by viewModel.actionLoading.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
@@ -466,4 +453,27 @@ private fun prepareRelationship(
         if (action == HomeClaimRelationshipAction.DeclineRelationship) HomeRelationshipAction.Decline else HomeRelationshipAction.Flag,
     )
     return null
+}
+
+@Composable
+private fun ResidencyReviewDialogs(
+    model: HomeResidencyReviewViewModel,
+    historyTarget: HomeResidencyHistoryTarget?,
+    onHistoryTarget: (HomeResidencyHistoryTarget?) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    val residency by model.state.collectAsStateWithLifecycle()
+    if (residency.presented) {
+        HomeResidencyReviewDialog(model, onHistory = { reference ->
+            model.dismiss()
+            onRefresh()
+            onHistoryTarget(HomeResidencyHistoryTarget(reference.homeId, reference))
+        }) {
+            model.dismiss()
+            onRefresh()
+        }
+    }
+    historyTarget?.let { target ->
+        HomeResidencyHistoryDialog(target = target, onClosed = { onHistoryTarget(null) })
+    }
 }

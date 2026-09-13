@@ -27,8 +27,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.data.homes.HomeResidencyHistoryReference
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskResumeEffect
 import app.pantopus.android.ui.theme.PantopusColors

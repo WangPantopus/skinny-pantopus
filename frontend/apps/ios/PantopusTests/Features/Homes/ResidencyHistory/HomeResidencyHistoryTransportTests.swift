@@ -12,8 +12,8 @@ final class HomeResidencyHistoryTransportTests: XCTestCase {
         .init(api: api)
     }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         URLProtocolStub.reset()
         api = APIClient(environment: .current, session: TestSession.make(), retryPolicy: .none)
         marker = FileManager.default.temporaryDirectory.appendingPathComponent("history-read-tests-" + UUID().uuidString)

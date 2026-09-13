@@ -12,16 +12,24 @@ import kotlinx.coroutines.CoroutineScope
 import retrofit2.Retrofit
 import javax.inject.Inject
 
-class HomeResidencyHistoryFactory @Inject constructor(
-    private val retrofit: Retrofit,
-    private val sessions: HomeClaimSessionScopeFactory,
-    moshi: Moshi,
-) {
-    val transport: HomeResidencyReviewHistoryTransport = APIHomeResidencyReviewHistoryTransport(
-        retrofit.create(HomeResidencyReviewHistoryApi::class.java), HomeResidencyReviewHistoryCodec(moshi),
-    )
+class HomeResidencyHistoryFactory
+    @Inject
+    constructor(
+        private val retrofit: Retrofit,
+        private val sessions: HomeClaimSessionScopeFactory,
+        moshi: Moshi,
+    ) {
+        val transport: HomeResidencyReviewHistoryTransport =
+            APIHomeResidencyReviewHistoryTransport(
+                retrofit.create(HomeResidencyReviewHistoryApi::class.java),
+                HomeResidencyReviewHistoryCodec(moshi),
+            )
 
-    fun session(scope: CoroutineScope): HomeClaimSessionScope = sessions.create(scope)
+        fun session(scope: CoroutineScope): HomeClaimSessionScope = sessions.create(scope)
 
-    fun identity(session: HomeClaimSessionScope): HomeCreationScope = HomeCreationScope(retrofit.baseUrl().toString(), session.actorId.orEmpty().lowercase())
-}
+        fun identity(session: HomeClaimSessionScope): HomeCreationScope =
+            HomeCreationScope(
+                retrofit.baseUrl().toString(),
+                session.actorId.orEmpty().lowercase(),
+            )
+    }
