@@ -23,9 +23,10 @@ export default function FloatingChatWidget() {
   const [view, setView] = useState<WidgetView>('closed');
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
 
-  // Keep destructive review/recovery text unobstructed. Messages remain in
+  // Keep Home recovery and decision-history text unobstructed. Messages remain in
   // the app header while this focused flow is open.
-  if (pathname?.startsWith('/app/chat') || pathname === '/app/homes/member-removals') return null;
+  if (pathname?.startsWith('/app/chat') || pathname === '/app/homes/member-removals'
+    || /^\/app\/homes\/[^/]+\/owners\/review-claim\/history\/?$/.test(pathname ?? '')) return null;
 
   const handleSelectConversation = (chat: ActiveChat) => {
     setActiveChat(chat);

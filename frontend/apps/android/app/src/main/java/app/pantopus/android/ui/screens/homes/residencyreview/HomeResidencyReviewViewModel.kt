@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.homes.HomeResidencyCurrentReview
 import app.pantopus.android.data.homes.HomeResidencyDecision
+import app.pantopus.android.data.homes.HomeResidencyHistoryReference
 import app.pantopus.android.data.homes.HomeResidencyReviewCodec
 import app.pantopus.android.data.homes.HomeResidencyReviewFailure
 import app.pantopus.android.data.homes.HomeResidencyReviewFailureKind
@@ -36,6 +37,7 @@ data class HomeResidencyReviewUiState(
     val reason: String = "",
     val reviewed: Boolean = false,
     val error: String? = null,
+    val acknowledgedHistory: HomeResidencyHistoryReference? = null,
 ) {
     val canEdit: Boolean get() = !working && !storageFailed && pending == null && review?.canDecide(review.actorId) == true
     val canSubmit: Boolean get() =
@@ -148,9 +150,31 @@ class HomeResidencyReviewViewModel
         }
 
         fun acknowledge() {
-            if (!_state.value.canAcknowledge) return
+            val selected = _state.value
+            if (!selected.canAcknowledge) return
+            // Only the existing verified receipt's actual ID enters this ephemeral
+            // navigation reference. Request IDs and original capability bytes do not.
+            val reference =
+                selected.pending?.let { draft ->
+                    draft.receiptJson?.let { proof ->
+                        runCatching {
+                            val row = codec.objectFrom(codec.receipt(proof, draft))
+                            HomeResidencyHistoryReference(draft.scope.homeId, draft.scope.actorId, row["id"] as String)
+                        }.getOrNull()
+                    }
+                }
+            val revision = generation
             _state.update { it.copy(action = initialAction, role = HomeResidencyReviewRole.Member, reason = "", reviewed = false) }
-            perform { coordinator.acknowledge(requestedClaim) }
+            perform {
+                coordinator.acknowledge(requestedClaim)
+                session.requireCurrent()
+                if (current(revision) && coordinator.pending == null) _state.update { it.copy(acknowledgedHistory = reference) }
+            }
+        }
+
+        fun openAcknowledgedHistory(open: (HomeResidencyHistoryReference) -> Unit) {
+            val reference = _state.value.acknowledgedHistory ?: return
+            if (visible && session.isCurrent && !_state.value.working) open(reference)
         }
 
         private fun current(revision: Long): Boolean = visible && session.isCurrent && generation == revision
@@ -158,7 +182,17 @@ class HomeResidencyReviewViewModel
         private fun perform(action: suspend () -> Unit) {
             if (!visible || _state.value.working) return
             val revision = generation
-            _state.update { it.copy(working = true, error = null, claimant = null, review = null, pending = null, receiptJson = null) }
+            _state.update {
+                it.copy(
+                    working = true,
+                    error = null,
+                    claimant = null,
+                    review = null,
+                    pending = null,
+                    receiptJson = null,
+                    acknowledgedHistory = null,
+                )
+            }
             job =
                 viewModelScope.launch {
                     var claimant: String? = null

@@ -1,6 +1,8 @@
 # Pantopus project handoff
 
-Updated September 13, 2026, after native member-removal recovery and reader acceptance. **This is the
+**Active native candidate — PR #35:** both installed own-review history readers and both separate fresh native applicant/reviewer cycles pass. See [native evidence and CI limits](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-residency-review-history/docs/home-native-history-wip-2026-09-13.md). Each fresh cycle retains two submissions, two immutable reviewer decisions and one completed removal; old Home links are denied after removal. All fixtures are exactly cleaned; both owned devices are stopped with userdata retained and leases released. Primary remains `f14989637`; reconcile and integrate native history after exact pushed-head CI, then complete current-claims privacy and the ordered backlog. All four PRs #32/#34/#35/#36 remain drafts; 8/80 acceptance rows are closed.
+
+Updated September 13, 2026, after backend/browser reviewer-history acceptance. **This is the
 current entry point.** Old accumulated checkpoints are preserved in
 [handoff history](HANDOFF_HISTORY_THROUGH_2026-09-12.md); their old “next” actions
 are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
@@ -11,11 +13,14 @@ are superseded. Also read the [resume guide](SESSION_RESUME_2026-09-10.md) and
 Continue in `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, associated with
 [PR #32 — Enforce Home permission and record boundaries](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-**Next: complete actual reviewer-history HTTP/browser/native acceptance, then
-repair the observed current-claims privacy and reader failures.** Native removal
+**Next: complete installed native reviewer-history and combined-cycle acceptance,
+then integrate and accept the observed current-claims privacy/reader repair.** Native removal
 and its bounded reader follow-ups are accepted; preserve their distinct evidence
-instead of rerunning them. Verify the current pushed native head's CI separately
-from the accepted backend/browser predecessor.
+instead of rerunning them. Verify the current pushed head's CI separately from accepted predecessor runs.
+Reviewer-history [backend](home-residency-review-history-backend-2026-09-13.md) and
+[browser](home-browser-residency-review-history-2026-09-13.md) now pass actual
+SQL/HTTP/SDK, own-history reader and a fresh combined applicant/reviewer cycle.
+Native history sources remain separate until product and installed acceptance.
 The [deliberate Task policy repair](home-member-task-first-use-2026-09-12.md)
 passes actual HTTP/SDK/SQL, populated preservation and all 49 raw/generated SQL
 contracts. The [browser journey](home-browser-member-first-use-2026-09-12.md)
@@ -121,16 +126,26 @@ that queued run nor the earlier R02 run substitutes for this successful binding.
 2. The [combined applicant/reviewer baseline](home-residency-cycle-baseline-2026-09-13.md)
    now passes actual HTTP/SDK/SQL and Chrome, including resubmission, independent
    review, removal, immutable history, observed conflicts and clock expiry.
-   Continue post-acknowledgement reviewer history and the observed claims-queue
-   privacy repair. The isolated history candidate passes populated upgrade,
-   zero SQL lint issues and all 52 raw plus 52 generated contracts after fixing
-   an inherited internal-helper execution grant. Both the failed predecessor and
-   final exact restorations are retained; actual history HTTP/browser/native
-   acceptance remains ahead. Then continue the full ordered
-   feature/UI/payment/provider/integration/launch inventory. Preserve accepted
-   applicant resubmission/pagination. Establish household needs-more-information
-   separately from ownership challenge. Current applicant history lists the
-   current claim per Home; it is not a complete attempt history.
+   The new own-review history passes populated upgrade, zero SQL lint issues,
+   all 52 raw/52 generated contracts, actual HTTP/SDK/SQL and both observed
+   Home/profile expiry cases. The real 23+1-decision population also passes
+   browser pagination, exact detail, normal account switching, 503/Retry and
+   held old-200/current-403 retirement. A separate fresh browser cycle passes
+   post-ack history, actual rejection/resubmission/approval/removal and cold
+   current-access checks, with each reviewer restricted to their own receipt.
+   A narrow-screen floating Messages obstruction is repaired and verified at
+   320/390px. All four actual fixtures are exactly cleaned; history REST is
+   stopped with its database/configuration retained. Failed ACL/driver
+   predecessors and comparison limits remain explicit in the
+   [backend report](home-residency-review-history-backend-2026-09-13.md) and
+   [browser report](home-browser-residency-review-history-2026-09-13.md).
+   Complete native history products/installed reader and native combined-cycle
+   parity next. A separate current-claims backend source repair is in progress
+   at `/private/tmp/pantopus-home-current-residency-claims`; it is not integrated
+   or actual SQL/HTTP accepted. Then continue the full ordered inventory.
+   Establish needs-more-information separately from ownership challenge;
+   legitimate renewal remains unimplemented. Current applicant history is the
+   current claim per Home, not complete attempt history.
 
 The additive removal nonce does not rewrite old occupancy values, but the older
 review snapshot hashes the complete occupancy. Existing unsubmitted reviewer
@@ -194,12 +209,12 @@ unfinished. Preserve `/private/tmp/pantopus-staging-paid-gig`, branch
 `codex/staging-paid-gig`, its unwired tip draft and completed paid source work;
 source/build checkpoints are not full live/native payment acceptance.
 
-Primary source SQL inventory: **48 Home / 21 paid / 57 combined versions**, including 12
+Primary source SQL inventory: **49 Home / 21 paid / 58 combined versions**, including 12
 byte-identical shared versions and zero collisions. Invitation command migration
 `20260912020000` and sender migration `20260912040000` are additive source; no permanent adoption. Android adds no
 migration. The Task default migration is `20260912050000`; legacy residency compatibility
 is `20260912060000`; member removal recovery is `20260913010000`. The latest
-102-contract Home run includes these prerequisites; it is not the unfinished
+104-contract Home run includes these prerequisites; it is not the unfinished
 combined paid/Home replay. Reserved ledger version `20260910220000` must retain every original
 row/column, not merely its version number. Reserved tip migration
 `20260910190000_paid_gig_tip_receipts.sql` is not implemented. Combined dependency
@@ -219,7 +234,7 @@ Verify final PR checks and merged-master checks independently.
 | Owned iOS | Simulator `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, Pantopus Bill Acceptance iPhone 17 / iOS 26.5, stopped after accepted R03 app9/driver10 dismissal follow-up with data retained. The five-original app6 matrix, separate one-original app9 reader proof, signed products and failed predecessors are durably preserved. Final units pass 4,428 checks/168 skips. Owner and earlier Task/sender products remain separate. |
 | Owner devices | Physical iPhone remains Staging 1.0.0 (2), earlier source `139868c`; no update in this milestone. Owner simulator `EB5AD759-4699-481F-8A9F-0D650B074623` is unrelated and preserved. Never install loopback acceptance builds on the physical phone. |
 | Owned replay DB | Project `/private/tmp/pantopus-home-gig-replay`, DB `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522, retained. Sender fixture cleanups restore complete role rows, full ledger and exact function definitions/owners/ACLs/configuration/provenance. Both native list-ordering follow-ups are exactly cleaned; preserve the same exclusive ownership protocol for future fixtures. |
-| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Primary Next dev 18080 is retained. Isolated history Next 18081, last PID 59774, is separately owned; no history browser acceptance yet. R03 runtime-r5/REST 18085 is retained and its native fixtures are cleaned. Backend history acceptance now owns runtime-r2/REST 18086 and fixture port 18084 after passing 104 contracts. Inspect the private operator index and current ownership before another writer; no competing build in either Next output directory. |
+| Retained REST/browser | Owned Next 18080/18081 are stopped. All four history fixtures are exactly cleaned; API 18084 and history REST 18086 are closed, DB/config retained. Separate R03 REST 18085 and replay stack are retained. Inspect private operator leases before reuse. |
 | Staging deployment — historical, not reverified here | API/worker last recorded at `65d2cc2d9ab4857e044325315f0023a6d8f4bf54`, `https://staging-api.pantopus.com`, existing Oregon EC2; API loopback 18001 behind nginx, worker private. Source is newer. Original production container and all hosted databases preserved. |
 | Hosted release — unfinished | Last recorded staging/production deployment and migration switches false; re-read before merge/release. Production schema/ledger, external files, Auth/Storage, DNS/cutover and rollback need separate verification. Local replay is not hosted adoption. |
 

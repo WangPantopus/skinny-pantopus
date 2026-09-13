@@ -1,6 +1,6 @@
 # Current residency claims — frozen WIP, September 13
 
-Branch codex/home-current-residency-claims is based on a389001a, before reviewer-history integration. This is source preservation, not accepted or integrated behavior. Reconcile history router/API mounts and migration 20260913020000 before later integration. The new candidate migration is 20260913030000_home_current_residency_claims.sql; it has not been applied or accepted.
+Branch codex/home-current-residency-claims now includes native-history head `8c3f7a6c6`, which incorporates verified primary `f14989637`; primary integration of native history still awaits exact-head CI. This is source preservation, not accepted or integrated behavior. History and current-claims router mounts/SDK exports coexist, and the private queue panel retains the accepted history link. Migration 20260913020000 is retained alongside the new additive migration; application and populated adoption remain unaccepted. The new candidate migration is 20260913030000_home_current_residency_claims.sql; it has not been applied or accepted.
 
 Twelve backend/SQL/SDK files add a current-authority pending-only private projection, no-store/session binding and default SDK client import. Fifteen focused tests in two suites pass, six JavaScript syntax checks and 52 generated-wrapper consistency checks pass. SQL contracts, populated upgrade, actual HTTP/SDK/SQL and UI are unexecuted. Legacy NULL claim dates are preserved and sorted last; never fabricate dates or backfill stranded claims. Public claimant projection deliberately has name:null.
 
@@ -26,3 +26,5 @@ value. The generated wrapper is synchronized; all 52 wrapper consistency checks
 pass. This changes only the contract's identifier resolution, not the migration or
 application behavior. Fresh SQL CI remains required; the exclusively leased native
 acceptance database was not used for this correction.
+
+The reconciliation preserves both specific route mounts before dynamic Home routes, both SDK namespaces, and the queue panel’s safe projection plus history navigation. This is still a WIP combination; complete the second browser consumer, session/render retirement and native consumers before actual populated acceptance. Neither the native acceptance fixture nor its archived products were changed.

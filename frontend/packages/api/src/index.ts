@@ -500,3 +500,4 @@ export type { ClaimEvidenceSession } from './endpoints/claimEvidence';
 
 export * as homeMemberRemovals from './endpoints/homeMemberRemovals';
 export * as homeResidencyClaims from './endpoints/homeResidencyClaims';
+export * as homeResidencyReviewHistory from './endpoints/homeResidencyReviewHistory';
