@@ -1,5 +1,7 @@
 # Pantopus remaining work
 
+**Current frozen boundary:** read [September 13 session handoff](SESSION_HANDOFF_2026-09-13.md) first for pushed WIP branches, the SDK CI correction, final verification procedure and one next task. Native/claims candidates are preserved separately, not accepted or integrated.
+
 Updated September 13, 2026 after backend/browser reviewer-history acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered

@@ -139,3 +139,7 @@ renewal remain unfinished. This closes no additional acceptance row: **8 of 80
 remain locally closed, with 72 partial/open**. The source union is now 49 Home /
 21 paid / 58 combined migration versions, with 12 identical shared versions and
 zero collisions. Combined replay/adoption and hosted release remain separate.
+
+## Integration verification correction
+
+CI at eb22e615 exposed an invalid named import in the new frontend SDK wrapper. The handoff commit uses the actual default client export. Primary type checking, 1,312 web tests and a real Axios four-GET smoke pass after correction. Earlier actual HTTP/Supabase-SDK/SQL acceptance did not exercise this frontend wrapper; the browser used the valid package-root client export. Isolated dependency links masked the new module before integration. See [final handoff](SESSION_HANDOFF_2026-09-13.md) for exact-head verification and separately pushed, unaccepted native/claims candidates.
