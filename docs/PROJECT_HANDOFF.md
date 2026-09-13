@@ -1,19 +1,20 @@
 # Pantopus project handoff
 
-Updated September 13, 2026 after native reviewer-history integration. This is the
+Updated September 13, 2026 after current-claims local acceptance. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) supplies
 the ordered backlog; dated reports preserve detailed evidence and limitations.
 The [earlier frozen checkpoint](SESSION_HANDOFF_2026-09-13.md) is historical.
 
 ## Current state and next action
 
-**Next: finish current-claims privacy acceptance in PR #36, then continue the
-ordered backlog.** Work in `/private/tmp/pantopus-home-current-residency-claims`,
-branch `codex/home-current-residency-claims`. Both browser and native consumers are committed at `e1966d9af`; primary
-`4e966835f` is reconciled through `b64e6e255`. Actual populated HTTP/SDK and both
-browser consumers now pass. Installed native current-queue and empty-queue
-acceptance remain unfinished. Primary still has the known raw-claims exposure until this repair
-is accepted and integrated. Do not substitute unit checks for the real workflows.
+**Next: verify final exact-head CI and integrate PR #36, then continue the remaining
+R03 lifecycle and ordered backlog.** Current-claims local acceptance is complete in
+`/private/tmp/pantopus-home-current-residency-claims`, branch
+`codex/home-current-residency-claims`. Source `4d4183a79` includes primary
+`4e966835f`; final acceptance documentation is being recorded. Both browser and
+native consumers pass populated, denied, stale-read and confirmed-empty workflows.
+All fixtures are exactly cleaned and owned servers/devices stopped. Primary still
+requires this repair integrated to remove its known raw-claims exposure.
 
 Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
@@ -53,36 +54,38 @@ source `9350896c4` also passed all 16 checks in CI 34768705945. The later iPhone
 failure in CI 34774032459 was a global request-count assertion; the repaired test
 filters history routes. It changes no accepted application or migration bytes.
 
-## Current-claims candidate and verification limits
+## Current-claims acceptance and verification limits
 
-See the [current-claims report](home-current-claims-wip-2026-09-13.md). The candidate
-has both browser and native consumers with strict safe projection, current session
-binding and stale-view retirement. The isolated browser package binding resolves
-this worktree's API/types/utils; all 1,324 browser checks and zero-error web type
-checking pass. The later duplicate-applicant guard passes 14 focused checks.
-Standalone API checking retains the same 39 baseline diagnostics as primary.
+See the [acceptance report](home-current-claims-wip-2026-09-13.md). Nine actual
+HTTP/source-loaded SDK cases, both populated browser consumers and both installed
+native readers pass. Original serialized old 200 responses complete after newer 403s
+without restoring retired rows on each client. Six real protected HTTP rejections
+then drain the queue; both browser consumers and both native apps confirm empty
+while preserving membership, ownership, submission and removal rows. Browser
+lifecycle signals are explicit events; native background/foreground is actual.
 
-Actual HTTP/source-loaded SDK acceptance passes nine cases, including six real
-submissions, safe complete SQL ordering, service retry, current authority changes,
-delivered old200 after newer403 and expiry during observed Home/profile lock waits.
-Both actual Chrome consumers pass populated privacy, order/unknown values,
-error-versus-empty/retry, exact protected selection and delivered stale-response
-retirement. The account/lifecycle/cold-return continuation also passes. Explicit
-browser lifecycle signals are not OS window-background proof. Empty UI remains
-pending after all native populated readers.
+The iOS signed product passes 31 focused and 4,471 full checks, with 168 skips. All 679 installed
+app files remain unchanged and three observed original stores remain empty.
+Android passes 44 focused and 4,661 full checks, with 80 skips for each Debug/Release variant,
+Debug/Release build and lint, ktlint/Detekt, and an offline optimized twelve-record codec
+probe. Its installed Debug APK is unchanged, all 16 preference files survive update,
+and seven observed originals remain empty. Browser isolation, 1,324 full checks,
+14 later focused checks and zero-error web type checking pass; standalone API
+checking retains 39 baseline diagnostics with no candidate-only errors.
 
-The iOS candidate passes signed r2 builds, 31 focused checks and full regression
-(4,471 passed / 168 skipped / zero failed). The actual installed run now verifies
-all 679 app files after correcting stale predecessor paths in its private test
-descriptor. Android's Debug build/lint and 44 focused checks pass; full Debug and
-Release regression/product checks are running. Installed current-queue acceptance
-is still required. Devices/API/database use the private operator leases.
+The populated upgrade preserves all 366 retained tables in an outer rollback.
+Final fixture cleanup preserves all 374 candidate tables and all 366 retained tables,
+roles, ledger, functions and catalog. The candidate database is retained, with its
+REST/API/Next servers and both owned devices stopped. This is not retained-database
+permanent adoption or production/provider activation. Migration reconciliation is
+50 Home / 21 paid / 59 combined, with 12 identical shared versions and zero collisions; combined
+paid/Home populated replay/adoption remains open. Private evidence archives and
+released leases are indexed in the operator handoff.
 
-The additive claims migration passes a populated upgrade in one outer rollback:
-all 366 retained tables, functions, permissions and prepared originals are preserved,
-with zero SQL lint issues. A separate schema/reference candidate hosts the current
-fixture. This is not permanent adoption of the retained database. Predecessor
-`52fa96c65` passes all16 CI34774733863; verify later pushed heads independently.
+Exact application source `4d4183a79` passes [CI 34779388555](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34779388555):
+15 successful checks and one unchanged Seeder skip. Verify the final documentation
+head independently before integration. The report preserves driver/preparation
+failures and each product/screenshot limitation rather than treating them as passes.
 
 ## Preserve and continue
 
