@@ -1,6 +1,6 @@
 # Pantopus remaining work
 
-Updated September 13, 2026 after older-client residency compatibility acceptance.
+Updated September 13, 2026 after backend/browser member-removal recovery acceptance.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
@@ -23,8 +23,12 @@ cold recovery and current access. Exact fixture cleanup and durable proof pass.
 The bounded H07/H08 milestone is committed/pushed at `767fbb2`, with all 16
 checks green in [CI 34742973930](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34742973930).
 R02 older-client compatibility and the combined 100 SQL contracts also pass
-locally. Verify its later integration commit/push and exact-head CI, then actual
-Members removal/recovery (R03) and the full ordered backlog.
+locally, and its committed/pushed head `d3c3e0f` passes all 16 checks in
+[CI 34744758908](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34744758908).
+R03 [backend](home-member-removal-recovery-backend-2026-09-13.md) and
+[browser removal recovery](home-browser-member-removal-recovery-2026-09-13.md) now
+pass actual acceptance. Finish native product/installed gates, the combined R03
+lifecycle and the full ordered backlog; no additional row is closed.
 Do not redo accepted native joining/postal/review/private-first-use work solely
 because an older report says “next.”
 
@@ -52,7 +56,7 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 - [x] R01 **Implemented and locally verified:** Backend/browser and both installed native prepared residency review pass protected originals/receipts, approval/rejection, lost replies, restart, current-access removal/restoration and retired replies. See [iOS acceptance](home-ios-residency-review-2026-09-12.md) and [Android acceptance](home-android-residency-review-2026-09-12.md). Broader history/authority combinations remain R03; final release-wide checks remain U05/G05.
 - [x] R02 **Implemented and locally verified:** The [new atomic submission command](home-residency-submission-recovery-2026-09-11.md) passes real HTTP/SDK/SQL, eleven lock races, selected-address fencing, rejected resubmission, failure/cancel recovery, dedicated request limits and populated upgrade. Role, age, dates, explicit denies and ownership restrictions are preserved. [Browser original-command joining and address lifetimes now pass](home-browser-residency-submission-2026-09-11.md). [Current personal identity/status and paginated history pass](home-personal-residency-progress-2026-09-11.md). [Postal request](home-postcard-current-recovery-2026-09-11.md) and [code/review backend recovery](home-postcard-verification-recovery-2026-09-12.md) now pass. [Browser postal recovery](home-browser-postcard-recovery-2026-09-12.md) also passes. Both native joining/status, [iOS postal recovery](home-ios-postal-recovery-2026-09-12.md) and [Android postal recovery](home-android-postal-recovery-2026-09-12.md) also pass; both native prepared-review clients now pass. The [legacy compatibility repair](home-residency-legacy-compatibility-2026-09-12.md) replaces the partial-write route with shared atomic policy. It passes 53 actual HTTP/SDK calls, ten observed lock races, populated preservation, reviewer alias compatibility and all 100 combined H07/R02 SQL contracts. Existing membership, full uniqueness and protected originals are preserved. No historical-binary UI, immutable legacy request/cancel protocol, live notice arrival or hosted adoption is claimed; broader applicant/reviewer lifecycle remains R03 and final release gates remain G03/G05.
-- [ ] R03 **Fix/Verify:** [Actual backend/browser removal](home-member-removal-baseline-2026-09-13.md) proves lost-reply stale UI and repeated DELETE side effects; finish retained native baselines, then original-action recovery. Shipped re-invitation refuses ended membership; no renewed-membership deletion was proved. Preserve accepted applicant request pagination/resubmission and native historical receipts beside fixture-controlled later removal/resubmission. Finish the combined applicant/reviewer cycle, actual Members removal recovery, post-acknowledgement reviewer history, clock-expired authority and independent conflicting reviewers. Establish the household residency needs-more-information contract separately from ownership challenge; current household forms expose approval/rejection only.
+- [ ] R03 **Fix/Verify:** [Actual backend/browser/iOS/Android removal](home-member-removal-baseline-2026-09-13.md) proves lost-reply stale UI and repeated DELETE side effects. Native baselines are complete: one iOS confirmation repeats three committed removals; browser/Android each issue one in their accepted lost-reply cases. [Backend](home-member-removal-recovery-backend-2026-09-13.md) and [browser recovery](home-browser-member-removal-recovery-2026-09-13.md) now pass protected originals, lost replies, unseen cancellation, current authority and history after self-leave. Finish native product/installed gates. The additive nonce preserves old column values but requires fresh review of old unsubmitted reviewer originals. Shipped re-invitation refuses ended membership; no renewed-membership deletion was proved. Preserve accepted applicant request pagination/resubmission and native historical receipts beside fixture-controlled later removal/resubmission. Finish the combined applicant/reviewer cycle, actual Members removal recovery, post-acknowledgement reviewer history, clock-expired authority and independent conflicting reviewers. Establish the household residency needs-more-information contract separately from ownership challenge; current household forms expose approval/rejection only.
 - [ ] R04 **Verify:** Complete ownership transfer, challenge/dispute, recovery and related household lifecycle paths beyond the already completed ordinary claim review/withdrawal and relationship-decision milestones.
 - [ ] R05 **Verify:** Lease creation/change/end, renter/landlord/manager authority and access expiry must remain coherent with ownership and household admission.
 - [ ] R06 **Verify:** Residency passes/letters are separate from household admission: verify issue, view, revoke and public-verification access independently.
@@ -73,9 +77,9 @@ subjourney; the authentication change itself closes no additional acceptance row
 - [ ] D02 **Fix:** Resolve browser embedded issue/bill/package media being discarded and silent write errors; verify cancellation and unknown saves in the actual panels.
 - [ ] D03 **Fix:** Reconcile standalone bill amount-unit handling and package `in_transit` input with the real server contract.
 - [ ] D04 **Verify:** Reconcile HomeMaintenanceLog versus HomeIssue behavior and other competing readers/writers so records have one truthful lifecycle.
-- [ ] D05 **Fix/Verify:** Finish general HomeSettingsTab error recovery, atomic saves, retained original intent, privacy settings, concurrent edits and explicit clearing of optional fields. Saving notification preferences alone does not establish delivery.
+- [ ] D05 **Fix/Verify:** Finish general HomeSettingsTab error recovery, atomic saves, retained original intent, privacy settings, concurrent edits and explicit clearing of optional fields. Saving notification preferences alone does not establish delivery. R03 source review also found Android and iOS Settings hardcode the nonpending footer as Owner and the address chip as Verified; confirm the ordinary-member UI and repair its identity labels.
 - [ ] D06 **Fix:** HomePrivacyService must not fall back to permissive address precision when its read fails; verify every exposed privacy control against actual consumers.
-- [ ] D07 **Fix/Verify:** Sender invitation queues, explicit actions and bounded stale-list retirement now pass on all three clients. Reconcile DocsCard Share with the current sharing contract; finish ShareCenter, Members/Security and provider panels' error-versus-empty behavior and current access.
+- [ ] D07 **Fix/Verify:** Sender invitation queues, explicit actions and bounded stale-list retirement now pass on all three clients. Reconcile DocsCard Share with the current sharing contract; finish ShareCenter, Members/Security and provider panels' error-versus-empty behavior and current access. R03 source review found the standalone browser role cycle excludes the current role before searching its index, selecting the first assignable role; reproduce and replace this with an explicit supported role choice.
 - [ ] D08 **Verify:** Complete external-share expiry/revocation, exact-resource scope, document/evidence retirement, account changes and hosted storage lifecycle acceptance beyond already verified local/native document milestones.
 - [ ] D09 **Fix/Verify:** Reject malformed success records instead of optimistic fake success or false empty lists; pets' missing-table fallback remains a known example.
 - [ ] D10 **Verify:** Household leave/delete and linked-resource cleanup must preserve history, files, balances and live obligations through ownership/lease changes.
@@ -134,9 +138,9 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 ## 11. Integration and migration dependencies
 
-- [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 is updated through invitation recovery while #34 remains unfinished.
+- [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 includes accepted Task/R02 and backend/browser removal recovery while #34 remains unfinished.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile the primary source’s 47 Home / 21 payment / 56 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The source includes Task defaults `20260912050000` and R02 compatibility `20260912060000`. The 100-contract H07/R02 proof applies Home prerequisites only and does not complete combined paid/Home replay or adoption. The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile the primary source’s 48 Home / 21 payment / 57 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The source includes Task defaults `20260912050000` R02 compatibility `20260912060000` and removal recovery `20260913010000`. The latest 102-contract Home proof applies Home prerequisites only and does not complete combined paid/Home replay or adoption. The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 
@@ -180,9 +184,9 @@ its own scope decisions; it is not silently counted as a missing v1 implementati
 - [Payment branch handoff](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/PROJECT_HANDOFF.md) and [durable-tip draft](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/paid-gig-tip-draft-checkpoint-2026-09-10.md).
 - Private real SDK/SQL identity baseline: `/private/tmp/pantopus-home-identity-baseline-r1.log` (exact fixture cleanup passed). No credentials or raw operator logs are committed.
 
-Next: verify R02’s integrating commit/push and exact-head CI, then finish
-retained native removal baselines and implement original-action/current-membership
-recovery (R03).
+Next: verify the accepted backend/browser removal commit and its exact-head CI,
+finish native removal products/installed recovery, then the combined applicant/
+reviewer lifecycle and history (R03).
 Refresh current Git/PR checks and fixture ownership
 before acting. Use the resume guide’s current next step.
 Keep this inventory updated as evidence closes or adds individual items.

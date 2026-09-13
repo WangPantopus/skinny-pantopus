@@ -62,8 +62,9 @@ BEGIN
  SELECT to_jsonb(o) INTO original FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pending_id;
  PERFORM pg_temp.expect_admission(public.review_home_residency(h,owner_id,'approve',jsonb_build_object('claim_id',claim_id)), 'MEMBERSHIP_CONFIRMED');
  SELECT to_jsonb(o) INTO after_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pending_id;
- IF (after_row - ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks'])
-   IS DISTINCT FROM (original - ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks'])
+ IF (after_row - ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks','membership_version'])
+   IS DISTINCT FROM (original - ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks','membership_version'])
+   OR after_row->>'membership_version' IS NULL OR after_row->'membership_version'=original->'membership_version'
    OR after_row->>'verification_status'<>'verified' OR after_row->>'verified_at' IS NULL
    OR (after_row->>'verification_expires_at')::timestamptz-(after_row->>'verified_at')::timestamptz<>interval '365 days'
    OR public.home_has_permission(h,'finance.manage',pending_id) OR (after_row->>'can_manage_tasks')::boolean IS DISTINCT FROM true

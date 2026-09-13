@@ -7,7 +7,7 @@ import { post } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import LandlordVerificationFlow from './LandlordVerificationFlow';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
+import { removalLink } from './member-removals/removalModel';
 
 interface VerificationCenterProps {
   homeId: string;
@@ -27,18 +27,8 @@ export default function VerificationCenter({ homeId, onRefresh }: VerificationCe
     hasLease: boolean;
   }>({ checked: false, hasLandlord: false, hasLease: false });
 
-  const handleMoveOut = useCallback(async () => {
-    const yes = await confirmStore.open({ title: 'Move out', description: 'This will remove you from this home. You can request to join again later. Continue?', confirmLabel: 'Move out', variant: 'destructive' });
-    if (!yes) return;
-    setActionLoading('move-out');
-    try {
-      await post(`/api/homes/${homeId}/move-out`);
-      router.push('/app');
-    } catch {
-      toast.error('Failed to process move-out. Please try again.');
-    } finally {
-      setActionLoading(null);
-    }
+  const handleMoveOut = useCallback(() => {
+    router.push(removalLink(homeId, 'self'));
   }, [homeId, router]);
 
   const handleResendPostcard = useCallback(async () => {
@@ -222,14 +212,9 @@ export default function VerificationCenter({ homeId, onRefresh }: VerificationCe
       <div className="mt-8 space-y-2">
         <button
           onClick={handleMoveOut}
-          disabled={actionLoading === 'move-out'}
           className="w-full flex items-center justify-center gap-2 py-3 text-red-600 hover:text-red-700 text-sm font-medium disabled:opacity-50"
         >
-          {actionLoading === 'move-out' ? (
-            <span className="animate-spin inline-block w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full" />
-          ) : (
-            <span>&#128682;</span>
-          )}
+          <span>&#128682;</span>
           This isn&apos;t my home / I made a mistake
         </button>
 

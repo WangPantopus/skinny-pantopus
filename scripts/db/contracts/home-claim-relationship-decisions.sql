@@ -109,6 +109,9 @@ DO $$ DECLARE h uuid:=pg_temp.rd_id(100); actor uuid:=pg_temp.rd_id(1); r jsonb;
  PERFORM pg_temp.rd_expect(public.decide_home_claim_relationship(h,pg_temp.rd_id(203),actor,'decline_relationship'),
    'CLAIM_CHALLENGE_REVIEW_REQUIRED');
 
+ -- Decisions themselves preserve the complete occupancy including its nonce.
+ IF EXISTS((SELECT row FROM rd_members) EXCEPT (SELECT to_jsonb(o) FROM public."HomeOccupancy"o WHERE home_id=h)) THEN
+   RAISE EXCEPTION 'Relationship decisions changed membership generation'; END IF;
  -- Every recovery rechecks current reviewer authority, including age/windows.
  UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=h AND user_id=actor;
  PERFORM pg_temp.rd_expect(public.decide_home_claim_relationship(h,pg_temp.rd_id(203),actor,'flag_unknown_person',NULL,pg_temp.rd_id(503),tok),
@@ -150,7 +153,10 @@ DO $$ DECLARE before_claim jsonb; before_home jsonb; BEGIN
    OR (SELECT to_jsonb(c) FROM public."HomeOwnershipClaim" c WHERE id=pg_temp.rd_id(208))<>before_claim
    OR (SELECT to_jsonb(h) FROM public."Home" h WHERE id=pg_temp.rd_id(100))<>before_home THEN
    RAISE EXCEPTION 'Audit failure left a partial decision'; END IF;
- IF EXISTS((SELECT row-'updated_at' FROM rd_members) EXCEPT (SELECT to_jsonb(o)-'updated_at' FROM public."HomeOccupancy" o WHERE home_id=pg_temp.rd_id(100)))
+ IF (SELECT membership_version IS NULL FROM public."HomeOccupancy" WHERE home_id=pg_temp.rd_id(100))
+   OR (SELECT row->'membership_version' FROM rd_members)=(SELECT to_jsonb(o)->'membership_version' FROM public."HomeOccupancy"o WHERE home_id=pg_temp.rd_id(100)) THEN
+   RAISE EXCEPTION 'Controlled authority ABA restored an old membership nonce'; END IF;
+ IF EXISTS((SELECT row-ARRAY['updated_at','membership_version'] FROM rd_members) EXCEPT (SELECT to_jsonb(o)-ARRAY['updated_at','membership_version'] FROM public."HomeOccupancy" o WHERE home_id=pg_temp.rd_id(100)))
    OR EXISTS((SELECT row FROM rd_owners) EXCEPT (SELECT to_jsonb(o) FROM public."HomeOwner" o WHERE home_id=pg_temp.rd_id(100)))
    OR EXISTS((SELECT row FROM rd_evidence) EXCEPT (SELECT to_jsonb(e) FROM public."HomeVerificationEvidence" e WHERE id::text LIKE 'ddc23000-%'))
    OR (SELECT rows FROM rd_roles)<>(SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission" r) THEN

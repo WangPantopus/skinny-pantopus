@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { removalLink } from '@/components/home/member-removals/removalModel';
 type MyHome = Awaited<ReturnType<typeof api.homes.getMyHomes>>['homes'][number];
 type Claim = Awaited<ReturnType<typeof api.homeOwnership.getMyOwnershipClaims>>['claims'][number];
 import { toast } from '@/components/ui/toast-store';
@@ -137,26 +138,10 @@ export default function HomesPage() {
     catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Failed'); }
   };
 
-  const leave = async (homeId: string) => {
+  const leave = (homeId: string) => {
     const opening = ready.current;
     if (!opening?.() || !homes.some(h => h.id === homeId && h.occupancy?.is_active === true)) return;
-    const yes = await confirmStore.open({
-      title: 'Leave this home?',
-      description: 'You will lose access to this home. You can be re-added later.',
-      confirmLabel: 'Leave',
-      variant: 'destructive',
-    });
-    if (!yes || ready.current !== opening || !opening()) return;
-    try {
-      await api.homes.leaveHome(homeId);
-      toast.success('You left the home');
-      await load();
-    } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'code' in e && (e as { code?: string }).code === 'TRANSFER_REQUIRED'
-        ? 'Primary owners must transfer ownership before leaving.'
-        : (e instanceof Error ? e.message : 'Failed to leave');
-      toast.error(msg);
-    }
+    router.push(removalLink(homeId, 'self'));
   };
 
   const removeClaim = async (claim: { id: string; home_id: string }) => {
@@ -193,6 +178,7 @@ export default function HomesPage() {
             Add home
           </Link>
         </div>
+        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 underline">Recover a member removal or leave attempt</Link></div>
         {loading ? (
           <div className="text-app-text-secondary">Loading…</div>
         ) : error ? (

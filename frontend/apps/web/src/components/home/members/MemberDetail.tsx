@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { removalLink } from '../member-removals/removalModel';
 import * as api from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
@@ -110,7 +112,6 @@ export default function MemberDetail({
   homeId,
   isOwner,
   onUpdate,
-  onRemoved,
 }: {
   open: boolean;
   onClose: () => void;
@@ -121,13 +122,13 @@ export default function MemberDetail({
   onUpdate: () => void;
   onRemoved: () => void;
 }) {
+  const router = useRouter();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roleBase, setRoleBase] = useState('member');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferConfirmText, setTransferConfirmText] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
@@ -142,7 +143,6 @@ export default function MemberDetail({
   useEffect(() => {
     if (!open || !member) return;
     setError('');
-    setConfirmRemove(false);
     setShowAdvanced(false);
     setShowTransfer(false);
     setTransferConfirmText('');
@@ -202,18 +202,8 @@ export default function MemberDetail({
     setSaving(false);
   };
 
-	  const handleRemove = async () => {
-	    if (!member) return;
-	    const memberUserId = member.user_id;
-	    setSaving(true);
-	    setError('');
-	    try {
-	      await api.homeIam.removeMember(homeId, memberUserId);
-      onRemoved();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to remove member');
-    }
-    setSaving(false);
+  const handleRemove = () => {
+    if (member) router.push(removalLink(homeId, member.user_id));
   };
 
 	  const handleTransfer = async () => {
@@ -425,34 +415,9 @@ export default function MemberDetail({
 
                 {/* Remove Member */}
                 <div className="border-t border-app-border-subtle pt-3">
-                  {!confirmRemove ? (
-                    <button
-                      onClick={() => setConfirmRemove(true)}
-                      className="text-sm text-red-600 hover:text-red-700 font-medium"
-                    >
-                      Remove from home
-                    </button>
-                  ) : (
-                    <div className="bg-red-50 rounded-lg p-3 space-y-2">
-                      <p className="text-sm text-red-700">Remove <strong>{memberName}</strong> from this home?</p>
-                      <p className="text-[10px] text-red-500">They will lose all access immediately.</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleRemove}
-                          disabled={saving}
-                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {saving ? 'Removing...' : 'Confirm Remove'}
-                        </button>
-                        <button
-                          onClick={() => setConfirmRemove(false)}
-                          className="px-3 py-1.5 border border-app-border text-app-text-secondary text-xs font-medium rounded-lg hover:bg-app-hover"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <button onClick={handleRemove} className="text-sm text-red-600 hover:text-red-700 font-medium">
+                    Review removal from home
+                  </button>
                 </div>
 
                 {/* Transfer Ownership */}

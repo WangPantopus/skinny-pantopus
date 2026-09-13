@@ -56,8 +56,9 @@ DO $$ DECLARE h uuid:=pg_temp.rr_id(100); actor uuid:=pg_temp.rr_id(1); r jsonb;
  r:=public.decide_home_residency_review(h,pg_temp.rr_id(202),actor,'approve','member',NULL,pg_temp.rr_id(502),tok);
  PERFORM pg_temp.rr_expect(r);
  SELECT to_jsonb(o) INTO after_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.rr_id(2);
- IF (after_row-ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks'])
-   IS DISTINCT FROM (original-ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks'])
+ IF (after_row-ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks','membership_version'])
+   IS DISTINCT FROM (original-ARRAY['verification_status','verified_at','verification_expires_at','updated_at','can_manage_tasks','membership_version'])
+   OR after_row->>'membership_version' IS NULL OR after_row->'membership_version'=original->'membership_version'
    OR r->'receipt'->'result'->>'status'<>'verified' THEN RAISE EXCEPTION 'Approval changed a preserved membership field'; END IF;
  SELECT count(*) INTO n FROM public."HomeAuditLog" WHERE home_id=h;
  UPDATE public."HomeOccupancy" SET is_active=false,verification_status='moved_out' WHERE home_id=h AND user_id=pg_temp.rr_id(2);

@@ -497,3 +497,5 @@ export { taskSessionHeaders } from './taskSessionScope';
 
 export * as claimEvidence from './endpoints/claimEvidence';
 export type { ClaimEvidenceSession } from './endpoints/claimEvidence';
+
+export * as homeMemberRemovals from './endpoints/homeMemberRemovals';

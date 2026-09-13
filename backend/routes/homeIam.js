@@ -25,6 +25,8 @@
 
 const express = require('express');
 const router = express.Router();
+// Static recovery routes precede every dynamic Home-id route.
+router.use('/member-removals', require('./homeMemberRemovals'));
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const { invalidateRoleCache } = require('../middleware/verifyToken');

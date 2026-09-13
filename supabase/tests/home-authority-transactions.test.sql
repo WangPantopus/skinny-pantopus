@@ -185,7 +185,7 @@ DROP TRIGGER authority_contract_failure ON public."HomeAuditLog";
 SET LOCAL ROLE service_role;
 DO $$
 DECLARE h uuid:='dda00000-0000-4000-8000-000000000100'; owner_id uuid:='dda00000-0000-4000-8000-000000000001';
-  target uuid:='dda00000-0000-4000-8000-000000000003';
+  target uuid:='dda00000-0000-4000-8000-000000000003'; ended jsonb; audit_count bigint;
 BEGIN
   PERFORM pg_temp.expect_authority(public.mutate_home_member(h,owner_id,target,'remove'),'MEMBER_UPDATED');
   IF EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=h AND user_id=target AND (is_active OR verification_status<>'inactive' OR end_at>clock_timestamp()))
@@ -194,9 +194,12 @@ BEGIN
     OR EXISTS(SELECT FROM public."ResidencyLetter" WHERE home_id=h AND user_id=target AND status<>'revoked') THEN
     RAISE EXCEPTION 'Removal left active membership, overrides, grants or letters';
   END IF;
+  SELECT to_jsonb(o) INTO ended FROM public."HomeOccupancy"o WHERE home_id=h AND user_id=target;
+  SELECT count(*) INTO audit_count FROM public."HomeAuditLog" WHERE home_id=h;
   PERFORM pg_temp.expect_authority(public.mutate_home_member(h,target,target,'remove'),'MEMBER_UPDATED');
-  IF NOT EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=h AND user_id=target AND verification_status='moved_out') THEN
-    RAISE EXCEPTION 'Own inactive occupancy could not complete move-out';
+  IF ended IS DISTINCT FROM (SELECT to_jsonb(o) FROM public."HomeOccupancy"o WHERE home_id=h AND user_id=target)
+    OR audit_count<>(SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h) THEN
+    RAISE EXCEPTION 'Already ended membership self-leave repeated effects';
   END IF;
   UPDATE public."HomeOccupancy" SET role_base=NULL,role=NULL,is_active=true,verification_status='unknown' WHERE home_id=h AND user_id=target;
   PERFORM pg_temp.expect_authority(public.mutate_home_member(h,target,target,'remove'),'MEMBER_UPDATED');

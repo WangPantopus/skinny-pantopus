@@ -182,3 +182,14 @@ migration adoption or final launch readiness is established by this candidate.
 Legacy clients still lack the protected protocol's explicit original identity
 and cancellation fence: a delayed old POST after a rejection is a current-state
 resubmission, not recoverable proof of a prior immutable command.
+
+
+## Verified integration boundary
+
+Committed/pushed primary HEAD `d3c3e0fac3b90e7e0d468ba421cffd5bb0e9475c`
+passes all 16 checks in [CI 34744758908](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34744758908).
+All 19 changed integration files are bound to the tested candidate; all 148
+H07/R02 union files match. The earlier CI-pending integration record is preserved
+beside a separate final-CI extension. Later member-removal source is a separate
+acceptance boundary and is not verified by this run. Hosted deployment/adoption and
+the paid/Home migration union remain unfinished.
