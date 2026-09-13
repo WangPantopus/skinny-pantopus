@@ -1,5 +1,20 @@
 # Pantopus project handoff
 
+**Active native candidate — PR #35:** both installed own-review history readers and both separate fresh native applicant/reviewer cycles pass. See [native evidence and CI limits](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-residency-review-history/docs/home-native-history-wip-2026-09-13.md). Each fresh cycle retains two submissions, two immutable reviewer decisions and one completed removal; old Home links are denied after removal. All fixtures are exactly cleaned; both owned devices are stopped with userdata retained and leases released. Primary remains `f14989637`; reconcile and integrate native history after exact pushed-head CI, then complete current-claims privacy and the ordered backlog. All four PRs #32/#34/#35/#36 remain drafts; 8/80 acceptance rows are closed.
+#32 Home, #34 paid work, #35 native reviewer history, and #36 current-claims
+privacy. The primary remains `f14989637` with exact-head CI 34765068991 green.
+On #35's separate candidate, the iOS setup correction, signed rebuild, 31 focused
+checks, full 4,459 checks/168 skips, and both installed history-reader phases pass.
+Android also passes both full variants (4,647 checks/80 skips), product gates,
+optimized Release codecs and installed reader acceptance, with cancelled held
+responses distinguished from delivered stale bytes. The shared reader fixture
+is exactly cleaned. Separate fresh native applicant/reviewer cycles remain open;
+root owns iOS F9/API18084/history REST18086 for the fresh iOS cycle and Android is
+stopped with data retained. Consult
+[the active #35 report](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-residency-review-history/docs/home-native-history-wip-2026-09-13.md)
+and private `ios-history-candidate-r2` evidence. This supersedes only the older
+frozen boundary's PR inventory and pending iOS reader gates, not its remaining work.
+
 **Current frozen boundary:** read [September 13 session handoff](SESSION_HANDOFF_2026-09-13.md) first for pushed WIP branches, the SDK CI correction, final verification procedure and one next task. Native/claims candidates are preserved separately, not accepted or integrated.
 
 Updated September 13, 2026, after backend/browser reviewer-history acceptance. **This is the
