@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-**Current frozen boundary:** read [September 13 session handoff](SESSION_HANDOFF_2026-09-13.md) first for pushed WIP branches, the SDK CI correction, final verification procedure and one next task. Native/claims candidates are preserved separately, not accepted or integrated.
+**Active native candidate — PR #35:** both installed own-review history readers and both separate fresh native applicant/reviewer cycles pass. See [native evidence and CI limits](https://github.com/WangPantopus/skinny-pantopus/blob/codex/home-residency-review-history/docs/home-native-history-wip-2026-09-13.md). Each fresh cycle retains two submissions, two immutable reviewer decisions and one completed removal; old Home links are denied after removal. All fixtures are exactly cleaned; both owned devices are stopped with userdata retained and leases released. Primary remains `f14989637`; reconcile and integrate native history after exact pushed-head CI, then complete current-claims privacy and the ordered backlog. All four PRs #32/#34/#35/#36 remain drafts; 8/80 acceptance rows are closed.
 
 Updated September 13, 2026, after backend/browser reviewer-history acceptance. **This is the
 current entry point.** Old accumulated checkpoints are preserved in
