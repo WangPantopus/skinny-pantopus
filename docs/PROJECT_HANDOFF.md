@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 13, 2026 after verification-first reconciliation. This is the
+Updated September 13, 2026 after current-claims integration and design restoration. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
 the ordered backlog; dated reports preserve source-specific evidence.
 
@@ -12,25 +12,38 @@ new rules in [AGENTS.md](../AGENTS.md) and the
 An open acceptance row does not authorize a rebuild. Locate existing code and
 establish a defect or concrete unmet requirement before application changes.
 
-**Next: reconcile PR #36's visible queue differences with the existing design
-before integration.** Preserve its accepted privacy/authority behavior. The
-primary handoff previously said actual current-claims acceptance was unfinished;
-that instruction is superseded. Do not rerun completed native/browser journeys
-merely because an older report says “next.” The reconciliation names the specific
-presentation differences and the existing components to inspect.
+**Next: verify and reuse the existing reactivation path before extending R03.**
+`occupancyAttachService._reactivateOccupancy` already exists and is called by
+landlord invite acceptance and tenant approval in `landlordTenant.js` through
+`landlordAuthorityService`. Its service/pipeline tests and shared SDK endpoints
+also exist. Trace current authority, persisted dates and recovery through those
+entrypoints before proposing an ordinary-household re-entry extension. Existing
+protected Home submission/review routes refuse ended membership; this does not
+mean the entire app lacks reactivation code. Keep the proposed renewal tables paused.
+
+PR #36 is integrated here from `a68e8f0e52d8f2739e5a49279ae3495956d073ee`.
+Its exact [CI 34785056441](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34785056441)
+passes all 15 executed checks, with one unchanged Seeder skip. The six-view
+presentation repair restores the distinct web layouts and native illustrated
+empty states; the accepted reader, API, SQL and recovery controllers are unchanged.
+See [the accepted report](home-current-claims-wip-2026-09-13.md) for rendered web
+checks and source-specific native limits. Inspect CI for the integration commit
+independently; it adds no application changes beyond the accepted candidate.
 
 Primary is `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-The inspected application head is `4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
+The earlier primary application checkpoint was
+`4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
 [CI 34777977420](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34777977420)
-passing all 16 checks. This reconciliation changes documentation only; check its
-new commit separately. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
+passing all 16 checks. Documentation checkpoint `a1d278e33` records the verification-first rules.
+The integrated #36 source and its passing CI are recorded above. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
 is already merged into #32 at `f1a92f45ad8c79ef88e89a2882a584898d3f8017`, not master.
 Its exact source `8cfcbf2b28d95587a70fe784c81b913de688dd52` passes the executed
 checks in [CI 34775715928](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34775715928).
 
-PRs #32, [#34](https://github.com/WangPantopus/skinny-pantopus/pull/34) and
-[#36](https://github.com/WangPantopus/skinny-pantopus/pull/36) remain drafts.
+PRs #32 and [#34](https://github.com/WangPantopus/skinny-pantopus/pull/34) remain drafts.
+[PR #36](https://github.com/WangPantopus/skinny-pantopus/pull/36) is integrated into
+the Home branch, alongside the previously integrated #35.
 #34 is conflicting against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`;
 its selected CI scope passes, but paid/provider journeys remain incomplete.
 Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
@@ -61,13 +74,14 @@ source `9350896c4` also passed all 16 checks in CI 34768705945. The later iPhone
 failure in CI 34774032459 was a global request-count assertion; the repaired test
 filters history routes. It changes no accepted application or migration bytes.
 
-## Current-claims acceptance and paused work
+## Preserved current-claims acceptance and paused work
 
-PR #36 is at `1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1` in
+The pre-restoration PR #36 acceptance checkpoint is
+`1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1`, preserved in
 `/private/tmp/pantopus-home-current-residency-claims`. Final exact-head
 [CI 34781479982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34781479982)
-passes (15 successes and one unchanged Seeder skip). The unchanged accepted
-application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`.
+passes (15 successes and one unchanged Seeder skip). Its accepted
+privacy/recovery application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`.
 Read its [accepted report at the candidate head](https://github.com/WangPantopus/skinny-pantopus/blob/1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1/docs/home-current-claims-wip-2026-09-13.md).
 
 Recorded actual HTTP/SDK/SQL, both browser consumers and both installed native
@@ -82,7 +96,9 @@ creates no tables. Populated upgrade preservation passes, but combined paid/Home
 adoption and hosted rollout remain open. Browser type checking has zero errors;
 standalone API checking retains 39 baseline diagnostics and no candidate-only
 errors. Android optimized codec verification is not Release UI acceptance. Preserve
-all other report limitations. Primary still lacks this unmerged privacy repair.
+all other report limitations. Primary now includes the privacy repair. Combined migration inventory is
+50 Home / 21 paid / 59 combined, with 12 identical shared versions and zero
+collisions at this source checkpoint; combined adoption remains open.
 
 The uncommitted renewal worktree `/private/tmp/pantopus-home-residency-renewal`
 stays paused at #36's head. Its proposed two-table renewal migration and contract
@@ -90,7 +106,17 @@ are neither applied nor pushed. Compare existing claims, occupancy, submission
 commands and review receipts before deciding whether any new schema is needed.
 Its small storage-check/test patch is also unaccepted; larger storage consolidation
 was deferred and preserved privately. Do not treat this draft as an implementation
-requirement. The reconciliation retains exact paths and dispositions.
+requirement. The reconciliation retains exact paths and dispositions. The supplementary
+read-only reuse review is preserved in the owner checkout at
+`.pantopus-recovery/audits/20260913-claims-presentation/R03_REUSE_REVIEW.md`.
+
+The older documentation run 34784251075 at `a1d278e33` failed one iPhone SE
+`HomeTaskMediaViewModelTests.testSessionReplacementDuringUploadCannotPublishOldCompletion`
+setup wait: the attachment request did not start within the fixture's 100 × 5ms
+poll. It failed before the session-change assertions. The current candidate
+passes that test on all three iOS devices; do not relabel the older run green.
+Keep a bounded test-stability follow-up in G05 instead of repeating unchanged
+app journeys or assuming a production defect from that timeout.
 
 ## Preserve and continue
 

@@ -20,6 +20,9 @@ import SwiftUI
 
 /// Owner-facing claim triage for one home.
 public struct HomeClaimReviewView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var visible = false
+    @State private var queue: HomeResidencyQueueViewModel
     @State private var viewModel: HomeClaimReviewViewModel
     @State private var verdictConfirm: VerdictConfirm?
     @State private var relationshipConfirm: RelationshipConfirm?
@@ -34,6 +37,7 @@ public struct HomeClaimReviewView: View {
         let model = HomeClaimReviewViewModel(homeId: homeId)
         model.selectedTab = initialTab
         _viewModel = State(initialValue: model)
+        _queue = State(initialValue: .live(homeId: homeId))
         self.onBack = onBack
     }
 
@@ -41,25 +45,31 @@ public struct HomeClaimReviewView: View {
         VStack(spacing: Spacing.s0) {
             topBar
             Button("Relationship decisions and recovery") {
+                queue.suspend()
                 relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
             }
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
             Button("Residency decisions and recovery") {
+                queue.suspend()
                 residencyTarget = .live(homeId: viewModel.homeId)
             }
             .frame(minHeight: 44)
             .padding(Spacing.s3)
             .accessibilityIdentifier("homeClaimReview.residencyRecovery")
-            Button("Your past residency decisions") { showingResidencyHistory = true }
-                .frame(minHeight: 44)
-                .padding(Spacing.s3)
-                .accessibilityIdentifier("homeClaimReview.residencyHistory")
-            if case .loaded = viewModel.state {
-                HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
+            Button("Your past residency decisions") { queue.suspend()
+                showingResidencyHistory = true
             }
-            stateBody(for: viewModel.state)
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.residencyHistory")
+            HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
+            if viewModel.selectedTab == .residency {
+                HomeResidencyQueueView(model: queue) { claimId, action in
+                    residencyTarget = .live(homeId: viewModel.homeId, claimId: claimId, action: action)
+                }
+            } else { stateBody(for: viewModel.state) }
         }
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
@@ -67,6 +77,12 @@ public struct HomeClaimReviewView: View {
         .accessibilityIdentifier("homeClaimReview")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onAppear { visible = true }
+        .onDisappear { visible = false
+            queue.suspend()
+        }
+        .onChange(of: queueActive) { _, _ in updateQueueVisibility() }
+        .onChange(of: queue.isCurrent) { _, current in if !current { queue.suspend() } }
         .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
             PrivateClaimEvidenceView(model: target)
         })
@@ -132,11 +148,27 @@ public struct HomeClaimReviewView: View {
         }
     }
 
+    private var queueActive: Bool {
+        visible && scenePhase == .active && viewModel.selectedTab == .residency
+            && residencyTarget == nil && !showingResidencyHistory && evidenceTarget == nil
+            && relationshipTarget == nil && verdictConfirm == nil && relationshipConfirm == nil
+    }
+
+    private func updateQueueVisibility() {
+        if queueActive {
+            queue.resume()
+            Task { await queue.refresh() }
+        } else { queue.suspend() }
+    }
+
     // MARK: - Chrome
 
     private var topBar: some View {
         HStack(spacing: Spacing.s0) {
-            Button(action: onBack) {
+            Button {
+                queue.suspend()
+                onBack()
+            } label: {
                 Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
             }
@@ -169,9 +201,7 @@ public struct HomeClaimReviewView: View {
             ),
             HomeClaimReviewTabItem(
                 tab: .residency,
-                title: viewModel.residencyCount > 0
-                    ? "Residency (\(viewModel.residencyCount))"
-                    : "Residency"
+                title: "Residency"
             )
         ]
         if viewModel.hasComparison {
@@ -183,7 +213,11 @@ public struct HomeClaimReviewView: View {
     private var tabBinding: Binding<HomeClaimReviewTab> {
         Binding(
             get: { viewModel.selectedTab },
-            set: { viewModel.selectedTab = $0 }
+            set: { tab in
+                guard tab != viewModel.selectedTab else { return }
+                queue.suspend()
+                viewModel.selectedTab = tab
+            }
         )
     }
 
@@ -200,10 +234,8 @@ public struct HomeClaimReviewView: View {
         case .empty:
             EmptyState(
                 icon: .checkCheck,
-                headline: "No claims to review",
-                subcopy:
-                "You're all caught up. New ownership and residency claims on "
-                    + "this home will appear here for you to approve, reject, or flag.",
+                headline: "No pending ownership claims",
+                subcopy: "New ownership claims for this Home will appear here.",
                 tint: Theme.Color.successBg,
                 accent: Theme.Color.success
             )
@@ -220,8 +252,7 @@ public struct HomeClaimReviewView: View {
             switch viewModel.selectedTab {
             case .ownership:
                 if data.ownershipUnavailable { unavailableCollection("ownership") } else { ownershipTab(data.ownership) }
-            case .residency:
-                if data.residencyUnavailable { unavailableCollection("residency") } else { residencyTab(data.residency) }
+            case .residency: EmptyView() // Rendered by the independent queue above.
             case .compare: compareTab(data.comparison)
             }
         }
@@ -279,41 +310,6 @@ public struct HomeClaimReviewView: View {
                         Button("Review private documents") {
                             Task { evidenceTarget = await viewModel.makeEvidenceViewModel(claimId: item.id) }
                         }.disabled(viewModel.actionLoading != nil)
-                    }
-                }
-                .padding(Spacing.s4)
-            }
-            .refreshable { await viewModel.refresh() }
-        }
-    }
-
-    @ViewBuilder
-    private func residencyTab(_ items: [HomeClaimReviewResidencyItem]) -> some View {
-        if items.isEmpty {
-            EmptyState(
-                icon: .checkCheck,
-                headline: "No pending residency claims",
-                subcopy:
-                "Neighbors asking to join this household will show up here "
-                    + "with the role they requested.",
-                tint: Theme.Color.successBg,
-                accent: Theme.Color.success
-            )
-            .accessibilityIdentifier("homeClaimReview_residencyEmpty")
-        } else {
-            ScrollView {
-                VStack(spacing: Spacing.s3) {
-                    ForEach(items) { item in
-                        HomeClaimResidencyCard(
-                            item: item,
-                            isBusy: viewModel.actionLoading == item.id,
-                            onApprove: {
-                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .approve)
-                            },
-                            onReject: {
-                                residencyTarget = .live(homeId: viewModel.homeId, claimId: item.id, action: .reject)
-                            }
-                        )
                     }
                 }
                 .padding(Spacing.s4)

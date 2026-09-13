@@ -507,7 +507,7 @@ export async function submitResidencyClaim(
 /**
  * Get pending residency claims for a home (owners/admins only)
  */
-export async function getHomeClaims(homeId: string): Promise<{ claims: ResidencyClaim[] }> {
+export async function getHomeClaims(homeId: string): Promise<import('./homeResidencyClaims').Response> {
   return get(`/api/homes/${homeId}/claims`);
 }
 
