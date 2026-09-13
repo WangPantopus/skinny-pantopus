@@ -1,5 +1,7 @@
 # Pantopus resume guide
 
+**Current frozen boundary:** read [September 13 session handoff](SESSION_HANDOFF_2026-09-13.md) first for pushed WIP branches, the SDK CI correction, final verification procedure and one next task. Native/claims candidates are preserved separately, not accepted or integrated.
+
 Updated September 13, 2026. Filename retained for existing links. Start with
 [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) and the
 [remaining inventory](REMAINING_WORK_2026-09-11.md). The previous guide is

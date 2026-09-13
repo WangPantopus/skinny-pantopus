@@ -130,3 +130,7 @@ Native history and native combined-cycle parity remain separate installed gates.
 The current claims queue still exposes the independently observed excessive
 projection and has failure/lifetime gaps; its repair is next. Broader onboarding,+renewal, needs-more-information, paid integration and launch readiness remain
 open. This bounded milestone does not close another acceptance row.
+
+## Integration verification correction
+
+CI at eb22e615 exposed an invalid named import in the new frontend SDK wrapper. The handoff commit uses the actual default client export. Primary type checking, 1,312 web tests and a real Axios four-GET smoke pass after correction. Earlier actual HTTP/Supabase-SDK/SQL acceptance did not exercise this frontend wrapper; the browser used the valid package-root client export. Isolated dependency links masked the new module before integration. See [final handoff](SESSION_HANDOFF_2026-09-13.md) for exact-head verification and separately pushed, unaccepted native/claims candidates.

@@ -214,7 +214,7 @@ byte-identical shared versions and zero collisions. Invitation command migration
 `20260912020000` and sender migration `20260912040000` are additive source; no permanent adoption. Android adds no
 migration. The Task default migration is `20260912050000`; legacy residency compatibility
 is `20260912060000`; member removal recovery is `20260913010000`. The latest
-102-contract Home run includes these prerequisites; it is not the unfinished
+104-contract Home run includes these prerequisites; it is not the unfinished
 combined paid/Home replay. Reserved ledger version `20260910220000` must retain every original
 row/column, not merely its version number. Reserved tip migration
 `20260910190000_paid_gig_tip_receipts.sql` is not implemented. Combined dependency
@@ -234,7 +234,7 @@ Verify final PR checks and merged-master checks independently.
 | Owned iOS | Simulator `F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8`, Pantopus Bill Acceptance iPhone 17 / iOS 26.5, stopped after accepted R03 app9/driver10 dismissal follow-up with data retained. The five-original app6 matrix, separate one-original app9 reader proof, signed products and failed predecessors are durably preserved. Final units pass 4,428 checks/168 skips. Owner and earlier Task/sender products remain separate. |
 | Owner devices | Physical iPhone remains Staging 1.0.0 (2), earlier source `139868c`; no update in this milestone. Owner simulator `EB5AD759-4699-481F-8A9F-0D650B074623` is unrelated and preserved. Never install loopback acceptance builds on the physical phone. |
 | Owned replay DB | Project `/private/tmp/pantopus-home-gig-replay`, DB `supabase_db_pantopus-home-gig-replay`, API 64521 / DB 64522, retained. Sender fixture cleanups restore complete role rows, full ledger and exact function definitions/owners/ACLs/configuration/provenance. Both native list-ordering follow-ups are exactly cleaned; preserve the same exclusive ownership protocol for future fixtures. |
-| Retained REST/browser | Preserve REST container `supabase_rest_pantopus-home-gig-replay-preserved-create-recovery-20260911` and its replacement. Primary Next dev 18080 is retained. Isolated history Next 18081, last PID 59774, is separately owned; no history browser acceptance yet. R03 runtime-r5/REST 18085 is retained and its native fixtures are cleaned. Backend history acceptance now owns runtime-r2/REST 18086 and fixture port 18084 after passing 104 contracts. Inspect the private operator index and current ownership before another writer; no competing build in either Next output directory. |
+| Retained REST/browser | Owned Next 18080/18081 are stopped. All four history fixtures are exactly cleaned; API 18084 and history REST 18086 are closed, DB/config retained. Separate R03 REST 18085 and replay stack are retained. Inspect private operator leases before reuse. |
 | Staging deployment — historical, not reverified here | API/worker last recorded at `65d2cc2d9ab4857e044325315f0023a6d8f4bf54`, `https://staging-api.pantopus.com`, existing Oregon EC2; API loopback 18001 behind nginx, worker private. Source is newer. Original production container and all hosted databases preserved. |
 | Hosted release — unfinished | Last recorded staging/production deployment and migration switches false; re-read before merge/release. Production schema/ledger, external files, Auth/Storage, DNS/cutover and rollback need separate verification. Local replay is not hosted adoption. |
 
