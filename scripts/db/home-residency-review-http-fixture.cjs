@@ -20,11 +20,14 @@ module.exports = function(container, { summary = false, place = false, dashboard
   let loseReply = false, notificationFailure = false, calls = 0;
   const notifications = [], queryCalls = [], queryDetails = [], queryHooks = [], diagnostics = []; let queryFailure = null;
   const postcardDeliveries = [];
+  const invitationEmailAttempts = [];
+  let invitationEmailResult = { success:false, preview:true };
+  let invitationNotificationSaved = false;
   let postcardResult = { success: false, deliveryUnknown: true };
   let propertyResult = { profile: null, source: 'fallback' };
   let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
   const db = { rpc: async (name, args) => {
-    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests', 'prepare_home_invitation_decision', 'get_home_invitation_decision', 'resolve_home_invitation_decision'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests', 'prepare_home_invitation_decision', 'get_home_invitation_decision', 'resolve_home_invitation_decision', 'prepare_home_invitation_sender','list_home_invitation_sender', 'get_home_invitation_sender', 'resolve_home_invitation_sender', 'claim_home_invitation_sender_delivery', 'record_home_invitation_sender_delivery'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
     rpcCalls.push(name);
     if (databaseClient) return databaseClient.rpc(name, args);
     if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
@@ -142,9 +145,9 @@ module.exports = function(container, { summary = false, place = false, dashboard
       if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
     }
     if (invitations && parent?.filename.endsWith('/services/homeInvitationService.js')) {
-      if (request === './emailService') return { sendHomeInviteEmail: async () => ({ success: false, preview: true }) };
+      if (request === './emailService') return { sendHomeInviteEmail: async value => { invitationEmailAttempts.push({kind:'controlled_email_attempt',role:value.role}); return invitationEmailResult; } };
       if (request === './notificationService') return {
-        notifyHomeInvite: async () => { notifications.push({ kind: 'controlled_invitation' }); },
+        notifyHomeInvite: async value => { notifications.push({ kind:'controlled_invitation' }); return invitationNotificationSaved ? { id:id(900), user_id:value.inviteeUserId } : null; },
         notifyHomeInviteAccepted: async () => { notifications.push({ kind: 'controlled_acceptance' }); },
       };
     }
@@ -178,7 +181,7 @@ module.exports = function(container, { summary = false, place = false, dashboard
       // that actual IAM read when exercising dashboard-backed navigation.
       if (dashboard && request === '../utils/homePermissions') return load.call(this, request, parent, isMain);
       if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
-      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService', '../services/homeInvitationDecisionService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService', '../services/homeInvitationDecisionService', '../services/homeInvitationSenderService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
     }
     return load.call(this, request, parent, isMain);
   };
@@ -219,7 +222,8 @@ module.exports = function(container, { summary = false, place = false, dashboard
     assert.equal(sql(`SELECT (SELECT count(*) FROM public."HomeResidencyReviewReceipt" WHERE home_id=${q(home)})+
       (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
   }
-  return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications,
+  return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications, invitationEmailAttempts,
+    setInvitationDelivery(email, saved = false) { assert(invitations); invitationEmailResult = email; invitationNotificationSaved = saved; },
     postcardDeliveries, setPostcardResult(value) { assert(postcard); postcardResult = value; },
     useDatabaseClient(client) { const url = new URL(client.supabaseUrl); assert.equal(url.hostname, '127.0.0.1'); assert.equal(url.protocol, 'http:'); assert.equal(url.port, '64521'); databaseClient = client; },
     rpcCalls, failNextRpc: (name, reject = false) => { rpcFailure = { name, reject }; },

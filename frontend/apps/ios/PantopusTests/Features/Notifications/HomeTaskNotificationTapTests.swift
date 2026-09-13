@@ -7,10 +7,12 @@ final class HomeTaskNotificationTapTests: XCTestCase {
     private let task = "51000000-0000-4000-8000-000000000002"
     private let actor = "51000000-0000-4000-8000-000000000003"
     private var selection: XCTestExpectation?
+    private var selectedDestination: DeepLinkRouter.Destination?
 
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        selectedDestination = nil
         DeepLinkRouter.bindSignedInUserIDProvider { self.actor }
         DeepLinkRouter.shared.clearPending()
         PendingDeepLinkStore.clear()
@@ -50,6 +52,8 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         return NotificationsViewModel(
             api: api,
             onSelect: { [weak self] _ in
+                // Capture the emitted route before the live app host consumes it.
+                self?.selectedDestination = DeepLinkRouter.shared.pending
                 onSelect()
                 self?.selection?.fulfill()
             },
@@ -73,7 +77,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         let model = model { "opening" }
         await model.load()
         try await tap(model)
-        XCTAssertEqual(DeepLinkRouter.shared.pending, .homeTask(homeId: home, taskId: task))
+        XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
     }
 
     func testRetainedTaskRowCannotRouteAfterSessionReplacement() async throws {
@@ -102,7 +106,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         await model.load()
         try await tap(model)
         await Task.yield()
-        XCTAssertEqual(DeepLinkRouter.shared.pending, .homeTask(homeId: home, taskId: task))
+        XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
     }
 
@@ -112,7 +116,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         SequencedURLProtocol.sequence = [.status(200, body: "{\"success\":true}")]
         await model.markRead(id: "synthetic-note")
         try await tap(model)
-        XCTAssertEqual(DeepLinkRouter.shared.pending, .homeTask(homeId: home, taskId: task))
+        XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
     }
 }

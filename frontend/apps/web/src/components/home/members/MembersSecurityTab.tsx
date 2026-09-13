@@ -77,7 +77,6 @@ export default function MembersSecurityTab({
   home,
   members,
   can,
-  onInvite,
   onMembersChange,
 }: {
   homeId: string;
@@ -85,7 +84,6 @@ export default function MembersSecurityTab({
   members: HomeMember[];
   can: (perm: string) => boolean;
   currentUserId: string | null;
-  onInvite: (data: Record<string, any>) => Promise<api.homes.HomeInvitationCreated>;
   onMembersChange: () => void;
 }) {
   const { access } = useHomePermissions();
@@ -208,7 +206,6 @@ export default function MembersSecurityTab({
       <InviteFlow
         open={showInvite}
         onClose={() => setShowInvite(false)}
-        onInvite={async (data) => { const result = await onInvite(data); onMembersChange(); return result; }}
         homeId={homeId}
       />
 

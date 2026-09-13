@@ -11,16 +11,12 @@
 
 import SwiftUI
 
-/// Pushed onto the Hub / You stack from `HomeDashboardView`. Reaches
-/// `GET /api/homes/:id/occupants` (members + pending invites in one
-/// call), `GET /api/homes/:id/me`,
-/// `GET /api/homes/:id/household-access-requests`,
-/// `POST /api/homes/:id/invite`, `POST …/members/:userId/role`,
-/// `POST …/household-access-requests/:requestId/(approve|reject)`, and
-/// `DELETE …/members/:userId`.
+/// Current Home occupants plus the sender invitation queue. Invitation actions
+/// use protected reviewed sender commands; membership actions remain separate.
 public struct MembersListView: View {
     @State private var viewModel: MembersListViewModel
-    @State private var showingInvite = false
+    @State private var invitationTarget: HomeInvitationSenderTarget?
+    @State private var invitationResult: String?
     @State private var showingResidencyReview = false
     @State private var removeConfirm: RemoveTarget?
     @State private var actionsTarget: MemberActionTarget?
@@ -38,48 +34,65 @@ public struct MembersListView: View {
     }
 
     public var body: some View {
-        ListOfRowsView(dataSource: viewModel)
-            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            .accessibilityIdentifier("membersList")
-            .onAppear { Analytics.track(.screenMembersListViewed) }
-            .task { await viewModel.load() }
-            .refreshable { await viewModel.refresh() }
-            .onChange(of: viewModel.pendingEvent) { _, event in
-                handle(event)
+        VStack(spacing: Spacing.s0) {
+            if let invitationResult {
+                Text(invitationResult)
+                    .pantopusTextStyle(.caption)
+                    .padding(Spacing.s3)
+                    .accessibilityIdentifier("membersListInvitationResult")
             }
-            .sheet(isPresented: $showingInvite) {
-                InviteMemberWizardView(homeId: homeId) { invitation in
-                    showingInvite = false
-                    if let invitation { viewModel.handleInvited(invitation) }
+            Button("Invitation recovery") { invitationTarget = .init(action: .create, invitationId: nil) }
+                .frame(minHeight: 44).accessibilityIdentifier("membersListInvitationRecovery")
+            ListOfRowsView(dataSource: viewModel)
+        }
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("membersList")
+        .onAppear { Analytics.track(.screenMembersListViewed) }
+        .onChange(of: viewModel.isCurrent) { _, current in if !current { viewModel.retire() } }
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.refresh() }
+        .onChange(of: viewModel.pendingEvent) { _, event in
+            handle(event)
+        }
+        .sheet(item: $invitationTarget) { target in
+            InviteMemberWizardView(homeId: homeId, target: target) { original in
+                invitationTarget = nil
+                if let original {
+                    invitationResult = original.outcome?.state == "completed"
+                        ? "Your invitation action was saved. The member list shows the most recent successful refresh."
+                        : "Your original invitation result was acknowledged."
+                    Task { await viewModel.refresh() }
                 }
             }
-            .sheet(isPresented: $showingResidencyReview, onDismiss: { Task { await viewModel.refresh() } }, content: {
-                NavigationStack {
-                    HomeClaimReviewView(homeId: homeId, initialTab: .residency) { showingResidencyReview = false }
-                }
-            })
-            .modifier(MemberActionsDialogs(
-                viewModel: viewModel,
-                actionsTarget: $actionsTarget,
-                roleTarget: $roleTarget,
-                removeConfirm: $removeConfirm
-            ))
-            .modifier(AccessRequestDialogs(
-                viewModel: viewModel,
-                approveTarget: $approveTarget,
-                declineTarget: $declineTarget
-            ))
-            .alert(
-                "Something went wrong",
-                isPresented: Binding(
-                    get: { viewModel.actionError != nil },
-                    set: { if !$0 { viewModel.actionError = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) { viewModel.actionError = nil }
-            } message: {
-                Text(viewModel.actionError ?? "")
+        }
+        .sheet(isPresented: $showingResidencyReview, onDismiss: { Task { await viewModel.refresh() } }, content: {
+            NavigationStack {
+                HomeClaimReviewView(homeId: homeId, initialTab: .residency) { showingResidencyReview = false }
             }
+        })
+        .modifier(MemberActionsDialogs(
+            viewModel: viewModel,
+            actionsTarget: $actionsTarget,
+            roleTarget: $roleTarget,
+            removeConfirm: $removeConfirm
+        ))
+        .modifier(AccessRequestDialogs(
+            viewModel: viewModel,
+            approveTarget: $approveTarget,
+            declineTarget: $declineTarget
+        ))
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.actionError = nil }
+        } message: {
+            Text(viewModel.actionError ?? "")
+        }
     }
 
     private func handle(_ event: MembersListEvent?) {
@@ -88,7 +101,9 @@ public struct MembersListView: View {
         case .openResidencyReview:
             showingResidencyReview = true
         case .openInvite:
-            showingInvite = true
+            invitationTarget = .init(action: .create, invitationId: nil)
+        case let .openInvitationSender(target):
+            invitationTarget = target
         case .openAddGuest:
             onAddGuest()
         case let .openMemberActions(target):

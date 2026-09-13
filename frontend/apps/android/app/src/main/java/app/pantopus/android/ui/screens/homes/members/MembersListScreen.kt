@@ -36,7 +36,8 @@ const val MEMBERS_LIST_TAG = "membersList"
  *
  * Reaches `GET /api/homes/:id/occupants`, `GET /api/homes/:id/me`,
  * `GET /api/homes/:id/household-access-requests`,
- * `POST /api/homes/:id/invite`, `POST …/members/:userId/role`,
+ * the current-session sender list and prepared sender commands,
+ * `POST …/members/:userId/role`,
  * `POST …/household-access-requests/:requestId/(approve|reject)`, and
  * `DELETE …/members/:userId`.
  */
@@ -53,7 +54,7 @@ fun MembersListScreen(
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
-    var inviting by remember { mutableStateOf(false) }
+    var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var actionsTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var roleTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
@@ -69,7 +70,11 @@ fun MembersListScreen(
         when (val event = pendingEvent) {
             null -> Unit
             MembersListEvent.OpenInvite -> {
-                inviting = true
+                inviting = HomeInvitationSenderTarget(viewModel.homeId)
+                viewModel.acknowledgeEvent()
+            }
+            is MembersListEvent.ReviewInvitation -> {
+                inviting = HomeInvitationSenderTarget(viewModel.homeId, event.action, event.invitationId)
                 viewModel.acknowledgeEvent()
             }
             MembersListEvent.OpenAddGuest -> {
@@ -115,12 +120,13 @@ fun MembersListScreen(
         )
     }
 
-    if (inviting) {
+    inviting?.let { target ->
         InviteMemberWizardSheet(
-            homeId = viewModel.homeId,
-            onClose = { invitation ->
-                inviting = false
-                invitation?.let(viewModel::handleInvited)
+            target = target,
+            onClose = { inviting = null },
+            onAcknowledged = {
+                inviting = null
+                viewModel.refresh()
             },
         )
     }

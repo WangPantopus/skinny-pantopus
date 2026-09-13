@@ -1,6 +1,6 @@
 # Pantopus remaining work
 
-Updated September 12, 2026 after [Android invitation acceptance](home-android-invitation-decisions-2026-09-12.md).
+Updated September 12, 2026 after the sender invitation milestone.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
@@ -11,9 +11,14 @@ implementation, effort remaining or a release date. Actual records, UI states,
 failures, recovery and current access establish acceptance; unit coverage alone
 does not. Further auditing may discover additional defects.
 
-Recipient invitation recovery now passes backend/browser/iOS/Android. Next is
-sender management, resend/withdrawal and truthful delivery, followed by complete
-ordinary-member onboarding (H07/H08), then older-client residency compatibility
+Recipient invitation recovery passes backend/browser/iOS/Android. Sender
+[backend](home-invitation-sender-recovery-2026-09-12.md) and
+[browser](home-browser-invitation-sender-2026-09-12.md) acceptance now pass creation,
+explicit resend/withdrawal, recovery and truthful delivery, including legacy
+approved requests and membership preservation. Both installed native sender
+command journeys, complete Pending recipient identities and bounded member-list
+refresh ordering also pass. Refresh exact-head CI, then complete ordinary-member
+onboarding (H07/H08), followed by older-client residency compatibility
 (R02) and the full ordered backlog. Do not redo accepted native joining/postal/
 review/private-first-use work solely because an older report says “next.”
 
@@ -29,8 +34,8 @@ review/private-first-use work solely because an older report says “next.”
 - [x] H04 **Implemented and locally verified:** Detail/property/occupants use per-field grants, safe household references and a verified current roster. Managed history and peer ownership remain separately gated. Actual SDK/SQL/HTTP acceptance passes; see [the projection repair](home-detail-projection-2026-09-11.md). Native first use remains H08; other mutation/IAM surfaces remain D01/D05/D07.
 - [x] H05 **Implemented and locally verified:** Both native lists/dashboard/profile distinguish saved Home, private setup, effective role, ownership and residency. Installed SDK/SQL identity, applicant navigation, recovery and current-access retirement pass; see [the native report](home-native-list-first-use-2026-09-11.md). Complete member onboarding, legacy compatibility and broader UI remain H07/H08/R02/U01/U02.
 - [x] H06 **Implemented and locally verified:** Lists use guarded deletion eligibility and actual occupancy or null, including verified owners without occupancy, private creators, explicit denies and minor limits. Browser controls/first use pass against real list/SQL responses. Broader member onboarding remains H08; see [the list report](home-list-authority-2026-09-11.md).
-- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Both native prepared review flows and selected-address private first use now pass. Bounded [browser invitation recovery](home-browser-invitation-recovery-2026-09-12.md) also passes, followed by [atomic invitation decision commands](home-invitation-decision-recovery-2026-09-12.md); [protected browser decisions](home-browser-invitation-decisions-2026-09-12.md) and [iOS recovery with secure sign-in return](home-ios-invitation-decisions-2026-09-12.md) also pass. [Android protected recovery and encrypted legacy sign-in return](home-android-invitation-decisions-2026-09-12.md) also pass. Finish sender invitation management/resend/withdrawal/delivery and complete ordinary-member onboarding. Address validation grants no membership.
-- [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Private setup → selected-address submission → separate mail next step also passes on all three clients; see [private first use](home-private-first-use-2026-09-12.md). Recipient decisions now pass backend/browser/iOS/Android; finish sender management, ordinary-member UI and complete onboarding/verification exit criteria. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
+- [ ] H07 **Verify (partial):** Ordinary invitation admission and missing `home.view` defaults pass actual HTTP/SQL and populated upgrade with explicit denies preserved; see [the member-default repair](home-member-view-defaults-2026-09-11.md). Native search/manual entry, canonical correction, unit editing, partial discard and failure/background recovery now pass both installed platforms; see [address entry](home-native-address-entry-2026-09-11.md). Device location denial/Settings/grant/revocation also passes both installed platforms; see [location recovery](home-device-location-recovery-2026-09-11.md). iPhone original-command creation/restart/cancel and atomic optional setup now pass [installed acceptance](home-ios-create-recovery-2026-09-11.md). Android also passes [retained creation and distinct units](home-android-create-recovery-2026-09-11.md). Browser now passes [retained creation, renter and storage-failure recovery](home-browser-create-recovery-2026-09-11.md). Browser existing-Home submission and bounded address lifetimes now pass [actual acceptance](home-browser-residency-submission-2026-09-11.md). Browser applicant status and postal recovery, both native joins/status and both native postal recovery now pass. Both native prepared review flows and selected-address private first use now pass. Bounded [browser invitation recovery](home-browser-invitation-recovery-2026-09-12.md) also passes, followed by [atomic invitation decision commands](home-invitation-decision-recovery-2026-09-12.md); [protected browser decisions](home-browser-invitation-decisions-2026-09-12.md) and [iOS recovery with secure sign-in return](home-ios-invitation-decisions-2026-09-12.md) also pass. [Android protected recovery and encrypted legacy sign-in return](home-android-invitation-decisions-2026-09-12.md) also pass. Sender [backend](home-invitation-sender-recovery-2026-09-12.md) and [browser](home-browser-invitation-sender-2026-09-12.md) pass actual creation/recovery, explicit resend/withdrawal and truthful delivery. Both installed native sender command journeys and member-list ordering follow-ups pass; see [iOS sender acceptance](home-ios-invitation-sender-2026-09-12.md) and [Android sender acceptance](home-android-invitation-sender-2026-09-12.md). Complete ordinary-member onboarding and its full exit criteria. Address validation grants no membership.
+- [ ] H08 **Verify (partial):** Browser and both installed native owner/applicant/private setup lists, distinct destinations, unavailable/malformed retry and private list → real Tasks pass through actual SDK/SQL. Private setup → selected-address submission → separate mail next step also passes on all three clients; see [private first use](home-private-first-use-2026-09-12.md). Recipient decisions and sender recovery pass backend/browser/iOS/Android, including explicit resend/withdrawal, current list ordering and complete pending recipient identities. Complete ordinary-member UI and the full onboarding/verification exit criteria. See [the native limits](home-native-list-first-use-2026-09-11.md) and [onboarding work](home-onboarding-recovery-2026-09-11.md).
 
 ## 2. Residency, ownership and leases
 
@@ -59,7 +64,7 @@ review/private-first-use work solely because an older report says “next.”
 - [ ] D04 **Verify:** Reconcile HomeMaintenanceLog versus HomeIssue behavior and other competing readers/writers so records have one truthful lifecycle.
 - [ ] D05 **Fix/Verify:** Finish general HomeSettingsTab error recovery, atomic saves, retained original intent, privacy settings, concurrent edits and explicit clearing of optional fields. Saving notification preferences alone does not establish delivery.
 - [ ] D06 **Fix:** HomePrivacyService must not fall back to permissive address precision when its read fails; verify every exposed privacy control against actual consumers.
-- [ ] D07 **Fix/Verify:** Reconcile DocsCard Share with the current sharing contract; finish ShareCenter, Members/Security and provider panels' error-versus-empty behavior and current access.
+- [ ] D07 **Fix/Verify:** Sender invitation queues, explicit actions and bounded stale-list retirement now pass on all three clients. Reconcile DocsCard Share with the current sharing contract; finish ShareCenter, Members/Security and provider panels' error-versus-empty behavior and current access.
 - [ ] D08 **Verify:** Complete external-share expiry/revocation, exact-resource scope, document/evidence retirement, account changes and hosted storage lifecycle acceptance beyond already verified local/native document milestones.
 - [ ] D09 **Fix/Verify:** Reject malformed success records instead of optimistic fake success or false empty lists; pets' missing-table fallback remains a known example.
 - [ ] D10 **Verify:** Household leave/delete and linked-resource cleanup must preserve history, files, balances and live obligations through ownership/lease changes.
@@ -110,7 +115,7 @@ review/private-first-use work solely because an older report says “next.”
 
 ## 10. UI, accessibility and operating conditions
 
-- [ ] U01 **Fix/Verify:** The discovered indistinguishable unit cards are repaired and accepted on API/browser/iPhone and [Android](home-android-create-recovery-2026-09-11.md). See [the repair](home-list-unit-identity-2026-09-11.md). Resolve indistinguishable personal residency cards, retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
+- [ ] U01 **Fix/Verify:** The discovered indistinguishable unit cards are repaired and accepted on API/browser/iPhone and [Android](home-android-create-recovery-2026-09-11.md). See [the repair](home-list-unit-identity-2026-09-11.md). Both native Pending invitation lists also show complete recipient identities, with four matching prepared reviews per platform; see the sender reports. Resolve indistinguishable personal residency cards, retained narrow-screen member/badge and floating-chat overlap, property-verification wording and long native activity identities; review finished screens, not loading placeholders.
 - [ ] U02 **Verify:** Complete small screens, large text/Dynamic Type, zoom, keyboard/focus, screen readers, contrast and dark-mode checks across reachable flows.
 - [ ] U03 **Verify:** Exercise loading, empty, partial, unavailable, offline, slow response, retry, cancellation, back navigation, duplicate taps and process death with actual UI and persisted state.
 - [ ] U04 **Verify:** Validate long-lived sessions, background/foreground transitions and concurrent device/account changes beyond the bounded Home tests.
@@ -120,7 +125,7 @@ review/private-first-use work solely because an older report says “next.”
 
 - [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 is updated through invitation recovery while #34 remains unfinished.
 - [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
-- [ ] G03 **Integrate:** Reconcile 44 Home / 21 payment / 53 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The reserved tip migration is not yet implemented and will change the final set.
+- [ ] G03 **Integrate:** Reconcile 45 Home / 21 payment / 54 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The reserved tip migration is not yet implemented and will change the final set.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes.
 
@@ -164,7 +169,7 @@ its own scope decisions; it is not silently counted as a missing v1 implementati
 - [Payment branch handoff](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/PROJECT_HANDOFF.md) and [durable-tip draft](https://github.com/WangPantopus/skinny-pantopus/blob/codex/staging-paid-gig/docs/paid-gig-tip-draft-checkpoint-2026-09-10.md).
 - Private real SDK/SQL identity baseline: `/private/tmp/pantopus-home-identity-baseline-r1.log` (exact fixture cleanup passed). No credentials or raw operator logs are committed.
 
-Next implementation: refresh the actual current-head CI, then sender invitation
-management and truthful delivery, complete ordinary-member onboarding, and R02
-legacy submission compatibility. Use the resume guide's concrete first reproduction.
+Next implementation: ordinary-member onboarding/private first use with shipped
+invitation defaults, then R02 legacy submission compatibility. Refresh current
+Git/PR/exact-head checks first. Use the resume guide's concrete first reproduction.
 Keep this inventory updated as evidence closes or adds individual items.

@@ -20,6 +20,7 @@ const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
 const homeInvitationService = require('../services/homeInvitationService');
 const homeInvitationDecisions = require('../services/homeInvitationDecisionService');
+const homeInvitationSender = require('../services/homeInvitationSenderService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
@@ -1280,6 +1281,44 @@ router.post('/invitations/decisions/:requestId/cancel', invitationDecisionNoStor
     homeInvitationDecisions.send(res, await homeInvitationDecisions.resolve({ actorId: req.user.id,
       requestId: req.params.requestId, token, intent, cancel: true }), getRequestSessionScope(req));
   } catch (error) { homeInvitationDecisions.sendError(res, error); }
+});
+
+// Sender originals are separate from recipient decisions and membership deletion.
+router.get('/invitations/sender/session', invitationDecisionNoStore, verifyToken, (req, res) => {
+  try { res.json({ session:getRequestSessionScope(req) }); }
+  catch (error) { homeInvitationSender.sendError(res,error); }
+});
+router.post('/invitations/sender/context', invitationDecisionNoStore, verifyToken, async (req,res) => {
+  try {
+    if (!requireExpectedSessionScope(req,res,{ required:true })) return;
+    res.json({ ...await homeInvitationSender.prepare({ actorId:req.user.id, intent:req.body }), session:getRequestSessionScope(req) });
+  } catch (error) { homeInvitationSender.sendError(res,error); }
+});
+router.get('/invitations/sender/commands/:requestId', invitationDecisionNoStore, verifyToken, async (req,res) => {
+  try {
+    if (!requireExpectedSessionScope(req,res,{ required:true })) return;
+    homeInvitationSender.send(res,await homeInvitationSender.read({ actorId:req.user.id, requestId:req.params.requestId }),getRequestSessionScope(req));
+  } catch (error) { homeInvitationSender.sendError(res,error); }
+});
+router.post('/invitations/sender/commands', invitationDecisionNoStore, verifyToken, homeOutboundLimiter, async (req,res) => {
+  try {
+    if (!requireExpectedSessionScope(req,res,{ required:true })) return;
+    const { request_id,token,...intent } = req.body || {};
+    homeInvitationSender.send(res,await homeInvitationSender.resolve({ actorId:req.user.id, requestId:request_id, token,intent }),getRequestSessionScope(req));
+  } catch (error) { homeInvitationSender.sendError(res,error); }
+});
+router.post('/invitations/sender/commands/:requestId/cancel', invitationDecisionNoStore, verifyToken, async (req,res) => {
+  try {
+    if (!requireExpectedSessionScope(req,res,{ required:true })) return;
+    const { token,...intent } = req.body || {};
+    homeInvitationSender.send(res,await homeInvitationSender.resolve({ actorId:req.user.id, requestId:req.params.requestId, token,intent,cancel:true }),getRequestSessionScope(req));
+  } catch (error) { homeInvitationSender.sendError(res,error); }
+});
+router.get('/:id/invitations', invitationDecisionNoStore, verifyToken, async (req,res) => {
+  try {
+    if (!requireExpectedSessionScope(req,res,{ required:true })) return;
+    res.json({ invitations:await homeInvitationSender.list({actorId:req.user.id,homeId:req.params.id}),session:getRequestSessionScope(req) });
+  } catch (error) { homeInvitationSender.sendError(res,error); }
 });
 
 async function acceptHomeInvitation(req, res, selector) {

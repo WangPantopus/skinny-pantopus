@@ -64,6 +64,8 @@
 	<true/>
 	<key>PantopusAPIBaseURL</key>
 	<string>$(PANTOPUS_API_BASE_URL)</string>
+	<key>PantopusPublicWebURL</key>
+	<string>$(PANTOPUS_PUBLIC_WEB_URL)</string>
 	<key>PantopusSocketURL</key>
 	<string>$(PANTOPUS_SOCKET_URL)</string>
 	<key>PostHogAPIKey</key>

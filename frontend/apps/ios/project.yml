@@ -99,6 +99,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         PantopusAPIBaseURL: $(PANTOPUS_API_BASE_URL)
+        PantopusPublicWebURL: $(PANTOPUS_PUBLIC_WEB_URL)
         PantopusSocketURL: $(PANTOPUS_SOCKET_URL)
         StripePublishableKey: $(STRIPE_PUBLISHABLE_KEY)
         SentryDSN: $(SENTRY_DSN)

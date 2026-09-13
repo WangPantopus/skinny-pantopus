@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import * as api from '@pantopus/api';
 import { ChevronLeft, Wallet, Package, Users, AlertCircle, Home, ClipboardList, AlertTriangle, Hammer, Clock, Building2 } from 'lucide-react';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -75,6 +76,7 @@ export default function HomeDashboardPage() {
 
   return (
     <HomePermissionsProvider key={homeId} homeId={homeId}>
+      <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 underline">Manage invitations and recovery</Link></div>
       <HomeDashboardContent />
     </HomePermissionsProvider>
   );
@@ -239,17 +241,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
     } finally { taskActionBusy.current = false; }
   }, [currentTaskAction, setTasks]);
 
-  // ── Member / Invite handler ──
-
-  const handleInvite = useCallback(
-    async (data: { email?: string; user_id?: string; username?: string; relationship: string; preset_key?: string; message?: string; start_at?: string; end_at?: string }) => {
-      const result = await api.homes.inviteToHome(homeId, data);
-      await refresh();
-      return result;
-    },
-    [homeId, refresh]
-  );
-
   // ── Issue handler ──
 
   const handleIssueSave = useCallback(
@@ -395,7 +386,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
       <InviteMemberModal
         open={inviteModal}
         onClose={closeInviteModal}
-        onInvite={handleInvite}
         homeId={homeId}
       />
 
@@ -475,7 +465,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           members={members}
           can={can}
           currentUserId={currentUserId}
-          onInvite={handleInvite}
           onMembersChange={refresh}
         />
       )}

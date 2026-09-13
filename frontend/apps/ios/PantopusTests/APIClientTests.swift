@@ -13,16 +13,30 @@ import XCTest
 @MainActor
 final class APIClientTests: XCTestCase {
     private var client: APIClient!
+    private var auth: AuthManager!
+    private var markerDirectory: URL!
 
     override func setUp() {
         super.setUp()
         URLProtocolStub.reset()
         client = APIClient(environment: .current, session: TestSession.make())
+        markerDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("api-client-tests-" + UUID().uuidString)
+        auth = AuthManager(
+            store: InMemorySecureStore(),
+            apiClient: client,
+            installMarker: InstallMarker(directory: markerDirectory),
+            allowSecureEnclave: false
+        )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
+        await auth.awaitBackgroundWork()
+        auth = nil
+        client = nil
+        try? FileManager.default.removeItem(at: markerDirectory)
+        markerDirectory = nil
         URLProtocolStub.reset()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testDecodesSnakeCaseUser() async throws {

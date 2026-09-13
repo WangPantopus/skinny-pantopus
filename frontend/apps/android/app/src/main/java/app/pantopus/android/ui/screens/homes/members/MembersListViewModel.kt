@@ -9,7 +9,6 @@ import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditEntryDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestDto
 import app.pantopus.android.data.api.models.homes.InvitationDto
-import app.pantopus.android.data.api.models.homes.InviteMemberRequest
 import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.models.homes.PendingInviteDto
 import app.pantopus.android.data.api.models.homes.actionLabel
@@ -31,6 +30,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowChip
+import app.pantopus.android.ui.screens.shared.list_of_rows.RowFooter
+import app.pantopus.android.ui.screens.shared.list_of_rows.RowFooterAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowModel
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowSection
@@ -40,6 +41,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.VerticalAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,6 +97,8 @@ data class MemberActionTarget(
 sealed interface MembersListEvent {
     data object OpenInvite : MembersListEvent
 
+    data class ReviewInvitation(val invitationId: String, val action: String) : MembersListEvent
+
     /** A13.1 — open the Add Guest form from the Guests tab. */
     data object OpenAddGuest : MembersListEvent
 
@@ -126,12 +131,12 @@ sealed interface MembersListEvent {
 
 /**
  * Drives the T6.3a / P9 Members per-home roster. Reads
- * `GET /api/homes/:id/occupants` (members + pending invites in one
- * payload), buckets client-side into Members / Guests / Pending tabs,
+ * `GET /api/homes/:id/occupants` and the current-session sender list,
+ * buckets client-side into Members / Guests / Pending tabs,
  * and projects rows via the shared `ListOfRows` archetype.
  *
- * Mirrors iOS `MembersListViewModel` exactly — same tab ids, same
- * row mapping, same optimistic remove + cancel-invite rollback.
+ * Invitation row actions open a freshly prepared sender command.
+ * Withdrawal never uses membership removal or hides an unconfirmed row.
  */
 @HiltViewModel
 class MembersListViewModel
@@ -140,6 +145,7 @@ class MembersListViewModel
         private val repo: HomeMembersRepository,
         private val adminRepo: HomeAdminRepository,
         private val auth: AuthRepository,
+        private val sender: HomeInvitationSenderFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val homeId: String = savedStateHandle[MEMBERS_LIST_HOME_ID_KEY] ?: ""
@@ -152,10 +158,14 @@ class MembersListViewModel
 
         private var occupants: List<OccupantDto> = emptyList()
         private var pendingInvites: List<PendingInviteDto> = emptyList()
+        private var invitationReadError: String? = null
         private var accessRequests: List<HouseholdAccessRequestDto> = emptyList()
         private var auditEntries: List<HomeAuditEntryDto> = emptyList()
         private var access: HomeAccessDto? = null
         private var loadedOnce = false
+        private var readGeneration = 0L
+        private var loadInFlight = false
+        private var readError: String? = null
         private var busyRequestId: String? = null
 
         private val _tabs = MutableStateFlow(makeTabs())
@@ -208,7 +218,7 @@ class MembersListViewModel
 
         /** Idempotent — re-running won't refetch once content is loaded. */
         fun load() {
-            if (loadedOnce) return
+            if (loadedOnce || loadInFlight) return
             reload()
         }
 
@@ -283,49 +293,18 @@ class MembersListViewModel
             }
         }
 
-        /**
-         * Optimistic cancel-invite. The backend lacks a dedicated cancel
-         * endpoint today, so for invites with a resolved `user_id` we
-         * use the same DELETE …/members/:userId route; for open invites
-         * (no user id) we just drop the row optimistically and let the
-         * backend reconcile via expiry.
-         */
-        fun cancelInvite(inviteId: String) {
-            val invite = pendingInvites.firstOrNull { it.id == inviteId } ?: return
-            val previous = pendingInvites
-            pendingInvites = previous.filterNot { it.id == inviteId }
-            applyState()
-            val userId = invite.userId ?: return
-            viewModelScope.launch {
-                when (repo.remove(homeId, userId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        pendingInvites = previous
-                        applyState()
-                    }
-                }
-            }
-        }
+        /** Review an explicit withdrawal; current server authority is checked before submission. */
+        fun cancelInvite(inviteId: String) = reviewInvitation(inviteId, "withdraw")
 
-        /**
-         * Re-issues the invite via POST /:id/invite with the same email
-         * + role. Optimistic — no state change locally.
-         */
-        fun resendInvite(inviteId: String) {
-            val invite = pendingInvites.firstOrNull { it.id == inviteId } ?: return
-            val request =
-                InviteMemberRequest(
-                    email = invite.email,
-                    userId = invite.userId,
-                    relationship = invite.role ?: MemberRole.Member.wire,
-                    message = null,
-                )
-            viewModelScope.launch {
-                // Fire-and-forget — we don't surface success/failure to UI
-                // until the design adds a toast/snackbar slot for the
-                // Members screen.
-                repo.invite(homeId, request)
-            }
+        /** Resend is a new reviewed command, not a second invitation creation. */
+        fun resendInvite(inviteId: String) = reviewInvitation(inviteId, "resend")
+
+        private fun reviewInvitation(
+            inviteId: String,
+            action: String,
+        ) {
+            if (!canManageMembers || pendingInvites.none { it.id == inviteId }) return
+            _pendingEvent.value = MembersListEvent.ReviewInvitation(inviteId, action)
         }
 
         /**
@@ -387,77 +366,105 @@ class MembersListViewModel
         }
 
         private fun reload() {
+            val generation = ++readGeneration
+            loadInFlight = true
             _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch { fetch() }
+            viewModelScope.launch { fetch(generation) }
         }
 
-        /**
-         * One pass over the three GETs the screen needs: the roster
-         * (`/occupants`), the viewer's own access record (`/me`), and —
-         * only when they may review — the household-access queue.
-         */
-        private suspend fun fetch() {
-            // Best-effort: a 403 on /me just means "no manage rights"; it
-            // must not fail the roster.
-            access =
-                when (val me = adminRepo.myAccess(homeId)) {
-                    is NetworkResult.Success -> me.data
-                    is NetworkResult.Failure -> null
-                }
-            when (val result = repo.listOccupants(homeId)) {
-                is NetworkResult.Success -> {
-                    occupants = result.data.occupants.filter { it.isActive }
-                    pendingInvites = result.data.pendingInvites
-                    fetchAccessRequests()
-                    fetchAuditLog()
+        /** Every endpoint contributes to one current-session snapshot, published only by the latest read. */
+        private suspend fun fetch(generation: Long = ++readGeneration) =
+            coroutineScope {
+                loadInFlight = true
+                val session = sender.session(this)
+                try {
+                    session.requireCurrent()
+                    val nextAccess =
+                        when (val me = adminRepo.myAccess(homeId)) {
+                            is NetworkResult.Success -> me.data
+                            is NetworkResult.Failure -> null
+                        }
+                    val roster = repo.listOccupants(homeId)
+                    if (roster is NetworkResult.Failure) {
+                        session.requireCurrent()
+                        if (generation == readGeneration) publishReadFailure(roster.error.displayMessage("Couldn't load the list."))
+                        return@coroutineScope
+                    }
+                    val nextOccupants = (roster as NetworkResult.Success).data.occupants.filter { it.isActive }
+                    val canManage = nextAccess?.canManageMembers == true
+                    val nextInvitations = fetchSenderInvitations(canManage)
+                    val confirmedManage = canManage && nextInvitations.second == null
+                    val nextRequests = fetchAccessRequests(confirmedManage)
+                    val nextAudit = fetchAuditLog(confirmedManage)
+                    session.requireCurrent()
+                    if (generation != readGeneration) return@coroutineScope
+                    access = nextAccess.takeUnless { canManage && !confirmedManage }
+                    occupants = nextOccupants
+                    pendingInvites = nextInvitations.first
+                    invitationReadError = nextInvitations.second
+                    accessRequests = nextRequests
+                    auditEntries = nextAudit
+                    readError = null
                     loadedOnce = true
-                    if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) &&
-                        !canManageMembers
-                    ) {
+                    if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) && !confirmedManage) {
                         _selectedTab.value = MembersTab.MEMBERS
                     }
                     applyState()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (generation == readGeneration) publishReadFailure("Current members could not be loaded. Retry to refresh this Home.")
+                } finally {
+                    if (generation == readGeneration) loadInFlight = false
+                    coroutineContext.cancelChildren()
                 }
-                is NetworkResult.Failure -> {
-                    _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
-                }
+            }
+
+        private fun publishReadFailure(message: String) {
+            access = null
+            occupants = emptyList()
+            pendingInvites = emptyList()
+            invitationReadError = message
+            accessRequests = emptyList()
+            auditEntries = emptyList()
+            readError = message
+            loadedOnce = false
+            applyState()
+        }
+
+        private suspend fun fetchSenderInvitations(canManage: Boolean): Pair<List<PendingInviteDto>, String?> {
+            if (!canManage) {
+                val message = "Current invitation management is unavailable. Recover a saved action from Invite member."
+                return emptyList<PendingInviteDto>() to message
+            }
+            return try {
+                sender.list(homeId) to null
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList<PendingInviteDto>() to "Current invitations could not be loaded. Retry to manage invitations."
             }
         }
 
-        /**
-         * `GET /api/homes/:id/household-access-requests?status=pending` —
-         * route `backend/routes/home.js:2671`. 403s for viewers who can't
-         * review, so it is best-effort and never fails the whole screen.
-         */
-        private suspend fun fetchAccessRequests() {
-            if (!canManageMembers) {
-                accessRequests = emptyList()
-                return
-            }
-            accessRequests =
+        private suspend fun fetchAccessRequests(canManage: Boolean): List<HouseholdAccessRequestDto> =
+            if (!canManage) {
+                emptyList()
+            } else {
                 when (val result = adminRepo.householdAccessRequests(homeId)) {
                     is NetworkResult.Success -> result.data.requests
                     is NetworkResult.Failure -> emptyList()
                 }
-        }
-
-        /**
-         * `GET /api/homes/:id/audit-log` — route
-         * `backend/routes/homeIam.js:602`. 403s for viewers without
-         * `members.manage`, so it is best-effort and never fails the
-         * whole screen.
-         */
-        private suspend fun fetchAuditLog() {
-            if (!canManageMembers) {
-                auditEntries = emptyList()
-                return
             }
-            auditEntries =
+
+        private suspend fun fetchAuditLog(canManage: Boolean): List<HomeAuditEntryDto> =
+            if (!canManage) {
+                emptyList()
+            } else {
                 when (val result = adminRepo.auditLog(homeId)) {
                     is NetworkResult.Success -> result.data.entries
                     is NetworkResult.Failure -> emptyList()
                 }
-        }
+            }
 
         // ─── Buckets ──────────────────────────────────────────────
 
@@ -469,7 +476,13 @@ class MembersListViewModel
             buildList {
                 add(ListOfRowsTab(id = MembersTab.MEMBERS, label = "Members", count = membersBucket().size))
                 add(ListOfRowsTab(id = MembersTab.GUESTS, label = "Guests", count = guestsBucket().size))
-                add(ListOfRowsTab(id = MembersTab.PENDING, label = "Pending", count = pendingInvites.size))
+                add(
+                    ListOfRowsTab(
+                        id = MembersTab.PENDING,
+                        label = "Pending",
+                        count = pendingInvites.size.takeIf { invitationReadError == null },
+                    ),
+                )
                 if (canManageMembers) {
                     add(
                         ListOfRowsTab(
@@ -491,6 +504,17 @@ class MembersListViewModel
         // ─── State projection ─────────────────────────────────────
 
         private fun applyState() {
+            if (readError != null) {
+                _tabs.value = makeTabs()
+                _state.value = ListOfRowsUiState.Error(checkNotNull(readError))
+                return
+            }
+            if (_selectedTab.value == MembersTab.PENDING && invitationReadError != null) {
+                _tabs.value = makeTabs()
+                _state.value = ListOfRowsUiState.Error(checkNotNull(invitationReadError))
+                return
+            }
+
             _tabs.value = makeTabs()
             val now = Instant.now()
             val zone = ZoneId.systemDefault()
@@ -668,14 +692,19 @@ class MembersListViewModel
             zone: ZoneId,
         ): RowModel {
             val role = MemberRole.parse(invite.role)
-            val palette = role.palette
             val name = invite.name
             val inviteId = invite.id
+            val expired = invite.expiresAt?.let { runCatching { !Instant.parse(it).isAfter(now) }.getOrDefault(false) } == true
             val invitedText =
-                "Invited " + (relativeText(invite.createdAt, now = now, zone = zone) ?: "recently")
+                if (expired) {
+                    "Invitation expired — withdrawal available"
+                } else {
+                    "Invited " + (relativeText(invite.createdAt, now = now, zone = zone) ?: "recently")
+                }
             return RowModel(
                 id = invite.id,
                 title = name,
+                titleMaxLines = Int.MAX_VALUE,
                 subtitle = role.label,
                 template = RowTemplate.StatusChip,
                 leading =
@@ -686,34 +715,29 @@ class MembersListViewModel
                         size = AvatarBadgeSize.Medium,
                         verified = false,
                     ),
-                trailing =
-                    RowTrailing.VerticalActions(
-                        primary =
-                            VerticalAction(
-                                label = "Resend",
-                                variant = CompactButtonVariant.Primary,
-                                onClick = { resendInvite(inviteId) },
-                            ),
-                        secondary =
-                            VerticalAction(
-                                label = "Cancel",
-                                variant = CompactButtonVariant.Ghost,
-                                onClick = { cancelInvite(inviteId) },
-                            ),
-                    ),
+                footer =
+                    if (!canManageMembers) {
+                        null
+                    } else {
+                        RowFooter(
+                            actions =
+                                listOf(
+                                    RowFooterAction(
+                                        title = "Resend",
+                                        variant = CompactButtonVariant.Primary,
+                                        onClick = { resendInvite(inviteId) },
+                                    ),
+                                    RowFooterAction(
+                                        title = "Withdraw",
+                                        variant = CompactButtonVariant.Ghost,
+                                        onClick = { cancelInvite(inviteId) },
+                                    ),
+                                ),
+                        )
+                    },
                 body = invitedText,
                 subtitleIcon = role.icon,
                 bodyIcon = PantopusIcon.Mailbox,
-                inlineChip =
-                    RowChip(
-                        text = role.label,
-                        icon = role.icon,
-                        tint =
-                            RowChip.Tint.Custom(
-                                background = palette.background,
-                                foreground = palette.foreground,
-                            ),
-                    ),
             )
         }
 

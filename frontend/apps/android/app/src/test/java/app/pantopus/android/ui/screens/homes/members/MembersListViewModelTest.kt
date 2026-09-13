@@ -14,7 +14,6 @@ import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequesterDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsResponse
 import app.pantopus.android.data.api.models.homes.InvitationDto
-import app.pantopus.android.data.api.models.homes.InviteMemberResponse
 import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.models.homes.OccupantsResponse
 import app.pantopus.android.data.api.models.homes.PendingInviteDto
@@ -24,6 +23,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -33,6 +33,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +60,7 @@ import org.junit.Test
  *    who can manage the roster)
  *  - tab switching mutates the loaded section without a refetch
  *  - optimistic remove + rollback
- *  - optimistic cancel-invite + rollback
+ *  - explicit reviewed withdrawal without hiding rows or removing members
  *  - handleInvited(_:) folds a new pending invite at top
  *  - role-change + approve/decline call the right repository methods
  *  - FAB tint + variant match the design contract
@@ -69,14 +70,20 @@ class MembersListViewModelTest {
     private val repo: HomeMembersRepository = mockk()
     private val adminRepo: HomeAdminRepository = mockk()
     private val auth: AuthRepository = mockk(relaxed = true)
+    private val sender: HomeInvitationSenderFactory = mockk()
+    private val readSession: HomeClaimSessionScope = mockk()
+    private var senderRows: List<PendingInviteDto> = emptyList()
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
+        every { sender.session(any()) } returns readSession
+        coEvery { readSession.requireCurrent() } returns Unit
         stubOwnerAccess()
         stubRequests()
         stubAuditLog()
+        coEvery { sender.list("home_1") } coAnswers { senderRows }
     }
 
     @After
@@ -142,6 +149,7 @@ class MembersListViewModelTest {
             repo = repo,
             adminRepo = adminRepo,
             auth = auth,
+            sender = sender,
             savedStateHandle = SavedStateHandle(mapOf(MEMBERS_LIST_HOME_ID_KEY to "home_1")),
         )
 
@@ -187,7 +195,7 @@ class MembersListViewModelTest {
                     occupant(id = "occ_guest", userId = "u_guest", role = "guest", name = "Daniel"),
                 ),
             pendingInvites = listOf(invite()),
-        )
+        ).also { senderRows = it.pendingInvites }
 
     // ─── Lifecycle ────────────────────────────────────────────────
 
@@ -278,7 +286,7 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun switching_to_pending_tab_surfaces_invites_with_resend_cancel_actions() =
+    fun switching_to_pending_tab_surfaces_explicit_resend_withdraw_actions() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             val vm = makeVm()
@@ -287,9 +295,31 @@ class MembersListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             val row = loaded.sections.first().rows.first()
             assertEquals("newhouse@example.com", row.title)
-            val trailing = row.trailing as RowTrailing.VerticalActions
-            assertEquals("Resend", trailing.primary.label)
-            assertEquals("Cancel", trailing.secondary.label)
+            val actions = requireNotNull(row.footer).actions
+            assertEquals("Resend", actions[0].title)
+            assertEquals("Withdraw", actions[1].title)
+            assertEquals(RowTrailing.None, row.trailing)
+            assertEquals(Int.MAX_VALUE, row.titleMaxLines)
+            assertNull(row.inlineChip)
+        }
+
+    @Test
+    fun pending_footer_keeps_complete_distinct_recipients_bound_to_their_own_withdrawal() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val firstName = "A long shared household recipient name @distinct_recipient_01"
+            val secondName = "A long shared household recipient name @distinct_recipient_02"
+            senderRows = listOf(invite(id = "first").copy(name = firstName), invite(id = "second").copy(name = secondName))
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab(MembersTab.PENDING)
+            val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows
+            assertEquals(listOf(firstName, secondName), rows.map { it.title })
+            assertTrue(rows.all { it.titleMaxLines == Int.MAX_VALUE && it.trailing == RowTrailing.None && it.inlineChip == null })
+            requireNotNull(rows[1].footer).actions.single { it.title == "Withdraw" }.onClick()
+            assertEquals(MembersListEvent.ReviewInvitation("second", "withdraw"), vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
+            coVerify(exactly = 0) { repo.invite(any(), any()) }
         }
 
     @Test
@@ -504,13 +534,14 @@ class MembersListViewModelTest {
             assertEquals("Maria", row.title)
             assertEquals("Owner", row.subtitle)
             assertEquals("Owner", row.inlineChip?.text)
+            assertEquals(2, row.titleMaxLines)
             val leading = row.leading as RowLeading.AvatarWithBadge
             assertTrue(leading.verified)
             assertEquals(RowTrailing.Kebab, row.trailing)
         }
 
     @Test
-    fun row_mapping_guest_emits_guest_chip_with_unverified_avatar_on_pending() =
+    fun row_mapping_pending_keeps_unverified_avatar_and_one_role_label() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             val vm = makeVm()
@@ -520,6 +551,8 @@ class MembersListViewModelTest {
             val row = loaded.sections.first().rows.first()
             val leading = row.leading as RowLeading.AvatarWithBadge
             assertEquals(false, leading.verified)
+            assertNull(row.inlineChip)
+            assertNotNull(row.subtitle)
             assertNotNull(row.body)
             assertTrue(row.body!!.startsWith("Invited"))
         }
@@ -556,7 +589,7 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun cancel_invite_with_resolved_user_id_optimistically_removes_and_hits_delete() =
+    fun withdrawal_with_resolved_user_preserves_row_and_never_removes_membership() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns
                 NetworkResult.Success(
@@ -570,17 +603,19 @@ class MembersListViewModelTest {
                 )
             coEvery { repo.remove("home_1", "u_pending") } returns
                 NetworkResult.Success(RemoveMemberResponse(message = "ok"))
+            senderRows = listOf(invite(id = "inv_1", userId = "u_pending", email = "x@y.com"))
             val vm = makeVm()
             vm.load()
             vm.selectTab(MembersTab.PENDING)
             vm.cancelInvite(inviteId = "inv_1")
-            val state = vm.state.value
-            assertTrue(state is ListOfRowsUiState.Empty)
-            coVerify { repo.remove("home_1", "u_pending") }
+            val state = vm.state.value as ListOfRowsUiState.Loaded
+            assertEquals(1, state.sections.first().rows.size)
+            assertEquals(MembersListEvent.ReviewInvitation("inv_1", "withdraw"), vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
         }
 
     @Test
-    fun cancel_invite_failure_rolls_back_when_user_id_present() =
+    fun withdrawal_for_email_only_invitation_requires_the_same_review() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns
                 NetworkResult.Success(
@@ -588,18 +623,21 @@ class MembersListViewModelTest {
                         occupants = emptyList(),
                         pendingInvites =
                             listOf(
-                                invite(id = "inv_1", userId = "u_pending", email = "x@y.com"),
+                                invite(id = "inv_1", userId = null, email = "x@y.com"),
                             ),
                     ),
                 )
             coEvery { repo.remove("home_1", "u_pending") } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
+            senderRows = listOf(invite(id = "inv_1", userId = null, email = "x@y.com"))
             val vm = makeVm()
             vm.load()
             vm.selectTab(MembersTab.PENDING)
             vm.cancelInvite(inviteId = "inv_1")
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(1, loaded.sections.first().rows.size)
+            assertEquals(MembersListEvent.ReviewInvitation("inv_1", "withdraw"), vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
         }
 
     @Test
@@ -625,25 +663,188 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun resend_invite_posts_with_same_email_and_role() =
+    fun resend_invite_opens_explicit_review_without_reusing_creation() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
-            coEvery { repo.invite("home_1", any()) } returns
-                NetworkResult.Success(
-                    InviteMemberResponse(
-                        invitation =
-                            InvitationDto(
-                                id = "echo",
-                                homeId = "home_1",
-                                inviteeEmail = "newhouse@example.com",
-                                proposedRole = "member",
-                            ),
-                    ),
-                )
             val vm = makeVm()
             vm.load()
             vm.resendInvite(inviteId = "inv_1")
-            coVerify { repo.invite("home_1", any()) }
+            assertEquals(MembersListEvent.ReviewInvitation("inv_1", "resend"), vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.invite(any(), any()) }
+        }
+
+    @Test
+    fun sender_row_actions_are_unavailable_when_management_access_is_missing() =
+        runTest {
+            coEvery { adminRepo.myAccess("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "unavailable"))
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab(MembersTab.PENDING)
+            vm.resendInvite("inv_1")
+            vm.cancelInvite("inv_1")
+            assertNull(vm.pendingEvent.value)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            coVerify(exactly = 0) { sender.list(any()) }
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
+            coVerify(exactly = 0) { repo.invite(any(), any()) }
+        }
+
+    @Test
+    fun unavailable_dedicated_invitation_read_is_retryable_not_empty_or_legacy_fallback() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            coEvery { sender.list("home_1") } throws IllegalStateException("Synthetic unavailable sender list")
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            vm.resendInvite("inv_1")
+            assertNull(vm.pendingEvent.value)
+            coEvery { sender.list("home_1") } returns senderRows
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+        }
+
+    @Test
+    fun older_sender_success_cannot_restore_rows_after_newer_empty_snapshot() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val held = CompletableDeferred<List<PendingInviteDto>>()
+            var calls = 0
+            coEvery { sender.list("home_1") } coAnswers { if (++calls == 1) held.await() else emptyList() }
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab(MembersTab.PENDING)
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            held.complete(listOf(invite()))
+            vm.selectTab(MembersTab.MEMBERS)
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            vm.cancelInvite("inv_1")
+            assertNull(vm.pendingEvent.value)
+        }
+
+    @Test
+    fun older_sender_success_cannot_restore_authority_or_rows_after_newer_denial_and_tab_changes() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val held = CompletableDeferred<List<PendingInviteDto>>()
+            coEvery { sender.list("home_1") } coAnswers { held.await() }
+            val vm = makeVm()
+            vm.load()
+            stubMemberAccess()
+            vm.refresh()
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            held.complete(listOf(invite()))
+            vm.selectTab(MembersTab.MEMBERS)
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertEquals(false, vm.canManageMembers)
+            assertNull(vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            assertTrue(vm.tabs.value.none { it.id == MembersTab.REQUESTS || it.id == MembersTab.AUDIT })
+            vm.cancelInvite("inv_1")
+            assertNull(vm.pendingEvent.value)
+        }
+
+    @Test
+    fun newer_sender_failure_retires_manager_access_across_tabs_and_older_success() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            senderRows = listOf(invite())
+            val vm = makeVm()
+            vm.load()
+            val held = CompletableDeferred<List<PendingInviteDto>>()
+            coEvery { sender.list("home_1") } coAnswers { held.await() }
+            vm.refresh()
+            coEvery { sender.list("home_1") } throws IllegalStateException("Current sender read denied")
+            vm.refresh()
+            held.complete(senderRows)
+            vm.selectTab(MembersTab.MEMBERS)
+            assertEquals(false, vm.canManageMembers)
+            assertTrue(vm.tabs.value.none { it.id == MembersTab.REQUESTS || it.id == MembersTab.AUDIT })
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertNull(vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            vm.cancelInvite("inv_1")
+            assertNull(vm.pendingEvent.value)
+            vm.requestInvite()
+            assertEquals(MembersListEvent.OpenInvite, vm.pendingEvent.value)
+        }
+
+    @Test
+    fun older_access_success_and_roster_failure_cannot_replace_newer_snapshot() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val held = CompletableDeferred<NetworkResult<HomeAccessDto>>()
+            coEvery { adminRepo.myAccess("home_1") } coAnswers { held.await() }
+            val vm = makeVm()
+            vm.load()
+            stubMemberAccess()
+            vm.refresh()
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "Old read failed"))
+            held.complete(NetworkResult.Success(HomeAccessDto(hasAccess = true, isOwner = true, permissions = listOf("members.manage"))))
+            assertEquals(false, vm.canManageMembers)
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+            assertTrue(vm.tabs.value.none { it.id == MembersTab.REQUESTS })
+        }
+
+    @Test
+    fun sender_rows_do_not_publish_before_later_reads_or_return_after_newer_failure() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            senderRows = listOf(invite())
+            val held = CompletableDeferred<NetworkResult<HomeAuditLogResponse>>()
+            coEvery { adminRepo.auditLog("home_1", any(), any()) } coAnswers { held.await() }
+            val vm = makeVm()
+            vm.load()
+            vm.selectTab(MembersTab.PENDING)
+            assertEquals(0, vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, "Current read failed"))
+            vm.refresh()
+            held.complete(NetworkResult.Success(HomeAuditLogResponse(entries = emptyList())))
+            vm.selectTab(MembersTab.MEMBERS)
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertEquals(false, vm.canManageMembers)
+            assertNull(vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+        }
+
+    @Test
+    fun changed_session_before_final_publication_retires_snapshot_and_cached_tab_rows() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            senderRows = listOf(invite())
+            val vm = makeVm()
+            vm.load()
+            val held = CompletableDeferred<NetworkResult<HomeAuditLogResponse>>()
+            coEvery { adminRepo.auditLog("home_1", any(), any()) } coAnswers { held.await() }
+            vm.refresh()
+            coEvery { readSession.requireCurrent() } throws IllegalStateException("Session changed")
+            held.complete(NetworkResult.Success(HomeAuditLogResponse(entries = emptyList())))
+            vm.selectTab(MembersTab.PENDING)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertEquals(false, vm.canManageMembers)
+            assertNull(vm.tabs.value.single { it.id == MembersTab.PENDING }.count)
+            vm.requestInvite()
+            assertEquals(MembersListEvent.OpenInvite, vm.pendingEvent.value)
+        }
+
+    @Test
+    fun duplicate_initial_load_does_not_start_a_second_fetch() =
+        runTest {
+            coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            val held = CompletableDeferred<List<PendingInviteDto>>()
+            coEvery { sender.list("home_1") } coAnswers { held.await() }
+            val vm = makeVm()
+            vm.load()
+            vm.load()
+            coVerify(exactly = 1) { repo.listOccupants("home_1") }
+            held.complete(emptyList())
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
         }
 
     // ─── Chrome ───────────────────────────────────────────────────

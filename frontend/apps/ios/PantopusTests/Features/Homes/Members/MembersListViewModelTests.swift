@@ -1,27 +1,4 @@
-//
-//  MembersListViewModelTests.swift
-//  PantopusTests
-//
-//  T6.3a / P9 — Members. Covers:
-//    - load → loaded / empty / error transitions
-//    - the four tab buckets count and render correctly
-//      (Members excludes guests; Guests excludes non-guests; Pending
-//      comes from the same payload's `pendingInvites` array; Requests
-//      comes from `GET /:id/household-access-requests` and only exists
-//      for viewers who can manage the roster)
-//    - tab switching mutates the loaded section without a refetch
-//    - row mapping for occupants, pending invites, and access requests
-//    - optimistic remove + rollback
-//    - optimistic cancel-invite + rollback
-//    - handleInvited(_:) folds a new pending invite at top
-//    - role-change + approve/decline call the right routes
-//    - FAB tint + variant match the design contract
-//
-//  Stubbing note: the screen now issues three GETs per load
-//  (`/occupants`, `/me`, `/household-access-requests`), so fixtures are
-//  registered per-route via `SequencedURLProtocol.routeResponses`.
-//  Mutations (DELETE / POST) fall through to the FIFO `sequence`.
-//
+// Current occupants and sender invitations, role-aware row actions, and whole-fetch publication ordering.
 
 import XCTest
 @testable import Pantopus
@@ -30,9 +7,14 @@ import XCTest
 
 @MainActor
 final class MembersListViewModelTests: XCTestCase {
+    private var senderRows: [PendingInviteDTO] = []
+    private var sessionIdentity = "member-list-unit-session"
+
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        senderRows = []
+        sessionIdentity = "member-list-unit-session"
     }
 
     override func tearDown() {
@@ -70,15 +52,20 @@ final class MembersListViewModelTests: XCTestCase {
 
     private func makeVM(
         homeId: String = "home_1",
-        currentUserId: String? = "u_me"
+        currentUserId: String? = "u_me",
+        senderInvitations: ((String, APIClient) async throws -> [PendingInviteDTO])? = nil
     ) -> MembersListViewModel {
-        MembersListViewModel(
+        let sender: (String, APIClient) async throws -> [PendingInviteDTO] = { [unowned self] _, _ in senderRows }
+        let identity: () -> String? = { [unowned self] in sessionIdentity }
+        return MembersListViewModel(
             homeId: homeId,
             api: makeAPI(),
             now: { Self.fixedNow },
             calendar: Self.utcCalendar,
             timeZone: Self.utc,
-            currentUserId: currentUserId
+            currentUserId: currentUserId,
+            senderInvitations: senderInvitations ?? sender,
+            sessionIdentity: identity
         )
     }
 
@@ -171,6 +158,7 @@ final class MembersListViewModelTests: XCTestCase {
         audit: SequencedURLProtocol.Response? = nil,
         repeats: Int = 4
     ) {
+        senderRows = (try? JSONDecoder().decode(OccupantsResponse.self, from: occupants.body).pendingInvites) ?? []
         var routes: [String: [SequencedURLProtocol.Response]] = [:]
         routes["/api/homes/\(homeId)/occupants"] = Array(repeating: occupants, count: repeats)
         if let access {
@@ -297,13 +285,18 @@ final class MembersListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(row.title, "newhouse@example.com")
-        // Pending rows render the stacked Resend / Cancel pair.
-        if case let .verticalActions(primary, secondary) = row.trailing {
-            XCTAssertEqual(primary.label, "Resend")
-            XCTAssertEqual(secondary.label, "Cancel")
-        } else {
-            XCTFail("Expected .verticalActions on pending row, got \(row.trailing)")
-        }
+        XCTAssertNil(row.titleLineLimit)
+        XCTAssertNil(row.inlineChip)
+        XCTAssertEqual(row.subtitle, "Member")
+        if case .none = row.trailing {} else { XCTFail("Pending actions must not narrow recipient text") }
+        XCTAssertEqual(row.footer?.actions.map(\.title), ["Resend", "Withdraw"])
+        XCTAssertEqual(row.footer?.actions.map(\.identifier), ["membersInvitationResend_inv_1", "membersInvitationWithdraw_inv_1"])
+        row.footer?.actions.first?.handler()
+        await Task.yield()
+        XCTAssertEqual(vm.pendingEvent, .openInvitationSender(.init(action: .resend, invitationId: "inv_1")))
+        row.footer?.actions.last?.handler()
+        await Task.yield()
+        XCTAssertEqual(vm.pendingEvent, .openInvitationSender(.init(action: .withdraw, invitationId: "inv_1")))
     }
 
     func testEmptyGuestsTabShowsGuestEmptyState() async {
@@ -635,46 +628,36 @@ final class MembersListViewModelTests: XCTestCase {
         XCTAssertNotNil(sections.first?.rows.first { $0.id == "u_admin" })
     }
 
-    func testCancelInviteOptimisticallyRemovesPendingRow() async {
-        // Pending invite with a resolved user_id so DELETE …/members/:userId fires.
-        let json = """
-        {"occupants":[],"pendingInvites":[
-          {"id":"inv_1","user_id":"u_pending","role":"member","is_active":false,
-           "email":"x@y.com","name":"x@y.com","invited_by":null,
-           "created_at":"2026-05-14T12:00:00Z"}
-        ]}
-        """
-        stubOwner(occupantsBody: json)
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"message\":\"Member removed\"}")]
+    func testWithdrawalKeepsResolvedRecipientRowAndOpensInvitationReviewWithoutDeletingMembership() async {
+        stubOwner(occupantsBody: Self.populatedJSON.replacingOccurrences(of: "\"user_id\":null", with: "\"user_id\":\"u_pending\""))
         let vm = makeVM()
         await vm.load()
         vm.selectedTab = MembersTab.pending
+        let before = SequencedURLProtocol.capturedRequests.count
         await vm.cancelInvite(inviteId: "inv_1")
-        guard case .empty = vm.state else {
-            XCTFail("Expected empty Pending tab after cancel, got \(vm.state)")
-            return
-        }
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, before)
+        XCTAssertEqual(vm.pendingEvent, .openInvitationSender(.init(action: .withdraw, invitationId: "inv_1")))
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("The pending row must remain until withdrawal is proved") }
+        XCTAssertEqual(sections.first?.rows.count, 1)
     }
 
-    func testCancelInviteFailureRollsBackWhenUserIdResolved() async {
-        let json = """
-        {"occupants":[],"pendingInvites":[
-          {"id":"inv_1","user_id":"u_pending","role":"member","is_active":false,
-           "email":"x@y.com","name":"x@y.com","invited_by":null,
-           "created_at":"2026-05-14T12:00:00Z"}
-        ]}
-        """
-        stubOwner(occupantsBody: json)
-        SequencedURLProtocol.sequence = [.status(500, body: "{}")]
+    func testResendOpensReviewedInvitationCommandWithoutCallingCreation() async {
+        stubOwner()
         let vm = makeVM()
         await vm.load()
-        vm.selectedTab = MembersTab.pending
+        let before = SequencedURLProtocol.capturedRequests.count
+        await vm.resendInvite(inviteId: "inv_1")
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, before)
+        XCTAssertEqual(vm.pendingEvent, .openInvitationSender(.init(action: .resend, invitationId: "inv_1")))
+    }
+
+    func testSenderActionsRequireCurrentEffectivePermission() async {
+        let vm = makeVM()
+        XCTAssertNil(vm.fab)
         await vm.cancelInvite(inviteId: "inv_1")
-        guard case let .loaded(sections, _) = vm.state else {
-            XCTFail("Expected pending row to roll back into .loaded, got \(vm.state)")
-            return
-        }
-        XCTAssertEqual(sections.first?.rows.count, 1)
+        await vm.resendInvite(inviteId: "inv_1")
+        XCTAssertNil(vm.pendingEvent)
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.isEmpty)
     }
 
     func testHandleInvitedInsertsAtTopOfPendingBucket() async {
@@ -703,8 +686,10 @@ final class MembersListViewModelTests: XCTestCase {
 
     // MARK: - Chrome
 
-    func testFABIsHomeGreenSecondaryCreate() {
+    func testFABIsHomeGreenSecondaryCreate() async {
+        stubOwner()
         let vm = makeVM()
+        await vm.load()
         guard let fab = vm.fab else {
             XCTFail("Expected FAB")
             return
@@ -741,5 +726,119 @@ final class MembersListViewModelTests: XCTestCase {
     func testDefaultSelectedTabIsMembers() {
         let vm = makeVM()
         XCTAssertEqual(vm.selectedTab, MembersTab.members)
+    }
+
+    func testHeldOlderListCannotReplaceNewerDeniedRefreshOrReturnThroughTabChange() async throws {
+        stubOwner()
+        let rows = senderRows
+        let held = expectation(description: "Older sender list held")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            if calls == 2 { return await withCheckedContinuation { release = $0
+                held.fulfill()
+            } }
+            if calls == 3 { throw APIError.forbidden }
+            return rows
+        }
+        await vm.load()
+        let older = Task { await vm.refresh() }
+        await fulfillment(of: [held], timeout: 3)
+        await vm.refresh()
+        guard case let .error(message) = vm.state else { return XCTFail("Newer denial must be visible") }
+        XCTAssertFalse(vm.canManageMembers)
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.pending }?.count)
+        vm.selectedTab = MembersTab.pending
+        guard case .error = vm.state else { return XCTFail("Tab change must not publish a refused queue") }
+        try XCTUnwrap(release).resume(returning: rows)
+        await older.value
+        guard case let .error(after) = vm.state else { return XCTFail("Older success replaced newer denial") }
+        XCTAssertEqual(after, message)
+        XCTAssertFalse(vm.canManageMembers)
+        await vm.load()
+        guard case .loaded = vm.state else { return XCTFail("Explicit retry must restore the current list") }
+        XCTAssertEqual(vm.tabs.first { $0.id == MembersTab.pending }?.count, 1)
+    }
+
+    func testHeldOlderListCannotReplaceNewerSuccess() async throws {
+        stubOwner()
+        let staleRows = senderRows
+        let currentRows = [PendingInviteDTO(id: "current", name: "Current recipient")]
+        let held = expectation(description: "Older sender list held")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            if calls == 1 { return await withCheckedContinuation { release = $0
+                held.fulfill()
+            } }
+            return currentRows
+        }
+        let older = Task { await vm.refresh() }
+        await fulfillment(of: [held], timeout: 3)
+        await vm.refresh()
+        try XCTUnwrap(release).resume(returning: staleRows)
+        await older.value
+        vm.selectedTab = MembersTab.pending
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("Expected latest list") }
+        XCTAssertEqual(sections.first?.rows.map(\.id), ["current"])
+    }
+
+    func testSessionChangeRetiresHeldListAndCachedAuthority() async throws {
+        stubOwner()
+        let rows = senderRows
+        let held = expectation(description: "Sender list held across session change")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            if calls == 2 { return await withCheckedContinuation { release = $0
+                held.fulfill()
+            } }
+            return rows
+        }
+        await vm.load()
+        let older = Task { await vm.refresh() }
+        await fulfillment(of: [held], timeout: 3)
+        sessionIdentity = "another-session"
+        XCTAssertFalse(vm.canManageMembers)
+        try XCTUnwrap(release).resume(returning: rows)
+        await older.value
+        vm.selectedTab = MembersTab.pending
+        guard case .error = vm.state else { return XCTFail("Retired session must not publish private rows") }
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.pending }?.count)
+    }
+
+    func testParentAndNestedInitialLoadsShareOneFetch() async throws {
+        stubOwner()
+        let rows = senderRows
+        let held = expectation(description: "Initial sender list held")
+        var release: CheckedContinuation<[PendingInviteDTO], Never>?
+        var calls = 0
+        let vm = makeVM { _, _ in
+            calls += 1
+            return await withCheckedContinuation { release = $0
+                held.fulfill()
+            }
+        }
+        let parent = Task { await vm.load() }
+        await fulfillment(of: [held], timeout: 3)
+        await vm.load()
+        XCTAssertEqual(calls, 1)
+        try XCTUnwrap(release).resume(returning: rows)
+        await parent.value
+    }
+
+    func testOrdinaryMemberRosterDoesNotPresentLegacyPendingQueueAsConfirmed() async {
+        stub(occupants: .status(200, body: Self.populatedJSON), access: .status(200, body: Self.memberAccessJSON))
+        let vm = makeVM { _, _ in XCTFail("Ordinary member must not read the manager queue")
+            return []
+        }
+        await vm.load()
+        guard case .loaded = vm.state else { return XCTFail("Ordinary member keeps the authorized roster") }
+        XCTAssertNil(vm.tabs.first { $0.id == MembersTab.pending }?.count)
+        vm.selectedTab = MembersTab.pending
+        guard case .error = vm.state else { return XCTFail("Legacy occupants are not current sender-list proof") }
     }
 }

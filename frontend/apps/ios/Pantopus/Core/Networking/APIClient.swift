@@ -485,7 +485,9 @@ final class APIClient: @unchecked Sendable {
             request.setValue(proof, forHTTPHeaderField: Self.dpopHeader)
         }
 
-        if let body = endpoint.body {
+        if let bodyData = endpoint.bodyData {
+            request.httpBody = bodyData
+        } else if let body = endpoint.body {
             request.httpBody = try encoder.encode(AnyEncodable(body))
         }
 
@@ -543,6 +545,8 @@ public struct Endpoint: Sendable {
     public let path: String
     public let query: [String: String]
     public let body: (any Encodable & Sendable)?
+    /// Exact protected command bytes, retained before the first submission.
+    public let bodyData: Data?
     public let headers: [String: String]
     public let authenticated: Bool
     public let cachePolicy: URLRequest.CachePolicy
@@ -569,6 +573,7 @@ public struct Endpoint: Sendable {
         path: String,
         query: [String: String] = [:],
         body: (any Encodable & Sendable)? = nil,
+        bodyData: Data? = nil,
         headers: [String: String] = [:],
         authenticated: Bool = true,
         cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
@@ -580,6 +585,7 @@ public struct Endpoint: Sendable {
         self.path = path
         self.query = query
         self.body = body
+        self.bodyData = bodyData
         self.headers = headers
         self.authenticated = authenticated
         self.cachePolicy = cachePolicy

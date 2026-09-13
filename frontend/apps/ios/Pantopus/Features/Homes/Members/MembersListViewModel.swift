@@ -1,38 +1,8 @@
-//
-//  MembersListViewModel.swift
-//  Pantopus
-//
-//  T6.3a / P9 — Per-home members roster. Drives the Members screen
-//  against the shared `ListOfRows` archetype with three equal-width
-//  tabs:
-//
-//      Members (N)  ·  Guests (N)  ·  Pending (N)
-//
-//  Tab → data-source mapping (verified against `backend/routes/home.js:3705`
-//  + `backend/routes/homeIam.js`):
-//
-//    - Members tab: occupants where `isActive == true` AND role ∉ guestRoles
-//    - Guests  tab: occupants where `isActive == true` AND role  ∈ guestRoles
-//    - Pending tab: rows from the same payload's `pendingInvites` array
-//
-//  Backend lacks per-tab filters, so a single GET fetches both halves
-//  and the VM buckets client-side (as the design contract permits).
-//
-//  Row anatomy (shape F-derivative — same vocabulary as Connections):
-//    - Leading: `RowLeading.avatarWithBadge` (medium = 40pt) with the
-//      verified-check overlay on active members and disabled on pending.
-//    - Title: display name (or email fallback for pending invites).
-//    - Subtitle (with role-icon prefix): role label.
-//    - Body (with icon prefix): joined-at meta (Members / Guests) or
-//      "Invited <relative-time>" (Pending).
-//    - Trailing:
-//        - Members / Guests: kebab (`RowTrailing.kebab`) → Remove
-//          confirm.
-//        - Pending: vertical stacked Resend / Cancel pair
-//          (`RowTrailing.verticalActions`).
-//
-//  Empty states per tab, FAB opens the Invite member wizard.
-//
+// Per-Home member roster and invitation management. Members/Guests use current
+// occupants; managers use the current-session sender invitation list so expired
+// pending invitations remain withdrawable. Pending identities wrap fully above
+// explicit Resend/Withdraw review actions. Access requests and audit are separate
+// best-effort reads. Only the newest fetch in the opening session may publish.
 
 import Foundation
 import Observation
@@ -84,9 +54,10 @@ public struct MemberActionTarget: Sendable, Equatable, Identifiable {
 }
 
 /// Outbound event the host view reacts to (sheet presentation, alerts).
-public enum MembersListEvent: Sendable, Equatable {
+enum MembersListEvent: Equatable {
     case openResidencyReview
     case openInvite
+    case openInvitationSender(HomeInvitationSenderTarget)
     /// A13.1 — open the Add Guest form (issue a short-term guest pass).
     /// Fired from the Guests tab's FAB + empty-state CTA.
     case openAddGuest
@@ -119,7 +90,11 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         var out = [
             ListOfRowsTab(id: MembersTab.members, label: "Members", count: members.count),
             ListOfRowsTab(id: MembersTab.guests, label: "Guests", count: guests.count),
-            ListOfRowsTab(id: MembersTab.pending, label: "Pending", count: pending.count)
+            ListOfRowsTab(
+                id: MembersTab.pending,
+                label: "Pending",
+                count: isCurrent && invitationsConfirmed && fetchError == nil ? pending.count : nil
+            )
         ]
         if canManageMembers {
             out.append(
@@ -148,6 +123,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     }
 
     public var fab: FABAction? {
+        guard canManageMembers else { return nil }
         // 52pt secondary-create — this is a sub-screen of the Home
         // dashboard, so the canonical create lives on the parent and
         // this FAB carries the secondary tint. Home-green per the
@@ -182,7 +158,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
 
     /// Event the host view reacts to. Set by FAB / row handlers; cleared
     /// by the view after dispatching.
-    public var pendingEvent: MembersListEvent?
+    var pendingEvent: MembersListEvent?
 
     /// Surfaced by the view as an alert when a mutation fails (403 rank
     /// enforcement, network, …).
@@ -196,7 +172,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     /// and the Requests review queue). Mirrors the backend's
     /// `canReviewHouseholdAccessRequests` (`backend/routes/home.js:219`).
     public var canManageMembers: Bool {
-        access?.canManageMembers ?? false
+        isCurrent && (access?.canManageMembers ?? false)
     }
 
     // MARK: - Dependencies
@@ -207,6 +183,8 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     private let calendar: Calendar
     private let timeZone: TimeZone
     private let currentUserId: String?
+    private let session: HomeClaimSessionScope
+    private let senderInvitations: (String, APIClient) async throws -> [PendingInviteDTO]
 
     private var occupants: [OccupantDTO] = []
     private var pendingInvites: [PendingInviteDTO] = []
@@ -214,6 +192,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     private var auditEntries: [HomeAuditEntryDTO] = []
     private var access: HomeAccessDTO?
     private var loadedOnce = false
+    private var fetchGeneration = 0
+    private var isFetching = false
+    private var fetchError: String?
+    private var invitationsConfirmed = false
 
     init(
         homeId: String,
@@ -221,7 +203,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
         timeZone: TimeZone = .current,
-        currentUserId: String? = nil
+        currentUserId: String? = nil,
+        senderInvitations: ((String, APIClient) async throws -> [PendingInviteDTO])? = nil,
+        sessionIdentity: (() -> String?)? = nil
     ) {
         self.homeId = homeId
         self.api = api
@@ -232,6 +216,8 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         // default expression on a `@MainActor` view-model init trips a
         // compiler crash on the Xcode 16.4 / Swift 6.1.2 toolchain CI uses.
         self.currentUserId = currentUserId ?? Self.signedInUserId()
+        self.senderInvitations = senderInvitations ?? HomeInvitationSenderListLoader.load
+        session = HomeClaimSessionScope(api: api, identity: sessionIdentity)
     }
 
     /// Session user id, used to keep the always-allowed self-leave path
@@ -244,7 +230,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     // MARK: - ListOfRowsDataSource
 
     public func load() async {
-        if loadedOnce { return }
+        if isFetching || (loadedOnce && fetchError == nil && (selectedTab != MembersTab.pending || invitationsConfirmed)) { return }
         state = .loading
         await fetch()
     }
@@ -291,31 +277,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Optimistic cancel-invite. Backend lacks a dedicated cancel
-    /// endpoint today, so we delete the invitee's row via the same
-    /// `DELETE /:id/members/:userId` route when the invitee has a
-    /// resolved user id; for not-yet-registered invites (no user id)
-    /// we just drop the row optimistically and refetch — the backend
-    /// will reconcile when the invite expires.
+    /// Withdrawal is an explicit invitation command. It never removes membership.
     public func cancelInvite(inviteId: String) async {
-        guard let idx = pendingInvites.firstIndex(where: { $0.id == inviteId }) else { return }
-        let invite = pendingInvites[idx]
-        let previous = pendingInvites
-        pendingInvites.remove(at: idx)
-        applyState()
-        guard let userId = invite.userId else {
-            // Open invite with no resolved user — leave the optimistic
-            // removal in place. A subsequent refresh will reconcile.
-            return
-        }
-        do {
-            let _: EmptyResponse = try await api.request(
-                HomesEndpoints.removeMember(homeId: homeId, userId: userId)
-            )
-        } catch {
-            pendingInvites = previous
-            applyState()
-        }
+        guard canManageMembers, pendingInvites.contains(where: { $0.id == inviteId }) else { return }
+        pendingEvent = .openInvitationSender(.init(action: .withdraw, invitationId: inviteId))
     }
 
     /// `POST /api/homes/:id/members/:userId/role` — route
@@ -383,93 +348,100 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// "Resend" — re-issues the invite via POST /:id/invite with the
-    /// same email + role. Optimistic: no state change locally; surface
-    /// success/failure via the standard error path.
+    /// Opens a fresh authority/terms review; only confirmation submits a resend.
     public func resendInvite(inviteId: String) async {
-        guard let invite = pendingInvites.first(where: { $0.id == inviteId }) else { return }
-        let request = InviteMemberRequest(
-            email: invite.email,
-            userId: invite.userId,
-            relationship: invite.role ?? "member",
-            message: nil
-        )
-        do {
-            let _: InviteMemberResponse = try await api.request(
-                HomesEndpoints.inviteMember(homeId: homeId, request: request)
-            )
-        } catch {
-            // Resend failures don't roll back state (nothing changed
-            // locally). Future: surface a toast.
-        }
+        guard canManageMembers, pendingInvites.contains(where: { $0.id == inviteId }) else { return }
+        pendingEvent = .openInvitationSender(.init(action: .resend, invitationId: inviteId))
     }
 
     // MARK: - Fetch
 
+    var isCurrent: Bool {
+        session.isCurrent
+    }
+
+    func retire() {
+        fetchGeneration += 1
+        isFetching = false
+        loadedOnce = false
+        access = nil
+        occupants = []
+        pendingInvites = []
+        invitationsConfirmed = false
+        accessRequests = []
+        auditEntries = []
+        fetchError = HomeInvitationSenderError.sessionChanged.localizedDescription
+        applyState()
+    }
+
+    private func requireCurrentFetch(_ generation: Int) throws {
+        guard generation == fetchGeneration, !Task.isCancelled else { throw CancellationError() }
+        guard isCurrent else { throw HomeInvitationSenderError.sessionChanged }
+    }
+
     private func fetch() async {
-        // The viewer's own access record decides whether the manage
-        // affordances render at all. Best-effort: a 403 here just means
-        // "no manage rights", it must not fail the roster.
-        let accessResult = try? await api.request(
-            HomeAdminEndpoints.myAccess(homeId: homeId),
-            as: HomeAccessDTO.self
-        )
-        access = accessResult
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        isFetching = true
+        defer { if generation == fetchGeneration { isFetching = false } }
         do {
-            let response: OccupantsResponse = try await api.request(
-                HomesEndpoints.listOccupants(homeId: homeId)
-            )
+            try requireCurrentFetch(generation)
+            // Keep every response local until all reads belong to the same
+            // current fetch. Older access/queue replies cannot mutate the model.
+            let accessResult = try? await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
+            try requireCurrentFetch(generation)
+            let response: OccupantsResponse = try await api.request(HomesEndpoints.listOccupants(homeId: homeId))
+            try requireCurrentFetch(generation)
+            let canManage = accessResult?.canManageMembers ?? false
+            let currentInvitations = canManage ? try await senderInvitations(homeId, api) : []
+            try requireCurrentFetch(generation)
+            let requests = await fetchAccessRequests(canManage: canManage)
+            try requireCurrentFetch(generation)
+            let audit = await fetchAuditLog(canManage: canManage)
+            try requireCurrentFetch(generation)
+            access = accessResult
             occupants = response.occupants.filter(\.isActive)
-            pendingInvites = response.pendingInvites
-            await fetchAccessRequests()
-            await fetchAuditLog()
+            pendingInvites = currentInvitations
+            invitationsConfirmed = canManage
+            accessRequests = requests
+            auditEntries = audit
             loadedOnce = true
+            fetchError = nil
             if [MembersTab.requests, MembersTab.audit].contains(selectedTab), !canManageMembers {
                 selectedTab = MembersTab.members
             }
             applyState()
         } catch {
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load members. Try again."
-            )
+            guard generation == fetchGeneration, !Task.isCancelled else { return }
+            guard isCurrent else { retire()
+                return
+            }
+            access = nil
+            occupants = []
+            pendingInvites = []
+            invitationsConfirmed = false
+            accessRequests = []
+            auditEntries = []
+            fetchError = (error as? APIError)?.errorDescription ?? (error as? HomeInvitationSenderError)?.localizedDescription
+                ?? "Couldn't load members and invitations. Try again."
+            applyState()
         }
     }
 
-    /// `GET /api/homes/:id/household-access-requests?status=pending` —
-    /// route `backend/routes/home.js:2671`. 403s for viewers who can't
-    /// review, so it is best-effort and never fails the whole screen.
-    private func fetchAccessRequests() async {
-        guard canManageMembers else {
-            accessRequests = []
-            return
-        }
-        do {
-            let response: HouseholdAccessRequestsResponse = try await api.request(
-                HomeAdminEndpoints.householdAccessRequests(homeId: homeId)
-            )
-            accessRequests = response.requests
-        } catch {
-            accessRequests = []
-        }
+    /// Best-effort queues return values without publishing into another fetch.
+    private func fetchAccessRequests(canManage: Bool) async -> [HouseholdAccessRequestDTO] {
+        guard canManage else { return [] }
+        let response = try? await api.request(
+            HomeAdminEndpoints.householdAccessRequests(homeId: homeId),
+            as: HouseholdAccessRequestsResponse.self
+        )
+        return response?.requests ?? []
     }
 
-    /// `GET /api/homes/:id/audit-log` — route
-    /// `backend/routes/homeIam.js:602`. 403s for viewers without
-    /// `members.manage`, so it is best-effort and never fails the screen.
-    private func fetchAuditLog() async {
-        guard canManageMembers else {
-            auditEntries = []
-            return
-        }
-        do {
-            let response: HomeAuditLogResponse = try await api.request(
-                HomeAdminEndpoints.auditLog(homeId: homeId)
-            )
-            auditEntries = response.entries
-        } catch {
-            auditEntries = []
-        }
+    private func fetchAuditLog(canManage: Bool) async -> [HomeAuditEntryDTO] {
+        guard canManage else { return [] }
+        let response = try? await api.request(HomeAdminEndpoints.auditLog(homeId: homeId), as: HomeAuditLogResponse.self)
+        return response?.entries ?? []
     }
 
     // MARK: - Buckets
@@ -489,6 +461,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     // MARK: - State projection
 
     private func applyState() {
+        if let fetchError { state = .error(message: fetchError)
+            return
+        }
         switch selectedTab {
         case MembersTab.requests:
             let rows = accessRequests.map { row(forRequest: $0) }
@@ -506,6 +481,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 ? .empty(emptyContent(for: MembersTab.guests))
                 : .loaded(sections: [RowSection(id: "guests", rows: rows)], hasMore: false)
         case MembersTab.pending:
+            guard invitationsConfirmed else {
+                state = .error(message: "Current invitation access is unavailable. Refresh to check your permission again.")
+                return
+            }
             let rows = pending.map { row(forPending: $0) }
             state = rows.isEmpty
                 ? .empty(emptyContent(for: MembersTab.pending))
@@ -541,7 +520,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 icon: .users,
                 headline: "No active guests",
                 subcopy: "Add someone short-term — a sitter, visitor, or contractor — to share access while they're around.",
-                ctaTitle: "Add a guest"
+                ctaTitle: canManageMembers ? "Add a guest" : nil
             ) { @Sendable [weak self] in
                 Task { @MainActor in self?.pendingEvent = .openAddGuest }
             }
@@ -550,7 +529,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 icon: .mailbox,
                 headline: "No pending invites",
                 subcopy: "Invitations you send to housemates appear here until they accept.",
-                ctaTitle: "Send an invite"
+                ctaTitle: canManageMembers ? "Invite member" : nil
             ) { @Sendable [weak self] in
                 Task { @MainActor in self?.pendingEvent = .openInvite }
             }
@@ -559,7 +538,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 icon: .users,
                 headline: "No members yet",
                 subcopy: "Invite a housemate to share tasks, bills, calendar, and access codes for this home.",
-                ctaTitle: "Invite someone"
+                ctaTitle: canManageMembers ? "Invite someone" : nil
             ) { @Sendable [weak self] in
                 Task { @MainActor in self?.pendingEvent = .openInvite }
             }
@@ -649,7 +628,6 @@ public final class MembersListViewModel: ListOfRowsDataSource {
 
     public func row(forPending invite: PendingInviteDTO) -> RowModel {
         let role = MemberRole.parse(invite.role)
-        let palette = role.palette
         let name = invite.name
         let inviteId = invite.id
         let relative = Self.formatRelativeTime(
@@ -658,7 +636,8 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             calendar: calendar,
             timeZone: timeZone
         ) ?? "recently"
-        let invitedText = "Invited \(relative)"
+        let expired = invite.expiresAt.flatMap(HomeInvitationValidation.date).map { $0 <= now() } ?? false
+        let invitedText = expired ? "Expired invitation · Invited \(relative)" : "Invited \(relative)"
         return RowModel(
             id: invite.id,
             title: name,
@@ -671,27 +650,31 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 size: .medium,
                 verified: false
             ),
-            trailing: .verticalActions(
-                primary: VerticalAction(label: "Resend", variant: .primary) { @Sendable [weak self] in
-                    Task { @MainActor in await self?.resendInvite(inviteId: inviteId) }
-                },
-                secondary: VerticalAction(label: "Cancel", variant: .ghost) { @Sendable [weak self] in
-                    Task { @MainActor in await self?.cancelInvite(inviteId: inviteId) }
-                }
-            ),
             body: invitedText,
             subtitleIcon: role.icon,
             bodyIcon: .mailbox,
-            inlineChip: RowChip(
-                text: role.label,
-                icon: role.icon,
-                tint: .custom(background: palette.background, foreground: palette.foreground)
-            )
+            footer: canManageMembers ? RowFooter(actions: [
+                RowFooterAction(
+                    title: "Resend",
+                    variant: .primary,
+                    identifier: "membersInvitationResend_" + inviteId
+                ) { @Sendable [weak self] in
+                    Task { @MainActor in await self?.resendInvite(inviteId: inviteId) }
+                },
+                RowFooterAction(
+                    title: "Withdraw",
+                    variant: .ghost,
+                    identifier: "membersInvitationWithdraw_" + inviteId
+                ) { @Sendable [weak self] in
+                    Task { @MainActor in await self?.cancelInvite(inviteId: inviteId) }
+                }
+            ]) : nil,
+            titleLineLimit: nil
         )
     }
 
     /// Requests tab row — Invite / Decline stacked at the trailing edge,
-    /// same vocabulary as the Pending tab's Resend / Cancel pair.
+    /// separate from the Pending tab's reviewed Resend / Withdraw footer.
     public func row(forRequest request: HouseholdAccessRequestDTO) -> RowModel {
         let name = request.requesterDisplayName
         let requestId = request.id

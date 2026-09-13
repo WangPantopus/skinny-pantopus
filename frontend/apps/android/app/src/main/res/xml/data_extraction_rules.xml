@@ -9,6 +9,7 @@
         <exclude domain="sharedpref" path="private_home_postal_v1.xml" />
         <exclude domain="sharedpref" path="private_home_residency_review_v1.xml" />
         <exclude domain="sharedpref" path="private_home_invitation_decision_v1.xml" />
+        <exclude domain="sharedpref" path="private_home_invitation_sender_v1.xml" />
         <exclude domain="sharedpref" path="private_pending_deep_link_v1.xml" />
         <exclude domain="sharedpref" path="pantopus_pending_deep_link.xml" />
         <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
@@ -25,6 +26,7 @@
         <exclude domain="sharedpref" path="private_home_postal_v1.xml" />
         <exclude domain="sharedpref" path="private_home_residency_review_v1.xml" />
         <exclude domain="sharedpref" path="private_home_invitation_decision_v1.xml" />
+        <exclude domain="sharedpref" path="private_home_invitation_sender_v1.xml" />
         <exclude domain="sharedpref" path="private_pending_deep_link_v1.xml" />
         <exclude domain="sharedpref" path="pantopus_pending_deep_link.xml" />
         <exclude domain="sharedpref" path="secure_auth_tokens.xml" />
