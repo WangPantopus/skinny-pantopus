@@ -1858,3 +1858,39 @@ The preceding iOS/web checkpoint481c45b81 is pushed on draft
 [CI34870041822](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34870041822)
 passes all13 applicable jobs with two path-based skips. The Android follow-up
 requires CI at its own pushed source; this earlier green run does not cover it.
+
+
+### September14 merge review and Android screenshot references
+
+The user now authorizes merging PRs that are good to merge, followed by continued
+verification and fixes. Fresh remote review finds seven linear Home PR heads:
+32→38→39→40→41→42→43. Current master6a1013784 is an ancestor of the complete tip
+557a556db. Git merge-tree produces exactly that tip tree with no conflict. There
+are no unresolved GitHub review threads. PR43 now targets master to integrate the
+preserved chain together; no squash, branch deletion or deployment is intended.
+Production and staging deployment/migration switches were freshly verified false.
+
+Final CI34875176418 failed three Android Details golden-image comparisons, each
+retried three times. All other nonaggregate jobs passed, including all iOS devices,
+Android instrumented tests, backend, web and database replay. Earlier local
+rendering checks did not enable Paparazzi's reference comparison; they did not
+establish golden-image agreement. The explicit local verify task reproduces all
+three failures. Expected/delta/actual images were inspected: the changed text is
+the attachment-availability explanation; existing layout, controls and styles are
+preserved. Only these three reference images are refreshed from that exact-source
+CI rendering. All three Details comparisons now pass the explicit verifyPaparazziDebug task.
+Verification thresholds and snapshot assertions remain unchanged.
+The failed run stays failed; corrected-source CI is required before merging.
+
+PR34 is held separately. Its merge with the Home tip has nine textual conflicts;
+the isolated integration candidate retains both durable notification paths and
+current Home/session guards. Syntax checking caught an automatically merged
+duplicate session-scope import in gigs.js, which is removed. Combined candidate
+checks pass5808 backend tests/16 existing skips,59 focused web tests, web types,
+scoped lint with seven existing warnings,62 distinct migration versions and64
+synchronized SQL wrappers. Its combined fresh database replay and native CI still
+need verification. Existing cancellation presentation/custom-reason behavior and
+the unimplemented durable-tip draft remain unresolved; these local checks alone
+do not qualify PR34 for merge. No provider operation or hosted migration ran.
+Detailed private merge/source evidence is in integration-review-r1 alongside the
+existing lease-transaction archive. Owner checkout and unrelated work are intact.
