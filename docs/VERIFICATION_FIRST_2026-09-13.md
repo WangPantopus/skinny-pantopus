@@ -1994,3 +1994,44 @@ No repeated journey or native build was required for an identical merge tree.
 Deployment/migration activation remains disabled, and all prior provider,
 rollout and feature-completion limits continue to apply. Private merge proof and
 fresh PR dispositions are under integration-review-r1/home-merge-*.json.
+
+## Existing cancellation presentation restoration in the paid candidate
+
+September14 compared GigStopDialog with the existing master CancellationModal and
+its CompletionFlow caller. The recovery PR had replaced the original icon/reason
+buttons and policy/fee/header/footer presentation with a dropdown and plain text.
+Two focused regressions reproduce the missing owner/worker buttons. The existing
+GigStopDialog now reuses the original reason labels, Lucide icons, selected-state
+classes, policy pill, fee-card and header/footer styling. Current term validation,
+retained UUID/retry logic, focus management and account/task retirement stay in
+place. The displayed fee uses verified terms and never claims a fee was charged
+when the action requires review. No new product file, endpoint, migration or table.
+
+All52 rendered recovery/dialog tests pass, including the existing saved-request,
+response-loss, conflict, storage and session boundaries. Tests now select the
+restored button instead of the superseded dropdown; assertions remain active.
+Web types and scoped lint pass. The first type check caught six test-only uses of
+Playwright's exact option in Testing Library; removing the unsupported option
+preserves its already-exact string-name matching. Initial private patch commands
+used a wrong working directory and changed no source; their failed/no-op attempts
+are retained separately from the two-failure baseline and passing candidate.
+
+Chrome visually confirms the original button/icon and card styling through the
+existing dialog with a synthetic Axios preview adapter. Changed my plans becomes
+selected and enables confirmation; Keep Gig closes without submitting any task
+or provider operation. The first private fixture intercepted fetch, but this SDK
+uses Axios/XHR, so it reached the stopped local proxy and failed; the corrected
+fixture changes only the adapter. Temporary Next18119/page/tab are stopped/removed,
+and generated route output is preserved privately. This is presentation validation,
+not a browser/backend/provider cancellation journey. Evidence is private
+paid-cancellation-presentation-r1/baseline-r2.log, candidate-r3.log, types-r2/r3.log,
+lint-r1.log and browser-binding-r1.json.
+
+The restoration remains partial: the original Other explanation box is not yet
+connected to the durable contract. Its old parent never passed customReason or
+onChangeCustomReason, so it was already nonfunctional. Current stop requests retain
+an enum reason across SQL, web, iOS and Android. Do not silently discard typed
+explanations or put free text into native enum fields. Inspect existing reason
+storage and protected recovery before extending the contract; no new schema is
+justified yet. Nonzero-fee/started/provider and tip/durable-recovery gates remain
+open; original PR34 stays draft. This milestone does not authorize paid launch.

@@ -38,6 +38,15 @@ and this candidate now incorporates that exact master. Its application repair an
 component evidence remain intact. Expiry PR45 is independently under CI at
 a25b5df61; do not pull its unmerged work into this candidate.
 
+The cancellation presentation follow-up restores the original icon/reason buttons,
+policy/fee card and header/footer styles in the existing GigStopDialog. All52
+recovery/dialog regressions, web types and scoped lint pass; Chrome confirms
+selection and Keep Gig with a synthetic preview only. No task/provider command
+ran. See [presentation evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-cancellation-presentation-restoration-in-the-paid-candidate).
+The Other explanation remains a separate contract gap: old CompletionFlow never
+wired its input, and current durable/native reasons are enums. Do not claim the
+whole modal/flow complete or silently discard a typed explanation.
+
 **Next:** finish the existing cancellation
 presentation/custom-reason and durable tip contracts before marking PR34 ready.
 Its tip proof helper remains an unwired draft. Keep paid services/provider

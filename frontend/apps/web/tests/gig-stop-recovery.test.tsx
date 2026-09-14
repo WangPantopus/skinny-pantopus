@@ -33,7 +33,7 @@ const done: GigStopProgress = { ...pending, status: 'completed', financialStatus
 const onCompleted = jest.fn();
 function show() { return render(<GigStopDialog gigId={gig} actorId={actor} action="cancel" isOwner onClose={jest.fn()} onCompleted={onCompleted} />); }
 async function submitNew() {
-  fireEvent.change(await screen.findByRole('combobox', { name: 'Reason' }), { target: { value: 'changed_plans' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Changed my plans' }));
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel task' })); });
 }
 beforeEach(() => {
@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 test('opening reads current terms; explicit submission saves exact identity before POST and retains a pending outcome', async () => {
-  show(); await screen.findByRole('combobox');
+  show(); await screen.findByRole('button', { name: 'Changed my plans' });
   expect(api.gigs.submitGigStopRequest).not.toHaveBeenCalled();
   jest.mocked(api.gigs.submitGigStopRequest).mockImplementation(async (_, body) => {
     expect(JSON.parse(localStorage.getItem(key)!)).toEqual(request);
@@ -114,7 +114,7 @@ test('a fresh same-actor session recovers original terms with new server proof',
 });
 
 test('same cookie marker replacement blocks submission before a delayed storage event', async () => {
-  show(); fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'changed_plans' } });
+  show(); fireEvent.click(await screen.findByRole('button', { name: 'Changed my plans' }));
   const submit = screen.getByRole('button', { name: 'Cancel task' });
   localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'replacement-session');
   fireEvent.click(submit);

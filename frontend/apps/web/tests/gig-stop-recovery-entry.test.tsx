@@ -81,6 +81,25 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+describe('existing cancellation presentation', () => {
+  test.each([
+    [true, owner, ['Changed my plans', 'Found someone else', 'Bids too expensive', 'Emergency', 'Other']],
+    [false, worker, ['Schedule conflict', 'Unable to complete', 'Emergency', 'Safety concern', 'Other']],
+  ] as const)('keeps the original reason buttons and fee card (owner=%s)', async (isOwner, actorId, reasons) => {
+    jest.mocked(api.gigs.getGigStopPreview).mockResolvedValue({ ...preview, actorId, action: 'cancel' });
+    render(<GigStopDialog gigId={gigId} actorId={actorId} action="cancel" isOwner={isOwner} onClose={jest.fn()} />);
+    await screen.findByText('What happened?');
+    expect(screen.getByText('No cancellation fee')).toBeInTheDocument();
+    for (const reason of reasons) {
+      const button = screen.getByRole('button', { name: reason });
+      expect(button.querySelector('svg')).not.toBeNull();
+    }
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: reasons[0] }));
+    expect(screen.getByRole('button', { name: reasons[0] })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe.each([['classic', ClassicPage], ['v2', V2Page]] as const)('%s actual page', (_, Page) => {
   test.each(['open', 'cancelled'])('former worker can recover after the raw task becomes %s', async (status) => {
     retainStopRequest(key, request);
