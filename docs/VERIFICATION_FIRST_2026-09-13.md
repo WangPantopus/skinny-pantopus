@@ -2344,3 +2344,47 @@ working source. Pushed89658c9e6 completed CI34893989362 with15 successes/one pat
 skip. Existing clients are still on the old tip command, so this is a partial
 backend integration, not a deployable or merge-ready feature. Keep original screen
 designs and reuse the existing SDK/confirmation components for the client update.
+
+
+## Existing web tip confirmation and protected original recovery
+
+September14 follow-up to backend410ae2767. The preexisting TipModal retained a
+created payment only in memory, did not present card confirmation, and could not
+recover an interrupted creation after restart. The existing API method, modal,
+CompletionFlow and GigPaymentSetup now use the tested original Payment protocol.
+The amount picker and card-confirmation layouts/styles are preserved. Tip copy
+accurately describes an immediate separate charge. No product screen or storage
+system is added; ProtectedRecoverySlot's existing AES-GCM/IndexedDB transactions
+now also support replacing a specifically expected revision for explicit recovery.
+
+The original amount, worker, terms and UUID are saved before POST, without SDK
+secrets or session credentials. Missing reads retain that original. Pending checks
+and explicit cancellation keep its UUID. Active-request conflicts require a
+verified read and explicit adoption guarded by the saved revision. Every receipt
+must match identity, amount, currency and charge outcome. SDK success alone does
+not publish a sent tip. Refund/dispute records lead to history information. Current
+actor/session/origin/task and storage revision guard callbacks and cleanup. The
+existing page reopens retained originals, including provider returns; query-string
+success flags are never evidence. Session changes during the page's storage read
+cannot open the old original.
+
+Final156 tests/six suites pass:45 modal/page-recovery cases, seven existing/shared
+confirmation cases, and104 existing cancellation/checkout/authorization assertions.
+TypeScript has zero diagnostics. Scoped lint:zero errors/seven existing any
+warnings and one ref-lifecycle warning. The broader cancellation page run first
+failed four tests because its old TipModal mock replaced the new named exports;
+retaining the actual helpers repairs the fixture, with all30 entry assertions
+passing. No app behavior was relaxed for that failure.
+
+Actual Chrome confirms encrypted storage with a non-extractable key, lost response
+and reload retaining one UUID/500 cents, exact retry, one matching completion and
+removal. Seven actual IndexedDB transaction checks pass; two separate browser tabs
+read one original, the second adopts it, and the first's stale revision cannot
+overwrite that adoption. Exact shared fixture cleanup passes. The private Axios
+adapter supplies synthetic API/provider outcomes, so this is not real Stripe,
+HTTP/SQL end-to-end or installed-native acceptance. Visual inspection confirms the
+existing picker layout. Both tabs and server18121 are stopped, the exact temporary
+page is removed, and Next's generated tsconfig change is restored. Source/evidence
+binding:private `existing-tip-provider-proof-r1/tip-browser-binding-r1.json`.
+Native original-request clients, legacy recovery, durable delivery and provider
+acceptance remain open. PR34 is still draft and needs final current-source CI.

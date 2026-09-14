@@ -8,7 +8,8 @@ provider parameters/leases and atomic pending/success/zero-charge cancellation
 receipts, without adding a table or column. Its SQL is applied only to the owned
 local contract database. The existing tip POST now enforces the original UUID,
 terms and current actor/session; preview and local request reads are implemented.
-The web/iOS/Android clients still need the coordinated update described below.
+The existing web client now implements the original command and protected recovery.
+The existing iOS/Android clients still need the coordinated update described below.
 Legacy recovery, durable delivery and real provider/installed-client acceptance
 remain open. Do not deploy this partial integration or merge PR34 yet.
 
@@ -22,16 +23,17 @@ original request UUID, current opening session proof and exact displayed terms r
 type TipTerms = {
   gigId: string;
   payerId: string;
-  payeeId: string;
+  payeeId: string | null; // null only in an ineligible preview
   ownerConfirmedAt: string | null; // null only for historical existing-payment recovery
 };
 type TipPreview = {
   actorId: string;
   sessionScope: string;
-  terms: TipTerms | null;
+  terms: TipTerms;
   eligible: boolean;
   unavailableReason: string | null;
   activeRequestId: string | null;
+  legacyPaymentId: string | null;
   minimumAmountCents: 50;
   maximumAmountCents: 99999999;
   remainingTipSlots: number;

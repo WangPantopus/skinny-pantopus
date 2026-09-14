@@ -7,6 +7,9 @@ import { payments } from '@pantopus/api';
 const { completePaymentSetup } = payments;
 
 interface GigPaymentSetupProps {
+  /** Reuse this confirmation UI for a separately charged original tip. */
+  intentPurpose?: 'gig' | 'tip';
+  tipRequestId?: string;
   /** The clientSecret from the backend (PaymentIntent or SetupIntent). */
   clientSecret: string;
   /** Whether this is a SetupIntent (save card) vs PaymentIntent (authorize now). */
@@ -39,6 +42,8 @@ interface GigPaymentSetupProps {
  * Must be wrapped in <StripeProvider clientSecret={...}>.
  */
 export default function GigPaymentSetup({
+  intentPurpose = 'gig',
+  tipRequestId,
   isSetupIntent,
   gigId,
   bidId,
@@ -60,6 +65,10 @@ export default function GigPaymentSetup({
       e.preventDefault();
       if (submitting.current || (isCurrent && !isCurrent())) return;
 
+      if (intentPurpose === 'tip' && (!tipRequestId || !beforeConfirm || !isCurrent)) {
+        setErrorMessage('Reopen the original tip before confirming payment.');
+        return;
+      }
       if (!stripe || !elements) {
         setErrorMessage('Payment system is loading. Please wait...');
         return;
@@ -104,7 +113,9 @@ export default function GigPaymentSetup({
           const { error: confirmError } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=authorized${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
+              return_url: intentPurpose === 'tip'
+                ? `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?tip_request=${encodeURIComponent(tipRequestId!)}`
+                : `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=authorized${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
             },
             redirect: 'if_required',
           });
@@ -112,7 +123,7 @@ export default function GigPaymentSetup({
           if (isCurrent && !isCurrent()) return;
 
           if (confirmError) {
-            setErrorMessage(confirmError.message || 'Payment authorization failed.');
+            setErrorMessage(confirmError.message || (intentPurpose === 'tip' ? 'Tip confirmation failed.' : 'Payment authorization failed.'));
             onError?.(confirmError.message || 'Authorization failed');
             setProcessing(false);
             return;
@@ -130,7 +141,7 @@ export default function GigPaymentSetup({
         setProcessing(false);
       }
     },
-    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError, isCurrent, beforeConfirm]
+    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError, isCurrent, beforeConfirm, intentPurpose, tipRequestId]
   );
 
   const amountFormatted = `$${(amount / 100).toFixed(2)}`;
@@ -142,7 +153,7 @@ export default function GigPaymentSetup({
         <div className="p-6 border-b border-app-border-subtle">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-app-text">
-              {isSetupIntent ? 'Save Payment Method' : 'Authorize Payment'}
+              {intentPurpose === 'tip' ? 'Confirm Tip' : isSetupIntent ? 'Save Payment Method' : 'Authorize Payment'}
             </h2>
             <button
               onClick={onClose}
@@ -157,7 +168,12 @@ export default function GigPaymentSetup({
 
           {/* Info banner */}
           <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-            {isSetupIntent ? (
+            {intentPurpose === 'tip' ? (
+              <>
+                <p className="font-medium">Confirm your {amountFormatted} tip.</p>
+                <p className="mt-1 text-blue-600">Your card will be charged when you confirm. The full tip goes to the worker.</p>
+              </>
+            ) : isSetupIntent ? (
               <>
                 <p className="font-medium">Your card will be saved securely.</p>
                 <p className="mt-1 text-blue-600">
@@ -218,7 +234,7 @@ export default function GigPaymentSetup({
               ) : isSetupIntent ? (
                 'Save Card'
               ) : (
-                `Authorize ${amountFormatted}`
+                `${intentPurpose === 'tip' ? 'Confirm tip' : 'Authorize'} ${amountFormatted}`
               )}
             </button>
           </div>

@@ -348,41 +348,90 @@ export async function refreshPaymentStatus(gigId: string): Promise<AssignedAutho
   return post(`/api/gigs/${gigId}/refresh-payment-status`);
 }
 
-/**
- * Create a tip payment for a completed gig.
- *
- * On-session (no paymentMethodId): response includes `clientSecret`, `customer`,
- * `ephemeralKey`, and `publishableKey` so mobile can present the Stripe
- * PaymentSheet with saved cards visible. Web ignores these extra fields.
- *
- * Off-session (with paymentMethodId): server charges the saved card directly.
- */
-export async function createTip(
-  gigId: string,
-  amount: number,
-  paymentMethodId?: string
-): Promise<{
-  clientSecret?: string | null;
+export interface GigTipTerms {
+  gigId: string;
+  payerId: string;
+  payeeId: string | null;
+  ownerConfirmedAt: string | null;
+}
+export interface GigTipPreview {
+  actorId: string;
+  sessionScope: string;
+  terms: GigTipTerms;
+  eligible: boolean;
+  unavailableReason: string | null;
+  activeRequestId: string | null;
+  legacyPaymentId: string | null;
+  minimumAmountCents: number;
+  maximumAmountCents: number;
+  remainingTipSlots: number;
+}
+export interface GigTipRequest {
+  requestId: string;
   paymentId: string;
-  paymentIntentId?: string | null;
-  customer?: string | null;
-  ephemeralKey?: string | null;
-  publishableKey?: string | null;
-  success: boolean;
-}> {
-  return post<{
-    clientSecret?: string | null;
-    paymentId: string;
-    paymentIntentId?: string | null;
-    customer?: string | null;
-    ephemeralKey?: string | null;
-    publishableKey?: string | null;
-    success: boolean;
-  }>('/api/payments/tip', {
-    gigId,
-    amount,
-    paymentMethodId,
-  });
+  gigId: string;
+  payerId: string;
+  payeeId: string;
+  amountCents: number;
+  currency: 'usd';
+  terms: GigTipTerms;
+  paymentMethodId: string | null;
+}
+export interface GigTipReceipt {
+  requestId: string;
+  paymentId: string;
+  gigId: string;
+  payerId: string;
+  payeeId: string;
+  amountCents: number;
+  currency: 'usd';
+  status: 'succeeded' | 'canceled';
+  paymentIntentId: string | null;
+  chargeId: string | null;
+  amountChargedCents: number;
+}
+export interface GigTipCheckout {
+  paymentIntentId: string;
+  clientSecret: string;
+  customer: string;
+  ephemeralKey: string | null;
+  publishableKey: string | null;
+}
+export interface GigTipProgress {
+  actorId: string;
+  sessionScope: string;
+  request: GigTipRequest;
+  status: 'pending' | 'requires_action' | 'needs_review' | 'succeeded' | 'canceled';
+  paymentStatus: string;
+  providerStatus: string | null;
+  paymentIntentId: string | null;
+  canRetry: boolean;
+  canCancel: boolean;
+  receipt: GigTipReceipt | null;
+  checkout?: GigTipCheckout;
+}
+export interface GigTipCommand {
+  requestId: string;
+  gigId: string;
+  amount: number;
+  paymentMethodId: string | null;
+  expectedActorId: string;
+  expectedSessionScope: string;
+  expectedTerms: GigTipTerms;
+  mode: 'resume' | 'check' | 'cancel';
+}
+
+/** Current local eligibility and opening actor/session; no provider operation. */
+export async function getTipPreview(gigId: string): Promise<GigTipPreview> {
+  return get('/api/payments/tip-preview', { gigId });
+}
+/** Local original only. Absence never permits a replacement UUID. */
+export async function getTipRequest(requestId: string): Promise<GigTipProgress> {
+  return get(`/api/payments/tip-requests/${encodeURIComponent(requestId)}`);
+}
+/** Explicit same-ID resume/check/cancel; only a matching terminal receipt confirms the result. */
+export async function createTip(command: GigTipCommand): Promise<GigTipProgress> {
+  return post('/api/payments/tip', command);
 }
 
 /**

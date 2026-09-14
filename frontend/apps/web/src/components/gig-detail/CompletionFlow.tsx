@@ -13,7 +13,7 @@ import Image from 'next/image';
 import * as api from '@pantopus/api';
 import FileUpload from '@/components/FileUpload';
 import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboarding';
-import TipModal from '@/components/payments/TipModal';
+import TipModal, { tipId, tipRecoverySlot } from '@/components/payments/TipModal';
 import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
 import { toast } from '@/components/ui/toast-store';
 import GigStopDialog from './GigStopDialog';
@@ -114,6 +114,31 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
 
   // Tip
   const [showTipModal, setShowTipModal] = useState(false);
+  const [tipRecoveryRequestId, setTipRecoveryRequestId] = useState<string | undefined>();
+
+  // Reopen the existing amount/status screen for this actor's retained original.
+  // A Stripe return URL only identifies a request; its outcome comes from the API.
+  useEffect(() => {
+    if (!currentUserId || !gigId) return;
+    let active = true;
+    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = () => { try { return localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY); } catch { return undefined; } };
+    const openingMarker = marker();
+    const current = () => active && api.getAuthToken() === token && api.getApiBaseUrl() === origin && marker() === openingMarker;
+    const unsubscribe = api.onTokenChange(() => { active = false; });
+    const url = new URL(window.location.href);
+    const returned = url.searchParams.get('tip_request');
+    if (tipId(returned)) {
+      for (const name of ['payment_intent_client_secret', 'payment_intent', 'redirect_status']) url.searchParams.delete(name);
+      if (url.href !== window.location.href) router.replace(url.pathname + url.search + url.hash);
+      setTipRecoveryRequestId(returned); setShowTipModal(true);
+    } else if (typeof indexedDB !== 'undefined') {
+      void tipRecoverySlot(origin, currentUserId, gigId).load().then(original => {
+        if (current() && original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); }
+      }).catch(() => { /* Explicit tip entry still shows retained-storage errors before sending. */ });
+    }
+    return () => { active = false; unsubscribe(); };
+  }, [currentUserId, gigId, router]);
 
   const handleReopenBidding = () => setStopAction('reopen_bidding');
 
@@ -218,6 +243,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       }
       setShowConfirmModal(false);
       onStatusChange?.();
+      setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
       console.error('Confirm completion failed:', err);
@@ -688,8 +714,12 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       />}
 
       {/* ─── Tip Modal ─── */}
-      {showTipModal && acceptedBy && (
+      {showTipModal && currentUserId && (
         <TipModal
+          key={`${currentUserId}:${gigId}:${tipRecoveryRequestId || 'new'}`}
+          actorId={currentUserId}
+          workerId={acceptedBy}
+          recoveryRequestId={tipRecoveryRequestId}
           gigId={gigId}
           workerName={
             gig?.accepted_bid?.bidder?.name ||
@@ -698,6 +728,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           }
           onSuccess={(tipAmount) => {
             setShowTipModal(false);
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('tip_request')) { url.searchParams.delete('tip_request'); router.replace(url.pathname + url.search + url.hash); }
             onStatusChange?.();
             toast.success(`Tip of $${(tipAmount / 100).toFixed(2)} sent!`);
           }}

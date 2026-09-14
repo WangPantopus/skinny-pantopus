@@ -129,8 +129,33 @@ repeated. The earlier local commands passed an unsupported --base argument; the
 correct MIGRATION_BASE_SHA environment variable reproduces the CI failure and
 validates the repaired ordering. Current89658c9e6 CI34893989362 passed fresh schema replay/lint and all completed backend/web gates. Its Android instrumentation and iOS build also pass; native remaining checks were still running at this checkpoint. The newer local reservation needs its own complete-schema CI.
 
-**Next:** finish wiring the tested original Payment reservation into the existing
-tip/provider paths and existing clients; retain their exact designs. Inspect draft
+**Web tip recovery checkpoint after backend `410ae2767`:** the existing TipModal
+and shared card-confirmation screen now use the original request commands. Only
+nonsecret original terms/amount/UUID are retained in the existing encrypted
+IndexedDB store. Reload and GET404 keep the same request; SDK confirmation has
+current-session/original checks before and after; a matching committed receipt
+is required before clearing recovery or reporting success. Current task pages
+reopen retained requests and strip transient provider return parameters. No new
+screen, layout, storage database, table or migration is added by this web repair.
+
+Final156 web assertions in six suites pass, including classic/V2 cancellation
+entry points, bid checkout and assigned authorization compatibility. Web TypeScript
+passes. Scoped lint has zero errors/seven existing any warnings and one lifecycle
+ref warning. Actual Chrome verifies encrypted lost-response reload, same UUID and
+amount retry, one completion and exact cleanup, plus seven real storage transaction
+assertions and stale adoption denial across two separate tabs. The API/provider
+responses in that browser fixture are synthetic; real provider and installed
+native acceptance remain open. The initial broader page check failed four cases
+because its TipModal mock omitted the new helper exports; preserving actual helper
+exports fixed that fixture, and all30 entry assertions pass. Private evidence:
+`existing-tip-provider-proof-r1/tip-browser-binding-r1.json`, `tip-web-final-r1.log`.
+Both owned tabs/server18121 are stopped; exact temporary page removed and original
+tsconfig restored. Existing iOS/Android tip flows still require their coordinated
+update. Legacy tip recovery, durable delivery and final current-source CI remain
+open; do not merge/deploy PR34 yet.
+
+**Next:** update the existing iOS/Android tip flows to the original Payment
+commands, then finish legacy recovery/delivery/provider acceptance; retain their exact designs. Inspect draft
 PR34 current-head CI
 and final combined CI before marking PR34 ready. Keep all original screen designs.
 R05/R06, paid release gates and the app remain incomplete; the80-row inventory is

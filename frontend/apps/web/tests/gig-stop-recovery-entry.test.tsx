@@ -50,7 +50,9 @@ jest.mock('@/components/gig-detail-v2/ETATracker', () => () => null);
 jest.mock('@/components/gig-detail-v2/ActiveTaskPanel', () => () => null);
 jest.mock('@/components/FileUpload', () => () => null);
 jest.mock('@/components/payments/StripeConnectOnboarding', () => () => null);
-jest.mock('@/components/payments/TipModal', () => () => null);
+jest.mock('@/components/payments/TipModal', () => ({
+  ...jest.requireActual('@/components/payments/TipModal'), default: () => null,
+}));
 jest.mock('@/components/payments/AssignedGigAuthorization', () => () => null);
 
 const request: GigStopRequest = { requestId, gigId, actorId: worker, action: 'worker_release', reason: null,
