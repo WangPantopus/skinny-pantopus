@@ -1648,3 +1648,68 @@ User cleanup counts are all zero; API18109 is stopped. Account/departure failure
 also retain the focused native session tests; provider identity, notification
 delivery and hosted adoption are not established. Private lease attachments and
 remaining R05 criteria stay open.
+
+
+### Existing private lease file storage and request binding
+
+The existing native request screen already contains Attach, remove and file cards,
+but its live Attach action reports unavailable and submission has no private file
+binding. Repository and all-ref history searches found no private lease upload
+contract to reuse. Existing generic S3 upload URLs do not satisfy applicant/current
+landlord access. Existing HomeDocument and ownership/task evidence transactions
+serve different audiences; no fake household document, claim or task is created.
+
+The backend candidate extends File/HomeLease metadata, uses homeDocumentStorage's
+private bucket check, immutable SHA256 keys and retry verification, and reuses the
+existing private evidence byte/signature inspector. A File-only reservation admits
+quota before storage; finalized drafts grant no lease or occupancy. The optional
+file ID in the existing request endpoint reaches a small wrapper around the
+unchanged decide_home_lease engine. Request, audit and exact file binding commit
+atomically. Retrying a saved request recovers its same attachment; changed details,
+wrong actors/Homes, another draft and canceled requests cannot silently rebind it.
+Only the applicant can read an unsubmitted draft; submitted bytes require that
+applicant or current verified authority. Both authorization and exact binding are
+rechecked after provider reads. Generic File listing/RLS/deletion cannot bypass it.
+
+One forward migration adds no tables. It extends existing cleanup functions/worker
+and retains File tombstones after removal/expiry/parent deletion. File.user_id can
+be null only for a retired private lease file; legacy ownership and its cascade FK
+remain intact. The original Home-delete eligibility function would permanently
+block an owner after an applicant's abandoned draft. The real database reproduced
+that failure. Its focused extension now permits the existing authorized deletion,
+whose parent trigger retires/detaches private lease Files atomically. Exact object
+keys survive for the existing worker; late writes invalidate old acknowledgements.
+The repeated SQL function bodies are forward updates to existing functions, not
+additional tenancy/upload tables or replacement implementations.
+
+Verification passes244 selected backend tests, all privacy gates, and eight real
+SQL contracts covering existing document delete/recovery/replacement, quota,
+task media, Home deletion, lease decisions and the new file binding. The new
+contract checks service-only access, direct File RLS, exact quota/retries, calendar
+rejection, fault-injected binding rollback, replay/cancellation, cleanup claim
+races and real User/Home cascades. Its first candidate correctly failed the
+existing required File extension constraint; the reservation now supplies it.
+That failed attempt and the Home-delete baseline are retained as failures.
+
+Sixteen actual Express/Multer/service/Supabase HTTP/PostgreSQL cases pass, including
+one committed request whose RPC response is lost, exact-row recovery, current
+landlord reads, revocation/freeze while bytes are being read, generic bypass denial,
+draft removal, deletion of an applicant during provider upload, late-write cleanup,
+cancellation and authorized Home removal followed by removal of the last private
+object. Exact owned User/File/Home/lease/authority/occupancy/invitation counts and
+provider objects finish at zero. The populated forward rehearsal preserves all374
+public/auth/storage/ledger table fingerprints (including an existing legacy File)
+and existing function identities/grants. Application lint has270 functions and88
+trigger bindings, zero errors/eight existing warnings. The55 generated pgTAP
+wrappers are synchronized; they duplicate source tests for the existing runner.
+
+Private evidence is under private-lease-evidence-r1 and is mirrored to the owner's
+private recovery directory. These checks use synthetic scoped login, an in-memory
+private object provider and intercepted notifications with real API/database
+behavior. No hosted/private-provider or real identity-delivery acceptance is
+claimed. Native/web attachment controls and landlord file presentation are not
+yet connected or verified. R05 and the app remain open; continue existing clients
+without redesigning them. PR41 now passes11 applicable CI checks/five path skips.
+PR42's first attempt failed a Sentry download cache collision before compilation;
+its same-source build/dependent-job retry is running. No new PR for the attachment
+checkpoint has been opened yet.

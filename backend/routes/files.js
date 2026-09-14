@@ -765,7 +765,7 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
     
     // Byte-contract documents have their own current HomeDocument visibility.
     // Only that API may expose their metadata; legacy File visibility is broader.
-    const legacyFiles = (files || []).filter(file => !['home_document_v1', 'home_task_media_v1', 'home_claim_evidence_v1'].includes(file.metadata?.storage_contract));
+    const legacyFiles = (files || []).filter(file => !['home_document_v1', 'home_task_media_v1', 'home_claim_evidence_v1', 'home_lease_evidence_v1'].includes(file.metadata?.storage_contract));
     res.json({ files: legacyFiles });
     
   } catch (err) {

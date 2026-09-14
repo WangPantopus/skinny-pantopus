@@ -65,6 +65,7 @@ const endLeaseSchema = Joi.object({});
 
 const tenantRequestSchema = Joi.object({
   home_id: Joi.string().uuid().required(),
+  lease_file_id: Joi.string().uuid().lowercase(),
   request_context: Joi.object({
     home_id: Joi.string().uuid().required(),
     actor_id: Joi.string().uuid().required(),
@@ -586,12 +587,12 @@ router.post(
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const { home_id, start_at, end_at, message, request_context } = req.body;
+      const { home_id, start_at, end_at, message, request_context, lease_file_id } = req.body;
 
       const dates = {};
       if (start_at !== undefined) dates.start_at = start_at;
       if (end_at !== undefined) dates.end_at = end_at;
-      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null, request_context);
+      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null, request_context, lease_file_id);
       if (!result.success) return res.status(result.status || 400).json({ error: result.error });
       const lease = result.lease;
       res.status(201).json({ lease });
@@ -777,5 +778,7 @@ router.post(
     }
   },
 );
+
+router.use(require('./homeLeaseEvidenceFiles'));
 
 module.exports = router;

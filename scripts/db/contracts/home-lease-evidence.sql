@@ -1,0 +1,213 @@
+-- Exercise the existing File/quota/lease engine and cleanup worker's real SQL.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+INSERT INTO auth.users(id,email) SELECT ('f3260000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'lease-evidence-'||n||'@example.invalid' FROM generate_series(1,4) n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'lease_evidence_'||right(id::text,2),'Lease evidence fixture'
+  FROM auth.users WHERE id::text LIKE 'f3260000-0000-4000-8000-%';
+INSERT INTO public."Home"(id,address,city,state,zipcode,home_type) VALUES
+  ('f3260000-0000-4000-8000-000000000010','Lease evidence fixture','Test','CA','00000','apartment'),
+  ('f3260000-0000-4000-8000-000000000011','Other evidence fixture','Test','CA','00000','apartment');
+INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,status) VALUES
+  ('f3260000-0000-4000-8000-000000000020','f3260000-0000-4000-8000-000000000010','user','f3260000-0000-4000-8000-000000000001','owner','verified');
+CREATE FUNCTION pg_temp.check_lease_file(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION '%',label; END IF; END $$;
+CREATE FUNCTION pg_temp.lease_file_payload(actor uuid DEFAULT 'f3260000-0000-4000-8000-000000000002')
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('bucket','private-lease-test','sha256',repeat('a',64),'file_name','lease.txt',
+    'mime_type','text/plain','file_size',20,'request_context',jsonb_build_object(
+      'home_id','f3260000-0000-4000-8000-000000000010','actor_id',actor,'lease_id',NULL,'lease_state',NULL));
+$$;
+CREATE FUNCTION pg_temp.fail_lease_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.metadata ? 'lease_id' AND current_setting('test.fail_lease_binding',true)='on' THEN
+    RAISE EXCEPTION 'Controlled final binding failure' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER test_fail_lease_binding BEFORE UPDATE ON public."File"
+  FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_lease_binding();
+DO $$ BEGIN
+  PERFORM pg_temp.check_lease_file(NOT has_function_privilege('authenticated',
+    'public.mutate_home_lease_evidence(uuid,uuid,uuid,text,jsonb)','execute')
+    AND NOT has_function_privilege('anon','public.request_home_lease_with_evidence(text,uuid,uuid,uuid,jsonb,text,jsonb,integer)','execute')
+    AND has_function_privilege('service_role','public.mutate_home_lease_evidence(uuid,uuid,uuid,text,jsonb)','execute'),
+    'Only the service can reserve, publish or bind lease uploads');
+END $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+  h uuid:='f3260000-0000-4000-8000-000000000010'; other_home uuid:='f3260000-0000-4000-8000-000000000011';
+  a uuid:='f3260000-0000-4000-8000-000000000002'; stranger uuid:='f3260000-0000-4000-8000-000000000003';
+  f uuid:='f3260000-0000-4000-8000-000000000030'; f2 uuid:='f3260000-0000-4000-8000-000000000031';
+  r jsonb; again jsonb; payload jsonb:=pg_temp.lease_file_payload(); l uuid; claim jsonb;
+  dates jsonb:=jsonb_build_object('start_at',now()+interval '1 day','end_at',now()+interval '1 year');
+BEGIN
+  r:=public.mutate_home_lease_evidence(other_home,a,f,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'success'='false' AND NOT EXISTS(SELECT FROM public."File" WHERE id=f),
+    'A Home without verified landlord cannot reserve evidence');
+  UPDATE public."Home" SET home_type='multi_unit' WHERE id=h;
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'status'='403','Parent buildings cannot reserve tenant evidence');
+  UPDATE public."Home" SET home_type='apartment',security_state='frozen' WHERE id=h;
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'status'='403','Frozen Homes cannot reserve evidence');
+  UPDATE public."Home" SET security_state='normal' WHERE id=h;
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload||'{"file_size":0}');
+  PERFORM pg_temp.check_lease_file(r->>'status'='413','Empty files cannot reserve quota');
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload-'request_context');
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Reservation requires observed actor/Home/status');
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'success'='true' AND r->'file'->>'processing_status'='uploading'
+    AND (SELECT storage_used=20 AND file_count=1 FROM public."FileQuota" WHERE user_id=a)
+    AND NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h)
+    AND NOT EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=h AND user_id=a)
+    AND NOT EXISTS(SELECT FROM public."HomeDocument" WHERE home_id=h),
+    'File-only reservation consumes quota without publishing tenancy or household access');
+  again:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(again->'file'=r->'file'
+    AND (SELECT storage_used=20 AND file_count=1 FROM public."FileQuota" WHERE user_id=a),'Lost reservation reply reuses one File/quota');
+  r:=public.mutate_home_lease_evidence(h,stranger,f,'reserve',pg_temp.lease_file_payload(stranger));
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Another actor cannot reuse an upload identifier');
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',payload||jsonb_build_object('sha256',repeat('b',64)));
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Different bytes cannot overwrite a retained upload');
+  r:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(r->>'status'='409' AND NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h),
+    'An incomplete upload cannot create a request');
+  r:=public.mutate_home_lease_evidence(h,a,f,'finalize');
+  PERFORM pg_temp.check_lease_file(r->>'success'='true' AND r->'file'->>'processing_status'='completed','Finalize publishes only ready File bytes');
+  r:=public.mutate_home_lease_evidence(h,a,f2,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'success'='true','An explicit different draft may be selected before request submission');
+  r:=public.mutate_home_lease_evidence(h,a,f2,'finalize');
+  r:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:='{"start_at":"2026-02-30"}',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(r->>'success'='false' AND NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h),
+    'Existing strict calendar validation still rejects invalid requests with attachments');
+  r:=public.request_home_lease_with_evidence('request',stranger,h,f,p_dates:=dates,p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Another applicant cannot submit the file');
+  PERFORM set_config('test.fail_lease_binding','on',true);
+  BEGIN
+    r:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+    RAISE EXCEPTION 'Expected binding failure did not occur';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  PERFORM set_config('test.fail_lease_binding','off',true);
+  PERFORM pg_temp.check_lease_file(NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h)
+    AND NOT EXISTS(SELECT FROM public."HomeAuditLog" WHERE home_id=h AND action='TENANT_REQUEST_SUBMITTED')
+    AND NOT (SELECT metadata ? 'lease_id' FROM public."File" WHERE id=f),
+    'A failed final File binding rolls back both the new request and its audit');
+  r:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+  l:=(r->'lease'->>'id')::uuid;
+  PERFORM pg_temp.check_lease_file(r->>'success'='true' AND r->>'replayed'='false'
+    AND r->'lease'->'metadata'->>'lease_file_id'=f::text
+    AND (SELECT metadata->>'lease_id'=l::text FROM public."File" WHERE id=f)
+    AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE home_id=h AND action='TENANT_REQUEST_SUBMITTED'),
+    'Existing request/audit and exact File binding commit together');
+  again:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(again->>'replayed'='true' AND again->'lease'=r->'lease'
+    AND (SELECT count(*)=1 FROM public."HomeLease" WHERE home_id=h),'Lost submit reply recovers the same lease and attachment');
+  UPDATE public."HomeAuthority" SET status='revoked' WHERE home_id=h;
+  again:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(again->>'success'='false','Saved-request replay still requires current verified landlord availability');
+  UPDATE public."HomeAuthority" SET status='verified' WHERE home_id=h;
+  again:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Changed message',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(again->>'status'='409','A saved upload cannot silently rewrite submitted request details');
+  again:=public.request_home_lease_with_evidence('request',a,h,f2,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(again->>'status'='409' AND NOT (SELECT metadata ? 'lease_id' FROM public."File" WHERE id=f2),
+    'A different draft cannot silently attach to an existing request');
+  r:=public.mutate_home_lease_evidence(h,a,f,'retire');
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Draft removal cannot erase a submitted attachment');
+  r:=public.soft_delete_file(f,a);
+  PERFORM pg_temp.check_lease_file(r->>'success'='false' AND NOT (SELECT is_deleted FROM public."File" WHERE id=f),
+    'Generic deletion cannot bypass submitted evidence policy');
+  UPDATE public."File" SET updated_at=now()-interval '2 days' WHERE id=f;
+  claim:=public.claim_home_document_cleanup(f,'private-lease-test');
+  PERFORM pg_temp.check_lease_file(claim IS NULL,'Existing cleanup cannot remove published lease evidence');
+  r:=public.mutate_home_lease_evidence(h,a,f2,'retire');
+  PERFORM pg_temp.check_lease_file(r->>'success'='true' AND r->'file'->>'is_deleted'='true'
+    AND (SELECT storage_used=20 AND file_count=1 FROM public."FileQuota" WHERE user_id=a),
+    'Draft retirement atomically hides the file and releases only its quota');
+  r:=public.mutate_home_lease_evidence(h,a,f2,'retire');
+  PERFORM pg_temp.check_lease_file(r->>'success'='true' AND (SELECT storage_used=20 AND file_count=1 FROM public."FileQuota" WHERE user_id=a),
+    'Removal retry does not release quota twice');
+  UPDATE public."File" SET updated_at=now()-interval '11 minutes' WHERE id=f2;
+  PERFORM pg_temp.check_lease_file(f2 IN (SELECT public.home_document_cleanup_candidates('private-lease-test')),'Existing worker discovers retired lease drafts');
+  claim:=public.claim_home_document_cleanup(f2,'private-lease-test');
+  PERFORM pg_temp.check_lease_file(claim->>'is_deleted'='true' AND claim->'metadata'->>'storage_cleanup_claim' IS NOT NULL,
+    'Worker claims the exact File tombstone before deleting storage');
+  PERFORM public.mark_home_document_cleanup_pending(f2);
+  PERFORM pg_temp.check_lease_file(NOT public.finish_home_document_cleanup(f2,claim->'metadata'->>'storage_cleanup_claim',true)
+    AND (SELECT metadata->>'storage_cleanup_pending'='true' FROM public."File" WHERE id=f2),
+    'Late upload invalidates an older cleanup acknowledgement');
+  UPDATE public."File" SET updated_at=now()-interval '11 minutes' WHERE id=f2;
+  claim:=public.claim_home_document_cleanup(f2,'private-lease-test');
+  PERFORM pg_temp.check_lease_file(public.finish_home_document_cleanup(f2,claim->'metadata'->>'storage_cleanup_claim',true),
+    'The current cleanup claim can acknowledge provider removal');
+  r:=public.mutate_home_lease_evidence(h,a,f2,'reserve',payload);
+  PERFORM pg_temp.check_lease_file(r->>'status'='409','Cleaned tombstones cannot be resurrected by old multipart retries');
+  r:=public.decide_home_lease('cancel',a,p_lease_id:=l);
+  PERFORM pg_temp.check_lease_file(r->>'success'='true','Existing tenant cancellation still works');
+  r:=public.request_home_lease_with_evidence('request',a,h,f,p_dates:=dates,p_message:='Saved message',p_request_context:=payload->'request_context');
+  PERFORM pg_temp.check_lease_file(r->>'status'='409' AND (SELECT count(*)=1 FROM public."HomeLease" WHERE home_id=h),
+    'A delayed saved request cannot recreate tenancy after cancellation');
+END $$;
+RESET ROLE;
+
+-- An abandoned upload must not become a permanent deletion blocker for its
+-- Home owner. Existing destructive authority still controls the operation.
+INSERT INTO public."Home"(id,owner_id,address,city,state,zipcode,home_type) VALUES
+  ('f3260000-0000-4000-8000-000000000012','f3260000-0000-4000-8000-000000000001','Lease cleanup fixture','Test','CA','00000','apartment');
+INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,status) VALUES
+  ('f3260000-0000-4000-8000-000000000022','f3260000-0000-4000-8000-000000000012','user','f3260000-0000-4000-8000-000000000001','owner','verified');
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+  h uuid:='f3260000-0000-4000-8000-000000000012'; a uuid:='f3260000-0000-4000-8000-000000000003';
+  owner_id uuid:='f3260000-0000-4000-8000-000000000001'; f uuid:='f3260000-0000-4000-8000-000000000033'; r jsonb;
+BEGIN
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',pg_temp.lease_file_payload(a)||jsonb_build_object('request_context',
+    jsonb_build_object('home_id',h,'actor_id',a,'lease_id',NULL,'lease_state',NULL)));
+  PERFORM pg_temp.check_lease_file(r->>'success'='true','Home deletion fixture reserves an unsubmitted upload');
+  PERFORM pg_temp.check_lease_file(public.delete_home_authorized(h,a)->>'deleted'='false'
+    AND NOT (SELECT is_deleted FROM public."File" WHERE id=f),'An applicant cannot delete the Home or retire its uploads through owner deletion');
+  r:=public.delete_home_authorized(h,owner_id);
+  PERFORM pg_temp.check_lease_file(r->>'deleted'='true' AND NOT EXISTS(SELECT FROM public."Home" WHERE id=h)
+    AND (SELECT is_deleted AND home_id IS NULL AND metadata->>'storage_cleanup_pending'='true' FROM public."File" WHERE id=f),
+    'Owner deletion can retire an abandoned lease upload while retaining its cleanup key');
+END $$;
+RESET ROLE;
+
+-- Direct client File reads and writes cannot bypass applicant/authority APIs.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','f3260000-0000-4000-8000-000000000002',true);
+DO $$ BEGIN
+  PERFORM pg_temp.check_lease_file(NOT EXISTS(SELECT FROM public."File" WHERE id::text LIKE 'f3260000-%'),
+    'Even the applicant cannot read private evidence through generic File RLS');
+END $$;
+RESET ROLE;
+
+-- Actual parent cascades keep only retired File reservations for cleanup.
+DO $$ DECLARE
+  h uuid:='f3260000-0000-4000-8000-000000000010'; a uuid:='f3260000-0000-4000-8000-000000000003';
+  f uuid:='f3260000-0000-4000-8000-000000000032'; r jsonb; claim jsonb;
+BEGIN
+  r:=public.mutate_home_lease_evidence(h,a,f,'reserve',pg_temp.lease_file_payload(a));
+  PERFORM pg_temp.check_lease_file(r->>'success'='true','Account deletion fixture reserves upload');
+  DELETE FROM public."User" WHERE id=a;
+  PERFORM pg_temp.check_lease_file((SELECT is_deleted AND user_id IS NULL AND home_id=h
+    AND metadata->>'storage_cleanup_pending'='true' FROM public."File" WHERE id=f),
+    'Applicant deletion preserves a retired cleanup reservation');
+  DELETE FROM public."User" WHERE id='f3260000-0000-4000-8000-000000000002';
+  PERFORM pg_temp.check_lease_file((SELECT is_deleted AND user_id IS NULL FROM public."File" WHERE id='f3260000-0000-4000-8000-000000000030')
+    AND NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h),
+    'Submitted evidence cleanup survives applicant and lease cascades');
+  DELETE FROM public."Home" WHERE id=h;
+  PERFORM pg_temp.check_lease_file((SELECT is_deleted AND home_id IS NULL AND metadata->>'original_home_id'=h::text FROM public."File" WHERE id=f)
+    AND (SELECT count(*)=4 FROM public."File" WHERE id::text LIKE 'f3260000-%'),
+    'Home cascade preserves exact retired file identities without an extra table');
+  UPDATE public."File" SET updated_at=now()-interval '11 minutes' WHERE id=f;
+  claim:=public.claim_home_document_cleanup(f,'private-lease-test');
+  PERFORM pg_temp.check_lease_file(claim->>'id'=f::text AND claim->'metadata'->>'original_home_id'=h::text,
+    'Existing cleanup can claim evidence after both parent records are gone');
+  UPDATE public."File" SET deleted_at=now()-interval '60 days',updated_at=now()-interval '60 days' WHERE id::text LIKE 'f3260000-%';
+  PERFORM public.cleanup_old_deleted_files(30);
+  PERFORM pg_temp.check_lease_file((SELECT count(*)=4 FROM public."File" WHERE id::text LIKE 'f3260000-%'),
+    'Generic retention cannot erase lease retry/cleanup tombstones');
+END $$;
+ROLLBACK;

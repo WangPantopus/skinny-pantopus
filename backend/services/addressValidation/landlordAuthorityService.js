@@ -393,9 +393,10 @@ class LandlordAuthorityService {
     return result;
   }
 
-  async requestLease(homeId, actorId, dates = {}, message = null, requestContext = null) {
+  async requestLease(homeId, actorId, dates = {}, message = null, requestContext = null, fileId = null) {
     const result = await this._decideLease({ p_action: 'request', p_actor_id: actorId,
-      p_home_id: homeId, p_dates: dates, p_message: message, p_request_context: requestContext });
+      p_home_id: homeId, p_dates: dates, p_message: message, p_request_context: requestContext,
+      ...(fileId ? { p_file_id: fileId } : {}) });
     if (!result.success || result.replayed) return result;
     if (result.authority?.subject_type === 'user') {
       await this._notifyLeaseDecision({ userId: result.authority.subject_id,
@@ -415,25 +416,27 @@ class LandlordAuthorityService {
   async _decideLease(params) {
     if (!params.p_actor_id) return { success: false, error: 'Authenticated actor required' };
     try {
-      const { data, error } = await supabaseAdmin.rpc('decide_home_lease', {
+      const { data, error } = await supabaseAdmin.rpc(params.p_file_id ? 'request_home_lease_with_evidence' : 'decide_home_lease', {
         ...params, p_validity_days: params.p_validity_days ?? require('../../utils/verificationAge').validityDays(),
       });
       if (error || !data || typeof data.success !== 'boolean'
         || (!data.success && typeof data.error !== 'string')
+        || (data.success && params.p_file_id && (data.lease?.metadata?.lease_file_id !== params.p_file_id
+          || data.lease?.home_id !== params.p_home_id || data.lease?.primary_resident_user_id !== params.p_actor_id))
         || (data.success && (params.p_action === 'invite'
           ? !data.invite?.id || data.invite.home_id !== params.p_home_id || data.invite.token_hash !== params.p_token_hash
           : !data.lease || (['approve', 'accept'].includes(params.p_action) && !data.occupancy)))) {
         logger.error('LandlordAuthorityService: lease transaction unavailable', {
           action: params.p_action, leaseId: params.p_lease_id, code: error?.code,
         });
-        return { success: false, ...(params.p_action === 'invite' ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
+        return { success: false, ...(params.p_action === 'invite' || params.p_file_id ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
       }
       return data;
     } catch (error) {
       logger.error('LandlordAuthorityService: lease transaction interrupted', {
         action: params.p_action, leaseId: params.p_lease_id, code: error.code,
       });
-      return { success: false, ...(params.p_action === 'invite' ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
+      return { success: false, ...(params.p_action === 'invite' || params.p_file_id ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
     }
   }
 

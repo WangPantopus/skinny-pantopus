@@ -10,8 +10,8 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/native-lease-request-controls`, starting from native invitation/CI fixture
-checkpoint `1ed6f6793` on draft PR41. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`codex/private-lease-evidence`, based on request-controls checkpoint
+`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease attachment backend is locally verified; client integration is next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -54,9 +54,11 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** continue private lease attachment and remaining R05 criteria using
-existing File metadata, private storage/recovery and the existing lease transaction.
-The request-controls follow-up is verified and ready as its own draft PR. The previously open installed Android request journey is now verified
+**Next:** connect the existing native Attach/file cards and protected readers to the
+verified private lease backend, then the existing landlord review/remaining R05
+criteria. Inspect each existing caller before editing; preserve screen design.
+See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
+The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
 Existing shell state binding fixes stale step/action controls; existing native
 validators reject impossible calendar dates, and existing dirty-form guards cover
@@ -71,7 +73,12 @@ using the already available session-scoped route stubs. All13 selected tests pas
 Original [CI34851208086](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34851208086)
 remains failed for that iPhone16 fixture; the other original applicable checks pass.
 Replacement [CI34855898348](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34855898348)
-is running. No product Support Train change or disabled assertion.
+passes all11 applicable checks/five path-based skips. No product Support Train
+change or disabled assertion. PR42 at e16c0c499 passed all original applicable
+checks except its iOS build: Sentry binary download hit a runner cache collision
+before compilation. Original [CI34857194083](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34857194083)
+remains a failed attempt; the failed build/dependent jobs were retried as attempt2
+on the same source and are running. No app change or cache-policy workaround.
 Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40) at a1069e1de
 repairs existing private document delivery and generic uploads; all6 applicable
 [CI34845551425](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34845551425)
@@ -96,18 +103,27 @@ older APK and was corrected before acceptance. See
 [native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-invitation-links).
 No screen, schema or new tracked file is added by the candidate.
 
-Private lease upload remains open. Legacy generic S3 direct URLs are not accepted
-private evidence storage. Pending applicants need applicant/current-authority
-access, not household-wide document visibility. Reuse existing File metadata,
-private storage/cleanup and the existing lease transaction. R05 provider criteria
-and the remaining inventory stay open. No speculative replacement/renewal schema.
+Private lease upload client integration remains open. Its backend reuses File,
+HomeLease, homeDocumentStorage and the existing recovery worker; the new route
+only supplies the missing applicant/current-authority boundary. One forward
+migration extends existing functions and permits an ownerless File only for a
+retired private lease upload. Parent deletion preserves immutable cleanup keys;
+no new tables or screen/layout changes. An abandoned draft's Home-delete blocker
+was reproduced and repaired in the existing eligibility function. All244 selected
+backend tests/privacy gates, eight SQL contracts and16 actual HTTP/SQL checks pass.
+The populated forward rehearsal preserves374 table fingerprints and all existing
+function identities/grants; application lint checks270 functions/88 trigger
+bindings with zero errors/eight existing warnings. Actual storage and login are
+synthetic in these bounded checks; hosted provider/rollout criteria stay open.
+Do not claim end-to-end attachment acceptance until existing clients are connected
+and verified. Legacy generic S3 direct URLs remain unaccepted private evidence.
 
 **Native evidence/limits:** unchanged request/display source passes50 iOS/49
 Android focused/rendering tests and static checks. Installed iOS covers Back/
 Discard, saved-request/account/foreground recovery, correct calendar/status,
 truthful unavailable Attach feedback and invalid-date rejection/corrected save.
 Live forms no longer insert sample files/data or promise email delivery. Real
-private lease upload remains unfinished. Installed Android now passes the actual request route/SQL journey and real
+private lease upload UI integration remains unfinished. Installed Android now passes the actual request route/SQL journey and real
 Compose control/discard regressions under the recorded native request limits. Reuse the retained
 products; one heavy native build at a time. Provider identity/delivery, combined
 populated adoption and hosted rollout remain open. Notification recovery is
@@ -135,6 +151,9 @@ schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserve
 direct PostgreSQL64522 responds. Its existing Home-create function includes the
 unit candidate body, with unchanged signature and passing generated SQL contract. Docker control stalls: use the private direct-SQL
 helper that verifies the exact database, not repeated Docker calls/global restart.
+The private lease File candidate is now applied only to this owned rehearsal
+database (including the existing Home-delete eligibility extension). All fb26
+HTTP fixtures are cleaned; no attachment API listener or native build was started.
 Inspect the private current-checkpoint/runtime leases before reuse; clean exact
 owned fixtures afterwards. Credentials, tokens, archives and operator logs stay
 outside Git/chat. Evidence is mirrored to the owner's private
