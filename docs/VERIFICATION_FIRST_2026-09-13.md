@@ -2195,3 +2195,62 @@ full baseline CI must verify the actual renamed tree before merging.
 
 Private `integration-review-r1/paid-migration-order-r1.json` records all old/new
 paths and SHA-256 identities. No hosted database or deployment was touched.
+
+
+## Existing tip status provider proof and guarded persistence
+
+September14 inspected existing Payment columns, POST /payments/tip, refresh route,
+StripeService.createTipPayment/syncTipPaymentStatus, callbacks, state transition
+helper and the earlier gigTipProof draft. Current creation still calls Stripe
+before inserting Payment and has no durable client request UUID. The existing
+Payment.id, financial columns and metadata can supply that future reservation;
+no competing tip table is justified by this status repair.
+
+Baseline tests reproduce14 failures/one pass for accepting mismatched or stale
+provider evidence and inferring capture time without the actual Charge. Separate
+transition regressions reproduce two failures/15 passes: the old catch path
+writes directly around a rejected transition, or reports cancellation despite a
+failed write. Existing real SQL also reproduces a dispute-state race before the
+new financial snapshot guard. The original failures remain recorded.
+
+The existing syncTipPaymentStatus now reuses readTipProof for a fresh matching
+PaymentIntent/Charge rather than trusting a supplied webhook/create object.
+It checks current mode, amount, currency, customer, payer/worker/gig metadata,
+platform fee/destination shape and actual capture. Capture time comes from the
+verified Charge. The existing state transition helper can bind the original
+financial snapshot and status in its guarded update; existing callers retain
+their original behavior when no snapshot is provided. Failed/conflicting writes
+remain unresolved; no direct fallback can overwrite them. A paid flag without
+provider identity is rejected, while an unknown pending original stays pending.
+No screen/layout/endpoint/schema is replaced or added.
+
+Validation: final78 focused tests across seven existing suites pass, including
+payment/webhook/mobile/read-path compatibility, mismatched identities, stale
+success, missing identity, failed persistence, and amount changes. The first full
+backend run passed5837 tests/16 skips; after adding the snapshot guard it passed
+5838/16 with natural exit0 and the existing open-handles warning. Only the final
+two missing-ID regressions and their bounded condition followed that full run;
+the final focused suite covers both. Final-head CI remains required.
+
+Nine scenarios run the actual StripeService/state machine against the owned
+combined PostgreSQL database via a private SQL adapter: verified success,
+stale-event/current-processing, wrong amount, wrong Charge binding, intervening
+dispute, intervening amount change, lost database acknowledgement followed by
+read recovery without another write, zero-charge cancellation, and inconsistent
+already-paid state. They use49 queries, zero provider mutations, and synthetic
+provider/notification transport. All exact synthetic users, gig and Payment are
+removed. Initial harness failures are retained: its identifier whitelist omitted
+digits in last4, and its counter initially counted attempted rather than affected
+rows. The intervening-dispute failure was a real application gap and is repaired.
+
+Private evidence is under existing-tip-provider-proof-r1 in the existing local
+audit root. No archive/credential/operator log is committed. These checks do not
+establish hosted Stripe, installed confirmation, durable creation or full tips.
+The current provider guidance also calls for reusing an existing intent and an
+idempotency key; provider keys can expire, so that alone cannot replace a durable
+local original: [Stripe PaymentIntents](https://docs.stripe.com/payments/payment-intents)
+and [idempotency](https://docs.stripe.com/api/idempotent_requests).
+
+Next: reserve the original using the existing Payment model before provider
+creation, freeze terms under a lock, and continue same-request/native/browser
+confirmation and lost-creation recovery. Preserve the original tip modal design.

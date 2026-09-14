@@ -38,8 +38,24 @@ Existing TipModal repairs pass10 regressions: created PaymentIntent is not repor
 as paid, same-modal status checks retain original payment/amount, already
 reconciled success survives, and retired sessions cannot publish completion.
 Durable tip creation/recovery across restart and actual confirmation/provider
-acceptance remain open. The tip contract/helper is a proposed unwired draft;
-inspect existing Payment and tip service before changing schema.
+acceptance remain open. The durable tip contract remains proposed; the existing
+proof helper now verifies current legacy tip status in syncTipPaymentStatus.
+Inspect existing Payment and tip service before changing schema.
+
+**Current tip status proof repair:** existing StripeService now reads the current
+matching PaymentIntent and Charge, validates amount/customer/metadata/mode/capture,
+and requires a successful guarded Payment update. It cannot use a stale callback,
+local paid flag without provider identity, or failed write to report success.
+The existing state transition helper accepts an optional financial snapshot;
+late provider reads cannot overwrite changed payment identity or status. No new
+screen, route, table or migration. Final78 focused tests pass. Full backend5838
+passes/16 existing skips precedes only the two final missing-ID regressions;
+those pass in the final focused run. Nine real-SQL scenarios pass with simulated
+provider/notification transport and zero provider mutations. See the [tip proof
+evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tip-status-provider-proof-and-guarded-persistence).
+Creation still reaches Stripe before reserving Payment; durable UUID/reservation,
+unknown creation, confirmation, legacy recovery and delivery concurrency remain
+open. This is a bounded repair, not completion of P01–P03 or PR34.
 
 **Current cancellation explanation follow-up:** the existing Other textarea is
 restored with its original design. The existing private GigStopRequest.reason

@@ -8,10 +8,11 @@ const { getStripeClient } = require('./getStripeClient');
 const stripe = getStripeClient();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { PAYMENT_STATES, transitionPaymentStatus } = require('./paymentStateMachine');
+const { PAYMENT_STATES, transitionPaymentStatus, matchPaymentSnapshot } = require('./paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
 const { conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent } = require('./gigPaymentProof');
 const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('./gigAuthorizationDeadline');
+const { expectedTipLiveMode, readTipProof } = require('./gigTipProof');
 
 // Default platform fee: 15%
 const DEFAULT_PLATFORM_FEE_PCT = 15;
@@ -80,7 +81,7 @@ class StripeService {
    * PaymentIntent. This is used by both webhooks and the mobile post-sheet
    * success path so tips don't remain stuck in authorize_pending.
    */
-  async syncTipPaymentStatus(paymentId, { paymentIntent: providedPaymentIntent } = {}) {
+  async syncTipPaymentStatus(paymentId) {
     if (!paymentId) throw new Error('Payment ID is required');
 
     const { data: payment } = await supabaseAdmin
@@ -108,40 +109,32 @@ class StripeService {
       PAYMENT_STATES.DISPUTED,
     ]);
 
+    if (!payment.stripe_payment_intent_id && payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
+      return { payment_status: payment.payment_status, payment };
+    }
+
+    // Existing tip rows already own the amount, customer and provider ID. Read
+    // current provider evidence even when a webhook/create callback supplied an
+    // older object; local status or a bare succeeded flag is not capture proof.
+    const livemode = expectedTipLiveMode();
+    const original = { source: 'legacy', payment_id: payment.id, gig_id: payment.gig_id,
+      payer_id: payment.payer_id, payee_id: payment.payee_id, amount_cents: payment.amount_total,
+      currency: String(payment.currency).toLowerCase(), intent_id: payment.stripe_payment_intent_id, livemode };
+    const { intent: paymentIntent, charge, proof } = await readTipProof(stripe, payment, original, livemode);
+
     if (alreadySucceededStates.has(payment.payment_status) && payment.payment_succeeded_at) {
-      await this._notifyTipReceivedIfNeeded(payment);
-      return { payment_status: payment.payment_status, payment };
-    }
-
-    if (!payment.stripe_payment_intent_id) {
-      return { payment_status: payment.payment_status, payment };
-    }
-
-    const paymentIntent = providedPaymentIntent || await stripe.paymentIntents.retrieve(
-      payment.stripe_payment_intent_id,
-      { expand: ['latest_charge'] }
-    );
-
-    if (!paymentIntent) {
-      return { payment_status: payment.payment_status, payment };
+      if (paymentIntent.status !== 'succeeded') throw Object.assign(new Error('The original tip outcome needs verification.'),
+        { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+      const { data: current, error } = await matchPaymentSnapshot(supabaseAdmin.from('Payment').select('*'), payment).single();
+      if (error || !current) throw new Error('The tip changed during verification. Check the original payment again.');
+      await this._notifyTipReceivedIfNeeded(current);
+      return { payment_status: current.payment_status, payment: current };
     }
 
     if (paymentIntent.status === 'canceled') {
-      if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-        try {
-          await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED);
-        } catch (err) {
-          logger.info('syncTipPaymentStatus: cancel transition skipped', {
-            paymentId: payment.id,
-            error: err.message,
-          });
-        }
-      }
-      return {
-        payment_status: PAYMENT_STATES.CANCELED,
-        stripe_status: paymentIntent.status,
-        payment,
-      };
+      const saved = payment.payment_status === PAYMENT_STATES.CANCELED ? payment
+        : await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED, {}, payment);
+      return { payment_status: saved.payment_status, stripe_status: paymentIntent.status, payment: saved };
     }
 
     if (paymentIntent.status !== 'succeeded') {
@@ -152,15 +145,7 @@ class StripeService {
       };
     }
 
-    const charge =
-      typeof paymentIntent.latest_charge === 'object'
-        ? paymentIntent.latest_charge
-        : paymentIntent.charges?.data?.[0] || null;
-    const capturedAt = charge?.created
-      ? new Date(charge.created * 1000)
-      : paymentIntent.created
-        ? new Date(paymentIntent.created * 1000)
-        : new Date();
+    const capturedAt = new Date(proof.captured_at);
     const coolingOffEnds = new Date(capturedAt.getTime() + COOLING_OFF_MS);
     const paymentMethodId =
       typeof paymentIntent.payment_method === 'string'
@@ -182,55 +167,34 @@ class StripeService {
       payment_method_brand: charge?.payment_method_details?.card?.brand || payment.payment_method_brand || null,
     };
 
-    try {
-      if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.CAPTURED_HOLD, {
-          captured_at: capturedAt.toISOString(),
-          cooling_off_ends_at: coolingOffEnds.toISOString(),
-          payment_succeeded_at: capturedAt.toISOString(),
-          ...cardUpdates,
-        });
-      } else if (alreadySucceededStates.has(payment.payment_status)) {
-        await supabaseAdmin
-          .from('Payment')
-          .update({
-            ...cardUpdates,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', payment.id);
-      }
-    } catch (err) {
-      logger.warn('syncTipPaymentStatus: capture transition failed, direct update fallback', {
-        paymentId: payment.id,
-        currentStatus: payment.payment_status,
-        error: err.message,
-      });
-
-      await supabaseAdmin
-        .from('Payment')
-        .update({
-          payment_status: PAYMENT_STATES.CAPTURED_HOLD,
-          captured_at: capturedAt.toISOString(),
-          cooling_off_ends_at: coolingOffEnds.toISOString(),
-          payment_succeeded_at: capturedAt.toISOString(),
-          ...cardUpdates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payment.id);
+    if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
+      await transitionPaymentStatus(payment.id, PAYMENT_STATES.CAPTURED_HOLD, {
+        captured_at: capturedAt.toISOString(),
+        cooling_off_ends_at: coolingOffEnds.toISOString(),
+        payment_succeeded_at: capturedAt.toISOString(),
+        ...cardUpdates,
+      }, payment);
+    } else if (alreadySucceededStates.has(payment.payment_status)) {
+      const { data: saved, error } = await matchPaymentSnapshot(supabaseAdmin.from('Payment')
+        .update({ ...cardUpdates, updated_at: new Date().toISOString() }), payment).select().single();
+      if (error || !saved) throw new Error('The tip status could not be saved. Check the original payment again.');
     }
 
-    const { data: refreshed } = await supabaseAdmin
+    const { data: refreshed, error: refreshError } = await supabaseAdmin
       .from('Payment')
       .select('*')
       .eq('id', payment.id)
       .single();
 
-    await this._notifyTipReceivedIfNeeded(refreshed || payment);
+    if (refreshError || !refreshed || !alreadySucceededStates.has(refreshed.payment_status) || !refreshed.payment_succeeded_at) {
+      throw new Error('The tip status is not confirmed. Check the original payment again.');
+    }
+    await this._notifyTipReceivedIfNeeded(refreshed);
 
     return {
-      payment_status: refreshed?.payment_status || PAYMENT_STATES.CAPTURED_HOLD,
+      payment_status: refreshed.payment_status,
       stripe_status: paymentIntent.status,
-      payment: refreshed || payment,
+      payment: refreshed,
     };
   }
 
@@ -1329,6 +1293,7 @@ class StripeService {
           amount_processing_fee: estimatedStripeFee,
           payment_status: PAYMENT_STATES.AUTHORIZE_PENDING,
           payment_type: 'tip',
+          currency: 'usd',
           tip_amount: amount,
           is_escrowed: true,
         })

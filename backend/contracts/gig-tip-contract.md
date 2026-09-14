@@ -3,8 +3,11 @@
 **Status checked September14,2026:** this document describes a proposed extension.
 The current tip POST/refresh routes and Payment model already exist; the preview,
 request command, receipt migration and matching clients described below do not.
-The current POST does not return TIP_TERMS_REQUIRED. gigTipProof.js is an unwired
-draft. Inspect and extend the existing paths before implementing any new contract.
+The current POST does not return TIP_TERMS_REQUIRED. The existing
+syncTipPaymentStatus now uses gigTipProof.js for current legacy PaymentIntent/Charge
+verification and guarded local status updates. The proposed durable reservation,
+modern request identity and commands below remain unimplemented. Inspect and
+extend the existing Payment and service paths before adding any contract.
 The TipModal status repair reuses the current refresh API and does not implement
 this proposal. Keep provider activation and hosted rollout gated.
 
