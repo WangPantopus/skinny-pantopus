@@ -17,7 +17,7 @@ integration candidate includes current master. Refresh remote CI and the handoff
 before relying on older Git state below. Counts remain8 closed and72 partial/open. Renewal/schema drafts
 remain paused pending an existing-implementation comparison.
 
-Updated September 13, 2026 after current-claims integration and design restoration.
+Updated September 14, 2026 after the coordinated original-tip client checkpoint.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
@@ -125,9 +125,9 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 ## 7. Payments and paid gigs — PR #34
 
-- [ ] P01 **Fix:** Implement durable tips: atomically reserve exact original request/payment/payer/worker/cents/currency/terms before provider creation; the current contract/helper draft is not wired.
-- [ ] P02 **Fix:** Add tip migration/service/routes and exact provider proof; resolve unknown creation, check/resume/cancel, historical unknown tips and maximum-successful-tip concurrency without duplicate charges.
-- [ ] P03 **Fix:** Implement retained tip commands and truthful SDK/receipt handling in web/iOS/Android, with account/session changes and app restart recovery.
+- [ ] P01 **Verify (partial):** Existing Payment reservation now retains original request/payer/worker/cents/currency/terms before provider creation. Local SQL/concurrency and service checks pass; hosted adoption/provider acceptance remain open. See the current handoff and tip evidence; do not rebuild this implementation.
+- [ ] P02 **Fix/Verify (partial):** Existing StripeService/routes now implement same-ID resume/check/cancel and matching provider/receipt proof, with local SQL and synthetic-provider verification. Historical unknown-tip recovery, durable delivery and real provider acceptance remain open; no additional tip table is required.
+- [ ] P03 **Verify (partial):** Existing web/iOS/Android tip controls now retain originals and require matching receipts; Android checkpoint `c6b1f830e` completes the coordinated modern clients. Web156/iOS50 distinct selected/Android124 unit checks and bounded real protected-storage/control checks pass. Full installed/provider journeys and legacy-tip client recovery remain open; preserve existing screen designs.
 - [ ] P04 **Fix/Verify:** Finish started-work, no-show, cancellation-fee and completion/reopen policies, immutable displayed terms and exact fee execution. Existing zero-fee unstarted-stop recovery is a bounded completed source milestone.
 - [ ] P05 **Fix/Verify:** Settle cancellation-fee residuals under an explicit policy; do not silently treat held money as released earnings or waive fees.
 - [ ] P06 **Fix/Verify:** Finish disputes and dispute-loss accounting, historical Connect transfers/reversals, payout onboarding/withdrawal and operational debt recovery, including contradictory legacy proof.

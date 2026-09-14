@@ -2427,3 +2427,62 @@ shut down, with owner devices untouched. Source hashes and run bindings are priv
 under existing-tip-provider-proof-r1/tip-ios-source-binding-r1.json. Android client
 integration, legacy recovery, durable delivery, all-platform UI/provider acceptance
 and final current-source CI remain open; PR34 remains draft.
+
+
+## Existing Android tip handler, original recovery and controls
+
+September14 source `c6b1f830e9878ee54dd30e5d83021a331d3a474b`, following iOS `b98cc283c`. The old
+GigDetail handler lost its payment ID across model/app lifetime and treated the
+SDK Paid callback as success before a best-effort status refresh. Its existing
+picker, detail screen, API/repository and GigTip source now use the same original
+request protocol as web/iOS. One narrow typed encrypted-preference adapter reuses
+Android's existing Keystore/EncryptedSharedPreferences mechanism. Existing Home,
+card-setup and refund stores have different typed scopes/records; reusing them as
+tip storage would break those contracts. No new screen, layout, table or migration.
+Three new test files cover the handler, storage failures and actual controls.
+
+The original UUID/amount/worker/terms are durably retained before POST. Reload404
+cannot authorize a replacement; a fresh opening obtains current session proof.
+Verified active conflicts require explicit compare-and-replace adoption; unrelated
+409 responses cannot offer adoption. Current actor/session/origin, stored original,
+one shared admission and a presentation-specific token guard SDK launch/callbacks.
+A receipt must match all original financial identities and clear protected storage
+successfully before reporting paid. SDK dismissal does not cancel a payment.
+Explicit cancellation needs a matching zero-charge receipt. Changed task terms
+retain the existing recovery action. Nonfinite/out-of-range input is rejected.
+
+Each screen opening owns its handler and retires its callbacks on departure.
+A retired account closes the picker and removes its former amount. Existing picker
+controls/styles remain; amounts freeze while pending, existing submit/secondary
+controls show recovery/cancellation labels. The encrypted file is excluded from
+legacy backup, cloud backup and device transfer; SDK credentials/server proof are
+not persisted. Storage read/decode/write/cleanup failure cannot act as an empty slot.
+A failed preference commit may mutate memory, so the original expected value is
+retained until a successful guarded write.
+
+Verification: R1 compiles the app and passes121 selected tests, but fails format
+and detekt checks. R2 passes124 tests after three additional amount/conflict checks;
+format passes and two remaining static findings are simplified/resolved in place.
+R3 passes124 tests, format/detekt and both APK builds. Final R4 changes only the
+screen retirement cleanup and its emulator assertion; all other R3-bound source
+is byte-identical. R4 format/detekt and both APK builds pass. Preserve those failed
+attempts; no assertions or global static settings are weakened. The124 checks
+include27 recovery,6 store,5 existing tip/detail,28 saved-task,5 stop-entry,
+24 bid-checkout and29 assigned-authorization/API tests. Eleven altered receipt
+bindings run inside one validation test.
+
+Five actual emulator checks pass on R4: frozen amount/continuation/cancel controls,
+loading lockout, preserved preset selection, retired-account amount removal, and
+real Keystore/EncryptedSharedPreferences persistence across store instances. The
+last verifies ciphertext excludes fixture identities/origin, rejects mismatched
+or retired cleanup, separates scope and removes exactly the random fixture key.
+Both installed application/test APK hashes match the candidate. This is actual
+Compose and protected storage with synthetic typed API/SDK outcomes; it does not
+establish the full installed tip journey or real Stripe/provider acceptance.
+
+Private binding `existing-tip-provider-proof-r1/tip-android-source-binding-r4.json`
+records source/product hashes; unit-r3.json and instrument-r4.log retain results.
+Owned AVD emulator-5554 is stopped with data retained, no global registration was
+created and other devices remain untouched. Build products and evidence are
+preserved privately. PR34 stays draft: legacy recovery, durable delivery,
+all-platform installed/provider acceptance and final current-head CI remain open.

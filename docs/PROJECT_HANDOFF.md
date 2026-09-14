@@ -23,169 +23,90 @@ repair [PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merged at
 `f6dbbe2eb` (six applicable checks/five path skips). Their reviewed trees exactly
 matched master. No hosted deployment, migration adoption or provider activation ran.
 
-**Remaining open PR:** original [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
-contains the integration and tip proof repair through pushed `89658c9e6` and remains
-draft. Its preserved integration worktree is
-`/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
-explanation checkpoint `1c468e01a`. The current merge incorporates actual
-PR43/44/45 master, including all existing residency-expiry source and evidence. No unrelated owner checkout or
-worktree was changed. Preserve the paused renewal/two-table draft. This is continued verification and repair of existing work.
+**Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
+remains draft. Its isolated integration worktree is
+`/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
+the canonical PR branch is `codex/staging-paid-gig`. The coordinated Android
+checkpoint is `c6b1f830e9878ee54dd30e5d83021a331d3a474b`, following iOS `b98cc283c`, web
+`1b9ff598e`, backend `410ae2767` and reservation `ff51584d5`. It incorporates
+actual PR43/44/45 master. The preceding pushed `89658c9e6` passed all15 applicable
+checks/one Seeder skip in [CI34893989362](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34893989362).
+The newer coordinated source requires its own CI; inspect the actual PR head and
+checks before relying on that earlier green run. Do not merge/deploy PR34 yet.
 
-The nine prior integration conflicts are resolved, preserving both notification
-paths, current Home/session guards and payment proof. Prior combined evidence
-passes5808 backend tests/16 existing skips,59 selected web tests and types/lint.
-Existing TipModal repairs pass10 regressions: created PaymentIntent is not reported
-as paid, same-modal status checks retain original payment/amount, already
-reconciled success survives, and retired sessions cannot publish completion.
-Durable tip creation/recovery across restart and actual confirmation/provider
-acceptance remain open. The durable tip contract remains proposed; the existing
-proof helper now verifies current legacy tip status in syncTipPaymentStatus.
-Inspect existing Payment and tip service before changing schema.
+**Current original-tip behavior:** the existing Payment.id and financial fields
+reserve one request before provider creation. Metadata retains missing original
+terms and control state; `20260914040000_gig_tip_original.sql` adds no table or
+column. The existing StripeService freezes provider parameters, serializes work,
+retains the same provider key and rejects unsafe retries beyond23 hours. Fresh
+matching PaymentIntent/Charge proof and a committed matching receipt are required
+for success or zero-charge cancellation. A late initial submission cannot bypass
+a same-UUID canceled receipt. Preview/local-read routes and the existing tip POST
+use current actor/session and exact original terms. Previous clients without that
+command are rejected before provider work; matching clients/backend deploy together.
 
-**Current tip status proof repair:** existing StripeService now reads the current
-matching PaymentIntent and Charge, validates amount/customer/metadata/mode/capture,
-and requires a successful guarded Payment update. It cannot use a stale callback,
-local paid flag without provider identity, or failed write to report success.
-The existing state transition helper accepts an optional financial snapshot;
-late provider reads cannot overwrite changed payment identity or status. No new
-screen, route, table or migration. Final78 focused tests pass. Full backend5838
-passes/16 existing skips precedes only the two final missing-ID regressions;
-those pass in the final focused run. Nine real-SQL scenarios pass with simulated
-provider/notification transport and zero provider mutations. See the [tip proof
-evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tip-status-provider-proof-and-guarded-persistence).
-Creation still reaches Stripe before reserving Payment; durable UUID/reservation,
-unknown creation, confirmation, legacy recovery and delivery concurrency remain
-open. This is a bounded repair, not completion of P01–P03 or PR34.
+Backend evidence passes86 focused assertions,12 actual-service/local-SQL scenarios
+(129 queries with synthetic provider/notice transport),65 SQL contracts, generated
+pgTAP and eight separate-connection cases. Function lint checks358 functions/107
+bindings with zero errors/eight existing warnings. Full backend repeat passes5879
+with16 skips; the later cancellation-before-admission case passes focused/SQL
+checks. The first full run's unrelated Home socket interruption and successful
+unchanged-file rerun remain recorded in the [verification report](VERIFICATION_FIRST_2026-09-13.md).
+All schema work is limited to the owned local database; no hosted change ran.
 
-**Original tip reservation checkpoint:** `20260914040000_gig_tip_original.sql`
-reuses existing Payment.id, financial fields and metadata; no table, column, screen
-or layout is added. Local service-only functions reserve exact terms under the task
-lock, serialize provider work, retain the original customer/start time, reject
-creation after the conservative23-hour retry window, and cancel only an operation
-that never reached provider preparation. Older unresolved tips block replacement;
-nullable legacy metadata retains its recovery identity. All65 SQL contracts pass,
-generated pgTAP passes, and eight separate-connection concurrency cases plus exact
-fixture cleanup pass. Application-function lint:357 functions/107 bindings,
-zero errors/eight existing warnings. See [reservation evidence](VERIFICATION_FIRST_2026-09-13.md#original-tip-reservation-in-existing-payment).
-This foundation is applied only to the owned local contract database and is not
-wired into API/services/clients yet. Provider proof/receipts, same-ID commands,
-legacy cancellation recovery, delivery and installed client/provider acceptance
-remain open. No hosted schema change or provider operation ran.
+**Current client evidence:** existing web/iOS/Android pickers and SDK flows now
+retain one nonsecret original, keep its amount/UUID through lost replies/reopening,
+and require current identity, stored original and receipt before cleanup/success.
+No screen/layout is replaced. Web reuses encrypted IndexedDB and iOS the existing
+KeychainStore. Android uses the existing platform encrypted-preference mechanism
+through one narrow typed adapter; its existing Home/card/refund stores have other
+contracts and are not repurposed. SDK credentials and server session proof are
+never retained with the original.
 
-**Working tip integration after reservation checkpoint `ff51584d5`:** the existing
-StripeService and tip route now use the original Payment reservation. Provider
-parameters are frozen once in that row; create retries use the same key and payload,
-checks never create an intent, and terminal receipt/status commit atomically after
-fresh matching provider proof. The original tip endpoint now requires the displayed
-terms, original UUID and current actor/session; preview/local-read routes are added.
-Existing web/native clients still use the previous command and MUST be updated
-before deployment or merging this draft. Current working backend source is newer
-than pushed `89658c9e6`, whose CI34893989362 now passes all15 applicable checks /
-one Seeder skip. No hosted change ran.
+- Web156 assertions and TypeScript pass; scoped lint has zero errors and the
+  recorded warnings. Actual Chrome verifies encrypted reload, same-ID retry,
+  exact cleanup and stale adoption denial across two tabs, with synthetic API/provider.
+- iOS21 final tip tests plus29 unchanged authorization/bid checks pass (50 distinct
+  selected checks across two runs). Real simulator Keychain persistence,
+  this-device-only/unsynchronized attributes and cleanup pass; SwiftLint/SwiftFormat
+  pass. This is not an installed tip UI or real-provider journey.
+- Android `c6b1f830e` passes124 selected unit tests on R3, including existing bid,
+  authorization, saved-task and stop-entry compatibility. R4 changes only the
+  screen's retirement cleanup and its actual control test. R4 format/detekt and
+  both APK builds pass. All5 emulator checks pass: four actual Compose control
+  checks and one real Keystore/encrypted-preference check. Both installed APKs
+  match the candidate hashes. Frozen amounts, retired-account clearing, scoped
+  reopening and exact cleanup pass. Typed API/SDK outcomes remain synthetic.
 
-The integration passes86 focused backend assertions,12 actual-service/local-SQL
-scenarios (129 queries; simulated provider and notice transport), all65 SQL
-contracts, and function lint358/107 with zero errors/eight existing warnings.
-The first full backend attempt has5878 passes/16 skips/one unrelated Home document
-socket interruption. That unchanged33-test file passes alone; full repeat reports
-5879 passes/16 skips and natural exit0. Only the subsequent same-ID cancellation
-before initial admission follows that full run; it passes the final focused and
-real-SQL verification. Do not erase the first
-failure. Private evidence and the precise client next steps are in
-`existing-tip-provider-proof-r1/NEXT.md`. Modern delivery uses the existing
-Notification idempotency key, but durable push delivery and legacy tip recovery
-remain separate open gates.
+See the [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-tip-handler-original-recovery-and-controls),
+[web evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-tip-confirmation-and-protected-original-recovery),
+and [iOS evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-tip-handler-and-protected-recovery).
+Private source/product/run bindings are under `existing-tip-provider-proof-r1`.
+Android format/static failures in R1/R2 are preserved; the corrected R3/R4 runs pass.
 
-**Current cancellation explanation follow-up:** the existing Other textarea is
-restored with its original design. The existing private GigStopRequest.reason
-retains its immutable explanation; the API/native receipts carry only a hash,
-and web recovery reuses existing encrypted IndexedDB storage. One forward update
-to finish_gig_stop keeps free text out of the public task timeline; no new table.
-Baseline SQL reproduced that leak before the forward function update. Candidate
-SQL and generated pgTAP pass;65 backend and57 web tests, web types/scoped lint,
-and38 Android unit tests plus ktlint/detekt pass. Existing production service
-checks pass against real local SQL with a synthetic provider (238 connections).
-Chrome verifies real encryption, lost-response reload, same-request retry and
-cleanup after completion using a synthetic API; this is not provider acceptance.
-All22 focused iOS tests, SwiftLint and SwiftFormat now pass after isolating the
-existing test factory from the simulator Keychain. The new explanation, native
-compatibility and SQL privacy repair are ready for this bounded source checkpoint.
+**Other paid work preserved:** the existing cancellation Other explanation is
+private in the original GigStopRequest and encrypted web recovery. Public receipts
+carry only its hash; the forward14030000 function update removes public free text.
+Its65 backend/57 web/38 Android/22 iOS checks and real local SQL/synthetic-provider
+journeys pass within the report limits. The nine previously unmerged paid migration
+versions moved byte-for-byte to14020100–14020900 after current Home master. No
+master migration was rewritten; correct `MIGRATION_BASE_SHA` policy and prior
+complete-schema CI validate ordering. Earlier failed attempts remain recorded.
 
-The combined isolated paid database copies only the owned Home rehearsal and
-applies the nine existing paid migrations plus the private-explanation function.
-All64 SQL contracts now pass across recorded runs; the first reference-default
-attempt correctly failed because the old Home rehearsal omitted static reference
-rows. Only its five empty reference tables were filled from the canonical existing
-baseline, then that unchanged check passed. Application-function lint passes349
-functions/106 trigger bindings, zero errors/eight existing warnings. This is local
-combined-schema verification; fresh baseline CI, populated hosted adoption and
-provider/native end-to-end acceptance remain distinct gates.
+**Next:** finish legacy tip recovery in the existing Payment/service/client paths,
+then durable tip delivery, actual installed all-platform/provider journeys and
+final current-head CI. Recheck existing implementations before each change.
+P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
+stated limits. After the paid scope, continue the remaining existing-feature
+inventory; preserve accepted subjourneys and screen designs.
 
-The combined CI exposed nine unmerged paid migration versions older than the
-new Home master. They are moved, byte-for-byte and in the same dependency order,
-to20260914020100–20260914020900, after Home14020000 and before the explanation
-update14030000. No migration already in master is changed, and no SQL is added or
-repeated. The earlier local commands passed an unsupported --base argument; the
-correct MIGRATION_BASE_SHA environment variable reproduces the CI failure and
-validates the repaired ordering. Current89658c9e6 CI34893989362 passed fresh schema replay/lint and all completed backend/web gates. Its Android instrumentation and iOS build also pass; native remaining checks were still running at this checkpoint. The newer local reservation needs its own complete-schema CI.
-
-**Web tip recovery checkpoint after backend `410ae2767`:** the existing TipModal
-and shared card-confirmation screen now use the original request commands. Only
-nonsecret original terms/amount/UUID are retained in the existing encrypted
-IndexedDB store. Reload and GET404 keep the same request; SDK confirmation has
-current-session/original checks before and after; a matching committed receipt
-is required before clearing recovery or reporting success. Current task pages
-reopen retained requests and strip transient provider return parameters. No new
-screen, layout, storage database, table or migration is added by this web repair.
-
-Final156 web assertions in six suites pass, including classic/V2 cancellation
-entry points, bid checkout and assigned authorization compatibility. Web TypeScript
-passes. Scoped lint has zero errors/seven existing any warnings and one lifecycle
-ref warning. Actual Chrome verifies encrypted lost-response reload, same UUID and
-amount retry, one completion and exact cleanup, plus seven real storage transaction
-assertions and stale adoption denial across two separate tabs. The API/provider
-responses in that browser fixture are synthetic; real provider and installed
-native acceptance remain open. The initial broader page check failed four cases
-because its TipModal mock omitted the new helper exports; preserving actual helper
-exports fixed that fixture, and all30 entry assertions pass. Private evidence:
-`existing-tip-provider-proof-r1/tip-browser-binding-r1.json`, `tip-web-final-r1.log`.
-Both owned tabs/server18121 are stopped; exact temporary page removed and original
-tsconfig restored. Existing iOS/Android tip flows still require their coordinated
-update. Legacy tip recovery, durable delivery and final current-source CI remain
-open; do not merge/deploy PR34 yet.
-
-**iOS original tip checkpoint after web1b9ff598e:** the existing GigDetail
-picker/handler and Payments DTOs/endpoints now retain the original in the existing
-KeychainStore, read current terms and use same-ID commands. The existing SDK is
-checked immediately before presentation and after every outcome. SDK completion
-without a matching committed receipt cannot report success; loss, cancellation,
-conflicts and storage/session changes retain or explicitly recover the original.
-The existing controls/styles remain, with frozen amount and recovery labels. A
-small throwing read is added to the existing SecureStore interface so Keychain
-failure cannot masquerade as a missing original. No new application screen,
-platform storage system, table or migration is introduced. One additional test
-file holds recovery assertions for the existing tip test class.
-
-Final21 tip tests pass, including real simulator Keychain persistence across store
-instances, this-device-only/unsynchronized attributes and exact item cleanup.
-The preceding combined47-test run includes29 unchanged authorization/bid-recovery
-checks, for50 distinct selected checks across these runs. SwiftLint/SwiftFormat
-pass. The first test build failed on a missing try in the new test assertion;
-corrected source passes and the original failure is retained. Actual provider and
-installed tip UI journeys remain open. Private binding:tip-ios-source-binding-r1.json.
-Owned simulator is shut down. Android DTO/API/storage updates are now in progress
-and not yet compiled; Android handlers/UI/tests must follow before deployment.
-
-**Next:** finish the existing Android tip handlers/UI/recovery and verify them,
-then finish legacy recovery/delivery/provider and all-platform UI acceptance; retain their exact designs. Inspect draft
-PR34 current-head CI
-and final combined CI before marking PR34 ready. Keep all original screen designs.
-R05/R06, paid release gates and the app remain incomplete; the80-row inventory is
-not a completion or duplicated-effort percentage. Private logs/archive/recovery
-proof are retained under `paid-cancellation-explanation-r1`; do not commit them.
-The draft head was fast-forwarded from e9ef2decbb without deleting or replacing
-source history. Its first combined CI is34891928750; always inspect current-head
-CI after later commits. No owned browser/server/simulator remains running.
+**Runtime/ownership:** owned Chrome tabs/servers, iOS simulator and Android AVD are
+stopped; their data and accepted products are retained. The Android verification
+used its private AVD home and created no global registration. Exact random tip
+storage-key cleanup passes. Direct PostgreSQL64522 and the owned Home rehearsal
+REST18089 remain reserved; inspect private leases before use. Owner checkout,
+other worktrees and the paused renewal/two-table draft remain untouched. No hosted
+deployment, migration adoption or provider activation ran.
 
 ## Earlier Home verification context
 

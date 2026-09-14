@@ -8,8 +8,8 @@ provider parameters/leases and atomic pending/success/zero-charge cancellation
 receipts, without adding a table or column. Its SQL is applied only to the owned
 local contract database. The existing tip POST now enforces the original UUID,
 terms and current actor/session; preview and local request reads are implemented.
-The existing web and iOS clients now implement the original command and protected
-recovery within their recorded test limits. Android integration is in progress.
+The existing web, iOS and Android clients now implement the original command and
+protected recovery within their recorded test limits (Android `c6b1f830e`).
 Legacy recovery, durable delivery and real provider/installed-client acceptance
 remain open. Do not deploy this partial integration or merge PR34 yet.
 
