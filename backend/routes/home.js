@@ -6,6 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const addressConfig = require('../config/addressVerification');
 const householdClaimConfig = require('../config/householdClaims');
 const verifyToken = require('../middleware/verifyToken');
+const requireAuthority = require('../middleware/requireAuthority');
 const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -686,7 +687,7 @@ router.post('/check-address', verifyToken, validate(checkAddressSchema), async (
  * POST /api/homes
  * Create a new home
  */
-async function prepareHomeCreate(req) {
+async function prepareHomeCreate(req, { selectAddress = false } = {}) {
     const {
       address, unit_number, address_id: requestedAddressId, city, state, zip_code, zipcode, country,
       latitude, longitude, location,
@@ -708,7 +709,9 @@ async function prepareHomeCreate(req) {
 
     const countryVal = country || 'US';
 
-    if (getRolloutFlag('requireAddressIdForHomeCreate') && !requestedAddressId) {
+    // Individual clients must confirm their address first. The server's unit
+    // tools select each address through the same live/cached validation below.
+    if (getRolloutFlag('requireAddressIdForHomeCreate') && !requestedAddressId && !selectAddress) {
       await recordCreateHomeOutcomeSafe({
         address_id: null,
         outcome: 'blocked',
@@ -771,6 +774,9 @@ async function prepareHomeCreate(req) {
         country: countryVal,
       }, {
         auditContext: { trigger: 'create_home' },
+        // Bulk tools keep existing units; the locked SQL duplicate check returns
+        // their identity without altering the household or granting access.
+        ...(selectAddress ? { includeHousehold: false } : {}),
       });
 
       addressVerdict = validationResult.verdict;
@@ -1140,6 +1146,91 @@ async function prepareHomeCreate(req) {
     };
 }
 
+// The existing unit tools create ordinary private Home setup requests. Every
+// unit goes through the same address validation and durable creation command.
+const bulkUnitIdentity = {
+  request_id: Joi.string().uuid().lowercase().required(),
+  expected_actor_id: Joi.string().uuid().lowercase().required(),
+};
+const importUnitSchema = Joi.object({ ...bulkUnitIdentity,
+  units: Joi.array().min(1).max(50).items(Joi.object({ label: Joi.string().trim().min(1).max(50).required() })).required(),
+});
+const generateUnitSchema = Joi.object({ ...bulkUnitIdentity,
+  prefix: Joi.string().min(1).max(30).required(),
+  start: Joi.number().integer().min(0).max(9999).required(),
+  end: Joi.number().integer().min(Joi.ref('start')).max(9999).required(),
+}).custom((value, helpers) => value.end - value.start >= 50 || !value.prefix.trim() ? helpers.error('any.invalid') : value);
+function bulkUnitRequestId(batchId, index) {
+  if (index === 0) return batchId;
+  const bytes = crypto.createHash('sha256').update(`home-unit:${batchId}:${index}`).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+async function createUnitBatch(req, res) {
+  res.set('Cache-Control', 'private, no-store');
+  if (req.body.expected_actor_id !== req.user.id) return res.status(409).json({ error: 'Your account changed. Reopen the property before creating units.' });
+  const labels = req.body.units ? req.body.units.map(unit => unit.label)
+    : Array.from({ length: req.body.end - req.body.start + 1 }, (_, index) => `${req.body.prefix}${req.body.start + index}`.trim());
+  if (new Set(labels.map(label => label.toLowerCase())).size !== labels.length) return res.status(400).json({ error: 'Each unit label must be distinct.' });
+  const results = [], parentId = req.params.homeId, actorId = req.user.id, batchId = req.body.request_id;
+  const reply = (state) => res.status(state === 'pending' ? 202 : 200).json({ state, request_id: batchId, actor_id: actorId,
+    home_id: parentId, results, total: labels.length, requires_verification: true });
+  try {
+    const { data: parent, error: parentError } = await supabaseAdmin.from('Home')
+      .select('id,address,address2,address_id,city,state,zipcode,country,home_type,home_status,security_state').eq('id', parentId).maybeSingle();
+    if (parentError) throw homeCreateService.failure();
+    if (!parent) return res.status(404).json({ error: 'Property not found.' });
+    if (parent.home_type !== 'multi_unit' || parent.home_status !== 'active' || parent.security_state !== 'normal'
+      || (parent.address2 || '').trim() || !parent.address_id) {
+      return res.status(409).json({ error: 'A current building with a validated address is required. Reopen its verification before creating units.' });
+    }
+    const batchHash = crypto.createHash('sha256').update(JSON.stringify({ parent_id: parentId, labels })).digest('hex');
+    for (const [index, label] of labels.entries()) {
+      const requestId = bulkUnitRequestId(batchId, index);
+      const addressHash = computeAddressHash(parent.address, label, parent.city, parent.state, parent.zipcode, parent.country || 'US');
+      const intent = { request_id: requestId, unit_number: label,
+        home_type: 'apartment', name: label, role: 'property_manager', is_owner: false, visibility: 'private',
+        bulk_parent_home_id: parentId, bulk_request_id: batchId, bulk_intent_hash: batchHash };
+      const { result, prepared, error } = await homeCreateService.resolve({ actorId, requestId, intent,
+        prepare: async () => {
+          const { data: cached, error: cacheError } = await supabaseAdmin.from('HomeAddress').select('id')
+            .eq('address_hash', addressHash).maybeSingle();
+          if (cacheError) throw homeCreateService.failure();
+          // A newly cached provider result must not change the original command's intent.
+          return prepareHomeCreate({ ...req, body: { ...intent, address: parent.address, city: parent.city,
+            state: parent.state, zip_code: parent.zipcode, country: parent.country || 'US',
+            ...(cached ? { address_id: cached.id } : {}) } }, { selectAddress: true });
+        } });
+      if (result.committed_now && prepared) await recordCreateHomeOutcomeSafe({ ...prepared.audit,
+        address_id: prepared.home.address_id, outcome: 'created', code: 'HOME_CREATED', status_code: 201,
+        message: 'Private unit setup saved; verification remains required.' });
+      if (result.state === 'completed') {
+        results.push({ label, request_id: requestId, state: 'completed', home_id: result.home_id });
+      } else if (result.state === 'rejected' && result.code === 'HOME_ALREADY_EXISTS') {
+        results.push({ label, request_id: requestId, state: 'existing', home_id: result.conflict_home_id });
+      } else {
+        results.push({ label, request_id: requestId, state: result.state,
+          code: result.code || 'HOME_CREATE_UNAVAILABLE', message: error?.body?.message || error?.body?.error
+            || (result.state === 'pending' ? 'This unit is still being resolved. Retry the original batch.' : 'This unit could not be created. Review its address and verification requirements.') });
+        return reply(result.state === 'pending' ? 'pending' : 'rejected');
+      }
+    }
+    return reply('completed');
+  } catch (error) {
+    // Earlier completed units remain saved. The retained original recovers
+    // their same IDs before attempting the first unresolved unit again.
+    if (results.length) return reply('pending');
+    return homeCreateService.sendError(res, error);
+  }
+}
+const requireUnitParent = (req, res, next) => {
+  if (Joi.string().uuid().validate(req.params.homeId).error) return res.status(400).json({ error: 'Invalid property.' });
+  req.params.homeId = req.params.homeId.toLowerCase(); return next();
+};
+router.post('/:homeId/units/import', verifyToken, homeOutboundLimiter, requireUnitParent, validate(importUnitSchema), requireAuthority, createUnitBatch);
+router.post('/:homeId/units/generate', verifyToken, homeOutboundLimiter, requireUnitParent, validate(generateUnitSchema), requireAuthority, createUnitBatch);
+
 router.get('/create-commands/:requestId', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try { return homeCreateService.send(res, await homeCreateService.read(req.user.id, req.params.requestId)); }
@@ -1159,13 +1250,9 @@ router.post('/', verifyToken, (req, res, next) => {
   // clients persist their UUID and original body before making this request.
   const requestId = req.body.request_id || crypto.randomUUID();
   const actorId = req.user.id;
-  let leaseId;
   try {
-    const command = await homeCreateService.begin(actorId, requestId, req.body);
-    leaseId = command.worker_lease_id;
-    if (!leaseId) return homeCreateService.send(res, command);
-    const prepared = await prepareHomeCreate(req);
-    const result = await homeCreateService.commit(actorId, requestId, leaseId, req.body, prepared);
+    const { result, prepared, error } = await homeCreateService.resolve({ actorId, requestId, intent: req.body,
+      prepare: () => prepareHomeCreate(req) });
     if (result.committed_now) {
       await recordCreateHomeOutcomeSafe({ ...prepared.audit, address_id: prepared.home.address_id, outcome: 'created',
         code: 'HOME_CREATED', status_code: 201,
@@ -1180,19 +1267,8 @@ router.post('/', verifyToken, (req, res, next) => {
         }
       }
     }
-    return homeCreateService.send(res, result);
+    return homeCreateService.send(res, result, error);
   } catch (error) {
-    if (leaseId) {
-      try {
-        // A lost commit reply can already have completed. Its durable outcome
-        // wins; transient failures only release this worker for an exact retry.
-        return homeCreateService.send(res, await homeCreateService.finish(actorId, requestId, leaseId, error), error);
-      } catch (_) {
-        // Even an earlier provider refusal cannot resolve a newer worker's
-        // outcome when the durable-command read fails.
-        return homeCreateService.sendError(res, homeCreateService.failure());
-      }
-    }
     return homeCreateService.sendError(res, error);
   }
 });

@@ -745,3 +745,113 @@ test('a matching invitation reported closed permits a fresh invitation instead o
   await waitFor(() => expect(screen.getByRole('button', { name: 'Send Invite' })).toBeEnabled());
   expect(mockOriginals.size).toBe(0); expect(screen.getByLabelText('Email address')).not.toBeDisabled();
 });
+
+const unitHomeId = 'ddf10001-0000-4000-8000-000000000500';
+function unitBatchResult(input: { request_id: string; expected_actor_id: string; units?: { label: string }[]; prefix?: string; start?: number; end?: number }, state = 'completed') {
+  const labels = input.units?.map(unit => unit.label) || Array.from({ length: input.end! - input.start! + 1 }, (_, index) => `${input.prefix}${input.start! + index}`.trim());
+  return { state, request_id: input.request_id, actor_id: input.expected_actor_id, home_id: unitHomeId, requires_verification: true,
+    total: labels.length, results: labels.map((label, index) => ({ label, request_id: index === 0 ? input.request_id : `ddf10001-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      home_id: `ddf10001-0000-4000-8000-${String(index + 100).padStart(12, '0')}`, state: state === 'pending' && index === labels.length - 1 ? 'pending' : 'completed' })) };
+}
+async function openUnitImport(props = { ...unitLeaseProps(), homeId: unitHomeId }) {
+  const view = render(<UnitsTab {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Import units' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled());
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Apt 103\nApt 104' } });
+  return { view, props };
+}
+
+test('unit import persists before POST, survives remount and recovers the same original after a lost reply', async () => {
+  jest.mocked(post).mockImplementationOnce(async () => { expect(mockOriginals.size).toBe(1); throw new Error('Lost unit response'); })
+    .mockImplementationOnce(async (_path, input) => unitBatchResult(input as Parameters<typeof unitBatchResult>[0]));
+  const { view, props } = await openUnitImport();
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  await screen.findByText('Lost unit response');
+  const first = jest.mocked(post).mock.calls[0];
+  expect(first[0]).toBe(`/api/homes/${unitHomeId}/units/import`);
+  expect(screen.getByRole('textbox')).toBeDisabled(); expect(props.onRefresh).not.toHaveBeenCalled();
+  view.unmount(); render(<UnitsTab {...props} />);
+  await screen.findByRole('button', { name: 'Retry Original Batch' });
+  expect(post).toHaveBeenCalledTimes(1); expect(screen.getByRole('textbox')).toHaveValue('Apt 103\nApt 104');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Batch' }));
+  await screen.findByRole('button', { name: 'Done' });
+  expect(jest.mocked(post).mock.calls[1]).toEqual(first); expect(mockOriginals.size).toBe(1);
+  expect(screen.getByText(/Each unit still needs verification/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  await waitFor(() => expect(props.onRefresh).toHaveBeenCalledTimes(1)); expect(mockOriginals.size).toBe(0);
+});
+
+test('a partial unit batch retains the original and cannot be mistaken for completed import', async () => {
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => unitBatchResult(input as Parameters<typeof unitBatchResult>[0], 'pending'))
+    .mockImplementationOnce(async (_path, input) => unitBatchResult(input as Parameters<typeof unitBatchResult>[0]));
+  const { props } = await openUnitImport(); fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  await screen.findByRole('button', { name: 'Retry Original Batch' });
+  expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument(); expect(props.onRefresh).not.toHaveBeenCalled();
+  expect(screen.getByText(/Saved unit setups: 1/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Batch' })); await screen.findByRole('button', { name: 'Done' });
+  expect(jest.mocked(post).mock.calls[1]).toEqual(jest.mocked(post).mock.calls[0]);
+});
+
+test.each(['actor', 'home', 'batch', 'incomplete', 'unverified', 'duplicate receipt'])('a unit reply with %s mismatch cannot clear recovery or report completion', async mismatch => {
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => {
+    const result = unitBatchResult(input as Parameters<typeof unitBatchResult>[0]);
+    if (mismatch === 'actor') result.actor_id = 'other'; else if (mismatch === 'home') result.home_id = 'other';
+    else if (mismatch === 'batch') result.request_id = crypto.randomUUID(); else if (mismatch === 'incomplete') result.results.pop();
+    else if (mismatch === 'unverified') result.requires_verification = false;
+    else result.results[1].request_id = result.results[0].request_id;
+    return result;
+  });
+  const { props } = await openUnitImport(); fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  await screen.findByText('The unit results could not be confirmed. Retry the original batch.');
+  expect(mockOriginals.size).toBe(1); expect(props.onRefresh).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+});
+
+test.each(['Apt 1,apt 1', ' ', Array.from({ length: 51 }, (_, i) => `Apt ${i}`).join(','), 'A'.repeat(51)])('invalid import labels cannot be retained or posted (%s)', async labels => {
+  await openUnitImport(); fireEvent.change(screen.getByRole('textbox'), { target: { value: labels } });
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  await screen.findByText(/Enter 1–50 distinct unit labels/); expect(post).not.toHaveBeenCalled(); expect(mockOriginals.size).toBe(0);
+});
+
+test.each(['1.5', ''])('generation rejects noninteger or absent range values (%s) without a request', async start => {
+  render(<UnitsTab {...unitLeaseProps()} homeId={unitHomeId} />); fireEvent.click(screen.getByRole('button', { name: 'Generate range' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled());
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Apt ' } });
+  fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: start } });
+  fireEvent.change(screen.getAllByRole('spinbutton')[1], { target: { value: '3' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+  await screen.findByText(/Enter 1–50 distinct unit labels/); expect(post).not.toHaveBeenCalled();
+});
+
+test('generation uses the supported SDK route and preserves its exact prefix and integer range', async () => {
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => unitBatchResult(input as Parameters<typeof unitBatchResult>[0]));
+  render(<UnitsTab {...unitLeaseProps()} homeId={unitHomeId} />); fireEvent.click(screen.getByRole('button', { name: 'Generate range' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled());
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Apt ' } });
+  fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '105' } });
+  fireEvent.change(screen.getAllByRole('spinbutton')[1], { target: { value: '106' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Generate' })); await screen.findByRole('button', { name: 'Done' });
+  expect(post).toHaveBeenCalledWith(`/api/homes/${unitHomeId}/units/generate`, expect.objectContaining({ prefix: 'Apt ', start: 105, end: 106, expected_actor_id: 'owner-1' }));
+});
+
+test.each(['retired', 'account', 'unmounted'])('a %s page while protected unit storage is pending cannot send', async departure => {
+  let release!: () => void, current = true;
+  mockRetainGate = new Promise(done => { release = done; });
+  const { view, props } = await openUnitImport({ ...unitLeaseProps(jest.fn(), () => current), homeId: unitHomeId });
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  if (departure === 'retired') current = false; else if (departure === 'account') localStorage.setItem('pantopus_auth_session_change', 'changed'); else view.unmount();
+  await act(async () => release()); expect(post).not.toHaveBeenCalled(); expect(props.onRefresh).not.toHaveBeenCalled(); expect(mockOriginals.size).toBe(0);
+});
+
+test('a storage failure keeps unit creation disabled until recovery is reopened', async () => {
+  const { props } = await openUnitImport(); mockStorageFailure = 'retain';
+  fireEvent.click(screen.getByRole('button', { name: 'Import' })); await screen.findByText('Recovery save failed');
+  expect(post).not.toHaveBeenCalled(); expect(props.onRefresh).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+});
+
+test('a stale unit acknowledgement cannot erase another tab’s original', async () => {
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => unitBatchResult(input as Parameters<typeof unitBatchResult>[0]));
+  const { props } = await openUnitImport(); fireEvent.click(screen.getByRole('button', { name: 'Import' })); await screen.findByRole('button', { name: 'Done' });
+  const [key, snapshot] = [...mockOriginals][0]; const replacement = { ...snapshot, revision: 'newer-revision' }; mockOriginals.set(key, replacement);
+  fireEvent.click(screen.getByRole('button', { name: 'Done' })); await screen.findByText('Another tab changed the saved original');
+  expect(mockOriginals.get(key)).toBe(replacement); expect(props.onRefresh).not.toHaveBeenCalled();
+});

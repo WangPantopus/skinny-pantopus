@@ -10,6 +10,7 @@ const MESSAGES = {
   HOME_CREATE_COMMAND_NOT_FOUND: 'This request has not been found. Retry it or cancel it before starting again.',
   HOME_CREATE_INTENT_CONFLICT: 'This request has different details. Recover the original request before editing.',
   HOME_ALREADY_EXISTS: 'This Home already exists on Pantopus. Review its joining options.',
+  HOME_CREATE_PARENT_UNAVAILABLE: 'The selected building or its authority changed. Reopen its verification before creating units.',
   HOME_CREATE_ROLE_INVALID: 'Choose your relationship to this Home again.',
   HOME_SECRET_INVALID: 'Check the optional Wi-Fi and access details, then try again.',
   HOME_SECRET_WRITE_DENIED: 'Your account cannot save those optional access details.',
@@ -75,6 +76,22 @@ async function commit(actorId, requestId, leaseId, intent, prepared) {
     p_intent: intent, p_home: prepared.home, p_canonical_address: prepared.canonicalAddress,
     p_templates: templates, p_step_up: prepared.stepUp });
 }
+// Shared by individual creation and the existing building's unit tools. The
+// same durable command decides whether a lost commit is complete or retryable.
+async function resolve({ actorId, requestId, intent, prepare }) {
+  let leaseId;
+  try {
+    const command = await begin(actorId, requestId, intent);
+    leaseId = command.worker_lease_id;
+    if (!leaseId) return { result: command };
+    const prepared = await prepare();
+    return { result: await commit(actorId, requestId, leaseId, intent, prepared), prepared };
+  } catch (error) {
+    if (!leaseId) throw error;
+    try { return { result: await finish(actorId, requestId, leaseId, error), error }; }
+    catch { throw failure(); }
+  }
+}
 function send(res, result, originalError = null) {
   // Explicit projection: worker leases, hashes and prepared/request data never
   // enter a response. Original outcome IDs confer no current Home authority.
@@ -113,4 +130,4 @@ function sendError(res, error) {
   if (error?.homeCreateRefusal) return res.status(error.statusCode).json(error.body);
   return res.status(503).json({ error: failure().message, code: 'HOME_CREATE_UNAVAILABLE' });
 }
-module.exports = { begin, read, cancel, commit, finish, send, sendError, refusal, failure };
+module.exports = { begin, read, cancel, commit, finish, resolve, send, sendError, refusal, failure };

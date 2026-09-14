@@ -10,7 +10,11 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/lease-approval-dates`, draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
+`codex/landlord-unit-tools`, starting from the accepted local lease checkpoint
+`c51740fce`. Its unit-tool repair connects the existing controls through shared Home creation;
+73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
+See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
+`codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
 against `codex/home-permission-boundaries`. Owner checkout edits and all unrelated
 worktrees are preserved. The separate renewal/two-table draft remains paused.
 
@@ -41,28 +45,26 @@ pgTAP wrapper. Application-function lint has266 functions/85 trigger bindings,
 zero errors/eight existing warnings. Actual browser/SDK/HTTP/SQL and9 actual
 IndexedDB/WebCrypto checks pass within their documented synthetic boundaries.
 
-**Git/CI:** pushed c334ea664 includes creation, sharing and building repairs.
-[CI34836085491](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34836085491)
-failed the generated SQL wrapper synchronization gate; native jobs were still
-running at last inspection. The source SQL contract had passed locally. Its
-existing wrapper is now regenerated and passes actual pgTAP, and all54 wrappers
-verify. After any scripts/db/contracts edit, run the existing
-`node scripts/db/sync-sql-contracts.cjs` and `--check` before push. Local protected
-recovery checkpoint0b25485fe and the subsequent notice repair/correction await
-push and their own CI. Do not relabel the failed run green. Last complete green
-source40866ab85 passed15 applicable checks/one unchanged Seeder skip in
-[CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732).
-Recheck branch/status/remote PR and CI before relying on these recorded heads.
+**Git/CI:** lease checkpoint c51740fce is pushed to PR38. Its fresh
+[CI34840961607](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34840961607)
+has passed its database and web/backend jobs; native jobs were still running at
+last inspection. Prior [CI34836085491](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34836085491)
+failed the generated SQL wrapper synchronization gate; other nonaggregate jobs
+passed except the unchanged Seeder skip. The existing wrapper was regenerated
+and passes actual pgTAP. Do not relabel that failed run green. After any contract
+edit run the existing wrapper sync and --check; all54 currently synchronize.
+The unit branch has its own candidate verification; recheck its PR/CI before
+integration. Last complete green source40866ab85 passed15 applicable checks/one
+unchanged Seeder skip in [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732).
 
-**Next:** connect the existing bulk-unit controls through existing canonical
-address/Home-creation implementations. The SDK import/generate URLs currently
-have no backend handlers. Existing home.js prepareHomeCreate and homeCreateService
-already validate addresses and use protected HomeCreateCommand recovery; the
-existing commit function derives parent_home_id from canonical identity. Unit
-labels alone must not fabricate validated addresses or verified unit authority.
-Trace these contracts before extending them. Afterwards finish R05 private lease
-attachments, native invitation links, installed Android/provider criteria and
-then the remaining inventory. No speculative replacement/renewal schema.
+**Next:** finish CI/review of existing unit tools, then trace the existing private
+lease attachment/storage path before extending it. The unit repair reuses Home,
+canonical validation, protected HomeCreateCommand recovery and existing encrypted
+browser storage. It adds no table, migration or replacement screen. Confirmed
+parent authority never becomes verified unit authority. Import and Generate now
+report partial progress and retry the same original after Close/reload. Afterwards
+finish R05 native invitation links, installed Android/provider criteria and the
+remaining inventory. No speculative replacement/renewal schema.
 
 **Native evidence/limits:** unchanged request/display source passes50 iOS/49
 Android focused/rendering tests and static checks. Installed iOS covers Back/
@@ -76,12 +78,15 @@ populated adoption and hosted rollout remain open. Notification recovery is
 best effort and requires retry after a lost process; no eventual-push claim.
 
 **Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
-notice API18116 and Next18110 are active. Earlier unit/invitation/sharing/building/
+Next18110 remains active. Unit API18117 and notice API18116 are stopped.
+The unit fixture has zero remaining owned Home, User, address or command rows;
+source/evidence and exact cleanup are recorded in the private checkpoint. Earlier unit/invitation/sharing/building/
 creation/retention/native API fixtures are stopped with exact row cleanup. The
 owned iOS simulator, Android AVD and Android Studio are stopped; owner iPhone17,
 Bill Acceptance and Home Recurrence Acceptance devices remain untouched. The
 schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserved;
-direct PostgreSQL64522 responds. Docker control stalls: use the private direct-SQL
+direct PostgreSQL64522 responds. Its existing Home-create function includes the
+unit candidate body, with unchanged signature and passing generated SQL contract. Docker control stalls: use the private direct-SQL
 helper that verifies the exact database, not repeated Docker calls/global restart.
 Inspect the private current-checkpoint/runtime leases before reuse; clean exact
 owned fixtures afterwards. Credentials, tokens, archives and operator logs stay

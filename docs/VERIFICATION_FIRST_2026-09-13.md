@@ -1409,3 +1409,59 @@ best effort. Older unkeyed historical notices are not retroactively deduplicated
 no record cleanup is inferred. The current lease-creation transaction/branch is
 unmerged. Next: existing bulk-unit controls and canonical Home/address creation;
 private lease attachments and remaining native/provider/adoption criteria stay open.
+
+
+### Existing unit import and range generation
+
+The existing UnitsTab Import and Generate controls and SDK methods both reached
+missing routes (actual HTTP404 and browser failure). The repair on
+`codex/landlord-unit-tools`, based on lease checkpoint `c51740fce`, connects those
+controls to the existing Home router and shared Home-create command execution.
+Home remains the unit registry. No new screen, tracked file, table, migration or
+SQL function signature is introduced; the existing unmerged Home-create commit
+function gains the selected-parent check.
+
+Each label uses the existing live/cached canonical-address checks and provisional
+property-manager setup. The server-selected unit path obtains its address through
+that same validator, including when individual clients must supply an address ID.
+The existing provider option leaves household deduplication to the locked SQL
+check so an existing unit can be returned unchanged. Units do not inherit verified
+authority or ownership from the building. Current parent status, physical identity,
+verified authority and current business seat/binding or legacy team proof are
+checked under locks before inserting. Private ownership stays unclaimed, with
+null owner pointer, provisional occupancy and capped permissions.
+
+The original bounded batch is encrypted through the existing protected recovery
+adapter before POST. Stable per-unit command IDs and the full batch intent hash
+prevent later-label changes from appending different work to an original request.
+Earlier completed units survive a later provider outage; pending/terminal outcomes
+stop the batch. Close/reload preserves the original without an automatic POST;
+explicit retry recovers its same IDs. Only acknowledged completed or durable
+terminal results are compare-cleared. Current account, property and page checks
+retire delayed storage/response work. Existing layout/classes are preserved; status
+copy distinguishes saved setup, existing units, partial progress and verification.
+
+Validation:73 selected backend address/owner/coordinate tests,90 rendered web
+lease/unit tests, standalone web TypeScript and scoped lint, all existing privacy
+gates, the extended Home-create SQL contract and its actual generated pgTAP wrapper
+pass. All54 wrappers synchronize. Application SQL lint checks266 functions and85
+trigger bindings with zero errors/eight existing warnings. Twelve actual HTTP/SQL
+checks cover input bounds, actor/authority rejection, original/concurrent retries,
+existing-unit preservation, live canonical creation, partial outage, provider
+refusal and authority revoked after middleware approval. Existing direct, business
+seat and legacy team SQL cases also pass with provisional capability assertions.
+
+Two actual Chrome journeys use the real component/SDK/routes/service/pipeline/SQL:
+Import saves two units but loses its HTTP reply, then Close/reload restores the
+original without POST and retry recovers the same rows; Generate saves one unit,
+loses its provider for the next, then reload/retry saves only the unresolved unit.
+Done returns to the same list with six total units:two initial plus four new. The
+four new units have no verified authority and offer no tenant invitation action.
+The existing screen styling was visually inspected. Real encrypted browser storage
+is exercised here; reuse the prior nine WebCrypto/IndexedDB adapter checks.
+
+Evidence is privately retained at `unit-bulk-r1` under the lease-transaction audit
+root. Authentication and Google/Smarty replies are synthetic; no external provider
+acceptance or delivery is claimed. This covers existing web bulk controls, not
+unimplemented native bulk UI. R05 private attachments, native links/installed
+Android and provider acceptance, populated adoption and rollout remain open.

@@ -163,6 +163,7 @@ DECLARE
   v_conflict uuid; v_parent uuid; v_claim uuid; v_secret jsonb; v_secret_result jsonb;
   v_secrets uuid[]:=ARRAY[]::uuid[]; v_code text; v_error_status text; v_now timestamptz;
   v_risk integer:=5; v_count integer; v_rejections integer; v_step public."AddressVerificationAttempt"%ROWTYPE;
+  v_bulk_parent public."Home"%ROWTYPE; v_bulk_allowed boolean;
 BEGIN
   IF p_actor_id IS NULL OR p_request_id IS NULL OR p_lease_id IS NULL
     OR jsonb_typeof(p_intent) IS DISTINCT FROM 'object'
@@ -198,6 +199,42 @@ BEGIN
     OR coalesce(h.address2,'')<>coalesce(a.address_line2_norm,'') OR h.city IS DISTINCT FROM a.city_norm
     OR h.state IS DISTINCT FROM a.state OR h.zipcode IS DISTINCT FROM a.postal_code THEN
     RAISE EXCEPTION 'Invalid prepared Home identity' USING ERRCODE='22023'; END IF;
+  IF p_intent ? 'bulk_parent_home_id' THEN
+    -- Unit labels are not ownership evidence. Recheck the selected building's
+    -- current authority before its private unit setup, under the existing locks.
+    IF jsonb_typeof(p_intent->'bulk_parent_home_id') IS DISTINCT FROM 'string'
+      OR (p_intent->>'bulk_parent_home_id') !~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+      OR p_intent->>'role' IS DISTINCT FROM 'property_manager' OR h.home_type IS DISTINCT FROM 'apartment'
+      OR nullif(btrim(h.address2),'') IS NULL THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    IF NOT public.lock_home_invitation_scope((p_intent->>'bulk_parent_home_id')::uuid) THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    SELECT * INTO v_bulk_parent FROM public."Home" WHERE id=(p_intent->>'bulk_parent_home_id')::uuid;
+    IF v_bulk_parent.home_status IS DISTINCT FROM 'active' OR v_bulk_parent.security_state IS DISTINCT FROM 'normal'
+      OR v_bulk_parent.home_type IS DISTINCT FROM 'multi_unit' OR nullif(btrim(v_bulk_parent.address2),'') IS NOT NULL
+      OR v_bulk_parent.address_id IS NULL OR lower(btrim(v_bulk_parent.address)) IS DISTINCT FROM lower(btrim(h.address))
+      OR lower(btrim(v_bulk_parent.city)) IS DISTINCT FROM lower(btrim(h.city)) OR lower(btrim(v_bulk_parent.state)) IS DISTINCT FROM lower(btrim(h.state))
+      OR v_bulk_parent.zipcode IS DISTINCT FROM h.zipcode OR lower(coalesce(v_bulk_parent.country,'US'))<>lower(coalesce(h.country,'US')) THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    PERFORM id FROM public."HomeAuthority" WHERE home_id=v_bulk_parent.id ORDER BY id FOR UPDATE;
+    v_bulk_allowed:=EXISTS(SELECT FROM public."HomeAuthority" WHERE home_id=v_bulk_parent.id AND status='verified'
+      AND subject_type='user' AND subject_id=p_actor_id);
+    IF NOT v_bulk_allowed THEN
+      PERFORM s.id FROM public."BusinessSeat" s JOIN public."SeatBinding" b ON b.seat_id=s.id
+        WHERE b.user_id=p_actor_id AND s.is_active AND EXISTS(SELECT FROM public."HomeAuthority" au
+          WHERE au.home_id=v_bulk_parent.id AND au.status='verified' AND au.subject_type='business' AND au.subject_id=s.business_user_id)
+        ORDER BY s.id FOR UPDATE OF s,b;
+      v_bulk_allowed:=FOUND;
+      IF NOT v_bulk_allowed THEN
+        PERFORM id FROM public."BusinessTeam" t WHERE t.user_id=p_actor_id AND t.is_active
+          AND EXISTS(SELECT FROM public."HomeAuthority" au WHERE au.home_id=v_bulk_parent.id AND au.status='verified'
+            AND au.subject_type='business' AND au.subject_id=t.business_user_id) ORDER BY id FOR UPDATE;
+        v_bulk_allowed:=FOUND;
+      END IF;
+    END IF;
+    IF NOT v_bulk_allowed THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+  END IF;
   SELECT id INTO v_conflict FROM public."Home" WHERE home_status='active' AND (
     address_hash=h.address_hash OR address_id=h.address_id OR (
       lower(btrim(address))=lower(btrim(h.address)) AND lower(btrim(coalesce(address2,'')))=lower(btrim(coalesce(h.address2,'')))
@@ -250,6 +287,8 @@ BEGIN
         AND lower(btrim(state))=lower(btrim(h.state)) AND zipcode=h.zipcode
         AND lower(coalesce(country,'US'))=lower(coalesce(h.country,'US')) ORDER BY created_at,id LIMIT 1;
     END IF;
+    IF v_bulk_parent.id IS NOT NULL AND v_parent IS DISTINCT FROM v_bulk_parent.id THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
     INSERT INTO public."Home"(address,address2,city,state,zipcode,country,address_hash,address_id,owner_id,
       name,home_type,bedrooms,bathrooms,sq_ft,lot_sq_ft,year_built,move_in_date,is_owner,description,
       entry_instructions,parking_instructions,visibility,amenities,niche_data,created_by_user_id,tenure_mode,

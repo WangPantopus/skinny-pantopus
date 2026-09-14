@@ -374,3 +374,83 @@ describe('coordinate provenance at create', () => {
     expect(home.map_center_lat).toBe(45.52);
   });
 });
+
+describe('existing building unit tools reuse private Home creation', () => {
+  const parentId = 'ddf10001-0000-4000-8000-000000000500', batchId = 'ddf10001-0000-4000-8000-000000000501';
+  const body = () => ({ request_id: batchId, expected_actor_id: TEST_USER, units: [{ label: 'Apt 103' }, { label: 'Apt 104' }] });
+  beforeEach(() => {
+    seedTable('Home', [{ id: parentId, address: CREATE_BODY.address, city: CREATE_BODY.city, state: CREATE_BODY.state,
+      zipcode: CREATE_BODY.zipcode, country: 'US', address_id: 'ddf10001-0000-4000-8000-000000000502',
+      home_type: 'multi_unit', home_status: 'active', security_state: 'normal' }]);
+    seedTable('HomeAuthority', [{ id: 'ddf10001-0000-4000-8000-000000000503', home_id: parentId,
+      subject_type: 'user', subject_id: TEST_USER, status: 'verified' }]);
+    pipelineService.runValidationPipeline.mockImplementation(async input => ({ verdict: { status: 'OK', confidence: 1, reasons: [] },
+      canonical_address: { id: '77777777-7777-4777-8777-777777777777', address_line1_norm: input.line1,
+        address_line2_norm: input.line2, city_norm: input.city, state: input.state, postal_code: input.zip,
+        country: 'US', address_hash: 'canonicalhash' }, address_id: null }));
+  });
+  test('the client address-ID gate does not prevent server-selected live unit validation and provisional setup', async () => {
+    const config = require('../../config/addressVerification'), previous = config.rollout.requireAddressIdForHomeCreate;
+    config.rollout.requireAddressIdForHomeCreate = true;
+    try {
+      const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send(body());
+      expect(res.status).toBe(200); expect(res.body.state).toBe('completed'); expect(res.body.requires_verification).toBe(true);
+      expect(createBoundary.commits()).toHaveLength(2);
+      expect(new Set(createBoundary.commits().map(c => c.p_request_id)).size).toBe(2);
+      for (const [index, commit] of createBoundary.commits().entries()) {
+        expect(commit.p_intent).toMatchObject({ bulk_parent_home_id: parentId, bulk_request_id: batchId,
+          unit_number: body().units[index].label, role: 'property_manager', is_owner: false });
+        expect(commit.p_home).toMatchObject({ owner_id: null, home_type: 'apartment', address2: body().units[index].label });
+        expect(commit.p_templates.adult).toMatchObject({ verification_status: 'provisional_bootstrap', can_manage_home: false,
+          can_manage_access: false, can_view_sensitive: false });
+      }
+      expect(pipelineService.runValidationPipeline).toHaveBeenCalledTimes(2);
+      expect(pipelineService.runValidationPipeline.mock.calls[0][1]).toMatchObject({ includeHousehold: false });
+      expect(getTable('Home')).toHaveLength(1);
+    } finally { config.rollout.requireAddressIdForHomeCreate = previous; }
+  });
+  test('generation preserves prefix spacing and inclusive whole-number labels', async () => {
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/generate`).send({
+      request_id: batchId, expected_actor_id: TEST_USER, prefix: 'Apt ', start: 105, end: 106 });
+    expect(res.status).toBe(200); expect(res.body.results.map(row => row.label)).toEqual(['Apt 105', 'Apt 106']);
+  });
+  test.each([
+    ['missing recovery identity', { units: [{ label: 'Apt 103' }] }],
+    ['duplicate label', { ...body(), units: [{ label: 'Apt 103' }, { label: 'apt 103' }] }],
+    ['oversized batch', { ...body(), units: Array.from({ length: 51 }, (_, i) => ({ label: `Apt ${i}` })) }],
+  ])('%s is rejected before provider work or creation', async (_name, input) => {
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send(input);
+    expect(res.status).toBe(400); expect(createBoundary.commits()).toHaveLength(0);
+    expect(pipelineService.runValidationPipeline).not.toHaveBeenCalled();
+  });
+  test('unknown client fields cannot override the selected building or grant ownership', async () => {
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send({
+      ...body(), is_owner: true, role: 'owner', address: 'Some other building' });
+    expect(res.status).toBe(200);
+    for (const commit of createBoundary.commits()) {
+      expect(commit.p_intent).toMatchObject({ role: 'property_manager', is_owner: false, bulk_parent_home_id: parentId });
+      expect(commit.p_home).toMatchObject({ address: CREATE_BODY.address, owner_id: null });
+    }
+  });
+  test.each([['fractional', 1.5, 3], ['reversed', 4, 3], ['oversized', 1, 51], ['negative', -1, 3]])(
+    '%s range cannot be truncated or expanded silently', async (_name, start, end) => {
+      const res = await request(createApp()).post(`/api/homes/${parentId}/units/generate`).send({
+        request_id: batchId, expected_actor_id: TEST_USER, prefix: 'Apt ', start, end });
+      expect(res.status).toBe(400); expect(pipelineService.runValidationPipeline).not.toHaveBeenCalled();
+    });
+  test('changed observed account cannot create under another actor', async () => {
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send({ ...body(), expected_actor_id: parentId });
+    expect(res.status).toBe(409); expect(createBoundary.commits()).toHaveLength(0);
+  });
+  test.each(['frozen', 'house', 'unit'])('a %s parent cannot create units', async kind => {
+    const parent = getTable('Home')[0];
+    if (kind === 'frozen') parent.security_state = 'frozen'; else if (kind === 'house') parent.home_type = 'house'; else parent.address2 = 'Apt 1';
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send(body());
+    expect(res.status).toBe(409); expect(pipelineService.runValidationPipeline).not.toHaveBeenCalled();
+  });
+  test('revoked authority cannot invoke the provider or create commands', async () => {
+    getTable('HomeAuthority')[0].status = 'revoked';
+    const res = await request(createApp()).post(`/api/homes/${parentId}/units/import`).send(body());
+    expect(res.status).toBe(403); expect(pipelineService.runValidationPipeline).not.toHaveBeenCalled();
+  });
+});

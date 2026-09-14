@@ -111,4 +111,64 @@ BEGIN
  ASSERT NOT has_function_privilege('authenticated','public.commit_home_create_command(uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb)','EXECUTE');
 END $$;
 RESET ROLE;
+-- The existing building tools create private unit setup, not inherited ownership.
+INSERT INTO public."HomeAddress"(id,address_line1_norm,address_line2_norm,city_norm,state,postal_code,country,address_hash)
+ SELECT ('ddc24000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'Unit contract road',CASE WHEN n>301 THEN 'Apt '||n END,
+ 'Test','WA','98607','US',encode(sha256(convert_to('unit-create-fixture-'||n,'UTF8')),'hex') FROM generate_series(301,308)n;
+INSERT INTO public."Home"(id,address,address_id,city,state,zipcode,home_type)
+ VALUES('ddc24000-0000-4000-8000-000000000310','Unit contract road','ddc24000-0000-4000-8000-000000000301','Test','WA','98607','multi_unit');
+INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,status)
+ VALUES('ddc24000-0000-4000-8000-000000000320','ddc24000-0000-4000-8000-000000000310','user','ddc24000-0000-4000-8000-000000000001','owner','verified');
+CREATE FUNCTION pg_temp.unit_create_commit(actor uuid,request uuid,intent jsonb,address uuid) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE r jsonb; snapshot jsonb; templates jsonb;
+BEGIN
+ r:=public.begin_home_create_command(actor,request,intent); IF NOT r ? 'worker_lease_id' THEN RETURN r; END IF;
+ SELECT to_jsonb(a) INTO snapshot FROM public."HomeAddress" a WHERE id=address;
+ SELECT jsonb_object_agg(key,value||'{"role_base":"manager"}'::jsonb) INTO templates FROM jsonb_each(pg_temp.home_create_templates(false));
+ RETURN public.commit_home_create_command(actor,request,(r->>'worker_lease_id')::uuid,intent,
+  pg_temp.home_create_prepared(address)||'{"home_type":"apartment"}'::jsonb,snapshot,templates);
+END $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE actor uuid:='ddc24000-0000-4000-8000-000000000001'; other_actor uuid:='ddc24000-0000-4000-8000-000000000002';
+ parent uuid:='ddc24000-0000-4000-8000-000000000310'; authority uuid:='ddc24000-0000-4000-8000-000000000320';
+ addr uuid:='ddc24000-0000-4000-8000-000000000302'; q uuid:=gen_random_uuid(); r jsonb; first jsonb;
+ intent jsonb:=jsonb_build_object('role','property_manager','bulk_parent_home_id',parent,'bulk_intent_hash',repeat('a',64));
+BEGIN
+ r:=pg_temp.unit_create_commit(other_actor,gen_random_uuid(),intent,addr);
+ ASSERT r->>'state'='rejected' AND r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ ASSERT NOT EXISTS(SELECT FROM public."Home" WHERE address_id=addr);
+ UPDATE public."Home" SET security_state='frozen' WHERE id=parent;
+ r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr); ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ UPDATE public."Home" SET security_state='normal',home_type='house' WHERE id=parent;
+ r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr); ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ UPDATE public."Home" SET home_type='multi_unit' WHERE id=parent;
+ UPDATE public."HomeAuthority" SET status='revoked' WHERE id=authority;
+ r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr); ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ UPDATE public."HomeAuthority" SET status='verified' WHERE id=authority;
+ r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent||'{"role":"owner"}',addr); ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ r:=pg_temp.unit_create_commit(actor,q,intent,addr); first:=r; ASSERT r->>'state'='completed';
+ ASSERT (SELECT parent_home_id=parent AND owner_id IS NULL AND home_type='apartment' FROM public."Home" WHERE id=(r->>'home_id')::uuid);
+ ASSERT (SELECT role_base='manager' AND verification_status='provisional_bootstrap' AND verified_at IS NULL
+   AND NOT can_manage_access AND NOT can_manage_home AND NOT can_view_sensitive FROM public."HomeOccupancy" WHERE home_id=(r->>'home_id')::uuid AND user_id=actor);
+ ASSERT NOT EXISTS(SELECT FROM public."HomeAuthority" WHERE home_id=(r->>'home_id')::uuid);
+ ASSERT NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=(r->>'home_id')::uuid);
+ r:=pg_temp.unit_create_commit(actor,q,intent,addr); ASSERT r->>'home_id'=first->>'home_id';
+ r:=public.begin_home_create_command(actor,q,intent||jsonb_build_object('bulk_intent_hash',repeat('b',64))); ASSERT r->>'code'='HOME_CREATE_INTENT_CONFLICT';
+ ASSERT (SELECT count(*)=1 FROM public."Home" WHERE address_id=addr);
+ -- Business access is current seat/binding or current legacy team proof.
+ UPDATE public."HomeAuthority" SET status='revoked' WHERE id=authority;
+ INSERT INTO public."HomeAuthority"(home_id,subject_type,subject_id,role,status) VALUES(parent,'business',other_actor,'manager','verified');
+ INSERT INTO public."BusinessSeat"(id,business_user_id,display_name,is_active) VALUES('ddc24000-0000-4000-8000-000000000330',other_actor,'Unit contract seat',true);
+ INSERT INTO public."SeatBinding"(seat_id,user_id,binding_method) VALUES('ddc24000-0000-4000-8000-000000000330',actor,'invite_accept');
+ addr:='ddc24000-0000-4000-8000-000000000303';r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr);ASSERT r->>'state'='completed';
+ DELETE FROM public."SeatBinding" WHERE seat_id='ddc24000-0000-4000-8000-000000000330';
+ addr:='ddc24000-0000-4000-8000-000000000304';r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr);ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ INSERT INTO public."BusinessTeam"(business_user_id,user_id,role_base,is_active) VALUES(other_actor,actor,'admin',true);
+ r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr);ASSERT r->>'state'='completed';
+ UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id=other_actor AND user_id=actor;
+ addr:='ddc24000-0000-4000-8000-000000000305';r:=pg_temp.unit_create_commit(actor,gen_random_uuid(),intent,addr);ASSERT r->>'code'='HOME_CREATE_PARENT_UNAVAILABLE';
+ ASSERT NOT EXISTS(SELECT FROM public."Home" WHERE address_id=addr);
+ RAISE NOTICE 'Existing Home creation and current-parent unit setup contracts passed';
+END $$;
+RESET ROLE;
 ROLLBACK;

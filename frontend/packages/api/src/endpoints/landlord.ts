@@ -244,18 +244,26 @@ export async function removeStaff(homeId: string, staffId: string): Promise<{ su
 
 // ── Units (bulk) ────────────────────────────────────────────
 
-/** Import units from CSV */
-export async function importUnits(homeId: string, data: {
-  units: Array<{ label: string }>;
-}): Promise<{ created: number; units: PropertyUnit[] }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/import`, data);
+export type UnitBatchIdentity = { request_id: string; expected_actor_id: string };
+export type ImportUnitsInput = UnitBatchIdentity & { units: Array<{ label: string }> };
+export type GenerateUnitsInput = UnitBatchIdentity & { prefix: string; start: number; end: number };
+export type UnitBatchResult = {
+  state: 'completed' | 'pending' | 'rejected';
+  request_id: string;
+  actor_id: string;
+  home_id: string;
+  total: number;
+  requires_verification: true;
+  results: Array<{ label: string; request_id: string; state: 'completed' | 'existing' | 'pending' | 'rejected' | 'cancelled';
+    home_id?: string; code?: string; message?: string }>;
+};
+
+/** Import private unit setup through the existing Home creation boundary. */
+export async function importUnits(homeId: string, data: ImportUnitsInput): Promise<UnitBatchResult> {
+  return post(`/api/homes/${homeId}/units/import`, data);
 }
 
-/** Generate a range of units */
-export async function generateUnits(homeId: string, data: {
-  prefix: string;
-  start: number;
-  end: number;
-}): Promise<{ created: number; units: PropertyUnit[] }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/generate`, data);
+/** Generate private unit setup; retries retain the original batch identity. */
+export async function generateUnits(homeId: string, data: GenerateUnitsInput): Promise<UnitBatchResult> {
+  return post(`/api/homes/${homeId}/units/generate`, data);
 }

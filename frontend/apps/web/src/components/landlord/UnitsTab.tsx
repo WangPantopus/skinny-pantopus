@@ -266,12 +266,50 @@ function InviteTenantModal({
 
 // ── Bulk tools ──────────────────────────────────────────────
 
+type UnitBatchOriginal = { mode: 'csv'; input: landlord.ImportUnitsInput } | { mode: 'generate'; input: landlord.GenerateUnitsInput };
+const unitLabels = (original: UnitBatchOriginal) => original.mode === 'csv' ? original.input.units.map(unit => unit.label)
+  : Array.from({ length: original.input.end - original.input.start + 1 }, (_, index) => `${original.input.prefix}${original.input.start + index}`.trim());
+const unitUuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
+function validUnitOriginal(value: unknown, actorId: string): value is UnitBatchOriginal {
+  const v = value as UnitBatchOriginal | null;
+  if (!v || !v.input || v.input.expected_actor_id !== actorId || !unitUuid(v.input.request_id)) return false;
+  if (v.mode === 'csv') {
+    if (!Array.isArray(v.input.units) || v.input.units.length < 1 || v.input.units.length > 50
+      || v.input.units.some(unit => !unit || typeof unit.label !== 'string')) return false;
+  } else if (v.mode === 'generate') {
+    if (typeof v.input.prefix !== 'string' || !v.input.prefix.trim() || v.input.prefix.length > 30
+      || !Number.isInteger(v.input.start) || !Number.isInteger(v.input.end) || v.input.start < 0 || v.input.end > 9999
+      || v.input.end < v.input.start || v.input.end - v.input.start >= 50) return false;
+  } else return false;
+  const labels = unitLabels(v);
+  return labels.every(label => label.length > 0 && label.length <= 50 && label === label.trim())
+    && new Set(labels.map(label => label.toLowerCase())).size === labels.length;
+}
+function confirmedUnitResult(result: landlord.UnitBatchResult, original: UnitBatchOriginal, actorId: string, homeId: string): boolean {
+  const labels = unitLabels(original);
+  if (!result || result.request_id !== original.input.request_id || result.actor_id !== actorId || result.home_id !== homeId
+    || result.requires_verification !== true || result.total !== labels.length || !['completed', 'pending', 'rejected'].includes(result.state)
+    || !Array.isArray(result.results) || result.results.length > labels.length
+    || new Set(result.results.map(row => row?.request_id)).size !== result.results.length) return false;
+  const settled = (row: landlord.UnitBatchResult['results'][number]) => ['completed', 'existing'].includes(row.state) && unitUuid(row.home_id);
+  if (!result.results.every((row, index) => row && row.label === labels[index] && unitUuid(row.request_id)
+    && (index !== 0 || row.request_id === original.input.request_id)
+    && (settled(row) || index === result.results.length - 1 && ['pending', 'rejected', 'cancelled'].includes(row.state)))) return false;
+  if (result.state === 'completed') return result.results.length === labels.length && result.results.every(settled);
+  if (result.state === 'rejected') return ['rejected', 'cancelled'].includes(result.results.at(-1)?.state || '');
+  return result.results.every(settled) || result.results.at(-1)?.state === 'pending';
+}
+
 function BulkTools({
   homeId,
+  actorId,
   onSuccess,
+  isCurrent,
 }: {
   homeId: string;
+  actorId: string;
   onSuccess: () => void;
+  isCurrent: () => boolean;
 }) {
   const [mode, setMode] = useState<'idle' | 'csv' | 'generate'>('idle');
   const [csvText, setCsvText] = useState('');
@@ -280,55 +318,92 @@ function BulkTools({
   const [rangeEnd, setRangeEnd] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
+  const [retained, setRetained] = useState(false);
+  const [outcome, setOutcome] = useState<landlord.UnitBatchResult | null>(null);
+  const original = useRef<ProtectedRecoverySnapshot<UnitBatchOriginal> | null>(null);
+  const store = useRef<ProtectedRecoverySlot<UnitBatchOriginal> | null>(null);
+  const currentView = useRef(isCurrent); currentView.current = isCurrent;
+  const scope = useRef({ generation: 0, busy: false });
+  const [session] = useState(() => ({ auth: api.getAuthToken(), origin: api.getApiBaseUrl(),
+    marker: localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) }));
+  const sessionCurrent = () => currentView.current() && api.getAuthToken() === session.auth
+    && api.getApiBaseUrl() === session.origin && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === session.marker;
+  useEffect(() => {
+    const lifetime = scope.current, generation = ++lifetime.generation;
+    const current = () => lifetime.generation === generation && currentView.current()
+      && api.getAuthToken() === session.auth && api.getApiBaseUrl() === session.origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === session.marker;
+    void (async () => {
+      if (!actorId || !session.auth) throw new Error('Your account could not be confirmed. Reopen the property.');
+      const slot = new ProtectedRecoverySlot<UnitBatchOriginal>(['home-unit-batch-v1', session.origin, actorId, homeId],
+        (value): value is UnitBatchOriginal => validUnitOriginal(value, actorId));
+      const saved = await slot.load(); if (!current()) return;
+      store.current = slot; original.current = saved;
+      if (saved) {
+        setRetained(true); setMode(saved.value.mode);
+        if (saved.value.mode === 'csv') setCsvText(saved.value.input.units.map(unit => unit.label).join('\n'));
+        else { setPrefix(saved.value.input.prefix); setRangeStart(String(saved.value.input.start)); setRangeEnd(String(saved.value.input.end)); }
+      }
+      setReady(true);
+    })().catch(err => { if (current()) setError(extractApiError(err, 'Recovery could not be opened. Reopen the property before creating units.')); });
+    return () => { ++lifetime.generation; };
+  }, [actorId, homeId, session]);
 
-  const handleCSVImport = async () => {
-    const labels = csvText
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (labels.length === 0) return;
-
-    setLoading(true);
-    setError('');
+  const submit = async () => {
+    if (!ready || !store.current || !sessionCurrent() || scope.current.busy || mode === 'idle') return;
+    const generation = scope.current.generation;
+    const current = () => generation === scope.current.generation && sessionCurrent();
+    scope.current.busy = true; setLoading(true); setError('');
     try {
-      await api.landlord.importUnits(homeId, { units: labels.map((label) => ({ label })) });
-      setCsvText('');
-      setMode('idle');
-      onSuccess();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Import failed');
-    } finally {
-      setLoading(false);
-    }
+      if (!original.current) {
+        const identity = { request_id: crypto.randomUUID(), expected_actor_id: actorId };
+        const value: UnitBatchOriginal = mode === 'csv' ? { mode, input: { ...identity,
+          units: csvText.split(/[\n,]/).map(label => label.trim()).filter(Boolean).map(label => ({ label })) } }
+          : { mode, input: { ...identity, prefix, start: rangeStart.trim() ? Number(rangeStart) : NaN, end: rangeEnd.trim() ? Number(rangeEnd) : NaN } };
+        if (!validUnitOriginal(value, actorId)) {
+          setError('Enter 1–50 distinct unit labels, up to 50 characters each. Ranges need whole numbers from 0 to 9999.'); return;
+        }
+        original.current = await store.current.retain(value, current);
+        if (!current()) return;
+        setRetained(true);
+      }
+      if (!current()) return;
+      const saved = original.current.value;
+      const result = saved.mode === 'csv' ? await api.landlord.importUnits(homeId, saved.input) : await api.landlord.generateUnits(homeId, saved.input);
+      if (!current()) return;
+      if (!confirmedUnitResult(result, saved, actorId, homeId)) throw new Error('The unit results could not be confirmed. Retry the original batch.');
+      setOutcome(result);
+      if (result.state !== 'completed') setError(result.results.at(-1)?.message || 'Some units remain unresolved. Retry the original batch.');
+    } catch (err) {
+      if (current()) {
+        // A failed storage reply may already have retained an original; never replace it blindly.
+        if (!original.current) setReady(false);
+        setError(extractApiError(err, 'The result is not confirmed. Retry the original batch.'));
+      }
+    } finally { if (current()) { scope.current.busy = false; setLoading(false); } }
   };
-
-  const handleGenerate = async () => {
-    const start = parseInt(rangeStart, 10);
-    const end = parseInt(rangeEnd, 10);
-    if (!prefix || isNaN(start) || isNaN(end) || start > end) return;
-
-    setLoading(true);
-    setError('');
+  const done = async () => {
+    if (!outcome || outcome.state === 'pending' || !store.current || !original.current || !sessionCurrent() || scope.current.busy) return;
+    const generation = scope.current.generation;
+    const current = () => generation === scope.current.generation && sessionCurrent();
+    scope.current.busy = true; setLoading(true);
     try {
-      await api.landlord.generateUnits(homeId, { prefix, start, end });
-      setPrefix('');
-      setRangeStart('');
-      setRangeEnd('');
-      setMode('idle');
-      onSuccess();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Generation failed');
-    } finally {
-      setLoading(false);
-    }
+      await store.current.clear(original.current, current); if (!current()) return;
+      original.current = null; setRetained(false); setOutcome(null); setCsvText(''); setPrefix(''); setRangeStart(''); setRangeEnd('');
+      setError(''); setMode('idle'); onSuccess();
+    } catch (err) { if (current()) setError(extractApiError(err, 'The result was kept. Please retry Done.')); }
+    finally { if (current()) { scope.current.busy = false; setLoading(false); } }
   };
+  const open = (nextMode: 'csv' | 'generate') => { if (!scope.current.busy) setMode(original.current?.value.mode || nextMode); };
+  const settled = outcome && outcome.state !== 'pending';
 
   if (mode === 'idle') {
     return (
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setMode('csv')}
+          onClick={() => open('csv')}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-app-text-secondary border border-app-border rounded-lg hover:bg-app-hover transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -338,7 +413,7 @@ function BulkTools({
         </button>
         <button
           type="button"
-          onClick={() => setMode('generate')}
+          onClick={() => open('generate')}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-app-text-secondary border border-app-border rounded-lg hover:bg-app-hover transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -356,6 +431,7 @@ function BulkTools({
         <>
           <p className="text-sm font-medium text-app-text-strong mb-2">Import units (one per line or comma-separated)</p>
           <textarea
+            disabled={!ready || loading || retained}
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
             rows={4}
@@ -371,6 +447,7 @@ function BulkTools({
           <div className="flex items-center gap-2">
             <input
               type="text"
+              disabled={!ready || loading || retained}
               value={prefix}
               onChange={(e) => setPrefix(e.target.value)}
               placeholder="A"
@@ -378,6 +455,7 @@ function BulkTools({
             />
             <input
               type="number"
+              disabled={!ready || loading || retained}
               value={rangeStart}
               onChange={(e) => setRangeStart(e.target.value)}
               placeholder="101"
@@ -386,6 +464,7 @@ function BulkTools({
             <span className="text-app-text-muted">&ndash;</span>
             <input
               type="number"
+              disabled={!ready || loading || retained}
               value={rangeEnd}
               onChange={(e) => setRangeEnd(e.target.value)}
               placeholder="130"
@@ -394,29 +473,32 @@ function BulkTools({
           </div>
           {prefix && rangeStart && rangeEnd && (
             <p className="mt-1 text-xs text-app-text-secondary">
-              Will create: {prefix}{rangeStart} &ndash; {prefix}{rangeEnd}
+              Unit range: {prefix}{rangeStart} &ndash; {prefix}{rangeEnd}
             </p>
           )}
         </>
       )}
 
+      <p className="mt-2 text-xs text-app-text-secondary">{!ready ? 'Checking protected recovery. Reopen the property if it cannot be read.'
+        : outcome ? `Saved unit setups: ${outcome.results.filter(row => row.state === 'completed').length}; already present: ${outcome.results.filter(row => row.state === 'existing').length}. ${outcome.state === 'completed' ? 'Each unit still needs verification before tenant management.' : outcome.state === 'rejected' ? 'The batch stopped; later units were not created.' : 'The original batch is kept for retry.'}`
+          : retained ? 'The original batch is kept. Retry it to confirm the saved units before changing details.' : 'Creates private unit setup. Each address is checked, and unit verification is still required.'}</p>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       <div className="mt-3 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => { setMode('idle'); setError(''); }}
+          onClick={() => { setMode('idle'); }}
           className="px-3 py-1.5 text-xs font-medium text-app-text-secondary hover:text-app-text"
         >
-          Cancel
+          {retained || loading ? 'Close' : 'Cancel'}
         </button>
         <button
           type="button"
-          onClick={mode === 'csv' ? handleCSVImport : handleGenerate}
-          disabled={loading}
+          onClick={settled ? done : submit}
+          disabled={!ready || loading}
           className="px-4 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-black transition-colors disabled:opacity-40"
         >
-          {loading ? 'Working...' : mode === 'csv' ? 'Import' : 'Generate'}
+          {loading ? 'Working...' : settled ? 'Done' : retained ? 'Retry Original Batch' : mode === 'csv' ? 'Import' : 'Generate'}
         </button>
       </div>
     </div>
@@ -460,7 +542,7 @@ export default function UnitsTab({ actorId, homeId, authorityId, units, leases, 
         <div className="text-center py-12">
           <p className="text-sm text-app-text-secondary mb-4">No units added yet. Import from a list or generate a range.</p>
         </div>
-        <BulkTools homeId={homeId} onSuccess={onRefresh} />
+        <BulkTools key={`${actorId}:${homeId}`} homeId={homeId} actorId={actorId} onSuccess={onRefresh} isCurrent={isCurrent} />
       </div>
     );
   }
@@ -472,7 +554,7 @@ export default function UnitsTab({ actorId, homeId, authorityId, units, leases, 
         <p className="text-sm font-medium text-app-text-strong">
           {units.length} unit{units.length === 1 ? '' : 's'}
         </p>
-        <BulkTools homeId={homeId} onSuccess={onRefresh} />
+        <BulkTools key={`${actorId}:${homeId}`} homeId={homeId} actorId={actorId} onSuccess={onRefresh} isCurrent={isCurrent} />
       </div>
 
       {/* Units list */}
