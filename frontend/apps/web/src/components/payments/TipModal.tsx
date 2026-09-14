@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { payments } from '@pantopus/api';
-const { createTip } = payments;
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, getAuthToken, onTokenChange, payments } from '@pantopus/api';
+const { createTip, refreshTipPaymentStatus } = payments;
+
+function sessionMarker() {
+  try { return localStorage.getItem(AUTH_SESSION_CHANGE_KEY); } catch { return undefined; }
+}
 
 const PRESET_TIPS = [
   { label: '$5', amount: 500 },
@@ -36,6 +40,38 @@ export default function TipModal({
   const [customAmount, setCustomAmount] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdTip, setCreatedTip] = useState<{ paymentId: string; amount: number } | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  const working = useRef(false);
+  const confirmed = useRef(false);
+  const mounted = useRef(false);
+  const openingGig = useRef(gigId);
+  const openingSession = useRef({ token: getAuthToken(), origin: getApiBaseUrl(), marker: sessionMarker() });
+  const latestGig = useRef(gigId);
+  latestGig.current = gigId;
+  const invalidated = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    const retire = () => {
+      invalidated.current = true;
+      setError('Your session or task changed. Close and reopen its payment details before continuing.');
+    };
+    if (gigId !== openingGig.current) {
+      retire();
+    }
+    const unsubscribe = onTokenChange(retire);
+    const changed = (event: StorageEvent) => {
+      if (event.key === null || event.key === AUTH_SESSION_CHANGE_KEY) retire();
+    };
+    window.addEventListener('storage', changed);
+    return () => { mounted.current = false; unsubscribe(); window.removeEventListener('storage', changed); };
+  }, [gigId]);
+  const isCurrent = useCallback(() => mounted.current && !invalidated.current
+    && latestGig.current === openingGig.current && openingSession.current.token !== null
+    && getAuthToken() === openingSession.current.token && getApiBaseUrl() === openingSession.current.origin
+    && sessionMarker() === openingSession.current.marker, []);
+  const retired = invalidated.current || gigId !== openingGig.current;
 
   const tipAmount = selectedPreset ?? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0);
   const isValid = tipAmount >= 50; // Minimum $0.50
@@ -54,27 +90,45 @@ export default function TipModal({
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!isValid) return;
+    if (!isCurrent()) {
+      invalidated.current = true;
+      setError('Your session or task changed. Close and reopen its payment details before continuing.');
+      return;
+    }
+    if (!isValid || working.current || confirmed.current || (attempted && !createdTip)) return;
 
+    working.current = true;
     setProcessing(true);
     setError(null);
 
     try {
-      const result = await createTip(gigId, tipAmount, paymentMethodId);
-
-      if (result.success || result.clientSecret) {
-        // For off-session tips, the payment completes automatically.
-        // For on-session, the clientSecret would need Stripe.js confirmation.
-        // For MVP, we handle off-session (saved card) tips.
-        onSuccess(tipAmount);
+      let tip = createdTip;
+      if (!tip) {
+        setAttempted(true);
+        const result = await createTip(gigId, tipAmount, paymentMethodId);
+        if (!isCurrent()) return;
+        if (typeof result.paymentId !== 'string' || !result.paymentId) throw new Error('Missing payment identity');
+        tip = { paymentId: result.paymentId, amount: tipAmount };
+        setCreatedTip(tip);
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to process tip.';
-      setError(message);
+      // Creation success and a client secret do not establish payment. Reuse
+      // the existing reconciliation endpoint, retaining this payment for checks.
+      const status = await refreshTipPaymentStatus(tip.paymentId);
+      if (!isCurrent()) return;
+      if (status.stripeStatus === 'succeeded'
+        && ['captured_hold', 'transfer_pending', 'transferred'].includes(status.paymentStatus)) {
+        confirmed.current = true;
+        onSuccess(tip.amount);
+      } else {
+        setError('This tip has not been confirmed as paid. Check its status before trying another tip.');
+      }
+    } catch {
+      if (isCurrent()) setError('The tip result is not confirmed. Check its status or payment history before trying another tip.');
     } finally {
-      setProcessing(false);
+      working.current = false;
+      if (mounted.current) setProcessing(false);
     }
-  }, [gigId, tipAmount, paymentMethodId, isValid, onSuccess]);
+  }, [gigId, tipAmount, paymentMethodId, isValid, onSuccess, attempted, createdTip, isCurrent]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -97,6 +151,7 @@ export default function TipModal({
             {PRESET_TIPS.map(({ label, amount }) => (
               <button
                 key={amount}
+                disabled={attempted}
                 onClick={() => handlePresetClick(amount)}
                 className={`flex-1 py-3 rounded-xl text-center font-semibold transition ${
                   selectedPreset === amount
@@ -123,6 +178,7 @@ export default function TipModal({
                 inputMode="decimal"
                 placeholder="0.00"
                 value={customAmount}
+                disabled={attempted}
                 onChange={(e) => handleCustomChange(e.target.value)}
                 className={`w-full pl-7 pr-4 py-2.5 border rounded-lg text-app-text focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   customAmount ? 'border-emerald-300' : 'border-app-border'
@@ -152,7 +208,7 @@ export default function TipModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!isValid || processing}
+              disabled={retired || !isValid || processing || (attempted && !createdTip)}
               className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {processing ? (
@@ -161,8 +217,10 @@ export default function TipModal({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Sending...
+                  {createdTip ? 'Checking...' : 'Sending...'}
                 </span>
+              ) : createdTip ? (
+                'Check tip status'
               ) : isValid ? (
                 `Tip $${(tipAmount / 100).toFixed(2)}`
               ) : (

@@ -10,17 +10,34 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Paid integration work in progress — September14
 
 User authorizes checking and merging ready PRs, then continued verification and
-repairs. This isolated worktree is /private/tmp/pantopus-paid-gig-integration,
-branch codex/paid-gig-integration, integrating original PR34 e9ef2decb with the
-Home tip557a556db. Conflicts are under review; no paid merge or acceptance is
-claimed. Preserve current Home/session guards and both durable notification
-paths. PR34's tip proof helper remains an unwired, syntax-only draft; existing
-cancellation presentation/custom-reason behavior and paid/Home combined adoption
-need verification. Keep PR34 draft until its concrete blockers are resolved.
-The prior paid handoff is preserved at
-[e9ef2decb](https://github.com/WangPantopus/skinny-pantopus/blob/e9ef2decbb7ec435589bb3b92639041cfc4618a6/docs/PROJECT_HANDOFF.md)
-and its linked paid reports. Other worktrees and owner checkout are preserved.
-No hosted migration, deployment or provider operation is part of source review.
+repairs. Active paid worktree: `/private/tmp/pantopus-paid-gig-integration`, branch
+`codex/paid-gig-integration`. Local274bbe8cb integrates original PR34 e9ef2decb
+with Home557a556db. All nine conflicts are resolved while preserving both durable
+notification paths, current Home/session guards and every branch's source.
+Combined checks pass5808 backend tests/16 existing skips,59 focused web tests,
+web TypeScript and scoped lint (seven pre-existing CompletionFlow warnings).
+There are62 distinct migration versions, zero collisions and64 synchronized SQL
+wrappers. This is not combined populated adoption, native acceptance or hosted
+readiness. PR34 remains draft; the Home chain is independently awaiting final
+Android CI on PR43 d18120a8c, run34879088468, before a normal master merge.
+
+The existing TipModal now distinguishes PaymentIntent creation from paid status.
+It reuses refreshTipPaymentStatus, keeps the same payment/amount for further status
+checks, blocks another creation in the same modal after an unknown result, and
+retires stale task/session responses. Nine focused regressions, standalone web
+TypeScript and scoped lint pass. Existing layouts/styles are preserved. Payment
+confirmation UI, durable recovery across closing/reload, current backend provider
+proof and installed/provider acceptance remain open. This is a bounded UI-status
+repair, not completion of tips or PR34. See [tip-status evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-tip-status-repair).
+
+**Next:** merge the actual new master into this candidate, preserving Home's
+inspected screenshot correction and reports, then finish the existing cancellation
+presentation/custom-reason and durable tip contracts before marking PR34 ready.
+Its tip proof helper remains an unwired draft. Keep paid services/provider
+activation in the final launch bundle. Preserve the [prior paid handoff](https://github.com/WangPantopus/skinny-pantopus/blob/e9ef2decbb7ec435589bb3b92639041cfc4618a6/docs/PROJECT_HANDOFF.md)
+and linked reports. Other worktrees and owner checkout are untouched. No hosted
+migration, deployment or provider operation ran. The Home sections below are
+inherited context and must be reconciled with the new master before reliance.
 
 ## Current state and next action
 

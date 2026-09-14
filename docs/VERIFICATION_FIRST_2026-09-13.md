@@ -1858,3 +1858,37 @@ The preceding iOS/web checkpoint481c45b81 is pushed on draft
 [CI34870041822](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34870041822)
 passes all13 applicable jobs with two path-based skips. The Android follow-up
 requires CI at its own pushed source; this earlier green run does not cover it.
+
+
+### Existing web tip-status repair
+
+September14 paid integration review traced TipModal through the existing SDK,
+pays.js tip/refresh routes, stripeService.createTipPayment/syncTipPaymentStatus
+and Payment table. The route's success flag means a PaymentIntent was created;
+the modal treated that or a client secret as paid success. Six initial React
+regressions fail on the unchanged component. Current source uses the existing
+refresh endpoint and requires both succeeded provider status and a confirmed
+local paid state before calling onSuccess. Unconfirmed status keeps the same
+payment ID/amount for explicit checks; it never creates another payment for a
+status retry. An unknown creation reply blocks a second creation inside this
+modal. Amount controls freeze once an attempt starts. Layout/styles are retained.
+
+A follow-up test reproduces an old paid response being applied after the task
+changes. Two more reproduce submission after cookie-session replacement and an
+old paid response being shown to a replaced session. Existing token-change events,
+origin/token/session-marker comparison and task/mount lifetime now retire those
+responses. All nine final tests pass, with standalone TypeScript and zero-warning
+scoped ESLint. The first typecheck failed because the test used Playwright's exact
+option with Testing Library; removing that unsupported test option repairs it.
+Earlier failures remain in private integration-review-r1/paid-tip-modal-* logs.
+
+This extends one existing product file and adds one focused regression test file;
+no replacement screen, endpoint, service, table or migration. It does not complete
+tips: confirmation/3DS UI, a durable creation identity across loss/closing/reload,
+strong backend provider proof, and installed/browser/provider acceptance remain
+open. The server's pre-existing creation/reconciliation guarantees still need the
+planned tip-contract work. No provider operation ran in these mocked component
+checks. The unwired gigTipProof draft remains explicitly unaccepted. PR34 stays
+draft, including the cancellation presentation/custom-reason review and combined
+native/DB gates. Full backend and unchanged web evidence from local274bbe8cb is
+reused only for unaffected source.
