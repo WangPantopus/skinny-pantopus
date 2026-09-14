@@ -820,3 +820,52 @@ This does not undo a POST already committed by the server, nor prove installed
 navigation, account switching, background/restart or iOS departure behavior.
 The next check is the equivalent iOS departure case, followed by installed native
 verification and saved-state recovery. R05 stays open.
+
+
+### Existing iOS request departure
+
+At source `10c68a906`, a delayed actual APIClient status response still caused
+POST and moved the existing iOS wizard to Sent after Back/Discard. One regression
+failed four assertions. The existing controller now owns/cancels queued work and
+checks its generation before POST and before consuming a result. The view retires
+work on disappearance. Existing markup, styling, layout and routes are unchanged.
+The three regressions cover delayed status, deliberately delivered old success/
+error/fallback results, and a queued tap retired before execution. All 30 focused
+iOS tests and pinned SwiftLint/SwiftFormat pass. The new file contains tests only,
+sharing the existing fixture helpers; it keeps the original test file below the
+repository's 500-line lint limit. The first candidate build failed to compile a
+test helper's escaping predicate; the corrected candidate passes.
+
+An installed Xcode-signed Debug app on an exclusively owned iPhone16 simulator
+uses its real login UI, navigation, wizard and APIClient against a loopback fixture.
+Login/profile/shell responses are synthetic; tenant status and request routes use
+the actual Joi/service/isolated SQL, with notifications intercepted. Back → Close
+→ Discard while status was held closed the wizard; the transport disconnected,
+and releasing the retired response left zero POSTs, leases and notifications.
+The app remained on Hub. This proves cancellation through the installed screen;
+it does not claim old bytes were delivered after disconnection. Separate model
+regressions deliberately deliver late results. A first UI attempt was inconclusive:
+the status timed out and its automatic retry submitted before Back was performed.
+That attempt and its fixture reset are retained, not counted as a departure pass.
+The first manually re-signed test copy lacked keychain signing metadata; Xcode's
+normal simulator signing resolved the setup issue without auth-source changes.
+
+Actual UI also reproduced open defects: Attach proof instantly inserts the sample
+`lease_apt3b_2025.pdf`, claims upload and parsing, and sends no upload request. The
+Home chip shows the sample Elm Street address for the synthetic Home. Existing
+email-delivery claims remain unsupported by this fixture. Existing real file
+pickers/private claim evidence paths have been located for reuse analysis; no
+replacement upload subsystem, screen or migration was added. Attachment, true
+Home identity, saved-request recovery and native account/background/restart remain
+open. R05 is not closed by these focused checks.
+
+[CI34808888971](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34808888971)
+on `10c68a906` completed with 13 successful jobs, an Android static-analysis
+failure and the resulting aggregate failure, plus one unchanged Seeder skip.
+Detekt rejected a four-part condition in the existing TenantRepository. Splitting
+its Home comparison into a named boolean preserves behavior; local full detekt,
+ktlintCheck and all 28 focused Android tests now pass. This correction's remote
+CI remains required. Source, baseline/candidate results, installed-product hashes,
+fixture observations and failed attempts are retained privately in
+`ios-departure-r1`. The temporary simulator remains exclusively leased for the
+next installed checks and will be removed when those checks finish.

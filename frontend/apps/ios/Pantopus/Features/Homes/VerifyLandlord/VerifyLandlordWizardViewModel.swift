@@ -49,6 +49,8 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     private let homeId: String
     private let submitDelayNanos: UInt64
     private let api: APIClient
+    @ObservationIgnored private var pendingWork: Task<Void, Never>?
+    @ObservationIgnored private var requestGeneration = 0
 
     /// Test/offline seam for the tenant approval request. When non-nil,
     /// `submit()` calls this instead of
@@ -136,6 +138,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     func leadingTapped() {
+        retirePendingWork()
         switch currentStep {
         case .start, .sent:
             pendingEvent = .dismiss
@@ -146,7 +149,15 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     func discardConfirmed() {
+        retirePendingWork()
         pendingEvent = .dismiss
+    }
+
+    func retirePendingWork() {
+        requestGeneration &+= 1
+        pendingWork?.cancel()
+        pendingWork = nil
+        if isSubmitting { submitState = .idle }
     }
 
     func primaryTapped() {
@@ -154,8 +165,15 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         case .start:
             currentStep = .details
         case .details:
-            Task { await submit() }
+            guard !isSubmitting else { return }
+            pendingWork?.cancel()
+            let generation = requestGeneration
+            pendingWork = Task { [weak self] in
+                guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+                await submit()
+            }
         case .sent:
+            retirePendingWork()
             pendingEvent = .dismiss
         }
     }
@@ -164,7 +182,12 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         // Only the `.sent` step carries a secondary — the mailed-code
         // fallback (RN's "Verify with a mailed code" alternative path).
         guard currentStep == .sent else { return }
-        Task { await startPostcardFallback() }
+        pendingWork?.cancel()
+        let generation = requestGeneration
+        pendingWork = Task { [weak self] in
+            guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+            await startPostcardFallback()
+        }
     }
 
     // MARK: - Form mutations
@@ -229,7 +252,8 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     // MARK: - Submit
 
     func submit() async {
-        if isSubmitting { return }
+        guard currentStep == .details, !isSubmitting, !Task.isCancelled else { return }
+        let generation = requestGeneration
         let live = form.validate()
         errors = live
         if !live.isEmpty {
@@ -245,7 +269,9 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         // tenancy. Everything the user typed travels with it — the
         // move-in date as `start_at`, and the note + landlord / PM
         // details folded into `message`.
-        switch await requestApproval() {
+        let result = await requestApproval(generation: generation)
+        guard requestGeneration == generation, !Task.isCancelled else { return }
+        switch result {
         case let .success(lease):
             approvalResult = VerifyLandlordApprovalResult(
                 kind: .submitted,
@@ -301,17 +327,19 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     /// Submits the tenant approval request. Uses the injected
     /// `approvalRequester` seam when present (previews/tests); otherwise
     /// calls `POST /api/v1/tenant/request-approval`.
-    private func requestApproval() async -> Result<TenantLeaseDTO, any Error> {
+    private func requestApproval(generation: Int) async -> Result<TenantLeaseDTO, any Error> {
         let request = TenantRequestApprovalRequest(
             homeId: homeId,
             startAt: form.startAtISO,
             message: form.composedMessage
         )
-        if let approvalRequester {
-            try? await Task.sleep(nanoseconds: submitDelayNanos)
-            return await approvalRequester(request)
-        }
         do {
+            if let approvalRequester {
+                try await Task.sleep(nanoseconds: submitDelayNanos)
+                try Task.checkCancellation()
+                guard requestGeneration == generation else { throw CancellationError() }
+                return await approvalRequester(request)
+            }
             let status: TenantHomeStatusResponse = try await api.request(TenantEndpoints.homeStatus(homeId: homeId))
             let context = status.requestContext
             let validLease = context.leaseId == nil
@@ -321,6 +349,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 return .failure(APIError.invalidResponse)
             }
             try Task.checkCancellation()
+            guard requestGeneration == generation else { throw CancellationError() }
             let observedRequest = TenantRequestApprovalRequest(
                 homeId: request.homeId,
                 startAt: request.startAt,

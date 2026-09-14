@@ -45,6 +45,7 @@ public struct VerifyLandlordWizardView: View {
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }
+        .onDisappear { viewModel.retirePendingWork() }
         .accessibilityIdentifier("verifyLandlordWizard")
     }
 

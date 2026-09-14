@@ -73,9 +73,23 @@ checks again before applying a late result. All 28 focused Android tests and
 formatting pass, including deliberately noncancelable old responses. This is
 model/repository evidence, not installed UI acceptance.
 
-**Next:** reproduce the corresponding iOS departure case in its existing wizard,
-then verify installed native departure/account/background/restart and saved-request
-recovery. The API still accepts older clients without context. The separate
+**iOS departure follow-up:** a delayed-status baseline reproduced submission
+and Sent after Back/Discard. The existing controller/view now retire owned work
+and reject late results. All30 focused tests and Swift checks pass. Actual installed
+iOS Back → Close → Discard against real tenant routes/isolated SQL cancels the
+held status with zero POSTs, leases or notifications and returns to Hub. Login and
+shell responses are synthetic; provider identity/delivery are not verified.
+Actual UI also proves the attachment button inserts a sample lease without upload,
+and the Home chip uses a sample address. See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-request-departure).
+
+**CI correction:** exact10c68a906 CI34808888971 failed Android Detekt's condition
+complexity limit; all13 other non-aggregate jobs passed, with one Seeder skip.
+The equivalent simplified condition passes local full detekt/ktlint and28 focused
+Android tests. New remote CI is required before integration.
+
+**Next:** continue installed native saved-request recovery/account/background/
+restart, then repair the demonstrated attachment/Home-label/provider-copy defects
+using existing upload and status paths. The API still accepts older clients without context. The separate
 submitted page's notification/time estimate and native email claims remain open.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)

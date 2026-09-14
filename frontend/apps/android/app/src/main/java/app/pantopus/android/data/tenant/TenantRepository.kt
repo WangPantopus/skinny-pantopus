@@ -31,7 +31,8 @@ class TenantRepository
                     } else {
                         context.leaseId.isNotBlank() && context.leaseState in setOf("pending", "active", "ended", "canceled")
                     }
-                if (status.homeId != body.homeId || context.homeId != body.homeId || context.actorId.isBlank() || !validLease) {
+                val matchesHome = status.homeId == body.homeId && context.homeId == body.homeId
+                if (!matchesHome || context.actorId.isBlank() || !validLease) {
                     throw JsonDataException("Could not confirm this Home's lease status")
                 }
                 currentCoroutineContext().ensureActive()

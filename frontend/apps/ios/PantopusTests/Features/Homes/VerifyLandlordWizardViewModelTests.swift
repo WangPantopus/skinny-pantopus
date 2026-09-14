@@ -17,7 +17,7 @@ import XCTest
 final class VerifyLandlordWizardViewModelTests: XCTestCase {
     // MARK: - Helpers
 
-    private func makeVM(
+    func makeVM(
         homeId: String = "home-1",
         form: VerifyLandlordForm? = nil,
         startContent: VerifyLandlordStartContent? = nil,
@@ -34,7 +34,7 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
 
     /// Minimal `HomeLease` row shaped like the 201 body from
     /// `backend/routes/landlordTenant.js:587`.
-    private static let stubLease: TenantLeaseDTO = {
+    static let stubLease: TenantLeaseDTO = {
         let json = """
         {
           "id": "lease-1",
@@ -51,10 +51,10 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         return try! JSONDecoder().decode(TenantLeaseDTO.self, from: Data(json.utf8))
     }()
 
-    private func waitFor(
+    func waitFor(
         _ description: String = "predicate",
         timeout: TimeInterval = 5.0,
-        _ predicate: @MainActor () -> Bool
+        _ predicate: @escaping @MainActor () -> Bool
     ) async {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
