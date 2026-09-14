@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
+import java.time.LocalDate
+
 /**
  * Steps the A12.5 / A12.6 verify-landlord wizard owns. The third leg
  * of the flow (A12.7 Postcard verification) lives outside this state
@@ -282,13 +284,9 @@ data class VerifyLandlordForm(
          */
         @Suppress("MagicNumber", "ReturnCount")
         internal fun looksLikeISODate(candidate: String): Boolean {
-            val parts = candidate.split('-')
-            if (parts.size != 3) return false
-            if (parts[0].length != 4 || parts[1].length != 2 || parts[2].length != 2) return false
-            val year = parts[0].toIntOrNull() ?: return false
-            val month = parts[1].toIntOrNull() ?: return false
-            val day = parts[2].toIntOrNull() ?: return false
-            return year >= 1900 && month in 1..12 && day in 1..31
+            if (candidate.length != 10) return false
+            val date = runCatching { LocalDate.parse(candidate) }.getOrNull() ?: return false
+            return date.year >= 1900
         }
 
         /**

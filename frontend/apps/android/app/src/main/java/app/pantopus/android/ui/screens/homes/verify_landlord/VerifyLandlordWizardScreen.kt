@@ -120,6 +120,8 @@ fun VerifyLandlordWizardScreen(
 
     WizardShell(
         model = viewModel,
+        chrome = viewModel.chromeFor(state),
+        scrollResetKey = Triple(state.currentStep, state.errors != null, (state.submitState as? VerifyLandlordSubmitState.Error)?.message),
         modifier = Modifier.testTag(VERIFY_LANDLORD_SCREEN_TAG),
     ) {
         when (state.currentStep) {

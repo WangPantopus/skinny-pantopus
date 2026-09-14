@@ -663,7 +663,53 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
         )
     }
 
+    @Test fun move_in_date_must_exist_in_the_gregorian_calendar() {
+        listOf("2026-02-30", "2026-02-29", "2026-04-31", "1900-02-29", "2100-02-29", "1899-12-31", "2026-+9-14").forEach { value ->
+            val form = VerifyLandlordSampleData.populatedForm.copy(moveInDate = value)
+            assertNotNull(value, form.validate().moveInDate)
+            assertNull(value, form.startAtISO)
+        }
+        listOf("2024-02-29", "2000-02-29", "2026-09-14", "1900-01-01").forEach { value ->
+            val form = VerifyLandlordSampleData.populatedForm.copy(moveInDate = value)
+            assertNull(value, form.validate().moveInDate)
+            assertEquals("${value}T00:00:00.000Z", form.startAtISO)
+        }
+    }
+
+    @Test fun impossible_move_in_date_never_reaches_the_repository() =
+        runTest {
+            val vm = makeVm()
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.setMoveInDate("2026-02-30")
+            vm.onPrimary()
+            assertNotNull(vm.state.value.errors?.moveInDate)
+            assertFalse(vm.chrome.primaryCtaEnabled)
+            coVerify(exactly = 0) { tenantRepository.requestApproval(any(), any()) }
+            vm.setMoveInDate("2026-02-28")
+            assertTrue(vm.chrome.primaryCtaEnabled)
+        }
+
     // MARK: - Field mutations
+
+    @Test fun date_phone_and_message_alone_require_discard_confirmation() {
+        val edits: List<(TestVm) -> Unit> =
+            listOf(
+                { it.setMoveInDate("2026-09-14") },
+                { it.setPhone("555-0100") },
+                { it.setMessageToLandlord("Please review my request.") },
+            )
+        edits.forEach { edit ->
+            val vm = makeVm()
+            assertFalse(vm.chrome.dirty)
+            vm.onPrimary()
+            edit(vm)
+            vm.onLeading()
+            assertTrue(vm.chrome.dirty)
+            assertNull(vm.pendingEvent.value)
+        }
+        assertFalse(VerifyLandlordUiState(form = VerifyLandlordForm(registeredUnit = "3B")).isDirty)
+    }
 
     @Test fun pm_toggle_off_clears_pm_fields() {
         val vm = makeVm()

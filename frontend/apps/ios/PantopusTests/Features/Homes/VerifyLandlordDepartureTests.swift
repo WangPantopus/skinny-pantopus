@@ -4,6 +4,24 @@ import XCTest
 
 @MainActor
 extension VerifyLandlordWizardViewModelTests {
+    func testDatePhoneAndMessageAloneRequireDiscardConfirmation() {
+        let forms = [
+            VerifyLandlordForm(phone: "555-0100"),
+            VerifyLandlordForm(moveInDate: "2026-09-14"),
+            VerifyLandlordForm(messageToLandlord: "Please review my request.")
+        ]
+        for form in forms {
+            let vm = makeVM(form: form)
+            XCTAssertTrue(vm.chrome.dirty)
+            vm.primaryTapped()
+            vm.leadingTapped()
+            XCTAssertTrue(vm.chrome.dirty)
+            XCTAssertNil(vm.pendingEvent)
+        }
+        XCTAssertFalse(makeVM(form: VerifyLandlordForm()).chrome.dirty)
+        XCTAssertFalse(makeVM(form: VerifyLandlordForm(registeredUnit: "3B")).chrome.dirty)
+    }
+
     func waitFor(
         _ description: String = "predicate",
         timeout: TimeInterval = 5.0,

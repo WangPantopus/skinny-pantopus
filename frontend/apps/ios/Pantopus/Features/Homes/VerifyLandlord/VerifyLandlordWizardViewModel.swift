@@ -83,11 +83,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     // MARK: - WizardModel
 
     var chrome: WizardChrome {
-        let dirty = !form.ownerName.isEmpty
-            || !form.contactName.isEmpty
-            || !form.email.isEmpty
-            || form.lease != nil
-            || form.pmEnabled
+        let dirty = form != VerifyLandlordForm(registeredUnit: form.registeredUnit)
         switch currentStep {
         case .start:
             return WizardChrome(

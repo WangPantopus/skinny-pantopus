@@ -1599,3 +1599,52 @@ all seven slot requests and the single publish request. All13 selected Support
 Train tests pass; no Support Train product code, design or schema changes. Private evidence is in android-request-r2. The two
 other original iOS CI device jobs and Android instrumented tests passed; the
 remaining original Android build/test job was still running at this checkpoint.
+
+
+### Existing native lease request controls and calendar validation
+
+The formerly open installed Android request journey now runs through the docked
+IDE using CUA touch and on-screen keys. Its baseline showed the Details body with
+stale1-of-3/Start-verification/Close controls. Two real Compose device regressions
+reproduced the stale readout and an enabled action after validation failed. The
+repair applies the existing Add Home pattern: pass controls projected from the
+same observed state to the existing WizardShell. Step/error changes bring the
+existing content/error summary into view. No layout or replacement wizard is added.
+
+Installed testing also found February30 passed both native validators' loose
+month/day ranges. The actual backend rejected it and created no lease. Android
+now uses the existing java.time calendar parsing pattern; iOS uses strict Gregorian
+POSIX/UTC parsing with an exact round trip. Tests cover month lengths, leap years,
+century exceptions, canonical formatting and the existing1900 lower bound. Both
+existing dirty-form guards now include date-only, phone-only and message-only
+edits, while the loaded unit label alone is not an edit. The real Android screen
+test checks Back, Close and the existing discard dialog after date-only input.
+
+The installed calendar candidate verifies correct2-of-3/Submit controls, truthful
+unavailable attachment feedback, impossible-date rejection without another POST,
+correction re-enabling Submit, and a committed request whose response is replaced
+by503. Explicit retry reads current context and POSTs again; the existing backend
+returns the same pending lease with unchanged dates/message and no duplicate row.
+The immediate conflict frame has its existing compact status; foreground refresh
+shows the actual saved date/message. Approving the exact disposable lease through
+the existing service/SQL while backgrounded then restores active status and
+September14,2026 on return. Done closes the screen. Closing a held status read
+cancels its socket; releasing afterwards leaves the screen closed. This is canceled
+transport evidence, not delivery of late successful bytes.
+
+The installed APK hash matches its built calendar candidate. Subsequent native
+dirty-form changes are bounded by the rendered/model regressions; the unchanged
+request transport, recovery and date paths retain the installed evidence. Final
+candidate checks pass74 Android tests (72 model/snapshot and two real Compose
+device tests),52 iOS request model/snapshot tests, Android static checks and
+SwiftLint/SwiftFormat. Existing screenshot baselines are unchanged. Five existing product files and existing model tests are repaired;
+the only new tracked product/test file is the Android rendered regression suite.
+There are no new screens, layouts, backend routes, tables or migrations here.
+
+Private evidence/source and product bindings are in android-request-r2. The API
+used actual tenant route/Joi/service/SQL with synthetic login/shell and intercepted
+notices. Its exact fb23 Home, lease, occupancy, invitation, authority, address and
+User cleanup counts are all zero; API18109 is stopped. Account/departure failures
+also retain the focused native session tests; provider identity, notification
+delivery and hosted adoption are not established. Private lease attachments and
+remaining R05 criteria stay open.

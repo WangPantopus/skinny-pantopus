@@ -60,12 +60,7 @@ data class VerifyLandlordUiState(
     val isSubmitting: Boolean get() = isLoadingStatus || submitState is VerifyLandlordSubmitState.Submitting
 
     val isDirty: Boolean
-        get() =
-            form.ownerName.isNotEmpty() ||
-                form.contactName.isNotEmpty() ||
-                form.email.isNotEmpty() ||
-                form.lease != null ||
-                form.pmEnabled
+        get() = form != VerifyLandlordForm(registeredUnit = form.registeredUnit)
 }
 
 /**
@@ -226,7 +221,7 @@ open class VerifyLandlordWizardViewModel
         // MARK: - WizardModel
 
         override val chrome: WizardChrome
-            get() = computeChrome(_state.value)
+            get() = chromeFor(_state.value)
 
         override fun onLeading() {
             retirePendingWork()
@@ -454,7 +449,7 @@ open class VerifyLandlordWizardViewModel
 
         // MARK: - Chrome derivation
 
-        private fun computeChrome(state: VerifyLandlordUiState): WizardChrome =
+        internal fun chromeFor(state: VerifyLandlordUiState): WizardChrome =
             when (state.currentStep) {
                 VerifyLandlordStep.Start ->
                     WizardChrome(

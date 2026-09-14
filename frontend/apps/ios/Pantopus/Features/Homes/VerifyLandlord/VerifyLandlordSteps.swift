@@ -296,7 +296,14 @@ public struct VerifyLandlordForm: Sendable, Equatable {
               year >= 1900, (1...12).contains(month), (1...31).contains(day) else {
             return false
         }
-        return true
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        guard let date = formatter.date(from: candidate) else { return false }
+        return formatter.string(from: date) == candidate
     }
 
     /// Widen `YYYY-MM-DD` into the ISO-8601 timestamp Joi's

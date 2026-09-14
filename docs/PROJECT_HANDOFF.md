@@ -10,8 +10,8 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/native-lease-invites`, starting from the accepted file checkpoint
-`a1069e1de`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`codex/native-lease-request-controls`, starting from native invitation/CI fixture
+checkpoint `1ed6f6793` on draft PR41. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -54,8 +54,24 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** preserve the accepted native invitation repair, check its PR CI, then
-continue the existing private lease attachment path and remaining R05 criteria.
+**Next:** continue private lease attachment and remaining R05 criteria using
+existing File metadata, private storage/recovery and the existing lease transaction.
+The request-controls follow-up is verified and ready as its own draft PR. The previously open installed Android request journey is now verified
+within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
+Existing shell state binding fixes stale step/action controls; existing native
+validators reject impossible calendar dates, and existing dirty-form guards cover
+date-only, phone-only and message-only edits. Five existing product files change;
+the only new file is an Android rendered regression test. Android passes74 final
+checks and static checks; all52 final iOS request model/snapshot checks and
+SwiftLint/SwiftFormat pass. No screen/layout/schema
+replacement. Other wizard callers remain candidates for rendered verification.
+Draft [PR41](https://github.com/WangPantopus/skinny-pantopus/pull/41) now includes
+`1ed6f6793`, which fixes an existing Support Train test's shared FIFO response race
+using the already available session-scoped route stubs. All13 selected tests pass.
+Original [CI34851208086](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34851208086)
+remains failed for that iPhone16 fixture; the other original applicable checks pass.
+Replacement [CI34855898348](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34855898348)
+is running. No product Support Train change or disabled assertion.
 Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40) at a1069e1de
 repairs existing private document delivery and generic uploads; all6 applicable
 [CI34845551425](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34845551425)
@@ -91,14 +107,14 @@ Android focused/rendering tests and static checks. Installed iOS covers Back/
 Discard, saved-request/account/foreground recovery, correct calendar/status,
 truthful unavailable Attach feedback and invalid-date rejection/corrected save.
 Live forms no longer insert sample files/data or promise email delivery. Real
-private lease upload remains unfinished. Installed Android app-flow control was
-unreliable after APK installation; acceptance remains open. Reuse the retained
+private lease upload remains unfinished. Installed Android now passes the actual request route/SQL journey and real
+Compose control/discard regressions under the recorded native request limits. Reuse the retained
 products; one heavy native build at a time. Provider identity/delivery, combined
 populated adoption and hosted rollout remain open. Notification recovery is
 best effort and requires retry after a lost process; no eventual-push claim.
 
 **Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
-Next18110 remains active. Native invitation API18109 is stopped. Exact owned Home, HomeLease,
+Next18110 remains active. The invitation fixture on API18109 is stopped. Exact owned Home, HomeLease,
 HomeOccupancy, HomeLeaseInvite, HomeAuthority, HomeAddress and User cleanup is zero
 under native-invitation-r1. Unit API18117
 and notice API18116 are stopped.
@@ -106,7 +122,14 @@ The unit fixture has zero remaining owned Home, User, address or command rows;
 source/evidence and exact cleanup are recorded in the private checkpoint. Earlier unit/invitation/sharing/building/
 creation/retention/native API fixtures are stopped with exact row cleanup. The
 owned iOS simulator, Android AVD and this session Android Studio are stopped;
-owned Android registration is released and device data/products are retained. Owner iPhone17,
+owned Android registration was released and device data/products retained.
+Android request verification finished on the matching calendar candidate APK.
+API18109/fb23 is stopped, with exact Home/lease/occupancy/invitation/authority/
+address/User cleanup zero under android-request-r2. Owned Android AVD and IDE are
+stopped; only its owned registration was released, retaining device data/products.
+The owned iOS simulator is stopped after its final bounded regression suite. The
+incomplete worktree-only Gradle accessor cache was quarantined; no shared/user
+cache was cleared. Owner iPhone17,
 Bill Acceptance and Home Recurrence Acceptance devices remain untouched. The
 schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserved;
 direct PostgreSQL64522 responds. Its existing Home-create function includes the

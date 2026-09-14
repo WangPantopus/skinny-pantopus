@@ -275,6 +275,20 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         XCTAssertNil(form.validate().moveInDate, "Blank move-in date is allowed")
     }
 
+    func testMoveInDateMustExistInTheGregorianCalendar() {
+        var form = VerifyLandlordSampleData.populatedForm
+        for value in ["2026-02-30", "2026-02-29", "2026-04-31", "1900-02-29", "2100-02-29", "1899-12-31", "2026-+9-14"] {
+            form.moveInDate = value
+            XCTAssertNotNil(form.validate().moveInDate, value)
+            XCTAssertNil(form.startAtISO, value)
+        }
+        for value in ["2024-02-29", "2000-02-29", "2026-09-14", "1900-01-01"] {
+            form.moveInDate = value
+            XCTAssertNil(form.validate().moveInDate, value)
+            XCTAssertEqual(form.startAtISO, "\(value)T00:00:00.000Z")
+        }
+    }
+
     func testCTADisabledWhenErrorsPresent() async {
         let vm = makeVM(form: VerifyLandlordSampleData.errorForm)
         vm.primaryTapped()
