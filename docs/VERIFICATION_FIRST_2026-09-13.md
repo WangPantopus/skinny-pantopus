@@ -1938,3 +1938,59 @@ the unimplemented durable-tip draft remain unresolved; these local checks alone
 do not qualify PR34 for merge. No provider operation or hosted migration ran.
 Detailed private merge/source evidence is in integration-review-r1 alongside the
 existing lease-transaction archive. Owner checkout and unrelated work are intact.
+
+
+### Existing shared file-picker replacement and preview lifetime
+
+On September14, the existing FileUpload component was traced through its Home
+bill/package/issue and gig creation/completion/Q&A callers, with existing upload
+SDK/routes retained. All present callers use multi-file mode. The existing
+single-file API has a Click to change control and an explicit replacement branch,
+but its preceding count check rejects a second selection. Image previews in both
+modes allocate a fresh object URL on every render and never release one. This
+source dates to the initial import; it is not evidence that these screens need
+rebuilding. No backend, storage, migration or caller contract changes are needed.
+
+The unchanged component fails five of eight focused regressions: two replacement
+cases, preview stability in both modes and StrictMode/unmount cleanup. The repair
+keeps the existing markup/styles and uses a file-scoped effect for local image
+URLs, releasing them on replacement/removal/unmount and preventing a replaced
+file from rendering the old URL. Multi-file append/count and document-icon
+behavior remain intact. All eight cases now pass; standalone web TypeScript and
+scoped ESLint pass with zero warnings. The initial lint warning was resolved by
+passing the existing required alt prop explicitly. The test file is the only new
+source file; the existing product component is extended in place.
+
+These checks use the real React/Next component in jsdom with a controlled URL
+allocator, not an installed browser/upload-provider journey. Full caller upload
+acceptance and the rest of the inventory remain open. Private baseline/candidate,
+types and lint results are retained under integration-review-r1/file-picker-*.
+This repair is isolated above Home integration source d18120a8c while PR43 CI runs;
+it does not alter the source currently awaiting the Home merge.
+
+A subsequent Chrome check loads the real component in an owned temporary Next
+fixture with actual browser File objects. Image decode succeeds; unrelated
+renders allocate no further URL, replacement retires the old URL, and the
+existing multi-file remove button plus unmount leave zero live URLs (seven
+created/seven revoked across the exercise). The Chrome extension disallowed
+chooser file injection; no permission was changed. Files for these browser
+lifetime checks were supplied by the synthetic fixture, so actual chooser
+selection is not accepted browser evidence. The focused React tests cover input
+selection/replacement separately. The temporary route is removed, the owned tab
+is closed and Next18119 is stopped. Source binding and counters are in the private
+file-picker-browser-r1/binding.json; no browser harness is committed.
+
+## Reviewed Home chain integration into master
+
+September14: [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43) merged
+at `0cb4f3c600228dab0d09ca8d660741c93028e3f4` after all16 checks passed in
+[CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468).
+Its master tree is exactly `c67f9b687dcee56d5a7a7eb52b000a19a3d10306`, matching the
+verified head `d18120a8c`. All seven PR heads (32,38–43) remain ancestors, with no
+squash or source rewrite. PR32 is marked merged. GitHub cannot retarget an already
+incorporated stacked head to master because there are no new commits; PR38–42
+are therefore closed with integration references and their branches retained.
+No repeated journey or native build was required for an identical merge tree.
+Deployment/migration activation remains disabled, and all prior provider,
+rollout and feature-completion limits continue to apply. Private merge proof and
+fresh PR dispositions are under integration-review-r1/home-merge-*.json.
