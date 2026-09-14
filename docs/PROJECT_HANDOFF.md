@@ -24,7 +24,7 @@ repair [PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merged at
 matched master. No hosted deployment, migration adoption or provider activation ran.
 
 **Remaining open PR:** original [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
-now contains the verified integration candidate through `ea5a87226` and remains
+contains the integration and tip proof repair through pushed `89658c9e6` and remains
 draft. Its preserved integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
 explanation checkpoint `1c468e01a`. The current merge incorporates actual
@@ -57,6 +57,21 @@ Creation still reaches Stripe before reserving Payment; durable UUID/reservation
 unknown creation, confirmation, legacy recovery and delivery concurrency remain
 open. This is a bounded repair, not completion of P01–P03 or PR34.
 
+**Original tip reservation checkpoint:** `20260914040000_gig_tip_original.sql`
+reuses existing Payment.id, financial fields and metadata; no table, column, screen
+or layout is added. Local service-only functions reserve exact terms under the task
+lock, serialize provider work, retain the original customer/start time, reject
+creation after the conservative23-hour retry window, and cancel only an operation
+that never reached provider preparation. Older unresolved tips block replacement;
+nullable legacy metadata retains its recovery identity. All65 SQL contracts pass,
+generated pgTAP passes, and eight separate-connection concurrency cases plus exact
+fixture cleanup pass. Application-function lint:357 functions/107 bindings,
+zero errors/eight existing warnings. See [reservation evidence](VERIFICATION_FIRST_2026-09-13.md#original-tip-reservation-in-existing-payment).
+This foundation is applied only to the owned local contract database and is not
+wired into API/services/clients yet. Provider proof/receipts, same-ID commands,
+legacy cancellation recovery, delivery and installed client/provider acceptance
+remain open. No hosted schema change or provider operation ran.
+
 **Current cancellation explanation follow-up:** the existing Other textarea is
 restored with its original design. The existing private GigStopRequest.reason
 retains its immutable explanation; the API/native receipts carry only a hash,
@@ -88,10 +103,11 @@ to20260914020100–20260914020900, after Home14020000 and before the explanation
 update14030000. No migration already in master is changed, and no SQL is added or
 repeated. The earlier local commands passed an unsupported --base argument; the
 correct MIGRATION_BASE_SHA environment variable reproduces the CI failure and
-validates the repaired ordering. Fresh full-schema CI remains required.
+validates the repaired ordering. Current89658c9e6 CI34893989362 passed fresh schema replay/lint and all completed backend/web gates. Its Android instrumentation and iOS build also pass; native remaining checks were still running at this checkpoint. The newer local reservation needs its own complete-schema CI.
 
-**Next:** inspect the updated draft PR34 combined CI, then continue existing
-durable tip/provider work
+**Next:** finish wiring the tested original Payment reservation into the existing
+tip/provider paths and existing clients; retain their exact designs. Inspect draft
+PR34 current-head CI
 and final combined CI before marking PR34 ready. Keep all original screen designs.
 R05/R06, paid release gates and the app remain incomplete; the80-row inventory is
 not a completion or duplicated-effort percentage. Private logs/archive/recovery

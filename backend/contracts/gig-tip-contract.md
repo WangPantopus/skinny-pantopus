@@ -1,15 +1,16 @@
-# Durable Gig tip contract — proposed, not implemented
+# Durable Gig tip contract — partial implementation
 
-**Status checked September14,2026:** this document describes a proposed extension.
-The current tip POST/refresh routes and Payment model already exist; the preview,
-request command, receipt migration and matching clients described below do not.
-The current POST does not return TIP_TERMS_REQUIRED. The existing
-syncTipPaymentStatus now uses gigTipProof.js for current legacy PaymentIntent/Charge
-verification and guarded local status updates. The proposed durable reservation,
-modern request identity and commands below remain unimplemented. Inspect and
-extend the existing Payment and service paths before adding any contract.
-The TipModal status repair reuses the current refresh API and does not implement
-this proposal. Keep provider activation and hosted rollout gated.
+**Status checked September14,2026:** the existing tip status service now uses
+`gigTipProof.js` for current legacy PaymentIntent/Charge verification and guarded
+local status updates. Migration `20260914040000_gig_tip_original.sql` adds a tested,
+service-only original reservation and provider lease in existing Payment storage;
+it adds no table or column. It is applied only to the owned local contract database.
+The reservation, customer preparation and unstarted cancellation functions are
+not yet called by the app. The current POST still reaches the provider before
+inserting Payment and does not return TIP_TERMS_REQUIRED. The preview/command API,
+provider creation and terminal reconciliation, recovery clients and delivery work
+below remain incomplete. The TipModal status repair uses the existing refresh API.
+Keep hosted rollout and provider activation gated.
 
 Matching clients and backend must deploy together. The previous tip POST without an
 original request UUID, current opening session proof and exact displayed terms returns
@@ -156,6 +157,6 @@ New request creation requires a nonnull current owner confirmation. Unverified o
 multiple historical pending payments block an ambiguous new tip until individually
 reconciled. Existing successful tips and financial records are preserved.
 
-The proposed migration name is `20260910190000_paid_gig_tip_receipts.sql`; that migration does not exist in this candidate. Compare existing Payment storage and other branches before choosing a migration or adding schema.
+The reservation migration is `20260914040000_gig_tip_original.sql`. It reuses Payment.id for both identities and financial columns for amounts/customer/provider IDs; only absent original terms and control state use metadata.gig_tip_original_v1. Legacy rows remain unmarked. Additional provider reconciliation and client work must complete this boundary before activation; do not add a competing tip table.
 Hosted application, new provider acceptance and client completion remain separate
 verification gates until the corresponding source and receipt tests pass.

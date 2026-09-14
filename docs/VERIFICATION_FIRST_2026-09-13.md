@@ -2254,3 +2254,47 @@ and [idempotency](https://docs.stripe.com/api/idempotent_requests).
 Next: reserve the original using the existing Payment model before provider
 creation, freeze terms under a lock, and continue same-request/native/browser
 confirmation and lost-creation recovery. Preserve the original tip modal design.
+
+
+## Original tip reservation in existing Payment
+
+September14,2026. Existing source inspection found Payment already has the UUID,
+financial amounts, payer/worker/task, provider/customer IDs, timestamps and metadata.
+The current createTipPayment still contacts Stripe before inserting that row. This
+checkpoint adds the missing atomic reservation and lease functions in
+`20260914040000_gig_tip_original.sql`; it does not add a table, column, route, client
+or screen. Original Payment.id is also the request UUID. Legacy rows remain intact.
+
+The behavioral contract checks exact original identity across retries/session
+renewal, changed amount/method/provider mode/terms conflicts, personal-poster and
+confirmation/worker/Connect requirements, existing successful-tip limits, nullable
+legacy recovery, immutable fields and direct-client denial. Preparation binds the
+existing customer winner, keeps the first provider-attempt time and rejects old
+unknown outcomes after23 hours. Explicit cancellation is terminal only before any
+provider preparation; a timeout never proves no charge. Stripe documents pruning
+of [idempotency keys after at least24 hours](https://docs.stripe.com/api/idempotent_requests),
+so the23-hour cutoff is a conservative local recovery policy, not a Stripe guarantee.
+
+Verification in the owned combined database `pantopus_paid_20260914_contract`:
+
+- All65 existing/new raw SQL contracts pass; generated tip pgTAP is `ok`.
+- Eight separate-connection scenarios pass: same-ID replay, competing IDs,
+  transaction rollback, poster change, exclusive provider lease, lease expiry
+  during an observed task lock wait, frozen customer after account change, and
+  slot release only after unstarted cancellation commits. Seven scenarios exercise
+  concurrency; the customer check is sequential and the lease-expiry case also
+  verifies wall-clock revalidation. Exact synthetic fixture cleanup is zero.
+- Application-function lint passes357 functions/107 attached bindings, zero
+  errors/eight existing warnings. Migration ordering and generated wrappers pass.
+- Initial draft contract failed nullable legacy metadata recovery; the repair
+  passes. The concurrency script first failed Python parsing before any database
+  access; corrected source passed its first execution. Keep failures as evidence.
+
+Reproduction: `scripts/db/contracts/gig-tip-original.sql`, its generated wrapper,
+and `scripts/db/test-gig-tip-original-concurrency.py`. The latter requires explicit
+local PG* settings and an owned `pantopus_*_contract` database. Private evidence is
+under `existing-tip-provider-proof-r1`; credentials and database archives stay out
+of Git. These functions are not yet wired into the app. Modern provider binding,
+terminal receipts, route/session commands, original-ID client recovery, legacy
+cancellation and delivery remain open, as do hosted adoption and real provider /
+installed-client acceptance. Current screen designs are unchanged.
