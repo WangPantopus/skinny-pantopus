@@ -74,6 +74,7 @@ function InviteTenantModal({
   authorityId,
   onClose,
   onSuccess,
+  isCurrent,
 }: {
   homeId: string;
   unitId: string;
@@ -81,46 +82,74 @@ function InviteTenantModal({
   authorityId: string;
   onClose: () => void;
   onSuccess: () => void;
+  isCurrent: () => boolean;
 }) {
   const [email, setEmail] = useState('');
   const [startAt, setStartAt] = useState(new Date().toISOString().split('T')[0]);
   const [endAt, setEndAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
+  const scope = useRef({ generation: 0, busy: false });
+  useEffect(() => { const current = scope.current; return () => { ++current.generation; }; }, []);
+
+  const close = () => { if (inviteLink && isCurrent()) onSuccess(); onClose(); };
 
   const handleSubmit = async () => {
-    if (!email.trim()) return;
+    if (!email.trim() || !isCurrent() || scope.current.busy) return;
+    if (!startAt) { setError('Enter a start date.'); return; }
+    if (endAt && endAt <= startAt) { setError('End date must be after start date.'); return; }
+    const generation = scope.current.generation;
+    const current = () => generation === scope.current.generation && isCurrent();
+    scope.current.busy = true;
     setLoading(true);
     setError('');
     try {
-      await api.landlord.inviteTenant({
+      const result = await api.landlord.inviteTenant({
         home_id: unitId,
         authority_id: authorityId,
         invitee_email: email.trim(),
-        start_at: new Date(startAt).toISOString(),
-        end_at: endAt ? new Date(endAt).toISOString() : undefined,
+        start_at: startAt,
+        end_at: endAt || undefined,
       });
-      onSuccess();
-      onClose();
+      if (!current()) return;
+      if (!result?.invite?.id || result.invite.home_id !== unitId || !/^[a-f0-9]{64}$/.test(result.token)) {
+        throw new Error('Could not recover the invitation link. Reopen the property to check its status.');
+      }
+      setInviteLink(`${window.location.origin}/invite/lease/${result.token}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to send invite');
+      if (current()) setError(extractApiError(err, 'Failed to create invite'));
     } finally {
-      setLoading(false);
+      if (current()) { scope.current.busy = false; setLoading(false); }
     }
   };
 
+  const copyLink = async () => {
+    const generation = scope.current.generation;
+    const current = () => generation === scope.current.generation && isCurrent();
+    if (!inviteLink || !current()) return;
+    try { await navigator.clipboard.writeText(inviteLink); if (current()) { setCopied(true); setError(''); } }
+    catch { if (current()) setError('Copy failed. Select and copy the invitation link above.'); }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={close}>
       <div className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-app-text mb-1">Invite Tenant</h3>
-        <p className="text-sm text-app-text-secondary mb-4">Send a lease invite for {unitName}.</p>
+        <p className="text-sm text-app-text-secondary mb-4">{inviteLink
+          ? `Invitation created for ${email}. Share the link with the tenant. Email delivery has not been confirmed.`
+          : `Send a lease invite for ${unitName}.`}</p>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-app-text-strong mb-1">Email address</label>
+            <label htmlFor="lease-invite-contact" className="block text-sm font-medium text-app-text-strong mb-1">{inviteLink ? 'Invitation link' : 'Email address'}</label>
             <input
-              type="email"
-              value={email}
+              id="lease-invite-contact"
+              type={inviteLink ? 'text' : 'email'}
+              value={inviteLink || email}
+              readOnly={!!inviteLink}
+              disabled={loading}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tenant@example.com"
               className="w-full px-4 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -132,6 +161,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">Start date</label>
               <input
                 type="date"
+                disabled={loading || !!inviteLink}
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -141,6 +171,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">End date <span className="text-app-text-muted font-normal">(optional)</span></label>
               <input
                 type="date"
+                disabled={loading || !!inviteLink}
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -152,16 +183,16 @@ function InviteTenantModal({
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <div className="mt-5 flex items-center justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-app-text-secondary hover:text-app-text transition-colors">
-            Cancel
+          <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-medium text-app-text-secondary hover:text-app-text transition-colors">
+            {inviteLink ? 'Done' : 'Cancel'}
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={inviteLink ? copyLink : handleSubmit}
             disabled={!email.trim() || loading}
             className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black transition-colors disabled:opacity-40"
           >
-            {loading ? 'Sending...' : 'Send Invite'}
+            {inviteLink ? copied ? 'Copied' : 'Copy Link' : loading ? 'Sending...' : 'Send Invite'}
           </button>
         </div>
       </div>
@@ -441,6 +472,7 @@ export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh
           authorityId={authorityId}
           onClose={() => setInviteTarget(null)}
           onSuccess={onRefresh}
+          isCurrent={isCurrent}
         />
       )}
     </div>

@@ -187,6 +187,43 @@ END $$;
 RESET ROLE;
 UPDATE public."Home" SET address_id=NULL WHERE id='f3190000-0000-4000-8000-000000000010';
 
+-- Home's real multi_unit enum must also block parent-building admission, even
+-- when address data is absent or its unit flag appears resolved.
+UPDATE public."Home" SET home_type='multi_unit' WHERE id='f3190000-0000-4000-8000-000000000010';
+SET LOCAL ROLE service_role;
+DO $$ DECLARE l uuid;r jsonb;i integer;before_count integer;before_occ jsonb;
+ h uuid:='f3190000-0000-4000-8000-000000000010';a uuid:='f3190000-0000-4000-8000-000000000001';
+ t uuid:='f3190000-0000-4000-8000-000000000002';au uuid:='f3190000-0000-4000-8000-000000000020';
+BEGIN
+ FOR i IN 8..9 LOOP
+   UPDATE public."Home" SET address_id=CASE WHEN i=8 THEN NULL ELSE 'f3190000-0000-4000-8000-000000000014'::uuid END WHERE id=h;
+   l:=pg_temp.pending_lease();
+   SELECT count(*) INTO before_count FROM public."HomeLease" WHERE home_id=h;
+   SELECT jsonb_agg(to_jsonb(o) ORDER BY id) INTO before_occ FROM public."HomeOccupancy" o WHERE home_id=h;
+   r:=public.decide_home_lease('approve',a,l,au);
+   PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE '%unit number%'
+     AND (SELECT state='pending' FROM public."HomeLease" WHERE id=l),'Parent multi_unit Home cannot approve a lease');
+   INSERT INTO public."HomeLeaseInvite"(home_id,landlord_subject_type,landlord_subject_id,token_hash,expires_at)
+     VALUES(h,'user',a,repeat(i::text,64),now()+interval '1 day');
+   r:=public.decide_home_lease('accept',t,p_token_hash:=repeat(i::text,64));
+   PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE '%unit number%'
+     AND (SELECT status='pending' FROM public."HomeLeaseInvite" WHERE token_hash=repeat(i::text,64)),
+     'Parent multi_unit Home cannot consume an invitation');
+   r:=public.decide_home_lease('request',t,p_home_id:=h);
+   PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE '%unit number%'
+     AND (SELECT count(*)=before_count FROM public."HomeLease" WHERE home_id=h)
+     AND before_occ IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM public."HomeOccupancy" o WHERE home_id=h),
+     'Parent multi_unit Home cannot create a tenant request or change occupancy');
+ END LOOP;
+ UPDATE public."Home" SET home_type='apartment',address_id=NULL WHERE id=h;
+ -- Retire the earlier contract's membership so its active-lease conflict does
+ -- not replace the Home-type compatibility check.
+ DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+ r:=public.decide_home_lease('approve',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true','An apartment remains admissible after enforcing the actual building enum');
+END $$;
+RESET ROLE;
+
 -- End/retry proofs use a separate Home so earlier admission cases are independent.
 INSERT INTO public."Home"(id,address,city,state,zipcode) VALUES
  ('f3190000-0000-4000-8000-000000000012','Lease end contract','Test','CA','00000');

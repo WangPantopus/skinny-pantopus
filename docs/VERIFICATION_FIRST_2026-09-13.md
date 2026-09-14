@@ -1227,3 +1227,60 @@ delivery, installed Android acceptance, combined adoption/rollout and R05 remain
 Native identity/date source113d4cdc6 now passes all15 applicable checks and1
 unchanged Seeder skip in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
 The unit/invitation follow-up is saved to PR#38 and requires its own CI.
+
+
+### Existing landlord sharing and parent-building admission
+
+The existing invitation modal discarded the service's raw sharing token and
+closed immediately. It now keeps the created link in its existing input, reuses
+the existing buttons for Copy Link/Done, and explains that email delivery is not
+confirmed. Creation errors retain the form; copy errors leave the full link for
+manual copying. Incomplete or wrong-Home results cannot claim a saved link, and
+closed/account-retired callbacks cannot refresh or reveal it. Dates retain their
+calendar values and obvious missing/reversed ranges do not submit. Markup classes
+and layout are preserved; no replacement screen or new file was added.
+
+Six rendered baseline checks failed; all58 existing lease/web checks now pass,
+including clipboard failure/retry and malformed response cases. Types/scoped lint
+pass. Actual browser/SDK/HTTP/SQL checks cover a controlled503 with no invite or
+notice, retained form, a created/copyable link, Done refresh, then that link's
+recipient preview and acceptance into one active lease/occupancy. The existing
+modal was visually inspected. An initial .invalid fixture email was correctly
+rejected by real email validation; reserved example.com fixture addresses then
+passed. Notices were intercepted, not delivered to a provider.
+
+A separate actual HTTP baseline created and accepted a lease on the parent Home:
+its real home_type is multi_unit, but the existing service checked the nonexistent
+building enum. Address data alone did not prevent the transaction from admitting
+that parent. The existing service now recognizes multi_unit, and the same unmerged
+lease migration's transaction blocks request/approve/accept for that Home type.
+No table or second migration was introduced. Existing end/move-out remains usable;
+an actual older parent-building lease was successfully ended after the guard.
+
+The service baseline and new real SQL contract assertions failed before the repair.
+All145 selected backend tests and the complete lease lifecycle/rollback/retry SQL
+contract pass. The first apartment compatibility fixture hit the existing active-
+lease conflict guard; isolating its earlier membership fixed the fixture without
+changing that guard. Existing application-function lint passes with zero errors
+across266 functions/85 trigger bindings (8 warnings). The checker is installed
+only inside the existing rollback-only lint script; the initial direct query had
+no installed checker and is retained as a failed setup attempt.
+
+Actual HTTP verifies7 parent-building rejections (creation plus request/approval/
+acceptance with misclassified or missing address) and3 valid apartment creation/
+preview/acceptance cases. Parent pending lease/invitation rows remain unchanged
+and no parent occupancy is created. These checks use synthetic auth and the
+isolated database; provider delivery, native link acceptance and hosted adoption
+remain open.
+
+Private lease-sharing-r1 and lease-building-r1 contain source bindings, baseline/
+candidate tests, SQL/lint and exact HTTP/browser state. Earlier API18113 is stopped
+and cleaned; owned API18114/Next18110 remain active. Both folders are mirrored in
+the existing private recovery audit. Source40866ab85 is pushed and its own
+[CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732)
+is running; this sharing/building follow-up needs its own CI after push.
+
+Next: existing invitation-creation recovery/current-authority/date boundaries,
+then bulk unit controls through the existing canonical-address/Home-creation path.
+Private attachments, provider delivery, installed Android acceptance, combined
+adoption/rollout and the R05 row remain open. The inventory stays8/72/80.

@@ -64,7 +64,7 @@ function seedHome(overrides = {}) {
   seedTable('Home', [{
     id: 'home-1',
     name: 'Test Home',
-    home_type: 'unit',
+    home_type: 'apartment',
     address_id: 'addr-1',
     ...overrides,
   }]);
@@ -451,8 +451,8 @@ describe('inviteTenant', () => {
     expect(result.error).toContain('does not match');
   });
 
-  test('returns error when home is a building', async () => {
-    getTable('Home')[0].home_type = 'building';
+  test.each(['multi_unit', 'building'])('returns error when home is a building (%s)', async homeType => {
+    getTable('Home')[0].home_type = homeType;
 
     const result = await service.inviteTenant(
       'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',

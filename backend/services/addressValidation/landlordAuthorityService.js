@@ -315,7 +315,7 @@ class LandlordAuthorityService {
       return { success: false, error: 'Home not found' };
     }
 
-    if (home.home_type === 'building') {
+    if (['multi_unit', 'building'].includes(home.home_type)) {
       return { success: false, error: 'Cannot invite tenants to a building — use a unit' };
     }
 

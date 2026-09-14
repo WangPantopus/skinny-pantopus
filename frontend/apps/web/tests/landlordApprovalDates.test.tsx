@@ -542,3 +542,79 @@ test.each(['wrong-account', 'malformed'])('a %s preview cannot offer lease accep
     expect(confirm).not.toHaveBeenCalled(); expect(post).toHaveBeenCalledTimes(1); expect(mockPush).not.toHaveBeenCalled();
   } finally { confirm.mockRestore(); }
 });
+
+function openUnitInvite(onRefresh = jest.fn(), isCurrent = () => true) {
+  const props = unitLeaseProps(onRefresh, isCurrent); props.leases = [];
+  const view = render(<UnitsTab {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  fireEvent.change(screen.getByPlaceholderText('tenant@example.com'), { target: { value: 'tenant@example.invalid' } });
+  const dates = view.container.querySelectorAll('input[type="date"]');
+  fireEvent.change(dates[0], { target: { value: '2026-09-01' } });
+  return { ...view, dates, onRefresh };
+}
+
+test('the existing landlord modal retains the created invitation link for manual sharing', async () => {
+  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
+  const view = openUnitInvite();
+  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${leaseToken}`));
+  expect(screen.getByText(/Email delivery has not been confirmed/)).toBeVisible();
+  expect(view.onRefresh).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  expect(view.onRefresh).toHaveBeenCalledTimes(1);
+});
+
+test('an SDK invitation error retains the existing form for retry', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ message: 'Current verified authority required' });
+  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByText('Current verified authority required')).toBeVisible());
+  expect(screen.getByPlaceholderText('tenant@example.com')).toHaveValue('tenant@example.invalid');
+});
+
+test.each(['closed', 'account'])('a %s landlord invitation cannot refresh or reveal a late sharing link', async mode => {
+  let resolve!: (value: unknown) => void, current = true;
+  jest.mocked(post).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  const view = openUnitInvite(jest.fn(), () => current);
+  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  if (mode === 'closed') fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  else current = false;
+  await act(async () => resolve({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken }));
+  expect(view.onRefresh).not.toHaveBeenCalled(); expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument();
+});
+
+test.each(['', '2026-08-31'])('an invalid invite date %s cannot submit', async invalid => {
+  const { dates } = openUnitInvite();
+  fireEvent.change(dates[invalid ? 1 : 0], { target: { value: invalid } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  expect(post).not.toHaveBeenCalled();
+  expect(screen.getByText(invalid ? 'End date must be after start date.' : 'Enter a start date.')).toBeVisible();
+});
+
+test('a clipboard failure keeps the complete invitation link available for manual copy and retry', async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const writeText = jest.fn().mockRejectedValueOnce(new Error('denied')).mockResolvedValueOnce(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
+  try {
+    openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copy Link' })).toBeVisible());
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
+    await waitFor(() => expect(screen.getByText('Copy failed. Select and copy the invitation link above.')).toBeVisible());
+    expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${leaseToken}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible());
+    expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/invite/lease/${leaseToken}`);
+    expect(post).toHaveBeenCalledTimes(1);
+  } finally {
+    if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+test.each(['missing-token', 'wrong-home'])('an incomplete invitation response (%s) cannot claim a saved sharing link', async kind => {
+  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: kind === 'wrong-home' ? 'other-home' : 'unit-1' }, ...(kind === 'wrong-home' ? { token: leaseToken } : {}) });
+  const view = openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByText('Could not recover the invitation link. Reopen the property to check its status.')).toBeVisible());
+  expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument(); expect(view.onRefresh).not.toHaveBeenCalled();
+});

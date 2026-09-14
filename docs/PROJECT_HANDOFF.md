@@ -183,8 +183,23 @@ Unit checkpoint19369aa40 and the invitation follow-up are saved together for PR#
 the current follow-up requires its own remote CI.
 Owned unit API18111 is stopped/cleaned; invitation API18112 and Next18110 are active.
 
-**Next:** verify existing invitation creation/sharing and multi-unit admission,
-then missing bulk unit handlers. Complete remaining R05 private-attachment/provider acceptance
+**Landlord sharing and building admission follow-up:** the existing modal now
+retains a copyable invitation link, truthful delivery status, form errors and
+retired-response guards. Actual browser creation/copy/recipient acceptance passes;
+all58 rendered checks and types/lint pass. Actual HTTP also reproduced parent-
+building admission because the service checked building instead of the real
+multi_unit enum. The existing service and unmerged transaction now block it while
+preserving valid apartment admission and ending an older parent lease. All145
+backend tests, full lease SQL contract and application-function lint (zero errors)
+pass, plus7 rejection/3 apartment HTTP cases. No new file/table/screen or second
+migration. See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-sharing-and-parent-building-admission).
+Source40866ab85 is pushed; [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732) is running.
+The current follow-up requires its own CI after push. API18113 is stopped/cleaned;
+owned API18114 and Next18110 are active.
+
+**Next:** verify existing invitation-creation recovery/current-authority/date
+boundaries, then connect bulk unit controls through existing canonical-address/
+Home-creation implementations. Complete remaining R05 private-attachment/provider acceptance
 through existing implementations, and installed Android recovery/foreground when
 computer control is reliable. The earlier APK installed in the owned AVD, but
 control repeatedly selected the IDE instead of the device. No installed Android

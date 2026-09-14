@@ -130,6 +130,9 @@ BEGIN
       VALUES(v_home_id,p_actor_id,'LEASE_REQUEST_CANCELED','HomeLease',v_lease.id);
     RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',false);
   END IF;
+  IF p_action IN ('approve','accept','request') AND v_home.home_type='multi_unit' THEN
+    RETURN jsonb_build_object('success',false,'error','This is a multi-unit building. A unit number is required.');
+  END IF;
   IF p_action IN ('approve','accept','request') AND v_home.address_id IS NOT NULL THEN
     PERFORM id FROM public."HomeAddress" WHERE id=v_home.address_id FOR SHARE;
     v_now:=clock_timestamp();
