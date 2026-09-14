@@ -5,10 +5,11 @@
  * Tabs: Units, Requests, Leases, Notices, Settings
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 import UnitsTab from './UnitsTab';
 import RequestsTab from './RequestsTab';
 import LeasesTab from './LeasesTab';
@@ -50,23 +51,47 @@ export default function PropertyDetail({ homeId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState<landlord.PropertyDetail | null>(null);
+  const lifetime = useRef({ active: true, generation: 0 });
+  const [detailGeneration, setDetailGeneration] = useState(0);
 
   const loadDetail = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    const generation = ++lifetime.current.generation;
+    const current = () => lifetime.current.active && lifetime.current.generation === generation;
+    if (!current()) return;
+    setLoading(true); setDetail(null); setError('');
     try {
       const data = await api.landlord.getPropertyDetail(homeId);
-      setDetail(data);
+      if (!current()) return;
+      if (!data || data.home?.id !== homeId || !data.authority
+        || ![data.units, data.leases, data.pending_requests, data.occupants].every(Array.isArray)) {
+        throw new Error('Could not confirm this property’s details. Reopen the property to retry.');
+      }
+      setDetail(data); setDetailGeneration(generation);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load property details');
+      if (current()) setError(extractApiError(err, 'Failed to load property details'));
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [homeId]);
 
   useEffect(() => {
-    loadDetail();
+    const scope = lifetime.current;
+    scope.active = true;
+    void loadDetail();
+    const changed = () => { void loadDetail(); };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    return () => {
+      scope.active = false; ++scope.generation;
+      unsubscribe(); window.removeEventListener('storage', storage);
+    };
   }, [loadDetail]);
+  const isCurrent = () => lifetime.current.active && lifetime.current.generation === detailGeneration
+    && detail?.home.id === homeId;
+  const refreshCurrent = () => { if (isCurrent()) void loadDetail(); };
 
   const handleTabChange = (newTab: PropertyTab) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -78,7 +103,7 @@ export default function PropertyDetail({ homeId }: Props) {
   const requestCount = detail?.pending_requests?.length ?? 0;
 
   // ── Loading ─────────────────────────────────────────────
-  if (loading) {
+  if (loading || (detail !== null && detail.home.id !== homeId)) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="flex flex-col items-center justify-center py-16">
@@ -173,7 +198,7 @@ export default function PropertyDetail({ homeId }: Props) {
       </div>
 
       {/* Tab content */}
-      <div className="animate-fade-in">
+      <div key={detailGeneration} className="animate-fade-in">
         {tab === 'units' && (
           <UnitsTab
             homeId={homeId}
@@ -181,7 +206,7 @@ export default function PropertyDetail({ homeId }: Props) {
             units={units}
             leases={leases}
             occupants={occupants}
-            onRefresh={loadDetail}
+            onRefresh={refreshCurrent}
           />
         )}
         {tab === 'requests' && (
@@ -189,14 +214,16 @@ export default function PropertyDetail({ homeId }: Props) {
             homeId={homeId}
             authorityId={authority?.id || ''}
             requests={pending_requests as landlord.TenantRequest[]}
-            onRefresh={loadDetail}
+            onRefresh={refreshCurrent}
+            isCurrent={isCurrent}
           />
         )}
         {tab === 'leases' && (
           <LeasesTab
             homeId={homeId}
             leases={leases}
-            onRefresh={loadDetail}
+            onRefresh={refreshCurrent}
+            isCurrent={isCurrent}
           />
         )}
         {tab === 'notices' && (

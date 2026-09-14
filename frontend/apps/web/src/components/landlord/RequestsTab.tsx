@@ -16,6 +16,7 @@ type Props = {
   authorityId: string;
   requests: landlord.TenantRequest[];
   onRefresh: () => void;
+  isCurrent: () => boolean;
 };
 
 // ── Approve modal ───────────────────────────────────────────
@@ -25,11 +26,13 @@ function ApproveModal({
   authorityId,
   onClose,
   onSuccess,
+  isCurrent,
 }: {
   request: landlord.TenantRequest;
   authorityId: string;
   onClose: () => void;
   onSuccess: () => void;
+  isCurrent: () => boolean;
 }) {
   const originalStartDate = request.start_at ? new Date(request.start_at).toISOString().split('T')[0] : '';
   const originalEndDate = request.end_at ? new Date(request.end_at).toISOString().split('T')[0] : '';
@@ -39,6 +42,7 @@ function ApproveModal({
   const [error, setError] = useState('');
 
   const handleApprove = async () => {
+    if (!isCurrent()) return;
     if (!startAt) {
       setError('Enter a start date.');
       return;
@@ -57,12 +61,11 @@ function ApproveModal({
         start_at: startValue,
         end_at: endValue,
       });
-      onSuccess();
-      onClose();
+      if (isCurrent()) { onSuccess(); onClose(); }
     } catch (err: unknown) {
-      setError(extractApiError(err, 'Failed to approve'));
+      if (isCurrent()) setError(extractApiError(err, 'Failed to approve'));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -212,19 +215,20 @@ function RequestCard({
 
 // ── Main component ──────────────────────────────────────────
 
-export default function RequestsTab({ homeId: _homeId, authorityId, requests, onRefresh }: Props) {
+export default function RequestsTab({ homeId: _homeId, authorityId, requests, onRefresh, isCurrent }: Props) {
   const [approveTarget, setApproveTarget] = useState<landlord.TenantRequest | null>(null);
 
   const handleDeny = useCallback(async (leaseId: string) => {
+    if (!isCurrent()) return;
     const reason = prompt('Reason for denial (optional):');
-    if (reason === null) return;
+    if (reason === null || !isCurrent()) return;
     try {
       await api.landlord.denyLease(leaseId, authorityId, reason || undefined);
-      onRefresh();
+      if (isCurrent()) onRefresh();
     } catch (err: unknown) {
       console.error('Deny failed:', err);
     }
-  }, [authorityId, onRefresh]);
+  }, [authorityId, onRefresh, isCurrent]);
 
   if (requests.length === 0) {
     return (
@@ -262,6 +266,7 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
           authorityId={authorityId}
           onClose={() => setApproveTarget(null)}
           onSuccess={onRefresh}
+          isCurrent={isCurrent}
         />
       )}
     </div>

@@ -598,7 +598,47 @@ failure. The corrected locator selects the existing textarea and all three cases
 pass. This proves actual HTTP/SQL and component behavior under the existing auth
 signal; it does not prove real login/cookie rotation or full AppShell behavior.
 Background/focus, landlord view lifetimes, unseen/queued submissions and installed
-lease-verification consumers remain open. The current follow-up requires CI after
-push, R05 stays open, and the inventory remains 8 closed / 72 partial or open.
+lease-verification consumers remain open. Tenant source `0f54be50a6fc55b13b7425686d6f3c202ef3723c` passes all eight applicable
+checks in [CI34799934365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34799934365),
+with three unchanged scopes skipped. R05 stays open, and the inventory remains 8 closed / 72 partial or open.
 Private source-bound evidence is versioned under `tenant-account-r1` in the
 existing lease-transaction archive. No backend, SDK or migration changed here.
+
+
+### Existing landlord Home/account boundaries
+
+Two rendered baseline failures reproduced late property reads replacing the new
+Home/account view. Actual Chrome/SDK/HTTP/SQL then confirmed the privacy impact:
+an authorized response containing tenant email was held, the new synthetic actor
+received HTTP403, and delivery of the old body restored tenant details and Approve
+controls. That old response also had no cache-control header. The baseline body
+hash and screenshot are retained privately; they contain synthetic fixtures only.
+
+The existing PropertyDetail component now clears retired data, uses the existing
+SDK account signals, validates the returned Home and collections, and passes a
+required current-lifetime guard to the existing approval/denial/end controls.
+Late completions cannot refresh a newer view; retired end errors cannot alert the
+new account; a denial prompt cannot send after an observed account change. Existing
+child state resets when a new detail lifetime is accepted. The same property route
+now marks successful and rejected responses private/no-store before authentication.
+No SDK, service, migration, visual layout or stylesheet was added or changed.
+
+The actual held-response candidate keeps the existing HTTP403 error view with no
+tenant details or approval controls, and its authorized response is private/no-store.
+A second actual case commits approval in SQL, holds its successful HTTP response,
+changes account, then delivers the reply: the new denial view remains, with one
+approval/audit and no extra property refresh. Screenshots were visually checked.
+All 46 relevant rendered tests and 66 route tests pass; standalone TypeScript exits
+zero. Scoped lint has zero errors and one pre-existing metadata `any` warning.
+An initial new ref-cleanup warning was corrected by capturing the existing lifetime
+object in the effect. Six actual approval/denial browser cases and three lease-end
+failure/lost-reply/retry cases remain compatible. SQL behavior is unchanged, so its
+accepted lifecycle/race evidence is reused.
+
+Evidence is source-bound under `landlord-account-r1` in the existing private lease
+transaction archive. Current landlord source requires CI after push. The boundary
+is actual component/SDK/HTTP/SQL with synthetic authentication, not full AppShell,
+real login/cookie rotation or native acceptance. Background/return behavior and the
+legacy queued-submission boundary are next; validate the existing workflow before
+adding anything. Provider delivery, populated adoption and hosted rollout remain
+open. R05 and the 8/72 inventory are unchanged.

@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { get, post } from '../../../packages/api/src/client';
 import { approveLease, type TenantRequest } from '../../../packages/api/src/endpoints/landlord';
 import RequestsTab from '@/components/landlord/RequestsTab';
+import PropertyDetail from '@/components/landlord/PropertyDetail';
+import LeasesTab from '@/components/landlord/LeasesTab';
 import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
 import VerificationCenter from '@/components/home/VerificationCenter';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -14,7 +16,7 @@ jest.mock('@pantopus/api', () => ({
   AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }), useSearchParams: () => new URLSearchParams('tab=requests') }));
 jest.mock('@/components/home/useHomePermissions', () => ({ useHomePermissions: () => ({ access: null, reload: jest.fn() }) }));
 
 beforeEach(() => { jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
@@ -27,7 +29,7 @@ function openApproval(endAt: string | null = '2027-09-01', startAt = '2026-09-01
   const refresh = jest.fn();
   const request = { id: 'lease-1', home_id: 'home-1', start_at: startAt,
     end_at: endAt, state: 'pending', metadata: {}, primary_resident: { name: 'Synthetic Tenant' } } as TenantRequest;
-  const view = render(<RequestsTab homeId="home-1" authorityId="authority-1" requests={[request]} onRefresh={refresh} />);
+  const view = render(<RequestsTab homeId="home-1" authorityId="authority-1" requests={[request]} onRefresh={refresh} isCurrent={() => true} />);
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
   const dates = view.container.querySelectorAll('input[type="date"]');
   return { refresh, dates };
@@ -210,4 +212,80 @@ test('a response for another Home cannot provide cancellation controls', async (
   expect(await screen.findByText('Could not confirm this home’s lease status. Please retry.')).toBeTruthy();
   expect(screen.queryByText(/Wrong Home private request/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
+});
+
+const propertyDetail = (homeId: string, name: string) => ({
+  home: { id: homeId, name, home_type: 'house' }, units: [], leases: [], pending_requests: [], occupants: [],
+  authority: { id: 'authority-1', verification_tier: 'standard' },
+});
+
+test('a late landlord read cannot restore details from the previous Home', async () => {
+  const old = deferredTenantStatus();
+  jest.mocked(get).mockReset().mockReturnValueOnce(old.promise).mockResolvedValue(propertyDetail('home-b', 'Current property'));
+  const view = render(<PropertyDetail homeId="home-a" />);
+  view.rerender(<PropertyDetail homeId="home-b" />);
+  expect(await screen.findByText('Current property')).toBeTruthy();
+  await act(async () => old.resolve(propertyDetail('home-a', 'Previous private property')));
+  expect(screen.queryByText('Previous private property')).toBeNull();
+  expect(screen.getByText('Current property')).toBeTruthy();
+});
+
+test('an account change retires held landlord data even when the new account is denied', async () => {
+  const old = deferredTenantStatus();
+  jest.mocked(get).mockReset().mockReturnValueOnce(old.promise).mockRejectedValue({ message: 'Current account cannot manage this property' });
+  render(<PropertyDetail homeId="home-a" />);
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' })));
+  await act(async () => old.resolve(propertyDetail('home-a', 'Previous private property')));
+  expect(screen.queryByText('Previous private property')).toBeNull();
+  expect(await screen.findByText('Current account cannot manage this property')).toBeTruthy();
+});
+
+function propertyWithRequest(homeId: string) {
+  return { ...propertyDetail(homeId, 'Original property'), pending_requests: [{ id: 'lease-1', home_id: homeId,
+    start_at: '2026-09-01', end_at: null, created_at: '2026-09-01', state: 'pending', metadata: {},
+    primary_resident: { name: 'Original tenant' } }] };
+}
+
+test('a completed approval for a retired Home cannot refresh over the current property', async () => {
+  const saved = deferredTenantStatus();
+  jest.mocked(post).mockReturnValueOnce(saved.promise);
+  jest.mocked(get).mockReset().mockResolvedValueOnce(propertyWithRequest('home-a')).mockResolvedValue(propertyDetail('home-b', 'Current property'));
+  const view = render(<PropertyDetail homeId="home-a" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve Lease' }));
+  expect(post).toHaveBeenCalledTimes(1);
+  view.rerender(<PropertyDetail homeId="home-b" />);
+  expect(await screen.findByText('Current property')).toBeTruthy();
+  await act(async () => saved.resolve({ success: true }));
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Current property')).toBeTruthy();
+});
+
+test('a denial prompt cannot submit after the account changes while it is open', async () => {
+  jest.mocked(get).mockReset().mockResolvedValueOnce(propertyWithRequest('home-a'))
+    .mockRejectedValue({ message: 'No verified authority for this property' });
+  const prompt = jest.spyOn(window, 'prompt').mockImplementation(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' }));
+    return 'Old account decision';
+  });
+  try {
+    render(<PropertyDetail homeId="home-a" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
+    expect(await screen.findByText('No verified authority for this property')).toBeTruthy();
+    expect(post).not.toHaveBeenCalled();
+  } finally { prompt.mockRestore(); }
+});
+
+test('a retired lease-end failure cannot alert or refresh the next account', async () => {
+  let reject!: (error: unknown) => void, current = true;
+  jest.mocked(post).mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+  const alert = jest.spyOn(window, 'alert').mockImplementation(() => {}), refresh = jest.fn();
+  try {
+    render(<LeasesTab homeId="home-a" leases={[{ id: 'lease-1', state: 'active', start_at: '2026-09-01', end_at: null } as TenantRequest]}
+      onRefresh={refresh} isCurrent={() => current} />);
+    fireEvent.click(screen.getByRole('button', { name: 'End Lease' }));
+    current = false;
+    await act(async () => reject({ message: 'Previous account private error' }));
+    expect(alert).not.toHaveBeenCalled(); expect(refresh).not.toHaveBeenCalled();
+  } finally { alert.mockRestore(); }
 });

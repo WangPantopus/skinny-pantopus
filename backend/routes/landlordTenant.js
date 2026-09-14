@@ -199,6 +199,7 @@ router.get(
 
 router.get(
   '/landlord/properties/:homeId',
+  (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); },
   verifyToken,
   requireAuthority,
   async (req, res) => {

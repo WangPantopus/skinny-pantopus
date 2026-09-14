@@ -6,138 +6,72 @@ the ordered backlog; dated reports preserve source-specific evidence.
 
 ## Current direction, state and next action
 
-**Preserve working implementations and existing screen designs.** Follow the
-new rules in [AGENTS.md](../AGENTS.md) and the
-[reconciliation and inventory map](VERIFICATION_FIRST_2026-09-13.md).
-An open acceptance row does not authorize a rebuild. Locate existing code and
-establish a defect or concrete unmet requirement before application changes.
+**Preserve working implementations and existing screen designs.** Follow
+[AGENTS.md](../AGENTS.md) and the [reconciliation](VERIFICATION_FIRST_2026-09-13.md).
+Trace the existing screen, caller, route, service and SQL before changes. An open
+acceptance row does not authorize a rebuild. Reuse unchanged accepted evidence.
 
-**Active draft: `codex/lease-approval-dates`, PR #38.** The date repair now uses
-an atomic database decision over the existing lease, invitation, resident,
-occupancy and audit tables. It rechecks current authority and the authenticated
-actor under locks, preserves independent current membership, applies reviewed
-lease bounds on admission/reentry, and binds completed retries to the existing
-membership generation. Approval and denial cannot both commit. There are no
-new tables or screen/layout changes. See [the transaction evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-decision-transaction--september-13-draft).
+**Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/lease-approval-dates`, draft [PR #38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
+against `codex/home-permission-boundaries`. It repairs demonstrated lease date,
+admission, end/move-out, tenant status/cancellation and request-submission defects.
+The same service-only transaction uses existing lease/invitation/resident/occupancy/
+audit records, current authority and Home locks. It preserves independent membership,
+makes access changes atomic, and binds completed retries to membership generations.
+Self move-out reuses the accepted removal policy. No tables or replacement screens
+were added; the only migration is still unmerged. Request creation is serialized,
+and the existing form recovers matching saved requests after lost replies.
 
-The end/move-out follow-up now makes lease termination and bound access
-withdrawal atomic too. It preserves independent/replaced membership, reports
-failures in the existing Leases UI, and restores the history its Ended filter
-already expects. A reproduced co-resident bug is repaired using the accepted
-self-removal helper: only the departing person loses access, the primary lease
-stays active, and an old request cannot remove restored membership. No table,
-screen, markup, layout or CSS class was added or changed.
+**Last pushed tenant privacy source:** `0f54be50a6fc55b13b7425686d6f3c202ef3723c`
+passes all eight applicable checks in
+[CI34799934365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34799934365),
+with three unchanged native/Seeder skips. Its 41 rendered checks, fresh types/lint,
+three actual browser/SDK/HTTP/SQL account-boundary cases and tenant lifecycle/recovery
+compatibility pass. Old Home/account responses and cancellation callbacks retire
+without exposing prior request data or erasing the new account's draft. See
+[tenant privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-homeaccount-boundaries).
 
-Current local checks: 125 service/route tests, ten rendered web/SDK tests, real
-SQL lifecycle and final-write rollback, five end HTTP/SQL comparisons, a separate
-co-resident HTTP/SQL baseline/candidate, seven multi-session SQL races and three
-actual browser end/retry cases pass. Six earlier actual browser approval/denial
-cases retain their source-specific evidence. Fresh standalone web TypeScript
-and application-function lint pass; scoped ESLint has one existing warning.
-See [the end evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-lease-end-and-move-out-follow-up).
+**Current follow-up: landlord Home/account privacy.** Actual Chrome reproduced an
+old authorized response restoring tenant details and approval controls after the
+new account received HTTP403. The existing property component now retires reads,
+validates Home identity, and gates action callbacks with the current lifetime.
+Late approvals cannot refresh the new view; retired end failures cannot alert it;
+a denial prompt cannot send after an observed account change. Property-detail
+responses are private/no-store. Existing markup, layout, styles and navigation are
+preserved. All 46 relevant rendered checks, 66 route checks, standalone TypeScript,
+scoped lint (one pre-existing warning), actual stale-read/committed-approval browser
+cases and six approval/three end browser compatibility cases pass. Current landlord
+source needs CI after push. See [landlord privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-homeaccount-boundaries).
 
-Transaction source `81cf3bef8` passes all eight executed checks in
-[CI34793608043](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34793608043),
-with three unchanged scopes skipped. Browser source `695a1cfb3` failed CI on two
-test-only unsupported role-query options, now removed. An intermediate chained
-local command masked that TypeScript failure; the report corrects it. The end
-follow-up requires CI against its pushed head. Home integration `7f2a5e6d6`
-passes all 16 checks in
+**Next:** verify background/return behavior, reconcile the legacy request API's
+queued-original boundary using existing records, then verify remaining installed
+lease-verification consumers. Saved-status recovery does not prove cancellation
+of an unseen request; first establish what the existing flow actually offers.
+Do not build speculative command/renewal tables. The separate proposed renewal
+migration remains paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
+remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
+
+**Verification limits:** browser evidence uses actual components, SDK, HTTP and
+SQL with synthetic authentication in an isolated renderer. Full AppShell/login,
+background lifetimes and installed lease-verification consumers are not claimed.
+Accepted native Leave Home source is unchanged and its evidence is reused. Actual
+provider delivery, combined populated adoption and hosted rollout remain open.
+The schema-only lease DB, REST18089 and private Next18110 remain exclusively leased
+to `/private/tmp/pantopus-lease-transaction-r1`; inspect its private runtime lease
+before reuse. Synthetic fixtures are cleaned after checks. No provider/production
+activation occurred. Owner checkout edits and unrelated worktrees are preserved.
+
+**Other verified Git state:** Home integration [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32)
+is draft at `7f2a5e6d6afe18c69c646320aa13e70a2f81b999`, with all16 checks passing
 [CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
-
-End source `1f526de0d` now passes all eight executed checks in
-[CI34796831599](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34796831599),
-with three unchanged scopes skipped. The legacy protected removal → end retry
-and later admission composition also passes four actual HTTP/SQL groups. Both
-native Leave Home screens already use the accepted removal controller; relevant
-native source is unchanged and its evidence is reused.
-
-**Current follow-up: existing tenant status, cancellation and request recovery.**
-The status/cancel controls now reach the existing records without exposing other
-residents or raw metadata. An actual two-request race then reproduced two pending
-leases; request creation now shares the same lease transaction/Home lock and
-produces one saved request. The existing form recovers a lost successful reply by
-reading its matching saved status, retains edits if status is unavailable, and
-uses the existing request state after an expired lease. No table, second migration,
-replacement screen or design change was added.
-
-Current local checks: 126 backend tests, 37 relevant rendered web tests, fresh
-TypeScript, application SQL lint/rollback contract, two-request HTTP/SQL barrier,
-actual request-recovery and expired-lease browser journeys, and compatibility
-rechecks of the 12 admission/five end HTTP/SQL cases pass. The prior tenant CI
-`08e0b6177` failed an old verification test fixture that omitted the tenant API;
-it now supplies a successful no-landlord/no-lease result with all behavior
-assertions retained. Request source `9c31be7a3` passes all eight applicable checks
-in [CI34798866061](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34798866061),
-with three unchanged scopes skipped. See [the request evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-request-submission-and-response-loss-follow-up).
-
-**Current follow-up: tenant Home/account privacy.** Reproduced late status reads
-could restore a previous Home/account's request. The existing tenant component
-now retires reads and action callbacks on Home/account change and unmount, using
-the existing authentication signals. An old cancellation confirmation sends no
-request; a late committed cancellation reply cannot erase the new account's draft.
-No visual markup or styles changed. All 41 relevant rendered tests, fresh web
-TypeScript/scoped lint and three actual browser/SDK/HTTP/SQL account-boundary cases
-pass; six tenant lifecycle cases and saved-submission recovery remain compatible.
-This follow-up needs CI after push; #38 remains draft. See
-[the privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-homeaccount-boundaries).
-
-**Next: landlord stale read/action results, background changes, and
-the legacy request API's lack of a durable client command ID.** Reuse existing
-controllers and records; saved-status response-loss recovery does not establish
-cancellation of an unseen request or retirement of every queued original.
-The actual components/SDK/HTTP/SQL run in an isolated renderer; full AppShell/login
-and installed-native lease verification are not claimed. Provider delivery,
-combined populated adoption and hosted rollout remain open. R05 stays open and
-proposed renewal tables stay paused. The schema-only lease database, REST18089
-and private Next18110 are exclusively leased to `/private/tmp/pantopus-lease-transaction-r1`;
-fixtures are cleaned after checks. Inspect its private lease before reuse.
-
-The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
-issuer's current verified authority before writes. Baseline SQL granted access
-after revocation; candidate SQL denies without consuming the invitation, while
-a valid invitation still works. All 279 focused service/route tests pass. See
-[the verification and limits](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-flow-verification--september-13).
-The active worktree is `/private/tmp/pantopus-home-permission-boundaries`;
-the integrated Home branch is `codex/home-permission-boundaries`. The previous Home integration `e6e3c65f8`
-passes all 16 checks in [CI 34788091570](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34788091570).
-The landlord candidate `968e145a7369e69f48638c7d16b06bcaa88aaff7` passes all six
-executed checks in [CI 34790034952](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790034952),
-with five unchanged scopes skipped. Check the new merge's integration CI
-separately. No screen or migration changed. A rendered React component probe also
-confirms the existing lease-date modal drops edited dates before the SDK call;
-include that concrete failure in the same lease repair, preserving its design.
-Owned landlord-verification REST is stopped, fixtures are cleaned, and the
-schema-only database is retained with its private lease released.
-
-PR #36 is integrated here from `a68e8f0e52d8f2739e5a49279ae3495956d073ee`.
-Its exact [CI 34785056441](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34785056441)
-passes all 15 executed checks, with one unchanged Seeder skip. The six-view
-presentation repair restores the distinct web layouts and native illustrated
-empty states; the accepted reader, API, SQL and recovery controllers are unchanged.
-See [the accepted report](home-current-claims-wip-2026-09-13.md) for rendered web
-checks and source-specific native limits. Inspect CI for the integration commit
-independently; it adds no application changes beyond the accepted candidate.
-
-The Home integration branch is `codex/home-permission-boundaries`, [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-The earlier primary application checkpoint was
-`4e966835fd6c2c9b51e1cd4d34ecaa8fb30372c8`, with
-[CI 34777977420](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34777977420)
-passing all 16 checks. Documentation checkpoint `a1d278e33` records the verification-first rules.
-The integrated #36 source and its passing CI are recorded above. [PR #35](https://github.com/WangPantopus/skinny-pantopus/pull/35)
-is already merged into #32 at `f1a92f45ad8c79ef88e89a2882a584898d3f8017`, not master.
-Its exact source `8cfcbf2b28d95587a70fe784c81b913de688dd52` passes the executed
-checks in [CI 34775715928](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34775715928).
-
-PRs #32 and [#34](https://github.com/WangPantopus/skinny-pantopus/pull/34) remain drafts.
-[PR #36](https://github.com/WangPantopus/skinny-pantopus/pull/36) is integrated into
-the Home branch, alongside the previously integrated #35.
-#34 is conflicting against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`;
-its selected CI scope passes, but paid/provider journeys remain incomplete.
-Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
-No production or provider activation has occurred. **8 of 80 acceptance areas
-are locally closed; 72 remain partial/open.** These are not implementation or
-remaining-effort percentages.
+It includes accepted #35 reviewer history, #36 private queue/presentation and #37
+current invitation-issuer authority repairs. Preserve their source-specific native
+and SQL acceptance; detailed chronology is in linked reports. Draft
+[PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34) was conflicting
+against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`; paid/provider journeys
+remain incomplete. Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
+Recheck remote state before integration. Earlier failed CI and the corrected
+masked local TypeScript failure remain recorded in the verification report.
 
 ## Accepted native history
 

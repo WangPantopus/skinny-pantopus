@@ -14,6 +14,7 @@ type Props = {
   homeId: string;
   leases: landlord.HomeLease[];
   onRefresh: () => void;
+  isCurrent: () => boolean;
 };
 
 // ── Lease categorization ────────────────────────────────────
@@ -70,7 +71,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
 
 // ── Main component ──────────────────────────────────────────
 
-export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props) {
+export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurrent }: Props) {
   const [filter, setFilter] = useState<FilterOption>('all');
   const [endingId, setEndingId] = useState<string | null>(null);
 
@@ -95,16 +96,17 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props)
   }, [categorized]);
 
   const handleEndLease = useCallback(async (leaseId: string) => {
+    if (!isCurrent()) return;
     setEndingId(leaseId);
     try {
       await api.landlord.endLease(leaseId);
-      onRefresh();
+      if (isCurrent()) onRefresh();
     } catch (err: unknown) {
-      alert(extractApiError(err, 'Could not end the lease. Please retry.'));
+      if (isCurrent()) alert(extractApiError(err, 'Could not end the lease. Please retry.'));
     } finally {
-      setEndingId(null);
+      if (isCurrent()) setEndingId(null);
     }
-  }, [onRefresh]);
+  }, [onRefresh, isCurrent]);
 
   const formatDate = (iso: string) =>
     // Match the calendar date shown by the existing UTC-based lease editor.
