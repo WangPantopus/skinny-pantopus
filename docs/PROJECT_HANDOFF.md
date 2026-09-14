@@ -205,12 +205,26 @@ proof retries return the same invitation without another notification attempt.
 application-function lint (zero errors) and13 HTTP/SQL cases pass. Actual Chrome
 recovers and copies the saved invitation after503 with one row and identical proof
 hashes. See [creation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-creation-boundaries).
-No new table, file or second migration. Recovery currently survives only within
-the mounted modal; older callers without a retained proof keep their older limit.
+No new table, file or second migration. The following retained-recovery checkpoint
+extends the mounted-modal repair; older callers without a proof retain their limit.
 Owned API18115 and Next18110 are active under the existing private lease.
 
-**Next:** verify retained invitation recovery after closing/reloading using the
-existing protected storage, then connect bulk unit controls through existing canonical-address/
+**Retained invitation recovery:** the existing modal now saves its encrypted
+original before POST in the existing recovery database, scoped to origin/account/
+unit. Reopening restores fields without POST; explicit retry recovers the same
+link. Done cannot erase another tab's newer original. The existing property response
+supplies the authenticated actor, and POST rejects actor mismatch.70 rendered/83
+route tests, types/scoped lint,9 real browser IndexedDB/WebCrypto checks and actual
+browser reload/retry/copy/acknowledgement plus HTTP actor rejection pass. See
+[retained recovery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-retained-recovery).
+CI34836085491 at pushed c334ea664 failed because its generated SQL test wrapper was
+stale. The corrected existing wrapper passes actual pgTAP locally and all54
+wrappers synchronize. Always generate/check wrappers after SQL contract edits.
+Later CI is required; the failed run must remain recorded as failed.
+
+**Next:** verify saved invitation → in-app notice recovery after a lost database
+response, reusing existing Notification.idempotency_key and notification service;
+then connect bulk unit controls through existing canonical-address/
 Home-creation implementations. Complete remaining R05 private-attachment/provider acceptance
 through existing implementations, and installed Android recovery/foreground when
 computer control is reliable. The earlier APK installed in the owned AVD, but

@@ -10,9 +10,11 @@ import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
 import { extractApiError } from '@pantopus/ui-utils';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { ProtectedRecoverySlot, type ProtectedRecoverySnapshot } from '@/components/home/tasks/TaskRecoveryStorage';
 
 type Props = {
   homeId: string;
+  actorId: string;
   authorityId: string;
   units: landlord.PropertyUnit[];
   leases: landlord.HomeLease[];
@@ -65,10 +67,13 @@ function LeaseCountdown({ endAt }: { endAt: string | null }) {
   return <span className="text-xs text-app-text-secondary">{days}d remaining</span>;
 }
 
+type InvitationInput = Parameters<typeof api.landlord.inviteTenant>[0];
+
 // ── Invite tenant modal ─────────────────────────────────────
 
 function InviteTenantModal({
   homeId: _homeId,
+  actorId,
   unitId,
   unitName,
   authorityId,
@@ -77,6 +82,7 @@ function InviteTenantModal({
   isCurrent,
 }: {
   homeId: string;
+  actorId: string;
   unitId: string;
   unitName: string;
   authorityId: string;
@@ -92,18 +98,60 @@ function InviteTenantModal({
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  const pendingInvite = useRef<Parameters<typeof api.landlord.inviteTenant>[0] | null>(null);
+  const [ready, setReady] = useState(false);
+  const pendingInvite = useRef<ProtectedRecoverySnapshot<InvitationInput> | null>(null);
+  const store = useRef<ProtectedRecoverySlot<InvitationInput> | null>(null);
+  const currentView = useRef(isCurrent); currentView.current = isCurrent;
+  const [session] = useState(() => ({ auth: api.getAuthToken(), origin: api.getApiBaseUrl(),
+    marker: localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) }));
+  const sessionCurrent = () => currentView.current() && api.getAuthToken() === session.auth
+    && api.getApiBaseUrl() === session.origin && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === session.marker;
   const scope = useRef({ generation: 0, busy: false });
-  useEffect(() => { const current = scope.current; return () => { ++current.generation; }; }, []);
+  useEffect(() => {
+    const lifetime = scope.current, generation = ++lifetime.generation;
+    const current = () => lifetime.generation === generation && currentView.current()
+      && api.getAuthToken() === session.auth && api.getApiBaseUrl() === session.origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === session.marker;
+    setReady(false);
+    void (async () => {
+      if (!actorId || !session.auth) throw new Error('Your account could not be confirmed. Reopen the property before inviting.');
+      const slot = new ProtectedRecoverySlot<InvitationInput>(['lease-invitation-create-v1', session.origin, actorId, unitId], (value): value is InvitationInput => {
+        const v = value as InvitationInput | null;
+        return !!v && v.home_id === unitId && v.expected_actor_id === actorId && typeof v.authority_id === 'string' && !!v.authority_id
+          && typeof v.invitee_email === 'string' && !!v.invitee_email.trim() && v.invitee_email.length <= 320
+          && typeof v.start_at === 'string' && Number.isFinite(Date.parse(v.start_at))
+          && (v.end_at === undefined || typeof v.end_at === 'string' && Number.isFinite(Date.parse(v.end_at)))
+          && typeof v.invite_token === 'string' && /^[a-f0-9]{64}$/.test(v.invite_token);
+      });
+      const saved = await slot.load(); if (!current()) return;
+      store.current = slot; pendingInvite.current = saved;
+      if (saved) { setEmail(saved.value.invitee_email); setStartAt(saved.value.start_at); setEndAt(saved.value.end_at || ''); setUncertain(true); }
+      setReady(true);
+    })().catch(error => { if (current()) setError(extractApiError(error, 'Recovery could not be opened. Reopen the form before sending.')); });
+    return () => { ++lifetime.generation; };
+  }, [actorId, unitId, session]);
 
-  const close = () => { if (inviteLink && isCurrent()) onSuccess(); onClose(); };
+  // Dismissing the modal keeps its protected original. Done acknowledges a
+  // confirmed link; compare-and-clear cannot erase another tab's newer request.
+  const close = () => { ++scope.current.generation; onClose(); };
+  const done = async () => {
+    if (!inviteLink || !sessionCurrent() || scope.current.busy || !pendingInvite.current || !store.current) return;
+    const generation = scope.current.generation;
+    const current = () => generation === scope.current.generation && sessionCurrent();
+    scope.current.busy = true; setLoading(true);
+    try {
+      await store.current.clear(pendingInvite.current, current);
+      if (current()) { onSuccess(); close(); }
+    } catch (err) { if (current()) setError(extractApiError(err, 'The saved link was kept. Please retry Done.')); }
+    finally { if (current()) { scope.current.busy = false; setLoading(false); } }
+  };
 
   const handleSubmit = async () => {
-    if (!email.trim() || !isCurrent() || scope.current.busy) return;
+    if (!ready || !store.current || !email.trim() || !sessionCurrent() || scope.current.busy) return;
     if (!startAt) { setError('Enter a start date.'); return; }
     if (endAt && endAt <= startAt) { setError('End date must be after start date.'); return; }
     const generation = scope.current.generation;
-    const current = () => generation === scope.current.generation && isCurrent();
+    const current = () => generation === scope.current.generation && sessionCurrent();
     scope.current.busy = true;
     setLoading(true);
     setError('');
@@ -111,12 +159,13 @@ function InviteTenantModal({
       if (!pendingInvite.current) {
         if (!globalThis.crypto?.getRandomValues) throw new Error('Could not prepare a secure invitation. Reopen in a supported browser.');
         const inviteToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
-        pendingInvite.current = { home_id: unitId, authority_id: authorityId,
-          invitee_email: email.trim(), start_at: startAt, end_at: endAt || undefined, invite_token: inviteToken };
+        pendingInvite.current = await store.current.retain({ home_id: unitId, authority_id: authorityId, expected_actor_id: actorId,
+          invitee_email: email.trim(), start_at: startAt, end_at: endAt || undefined, invite_token: inviteToken }, current);
       }
-      const result = await api.landlord.inviteTenant(pendingInvite.current);
       if (!current()) return;
-      if (!result?.invite?.id || result.invite.home_id !== unitId || !/^[a-f0-9]{64}$/.test(result.token)) {
+      const result = await api.landlord.inviteTenant(pendingInvite.current.value);
+      if (!current()) return;
+      if (!result?.invite?.id || result.invite.home_id !== unitId || !/^[a-f0-9]{64}$/.test(result.token) || result.token !== pendingInvite.current.value.invite_token) {
         throw new Error('Could not recover the invitation link. Reopen the property to check its status.');
       }
       setUncertain(false);
@@ -124,8 +173,14 @@ function InviteTenantModal({
     } catch (err: unknown) {
       if (current()) {
         const status = err && typeof err === 'object' && 'statusCode' in err ? err.statusCode : null;
-        const rejected = !uncertain && typeof status === 'number' && [400, 401, 403, 404, 409, 410, 422].includes(status);
-        if (rejected) pendingInvite.current = null;
+        const rejected = typeof status === 'number' && (status === 410 || !uncertain && [400, 401, 403, 404, 409, 422].includes(status));
+        if (rejected && pendingInvite.current) {
+          try { await store.current.clear(pendingInvite.current, current); if (!current()) return; pendingInvite.current = null; }
+          catch (storageError) { if (current()) { setUncertain(true); setError(extractApiError(storageError, 'The original invitation was kept.')); } return; }
+        }
+        // A failed retain may have committed before its response was lost.
+        // Reopen storage instead of issuing a replacement from an empty ref.
+        if (!pendingInvite.current && !rejected) setReady(false);
         setUncertain(pendingInvite.current !== null);
         setError(extractApiError(err, 'Could not confirm the invitation. Retry the original invitation.'));
       }
@@ -136,7 +191,7 @@ function InviteTenantModal({
 
   const copyLink = async () => {
     const generation = scope.current.generation;
-    const current = () => generation === scope.current.generation && isCurrent();
+    const current = () => generation === scope.current.generation && sessionCurrent();
     if (!inviteLink || !current()) return;
     try { await navigator.clipboard.writeText(inviteLink); if (current()) { setCopied(true); setError(''); } }
     catch { if (current()) setError('Copy failed. Select and copy the invitation link above.'); }
@@ -148,7 +203,7 @@ function InviteTenantModal({
         <h3 className="text-lg font-semibold text-app-text mb-1">Invite Tenant</h3>
         <p className="text-sm text-app-text-secondary mb-4">{inviteLink
           ? `Invitation created for ${email}. Share the link with the tenant. Email delivery has not been confirmed.`
-          : uncertain ? 'The result is not confirmed. Retry the original invitation to recover its link before changing the details.' : `Send a lease invite for ${unitName}.`}</p>
+          : !ready ? 'Checking protected invitation recovery. Close and reopen if it cannot be read.' : uncertain ? 'The result is not confirmed. Retry the original invitation to recover its link before changing the details.' : `Send a lease invite for ${unitName}.`}</p>
 
         <div className="space-y-3">
           <div>
@@ -158,7 +213,7 @@ function InviteTenantModal({
               type={inviteLink ? 'text' : 'email'}
               value={inviteLink || email}
               readOnly={!!inviteLink}
-              disabled={loading || uncertain}
+              disabled={!ready || loading || uncertain}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tenant@example.com"
               className="w-full px-4 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -170,7 +225,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">Start date</label>
               <input
                 type="date"
-                disabled={loading || !!inviteLink || uncertain}
+                disabled={!ready || loading || !!inviteLink || uncertain}
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -180,7 +235,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">End date <span className="text-app-text-muted font-normal">(optional)</span></label>
               <input
                 type="date"
-                disabled={loading || !!inviteLink || uncertain}
+                disabled={!ready || loading || !!inviteLink || uncertain}
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -192,13 +247,13 @@ function InviteTenantModal({
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <div className="mt-5 flex items-center justify-end gap-3">
-          <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-medium text-app-text-secondary hover:text-app-text transition-colors">
+          <button type="button" onClick={inviteLink ? () => void done() : close} disabled={!!inviteLink && loading} className="px-4 py-2.5 text-sm font-medium text-app-text-secondary hover:text-app-text transition-colors">
             {inviteLink ? 'Done' : uncertain || loading ? 'Close' : 'Cancel'}
           </button>
           <button
             type="button"
             onClick={inviteLink ? copyLink : handleSubmit}
-            disabled={!email.trim() || loading}
+            disabled={!ready || !email.trim() || loading}
             className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black transition-colors disabled:opacity-40"
           >
             {inviteLink ? copied ? 'Copied' : 'Copy Link' : loading ? 'Sending...' : uncertain ? 'Retry Original Invite' : 'Send Invite'}
@@ -370,7 +425,7 @@ function BulkTools({
 
 // ── Main component ──────────────────────────────────────────
 
-export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh, isCurrent }: Props) {
+export default function UnitsTab({ actorId, homeId, authorityId, units, leases, onRefresh, isCurrent }: Props) {
   const [inviteTarget, setInviteTarget] = useState<{ unitId: string; unitName: string } | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
   const ending = useRef(false), lifetime = useRef({ generation: 0 });
@@ -475,7 +530,9 @@ export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh
       {/* Invite modal */}
       {inviteTarget && (
         <InviteTenantModal
+          key={`${actorId}:${inviteTarget.unitId}`}
           homeId={homeId}
+          actorId={actorId}
           unitId={inviteTarget.unitId}
           unitName={inviteTarget.unitName}
           authorityId={authorityId}

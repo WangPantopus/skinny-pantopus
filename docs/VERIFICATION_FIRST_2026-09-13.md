@@ -1328,3 +1328,53 @@ provider delivery, retained recovery after departure and native link acceptance
 remain open. Synthetic authentication and the private browser shell do not prove
 hosted/provider behavior. Evidence is in lease-invitation-create-r1 under the
 existing private recovery audit, with source hashes and result files.
+
+
+### Existing lease invitation retained recovery
+
+Actual Chrome reproduced Close → reopen losing an invitation whose creation had
+committed but returned503. The existing modal now saves its exact original before
+POST in the existing private recovery database. An added reusable protected-slot
+adapter uses the existing encryption-key/database helpers, AES-GCM authenticated
+account/origin/unit scope and atomic compare-and-write. No new database, store,
+table, migration or product/test file is introduced. Existing household sender/
+recipient journals are unchanged. The authenticated actor is included by the
+existing property response and optionally bound to invitation POST; a changed
+actor is rejected before the service can write. The original token must match a
+successful reply before its sharing link is shown.
+
+Closing/reloading keeps the encrypted original; reopening restores its fields
+without POST, and explicit retry checks current server authority before sharing.
+Done clears only the acknowledged revision. Corruption, failed storage, retired
+work and another tab's replacement cannot authorize an unretained POST or erase a
+newer record. An initial definite rejection permits correction; a matching closed/
+expired invitation (HTTP410) releases its obsolete proof. Other uncertain errors
+retain the original. Existing form markup/styles/layout are preserved.
+
+All70 rendered lease checks and83 route tests pass, with standalone TypeScript
+and scoped lint. Actual Chrome/SDK/HTTP/SQL saved-but-503 → full reload → recovered
+fields (zero new POST) → explicit retry → Copy → Done → fresh empty form passes.
+The same invitation/proof remains with one intercepted notice and zero membership
+writes. Nine separate actual Chrome IndexedDB/WebCrypto checks verify reopening,
+no plaintext proof/nonextractable key, account separation, copied-ciphertext
+rejection, corruption preservation, concurrent retention, stale clear and retired
+save/clear. These use an exclusively owned disposable test database. Actual HTTP
+also rejects a different expected actor without changing invitations/notices.
+The private renderer needed its synthetic signed-in initialization on the root
+page; the product's session guard was preserved. No provider authentication,
+provider delivery or installed native invitation journey is claimed.
+
+CI34836085491 at c334ea664 failed the generated SQL wrapper synchronization check,
+before SQL behavior ran. The manually exercised source contract was newer than
+its existing committed pgTAP wrapper. Running the existing generator repairs that
+wrapper; all54 wrappers verify and the actual generated lease test passes locally.
+This is a generated copy of the same tests, not a second migration or data model.
+After editing scripts/db/contracts, always run node scripts/db/sync-sql-contracts.cjs
+and its --check before pushing. Preserve the failed run as failed; the correction
+requires its own CI. Evidence and source bindings are in lease-invitation-retention-r1.
+
+Next: verify the boundary between a saved lease invitation and its in-app notice
+when the database response is lost before notification dispatch. Inspect/reuse the
+existing Notification.idempotency_key and notification service before changing it.
+Bulk unit tools, private attachments, installed Android/native links, provider
+acceptance, combined adoption and hosted rollout remain open; R05 remains open.

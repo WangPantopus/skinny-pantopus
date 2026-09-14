@@ -419,6 +419,7 @@ describe('GET /landlord/properties/:homeId', () => {
     expect(res._status).toBe(200);
     expect(res._json.home).toBeDefined();
     expect(res._json.home.id).toBe('home-1');
+    expect(res._json.actor_id).toBe('test-user-id');
     expect(res._json.leases).toBeDefined();
     expect(res._json.occupants).toBeDefined();
     expect(res._json.authority).toBeDefined();
@@ -511,6 +512,13 @@ describe('GET /landlord/properties/:homeId', () => {
 // ============================================================
 
 describe('POST /landlord/lease/invite', () => {
+  test('a retained invitation cannot send under a different authenticated actor', async () => {
+    const res = mockRes();
+    await inviteTenantHandler(mockReq({ body: { home_id: 'home-1', expected_actor_id: 'another-account', invitee_email: 'tenant@example.com', start_at: '2026-10-01' } }), res);
+    expect(res._status).toBe(409);
+    expect(res._json.error).toContain('Your account changed');
+  });
+
   test('forwards the authenticated actor and retained proof and returns the sharing envelope', async () => {
     const proof = 'b'.repeat(64);
     const rpc = jest.fn(async (_name, args) => ({ data: { success: true, replayed: false,

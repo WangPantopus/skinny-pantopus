@@ -202,6 +202,7 @@ export default function PropertyDetail({ homeId }: Props) {
         {tab === 'units' && (
           <UnitsTab
             homeId={homeId}
+            actorId={detail.actor_id}
             authorityId={authority?.id || ''}
             units={units}
             leases={leases}

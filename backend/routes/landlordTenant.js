@@ -45,6 +45,7 @@ const requestAuthoritySchema = Joi.object({
 
 const inviteTenantSchema = Joi.object({
   invite_token: Joi.string().hex().lowercase().length(64),
+  expected_actor_id: Joi.string().uuid(),
   home_id: Joi.string().uuid().required(),
   invitee_email: Joi.string().email().required(),
   start_at: Joi.string().isoDate().raw().required(),
@@ -274,6 +275,7 @@ router.get(
         .eq('is_active', true);
 
       res.json({
+        actor_id: req.user.id,
         home,
         units: (units || []).map(unit => ({ ...unit, lease_status_available: managedUnitIds.has(unit.id) })),
         leases: leases || [],
@@ -301,6 +303,9 @@ router.post(
   async (req, res) => {
     try {
       const { home_id, invitee_email, start_at, end_at } = req.body;
+      if (req.body.expected_actor_id && req.body.expected_actor_id !== req.user.id) {
+        return res.status(409).json({ error: 'Your account changed. Reopen the property before inviting.' });
+      }
 
       // Use middleware-verified authority — never trust caller-supplied authority_id (AUTH-2.1)
       const authority_id = req.authority.id;

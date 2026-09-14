@@ -16,9 +16,28 @@ const mockPush = jest.fn();
 const mockRouter = { push: mockPush, back: jest.fn() };
 let mockQuery = 'tab=requests';
 let mockSignedIn = true;
+const mockOriginals = new Map<string, { value: unknown; revision: string }>();
+let mockStorageFailure: 'load' | 'retain' | 'clear' | null = null;
+let mockRetainGate: Promise<void> | null = null;
+jest.mock('@/components/home/tasks/TaskRecoveryStorage', () => ({ ProtectedRecoverySlot: class {
+  key: string;
+  constructor(scope: string[]) { this.key = JSON.stringify(scope); }
+  async load() { if (mockStorageFailure === 'load') throw new Error('Recovery read failed'); return mockOriginals.get(this.key) || null; }
+  async retain(value: unknown, current: () => boolean) {
+    if (mockRetainGate) await mockRetainGate;
+    if (!current() || mockStorageFailure === 'retain') throw new Error('Recovery save failed');
+    if (mockOriginals.has(this.key)) throw new Error('Another tab changed the saved original');
+    const snapshot = { value: JSON.parse(JSON.stringify(value)), revision: crypto.randomUUID() }; mockOriginals.set(this.key, snapshot); return snapshot;
+  }
+  async clear(expected: { revision: string }, current: () => boolean) {
+    if (!current() || mockStorageFailure === 'clear') throw new Error('Recovery clear failed');
+    if (mockOriginals.get(this.key)?.revision !== expected.revision) throw new Error('Another tab changed the saved original');
+    mockOriginals.delete(this.key);
+  }
+} }));
 
 function unitLeaseProps(onRefresh = jest.fn(), isCurrent = () => true) {
-  return { homeId: 'building-1', authorityId: 'authority-1', occupants: [], onRefresh, isCurrent,
+  return { actorId: 'owner-1', homeId: 'building-1', authorityId: 'authority-1', occupants: [], onRefresh, isCurrent,
     units: [{ id: 'unit-1', name: 'Unit One', lease_status_available: true }] as React.ComponentProps<typeof UnitsTab>['units'],
     leases: [{ id: 'lease-1', home_id: 'unit-1', state: 'active', start_at: '2026-09-01', end_at: null }] as React.ComponentProps<typeof UnitsTab>['leases'] };
 }
@@ -103,6 +122,7 @@ jest.mock('@pantopus/api', () => ({
   landlord: jest.requireActual('../../../packages/api/src/endpoints/landlord'),
   tenant: jest.requireActual('../../../packages/api/src/endpoints/tenant'),
   onTokenChange: () => () => {},
+  getApiBaseUrl: () => 'http://localhost',
   getAuthToken: () => mockSignedIn ? 'synthetic-fixture' : null,
   AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
@@ -111,7 +131,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => mockRouter, useParams: ()
 jest.mock('@/components/ui/toast-store', () => ({ toast: { error: jest.fn(), success: jest.fn(), warning: jest.fn() } }));
 jest.mock('@/components/home/useHomePermissions', () => ({ useHomePermissions: () => ({ access: null, reload: jest.fn() }) }));
 
-beforeEach(() => { mockQuery = 'tab=requests'; mockSignedIn = true; jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
+beforeEach(() => { mockOriginals.clear(); mockStorageFailure = null; mockRetainGate = null; localStorage.clear(); mockQuery = 'tab=requests'; mockSignedIn = true; jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
 
 test('existing SDK callers can omit reviewed dates', async () => {
   await approveLease('lease-1', 'authority-1');
@@ -307,7 +327,7 @@ test('a response for another Home cannot provide cancellation controls', async (
 });
 
 const propertyDetail = (homeId: string, name: string) => ({
-  home: { id: homeId, name, home_type: 'house' }, units: [], leases: [], pending_requests: [], occupants: [],
+  actor_id: 'owner-1', home: { id: homeId, name, home_type: 'house' }, units: [], leases: [], pending_requests: [], occupants: [],
   authority: { id: 'authority-1', verification_tier: 'standard' },
 });
 
@@ -543,10 +563,11 @@ test.each(['wrong-account', 'malformed'])('a %s preview cannot offer lease accep
   } finally { confirm.mockRestore(); }
 });
 
-function openUnitInvite(onRefresh = jest.fn(), isCurrent = () => true) {
+async function openUnitInvite(onRefresh = jest.fn(), isCurrent = () => true) {
   const props = unitLeaseProps(onRefresh, isCurrent); props.leases = [];
   const view = render(<UnitsTab {...props} />);
   fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Email address')).not.toBeDisabled());
   fireEvent.change(screen.getByPlaceholderText('tenant@example.com'), { target: { value: 'tenant@example.invalid' } });
   const dates = view.container.querySelectorAll('input[type="date"]');
   fireEvent.change(dates[0], { target: { value: '2026-09-01' } });
@@ -554,19 +575,19 @@ function openUnitInvite(onRefresh = jest.fn(), isCurrent = () => true) {
 }
 
 test('the existing landlord modal retains the created invitation link for manual sharing', async () => {
-  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
-  const view = openUnitInvite();
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
+  const view = await openUnitInvite();
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
-  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${leaseToken}`));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${(jest.mocked(post).mock.calls[0][1] as { invite_token: string }).invite_token}`));
   expect(screen.getByText(/Email delivery has not been confirmed/)).toBeVisible();
   expect(view.onRefresh).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-  expect(view.onRefresh).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(view.onRefresh).toHaveBeenCalledTimes(1));
 });
 
 test('an SDK invitation error retains the existing form for retry', async () => {
   jest.mocked(post).mockRejectedValueOnce({ message: 'Current verified authority required' });
-  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByText('Current verified authority required')).toBeVisible());
   expect(screen.getByPlaceholderText('tenant@example.com')).toHaveValue('tenant@example.invalid');
 });
@@ -574,7 +595,7 @@ test('an SDK invitation error retains the existing form for retry', async () => 
 test.each(['closed', 'account'])('a %s landlord invitation cannot refresh or reveal a late sharing link', async mode => {
   let resolve!: (value: unknown) => void, current = true;
   jest.mocked(post).mockReturnValueOnce(new Promise(done => { resolve = done; }));
-  const view = openUnitInvite(jest.fn(), () => current);
+  const view = await openUnitInvite(jest.fn(), () => current);
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
   if (mode === 'closed') fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -584,7 +605,7 @@ test.each(['closed', 'account'])('a %s landlord invitation cannot refresh or rev
 });
 
 test.each(['', '2026-08-31'])('an invalid invite date %s cannot submit', async invalid => {
-  const { dates } = openUnitInvite();
+  const { dates } = await openUnitInvite();
   fireEvent.change(dates[invalid ? 1 : 0], { target: { value: invalid } });
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   expect(post).not.toHaveBeenCalled();
@@ -595,16 +616,16 @@ test('a clipboard failure keeps the complete invitation link available for manua
   const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
   const writeText = jest.fn().mockRejectedValueOnce(new Error('denied')).mockResolvedValueOnce(undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
   try {
-    openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+    await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copy Link' })).toBeVisible());
     fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
     await waitFor(() => expect(screen.getByText('Copy failed. Select and copy the invitation link above.')).toBeVisible());
-    expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${leaseToken}`);
+    expect(screen.getByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite/lease/${(jest.mocked(post).mock.calls[0][1] as { invite_token: string }).invite_token}`);
     fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible());
-    expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/invite/lease/${leaseToken}`);
+    expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/invite/lease/${(jest.mocked(post).mock.calls[0][1] as { invite_token: string }).invite_token}`);
     expect(post).toHaveBeenCalledTimes(1);
   } finally {
     if (previous) Object.defineProperty(navigator, 'clipboard', previous);
@@ -612,17 +633,17 @@ test('a clipboard failure keeps the complete invitation link available for manua
   }
 });
 
-test.each(['missing-token', 'wrong-home'])('an incomplete invitation response (%s) cannot claim a saved sharing link', async kind => {
-  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: kind === 'wrong-home' ? 'other-home' : 'unit-1' }, ...(kind === 'wrong-home' ? { token: leaseToken } : {}) });
-  const view = openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+test.each(['missing-token', 'wrong-home', 'wrong-token'])('an incomplete invitation response (%s) cannot claim a saved sharing link', async kind => {
+  jest.mocked(post).mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: kind === 'wrong-home' ? 'other-home' : 'unit-1' }, ...(kind !== 'missing-token' ? { token: leaseToken } : {}) });
+  const view = await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByText('Could not recover the invitation link. Reopen the property to check its status.')).toBeVisible());
   expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument(); expect(view.onRefresh).not.toHaveBeenCalled();
 });
 
 test('uncertain creation retries the same retained proof and details without replacing the form', async () => {
   jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' })
-    .mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
-  const view = openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+    .mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
+  const view = await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
   const original = jest.mocked(post).mock.calls[0][1];
   expect(original).toEqual(expect.objectContaining({ invite_token: expect.stringMatching(/^[a-f0-9]{64}$/), home_id: 'unit-1', start_at: '2026-09-01' }));
@@ -635,8 +656,8 @@ test('uncertain creation retries the same retained proof and details without rep
 
 test('a definite validation rejection permits corrected details with a fresh invitation proof', async () => {
   jest.mocked(post).mockRejectedValueOnce({ statusCode: 400, message: 'Email is invalid.' })
-    .mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
-  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+    .mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByText('Email is invalid.')).toBeVisible());
   expect(screen.getByLabelText('Email address')).not.toBeDisabled();
   fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'corrected@example.com' } });
@@ -650,10 +671,77 @@ test('a definite validation rejection permits corrected details with a fresh inv
 test('a later authority rejection does not discard an already uncertain creation proof', async () => {
   jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' })
     .mockRejectedValueOnce({ statusCode: 403, message: 'Current verified authority required' });
-  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
   fireEvent.click(screen.getByRole('button', { name: 'Retry Original Invite' }));
   await waitFor(() => expect(screen.getByText('Current verified authority required')).toBeVisible());
   expect(screen.getByLabelText('Email address')).toBeDisabled();
   expect(jest.mocked(post).mock.calls[1][1]).toEqual(jest.mocked(post).mock.calls[0][1]);
+});
+
+
+test('closing and reopening recovers the same original without sending until explicit retry', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' })
+    .mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
+  const original = jest.mocked(post).mock.calls[0][1];
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeEnabled());
+  expect(screen.getByLabelText('Email address')).toHaveValue('tenant@example.invalid');
+  expect(post).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toBeVisible());
+  expect(jest.mocked(post).mock.calls[1][1]).toEqual(original);
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  await waitFor(() => expect(mockOriginals.size).toBe(0));
+});
+
+test.each(['account', 'unit'])('a different %s cannot read the retained invitation', async boundary => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' });
+  const first = await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(mockOriginals.size).toBe(1)); first.unmount();
+  const props = unitLeaseProps(); props.leases = [];
+  if (boundary === 'account') props.actorId = 'owner-2'; else props.units[0].id = 'unit-2';
+  render(<UnitsTab {...props} />); fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Email address')).not.toBeDisabled());
+  expect(screen.getByLabelText('Email address')).toHaveValue(''); expect(mockOriginals.size).toBe(1); expect(post).toHaveBeenCalledTimes(1);
+});
+
+test.each(['load', 'retain'] as const)('a protected %s failure prevents an unretained POST', async operation => {
+  if (operation === 'load') {
+    mockStorageFailure = operation; const props = unitLeaseProps(); props.leases = [];
+    render(<UnitsTab {...props} />); fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+  } else {
+    await openUnitInvite(); mockStorageFailure = operation; fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  }
+  await waitFor(() => expect(screen.getByText(operation === 'load' ? 'Recovery read failed' : 'Recovery save failed')).toBeVisible());
+  expect(screen.getByRole('button', { name: 'Send Invite' })).toBeDisabled(); expect(post).not.toHaveBeenCalled();
+});
+
+test('closing during protected retain cannot send after storage completes', async () => {
+  let release!: () => void; mockRetainGate = new Promise(done => { release = done; });
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  await act(async () => release()); expect(post).not.toHaveBeenCalled(); expect(mockOriginals.size).toBe(0);
+});
+
+test('Done cannot erase a newer original retained by another tab', async () => {
+  jest.mocked(post).mockImplementationOnce(async (_path, input) => ({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: (input as { invite_token: string }).invite_token }));
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toBeVisible());
+  const [key, saved] = [...mockOriginals][0]; mockOriginals.set(key, { ...saved, revision: 'newer-original' });
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  await waitFor(() => expect(screen.getByText('Another tab changed the saved original')).toBeVisible());
+  expect(mockOriginals.get(key)?.revision).toBe('newer-original'); expect(screen.getByLabelText('Invitation link')).toBeVisible();
+});
+
+test('a matching invitation reported closed permits a fresh invitation instead of trapping an expired original', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' }).mockRejectedValueOnce({ statusCode: 410, message: 'This invitation is closed or expired' });
+  await openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Send Invite' })).toBeEnabled());
+  expect(mockOriginals.size).toBe(0); expect(screen.getByLabelText('Email address')).not.toBeDisabled();
 });
