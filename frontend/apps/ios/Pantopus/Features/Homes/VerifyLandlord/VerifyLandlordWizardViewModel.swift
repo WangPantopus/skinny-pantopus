@@ -5,8 +5,8 @@
 //  Drives the A12.5 / A12.6 wizard state machine:
 //
 //    .start → .details → submit ─┬─ 201  → .sent (landlord now has it)
-//                                ├─ 409  → .sent (existing pending/active lease)
-//                                └─ 400  → openPostcardVerification(homeId)
+//                                ├─ known duplicate → .sent (existing pending/active lease)
+//                                └─ verified no-landlord error → openPostcardVerification(homeId)
 //
 //  Submit posts a real tenant approval request to
 //  `POST /api/v1/tenant/request-approval` (route
@@ -260,8 +260,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         }
     }
 
-    /// Branches the `request-approval` non-2xx answers into the states
-    /// we can observe without a tenant status endpoint.
+    /// Only explicit lease/no-landlord responses establish these alternate states.
     private func handleApprovalFailure(_ error: any Error) async {
         guard let apiError = error as? APIError else {
             submitState = .error(message: "Couldn't send the request. Try again.")
@@ -270,25 +269,22 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         let message = apiError.errorDescription
         var status: Int?
         if case let .clientError(code, _) = apiError { status = code }
-        if case .notFound = apiError { status = 404 }
-
-        switch status {
-        case 409:
-            // Duplicate request — the server just told us the real
-            // state, so render it instead of failing the wizard.
-            let isActive = message?.localizedCaseInsensitiveContains("active lease") == true
+        let existingKind: VerifyLandlordApprovalResult.Kind? = switch message {
+        case "You already have a pending request for this home": .alreadyPending
+        case "You already have an active lease at this home": .alreadyActive
+        default: nil
+        }
+        if status == 409, let existingKind {
             approvalResult = VerifyLandlordApprovalResult(
-                kind: isActive ? .alreadyActive : .alreadyPending,
+                kind: existingKind,
                 serverMessage: message
             )
             submitState = .submitted
             currentStep = .sent
-        case 400, 404:
-            // "This property has no verified landlord…" — RN's
-            // no-landlord branch. Fall back to the mailed-code path so
-            // the tenant still has a way through.
+        } else if status == 400,
+                  message == "This property has no verified landlord. Cannot submit a lease request." {
             await startPostcardFallback()
-        default:
+        } else {
             submitState = .error(
                 message: message ?? "Couldn't send the request. Try again."
             )

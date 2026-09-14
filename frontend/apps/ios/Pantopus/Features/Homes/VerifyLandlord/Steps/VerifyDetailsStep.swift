@@ -28,6 +28,8 @@ struct VerifyDetailsStep: View {
 
         if let errors = viewModel.errors, !errors.isEmpty {
             VerifyErrorSummaryBanner(errors: errors)
+        } else if case let .error(message) = viewModel.submitState {
+            VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
         }
 
         BusinessInfoCard(viewModel: viewModel)
@@ -602,6 +604,7 @@ private struct LeaseParseStatusRow: View {
 
 private struct VerifyErrorSummaryBanner: View {
     let errors: VerifyLandlordValidationErrors
+    var serverMessage: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
@@ -613,11 +616,12 @@ private struct VerifyErrorSummaryBanner: View {
                 }
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Fix \(errors.count) thing\(errors.count == 1 ? "" : "s") to submit")
+                Text(serverMessage == nil ? "Fix \(errors.count) thing\(errors.count == 1 ? "" : "s") to submit" :
+                    "Couldn't submit request")
                     .pantopusTextStyle(.body)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.Color.error)
-                Text(errors.compactSummary)
+                Text(serverMessage ?? errors.compactSummary)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.error)
                     .opacity(0.9)

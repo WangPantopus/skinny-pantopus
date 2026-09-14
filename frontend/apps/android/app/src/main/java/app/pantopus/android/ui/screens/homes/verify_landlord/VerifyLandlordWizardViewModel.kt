@@ -64,8 +64,8 @@ data class VerifyLandlordUiState(
  * Drives the A12.5 / A12.6 wizard state machine:
  *
  *     Start -> Details -> submit -+- 201 -> Sent (landlord now has it)
- *                                 +- 409 -> Sent (existing pending/active lease)
- *                                 +- 400 -> OpenPostcardVerification(homeId)
+ *                                 +- known duplicate -> Sent (existing pending/active lease)
+ *                                 +- verified no-landlord error -> OpenPostcardVerification(homeId)
  *
  * Submit posts a real tenant approval request to
  * `POST /api/v1/tenant/request-approval` (route
@@ -256,35 +256,28 @@ open class VerifyLandlordWizardViewModel
             }
         }
 
-        /**
-         * Branches the `request-approval` non-2xx answers into the states
-         * we can observe without a tenant status endpoint.
-         */
+        /** Only explicit lease/no-landlord responses establish these alternate states. */
         private suspend fun handleApprovalFailure(result: NetworkResult.Failure) {
             val message = result.error.message
-            when (result.error.code) {
-                HTTP_CONFLICT -> {
-                    // Duplicate request — the server just told us the real
-                    // state, so render it instead of failing the wizard.
-                    val kind =
-                        if (message.contains("active lease", ignoreCase = true)) {
-                            VerifyLandlordApprovalResult.Kind.AlreadyActive
-                        } else {
-                            VerifyLandlordApprovalResult.Kind.AlreadyPending
-                        }
+            val existingKind =
+                when (message) {
+                    "You already have a pending request for this home" -> VerifyLandlordApprovalResult.Kind.AlreadyPending
+                    "You already have an active lease at this home" -> VerifyLandlordApprovalResult.Kind.AlreadyActive
+                    else -> null
+                }
+            when {
+                result.error.code == HTTP_CONFLICT && existingKind != null -> {
                     _state.update {
                         it.copy(
                             submitState = VerifyLandlordSubmitState.Submitted,
                             currentStep = VerifyLandlordStep.Sent,
                             approvalResult =
-                                VerifyLandlordApprovalResult(kind = kind, serverMessage = message),
+                                VerifyLandlordApprovalResult(kind = existingKind, serverMessage = message),
                         )
                     }
                 }
-                HTTP_BAD_REQUEST, HTTP_NOT_FOUND ->
-                    // "This property has no verified landlord…" — RN's
-                    // no-landlord branch. Fall back to the mailed-code path
-                    // so the tenant still has a way through.
+                result.error.code == HTTP_BAD_REQUEST &&
+                    message == "This property has no verified landlord. Cannot submit a lease request." ->
                     startPostcardFallback()
                 else ->
                     _state.update {
@@ -381,7 +374,6 @@ open class VerifyLandlordWizardViewModel
             const val SUBMIT_DELAY_DEFAULT_MILLIS: Long = 800L
 
             private const val HTTP_BAD_REQUEST = 400
-            private const val HTTP_NOT_FOUND = 404
             private const val HTTP_CONFLICT = 409
         }
     }

@@ -31,7 +31,7 @@ compatibility pass. Old Home/account responses and cancellation callbacks retire
 without exposing prior request data or erasing the new account's draft. See
 [tenant privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-homeaccount-boundaries).
 
-**Current follow-up: landlord Home/account privacy.** Actual Chrome reproduced an
+**Completed landlord Home/account privacy follow-up.** Actual Chrome reproduced an
 old authorized response restoring tenant details and approval controls after the
 new account received HTTP403. The existing property component now retires reads,
 validates Home identity, and gates action callbacks with the current lifetime.
@@ -53,13 +53,30 @@ Do not build speculative command/renewal tables. The separate proposed renewal
 migration remains paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
 
-Native source review has identified a concrete next baseline: both existing
-VerifyLandlordWizardViewModels map every HTTP400/404 submission failure to mail
-verification, although the current request route also returns400 for frozen Homes,
-unresolved units and invalid dates. Both also interpret every409 as a saved lease.
-Capture the actual response and verify these branches in the existing native tests
-before repairing them. Their screens, layouts and view models already exist;
-do not create replacements. No native source was changed in this follow-up.
+**Current native candidate:** actual HTTP/SQL confirms HTTP 400 responses
+for frozen Homes, unresolved units and invalid dates, HTTP 404 for a missing Home, and HTTP 400
+for the distinct no-landlord case. The existing Android/iOS models incorrectly
+treated every HTTP 400/404 as mail fallback and every HTTP 409 as a saved lease. Android's new
+baseline regression failed; the focused candidate suite now passes. Both existing
+models now distinguish the known responses and keep other failures in the form.
+The existing detail screens also did not bind submission errors; they now reuse
+their existing error banner. Android's three detail snapshots pass, with the normal
+and validation-error goldens unchanged; only the new submission-error variant has
+a new test PNG. SwiftLint/SwiftFormat pass for the changed Swift files.
+
+All 32 focused iOS tests pass, including a screenshot/OCR check of the actual error
+banner. Both native error renderings were visually checked. One baseline build
+stopped with exit73 during disk
+exhaustion before tests ran. Removing old disposable Pantopus compiler intermediates
+restored 9.94 GiB free while preserving source, compiled products and evidence. The
+next build found an ignored, stale generated Xcode project omitting existing native
+files; it was backed up and regenerated without changing environment overlays.
+The focused iOS retry passed on a newly created, exclusively owned simulator, now
+shut down and deleted; its `native-error-runtime-lease.json` is released. Compiled
+products and result bundles are retained. Check available disk space before another
+heavy native build, and run only one at a time. No physical device was involved.
+Local acceptance is source-bound under `native-errors-r1`; this native candidate
+still requires CI after push. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Full AppShell/login,

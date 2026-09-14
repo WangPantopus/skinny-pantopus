@@ -122,6 +122,20 @@ class VerifyLandlordDetailsSnapshotTest {
         }
     }
 
+    @Test
+    fun verify_landlord_details_submission_error() {
+        val vm = seededVm(VerifyLandlordSampleData.populatedForm)
+        val state =
+            vm.state.value.copy(
+                submitState = VerifyLandlordSubmitState.Error("This home is unavailable for lease decisions"),
+            )
+        paparazzi.snapshot {
+            Frame(chrome = SnapshotDetailsChrome.enabled) {
+                DetailsStep(state = state, viewModel = vm)
+            }
+        }
+    }
+
     @Composable
     private fun Frame(
         chrome: WizardModel,

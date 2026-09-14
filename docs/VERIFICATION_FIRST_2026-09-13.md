@@ -645,3 +645,55 @@ real login/cookie rotation or native acceptance. Background/return behavior and 
 legacy queued-submission boundary are next; validate the existing workflow before
 adding anything. Provider delivery, populated adoption and hosted rollout remain
 open. R05 and the 8/72 inventory are unchanged.
+
+### Existing native submission-error follow-up
+
+The existing iOS/Android verify-landlord wizards mapped every HTTP 400/404 response to
+mail verification and every HTTP 409 to a saved lease. Actual routed HTTP/Joi/service/SQL
+confirmed distinct failures: frozen Home, missing unit and invalid dates return400;
+a missing Home returns404; no verified landlord has its own400 message. None saved
+a lease. Android's new regression failed on the frozen case on all three automatic
+retry attempts; these are one failing test, not three independent defects.
+
+The existing view models now branch only on the known duplicate/no-landlord
+responses and retain the form/error for other failures. The current API does not
+provide a stable typed code for these cases; unknown response text stays an error.
+The existing status/cancellation routes were also incorrectly described as missing
+in native endpoint comments; those comments now state that the wizard does not yet
+consume them. No endpoint, table, service or replacement screen is added here.
+
+Source tracing also found that both Details screens rendered validation errors
+but did not bind submission errors. They now show them using the existing error
+banner in its existing position, with the same colors, typography, spacing and
+fields. Android's focused view-model suite passes; all three Details Paparazzi
+checks pass, preserving the two old goldens and adding only the new error-state
+test image. That new rendering was visually checked. SwiftLint 0.63.3 and
+SwiftFormat 0.61.1 pass the changed Swift files. All 32 focused iOS tests pass, including a meaningful rendered check that captures
+the existing banner and recognizes the visible error text with Vision. Its exported
+image was visually checked. The other six existing render checks alone assert
+structure, not pixel equivalence; they are not relabeled as full visual acceptance.
+
+The first iOS baseline attempt stopped with exit73 before tests during disk
+exhaustion. The next local build failed because its ignored generated project
+omitted native files that already existed in the repo. These are retained as
+infrastructure failures, not product test results. Old disposable compiler
+intermediates were removed to recover space; app bundles, source and test evidence
+were preserved. The generated project was backed up and regenerated directly,
+without rewriting private environment overlays. The focused retry passed on an
+exclusively created simulator, with one heavy local native build at a time. That
+simulator is now shut down and deleted; the private native runtime lease is
+released. The unrelated pre-existing simulator was preserved.
+
+Local native acceptance is source-bound in `native-errors-r1` under the existing
+private lease-transaction archive. This native candidate still requires CI after
+push. Its changes are limited to existing models, callers/comments, error-banner
+bindings and relevant tests; the only new tracked file is an Android test PNG. It does not establish installed end-to-end lease
+verification, account/background retirement, native lost-response recovery, actual
+email delivery or all wizard claims. In particular, the existing one-time-email
+copy still requires provider/workflow reconciliation. R05 stays open; preserve
+existing forms and implement only demonstrated unmet behavior in their current
+callers/controllers. The actual HTTP error matrix, Android baseline/candidate and snapshot checks, iOS
+failed attempts/passing result bundle, exported image, lint and formatting logs
+are retained with their source binding. The five HTTP scenarios cleaned their
+synthetic rows. Backend/service/SQL behavior did not change during this native
+follow-up, so its accepted lifecycle/race/rollback evidence is reused.

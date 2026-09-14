@@ -246,6 +246,27 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         XCTAssertEqual(vm.approvalResult?.serverMessage, "You already have a pending request for this home")
     }
 
+    func testUnrelatedRequestFailuresKeepFormWithoutClaimingLeaseOrMailFallback() async {
+        let failures: [APIError] = [
+            .clientError(status: 400, message: "This home is unavailable for lease decisions"),
+            .clientError(status: 400, message: "This is a multi-unit building. A unit number is required."),
+            .clientError(status: 400, message: "End date must be after the start date and must not have expired"),
+            .notFound,
+            .clientError(status: 409, message: "The current request needs review")
+        ]
+        for failure in failures {
+            let vm = makeVM(form: VerifyLandlordSampleData.populatedForm) { _ in .failure(failure) }
+            vm.primaryTapped()
+            vm.setMessageToLandlord("Keep my entered message")
+            await vm.submit()
+            XCTAssertEqual(vm.currentStep, .details, failure.localizedDescription)
+            XCTAssertEqual(vm.submitState, .error(message: failure.localizedDescription))
+            XCTAssertNil(vm.pendingEvent)
+            XCTAssertNil(vm.approvalResult)
+            XCTAssertEqual(vm.form.messageToLandlord, "Keep my entered message")
+        }
+    }
+
     func testSubmitSurfacesExistingActiveLease() async {
         let vm = makeVM(
             form: VerifyLandlordSampleData.populatedForm

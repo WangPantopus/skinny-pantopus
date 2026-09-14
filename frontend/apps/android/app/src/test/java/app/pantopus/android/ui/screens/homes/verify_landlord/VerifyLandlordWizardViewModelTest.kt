@@ -281,6 +281,31 @@ class VerifyLandlordWizardViewModelTest {
             )
         }
 
+    @Test fun unrelated_request_failures_keep_the_form_without_claiming_a_lease_or_mail_fallback() =
+        runTest {
+            val failures =
+                listOf(
+                    NetworkError.ClientError(400, "This home is unavailable for lease decisions"),
+                    NetworkError.ClientError(400, "This is a multi-unit building. A unit number is required."),
+                    NetworkError.ClientError(400, "End date must be after the start date and must not have expired"),
+                    NetworkError.NotFound,
+                    NetworkError.ClientError(409, "The current request needs review"),
+                )
+            failures.forEach { failure ->
+                coEvery { tenantRepository.requestApproval(any()) } returns NetworkResult.Failure(failure)
+                val vm = makeVm()
+                vm.onPrimary()
+                vm.seedPopulatedForm()
+                vm.setMessageToLandlord("Keep my entered message")
+                vm.onPrimary()
+                assertEquals(failure.message, VerifyLandlordStep.Details, vm.state.value.currentStep)
+                assertEquals(VerifyLandlordSubmitState.Error(failure.message), vm.state.value.submitState)
+                assertNull(vm.pendingEvent.value)
+                assertNull(vm.state.value.approvalResult)
+                assertEquals("Keep my entered message", vm.state.value.form.messageToLandlord)
+            }
+        }
+
     @Test fun submit_surfaces_existing_active_lease() =
         runTest {
             coEvery { tenantRepository.requestApproval(any()) } returns

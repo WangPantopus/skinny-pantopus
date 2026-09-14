@@ -432,7 +432,14 @@ internal fun DetailsStep(
     HeadlineBlock("Landlord & lease details")
     SubcopyBlock("We'll email this person a one-time link to confirm the rental.")
 
-    state.errors?.takeIf { !it.isEmpty }?.let { ErrorSummaryBanner(it) }
+    val validationErrors = state.errors?.takeIf { !it.isEmpty }
+    if (validationErrors != null) {
+        ErrorSummaryBanner(validationErrors)
+    } else {
+        (state.submitState as? VerifyLandlordSubmitState.Error)?.let {
+            ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message)
+        }
+    }
 
     BusinessInfoCard(form = state.form, errors = state.errors, viewModel = viewModel)
     LeaseUploadCard(form = state.form, errors = state.errors, viewModel = viewModel)
@@ -1268,7 +1275,10 @@ private fun ParseStatusRow(
 // MARK: - Summary banner + attention hint
 
 @Composable
-private fun ErrorSummaryBanner(errors: VerifyLandlordValidationErrors) {
+private fun ErrorSummaryBanner(
+    errors: VerifyLandlordValidationErrors,
+    serverMessage: String? = null,
+) {
     Row(
         modifier =
             Modifier
@@ -1299,12 +1309,12 @@ private fun ErrorSummaryBanner(errors: VerifyLandlordValidationErrors) {
         Column(modifier = Modifier.weight(1f)) {
             val noun = if (errors.count == 1) "thing" else "things"
             Text(
-                text = "Fix ${errors.count} $noun to submit",
+                text = if (serverMessage == null) "Fix ${errors.count} $noun to submit" else "Couldn't submit request",
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.error,
             )
             Text(
-                text = errors.compactSummary,
+                text = serverMessage ?: errors.compactSummary,
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.error,
             )

@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import Vision
 import XCTest
 @testable import Pantopus
 
@@ -69,6 +70,43 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
                 VerifyDetailsStep(viewModel: vm)
             }
         )
+    }
+
+    func test_submission_error_is_visible_in_existing_details_banner() async throws {
+        let message = "This home is unavailable for lease decisions"
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            form: VerifyLandlordSampleData.populatedForm,
+            submitDelayNanos: 0
+        ) { _ in
+            .failure(APIError.clientError(status: 400, message: message))
+        }
+        vm.primaryTapped()
+        await vm.submit()
+        let controller = UIHostingController(rootView:
+            SnapshotWizardFrame(model: SnapshotChrome.detailsModel(enabled: true)) {
+                VerifyDetailsStep(viewModel: vm)
+            }
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+            controller.view.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "lease-submission-error-existing-banner"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let read = VNRecognizeTextRequest()
+        read.recognitionLanguages = ["en-US"]
+        try VNImageRequestHandler(cgImage: XCTUnwrap(image.cgImage), options: [:]).perform([read])
+        let text = (read.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").lowercased()
+        XCTAssertTrue(text.contains("home is unavailable for lease decisions"), text)
+        XCTAssertTrue(text.contains("submit request"), text)
     }
 
     // MARK: - A12.7 Postcard
