@@ -227,21 +227,38 @@ router.get(
       }
 
       // Fetch child units (if this is a building)
-      const { data: units } = await supabaseAdmin
+      const { data: units, error: unitsErr } = await supabaseAdmin
         .from('Home')
         .select('id, name, home_type')
         .eq('parent_home_id', homeId);
+      if (unitsErr) throw unitsErr;
+
+      // A building relationship alone does not grant access to a unit's tenants.
+      // Restrict child leases to the subject already verified by requireAuthority.
+      const managedUnitIds = new Set();
+      if (units?.length && req.authority?.subject_id) {
+        const { data: unitAuthorities, error: unitAuthErr } = await supabaseAdmin
+          .from('HomeAuthority')
+          .select('home_id')
+          .in('home_id', units.map(unit => unit.id))
+          .eq('subject_type', req.authority.subject_type)
+          .eq('subject_id', req.authority.subject_id)
+          .eq('status', 'verified');
+        if (unitAuthErr) throw unitAuthErr;
+        for (const authority of unitAuthorities || []) managedUnitIds.add(authority.home_id);
+      }
 
       // Include the history consumed by the existing Ended filter.
-      const { data: leases } = await supabaseAdmin
+      const { data: leases, error: leasesErr } = await supabaseAdmin
         .from('HomeLease')
         .select(`
           id, home_id, state, source, start_at, end_at, created_at,
           primary_resident:primary_resident_user_id(id, username, name, email)
         `)
-        .eq('home_id', homeId)
+        .in('home_id', [homeId, ...managedUnitIds])
         .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
+      if (leasesErr) throw leasesErr;
 
       // Fetch pending tenant requests (leases sourced from tenant)
       const pendingRequests = (leases || []).filter(
@@ -257,7 +274,7 @@ router.get(
 
       res.json({
         home,
-        units: units || [],
+        units: (units || []).map(unit => ({ ...unit, lease_status_available: managedUnitIds.has(unit.id) })),
         leases: leases || [],
         pending_requests: pendingRequests,
         occupants: occupants || [],

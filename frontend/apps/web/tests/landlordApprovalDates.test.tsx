@@ -4,6 +4,7 @@ import { approveLease, type TenantRequest } from '../../../packages/api/src/endp
 import RequestsTab from '@/components/landlord/RequestsTab';
 import PropertyDetail from '@/components/landlord/PropertyDetail';
 import LeasesTab from '@/components/landlord/LeasesTab';
+import UnitsTab from '@/components/landlord/UnitsTab';
 import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
 import VerificationCenter from '@/components/home/VerificationCenter';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -11,6 +12,87 @@ import VerifyLandlordDetailsPage from '@/app/(app)/app/homes/[id]/verify-landlor
 import { toast } from '@/components/ui/toast-store';
 
 const mockPush = jest.fn();
+
+function unitLeaseProps(onRefresh = jest.fn(), isCurrent = () => true) {
+  return { homeId: 'building-1', authorityId: 'authority-1', occupants: [], onRefresh, isCurrent,
+    units: [{ id: 'unit-1', name: 'Unit One', lease_status_available: true }] as React.ComponentProps<typeof UnitsTab>['units'],
+    leases: [{ id: 'lease-1', home_id: 'unit-1', state: 'active', start_at: '2026-09-01', end_at: null }] as React.ComponentProps<typeof UnitsTab>['leases'] };
+}
+
+test('the existing unit vacancy action ends its displayed lease through the supported SDK route', async () => {
+  const confirmation = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  const props = unitLeaseProps();
+  try {
+    render(<UnitsTab {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+    await waitFor(() => expect(props.onRefresh).toHaveBeenCalledTimes(1));
+    expect(confirmation).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/api/v1/landlord/lease/lease-1/end', {});
+  } finally { confirmation.mockRestore(); }
+});
+
+test.each([false, undefined])('unknown unit lease access (%s) cannot be presented as vacant or offer tenant actions', available => {
+  const props = unitLeaseProps();
+  props.units[0].lease_status_available = available;
+  props.leases = [];
+  render(<UnitsTab {...props} />);
+  expect(screen.getByText('Unavailable')).toBeVisible();
+  expect(screen.queryByText('Vacant')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Invite' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Mark Vacant' })).not.toBeInTheDocument();
+});
+
+test.each(['cancel', 'retired', 'unmounted'])(
+  'a %s unit vacancy confirmation cannot send a lease decision', async mode => {
+    let resolve!: (value: boolean) => void, current = true;
+    const confirmation = jest.spyOn(confirmStore, 'open').mockImplementation(() => new Promise(done => { resolve = done; }));
+    const props = unitLeaseProps(jest.fn(), () => current);
+    try {
+      const view = render(<UnitsTab {...props} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+      await waitFor(() => expect(confirmation).toHaveBeenCalledTimes(1));
+      if (mode === 'retired') current = false;
+      if (mode === 'unmounted') view.unmount();
+      await act(async () => resolve(mode !== 'cancel'));
+      expect(post).not.toHaveBeenCalled();
+      expect(props.onRefresh).not.toHaveBeenCalled();
+    } finally { confirmation.mockRestore(); }
+  },
+);
+
+test.each(['success', 'failure'])('a retired unit lease end %s cannot alert or refresh the next view', async outcome => {
+  let resolve!: (value: unknown) => void, reject!: (error: unknown) => void;
+  const result = new Promise((done, fail) => { resolve = done; reject = fail; });
+  jest.mocked(post).mockReturnValueOnce(result);
+  const confirmation = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  const alert = jest.spyOn(window, 'alert').mockImplementation(() => {}), props = unitLeaseProps();
+  try {
+    const view = render(<UnitsTab {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    view.unmount();
+    await act(async () => { if (outcome === 'success') resolve({ success: true }); else reject({ message: 'Old lease error' }); });
+    expect(alert).not.toHaveBeenCalled();
+    expect(props.onRefresh).not.toHaveBeenCalled();
+  } finally { confirmation.mockRestore(); alert.mockRestore(); }
+});
+
+test('a failed unit lease end reports the SDK error and permits retry without claiming vacancy', async () => {
+  const confirmation = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  const alert = jest.spyOn(window, 'alert').mockImplementation(() => {});
+  const props = unitLeaseProps();
+  jest.mocked(post).mockRejectedValueOnce({ message: 'Authority changed. Refresh this property.' }).mockResolvedValueOnce({ success: true });
+  try {
+    render(<UnitsTab {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Authority changed. Refresh this property.'));
+    expect(props.onRefresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Vacant' }));
+    await waitFor(() => expect(props.onRefresh).toHaveBeenCalledTimes(1));
+  } finally { confirmation.mockRestore(); alert.mockRestore(); }
+});
 
 jest.mock('../../../packages/api/src/client', () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock('@pantopus/api', () => ({

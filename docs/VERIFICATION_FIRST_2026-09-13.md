@@ -1127,3 +1127,48 @@ the existing durable audit directory. The prior foreground source9d344bcf0 passe
 all15 applicable [CI34820697178 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34820697178),
 with one unchanged Seeder skip. This follow-up needs its own exact-source CI.
 R05 remains open, and the inventory remains8 locally closed/72 partial or open/80.
+
+
+### Existing unit vacancy and child lease visibility
+
+September14 resumed follow-up, based on113d4cdc6. Existing UnitsTab used a
+nonexistent mark-vacant endpoint. The property-detail route returned units but
+queried only the parent Home's leases, so an occupied child appeared vacant.
+Four rendered baseline cases and two route cases reproduced the defects.
+
+The existing route now reads child leases only for units with a verified authority
+matching the subject already resolved by requireAuthority. A parent relationship
+alone grants no access to another owner's tenant details. Query failures fail the
+read instead of presenting vacancy. The existing unit DTO marks status unavailable
+when that authority is absent. The Units tab reuses endLease and the existing
+confirmation dialog, displays failures for retry, prevents duplicate actions and
+retires callbacks on tab/Home/account departure. Other leases and independent Home
+membership retain the existing transaction policy. No new file, table, migration,
+replacement service, screen or style was introduced.
+
+All134 selected backend and38 rendered web tests pass, with standalone TypeScript,
+scoped ESLint (zero warnings/errors) and diff checks. Native source is unchanged;
+its accepted50 iOS/49 Android and static/assembly evidence is reused. Private
+same-version dependency repair restored missing qrcode types/jsqr files using
+archives verified against the existing lockfile; no manifest/lockfile changed.
+
+Actual Chrome/component/SDK/HTTP/authority/SQL checks verify the managed active
+lease, withhold the other owner's lease/tenant data, cancel with zero POSTs,
+retain an active row after a controlled503, and retry through the real transaction
+to an ended lease/inactive lease occupancy and refreshed Vacant row. A held reply
+delivered after leaving Units for Requests causes no alert or extra property GET.
+The existing styled layout was inspected after correcting only the private test
+renderer's stylesheet setup. Auth/shell are synthetic and notices intercepted;
+provider delivery and independent-membership UI cases are not claimed here.
+
+Evidence: private unit-vacancy-r1 contains source-binding.json, baseline/candidate
+results, browser-acceptance.json and exact-row HTTP/SQL snapshots; mirrored under
+.pantopus-recovery/audits/20260913-lease-transaction. API18111 and private Next18110
+are owned local fixtures. Prior API18109 and iOS simulator are stopped; Android
+AVD/IDE remain stopped. No unrelated device or checkout was modified.
+
+Next: the existing invitation path, whose notification target has no matching
+lease acceptance page, and the existing bulk unit tools whose SDK endpoints are
+missing; inspect shared implementations before repair. Private attachment,
+provider delivery, installed Android acceptance and adoption/rollout remain open.
+R05 and the8/72/80 inventory are unchanged.

@@ -160,6 +160,19 @@ follow-up. Earlier foreground source9d344bcf0 passes all15 applicable checks in
 with one unchanged Seeder skip; this follow-up requires its own remote checks.
 See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-identity-attachment-and-calendar-input-follow-up).
 
+**Existing unit management follow-up:** the Units tab called a nonexistent vacancy
+endpoint, and property detail omitted child leases so occupied units looked vacant.
+It now reuses the existing confirmed lease-end operation, retains errors for retry,
+and retires callbacks after navigation. Child lease/tenant reads require the same
+verified authority subject on each unit; unavailable status is not shown as vacant.
+Actual browser/SDK/HTTP/SQL checks pass for cancellation, controlled failure/retry,
+and a delivered success after tab departure. All134 selected backend/38 rendered
+web checks, standalone types and scoped lint pass. No schema or design changes.
+See [unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-vacancy-and-child-lease-visibility).
+Native identity/date source113d4cdc6 has no failed CI jobs; Android assembly remains
+running in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
+The unit follow-up requires its own CI after push.
+
 **Next:** complete remaining R05 invitation/private-attachment/provider acceptance
 through existing implementations, and installed Android recovery/foreground when
 computer control is reliable. The earlier APK installed in the owned AVD, but

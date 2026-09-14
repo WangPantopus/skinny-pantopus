@@ -36,6 +36,8 @@ export type PropertyUnit = {
   id: string;
   name: string;
   home_type: string;
+  /** Child lease status is visible to the property's verified authority subject. */
+  lease_status_available?: boolean;
 };
 
 export type LeaseResident = {
@@ -253,9 +255,4 @@ export async function generateUnits(homeId: string, data: {
   end: number;
 }): Promise<{ created: number; units: PropertyUnit[] }> {
   return post(`/api/v1/landlord/properties/${homeId}/units/generate`, data);
-}
-
-/** Mark a unit as vacant */
-export async function markUnitVacant(homeId: string, unitId: string): Promise<{ success: boolean }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/${unitId}/mark-vacant`);
 }

@@ -464,6 +464,46 @@ describe('GET /landlord/properties/:homeId', () => {
     expect(res._json.pending_requests[0].id).toBe('lease-pending');
     expect(res._json.leases.map(lease => lease.id).sort()).toEqual(['lease-active', 'lease-canceled', 'lease-ended', 'lease-pending']);
   });
+
+  test.each(['user', 'business'])('child leases require the same verified %s authority subject as the property', async subjectType => {
+    seedTable('Home', [
+      { id: 'home-1', home_type: 'building' },
+      ...['owned-unit', 'other-unit', 'revoked-unit'].map(id => ({ id, name: id, home_type: 'unit', parent_home_id: 'home-1' })),
+    ]);
+    seedTable('HomeAuthority', [
+      { home_id: 'owned-unit', subject_type: subjectType, subject_id: 'property-subject', status: 'verified' },
+      { home_id: 'other-unit', subject_type: subjectType, subject_id: 'another-subject', status: 'verified' },
+      { home_id: 'revoked-unit', subject_type: subjectType, subject_id: 'property-subject', status: 'revoked' },
+    ]);
+    seedTable('HomeLease', ['owned-unit', 'other-unit', 'revoked-unit'].map(home_id => ({
+      id: `${home_id}-lease`, home_id, state: 'active', source: 'landlord_invite',
+    })));
+    const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET',
+      authority: { subject_type: subjectType, subject_id: 'property-subject', status: 'verified' } });
+    const res = mockRes(); await propertyDetailHandler(req, res);
+    expect(res._status).toBe(200);
+    expect(res._json.leases.map(lease => lease.id)).toEqual(['owned-unit-lease']);
+    expect(res._json.units.map(unit => [unit.id, unit.lease_status_available])).toEqual([
+      ['owned-unit', true], ['other-unit', false], ['revoked-unit', false],
+    ]);
+  });
+
+  test.each(['HomeAuthority', 'HomeLease'])('a failed %s read cannot produce an apparently vacant building', async failedTable => {
+    seedTable('Home', [{ id: 'home-1', home_type: 'multi_unit' }, { id: 'unit-1', home_type: 'apartment', parent_home_id: 'home-1' }]);
+    const db = require('../../config/supabaseAdmin'), original = db.from;
+    const from = jest.spyOn(db, 'from').mockImplementation(table => {
+      if (table !== failedTable) return original(table);
+      const query = { select: () => query, eq: () => query, in: () => query, order: () => query,
+        then: done => Promise.resolve({ data: null, error: new Error('Controlled property read failure') }).then(done) };
+      return query;
+    });
+    try {
+      const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET', authority: { subject_type: 'user', subject_id: 'test-user-id' } });
+      const res = mockRes(); await propertyDetailHandler(req, res);
+      expect(res._status).toBe(500);
+      expect(res._json).toEqual({ error: 'Failed to fetch property details' });
+    } finally { from.mockRestore(); }
+  });
 });
 
 // ============================================================

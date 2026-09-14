@@ -207,6 +207,7 @@ export default function PropertyDetail({ homeId }: Props) {
             leases={leases}
             occupants={occupants}
             onRefresh={refreshCurrent}
+            isCurrent={isCurrent}
           />
         )}
         {tab === 'requests' && (

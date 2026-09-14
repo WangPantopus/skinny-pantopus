@@ -5,9 +5,11 @@
  * and bulk tools (import CSV, generate range).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
+import { confirmStore } from '@/components/ui/confirm-store';
 
 type Props = {
   homeId: string;
@@ -16,13 +18,16 @@ type Props = {
   leases: landlord.HomeLease[];
   occupants: landlord.HomeOccupant[];
   onRefresh: () => void;
+  isCurrent: () => boolean;
 };
 
 // ── Occupancy status ────────────────────────────────────────
 
-type OccupancyStatus = 'active' | 'pending' | 'vacant';
+type OccupancyStatus = 'active' | 'pending' | 'vacant' | 'unavailable';
 
-function getUnitOccupancy(unitId: string, leases: landlord.HomeLease[]): { status: OccupancyStatus; lease?: landlord.HomeLease } {
+function getUnitOccupancy(unit: landlord.PropertyUnit, leases: landlord.HomeLease[]): { status: OccupancyStatus; lease?: landlord.HomeLease } {
+  if (unit.lease_status_available !== true) return { status: 'unavailable' };
+  const unitId = unit.id;
   const active = leases.find((l) => l.home_id === unitId && l.state === 'active');
   if (active) return { status: 'active', lease: active };
   const pending = leases.find((l) => l.home_id === unitId && l.state === 'pending');
@@ -34,6 +39,7 @@ const OCCUPANCY_BADGE: Record<OccupancyStatus, { label: string; bg: string; text
   active: { label: 'Active', bg: 'bg-emerald-100', text: 'text-emerald-700' },
   pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700' },
   vacant: { label: 'Vacant', bg: 'bg-app-surface-sunken', text: 'text-app-text-secondary' },
+  unavailable: { label: 'Unavailable', bg: 'bg-app-surface-sunken', text: 'text-app-text-secondary' },
 };
 
 function OccupancyBadge({ status }: { status: OccupancyStatus }) {
@@ -324,17 +330,34 @@ function BulkTools({
 
 // ── Main component ──────────────────────────────────────────
 
-export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh }: Props) {
+export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh, isCurrent }: Props) {
   const [inviteTarget, setInviteTarget] = useState<{ unitId: string; unitName: string } | null>(null);
+  const [endingId, setEndingId] = useState<string | null>(null);
+  const ending = useRef(false), lifetime = useRef({ generation: 0 });
+  useEffect(() => {
+    const scope = lifetime.current;
+    return () => { ++scope.generation; };
+  }, []);
 
-  const handleMarkVacant = useCallback(async (unitId: string) => {
+  const handleMarkVacant = useCallback(async (lease: landlord.HomeLease) => {
+    if (!isCurrent() || ending.current || lease.state !== 'active') return;
+    const generation = lifetime.current.generation;
+    const current = () => generation === lifetime.current.generation && isCurrent();
+    ending.current = true; setEndingId(lease.id);
     try {
-      await api.landlord.markUnitVacant(homeId, unitId);
-      onRefresh();
+      const confirmed = await confirmStore.open({ title: 'Mark this unit vacant?',
+        description: 'This ends the displayed lease and its lease-based access. Other active leases and independent Home membership remain.',
+        confirmLabel: 'End displayed lease', variant: 'destructive' });
+      if (!confirmed || !current()) return;
+      await api.landlord.endLease(lease.id);
+      if (current()) onRefresh();
     } catch (err: unknown) {
-      console.error('Mark vacant failed:', err);
+      if (current()) alert(extractApiError(err, 'Could not end the lease. Please retry.'));
+    } finally {
+      ending.current = false;
+      if (current()) setEndingId(null);
     }
-  }, [homeId, onRefresh]);
+  }, [onRefresh, isCurrent]);
 
   if (units.length === 0) {
     return (
@@ -360,7 +383,7 @@ export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh
       {/* Units list */}
       <div className="rounded-xl border border-app-border bg-app-surface divide-y divide-app-border-subtle">
         {units.map((unit) => {
-          const occ = getUnitOccupancy(unit.id, leases);
+          const occ = getUnitOccupancy(unit, leases);
           return (
             <div key={unit.id} className="flex items-center justify-between px-4 py-3 gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -392,11 +415,12 @@ export default function UnitsTab({ homeId, authorityId, units, leases, onRefresh
                       Invite
                     </button>
                   )}
-                  {occ.status === 'active' && (
+                  {occ.status === 'active' && occ.lease && (
                     <button
                       type="button"
-                      onClick={() => handleMarkVacant(unit.id)}
-                      className="px-2.5 py-1 text-xs font-medium text-app-text-secondary hover:text-app-text-strong hover:bg-app-hover rounded-lg transition-colors"
+                      onClick={() => { if (occ.lease) void handleMarkVacant(occ.lease); }}
+                      disabled={endingId !== null}
+                      className="px-2.5 py-1 text-xs font-medium text-app-text-secondary hover:text-app-text-strong hover:bg-app-hover rounded-lg transition-colors disabled:opacity-40"
                     >
                       Mark Vacant
                     </button>
