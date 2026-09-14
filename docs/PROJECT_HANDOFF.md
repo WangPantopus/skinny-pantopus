@@ -41,7 +41,9 @@ responses are private/no-store. Existing markup, layout, styles and navigation a
 preserved. All 46 relevant rendered checks, 66 route checks, standalone TypeScript,
 scoped lint (one pre-existing warning), actual stale-read/committed-approval browser
 cases and six approval/three end browser compatibility cases pass. Current landlord
-source needs CI after push. See [landlord privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-homeaccount-boundaries).
+source `1a17a22a9fe5e4490e56290f1d51f50af1d0fa39` passes all eight applicable checks
+in [CI34800605686](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34800605686),
+with three unchanged native/Seeder skips. See [landlord privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-homeaccount-boundaries).
 
 **Next:** verify background/return behavior, reconcile the legacy request API's
 queued-original boundary using existing records, then verify remaining installed
@@ -50,6 +52,14 @@ of an unseen request; first establish what the existing flow actually offers.
 Do not build speculative command/renewal tables. The separate proposed renewal
 migration remains paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
+
+Native source review has identified a concrete next baseline: both existing
+VerifyLandlordWizardViewModels map every HTTP400/404 submission failure to mail
+verification, although the current request route also returns400 for frozen Homes,
+unresolved units and invalid dates. Both also interpret every409 as a saved lease.
+Capture the actual response and verify these branches in the existing native tests
+before repairing them. Their screens, layouts and view models already exist;
+do not create replacements. No native source was changed in this follow-up.
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Full AppShell/login,

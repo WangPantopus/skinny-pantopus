@@ -636,7 +636,10 @@ failure/lost-reply/retry cases remain compatible. SQL behavior is unchanged, so 
 accepted lifecycle/race evidence is reused.
 
 Evidence is source-bound under `landlord-account-r1` in the existing private lease
-transaction archive. Current landlord source requires CI after push. The boundary
+transaction archive. Landlord source `1a17a22a9fe5e4490e56290f1d51f50af1d0fa39`
+passes all eight applicable checks in
+[CI34800605686](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34800605686),
+with three unchanged native/Seeder skips. The boundary
 is actual component/SDK/HTTP/SQL with synthetic authentication, not full AppShell,
 real login/cookie rotation or native acceptance. Background/return behavior and the
 legacy queued-submission boundary are next; validate the existing workflow before
