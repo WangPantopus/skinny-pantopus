@@ -11,6 +11,8 @@ import app.pantopus.android.data.api.models.place.RecordWatchResponse
 import app.pantopus.android.data.api.models.place.ResidencyClaimScope
 import app.pantopus.android.data.api.models.place.ResidencyClaimStatus
 import app.pantopus.android.data.api.models.place.ResidencyClaimsResponse
+import app.pantopus.android.data.api.models.place.ResidencyLetterStatus
+import app.pantopus.android.data.api.models.place.ResidencyLetterVerification
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
@@ -34,6 +36,17 @@ class PlaceWaveDtosTest {
             .build()
 
     private inline fun <reified T> decode(json: String): T = checkNotNull(moshi.adapter(T::class.java).fromJson(json)) { "decoded null" }
+
+    @Test
+    fun `expired residency letters remain distinct from revocation and unknown`() {
+        val expired = decode<ResidencyLetterVerification>("""{"valid":false,"status":"expired"}""")
+        assertEquals(ResidencyLetterStatus.EXPIRED, expired.status)
+        assertEquals(false, expired.valid)
+        assertNull(expired.residentName)
+        assertNull(expired.address)
+        val unknown = decode<ResidencyLetterVerification>("""{"valid":false,"status":"future"}""")
+        assertEquals(ResidencyLetterStatus.UNKNOWN, unknown.status)
+    }
 
     @Test
     fun `decodes the mailbox check`() {

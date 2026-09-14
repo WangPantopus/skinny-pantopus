@@ -162,7 +162,8 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
   const queryClient = useQueryClient();
   const [downloading, setDownloading] = useState(false);
   const [mailing, setMailing] = useState(false);
-  const revoked = letter.status === 'revoked';
+  const inactive = letter.status !== 'issued';
+  const statusLabel = letter.status === 'expired' ? 'Expired' : letter.status === 'revoked' ? 'Revoked' : 'Unavailable';
 
   const revokeMutation = useMutation({
     mutationFn: () => api.residencyLetters.revokeResidencyLetter(homeId, letter.id),
@@ -208,15 +209,15 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
   };
 
   return (
-    <div className={`bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 ${revoked ? 'opacity-75' : ''}`}>
+    <div className={`bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 ${inactive ? 'opacity-75' : ''}`}>
       <div className="flex items-center gap-3">
-        <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${revoked ? 'bg-app-surface-sunken' : 'bg-primary-100'}`}>
-          <FileText size={20} strokeWidth={2} className={revoked ? 'text-app-text-muted' : 'text-primary-600'} />
+        <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${inactive ? 'bg-app-surface-sunken' : 'bg-primary-100'}`}>
+          <FileText size={20} strokeWidth={2} className={inactive ? 'text-app-text-muted' : 'text-primary-600'} />
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[14px] font-bold text-app-text font-mono tracking-[0.02em]">{letter.letter_code}</span>
-            <Chip label={revoked ? 'Revoked' : 'Active'} variant={revoked ? 'warning' : 'success'} />
+            <Chip label={inactive ? statusLabel : 'Active'} variant={inactive ? 'warning' : 'success'} />
           </div>
           <div className="text-[12.5px] text-app-text-muted mt-0.5 truncate">
             {fmtDate(letter.issued_at)} · {letter.purpose}
@@ -235,12 +236,12 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
         <button
           type="button"
           onClick={onMail}
-          disabled={mailing || revoked}
+          disabled={mailing || inactive}
           className="flex-1 h-10 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-text text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-hover transition disabled:opacity-50"
         >
           <Mailbox size={15} strokeWidth={2} /> {mailing ? 'Sending…' : 'Mail'}
         </button>
-        {!revoked && (
+        {!inactive && (
           <button
             type="button"
             onClick={() => revokeMutation.mutate()}

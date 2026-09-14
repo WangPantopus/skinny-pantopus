@@ -183,10 +183,11 @@ function renderLetterPdf({ residentName, addressLine1, cityZip, purpose, letterC
 
 // ── Serialization (issuer-facing) ────────────────────────────
 function serializeLetter(row) {
+  const expired = row.expires_at && new Date(row.expires_at).getTime() <= Date.now();
   return {
     id: row.id,
     home_id: row.home_id,
-    status: row.status,
+    status: row.status === 'issued' && expired ? 'expired' : row.status,
     purpose: row.purpose,
     resident_name: row.resident_name,
     address: {
@@ -198,6 +199,7 @@ function serializeLetter(row) {
     letter_code: row.letter_code,
     verify_url: verifyUrlFor(row.letter_code),
     issued_at: row.issued_at,
+    expires_at: row.expires_at || null,
     revoked_at: row.revoked_at,
     pdf_sha256: row.pdf_sha256,
   };
@@ -272,7 +274,7 @@ async function issueLetter({ homeId, userId, purpose }) {
 async function listLetters({ homeId, userId }) {
   const { data, error } = await supabaseAdmin
     .from('ResidencyLetter')
-    .select('id, home_id, status, purpose, resident_name, address_line1, city, state, zipcode, letter_code, issued_at, revoked_at, pdf_sha256')
+    .select('id, home_id, status, purpose, resident_name, address_line1, city, state, zipcode, letter_code, issued_at, expires_at, revoked_at, pdf_sha256')
     .eq('home_id', homeId)
     .eq('user_id', userId)
     .order('issued_at', { ascending: false });

@@ -420,7 +420,8 @@ private struct LetterRow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.error)
                 } else {
-                    PlaceChip(model: PlaceChipModel(tone: .neutral, text: "Revoked"))
+                    let label = letter.status == .expired ? "Expired" : (letter.status == .revoked ? "Revoked" : "Unavailable")
+                    PlaceChip(model: PlaceChipModel(tone: .neutral, text: label))
                 }
             }
         }

@@ -16,6 +16,16 @@ import XCTest
 final class PlaceWaveDTOsTests: XCTestCase {
     private let decoder = JSONDecoder()
 
+    func testExpiredResidencyLetterRemainsDistinctFromRevocationAndUnknown() throws {
+        let expired = try decoder.decode(ResidencyLetterVerification.self, from: Data(#"{"valid":false,"status":"expired"}"#.utf8))
+        XCTAssertEqual(expired.status, .expired)
+        XCTAssertFalse(expired.valid)
+        XCTAssertNil(expired.residentName)
+        XCTAssertNil(expired.address)
+        let unknown = try decoder.decode(ResidencyLetterVerification.self, from: Data(#"{"valid":false,"status":"future"}"#.utf8))
+        XCTAssertEqual(unknown.status, .unknown)
+    }
+
     func testDecodesMailboxCheck() throws {
         let json = """
         {"check":{"verdict":"needs_attention",

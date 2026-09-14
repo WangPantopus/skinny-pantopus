@@ -18,6 +18,7 @@ import Foundation
 public enum ResidencyLetterStatus: String, Sendable, Hashable {
     case issued
     case revoked
+    case expired
     case unknown
 }
 
