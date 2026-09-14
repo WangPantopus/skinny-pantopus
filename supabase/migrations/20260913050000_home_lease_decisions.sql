@@ -1,4 +1,5 @@
--- Backwards compatible API repair. Reuse the existing lease, invite, resident,
+-- Backwards compatible: yes. The deployed app can keep using its existing writes.
+-- Reuse the existing lease, invite, resident,
 -- occupancy and audit tables; no data rewrite or replacement tenancy schema.
 -- Separate REST writes could activate a lease without membership and could not
 -- safely recover a lost response. The lease's service-only metadata holds the
