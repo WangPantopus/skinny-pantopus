@@ -131,7 +131,7 @@ object DeepLinkRouter {
         /** `pantopus://join/:code` — signup invite code (RN `/join/[code]` alias). */
         data class JoinInvite(val code: String) : Destination
 
-        data class Invite(val token: String) : Destination
+        data class Invite(val token: String, val leaseInvitation: Boolean = false) : Destination
 
         /**
          * `pantopus://auth/reset-password?token=…` — hashed recovery
@@ -630,7 +630,16 @@ object DeepLinkRouter {
             }
             "invite" -> {
                 val token = segments.getOrNull(1)
-                if (token.isNullOrBlank()) Destination.Unknown(raw) else Destination.Invite(token)
+                if (token == "lease") {
+                    val proof = segments.getOrNull(2)
+                    if (segments.size == 3 && proof?.matches(Regex("[a-fA-F0-9]{64}")) == true) {
+                        Destination.Invite(proof, leaseInvitation = true)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                } else {
+                    if (token.isNullOrBlank()) Destination.Unknown(raw) else Destination.Invite(token)
+                }
             }
             "place" -> {
                 // `pantopus://place`                      → dashboard (home resolved client-side)

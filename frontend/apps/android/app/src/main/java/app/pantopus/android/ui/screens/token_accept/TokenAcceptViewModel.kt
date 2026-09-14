@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.token_accept.GuestPassDto
 import app.pantopus.android.data.api.models.token_accept.HomeInviteDetailsDto
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteAcceptanceResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeInvitationPreview
@@ -45,6 +47,8 @@ class TokenAcceptViewModel
         private val invitations: HomeInvitationDecisionFactory,
     ) : ViewModel() {
         private val token: String = savedStateHandle.get<String>(TOKEN_KEY) ?: ""
+        private val leaseInvitation: Boolean = savedStateHandle.get<Boolean>("leaseInvitation") ?: false
+        private var leasePreview: LeaseInvitePreviewResponse? = null
 
         private val _state = MutableStateFlow<TokenAcceptUiState>(TokenAcceptUiState.Loading)
         val state: StateFlow<TokenAcceptUiState> = _state.asStateFlow()
@@ -65,6 +69,7 @@ class TokenAcceptViewModel
             lifetime?.cancel()
             lifetime = null
             session = null
+            leasePreview = null
             _state.value = TokenAcceptUiState.Loading
         }
 
@@ -108,7 +113,7 @@ class TokenAcceptViewModel
                         _state.value = TokenAcceptUiState.HomeInvitation
                         return@launch
                     }
-                    val resolved = resolveOffer()
+                    val resolved = if (leaseInvitation) resolveLease(revision) else resolveOffer()
                     current.requireCurrent()
                     if (isCurrent(revision)) _state.value = resolved
                 } catch (cancelled: CancellationException) {
@@ -119,6 +124,51 @@ class TokenAcceptViewModel
                     }
                 }
             }
+        }
+
+        private suspend fun resolveLease(revision: Long): TokenAcceptUiState {
+            if (!token.matches(Regex("[a-fA-F0-9]{64}"))) return TokenAcceptUiState.Error("Invalid lease invitation link.")
+            val result = repository.leaseInvite(token)
+            val user = (auth.state.value as? AuthRepository.State.SignedIn)?.user
+            if (result is NetworkResult.Success) {
+                val preview = result.data
+                val invite = preview.invitation
+                val start = Instant.parse(invite.proposedStart)
+                val expiry = Instant.parse(invite.expiresAt)
+                val valid =
+                    homeTaskUUID(preview.home.id) && preview.accountEmail.equals(user?.email, ignoreCase = true) &&
+                        invite.status in setOf("pending", "accepted") && (invite.status == "accepted" || expiry > Instant.now()) &&
+                        (invite.proposedEnd == null || Instant.parse(invite.proposedEnd) > start)
+                if (!valid || !isCurrent(revision)) {
+                    return TokenAcceptUiState.Error(
+                        "This lease invitation response could not be checked. Retry.",
+                    )
+                }
+                session?.requireCurrent()
+                leasePreview = preview
+                return TokenAcceptUiState.Ready(makeLeaseOffer(preview))
+            }
+            return if (result is NetworkResult.Failure && result.error.code == 410) {
+                TokenAcceptUiState.Expired("This lease invitation is closed or expired. Ask the landlord for a new invitation.")
+            } else {
+                TokenAcceptUiState.Error("This lease invitation could not be checked. Use the account it was sent to and retry.")
+            }
+        }
+
+        private suspend fun acceptLease(
+            offer: TokenAcceptOffer,
+            revision: Long,
+        ) {
+            val preview = leasePreview ?: return
+            val actor = session?.actorId ?: return
+            val result = repository.acceptLeaseInvite(token)
+            if (!isCurrent(revision)) return
+            _state.value =
+                if (result is NetworkResult.Success && validLeaseReceipt(result.data, preview.home.id, actor)) {
+                    TokenAcceptUiState.Accepted(offer, "Your lease acceptance is saved.")
+                } else {
+                    TokenAcceptUiState.Error("The acceptance could not be confirmed. Retry to check the invitation's current status.")
+                }
         }
 
         private suspend fun resolveOffer(): TokenAcceptUiState =
@@ -156,6 +206,10 @@ class TokenAcceptViewModel
             }
             _state.value = TokenAcceptUiState.Accepting(offer)
             viewModelScope.launch {
+                if (offer.inviteType == InviteType.LeaseInvite) {
+                    acceptLease(offer, revision)
+                    return@launch
+                }
                 val result =
                     when (offer.inviteType) {
                         InviteType.BusinessSeat -> repository.acceptBusinessSeat(token)
@@ -183,6 +237,10 @@ class TokenAcceptViewModel
 
         fun decline() {
             val ready = _state.value as? TokenAcceptUiState.Ready ?: return
+            if (ready.offer.inviteType == InviteType.LeaseInvite) {
+                dismiss()
+                return
+            }
             val revision = generation
             if (!isCurrent(revision)) return
             val offer = ready.offer
@@ -228,6 +286,39 @@ class TokenAcceptViewModel
 
         companion object {
             const val TOKEN_KEY = "token"
+
+            internal fun validLeaseReceipt(
+                response: LeaseInviteAcceptanceResponse,
+                homeId: String,
+                actorId: String,
+            ): Boolean =
+                homeTaskUUID(response.lease.id) && response.lease.homeId == homeId &&
+                    response.lease.primaryResidentUserId == actorId && response.lease.state == "active" &&
+                    homeTaskUUID(response.occupancy.id) && response.occupancy.homeId == homeId &&
+                    response.occupancy.userId == actorId && response.occupancy.isActive &&
+                    response.occupancy.verificationStatus == "verified"
+
+            internal fun makeLeaseOffer(preview: LeaseInvitePreviewResponse): TokenAcceptOffer {
+                val invitation = preview.invitation
+                val dates =
+                    listOfNotNull(
+                        "Starts: ${invitation.proposedStart.take(10)}",
+                        invitation.proposedEnd?.let { "Ends: ${it.take(10)}" },
+                    )
+                return TokenAcceptOffer(
+                    invitationId = null, inviteType = InviteType.LeaseInvite, title = "Review your lease invitation",
+                    sender = "Your landlord invited you", roleOffered = "Tenant",
+                    venue = listOfNotNull(preview.home.name ?: "Your rental Home", preview.home.city).joinToString(", "),
+                    benefits = dates, expiry = formatExpiry(invitation.expiresAt),
+                    safetyBand =
+                        SafetyBand(
+                            PantopusIcon.ShieldCheck,
+                            "Review the Home and dates before accepting. Access is checked again when you accept.",
+                        ),
+                    primaryCtaLabel = if (invitation.status == "accepted") "Check saved acceptance" else "Accept lease invitation",
+                    secondaryCtaLabel = "Not now", identityChip = IdentityChipContent(preview.accountEmail),
+                )
+            }
 
             internal fun makeHomeOffer(
                 home: HomeInviteResponse,

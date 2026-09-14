@@ -188,6 +188,22 @@ class DeepLinkRouterTest {
     }
 
     @Test
+    fun lease_invitation_preserves_the_complete_proof() {
+        val token = "a".repeat(64)
+        for (prefix in listOf("pantopus://", "https://pantopus.app/", "https://pantopus.com/")) {
+            val result = DeepLinkRouter.resolveString("${prefix}invite/lease/$token")
+            assertEquals(DeepLinkRouter.Destination.Invite(token, leaseInvitation = true), result)
+        }
+    }
+
+    @Test
+    fun lease_invitation_rejects_incomplete_or_extra_path() {
+        for (path in listOf("invite/lease", "invite/lease/short", "invite/lease/" + "a".repeat(64) + "/extra")) {
+            assertTrue(DeepLinkRouter.resolveString("pantopus://$path") is DeepLinkRouter.Destination.Unknown)
+        }
+    }
+
+    @Test
     fun invite_without_token_falls_back() {
         assertTrue(DeepLinkRouter.resolveString("pantopus://invite") is DeepLinkRouter.Destination.Unknown)
     }

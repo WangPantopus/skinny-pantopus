@@ -1120,9 +1120,12 @@ private object ChildRoutes {
      *  via the matching backend route. Mirrors iOS DeepLinkRouter's
      *  `.invite(token)` destination. */
     const val TOKEN_ACCEPT_TOKEN_KEY = "token"
-    const val TOKEN_ACCEPT = "invite/{$TOKEN_ACCEPT_TOKEN_KEY}"
+    const val TOKEN_ACCEPT = "invite/{$TOKEN_ACCEPT_TOKEN_KEY}?leaseInvitation={leaseInvitation}"
 
-    fun tokenAccept(token: String): String = "invite/${java.net.URLEncoder.encode(token, "UTF-8")}"
+    fun tokenAccept(
+        token: String,
+        leaseInvitation: Boolean = false,
+    ): String = "invite/${java.net.URLEncoder.encode(token, "UTF-8")}?leaseInvitation=$leaseInvitation"
 
     /** T6.6c (P26.5) Support Trains list. */
     const val SUPPORT_TRAINS = "support-trains"
@@ -1956,7 +1959,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         when (val pending = pendingDeepLink) {
             null -> Unit
             is DeepLinkRouter.Destination.Invite -> {
-                navController.navigate(ChildRoutes.tokenAccept(pending.token))
+                navController.navigate(ChildRoutes.tokenAccept(pending.token, pending.leaseInvitation))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.JoinInvite -> {
@@ -5051,6 +5054,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(
                             navArgument(ChildRoutes.TOKEN_ACCEPT_TOKEN_KEY) {
                                 type = NavType.StringType
+                            },
+                            navArgument("leaseInvitation") {
+                                type = NavType.BoolType
+                                defaultValue = false
                             },
                         ),
                 ) {

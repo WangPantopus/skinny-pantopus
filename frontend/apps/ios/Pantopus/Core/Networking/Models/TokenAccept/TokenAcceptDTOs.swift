@@ -137,3 +137,60 @@ public struct BusinessSeatAcceptResponse: Decodable, Sendable {
         case roleBase = "role_base"
     }
 }
+
+// MARK: - Recipient-only lease invitation
+
+struct LeaseInvitePreviewResponse: Decodable {
+    let home: HomeInviteHomeDTO
+    let invitation: LeaseInviteDetailsDTO
+    let accountEmail: String
+    enum CodingKeys: String, CodingKey {
+        case home, invitation
+        case accountEmail = "account_email"
+    }
+}
+
+struct LeaseInviteDetailsDTO: Decodable {
+    let status: String
+    let proposedStart: String
+    let proposedEnd: String?
+    let expiresAt: String
+    enum CodingKeys: String, CodingKey {
+        case status
+        case proposedStart = "proposed_start"
+        case proposedEnd = "proposed_end"
+        case expiresAt = "expires_at"
+    }
+}
+
+struct LeaseInviteAcceptanceResponse: Decodable {
+    let lease: LeaseInviteReceipt
+    let occupancy: LeaseInviteOccupancy
+}
+
+struct LeaseInviteReceipt: Decodable {
+    let id: String
+    let homeId: String
+    let primaryResidentUserId: String
+    let state: String
+    enum CodingKeys: String, CodingKey {
+        case id, state
+        case homeId = "home_id"
+        case primaryResidentUserId = "primary_resident_user_id"
+    }
+}
+
+struct LeaseInviteOccupancy: Decodable {
+    let id: String
+    let homeId: String
+    let userId: String
+    let isActive: Bool
+    let verificationStatus: String
+    enum CodingKeys: String, CodingKey {
+        case id
+        case homeId = "home_id"
+        case userId = "user_id"
+        case isActive = "is_active"
+        case verificationStatus = "verification_status"
+    }
+}

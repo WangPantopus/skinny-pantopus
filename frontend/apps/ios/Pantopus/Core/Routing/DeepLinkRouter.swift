@@ -63,7 +63,7 @@ final class DeepLinkRouter {
         /// `pantopus://businesses/new` — open the A12.10 Create Business
         /// wizard inside the active tab's nav stack.
         case createBusiness
-        case invite(token: String)
+        case invite(token: String, leaseInvitation: Bool = false)
         /// P4.2 — A13.10 Edit Business Page (owner-only).
         /// `pantopus://businesses/:id/page-editor`.
         case editBusinessPage(businessId: String)
@@ -516,6 +516,11 @@ final class DeepLinkRouter {
         case "wallet":
             return .wallet
         case "invite":
+            if segments.dropFirst().first == "lease" {
+                guard segments.count == 3, let token = segments.last,
+                      token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
+                return .invite(token: token, leaseInvitation: true)
+            }
             if let token = segments.dropFirst().first, !token.isEmpty {
                 return .invite(token: token)
             }

@@ -8,6 +8,12 @@ import app.pantopus.android.data.api.models.token_accept.BusinessSeatBusinessDto
 import app.pantopus.android.data.api.models.token_accept.BusinessSeatInviteResponse
 import app.pantopus.android.data.api.models.token_accept.GuestPassDto
 import app.pantopus.android.data.api.models.token_accept.GuestPassResponse
+import app.pantopus.android.data.api.models.token_accept.HomeInviteHomeDto
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteAcceptanceResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteDetailsDto
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteOccupancy
+import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteReceipt
 import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -19,11 +25,13 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -239,6 +247,170 @@ class TokenAcceptViewModelTest {
             vm.decline()
             assertTrue(vm.state.value is TokenAcceptUiState.Error)
             assertEquals(0, vm.dismissEvents.value)
+        }
+
+    private val leaseToken = "a".repeat(64)
+    private val leaseHome = "ddc24300-0000-4000-8000-000000000003"
+
+    private fun leasePreview() =
+        LeaseInvitePreviewResponse(
+            HomeInviteHomeDto(leaseHome, "Existing rental", "Test"),
+            LeaseInviteDetailsDto("pending", "2026-09-15T00:00:00+00:00", "2027-09-15T00:00:00+00:00", "2099-01-01T00:00:00+00:00"),
+            "alice@example.com",
+        )
+
+    private fun leaseReceipt() =
+        LeaseInviteAcceptanceResponse(
+            LeaseInviteReceipt("ddc24300-0000-4000-8000-000000000006", leaseHome, "u1", "active"),
+            LeaseInviteOccupancy("ddc24300-0000-4000-8000-000000000005", leaseHome, "u1", true, "verified"),
+        )
+
+    private fun leaseModel(): TokenAcceptViewModel {
+        every { session.actorId } returns "u1"
+        coEvery { repository.leaseInvite(leaseToken) } returns NetworkResult.Success(leasePreview())
+        return model(SavedStateHandle(mapOf(TokenAcceptViewModel.TOKEN_KEY to leaseToken, "leaseInvitation" to true)))
+    }
+
+    @Test fun lease_link_previews_only_the_recipient_route_and_never_accepts_automatically() =
+        runTest {
+            val vm = leaseModel()
+            vm.load()
+            val ready = vm.state.value as TokenAcceptUiState.Ready
+            assertEquals(InviteType.LeaseInvite, ready.offer.inviteType)
+            assertEquals("alice@example.com", ready.offer.identityChip.label)
+            assertEquals(listOf("Starts: 2026-09-15", "Ends: 2027-09-15"), ready.offer.benefits)
+            coVerify(exactly = 0) { repository.acceptLeaseInvite(any()) }
+            coVerify(exactly = 0) { repository.businessSeatInvite(any()) }
+            coVerify(exactly = 0) { repository.guestPass(any()) }
+            coVerify(exactly = 0) { invitations.preview(any()) }
+        }
+
+    @Test fun lease_acceptance_validates_current_membership() =
+        runTest {
+            val vm = leaseModel()
+            coEvery { repository.acceptLeaseInvite(leaseToken) } returns NetworkResult.Success(leaseReceipt())
+            vm.load()
+            vm.accept()
+            assertEquals("Your lease acceptance is saved.", (vm.state.value as TokenAcceptUiState.Accepted).message)
+        }
+
+    @Test fun lease_not_now_closes_without_sending_a_decision() =
+        runTest {
+            val vm = leaseModel()
+            vm.load()
+            vm.decline()
+            assertEquals(1, vm.dismissEvents.value)
+            coVerify(exactly = 0) { repository.acceptLeaseInvite(any()) }
+            coVerify(exactly = 0) { repository.declineBusinessSeat(any()) }
+        }
+
+    @Test fun lost_lease_acceptance_reply_rechecks_then_retries_the_same_proof() =
+        runTest {
+            val vm = leaseModel()
+            coEvery { repository.acceptLeaseInvite(leaseToken) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(leaseReceipt()),
+                )
+            vm.load()
+            vm.accept()
+            assertTrue(vm.state.value is TokenAcceptUiState.Error)
+            coEvery { repository.leaseInvite(leaseToken) } returns
+                NetworkResult.Success(
+                    leasePreview().copy(invitation = leasePreview().invitation.copy(status = "accepted")),
+                )
+            vm.load()
+            assertEquals("Check saved acceptance", (vm.state.value as TokenAcceptUiState.Ready).offer.primaryCtaLabel)
+            coVerify(exactly = 1) { repository.acceptLeaseInvite(leaseToken) }
+            vm.accept()
+            assertTrue(vm.state.value is TokenAcceptUiState.Accepted)
+            coVerify(exactly = 2) { repository.acceptLeaseInvite(leaseToken) }
+        }
+
+    @Test fun lease_denial_and_provider_failure_hide_the_offer() =
+        runTest {
+            for (status in listOf(403, 404, 410, 503)) {
+                val vm = leaseModel()
+                coEvery { repository.leaseInvite(leaseToken) } returns NetworkResult.Failure(NetworkError.Server(status, null))
+                vm.load()
+                if (status == 410) {
+                    assertTrue(vm.state.value is TokenAcceptUiState.Expired)
+                } else {
+                    assertTrue(vm.state.value is TokenAcceptUiState.Error)
+                }
+                vm.accept()
+            }
+            coVerify(exactly = 0) { repository.acceptLeaseInvite(any()) }
+        }
+
+    @Test fun invalid_lease_preview_scope_account_dates_or_state_never_offers_acceptance() =
+        runTest {
+            for (preview in listOf(
+                leasePreview().copy(accountEmail = "other@example.com"),
+                leasePreview().copy(home = leasePreview().home.copy(id = "invalid")),
+                leasePreview().copy(invitation = leasePreview().invitation.copy(proposedEnd = "2025-09-15T00:00:00Z")),
+                leasePreview().copy(invitation = leasePreview().invitation.copy(status = "revoked")),
+            )) {
+                val vm = leaseModel()
+                coEvery { repository.leaseInvite(leaseToken) } returns NetworkResult.Success(preview)
+                vm.load()
+                assertTrue(vm.state.value is TokenAcceptUiState.Error)
+            }
+        }
+
+    @Test fun mismatched_or_inactive_lease_receipt_never_reports_success() =
+        runTest {
+            for (receipt in listOf(
+                leaseReceipt().copy(lease = leaseReceipt().lease.copy(homeId = "other")),
+                leaseReceipt().copy(lease = leaseReceipt().lease.copy(primaryResidentUserId = "other")),
+                leaseReceipt().copy(occupancy = leaseReceipt().occupancy.copy(isActive = false)),
+                leaseReceipt().copy(occupancy = leaseReceipt().occupancy.copy(verificationStatus = "provisional")),
+            )) {
+                val vm = leaseModel()
+                coEvery { repository.acceptLeaseInvite(leaseToken) } returns NetworkResult.Success(receipt)
+                vm.load()
+                vm.accept()
+                assertTrue(vm.state.value is TokenAcceptUiState.Error)
+            }
+        }
+
+    @Test fun late_lease_preview_after_close_cannot_restore_offer_or_send_acceptance() =
+        runTest {
+            val vm = leaseModel()
+            val delayed = CompletableDeferred<NetworkResult<LeaseInvitePreviewResponse>>()
+            coEvery { repository.leaseInvite(leaseToken) } coAnswers { delayed.await() }
+            vm.load()
+            vm.dismiss()
+            delayed.complete(NetworkResult.Success(leasePreview()))
+            runCurrent()
+            assertEquals(TokenAcceptUiState.Loading, vm.state.value)
+            vm.accept()
+            coVerify(exactly = 0) { repository.acceptLeaseInvite(any()) }
+        }
+
+    @Test fun late_lease_acceptance_after_close_cannot_publish_success() =
+        runTest {
+            val vm = leaseModel()
+            val delayed = CompletableDeferred<NetworkResult<LeaseInviteAcceptanceResponse>>()
+            coEvery { repository.acceptLeaseInvite(leaseToken) } coAnswers { delayed.await() }
+            vm.load()
+            vm.accept()
+            vm.dismiss()
+            delayed.complete(NetworkResult.Success(leaseReceipt()))
+            runCurrent()
+            assertEquals(TokenAcceptUiState.Loading, vm.state.value)
+        }
+
+    @Test fun changed_account_during_lease_acceptance_cannot_publish_success() =
+        runTest {
+            val vm = leaseModel()
+            val delayed = CompletableDeferred<NetworkResult<LeaseInviteAcceptanceResponse>>()
+            coEvery { repository.acceptLeaseInvite(leaseToken) } coAnswers { delayed.await() }
+            vm.load()
+            vm.accept()
+            every { session.isCurrent } returns false
+            delayed.complete(NetworkResult.Success(leaseReceipt()))
+            runCurrent()
+            assertTrue(vm.state.value !is TokenAcceptUiState.Accepted)
         }
 
     @Test fun human_role_converts_snake_to_title_case() {

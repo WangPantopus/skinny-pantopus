@@ -230,6 +230,7 @@ private fun InviteTypeChip(type: InviteType) {
     val (label, bg, fg) =
         when (type) {
             InviteType.HomeInvite -> Triple("Home invite", PantopusColors.successBg, PantopusColors.success)
+            InviteType.LeaseInvite -> Triple("Lease invite", PantopusColors.successBg, PantopusColors.success)
             InviteType.BusinessSeat -> Triple("Business seat", PantopusColors.businessBg, PantopusColors.business)
             InviteType.GuestPass -> Triple("Guest pass", PantopusColors.warningBg, PantopusColors.warning)
         }

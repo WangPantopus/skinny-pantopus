@@ -7,6 +7,9 @@
 //  pass), plus the expired and not-found branches.
 //
 
+// Shared session/protected-store fixtures cover all invitation types and delayed replies.
+// swiftlint:disable file_length
+
 import XCTest
 @testable import Pantopus
 
@@ -29,10 +32,10 @@ final class TokenAcceptViewModelTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeAPI() async throws -> APIClient {
+    private func makeAPI(session: URLSession = TestSession.make()) async throws -> APIClient {
         let client = APIClient(
             environment: .current,
-            session: TestSession.make(),
+            session: session,
             retryPolicy: .none
         )
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("invitation-auth-" + UUID().uuidString)
@@ -348,5 +351,287 @@ extension TokenAcceptViewModelTests {
         XCTAssertEqual(acknowledged?.requestId, original.requestId)
         XCTAssertNil(store.saved)
         XCTAssertNil(model.pending)
+    }
+}
+
+@MainActor
+extension TokenAcceptViewModelTests {
+    private static let leaseToken = String(repeating: "a", count: 64)
+    private static let leasePreviewJSON = """
+    {"home":{"id":"ddc24300-0000-4000-8000-000000000003",
+     "name":"Existing rental",
+     "city":"Test"},
+     "invitation":{"status":"pending",
+     "proposed_start":"2026-09-15T00:00:00+00:00",
+     "proposed_end":"2027-09-15T00:00:00+00:00",
+     "expires_at":"2099-01-01T00:00:00+00:00"},
+     "account_email":"alice@example.com"}
+    """
+    private static let leaseReceiptJSON = """
+    {"lease":{"id":"ddc24300-0000-4000-8000-000000000006",
+     "home_id":"ddc24300-0000-4000-8000-000000000003",
+     "primary_resident_user_id":"ddc24300-0000-4000-8000-000000000001",
+     "state":"active"},
+     "occupancy":{"id":"ddc24300-0000-4000-8000-000000000005",
+     "home_id":"ddc24300-0000-4000-8000-000000000003",
+     "user_id":"ddc24300-0000-4000-8000-000000000001",
+     "is_active":true,
+     "verification_status":"verified"}}
+    """
+
+    func testLeaseLinkUsesOnlyRecipientPreviewAndRequiresExplicitAcceptance() async throws {
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        let vm = try await TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: makeAPI())
+        await vm.load()
+        guard case let .ready(offer) = vm.state else { return XCTFail("Expected existing invitation frame") }
+        XCTAssertEqual(offer.inviteType, .leaseInvite)
+        XCTAssertEqual(offer.identityChip.label, "alice@example.com")
+        XCTAssertEqual(offer.benefits, ["Starts: 2026-09-15", "Ends: 2027-09-15"])
+        XCTAssertEqual(offer.secondaryCtaLabel, "Not now")
+        XCTAssertFalse(URLProtocolStub.capturedRequests.contains { $0.url?.absoluteString.contains(Self.leaseToken) == true })
+        let requests = URLProtocolStub.capturedRequests.filter { $0.url?.path.contains("invite") == true }
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.httpMethod, "POST")
+        XCTAssertEqual(requests.first?.url?.path, "/api/v1/tenant/preview-invite")
+    }
+
+    func testLeaseAcceptanceRequiresMatchingCurrentMembership() async throws {
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        URLProtocolStub.stub(path: "/api/v1/tenant/accept-invite", response: .json(Self.leaseReceiptJSON))
+        let vm = try await TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: makeAPI())
+        await vm.load()
+        await vm.accept()
+        guard case let .accepted(offer, message) = vm.state else { return XCTFail("Expected confirmed receipt") }
+        XCTAssertEqual(offer.inviteType, .leaseInvite)
+        XCTAssertEqual(message, "Your lease acceptance is saved.")
+    }
+
+    func testLeaseNotNowClosesWithoutAcceptanceOrDeclinePost() async throws {
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        var closed = false
+        let vm = try await TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: makeAPI()) { closed = true }
+        await vm.load()
+        await vm.decline()
+        XCTAssertTrue(closed)
+        XCTAssertFalse(URLProtocolStub.capturedRequests
+            .contains { $0.url?.path.contains("accept-invite") == true || $0.url?.path.contains("decline") == true })
+    }
+
+    func testLeaseLostAcceptanceReplyCanRecheckAndRetryOriginalProof() async throws {
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", responses: [
+            .json(Self.leasePreviewJSON), .json(Self.leasePreviewJSON.replacingOccurrences(of: "pending", with: "accepted"))
+        ])
+        URLProtocolStub.stub(path: "/api/v1/tenant/accept-invite", responses: [.json("{}", status: 503), .json(Self.leaseReceiptJSON)])
+        let vm = try await TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: makeAPI())
+        await vm.load()
+        await vm.accept()
+        guard case .error = vm.state else { return XCTFail("Lost reply must not claim acceptance") }
+        await vm.load()
+        guard case let .ready(offer) = vm.state else { return XCTFail("Expected current preview") }
+        XCTAssertEqual(offer.primaryCtaLabel, "Check saved acceptance")
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/v1/tenant/accept-invite" }.count, 1)
+        await vm.accept()
+        guard case .accepted = vm.state else { return XCTFail("Expected recovered acceptance") }
+    }
+
+    func testLeasePreviewDenialOrFailureNeverShowsAnOffer() async throws {
+        let api = try await makeAPI()
+        for status in [403, 404, 410, 503] {
+            URLProtocolStub.reset()
+            URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json("{}", status: status))
+            let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+            await vm.load()
+            if status == 410 {
+                guard case .expired = vm.state else { return XCTFail("Closed invitation should be terminal") }
+            } else {
+                guard case .error = vm.state else { return XCTFail("Denied/unavailable preview must hide details") }
+            }
+            await vm.accept()
+            XCTAssertEqual(URLProtocolStub.capturedRequests.count, 1)
+        }
+    }
+
+    func testLeasePreviewRejectsWrongAccountAndInvalidScope() async throws {
+        let api = try await makeAPI()
+        for body in [
+            Self.leasePreviewJSON.replacingOccurrences(of: "alice@example.com", with: "other@example.com"),
+            Self.leasePreviewJSON.replacingOccurrences(of: "ddc24300-0000-4000-8000-000000000003", with: "invalid"),
+            Self.leasePreviewJSON.replacingOccurrences(of: "2027-09-15", with: "2025-09-15"),
+            Self.leasePreviewJSON.replacingOccurrences(of: "pending", with: "revoked")
+        ] {
+            URLProtocolStub.reset()
+            URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(body))
+            let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+            await vm.load()
+            guard case .error = vm.state else { return XCTFail("Invalid preview must not offer acceptance") }
+        }
+    }
+
+    func testLeaseAcceptanceRejectsMismatchedHomeActorOrInactiveMembership() async throws {
+        let api = try await makeAPI()
+        for body in [
+            Self.leaseReceiptJSON.replacingOccurrences(
+                of: "ddc24300-0000-4000-8000-000000000003",
+                with: "ddc24300-0000-4000-8000-000000000099"
+            ),
+            Self.leaseReceiptJSON.replacingOccurrences(
+                of: "ddc24300-0000-4000-8000-000000000001",
+                with: "ddc24300-0000-4000-8000-000000000099"
+            ),
+            Self.leaseReceiptJSON.replacingOccurrences(of: "true", with: "false"),
+            Self.leaseReceiptJSON.replacingOccurrences(of: "verified", with: "provisional")
+        ] {
+            URLProtocolStub.reset()
+            URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+            URLProtocolStub.stub(path: "/api/v1/tenant/accept-invite", response: .json(body))
+            let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+            await vm.load()
+            await vm.accept()
+            guard case .error = vm.state else { return XCTFail("Invalid acceptance receipt must not report success") }
+        }
+    }
+
+    func testLeaseCloseRetiresLoadedOfferAndCannotAccept() async throws {
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        let vm = try await TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: makeAPI())
+        await vm.load()
+        vm.close()
+        await vm.accept()
+        guard case .loading = vm.state else { return XCTFail("Close must clear old offer") }
+        XCTAssertFalse(URLProtocolStub.capturedRequests.contains { $0.url?.path == "/api/v1/tenant/accept-invite" })
+    }
+}
+
+private final class LeaseInvitationDelayedProtocol: URLProtocol {
+    private nonisolated(unsafe) static var path = ""
+    private nonisolated(unsafe) static var pending: [LeaseInvitationDelayedProtocol] = []
+    private static let lock = NSLock()
+    static func hold(_ target: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        path = target
+        pending = []
+    }
+
+    static var hasPending: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !pending.isEmpty
+    }
+
+    static func release(_ body: String) {
+        lock.lock()
+        let replies = pending
+        pending = []
+        path = ""
+        lock.unlock()
+        for instance in replies {
+            guard let url = instance.request.url,
+                  let response = HTTPURLResponse(
+                      url: url,
+                      statusCode: 200,
+                      httpVersion: nil,
+                      headerFields: ["Content-Type": "application/json"]
+                  ) else { continue }
+            instance.client?.urlProtocol(instance, didReceive: response, cacheStoragePolicy: .notAllowed)
+            instance.client?.urlProtocol(instance, didLoad: Data(body.utf8))
+            instance.client?.urlProtocolDidFinishLoading(instance)
+        }
+    }
+
+    override static func canInit(with request: URLRequest) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return request.url?.path == path
+    }
+
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.lock.lock()
+        Self.pending.append(self)
+        Self.lock.unlock()
+    }
+
+    override func stopLoading() {}
+}
+
+@MainActor
+extension TokenAcceptViewModelTests {
+    private func delayedLeaseAPI() async throws -> APIClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LeaseInvitationDelayedProtocol.self, URLProtocolStub.self]
+        return try await makeAPI(session: URLSession(configuration: config))
+    }
+
+    private func waitForLeaseReply() async throws {
+        for _ in 0..<500 {
+            if LeaseInvitationDelayedProtocol.hasPending { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Expected a held lease request")
+        throw APIError.invalidResponse
+    }
+
+    func testDeliveredLeasePreviewAfterCloseCannotRestorePrivateOffer() async throws {
+        let api = try await delayedLeaseAPI()
+        LeaseInvitationDelayedProtocol.hold("/api/v1/tenant/preview-invite")
+        defer { LeaseInvitationDelayedProtocol.release(Self.leasePreviewJSON) }
+        let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+        let pending = Task { await vm.load() }
+        try await waitForLeaseReply()
+        vm.close()
+        LeaseInvitationDelayedProtocol.release(Self.leasePreviewJSON)
+        await pending.value
+        guard case .loading = vm.state else { return XCTFail("Closed offer must stay retired") }
+        await vm.accept()
+        XCTAssertFalse(URLProtocolStub.capturedRequests.contains { $0.url?.path == "/api/v1/tenant/accept-invite" })
+    }
+
+    func testDeliveredLeaseAcceptanceAfterCloseCannotReportSuccess() async throws {
+        let api = try await delayedLeaseAPI()
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+        await vm.load()
+        LeaseInvitationDelayedProtocol.hold("/api/v1/tenant/accept-invite")
+        defer { LeaseInvitationDelayedProtocol.release(Self.leaseReceiptJSON) }
+        let pending = Task { await vm.accept() }
+        try await waitForLeaseReply()
+        vm.close()
+        LeaseInvitationDelayedProtocol.release(Self.leaseReceiptJSON)
+        await pending.value
+        guard case .loading = vm.state else { return XCTFail("Closed acceptance must stay retired") }
+    }
+
+    func testDeliveredLeaseAcceptanceAfterSignOutCannotReportSuccess() async throws {
+        let api = try await delayedLeaseAPI()
+        URLProtocolStub.stub(path: "/api/v1/tenant/preview-invite", response: .json(Self.leasePreviewJSON))
+        let vm = TokenAcceptViewModel(token: Self.leaseToken, leaseInvitation: true, api: api)
+        await vm.load()
+        LeaseInvitationDelayedProtocol.hold("/api/v1/tenant/accept-invite")
+        defer { LeaseInvitationDelayedProtocol.release(Self.leaseReceiptJSON) }
+        let pending = Task { await vm.accept() }
+        try await waitForLeaseReply()
+        await api.authProvider?.signOut()
+        LeaseInvitationDelayedProtocol.release(Self.leaseReceiptJSON)
+        await pending.value
+        if case .accepted = vm.state { XCTFail("An old account cannot publish acceptance") }
+    }
+
+    func testLeaseProofBodiesStayAuthenticatedAndOffURLs() throws {
+        for endpoint in [
+            TokenAcceptEndpoints.leaseInvite(token: Self.leaseToken),
+            TokenAcceptEndpoints.acceptLeaseInvite(token: Self.leaseToken)
+        ] {
+            XCTAssertEqual(endpoint.method, .post)
+            XCTAssertTrue(endpoint.authenticated)
+            XCTAssertTrue(endpoint.query.isEmpty)
+            XCTAssertFalse(endpoint.path.contains(Self.leaseToken))
+            let body = try XCTUnwrap(endpoint.body)
+            let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: String])
+            XCTAssertEqual(fields, ["token": Self.leaseToken])
+        }
     }
 }

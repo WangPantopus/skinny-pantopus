@@ -400,6 +400,10 @@ public struct TokenAcceptView: View {
             bg = Theme.Color.successBg
             fg = Theme.Color.success
             label = "Home invite"
+        case .leaseInvite:
+            bg = Theme.Color.successBg
+            fg = Theme.Color.success
+            label = "Lease invite"
         case .businessSeat:
             bg = Theme.Color.businessBg
             fg = Theme.Color.business

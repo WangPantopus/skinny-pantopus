@@ -921,3 +921,22 @@ final class DeepLinkRouterSessionReturnTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+extension DeepLinkRouterTests {
+    func testLeaseInvitationPreservesTheCompleteProof() throws {
+        let token = String(repeating: "a", count: 64)
+        for prefix in ["pantopus://", "https://pantopus.app/", "https://pantopus.com/"] {
+            let url = try XCTUnwrap(URL(string: "\(prefix)invite/lease/\(token)"))
+            DeepLinkRouter.shared.handle(url: url)
+            XCTAssertEqual(DeepLinkRouter.shared.pending, .invite(token: token, leaseInvitation: true))
+        }
+    }
+
+    func testLeaseInvitationRejectsIncompleteOrExtraPath() throws {
+        for path in ["invite/lease", "invite/lease/short", "invite/lease/" + String(repeating: "a", count: 64) + "/extra"] {
+            let result = try DeepLinkRouter.shared.resolve(url: XCTUnwrap(URL(string: "pantopus://" + path)))
+            guard case .unknown = result else { return XCTFail("Malformed lease link must not probe other invitation types") }
+        }
+    }
+}

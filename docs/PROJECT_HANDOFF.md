@@ -10,8 +10,8 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/lease-attachments`, starting from the accepted unit checkpoint
-`461120fca`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`codex/native-lease-invites`, starting from the accepted file checkpoint
+`a1069e1de`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -54,27 +54,37 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** finish the existing file upload compatibility repair, then continue
-private lease attachment reuse. Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40)
-at22f2884bd contains the document download security repair; its six applicable CI
-checks pass/five path-based jobs skip. Actual HTTP/SQL reproduced private bytes
-being delivered after access revocation, permission-read failure, tighter visibility,
-deletion or replacement during the storage read. The existing route now rechecks
-current permissions, visibility and file identity before delivery (101 tests/seven
-actual HTTP/SQL cases). See [document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization).
+**Next:** preserve the accepted native invitation repair, check its PR CI, then
+continue the existing private lease attachment path and remaining R05 criteria.
+Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40) at a1069e1de
+repairs existing private document delivery and generic uploads; all6 applicable
+[CI34845551425](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34845551425)
+checks pass/five path-based jobs skip. Seven document and12 generic-upload actual
+HTTP/SQL cases,115 selected tests and privacy gates pass, with exact fixture cleanup.
+See [document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization)
+and [upload evidence](VERIFICATION_FIRST_2026-09-13.md#existing-standalone-file-upload-compatibility).
 
-Following the storage callers exposed seven real generic upload failures: purpose
-names sent by existing web/native callers were outside the File type constraint.
-The current repair maps those purposes into existing categories/file_context and
-uses the existing MIME allowlist for Word files. All115 selected tests, privacy
-gates and12 actual HTTP/SQL checks pass with exact owned cleanup; see
-[upload evidence](VERIFICATION_FIRST_2026-09-13.md#existing-standalone-file-upload-compatibility).
-No screen, schema or new tracked file was added for either repair. Legacy generic
-S3 direct URLs are not accepted private lease storage. Pending applicants need
-applicant/current-authority access, not household-wide document visibility. Reuse
-existing File metadata/private storage/cleanup and the existing lease transaction.
-R05 native invitation links, installed Android/provider criteria and the remaining
-inventory stay open. No speculative replacement/renewal schema.
+Both native routers interpreted /invite/lease/<proof> as a token literally named
+lease. The Android baseline reproduces it. The native candidate keeps
+the complete proof and lease kind through the existing root navigation/invitation
+screen. It calls only authenticated recipient-only preview/acceptance bodies and
+validates the returned Home, actor and active membership. Not now closes without
+a recorded decision. Existing recovery/session lifetimes and screen designs are
+preserved. All134 selected Android routing/model/unchanged snapshot checks and
+static checks pass. All88 selected iOS tests pass. Installed iOS verifies the
+existing offer layout/dates, Not now without a decision, sign-in replay, and lost
+acceptance response recovery with the same SQL lease/occupancy. Android also passes the installed offer, Not now, saved-response-loss recovery
+and signed-out replay with no automatic acceptance or duplicate lease/occupancy.
+The installed APK hash matches the candidate; an initial IDE snapshot restored an
+older APK and was corrected before acceptance. See
+[native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-invitation-links).
+No screen, schema or new tracked file is added by the candidate.
+
+Private lease upload remains open. Legacy generic S3 direct URLs are not accepted
+private evidence storage. Pending applicants need applicant/current-authority
+access, not household-wide document visibility. Reuse existing File metadata,
+private storage/cleanup and the existing lease transaction. R05 provider criteria
+and the remaining inventory stay open. No speculative replacement/renewal schema.
 
 **Native evidence/limits:** unchanged request/display source passes50 iOS/49
 Android focused/rendering tests and static checks. Installed iOS covers Back/
@@ -88,11 +98,15 @@ populated adoption and hosted rollout remain open. Notification recovery is
 best effort and requires retry after a lost process; no eventual-push claim.
 
 **Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
-Next18110 remains active. Unit API18117 and notice API18116 are stopped.
+Next18110 remains active. Native invitation API18109 is stopped. Exact owned Home, HomeLease,
+HomeOccupancy, HomeLeaseInvite, HomeAuthority, HomeAddress and User cleanup is zero
+under native-invitation-r1. Unit API18117
+and notice API18116 are stopped.
 The unit fixture has zero remaining owned Home, User, address or command rows;
 source/evidence and exact cleanup are recorded in the private checkpoint. Earlier unit/invitation/sharing/building/
 creation/retention/native API fixtures are stopped with exact row cleanup. The
-owned iOS simulator, Android AVD and Android Studio are stopped; owner iPhone17,
+owned iOS simulator, Android AVD and this session Android Studio are stopped;
+owned Android registration is released and device data/products are retained. Owner iPhone17,
 Bill Acceptance and Home Recurrence Acceptance devices remain untouched. The
 schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserved;
 direct PostgreSQL64522 responds. Its existing Home-create function includes the

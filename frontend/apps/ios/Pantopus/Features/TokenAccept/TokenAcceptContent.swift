@@ -10,6 +10,7 @@ import Foundation
 /// Which kind of token the deep link resolved into.
 public enum InviteType: Sendable, Hashable {
     case homeInvite
+    case leaseInvite
     case businessSeat
     case guestPass
 }

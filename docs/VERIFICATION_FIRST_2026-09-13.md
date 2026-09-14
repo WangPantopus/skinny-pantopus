@@ -1533,3 +1533,58 @@ end-to-end acceptance of every consuming feature or provider access controls.
 The legacy S3 helper returns a direct object/CDN URL even for metadata marked
 private; its deployed access policy and recipient delivery remain unaccepted.
 Do not use that path for the pending tenant's private lease evidence.
+
+
+### Existing native lease invitation links
+
+Both existing native DeepLinkRouter implementations consumed the second segment
+of /invite/lease/<proof>, yielding the literal token lease. The Android routing
+baseline reproduces the lost proof under its test configurations. The candidate
+on codex/native-lease-invites starts from accepted file checkpointa1069e1de and
+preserves the complete bounded hexadecimal proof plus explicit lease kind through
+the existing root navigation and TokenAccept screen. It adds no replacement screen,
+backend transaction, table or migration. Invalid/extra path segments fail closed.
+
+Lease resolution uses only the existing authenticated recipient-only POST preview;
+it does not probe Home/seat/guest URL endpoints with the lease proof. Current
+Home, recipient account, status and dates must validate before an offer appears.
+The existing frame presents tenant role, proposed dates and receiving account.
+Acceptance requires an explicit action and a matching active lease/verified
+occupancy receipt. Not now simply closes, without falsely recording a decline.
+A lost reply can recheck the accepted invitation and explicitly retry the same
+proof through the existing SQL replay. Closing/foreground/session boundaries
+retire old results. Existing protected Home-invitation originals keep precedence.
+
+The candidate passes134 selected Android tests (108 routing,23 invitation
+model and three unchanged invitation snapshots), Detekt and ktlint. All88 selected
+iOS tests pass, including27 invitation cases, with Swift lint/format. Both native
+builds succeed. Delivered late preview/acceptance after close or account change
+never publishes an offer or success; wrong-scope and unverified receipts fail closed.
+The iOS test file keeps the shared session/store harness and adds a documented
+file-length exception, matching the existing routing-test convention. No checks
+for functional/security behavior were disabled. The initial Android default cache
+failure was an environment issue; the existing private project cache resolves it.
+The first candidate lint run identified return-count/format issues that were fixed.
+Do not report those earlier attempts as passing.
+
+Installed iOS and Android each pass the correct account/Home/calendar offer,
+Not now without any acceptance request, a committed acceptance whose response is
+replaced by503, and explicit retry recovering the identical lease/occupancy IDs.
+Each current build also passes signed-out link → login → original invitation,
+without automatic acceptance. The iOS account-removal action intentionally clears
+a prior handoff; this is separate from normal sign-in replay. All679 installed iOS
+files match the tested product, and the installed Android APK hash matches its
+candidate. The IDE initially restored an older Android APK from a saved snapshot;
+that mismatch was identified by hash and the candidate installed before acceptance.
+Native UI checks use CUA; Android works through the docked IDE panel with touch
+gestures/on-screen keys. Host text/keyboard and detached-window control were
+unreliable, not established app defects. Do not reuse a restored APK without
+checking its hash. The older installed request-approval Android journey is still
+a separate open criterion.
+
+Private evidence/runtime leases are in native-invitation-r1. API18109 used the
+actual lease router/service/SQL with synthetic login/shell and intercepted
+notifications, and owned only its exact fb22-prefixed fixtures. The two disposable
+leases do not establish real provider identity, push delivery, terms acceptance
+or hosted rollout. Private lease upload remains open.
+PR40 a1069e1de separately passes all6 applicable CI34845551425 checks/five skips.
