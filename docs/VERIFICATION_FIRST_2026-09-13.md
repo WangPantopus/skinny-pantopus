@@ -1935,3 +1935,18 @@ selection is not accepted browser evidence. The focused React tests cover input
 selection/replacement separately. The temporary route is removed, the owned tab
 is closed and Next18119 is stopped. Source binding and counters are in the private
 file-picker-browser-r1/binding.json; no browser harness is committed.
+
+## Reviewed Home chain integration into master
+
+September14: [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43) merged
+at `0cb4f3c600228dab0d09ca8d660741c93028e3f4` after all16 checks passed in
+[CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468).
+Its master tree is exactly `c67f9b687dcee56d5a7a7eb52b000a19a3d10306`, matching the
+verified head `d18120a8c`. All seven PR heads (32,38–43) remain ancestors, with no
+squash or source rewrite. PR32 is marked merged. GitHub cannot retarget an already
+incorporated stacked head to master because there are no new commits; PR38–42
+are therefore closed with integration references and their branches retained.
+No repeated journey or native build was required for an identical merge tree.
+Deployment/migration activation remains disabled, and all prior provider,
+rollout and feature-completion limits continue to apply. Private merge proof and
+fresh PR dispositions are under integration-review-r1/home-merge-*.json.
