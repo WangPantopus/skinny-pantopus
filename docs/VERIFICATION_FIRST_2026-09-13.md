@@ -2175,3 +2175,23 @@ checks/one path skip passed in [CI34886464860](https://github.com/WangPantopus/s
 Master exactly matched the tested a25b5df61 tree. The paid candidate now includes
 that actual master; the two documentation conflicts retain both scoped evidence
 sections and the current handoff. No application or schema conflict occurred.
+
+
+## Paid migration order after the Home merge
+
+The final combined PR34 safeguard correctly rejected nine paid migrations whose
+versions preceded the now-merged Home14020000. Earlier local check commands used
+an unsupported --base flag; the checker reads MIGRATION_BASE_SHA. With the actual
+base supplied correctly, the same nine ordering failures reproduce. The failed
+CI34892027685 and local diagnostics are retained.
+
+Move those nine still-unmerged migrations to20260914020100–20260914020900 in their
+original dependency order. Each SQL file is byte-for-byte identical under its new
+name; no table/function is duplicated, and nothing already in master changes.
+The explanation forward update14030000 stays after all of them. The existing
+combined local database already applied these identical bodies after the Home
+schema, so its64 contracts/function lint remain source-specific evidence. Fresh
+full baseline CI must verify the actual renamed tree before merging.
+
+Private `integration-review-r1/paid-migration-order-r1.json` records all old/new
+paths and SHA-256 identities. No hosted database or deployment was touched.

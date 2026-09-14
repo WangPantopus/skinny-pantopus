@@ -66,6 +66,14 @@ functions/106 trigger bindings, zero errors/eight existing warnings. This is loc
 combined-schema verification; fresh baseline CI, populated hosted adoption and
 provider/native end-to-end acceptance remain distinct gates.
 
+The combined CI exposed nine unmerged paid migration versions older than the
+new Home master. They are moved, byte-for-byte and in the same dependency order,
+to20260914020100–20260914020900, after Home14020000 and before the explanation
+update14030000. No migration already in master is changed, and no SQL is added or
+repeated. The earlier local commands passed an unsupported --base argument; the
+correct MIGRATION_BASE_SHA environment variable reproduces the CI failure and
+validates the repaired ordering. Fresh full-schema CI remains required.
+
 **Next:** inspect the updated draft PR34 combined CI, then continue existing
 durable tip/provider work
 and final combined CI before marking PR34 ready. Keep all original screen designs.
