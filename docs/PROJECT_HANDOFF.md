@@ -10,8 +10,8 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/landlord-unit-tools`, starting from the accepted local lease checkpoint
-`c51740fce`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`codex/lease-attachments`, starting from the accepted unit checkpoint
+`461120fca`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -45,29 +45,27 @@ pgTAP wrapper. Application-function lint has266 functions/85 trigger bindings,
 zero errors/eight existing warnings. Actual browser/SDK/HTTP/SQL and9 actual
 IndexedDB/WebCrypto checks pass within their documented synthetic boundaries.
 
-**Git/CI:** lease checkpoint c51740fce is pushed to PR38. Its fresh
-[CI34840961607](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34840961607)
-has passed its database and web/backend jobs; native jobs were still running at
-last inspection. Prior [CI34836085491](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34836085491)
-failed the generated SQL wrapper synchronization gate; other nonaggregate jobs
-passed except the unchanged Seeder skip. The existing wrapper was regenerated
-and passes actual pgTAP. Do not relabel that failed run green. After any contract
-edit run the existing wrapper sync and --check; all54 currently synchronize.
-PR39 initial CI34843214305 failed the immutable-migration gate. The original
-migration is now restored and the unchanged function update is in a forward file.
-Its corrected CI remains pending; recheck its PR/CI before
-integration. Last complete green source40866ab85 passed15 applicable checks/one
-unchanged Seeder skip in [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732).
+**Git/CI:** PR38 at c51740fce passes all15 applicable checks/one unchanged
+Seeder skip in [CI34840961607](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34840961607), including both native platforms.
+PR39 at461120fca passes all8 applicable checks/three path-based skips in
+[CI34843857113](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34843857113).
+Neither PR is merged. Preserve the earlier failed runs as failed: CI34836085491
+had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
+edit. Existing generator synchronization and the forward function update fix those
+issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** finish CI/review of existing unit tools, then trace the existing private
-lease attachment/storage path before extending it. The unit repair reuses Home,
-canonical validation, protected HomeCreateCommand recovery and existing encrypted
-browser storage. It adds one forward migration updating the existing function, with no table or
-replacement screen. The original migration stays immutable. Confirmed
-parent authority never becomes verified unit authority. Import and Generate now
-report partial progress and retry the same original after Close/reload. Afterwards
-finish R05 native invitation links, installed Android/provider criteria and the
-remaining inventory. No speculative replacement/renewal schema.
+**Next:** continue private lease attachment reuse after the existing document
+security repair. Actual HTTP/SQL reproduced private bytes being delivered after
+access revocation, permission-read failure, tighter visibility, deletion or replacement
+during the storage read. The existing download route now rechecks current permissions,
+visibility and file identity before delivery. All101 selected document/file tests and
+seven actual HTTP/SQL cases pass, with exact fixture cleanup. See the
+[document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization).
+The candidate adds no screen, table or migration. Pending rental applicants cannot
+use household-wide document sharing as lease evidence; trace existing File metadata,
+private storage and cleanup before extending the existing lease transaction.
+R05 native invitation links, installed Android/provider criteria and the remaining
+inventory stay open. No speculative replacement/renewal schema.
 
 **Native evidence/limits:** unchanged request/display source passes50 iOS/49
 Android focused/rendering tests and static checks. Installed iOS covers Back/

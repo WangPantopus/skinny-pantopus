@@ -1470,3 +1470,34 @@ root. Authentication and Google/Smarty replies are synthetic; no external provid
 acceptance or delivery is claimed. This covers existing web bulk controls, not
 unimplemented native bulk UI. R05 private attachments, native links/installed
 Android and provider acceptance, populated adoption and rollout remain open.
+
+
+### Existing private document download authorization
+
+The existing Home document download route checked access only before reading
+private object storage. Six baseline regressions returned200 and delivered the
+original bytes after access revocation, permission-read failure, visibility tightened
+to sensitive, File deletion, HomeDocument removal or byte replacement while the
+provider was responding. Actual upload/download routes, permission resolution and
+Home/File/Document/quota SQL reproduce all six failures at unit checkpoint461120fca.
+
+The same route now reuses its authorization/visibility resolver and rereads the
+document and File identity after the provider read. Revoked/restricted access returns403,
+unavailable permission checks503, removed files/documents404, and changed bytes409,
+without a file body or download header. An unchanged authorized file still delivers
+its exact bytes with the existing private/no-store and attachment headers. There
+is no screen, table, migration or alternate storage implementation.
+
+All101 selected document upload/replacement/deletion/recovery/storage and generic
+file access tests pass. Seven actual HTTP/SQL cases pass against the candidate;
+the six security cases fail against the preserved baseline. Synthetic authentication
+and an in-memory private object provider isolate the authorization boundary; this
+is not external storage-provider acceptance. Exact owned Home/File/Document/User
+counts are zero afterwards. Private evidence is retained in lease-documents-r1.
+The recheck narrows the asynchronous provider-read window; it does not claim an
+atomic transaction between database authorization and network delivery.
+
+PR38 checkpointc51740fce now passes15 applicable CI34840961607 checks/one Seeder
+skip, including native builds/tests. PR39 checkpoint461120fca passes8 applicable
+CI34843857113 checks/three path-based skips. Those PRs remain unmerged. R05 private
+lease attachment upload and remaining native/provider/adoption criteria remain open.
