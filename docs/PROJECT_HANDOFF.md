@@ -9,47 +9,55 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current state and next action
 
-**Master:** `0cb4f3c600228dab0d09ca8d660741c93028e3f4` after the authorized
-[PR43 merge](https://github.com/WangPantopus/skinny-pantopus/pull/43) on September14.
-All16 checks passed in [CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468).
-The master tree exactly matches tested candidate `d18120a8c`; all seven Home heads
-are ancestors. PR32 is also marked merged. PR38–42 were closed as already
-incorporated through PR43, with their source branches retained. No deployment or
-migration activation was performed; production/staging activation flags remain disabled.
-The three inspected Android screenshot references fix the earlier CI failure;
-assertions, tolerances, layout and application source were preserved.
+**Master:** `f6dbbe2ebdc2d63405aaac4f23cd2759ca0852be`, after reviewed
+[PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43) and
+[PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merges on September14.
+Home PR43 passed all16 checks in [CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468);
+master0cb4f3c60 exactly matched tested d18120a8c and retains all seven Home heads.
+PR32 is also marked merged; PR38–42 are closed as incorporated through PR43, with
+branches retained. File-picker PR44 passed all6 applicable checks/five path skips
+in [CI34885279768](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34885279768).
+It fixes the existing replacement/count and preview-URL lifetime defects; eight
+regressions/types/lint and bounded Chrome checks pass. Actual native chooser and
+provider upload remain outside that component acceptance. No deployment or
+migration activation was performed. Owner checkout and unrelated work are intact.
 
-**Current file-picker integration:** `/private/tmp/pantopus-file-picker-integration`,
-branch `codex/existing-file-picker-fixes`, includes the actual merged master and
-source repair `604307d38`. Its existing FileUpload component now accepts single-file
-replacement and releases local image preview URLs on replacement/removal/unmount.
-Current production Home/gig callers use multi-file mode; single-file mode is an
-existing component API with no current production caller. All8 focused tests,
-standalone web types and scoped lint pass. Bounded Chrome checks confirm image
-decoding and real object-URL cleanup, using synthetic files injected into the
-existing component. Actual native chooser selection and provider upload remain
-unaccepted. See [evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-shared-file-picker-replacement-and-preview-lifetime).
+**Active:** `/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/residency-letter-expiry`, based on the actual merged master. The existing
+issuer-list projection now reports elapsed letters as expired without waiting
+for a public verification request. Existing web/iOS/Android cards distinguish
+Expired, Revoked and unknown/unavailable statuses. Historical PDFs, explicit
+revocation and existing designs are preserved. All changes extend existing files;
+no replacement screen, table or migration. See [expiry evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-residency-letter-expiry-projection-and-labels).
 
-**Other active verification:** `/private/tmp/pantopus-home-permission-boundaries`,
-branch `codex/residency-letter-expiry`, has an uncommitted repair to the existing
-issuer-list projection and web/iOS/Android expired-status labels. Baselines
-reproduced expired letters appearing active. It reuses the existing table and
-expiry column, preserves frozen PDFs and existing layouts, and adds no migration.
-Backend12 and web20 tests plus Android unit/static checks pass; iOS and actual
-HTTP/SQL checks remain pending. R06 remains open. A web type-check attempt found
-stale generated references to the already removed private file-picker harness;
-regenerate owned route types before the final check.
+Baseline failures reproduce the list/status defects. Current checks pass12 backend,
+20 selected web,20 iOS and6 Android tests, web types/lint and native static checks.
+All8 actual local HTTP/SQL cases pass, including issuance, issuer/member/departed
+access, pre-public-read expiry, byte-identical frozen PDF, and redacted public
+verification. Chrome renders the actual existing card from the captured synthetic
+issuer-list response: Expired, Mail disabled, PDF enabled, no Revoke button.
+This browser check injects a query-cache fixture; it is not authenticated browser
+API acceptance. Native checks cover DTOs and compilation, not installed letter
+journeys. R06/R05 and the app remain open; inventory counts are unchanged.
 
-The separate `/private/tmp/pantopus-paid-gig-integration`, branch
-`codex/paid-gig-integration`, is preserved remotely at `0334ffeca`. It resolves
-PR34's nine conflicts and keeps both notification paths and current Home/session
-boundaries. Combined backend5808 and selected web59 tests pass. Its existing
-TipModal now checks the existing payment status, preserves already reconciled
-success, and retires old task/account completions; all10 regressions, types and
-scoped lint pass. Actual new master integration and combined CI remain pending.
-Cancellation presentation, durable tip creation/recovery and real provider gates
-remain open. Original PR34 stays draft at `e9ef2decbb`. Owner checkout edits,
-unrelated worktrees and the paused renewal/two-table draft are preserved.
+The first HTTP cleanup used a malformed email filter and left three fixture users;
+exact-ID/email cleanup corrected it, and all4 table counts are now zero. The
+private Next18119 is stopped, its temporary page and browser tab removed, generated
+route/build output preserved privately, and all tracked configuration restored.
+Web types pass after regenerating stale references from the earlier temporary
+file-picker page. The owned iOS simulator is already stopped; other devices are
+untouched. Private evidence lives under residency-letter-expiry-r1.
+
+**Paid candidate:** `/private/tmp/pantopus-paid-gig-integration`, branch
+`codex/paid-gig-integration`, is preserved remotely at `6d0fc6dec`. It incorporates
+PR43's merged Home master and the existing TipModal repair from0334ffeca. The
+Home merge changed only three approved PNG references and documentation; one
+append-only report conflict preserved both sections. Earlier combined backend5808,
+web59 and tip10 tests/types/lint remain source-specific evidence. PR34 itself is
+still draft at e9ef2decbb. Cancellation presentation/custom reason, durable tip
+creation/recovery, combined native/DB CI and actual provider acceptance remain
+open. Add PR44's merged master before combined CI. Paid activation stays in the
+final launch bundle. Preserve the paused renewal/two-table draft.
 
 **Current repairs reuse existing implementations.** The one existing unmerged
 service-only lease transaction uses existing leases, invitations, residents,
@@ -88,15 +96,12 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** submit the isolated file-picker repair against the actual merged master,
-verify required CI and merge if green. Continue the existing residency-letter
-expiry repair through iOS/HTTP/SQL verification, then advance PR34's preserved
-integration candidate through its remaining presentation/contract/combined-CI
-work. PR34 stays draft and paid provider activation remains part of the final
-launch bundle. Trace existing/archived web tenant attachment entry and native
-landlord readers before adding anything; the existing web “Upload your lease”
-links use the separate residency-claim flow. Do not merge those contracts or add
-screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
+**Next:** submit the bounded residency-letter expiry repair, check its required CI
+and merge only if green. Continue PR34's existing cancellation presentation and
+tip/recovery/provider gaps. R06 still needs its wider remaining lifecycle/device
+acceptance; trace existing/archived callers before adding anything. Existing web
+“Upload your lease” links use the separate residency-claim flow; do not merge
+those contracts or invent screens from an inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
 See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
 The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).

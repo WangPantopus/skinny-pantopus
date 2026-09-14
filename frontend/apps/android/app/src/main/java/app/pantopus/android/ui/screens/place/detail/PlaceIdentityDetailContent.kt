@@ -335,7 +335,13 @@ private fun LetterRow(
                         },
                 )
             } else {
-                PlaceChip(PlaceChipModel(PlaceChipTone.NEUTRAL, "Revoked"))
+                val label =
+                    when (letter.status) {
+                        ResidencyLetterStatus.EXPIRED -> "Expired"
+                        ResidencyLetterStatus.REVOKED -> "Revoked"
+                        else -> "Unavailable"
+                    }
+                PlaceChip(PlaceChipModel(PlaceChipTone.NEUTRAL, label))
             }
         }
     }

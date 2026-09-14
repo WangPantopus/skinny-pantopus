@@ -13,7 +13,7 @@
 
 import { get, post } from '../client';
 
-export type ResidencyLetterStatus = 'issued' | 'revoked';
+export type ResidencyLetterStatus = 'issued' | 'revoked' | 'expired';
 
 export interface ResidencyLetterAddress {
   line1: string;
@@ -33,6 +33,7 @@ export interface ResidencyLetter {
   letter_code: string;
   verify_url: string;
   issued_at: string;
+  expires_at?: string | null;
   revoked_at: string | null;
   pdf_sha256: string;
 }
@@ -45,6 +46,7 @@ export interface ResidencyLetterVerification {
   address?: ResidencyLetterAddress;
   purpose?: string;
   issued_at?: string;
+  expires_at?: string | null;
   revoked_at?: string | null;
 }
 
