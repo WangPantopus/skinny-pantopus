@@ -5,16 +5,19 @@ package app.pantopus.android.ui.screens.homes.verify_landlord
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.tenant.TenantHomeStatusResponse
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.tenant.TenantRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
 import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import app.pantopus.android.ui.screens.shared.wizard.WizardSecondaryCta
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -51,6 +54,8 @@ data class VerifyLandlordUiState(
      * [VerifyLandlordStep.Sent] content — every field comes off the wire.
      */
     val approvalResult: VerifyLandlordApprovalResult? = null,
+    val isLoadingStatus: Boolean = false,
+    val statusNeedsRetry: Boolean = false,
 ) {
     val isSubmitting: Boolean get() = submitState is VerifyLandlordSubmitState.Submitting
 
@@ -88,6 +93,7 @@ open class VerifyLandlordWizardViewModel
         private val networkMonitor: NetworkMonitor,
         savedStateHandle: SavedStateHandle,
         private val tenantRepository: TenantRepository,
+        sessions: HomeClaimSessionScopeFactory,
     ) : ViewModel(),
         WizardModel {
         private val homeId: String =
@@ -110,6 +116,109 @@ open class VerifyLandlordWizardViewModel
         /** One-shot navigation events the screen reacts to. */
         val pendingEvent = MutableStateFlow<VerifyLandlordOutboundEvent?>(null)
         private var pendingWork: Job? = null
+        private val session = sessions.create(viewModelScope)
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect { if (it) sessionChanged() }
+            }
+        }
+
+        private fun sessionChanged() {
+            retirePendingWork()
+            _state.update {
+                it.copy(
+                    currentStep = VerifyLandlordStep.Start,
+                    form = VerifyLandlordForm(),
+                    errors = null,
+                    approvalResult = null,
+                    statusNeedsRetry = false,
+                )
+            }
+            pendingEvent.value = VerifyLandlordOutboundEvent.Dismiss
+        }
+
+        private fun isCurrentSession(): Boolean = session.isCurrent.also { if (!it) sessionChanged() }
+
+        private suspend fun requireCurrentSession() {
+            currentCoroutineContext().ensureActive()
+            if (!session.confirmCurrent()) {
+                sessionChanged()
+                throw CancellationException("The opening session changed")
+            }
+            currentCoroutineContext().ensureActive()
+        }
+
+        fun onDeparture() = retirePendingWork()
+
+        /** Reuse the existing status read; opening this screen never creates a request. */
+        fun restoreSavedRequest() {
+            if (!isCurrentSession()) return
+            val snapshot = _state.value
+            if (snapshot.currentStep == VerifyLandlordStep.Details || snapshot.isSubmitting || snapshot.isLoadingStatus) return
+            pendingWork =
+                viewModelScope.launch {
+                    _state.update { it.copy(isLoadingStatus = true) }
+                    requireCurrentSession()
+                    val result = tenantRepository.homeStatus(homeId)
+                    currentCoroutineContext().ensureActive()
+                    requireCurrentSession()
+                    val status = (result as? NetworkResult.Success)?.data
+                    if (status != null && restoreStatus(status)) {
+                        _state.update { it.copy(isLoadingStatus = false, statusNeedsRetry = false) }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                isLoadingStatus = false,
+                                statusNeedsRetry = true,
+                                submitState =
+                                    VerifyLandlordSubmitState.Error(
+                                        "Couldn't check your saved request. Retry before continuing.",
+                                    ),
+                            )
+                        }
+                    }
+                }
+        }
+
+        @Suppress("ReturnCount")
+        private fun restoreStatus(status: TenantHomeStatusResponse): Boolean {
+            val saved = status.lease ?: return false
+            val matchesActor = status.requestContext.actorId == session.actorId
+            if (!status.matches(homeId) || !matchesActor) return false
+            val existing = saved.state == "pending" || saved.state == "active"
+            if (existing) {
+                val lease = saved.lease ?: return false
+                val matchesLease = lease.id == status.requestContext.leaseId && lease.homeId == homeId
+                val matchesState = lease.state == saved.state && lease.state == status.requestContext.leaseState
+                if (!matchesLease || !matchesState) return false
+                _state.update {
+                    it.copy(
+                        currentStep = VerifyLandlordStep.Sent,
+                        submitState = VerifyLandlordSubmitState.Submitted,
+                        approvalResult =
+                            VerifyLandlordApprovalResult(
+                                kind =
+                                    if (saved.state == "active") {
+                                        VerifyLandlordApprovalResult.Kind.AlreadyActive
+                                    } else {
+                                        VerifyLandlordApprovalResult.Kind.AlreadyPending
+                                    },
+                                submittedAt = lease.createdAt,
+                                requestedStartAt = lease.startAt,
+                                message = lease.metadata?.message,
+                            ),
+                    )
+                }
+            } else if (saved.state in setOf("none", "denied", "ended")) {
+                _state.update {
+                    it.copy(currentStep = VerifyLandlordStep.Start, submitState = VerifyLandlordSubmitState.Idle, approvalResult = null)
+                }
+            } else {
+                return false
+            }
+            return true
+        }
 
         // MARK: - WizardModel
 
@@ -135,13 +244,18 @@ open class VerifyLandlordWizardViewModel
         private fun retirePendingWork() {
             pendingWork?.cancel()
             pendingWork = null
-            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle) }
+            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle, isLoadingStatus = false) }
         }
 
         override fun onPrimary() {
+            if (!isCurrentSession() || _state.value.isLoadingStatus) return
             when (_state.value.currentStep) {
                 VerifyLandlordStep.Start -> {
-                    _state.update { it.copy(currentStep = VerifyLandlordStep.Details) }
+                    if (_state.value.statusNeedsRetry) {
+                        restoreSavedRequest()
+                    } else {
+                        _state.update { it.copy(currentStep = VerifyLandlordStep.Details) }
+                    }
                 }
                 VerifyLandlordStep.Details ->
                     if (!_state.value.isSubmitting) {
@@ -152,6 +266,7 @@ open class VerifyLandlordWizardViewModel
         }
 
         override fun onSecondary() {
+            if (!isCurrentSession()) return
             // Only the Sent step carries a secondary — the mailed-code
             // fallback (RN's "Verify with a mailed code" alternative path).
             if (_state.value.currentStep != VerifyLandlordStep.Sent) return
@@ -215,6 +330,7 @@ open class VerifyLandlordWizardViewModel
 
         @Suppress("ReturnCount")
         private suspend fun submit() {
+            requireCurrentSession()
             val snapshot = _state.value
             if (snapshot.isSubmitting) return
             val live = snapshot.form.validate()
@@ -252,8 +368,9 @@ open class VerifyLandlordWizardViewModel
                     startAt = form.startAtISO,
                     message = form.composedMessage,
                 )
-            val result = tenantRepository.requestApproval(request)
+            val result = tenantRepository.requestApproval(request, ::requireCurrentSession)
             currentCoroutineContext().ensureActive()
+            requireCurrentSession()
             when (result) {
                 is NetworkResult.Success -> {
                     val lease = result.data.lease
@@ -312,7 +429,8 @@ open class VerifyLandlordWizardViewModel
 
         /** Opens address review; this navigation never requests a mailing. */
         fun startPostcardFallback() {
-            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle) }
+            if (!isCurrentSession()) return
+            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle, isLoadingStatus = false) }
             pendingEvent.value = VerifyLandlordOutboundEvent.OpenPostcardVerification(homeId)
         }
 
@@ -326,10 +444,10 @@ open class VerifyLandlordWizardViewModel
                         progressLabel = WizardProgressLabel.StepOf(1, TOTAL_STEPS),
                         progressFraction = 1f / TOTAL_STEPS,
                         leading = WizardLeadingControl.Close,
-                        primaryCtaLabel = "Start verification",
-                        primaryCtaEnabled = true,
+                        primaryCtaLabel = if (state.statusNeedsRetry) "Retry status" else "Start verification",
+                        primaryCtaEnabled = !state.isLoadingStatus,
                         secondaryCta = null,
-                        isSubmitting = false,
+                        isSubmitting = state.isLoadingStatus,
                         dirty = state.isDirty,
                         showsProgressBar = true,
                     )
@@ -374,6 +492,7 @@ open class VerifyLandlordWizardViewModel
             revalidate: Boolean = true,
             crossinline transform: (VerifyLandlordForm) -> VerifyLandlordForm,
         ) {
+            if (!isCurrentSession()) return
             _state.update { current ->
                 val nextForm = transform(current.form)
                 val nextErrors =

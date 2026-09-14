@@ -1,5 +1,6 @@
 package app.pantopus.android.data.tenant
 
+import app.pantopus.android.data.api.models.tenant.TenantHomeStatusResponse
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutRequest
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutResponse
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
@@ -20,22 +21,22 @@ class TenantRepository
     constructor(
         private val api: TenantApi,
     ) {
+        suspend fun homeStatus(homeId: String): NetworkResult<TenantHomeStatusResponse> = safeApiCall { api.homeStatus(homeId) }
+
         /** `POST /api/v1/tenant/request-approval`. */
-        suspend fun requestApproval(body: TenantRequestApprovalRequest): NetworkResult<TenantRequestApprovalResponse> =
+        suspend fun requestApproval(
+            body: TenantRequestApprovalRequest,
+            requireCurrentSession: suspend () -> Unit = {},
+        ): NetworkResult<TenantRequestApprovalResponse> =
             safeApiCall {
+                requireCurrentSession()
                 val status = api.homeStatus(body.homeId)
                 val context = status.requestContext
-                val validLease =
-                    if (context.leaseId == null) {
-                        context.leaseState == null
-                    } else {
-                        context.leaseId.isNotBlank() && context.leaseState in setOf("pending", "active", "ended", "canceled")
-                    }
-                val matchesHome = status.homeId == body.homeId && context.homeId == body.homeId
-                if (!matchesHome || context.actorId.isBlank() || !validLease) {
+                if (!status.matches(body.homeId)) {
                     throw JsonDataException("Could not confirm this Home's lease status")
                 }
                 currentCoroutineContext().ensureActive()
+                requireCurrentSession()
                 api.requestApproval(body.copy(requestContext = context))
             }
 

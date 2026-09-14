@@ -16,7 +16,23 @@ data class TenantRequestContextDto(
 data class TenantHomeStatusResponse(
     @Json(name = "home_id") val homeId: String,
     @Json(name = "request_context") val requestContext: TenantRequestContextDto,
-)
+    val lease: LeaseStatus? = null,
+) {
+    @JsonClass(generateAdapter = true)
+    data class LeaseStatus(val state: String, val lease: TenantLeaseDto? = null)
+
+    fun matches(homeId: String): Boolean {
+        val context = requestContext
+        val validLease =
+            if (context.leaseId == null) {
+                context.leaseState == null
+            } else {
+                context.leaseId.isNotBlank() && context.leaseState in setOf("pending", "active", "ended", "canceled")
+            }
+        val matchesHome = this.homeId == homeId && context.homeId == homeId
+        return matchesHome && context.actorId.isNotBlank() && validLease
+    }
+}
 
 /**
  * DTOs for the tenant ↔ landlord approval flow

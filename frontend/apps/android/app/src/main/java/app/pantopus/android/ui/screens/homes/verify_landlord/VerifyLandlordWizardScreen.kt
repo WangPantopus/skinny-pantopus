@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -83,6 +84,11 @@ fun VerifyLandlordWizardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
 
+    DisposableEffect(viewModel) {
+        viewModel.restoreSavedRequest()
+        onDispose { viewModel.onDeparture() }
+    }
+
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
             is VerifyLandlordOutboundEvent.Dismiss -> {
@@ -102,7 +108,12 @@ fun VerifyLandlordWizardScreen(
         modifier = Modifier.testTag(VERIFY_LANDLORD_SCREEN_TAG),
     ) {
         when (state.currentStep) {
-            VerifyLandlordStep.Start -> StartStep(content = state.startContent)
+            VerifyLandlordStep.Start -> {
+                (state.submitState as? VerifyLandlordSubmitState.Error)?.let {
+                    ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message)
+                }
+                StartStep(content = state.startContent)
+            }
             VerifyLandlordStep.Details -> DetailsStep(state = state, viewModel = viewModel)
             VerifyLandlordStep.Sent ->
                 state.approvalResult?.let { result ->

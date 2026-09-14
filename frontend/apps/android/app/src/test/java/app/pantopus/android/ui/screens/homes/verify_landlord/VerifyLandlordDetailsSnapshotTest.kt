@@ -11,6 +11,8 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
@@ -18,6 +20,7 @@ import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +70,15 @@ class VerifyLandlordDetailsSnapshotTest {
             networkMonitor = networkMonitor,
             savedStateHandle = handle,
             tenantRepository = mockk(relaxed = true),
+            sessions =
+                mockk<HomeClaimSessionScopeFactory>().also { factory ->
+                    every { factory.create(any()) } returns
+                        mockk<HomeClaimSessionScope>().also { session ->
+                            every { session.isCurrent } returns true
+                            coEvery { session.confirmCurrent() } returns true
+                            every { session.invalidated } returns MutableStateFlow(false)
+                        }
+                },
         ) {
         override val submitDelayMillis: Long = 0L
     }

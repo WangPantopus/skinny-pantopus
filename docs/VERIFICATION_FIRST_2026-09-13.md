@@ -864,8 +864,10 @@ on `10c68a906` completed with 13 successful jobs, an Android static-analysis
 failure and the resulting aggregate failure, plus one unchanged Seeder skip.
 Detekt rejected a four-part condition in the existing TenantRepository. Splitting
 its Home comparison into a named boolean preserves behavior; local full detekt,
-ktlintCheck and all 28 focused Android tests now pass. This correction's remote
-CI remains required. Source, baseline/candidate results, installed-product hashes,
+ktlintCheck and all 28 focused Android tests now pass. Corrected checkpoint
+`6dbad11dea67c2da52d58e87247b2f207996ba80` passes all15 applicable checks in
+[CI34811429769](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34811429769),
+with one unchanged Seeder skip. Source, baseline/candidate results, installed-product hashes,
 fixture observations and failed attempts are retained privately in
 `ios-departure-r1`. The temporary simulator remains exclusively leased for the
 next installed checks and will be removed when those checks finish.
@@ -919,5 +921,59 @@ attachment, sample Home label and delivery-copy issues. Existing accepted web/SQ
 and native Leave Home evidence is reused. R05 stays open and the80-row inventory
 remains8closed/72partial or open. The prior pushed6dbad11de checkpoint's
 [CI34811429769](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34811429769)
-was still running at last inspection with no failures; this recovery candidate
-requires its own remote CI before integration.
+completed successfully on September14: all15 applicable jobs passed and Seeder
+was skipped. This later recovery candidate requires its own remote CI before integration.
+
+
+### Existing Android saved-request recovery
+
+Source inspection at `9c31bc40d` confirmed the same concrete gap as the installed
+iOS baseline: Android's existing status DTO discarded the returned lease, and its
+wizard did not read status when opened. The existing DTO/repository/wizard now
+recover matching pending/active requests into their existing confirmation, with
+stored dates/message and GET only. Home, actor, lease ID and state are checked.
+Failed/malformed reads keep the draft and require a status retry before Details.
+The existing error banner is reused; layouts, styles and navigation are preserved.
+
+The existing HomeClaimSessionScopeFactory binds the wizard to its opening session.
+Changed accounts clear drafts/results and dismiss. The repository checks current
+credentials before preflight and again before POST; the controller checks after
+responses. Departure cancels owned work, including screen disposal. Explicit
+cancellation checks also surround the suspended credential check, so an old read
+cannot restore a confirmation after departure. No new product/test file, service,
+endpoint, table or migration was added. Test cases share fixtures within the
+existing test file to satisfy its class-size limit.
+
+All37 model/session checks pass, including decoded pending/active recovery,
+failed/malformed reads, other-actor data, deliberately noncancelable old reads and
+POST replies, stored-session replacement before its account flow updates, and
+clearing an already visible confirmation. Both existing Start snapshots pass.
+The three existing Details snapshots pass after their synthetic session mock was
+updated to answer the new credential check. Before that fixture correction, the
+validation-error variant failed three retry attempts because validation never
+started; this was one variant, not three product defects. No golden image changed.
+Full local detekt/ktlintCheck pass. Earlier formatting/class-size check failures
+are preserved in private evidence rather than relabeled as successful runs.
+
+An isolated Android API34 baseline APK was built and installed on an exclusively
+owned temporary emulator. The computer-control surface did not establish a usable
+installed app session; login/restart/account behavior is therefore **not accepted
+on installed Android**. The emulator is stopped with its private data retained;
+no retained owner/acceptance device or shared runtime was removed. The baseline
+APK, source-bound checks, images and limitations are durably retained privately
+under `android-recovery-r1`. Provider identity/delivery and native foreground
+refresh remain separate acceptance boundaries.
+
+At September14's next check, 8,536 older tracked files and the Git link were
+missing from the temporary worktree, and its Gradle project cache lacked metadata.
+The committed head and all six edited Kotlin files survived; current files were
+copied before repair. Only missing tracked files were restored from `9c31bc40d`;
+existing files and unrelated owner work were preserved. A fresh private Gradle
+project cache restored validation. The wrapper-not-found and cache failures ran
+no tests; the precise missing-file list and retained changes are in private
+`worktree-repair.json`. The cause of the temporary-file loss was not established.
+
+Checkpoint6dbad11de's prior remote CI is green; this newer recovery source still
+requires its own remote CI. R05 remains open. Next: installed Android acceptance,
+both native foreground/indeterminate-reply behavior, and the confirmed attachment,
+Home-label and provider-copy defects through existing implementations.

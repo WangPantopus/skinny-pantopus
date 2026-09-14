@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 13, 2026 after existing landlord-flow verification. This is the
+Updated September 14, 2026 during existing landlord-flow verification. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
 the ordered backlog; dated reports preserve source-specific evidence.
 
@@ -85,7 +85,9 @@ and the Home chip uses a sample address. See [current evidence](VERIFICATION_FIR
 **CI correction:** exact10c68a906 CI34808888971 failed Android Detekt's condition
 complexity limit; all13 other non-aggregate jobs passed, with one Seeder skip.
 The equivalent simplified condition passes local full detekt/ktlint and28 focused
-Android tests. New remote CI is required before integration.
+Android tests. Corrected checkpoint `6dbad11dea67c2da52d58e87247b2f207996ba80`
+passes all15 applicable checks in [CI34811429769](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34811429769),
+with one unchanged Seeder skip. Later recovery source requires its own CI.
 
 **iOS saved-request recovery:** the installed app reproduced a committed request
 whose reply timed out; restart reopened an empty Start screen. The existing DTO now
@@ -98,9 +100,21 @@ Normal Settings logout → second synthetic login → same Home shows no prior t
 confirmation/message. These checks use synthetic auth/shell and actual tenant SQL.
 See [recovery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-saved-request-recovery).
 
-**Next:** check the existing Android recovery path, complete native background/
-foreground behavior, then repair the demonstrated attachment/Home-label/provider-copy
-defects using existing upload and status paths. The API still accepts older clients without context. The separate
+**Android saved-request recovery:** the existing DTO/repository/wizard now recover
+matching pending/active requests using GET only and reuse HomeClaimSessionScopeFactory
+to clear retired drafts/results and guard reads/POSTs with current credentials.
+All37 model/session tests and all5 unchanged Start/Details snapshots pass, with
+full detekt/ktlint checks. No new product/test file, screen or schema was added.
+Installed Android acceptance remains open: the isolated baseline APK installed,
+but computer control did not establish an app session. See [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-saved-request-recovery).
+
+**Next:** complete native background/foreground behavior and installed Android
+acceptance, then repair the demonstrated attachment/Home-label/provider-copy
+defects using existing upload and status paths. An iOS foreground patch is being
+checked locally; it is not yet accepted. The temporary worktree's missing Git link
+and8,536 older tracked files were restored from the verified head without replacing
+existing edits. A fresh private Gradle project cache replaces missing local cache
+metadata; precise repair/source evidence is preserved privately. The API still accepts older clients without context. The separate
 submitted page's notification/time estimate and native email claims remain open.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
@@ -132,8 +146,9 @@ Local acceptance is source-bound under `native-errors-r1`; this native candidate
 at `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947), with one unchanged Seeder skip. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
-SQL with synthetic authentication in an isolated renderer. Full AppShell/login,
-background lifetimes and installed lease-verification consumers are not claimed.
+SQL with synthetic authentication in an isolated renderer. Installed iOS lease checks now use the real login UI and wizard with synthetic
+auth/shell and actual tenant routes/SQL. Android installed lease acceptance, native
+foreground refresh and provider identity/delivery remain open.
 Accepted native Leave Home source is unchanged and its evidence is reused. Actual
 provider delivery, combined populated adoption and hosted rollout remain open.
 The schema-only lease DB, REST18089 and private Next18110 remain exclusively leased
