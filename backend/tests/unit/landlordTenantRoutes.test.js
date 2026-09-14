@@ -25,7 +25,18 @@
 // Express router and calling them with mock req/res.
 // ============================================================
 
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
+
+// These handlers exercise the service adapter; SQL lifecycle/security assertions
+// run in the real home-lease-decisions contract, not a second JS implementation.
+let leaseRpc;
+function decisionReply(data = { success: true, replayed: false,
+  lease: { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'tenant-1', state: 'active',
+    start_at: '2026-08-01T00:00:00.000Z', end_at: null, approved_by_subject_id: 'test-user-id' },
+  occupancy: { id: 'occ-1' } }) {
+  leaseRpc = jest.fn().mockResolvedValue({ data, error: null });
+  setRpcMock(leaseRpc);
+}
 
 // ── Mock writeAuditLog ──────────────────────────────────────
 jest.mock('../../utils/homePermissions', () => ({
@@ -498,6 +509,7 @@ describe('POST /landlord/lease/invite', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/approve', () => {
+  beforeEach(() => decisionReply());
   test('forwards reviewed dates while resolving authority from the actor', async () => {
     seedHome(); seedAuthority(); seedLease({ state: 'pending', end_at: '2027-09-01' });
     const req = mockReq({ params: { leaseId: 'lease-1' }, body: {
@@ -510,6 +522,10 @@ describe('POST /landlord/lease/:leaseId/approve', () => {
     expect(res._json.lease.start_at).toBe('2026-08-01T00:00:00.000Z');
     expect(res._json.lease.end_at).toBeNull();
     expect(res._json.lease.approved_by_subject_id).toBe('test-user-id');
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_actor_id: 'test-user-id', p_authority_id: 'auth-1',
+      p_dates: { start_at: '2026-08-01', end_at: null },
+    }));
   });
 
   test('returns lease and occupancy on success', async () => {
@@ -531,6 +547,7 @@ describe('POST /landlord/lease/:leaseId/approve', () => {
   });
 
   test('returns 400 when lease not pending', async () => {
+    decisionReply({ success: false, error: 'Cannot decide: lease is active' });
     seedHome();
     seedAuthority();
     seedLease({ state: 'active' });
@@ -654,6 +671,7 @@ describe('POST /landlord/lease/:leaseId/approve', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/deny', () => {
+  beforeEach(() => decisionReply());
   test('returns success on denial', async () => {
     seedHome();
     seedAuthority();
@@ -1070,6 +1088,7 @@ describe('POST /tenant/request-approval', () => {
 // ============================================================
 
 describe('POST /tenant/accept-invite', () => {
+  beforeEach(() => decisionReply());
   let rawToken;
 
   beforeEach(() => {
@@ -1107,6 +1126,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('refuses a revoked issuer without consuming the invite or creating access', async () => {
+    decisionReply({ success: false, error: 'Current verified authority required' });
     getTable('HomeAuthority')[0].status = 'revoked';
     const req = mockReq({ body: { token: rawToken } });
     const res = mockRes();
@@ -1121,6 +1141,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('returns 404 when token invalid', async () => {
+    decisionReply({ success: false, error: 'Invite not found' });
     const req = mockReq({
       body: { token: 'a'.repeat(64) },
     });
@@ -1131,6 +1152,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('returns 410 when invite expired', async () => {
+    decisionReply({ success: false, error: 'Invite has expired' });
     getTable('HomeLeaseInvite')[0].expires_at = new Date(Date.now() - 1000).toISOString();
 
     const req = mockReq({
@@ -1143,6 +1165,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('returns 400 when invite already accepted', async () => {
+    decisionReply({ success: false, error: 'Invite already completed' });
     getTable('HomeLeaseInvite')[0].status = 'accepted';
 
     const req = mockReq({

@@ -333,7 +333,7 @@ router.post(
       const result = await landlordAuthorityService.approveTenantRequest(leaseId, authResult.authority.id, {
         start_at: req.body.start_at,
         end_at: req.body.end_at,
-      });
+      }, userId);
 
       if (!result.success) {
         const status = result.error.includes('not found') ? 404 : 400;
@@ -386,7 +386,7 @@ router.post(
       }
 
       const result = await landlordAuthorityService.denyTenantRequest(
-        leaseId, authResult.authority.id, reason || undefined,
+        leaseId, authResult.authority.id, reason || undefined, userId,
       );
 
       if (!result.success) {

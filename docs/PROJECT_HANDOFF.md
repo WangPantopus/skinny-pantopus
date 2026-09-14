@@ -12,23 +12,34 @@ new rules in [AGENTS.md](../AGENTS.md) and the
 An open acceptance row does not authorize a rebuild. Locate existing code and
 establish a defect or concrete unmet requirement before application changes.
 
-**Active draft: `codex/lease-approval-dates` in the existing worktree.**
-It fixes the reproduced date-discard path using the existing modal, SDK, route
-and service; markup/styles/schema stay unchanged. Eight web/SDK checks, 187
-backend checks, seven actual HTTP/SQL checks and web TypeScript pass. Keep it in
-draft while the related lease/membership failures are repaired. A separate
-HTTP/SQL probe confirms a future-start lease grants access immediately, even
-without date edits. See [the draft evidence and next boundary](VERIFICATION_FIRST_2026-09-13.md#existing-lease-date-controls--september-13-draft).
-The Home branch remains at `7f2a5e6d6`; integration CI34790255357 is still running
-at this checkpoint. Do not cancel it by pushing this draft onto that branch.
-Owned date-verification HTTP/REST runtimes are stopped and synthetic rows cleaned.
+**Active draft: `codex/lease-approval-dates`, PR #38.** The date repair now uses
+an atomic database decision over the existing lease, invitation, resident,
+occupancy and audit tables. It rechecks current authority and the authenticated
+actor under locks, preserves independent current membership, applies reviewed
+lease bounds on admission/reentry, and binds completed retries to the existing
+membership generation. Approval and denial cannot both commit. There are no
+new tables or screen/layout changes. See [the transaction evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-decision-transaction--september-13-draft).
 
-**Next: repair the demonstrated lease/occupancy consistency and retry failures.**
-The existing reactivation and landlord services have now been checked with the
-actual SDK, PostgREST and isolated PostgreSQL. Approval can report success with
-no occupancy and refuse retry; reactivation can preserve an expired access end
-and leave the tenant locked out. Keep these concrete failures in R05 and reuse
-the existing tables. The proposed renewal tables remain paused.
+Local checks pass: 134 service/route checks, the real SQL lifecycle and rollback
+contract, 12 actual HTTP/SDK/SQL checks and five multi-session SQL races.
+Application function lint reports zero errors. The older 187 mocked checks are
+not the current count: admission persistence assertions now run in PostgreSQL
+instead of an always-successful mocked occupancy gateway. Existing web date
+acceptance remains source-bound and unchanged. Candidate CI is pending at this
+checkpoint. Home integration `7f2a5e6d6` now passes all 16 checks in
+[CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
+
+**Next: exercise the existing landlord browser workflow and lease ending.**
+Keep #38 draft while completing that acceptance and investigating any reproduced
+end/reentry inconsistency. Existing legacy active leases without a completed
+transaction receipt require a new review; this patch does not infer missing
+historical decisions or backfill membership. Installed client lease journeys,
+notification delivery, combined populated adoption and hosted rollout are not
+accepted by these local checks. R05 remains open; the proposed renewal tables
+remain paused. The owned schema-only lease database is exclusively leased to
+`/private/tmp/pantopus-lease-transaction-r1`; fixture rows are cleaned and its
+owned REST is running for the next browser/lease-end checks. Inspect its lease
+before reuse. Do not reuse unrelated devices, runtimes or databases.
 
 The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
 issuer's current verified authority before writes. Baseline SQL granted access

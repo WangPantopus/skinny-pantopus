@@ -1,13 +1,9 @@
 // ============================================================
-// TEST: Landlord Authority Pipeline — Integration Tests
+// TEST: Landlord service orchestration
 //
-// End-to-end flow tests covering the landlord-tenant lifecycle
-// with 5 scenarios:
-//   1. Invite → accept → occupancy created
-//   2. Request → approve → occupancy created
-//   3. Request → deny (lease canceled)
-//   4. Lease end → deactivation of all residents
-//   5. Unverified authority cannot approve
+// Invitation creation, authority verification and lease end use mocks here.
+// Admission persistence, authorization, dates and retry behavior execute the
+// real function in scripts/db/contracts/home-lease-decisions.sql.
 //
 // Uses in-memory supabaseAdmin mock with mocked occupancy and
 // notification services.
@@ -119,157 +115,8 @@ function seedPendingLease(overrides = {}) {
 // 1. Invite → accept → occupancy created
 // ============================================================
 
-describe('invite → accept → occupancy', () => {
-  test.each([
-    ['revoked', { status: 'revoked' }],
-    ['pending', { status: 'pending' }],
-    ['different home', { home_id: 'other-home' }],
-    ['different subject', { subject_id: 'other-landlord' }],
-    ['different subject type', { subject_type: 'business' }],
-    ['missing', null],
-  ])('does not consume an invite when its authority is %s', async (_label, changed) => {
-    seedHome();
-    seedVerifiedAuthority();
-    const invitation = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
-    );
-    expect(invitation.success).toBe(true);
-    if (changed) Object.assign(getTable('HomeAuthority')[0], changed);
-    else seedTable('HomeAuthority', []);
-    jest.clearAllMocks();
-
-    const result = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('verified authority');
-    expect(getTable('HomeLease')).toHaveLength(0);
-    expect(getTable('HomeLeaseResident')).toHaveLength(0);
-    expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
-    expect(mockOccAttach).not.toHaveBeenCalled();
-    expect(writeAuditLog).not.toHaveBeenCalled();
-    expect(notificationService.createNotification).not.toHaveBeenCalled();
-  });
-
-  test('authority read failure preserves the invite for a later retry', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    const invitation = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
-    );
-    const db = require('../__mocks__/supabaseAdmin');
-    const originalFrom = db.from;
-    const readFailure = jest.spyOn(db, 'from').mockImplementation((table) => {
-      const query = originalFrom(table);
-      if (table === 'HomeAuthority') {
-        query.maybeSingle = async () => ({ data: null, error: { message: 'synthetic read failure' } });
-      }
-      return query;
-    });
-    try {
-      const denied = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
-      expect(denied.success).toBe(false);
-      expect(getTable('HomeLease')).toHaveLength(0);
-      expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
-      expect(mockOccAttach).not.toHaveBeenCalled();
-    } finally {
-      readFailure.mockRestore();
-    }
-    const retried = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
-    expect(retried.success).toBe(true);
-    expect(getTable('HomeLease')).toHaveLength(1);
-    expect(getTable('HomeLeaseInvite')[0].status).toBe('accepted');
-  });
-
-  test.each(['business', 'trust'])('accepts an invite from its verified %s subject', async (subjectType) => {
-    seedHome();
-    seedVerifiedAuthority({ subject_type: subjectType });
-    const invitation = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', new Date().toISOString(),
-    );
-    const result = await service.acceptInvite(invitation.token, 'tenant-1', 'tenant@example.com');
-    expect(result.success).toBe(true);
-    expect(result.lease.approved_by_subject_type).toBe(subjectType);
-  });
-
-  test('full landlord invite flow creates active lease and occupancy', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    // Step 1: Landlord invites tenant
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com',
-      '2026-04-01T00:00:00.000Z', '2027-03-31T00:00:00.000Z',
-    );
-
-    expect(inviteResult.success).toBe(true);
-    expect(inviteResult.token).toBeTruthy();
-    expect(inviteResult.invite.status).toBe('pending');
-
-    // Step 2: Tenant accepts invite with token
-    const acceptResult = await service.acceptInvite(inviteResult.token, 'tenant-1', 'tenant@example.com');
-
-    expect(acceptResult.success).toBe(true);
-    expect(acceptResult.lease).toBeDefined();
-    expect(acceptResult.lease.state).toBe('active');
-    expect(acceptResult.lease.source).toBe('landlord_invite');
-    expect(acceptResult.lease.primary_resident_user_id).toBe('tenant-1');
-  });
-
-  test('accepting invite creates lease_resident occupancy', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const acceptResult = await service.acceptInvite(inviteResult.token, 'tenant-1', 'tenant@example.com');
-
-    expect(acceptResult.occupancy).toBeDefined();
-    expect(acceptResult.occupancy.role).toBe('lease_resident');
-    expect(acceptResult.occupancy.verification_status).toBe('verified');
-
-    // Verify occupancyAttachService called with landlord_invite method
-    expect(mockOccAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        method: 'landlord_invite',
-        roleOverride: 'lease_resident',
-      }),
-    );
-  });
-
-  test('invite updates to accepted status after acceptance', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    await service.acceptInvite(inviteResult.token, 'tenant-1', 'tenant@example.com');
-
-    const invites = getTable('HomeLeaseInvite');
-    expect(invites[0].status).toBe('accepted');
-    expect(invites[0].invitee_user_id).toBe('tenant-1');
-  });
-
-  test('invite creates HomeLeaseResident record', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    await service.acceptInvite(inviteResult.token, 'tenant-1', 'tenant@example.com');
-
-    const residents = getTable('HomeLeaseResident');
-    expect(residents).toHaveLength(1);
-    expect(residents[0].user_id).toBe('tenant-1');
-  });
-
+// Admission persistence is verified by the real home-lease-decisions SQL contract.
+describe('invitation creation', () => {
   test('invite token expires after 14 days', async () => {
     seedHome();
     seedVerifiedAuthority();
@@ -284,25 +131,6 @@ describe('invite → accept → occupancy', () => {
     expect(expiry.getTime()).toBeGreaterThan(minExpiry);
     expect(expiry.getTime()).toBeLessThan(maxExpiry);
   });
-
-  test('expired invite cannot be accepted', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    // Manually expire the invite
-    const invites = getTable('HomeLeaseInvite');
-    invites[0].expires_at = new Date(Date.now() - 1000).toISOString();
-
-    const acceptResult = await service.acceptInvite(inviteResult.token, 'tenant-1', 'tenant@example.com');
-
-    expect(acceptResult.success).toBe(false);
-    expect(acceptResult.error).toContain('expired');
-  });
-
   test('invite triggers notification for existing user', async () => {
     seedHome();
     seedVerifiedAuthority();
@@ -320,150 +148,6 @@ describe('invite → accept → occupancy', () => {
     );
   });
 });
-
-// ============================================================
-// 2. Request → approve → occupancy created
-// ============================================================
-
-describe('request → approve → occupancy', () => {
-  test('approving tenant request activates lease and creates occupancy', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(result.success).toBe(true);
-    expect(result.lease.state).toBe('active');
-    expect(result.lease.approved_by_subject_type).toBe('user');
-    expect(result.lease.approved_by_subject_id).toBe('landlord-1');
-  });
-
-  test('approved request creates occupancy via occupancyAttachService', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(result.occupancy).toBeDefined();
-    expect(mockOccAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        method: 'landlord_approval',
-        roleOverride: 'lease_resident',
-      }),
-    );
-  });
-
-  test('approved request sends notification to tenant', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_approved',
-      }),
-    );
-  });
-
-  test('approved request writes audit log', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_APPROVED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ authority_id: 'auth-1' }),
-    );
-  });
-});
-
-// ============================================================
-// 3. Request → deny (lease canceled)
-// ============================================================
-
-describe('request → deny', () => {
-  test('denying request cancels lease and stores reason', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-1', 'Failed background check');
-
-    expect(result.success).toBe(true);
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('canceled');
-    expect(leases[0].metadata.denial_reason).toBe('Failed background check');
-  });
-
-  test('denial notifies tenant with reason', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    await service.denyTenantRequest('lease-1', 'auth-1', 'Insufficient income proof');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_denied',
-        body: expect.stringContaining('Insufficient income proof'),
-      }),
-    );
-  });
-
-  test('denial works without reason (generic message)', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-1');
-
-    expect(result.success).toBe(true);
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining('denied by the property authority'),
-      }),
-    );
-  });
-
-  test('denial does not create any occupancy', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    await service.denyTenantRequest('lease-1', 'auth-1');
-
-    expect(mockOccAttach).not.toHaveBeenCalled();
-    expect(getTable('HomeOccupancy')).toHaveLength(0);
-  });
-
-  test('denial writes audit log with reason', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    await service.denyTenantRequest('lease-1', 'auth-1', 'Credit check failed');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_DENIED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ reason: 'Credit check failed' }),
-    );
-  });
-});
-
-// ============================================================
-// 4. Lease end → deactivation of all residents
-// ============================================================
 
 describe('lease end → deactivation', () => {
   beforeEach(() => {
@@ -578,66 +262,7 @@ describe('lease end → deactivation', () => {
 // 5. Unverified authority cannot approve
 // ============================================================
 
-describe('unverified authority cannot approve', () => {
-  test('pending authority cannot approve tenant request', async () => {
-    seedHome();
-    seedTable('HomeAuthority', [{
-      id: 'auth-pending',
-      home_id: 'home-1',
-      subject_type: 'user',
-      subject_id: 'landlord-1',
-      role: 'owner',
-      status: 'pending',
-      verification_tier: 'weak',
-      added_via: 'landlord_portal',
-    }]);
-    seedPendingLease();
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-pending');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('verified authority');
-  });
-
-  test('revoked authority cannot approve tenant request', async () => {
-    seedHome();
-    seedTable('HomeAuthority', [{
-      id: 'auth-revoked',
-      home_id: 'home-1',
-      subject_type: 'user',
-      subject_id: 'landlord-1',
-      role: 'owner',
-      status: 'revoked',
-      verification_tier: 'standard',
-      added_via: 'landlord_portal',
-    }]);
-    seedPendingLease();
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-revoked');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('verified authority');
-  });
-
-  test('pending authority cannot deny tenant request', async () => {
-    seedHome();
-    seedTable('HomeAuthority', [{
-      id: 'auth-pending',
-      home_id: 'home-1',
-      subject_type: 'user',
-      subject_id: 'landlord-1',
-      role: 'owner',
-      status: 'pending',
-      verification_tier: 'weak',
-      added_via: 'landlord_portal',
-    }]);
-    seedPendingLease();
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-pending');
-
-    expect(result.success).toBe(false);
-  });
-
+describe('invitation authority', () => {
   test('unverified authority cannot invite tenants', async () => {
     seedHome();
     seedTable('HomeAuthority', [{
@@ -658,22 +283,7 @@ describe('unverified authority cannot approve', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('must be verified');
   });
-
-  test('verified authority CAN approve tenant request', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedPendingLease();
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(result.success).toBe(true);
-    expect(result.lease.state).toBe('active');
-  });
 });
-
-// ============================================================
-// Authority verification flow
-// ============================================================
 
 describe('authority request → verification', () => {
   test('request creates pending authority, verify activates it', async () => {

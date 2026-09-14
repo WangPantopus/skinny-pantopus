@@ -10,8 +10,8 @@
  *   verifyAuthority(authorityId, reviewerId, decision, note?)
  *   inviteTenant(authorityId, homeId, inviteeEmail, startAt, endAt?)
  *   acceptInvite(token, userId)
- *   approveTenantRequest(leaseId, authorityId)
- *   denyTenantRequest(leaseId, authorityId, reason?)
+ *   approveTenantRequest(leaseId, authorityId, dates, actorId)
+ *   denyTenantRequest(leaseId, authorityId, reason, actorId)
  *   endLease(leaseId, initiatedBy)
  *
  * Tables used:
@@ -424,340 +424,79 @@ class LandlordAuthorityService {
    * @returns {Promise<{success: boolean, error?: string, lease?: object, occupancy?: object}>}
    */
   async acceptInvite(token, userId, userEmail) {
-    // ── 1. Hash token + look up invite ────────────────────────
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    const { data: invite } = await supabaseAdmin
-      .from('HomeLeaseInvite')
-      .select('*')
-      .eq('token_hash', tokenHash)
-      .maybeSingle();
-
-    if (!invite) {
-      return { success: false, error: 'Invite not found or invalid token' };
-    }
-
-    // ── 2. Verify not expired/revoked ─────────────────────────
-    if (invite.status !== 'pending') {
-      return { success: false, error: `Invite is ${invite.status}` };
-    }
-
-    if (new Date(invite.expires_at) < new Date()) {
-      await supabaseAdmin
-        .from('HomeLeaseInvite')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', invite.id);
-      return { success: false, error: 'Invite has expired' };
-    }
-
-    // ── 2b. Identity binding: verify invite is for this user ────
-    if (invite.invitee_email) {
-      const normalizedInviteEmail = invite.invitee_email.toLowerCase().trim();
-      const normalizedUserEmail = (userEmail || '').toLowerCase().trim();
-      if (normalizedInviteEmail !== normalizedUserEmail) {
-        return { success: false, error: 'This invitation was sent to a different email address' };
-      }
-    }
-
-    // An unexpired token is not proof that its issuer still has authority.
-    // Recheck the exact property and subject before creating any lease/access.
-    const { data: authority, error: authorityErr } = await supabaseAdmin
-      .from('HomeAuthority')
-      .select('id')
-      .eq('home_id', invite.home_id)
-      .eq('subject_type', invite.landlord_subject_type)
-      .eq('subject_id', invite.landlord_subject_id)
-      .eq('status', 'verified')
-      .maybeSingle();
-
-    if (authorityErr || !authority) {
-      return { success: false, error: 'Current verified authority required to accept this invitation' };
-    }
-
-    // ── 3. Create HomeLease (active, source: landlord_invite) ─
-    const { data: lease, error: leaseErr } = await supabaseAdmin
-      .from('HomeLease')
-      .insert({
-        home_id: invite.home_id,
-        approved_by_subject_type: invite.landlord_subject_type,
-        approved_by_subject_id: invite.landlord_subject_id,
-        primary_resident_user_id: userId,
-        start_at: invite.proposed_start || new Date().toISOString(),
-        end_at: invite.proposed_end || null,
-        state: 'active',
-        source: 'landlord_invite',
-        metadata: { invite_id: invite.id },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (leaseErr) {
-      logger.error('LandlordAuthorityService.acceptInvite: lease insert failed', {
-        inviteId: invite.id, userId, error: leaseErr.message,
-      });
-      return { success: false, error: 'Failed to create lease' };
-    }
-
-    // ── 4. Create HomeLeaseResident ───────────────────────────
-    await supabaseAdmin
-      .from('HomeLeaseResident')
-      .insert({
-        lease_id: lease.id,
-        user_id: userId,
-      });
-
-    // ── 5. Create/activate HomeOccupancy (via centralized gateway) ──
-    const occupancyAttachService = require('../occupancyAttachService');
-    const attachResult = await occupancyAttachService.attach({
-      homeId: invite.home_id,
-      userId,
-      method: 'landlord_invite',
-      roleOverride: 'lease_resident',
-      actorId: userId,
-      metadata: { source: 'landlord_invite', invite_id: invite.id, lease_id: lease.id },
+    return this._decideLease({
+      p_action: 'accept', p_actor_id: userId, p_token_hash: tokenHash,
+      p_user_email: userEmail || null,
     });
-    const occupancy = attachResult.occupancy || null;
-
-    // ── 6. Update invite status ───────────────────────────────
-    await supabaseAdmin
-      .from('HomeLeaseInvite')
-      .update({
-        status: 'accepted',
-        invitee_user_id: userId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', invite.id);
-
-    // ── 7. Audit log ──────────────────────────────────────────
-    await writeAuditLog(invite.home_id, userId, 'LEASE_INVITE_ACCEPTED', 'HomeLease', lease.id, {
-      invite_id: invite.id,
-      source: 'landlord_invite',
-    });
-
-    logger.info('LandlordAuthorityService.acceptInvite: lease created', {
-      leaseId: lease.id, inviteId: invite.id, userId,
-    });
-
-    return { success: true, lease, occupancy };
   }
 
-  // ================================================================
-  // approveTenantRequest
-  // ================================================================
-
-  /**
-   * Approve a pending tenant lease request.
-   *
-   * @param {string} leaseId
-   * @param {string} authorityId
-   * @param {{start_at?: string, end_at?: string|null}} [dates] - Reviewed dates; omitted fields retain existing values.
-   * @returns {Promise<{success: boolean, error?: string, lease?: object, occupancy?: object}>}
-   */
-  async approveTenantRequest(leaseId, authorityId, dates = {}) {
-    // ── 1. Verify authority ───────────────────────────────────
-    const { data: authority } = await supabaseAdmin
-      .from('HomeAuthority')
-      .select('*')
-      .eq('id', authorityId)
-      .maybeSingle();
-
-    if (!authority || authority.status !== 'verified') {
-      return { success: false, error: 'Valid verified authority required' };
-    }
-
-    // ── 2. Fetch lease ────────────────────────────────────────
-    const { data: lease } = await supabaseAdmin
-      .from('HomeLease')
-      .select('*')
-      .eq('id', leaseId)
-      .maybeSingle();
-
-    if (!lease) {
-      return { success: false, error: 'Lease not found' };
-    }
-
-    if (lease.state !== 'pending') {
-      return { success: false, error: `Cannot approve: lease is ${lease.state}` };
-    }
-
-    // ── 3. Verify authority matches home ──────────────────────
-    if (authority.home_id !== lease.home_id) {
-      return { success: false, error: 'Authority does not match lease home' };
-    }
-
-    const dateChanges = {};
-    if (dates.start_at !== undefined || dates.end_at !== undefined) {
-      const start = Date.parse(dates.start_at !== undefined ? dates.start_at : lease.start_at);
-      const endValue = dates.end_at !== undefined ? dates.end_at : lease.end_at;
-      const end = endValue == null ? null : Date.parse(endValue);
-      if (!Number.isFinite(start) || (end !== null && !Number.isFinite(end))) {
-        return { success: false, error: 'Lease dates must be valid dates' };
-      }
-      if (end !== null && end <= start) {
-        return { success: false, error: 'End date must be after start date' };
-      }
-      if (dates.start_at !== undefined) dateChanges.start_at = new Date(start).toISOString();
-      if (dates.end_at !== undefined) dateChanges.end_at = end === null ? null : new Date(end).toISOString();
-    }
-
-    // ── 4. Activate lease ─────────────────────────────────────
-    const { data: updated, error: updateErr } = await supabaseAdmin
-      .from('HomeLease')
-      .update({
-        ...dateChanges,
-        state: 'active',
-        approved_by_subject_type: authority.subject_type,
-        approved_by_subject_id: authority.subject_id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', leaseId)
-      .select()
-      .single();
-
-    if (updateErr) {
-      logger.error('LandlordAuthorityService.approveTenantRequest: update failed', {
-        leaseId, error: updateErr.message,
-      });
-      return { success: false, error: 'Failed to activate lease' };
-    }
-
-    // ── 5. Create/activate HomeOccupancy (via centralized gateway) ──
-    const occupancyAttachSvc = require('../occupancyAttachService');
-    const attachResult2 = await occupancyAttachSvc.attach({
-      homeId: lease.home_id,
+  /** Approve with the authenticated actor and optional reviewed dates. */
+  async approveTenantRequest(leaseId, authorityId, dates = {}, actorId) {
+    const result = await this._decideLease({
+      p_action: 'approve', p_actor_id: actorId, p_lease_id: leaseId,
+      p_authority_id: authorityId, p_dates: dates,
+    });
+    if (!result.success || result.replayed) return result;
+    const lease = result.lease;
+    await this._notifyLeaseDecision({
       userId: lease.primary_resident_user_id,
-      method: 'landlord_approval',
-      roleOverride: 'lease_resident',
-      actorId: authority.subject_id,
-      metadata: { source: 'tenant_request_approved', lease_id: leaseId, authority_id: authorityId },
+      type: 'lease_approved', title: 'Your lease has been approved',
+      body: 'Your landlord approved your lease request. Access follows your approved lease dates.',
+      icon: '🏡', link: `/homes/${lease.home_id}/dashboard`,
+      metadata: { home_id: lease.home_id, lease_id: leaseId },
     });
-    const occupancy = attachResult2.occupancy || null;
-
-    // ── 6. Notify tenant ──────────────────────────────────────
-    try {
-      const notificationService = require('../notificationService');
-      notificationService.createNotification({
-        userId: lease.primary_resident_user_id,
-        type: 'lease_approved',
-        title: 'Your lease has been approved',
-        body: 'Your landlord approved your lease request. You now have full access.',
-        icon: '🏡',
-        link: `/homes/${lease.home_id}/dashboard`,
-        metadata: { home_id: lease.home_id, lease_id: leaseId },
-      });
-    } catch (notifErr) {
-      logger.warn('LandlordAuthorityService.approveTenantRequest: notification failed (non-fatal)', {
-        error: notifErr.message,
-      });
-    }
-
-    // ── 7. Audit log ──────────────────────────────────────────
-    await writeAuditLog(lease.home_id, authority.subject_id, 'LEASE_APPROVED', 'HomeLease', leaseId, {
-      authority_id: authorityId,
-      tenant_user_id: lease.primary_resident_user_id,
-    });
-
-    logger.info('LandlordAuthorityService.approveTenantRequest: approved', {
-      leaseId, authorityId,
-    });
-
-    return { success: true, lease: updated, occupancy };
+    return result;
   }
 
-  // ================================================================
-  // denyTenantRequest
-  // ================================================================
+  /** Denial shares the approval transaction so competing decisions cannot win. */
+  async denyTenantRequest(leaseId, authorityId, reason, actorId) {
+    const result = await this._decideLease({
+      p_action: 'deny', p_actor_id: actorId, p_lease_id: leaseId,
+      p_authority_id: authorityId, p_reason: reason || null,
+    });
+    if (!result.success || result.replayed) return result;
+    const lease = result.lease;
+    await this._notifyLeaseDecision({
+      userId: lease.primary_resident_user_id,
+      type: 'lease_denied', title: 'Lease request denied',
+      body: reason ? `Your lease request was denied: ${reason}`
+        : 'Your lease request was denied by the property authority.',
+      icon: '🚫', link: `/homes/${lease.home_id}`,
+      metadata: { home_id: lease.home_id, lease_id: leaseId, reason: reason || null },
+    });
+    return result;
+  }
 
-  /**
-   * Deny a pending tenant lease request.
-   *
-   * @param {string} leaseId
-   * @param {string} authorityId
-   * @param {string} [reason]
-   * @returns {Promise<{success: boolean, error?: string}>}
-   */
-  async denyTenantRequest(leaseId, authorityId, reason) {
-    // ── 1. Verify authority ───────────────────────────────────
-    const { data: authority } = await supabaseAdmin
-      .from('HomeAuthority')
-      .select('*')
-      .eq('id', authorityId)
-      .maybeSingle();
-
-    if (!authority || authority.status !== 'verified') {
-      return { success: false, error: 'Valid verified authority required' };
-    }
-
-    // ── 2. Fetch lease ────────────────────────────────────────
-    const { data: lease } = await supabaseAdmin
-      .from('HomeLease')
-      .select('*')
-      .eq('id', leaseId)
-      .maybeSingle();
-
-    if (!lease) {
-      return { success: false, error: 'Lease not found' };
-    }
-
-    if (lease.state !== 'pending') {
-      return { success: false, error: `Cannot deny: lease is ${lease.state}` };
-    }
-
-    if (authority.home_id !== lease.home_id) {
-      return { success: false, error: 'Authority does not match lease home' };
-    }
-
-    // ── 3. Cancel lease ───────────────────────────────────────
-    const { error: updateErr } = await supabaseAdmin
-      .from('HomeLease')
-      .update({
-        state: 'canceled',
-        metadata: { ...lease.metadata, denial_reason: reason || null },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', leaseId);
-
-    if (updateErr) {
-      logger.error('LandlordAuthorityService.denyTenantRequest: update failed', {
-        leaseId, error: updateErr.message,
-      });
-      return { success: false, error: 'Failed to cancel lease' };
-    }
-
-    // ── 4. Notify tenant ──────────────────────────────────────
+  async _decideLease(params) {
+    if (!params.p_actor_id) return { success: false, error: 'Authenticated actor required' };
     try {
-      const notificationService = require('../notificationService');
-      notificationService.createNotification({
-        userId: lease.primary_resident_user_id,
-        type: 'lease_denied',
-        title: 'Lease request denied',
-        body: reason
-          ? `Your lease request was denied: ${reason}`
-          : 'Your lease request was denied by the property authority.',
-        icon: '🚫',
-        link: `/homes/${lease.home_id}`,
-        metadata: { home_id: lease.home_id, lease_id: leaseId, reason: reason || null },
+      const { data, error } = await supabaseAdmin.rpc('decide_home_lease', {
+        ...params, p_validity_days: require('../../utils/verificationAge').validityDays(),
       });
-    } catch (notifErr) {
-      logger.warn('LandlordAuthorityService.denyTenantRequest: notification failed (non-fatal)', {
-        error: notifErr.message,
+      if (error || !data || typeof data.success !== 'boolean'
+        || (!data.success && typeof data.error !== 'string')
+        || (data.success && (!data.lease || (params.p_action !== 'deny' && !data.occupancy)))) {
+        logger.error('LandlordAuthorityService: lease transaction unavailable', {
+          action: params.p_action, leaseId: params.p_lease_id, code: error?.code,
+        });
+        return { success: false, error: 'Unable to complete lease decision. Please retry.' };
+      }
+      return data;
+    } catch (error) {
+      logger.error('LandlordAuthorityService: lease transaction interrupted', {
+        action: params.p_action, leaseId: params.p_lease_id, code: error.code,
       });
+      return { success: false, error: 'Unable to complete lease decision. Please retry.' };
     }
+  }
 
-    // ── 5. Audit log ──────────────────────────────────────────
-    await writeAuditLog(lease.home_id, authority.subject_id, 'LEASE_DENIED', 'HomeLease', leaseId, {
-      authority_id: authorityId,
-      tenant_user_id: lease.primary_resident_user_id,
-      reason: reason || null,
-    });
-
-    logger.info('LandlordAuthorityService.denyTenantRequest: denied', {
-      leaseId, authorityId, reason,
-    });
-
-    return { success: true };
+  async _notifyLeaseDecision(notification) {
+    try {
+      await require('../notificationService').createNotification(notification);
+    } catch (error) {
+      logger.warn('LandlordAuthorityService: decision notification failed (non-fatal)', { code: error.code });
+    }
   }
 
   // ================================================================

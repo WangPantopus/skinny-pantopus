@@ -252,3 +252,65 @@ replacement screens. Do not overwrite applied migration history.
 Private source bindings, red/green logs, HTTP/SQL outcomes, access-window failure
 probes and runtime cleanup are preserved in the owner checkout at
 `.pantopus-recovery/audits/20260913-lease-dates/MANIFEST.json`.
+
+
+## Existing lease decision transaction — September 13 draft
+
+PR #38 now replaces the unsafe multi-write portions of the existing landlord
+service with `decide_home_lease`, called by the same routes. Both approval and
+denial receive the authenticated actor separately from the resolved authority;
+the function rechecks direct, business-seat and legacy business-team authority
+under locks. Invitation acceptance rechecks its exact verified issuer and
+recipient. Existing Home locking and permission helpers are reused. The existing
+lease/resident/occupancy/invite/audit writes commit or roll back together.
+
+The migration `20260913050000_home_lease_decisions.sql` adds a service-only
+function, **no tables**. The baseline, archived lease/invite schema, existing
+Home invitation/residency functions and paid branch were compared. The existing
+functions decide different records and cannot atomically complete this lease
+flow; extending the existing entities meets the need. Completed intent and
+membership-generation binding fit in existing service-only lease metadata.
+Inventory: 51 Home / 21 paid / 60 combined versions, 12 identical shared versions,
+zero collisions. Paused renewal draft `20260913040000` remains excluded.
+
+A new or expired/removed membership receives the approved lease start/end as
+both occupancy and access bounds. Independent current membership retains its
+role, age, flags and window. A fresh admission retains age limits and explicit
+denies; it does not revive old elevated Home overrides. Completed retries read
+the existing result, never reactivate removed/replaced/expired membership.
+Legacy active leases without this receipt are not automatically repaired.
+Approval notifications describe approved dates and are attempted only after a
+new committed decision; they remain best effort, not guaranteed delivery.
+
+Verification at this draft:
+
+- 134 service/pipeline/route checks pass. Existing admission persistence cases
+  moved to the real SQL contract instead of reproducing SQL in a JS mock.
+  Adapter checks cover authenticated identity, date omission/null, incomplete
+  replies, transport/database errors, replay and asynchronous notification failure.
+- The SQL contract passes authority, recipient, current membership, minor caps,
+  dates, frozen Home, business/trust issuer, denial, replay and generation checks.
+  Faulting the final audit write rolls back approval and invite acceptance;
+  the original request remains retryable. Its generated pgTAP wrapper uses the
+  existing CI runner. Application PL/pgSQL lint has zero errors.
+- Twelve actual Express/Joi/authority-resolver/service/SDK/PostgREST/PostgreSQL
+  checks pass, including all seven date cases, no-AddressClaim approval, actual
+  denied future access, expired-row reentry, completed retry, removed-membership
+  rejection and one-lease invite replay. Synthetic authentication and intercepted
+  notifications are explicit limits. Only reference tables remain populated.
+- Five actual multi-session SQL races pass: revocation while awaiting authority,
+  approval/denial in both queue orders, simultaneous invitation acceptance, and
+  expiry during a Home lock wait. They prove one consistent decision and no
+  premature or revoked admission. They are not installed UI or provider evidence.
+
+The existing web component/SDK source and its eight accepted tests are unchanged
+by this transaction repair. Browser workflow and lease-end acceptance remain
+next; R05 stays open. Earlier date-only and authority-guard reports retain their
+source-specific limitations and are not retroactively relabeled.
+
+Private source hashes, fixtures, logs and outcomes are preserved at the owner
+checkout's `.pantopus-recovery/audits/20260913-lease-transaction/MANIFEST.json`.
+Preparation failures (a wrong enum value, unsupported Home fixture type, short
+non-hex invite fixture token, and running Jest outside its backend cwd) are
+retained separately from passing application checks. None is claimed as a
+production failure. Candidate exact-head CI is pending at this checkpoint.
