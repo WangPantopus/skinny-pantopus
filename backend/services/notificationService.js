@@ -306,6 +306,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {string} [opts.icon] - emoji icon
  * @param {string} [opts.link] - in-app link to navigate to
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
+ * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -314,7 +315,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context }) {
+async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -346,11 +347,15 @@ async function createNotification({ userId, type, title, body, icon, link, metad
         context_type: contextType || 'personal',
         context_id: contextId || null,
         context: resolvedContext,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
       })
       .select()
       .single();
 
     if (error) {
+      // The existing unique index is the concurrency boundary. A retry must
+      // preserve read state and cannot repeat badge, socket or push emission.
+      if (idempotencyKey && error.code === '23505') return null;
       logger.error('Failed to create notification', { error: error.message, userId, type });
       return null;
     }

@@ -1,306 +1,100 @@
 # Pantopus project handoff
 
-Updated September 14, 2026 after the user resumed existing landlord-flow verification. This is the
-current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
-the ordered backlog; dated reports preserve source-specific evidence.
+Updated September14,2026. The user resumed verification and development with full
+permission: inspect existing implementations, repair demonstrated bugs/security
+issues, preserve working behavior and screen designs, then cover the remaining
+features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered backlog;
+its8 locally closed/72 partial or open rows are not an effort/completion percentage.
+Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current direction, state and next action
+## Current state and next action
 
-**Preserve working implementations and existing screen designs.** Follow
-[AGENTS.md](../AGENTS.md) and the [reconciliation](VERIFICATION_FIRST_2026-09-13.md).
-Trace the existing screen, caller, route, service and SQL before changes. An open
-acceptance row does not authorize a rebuild. Reuse unchanged accepted evidence.
+**Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/lease-approval-dates`, draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
+against `codex/home-permission-boundaries`. Owner checkout edits and all unrelated
+worktrees are preserved. The separate renewal/two-table draft remains paused.
 
-**Resumed at the user’s request.** Continue verifying existing implementations,
-repairing demonstrated functional/security defects, then the uncovered inventory.
-Installed iOS foreground recovery now passes the bounded journeys below. Latest
-local display checks pass **50 iOS /49 Android**; installed Android acceptance
-remains open. Existing layouts and working implementations are preserved.
+**Current repairs reuse existing implementations.** The one existing unmerged
+service-only lease transaction uses existing leases, invitations, residents,
+occupancies and audit records. No replacement screens or tenancy tables were
+added. Current Home/authority checks and atomic decisions protect approval,
+acceptance, end/move-out, tenant cancellation and request/invitation creation.
+Existing web/native callers preserve original dates, recover saved requests and
+retire old Home/account/departure work. Reuse unchanged accepted evidence.
 
-**Worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/lease-approval-dates`, draft [PR #38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
-against `codex/home-permission-boundaries`. It repairs demonstrated lease date,
-admission, end/move-out, tenant status/cancellation and request-submission defects.
-The same service-only transaction uses existing lease/invitation/resident/occupancy/
-audit records, current authority and Home locks. It preserves independent membership,
-makes access changes atomic, and binds completed retries to membership generations.
-Self move-out reuses the accepted removal policy. No tables or replacement screens
-were added; the only migration is still unmerged. Request creation is serialized,
-and the existing form recovers matching saved requests after lost replies.
+Recent follow-ups: existing unit vacancy reuses lease-end and per-unit authority;
+old invitation URLs reach the existing recipient screen; the existing sharing
+modal keeps the link; real multi_unit parent Homes cannot admit tenants. Creation
+now rejects invalid dates/revoked authority, saves invitation/audit atomically and
+recovers the same row from a retained random proof. Web closing/reloading uses the
+existing encrypted recovery database, scoped to origin/account/unit, and POST
+binds the observed actor. Notification recovery uses the existing Notification
+idempotency column/index; duplicate retries do not re-emit or reset a read notice.
 
-**Last pushed tenant privacy source:** `0f54be50a6fc55b13b7425686d6f3c202ef3723c`
-passes all eight applicable checks in
-[CI34799934365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34799934365),
-with three unchanged native/Seeder skips. Its 41 rendered checks, fresh types/lint,
-three actual browser/SDK/HTTP/SQL account-boundary cases and tenant lifecycle/recovery
-compatibility pass. Old Home/account responses and cancellation callbacks retire
-without exposing prior request data or erasing the new account's draft. See
-[tenant privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-homeaccount-boundaries).
+Detailed source-specific evidence is in the [verification report](VERIFICATION_FIRST_2026-09-13.md):
+[creation](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-creation-boundaries),
+[protected reload](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-retained-recovery),
+[notice recovery](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-notification-recovery).
+Latest bounded checks pass186 backend/notification tests,70 rendered web lease
+tests, standalone web TypeScript/scoped lint, full lease SQL contract and generated
+pgTAP wrapper. Application-function lint has266 functions/85 trigger bindings,
+zero errors/eight existing warnings. Actual browser/SDK/HTTP/SQL and9 actual
+IndexedDB/WebCrypto checks pass within their documented synthetic boundaries.
 
-**Completed landlord Home/account privacy follow-up.** Actual Chrome reproduced an
-old authorized response restoring tenant details and approval controls after the
-new account received HTTP403. The existing property component now retires reads,
-validates Home identity, and gates action callbacks with the current lifetime.
-Late approvals cannot refresh the new view; retired end failures cannot alert it;
-a denial prompt cannot send after an observed account change. Property-detail
-responses are private/no-store. Existing markup, layout, styles and navigation are
-preserved. All 46 relevant rendered checks, 66 route checks, standalone TypeScript,
-scoped lint (one pre-existing warning), actual stale-read/committed-approval browser
-cases and six approval/three end browser compatibility cases pass. Current landlord
-source `1a17a22a9fe5e4490e56290f1d51f50af1d0fa39` passes all eight applicable checks
-in [CI34800605686](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34800605686),
-with three unchanged native/Seeder skips. See [landlord privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-homeaccount-boundaries).
+**Git/CI:** pushed c334ea664 includes creation, sharing and building repairs.
+[CI34836085491](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34836085491)
+failed the generated SQL wrapper synchronization gate; native jobs were still
+running at last inspection. The source SQL contract had passed locally. Its
+existing wrapper is now regenerated and passes actual pgTAP, and all54 wrappers
+verify. After any scripts/db/contracts edit, run the existing
+`node scripts/db/sync-sql-contracts.cjs` and `--check` before push. Local protected
+recovery checkpoint0b25485fe and the subsequent notice repair/correction await
+push and their own CI. Do not relabel the failed run green. Last complete green
+source40866ab85 passed15 applicable checks/one unchanged Seeder skip in
+[CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732).
+Recheck branch/status/remote PR and CI before relying on these recorded heads.
 
-**Queued-request web follow-up:** actual HTTP/SQL and Chrome reproduced a delayed
-original creating a second pending lease after its retry was canceled. The existing
-status response/form now carry the actor's latest lease ID and stored state; the
-same Home-locked transaction rejects a stale observation. Actual HTTP and browser
-retry → cancel → release-original checks pass, as does an explicit fresh request.
-122 backend/48 rendered tests, types, scoped lint and the full lease SQL contract
-pass. The existing unmerged migration is updated; no new tables or screen designs.
-See [queued-request evidence](VERIFICATION_FIRST_2026-09-13.md#existing-queued-tenant-request-follow-up).
-Application source `25c6a5c01` at checkpoint `1e4d5a644` passes all 15 applicable
-[CI34806113797 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34806113797), with 1 unchanged Seeder skip.
+**Next:** connect the existing bulk-unit controls through existing canonical
+address/Home-creation implementations. The SDK import/generate URLs currently
+have no backend handlers. Existing home.js prepareHomeCreate and homeCreateService
+already validate addresses and use protected HomeCreateCommand recovery; the
+existing commit function derives parent_home_id from canonical identity. Unit
+labels alone must not fabricate validated addresses or verified unit authority.
+Trace these contracts before extending them. Afterwards finish R05 private lease
+attachments, native invitation links, installed Android/provider criteria and
+then the remaining inventory. No speculative replacement/renewal schema.
 
-**Native and second web caller follow-up:** the existing iOS/Android request
-controllers and separate web details page now read current status and submit its
-Home/actor/lease observation. Native omitted nil fields are normalized by the
-existing route. Failed/malformed status prevents submission; failures retain the
-form. The second web caller also retires account/Home/unmount work. 27 focused iOS,
-26 Android, 51 rendered web and 122 backend tests pass, with web types/lint and
-Swift checks. Actual second-page browser/SDK/HTTP/SQL checks pass for failed reads,
-a delivered old-account preflight and a persisted request. Actual HTTP/SQL also
-accepts omitted nil fields and rejects the queued original. See [caller evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-and-second-web-request-context).
+**Native evidence/limits:** unchanged request/display source passes50 iOS/49
+Android focused/rendering tests and static checks. Installed iOS covers Back/
+Discard, saved-request/account/foreground recovery, correct calendar/status,
+truthful unavailable Attach feedback and invalid-date rejection/corrected save.
+Live forms no longer insert sample files/data or promise email delivery. Real
+private lease upload remains unfinished. Installed Android app-flow control was
+unreliable after APK installation; acceptance remains open. Reuse the retained
+products; one heavy native build at a time. Provider identity/delivery, combined
+populated adoption and hosted rollout remain open. Notification recovery is
+best effort and requires retry after a lost process; no eventual-push claim.
 
-**Android departure follow-up:** a focused baseline reproduced a held status
-read still sending POST after Back/Discard. The existing controller now cancels
-pending work; the repository checks cancellation before POST, and the controller
-checks again before applying a late result. All 28 focused Android tests and
-formatting pass, including deliberately noncancelable old responses. This is
-model/repository evidence, not installed UI acceptance.
+**Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
+notice API18116 and Next18110 are active. Earlier unit/invitation/sharing/building/
+creation/retention/native API fixtures are stopped with exact row cleanup. The
+owned iOS simulator, Android AVD and Android Studio are stopped; owner iPhone17,
+Bill Acceptance and Home Recurrence Acceptance devices remain untouched. The
+schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserved;
+direct PostgreSQL64522 responds. Docker control stalls: use the private direct-SQL
+helper that verifies the exact database, not repeated Docker calls/global restart.
+Inspect the private current-checkpoint/runtime leases before reuse; clean exact
+owned fixtures afterwards. Credentials, tokens, archives and operator logs stay
+outside Git/chat. Evidence is mirrored to the owner's private
+`.pantopus-recovery/audits/20260913-lease-transaction` directory.
 
-**iOS departure follow-up:** a delayed-status baseline reproduced submission
-and Sent after Back/Discard. The existing controller/view now retire owned work
-and reject late results. All30 focused tests and Swift checks pass. Actual installed
-iOS Back → Close → Discard against real tenant routes/isolated SQL cancels the
-held status with zero POSTs, leases or notifications and returns to Hub. Login and
-shell responses are synthetic; provider identity/delivery are not verified.
-Actual UI also proves the attachment button inserts a sample lease without upload,
-and the Home chip uses a sample address. See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-request-departure).
-
-**CI correction:** exact10c68a906 CI34808888971 failed Android Detekt's condition
-complexity limit; all13 other non-aggregate jobs passed, with one Seeder skip.
-The equivalent simplified condition passes local full detekt/ktlint and28 focused
-Android tests. Corrected checkpoint `6dbad11dea67c2da52d58e87247b2f207996ba80`
-passes all15 applicable checks in [CI34811429769](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34811429769),
-with one unchanged Seeder skip. Later recovery source requires its own CI.
-
-**iOS saved-request recovery:** the installed app reproduced a committed request
-whose reply timed out; restart reopened an empty Start screen. The existing DTO now
-reads the status endpoint's existing lease, and the existing wizard restores its
-pending/active confirmation with saved dates/message using GET only. It reuses
-HomeClaimSessionScope to retire old-session reads/submissions and clear the draft.
-All36 model/network tests and7 existing screen checks pass, with Swift lint/format.
-The installed candidate recovers the same pending lease without another POST.
-Normal Settings logout → second synthetic login → same Home shows no prior tenant
-confirmation/message. These checks use synthetic auth/shell and actual tenant SQL.
-See [recovery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-saved-request-recovery).
-
-**Android saved-request recovery:** the existing DTO/repository/wizard now recover
-matching pending/active requests using GET only and reuse HomeClaimSessionScopeFactory
-to clear retired drafts/results and guard reads/POSTs with current credentials.
-All37 model/session tests and all5 unchanged Start/Details snapshots pass, with
-full detekt/ktlint checks. No new product/test file, screen or schema was added.
-Installed Android acceptance remains open: the isolated baseline APK installed,
-but computer control did not establish an app session. See [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-saved-request-recovery).
-
-**Native foreground checkpoint:** the existing lifecycle hooks now retire pending
-work when backgrounded and reread saved status when resumed, including from Details
-and Sent. A no-request result preserves an unfinished draft; failed reads require
-GET-only status retry before Submit or Done. Delayed reads/POST replies cannot
-replace a newer result. All49 selected iOS tests (42 model/network +7 rendering)
-and48 Android tests (43 model/session +5 unchanged snapshots) pass, with Swift
-lint/format and Android detekt/ktlint. Existing screen designs and schema are
-preserved. The installed iOS candidate was launched, then the user requested a
-pause after normal logout; no installed foreground transition was accepted.
-See [foreground evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-foreground-checkpoint-and-user-requested-pause).
-
-**Installed iOS foreground and display follow-up:** actual Home-button background
-and app-icon foreground preserve an unfinished Details draft, recover one request
-saved by another synthetic client, and refresh that same pending lease to active
-after the existing approval transaction. A held read times out and the existing
-idempotent GET retry recovers; these foreground actions create no POST. The journey
-exposed September1 rendering as August31 in the device time zone and active status
-still describing approval as pending. Existing native confirmations now preserve
-lease calendar dates using the web caller's UTC rule and describe saved status
-without promising notice delivery. All50 iOS/49 Android checks and relevant static
-checks pass. The installed iOS candidate displays September1 and the correct active
-note in the existing layout. See [resumed evidence](VERIFICATION_FIRST_2026-09-13.md#resumed-native-foreground-and-confirmation-display-verification).
-
-**Current native identity/attachment and date follow-up:** live forms now start
-empty with a neutral rental label. They no longer fabricate an uploaded lease,
-require that fake attachment, or append a false file-on-record claim. The existing
-attachment control reports its unavailable state; private lease upload remains
-open. Existing native/web copy describes saved status and verified-owner review
-without promising email delivery. The separate submitted URL directs users to
-Check Status rather than asserting a saved request. Existing designs are retained.
-All50 iOS/49 Android checks pass, including four visually inspected text updates
-to existing Android references; the fast-track pixels are unchanged. Android
-assembly, detekt/ktlint and Swift checks pass. Installed iOS verifies unavailable
-Attach, retained form after a real invalid-date response, then one saved request
-after correcting the date, without an attachment claim.
-
-Actual HTTP/SQL exposed February31 silently becoming March3 in Joi. The existing
-route now preserves submitted dates for PostgreSQL's existing strict validation.
-Three impossible start/end cases return400 with zero leases/notices; leap-day and
-offset-time cases still save correctly. All130 selected backend tests and29 existing
-web lease tests pass. No table, migration or replacement screen was added in this
-follow-up. Earlier foreground source9d344bcf0 passes all15 applicable checks in
-[CI34820697178](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34820697178),
-with one unchanged Seeder skip; this follow-up requires its own remote checks.
-See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-identity-attachment-and-calendar-input-follow-up).
-
-**Existing unit management follow-up:** the Units tab called a nonexistent vacancy
-endpoint, and property detail omitted child leases so occupied units looked vacant.
-It now reuses the existing confirmed lease-end operation, retains errors for retry,
-and retires callbacks after navigation. Child lease/tenant reads require the same
-verified authority subject on each unit; unavailable status is not shown as vacant.
-Actual browser/SDK/HTTP/SQL checks pass for cancellation, controlled failure/retry,
-and a delivered success after tab departure. All134 selected backend/38 rendered
-web checks, standalone types and scoped lint pass. No schema or design changes.
-See [unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-vacancy-and-child-lease-visibility).
-Native identity/date source113d4cdc6 passes all15 applicable checks with1 unchanged
-Seeder skip in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
-The unit/invitation follow-ups require their own CI after push.
-
-**Existing lease invitation acceptance:** old notification URLs now redirect to
-the existing code-entry screen. Its recipient-only preview and existing lease
-acceptance API pass actual browser/HTTP/SQL cancellation and saved-but-failed-reply
-retry with the same lease/occupancy. All144 backend/49 rendered tests, types and
-scoped lint pass. Household codes reuse the existing protected invitation page.
-No new screen/file/schema; designs remain unchanged. See [invitation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-landing-and-acceptance).
-Unit checkpoint19369aa40 and the invitation follow-up are saved together for PR#38;
-the current follow-up requires its own remote CI.
-Owned unit API18111 and invitation API18112 are stopped and their exact fixtures cleaned.
-
-**Landlord sharing and building admission follow-up:** the existing modal now
-retains a copyable invitation link, truthful delivery status, form errors and
-retired-response guards. Actual browser creation/copy/recipient acceptance passes;
-all58 rendered checks and types/lint pass. Actual HTTP also reproduced parent-
-building admission because the service checked building instead of the real
-multi_unit enum. The existing service and unmerged transaction now block it while
-preserving valid apartment admission and ending an older parent lease. All145
-backend tests, full lease SQL contract and application-function lint (zero errors)
-pass, plus7 rejection/3 apartment HTTP cases. No new file/table/screen or second
-migration. See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-sharing-and-parent-building-admission).
-Source40866ab85 is pushed and passes all15 applicable [CI34831886732 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732), with one unchanged Seeder skip.
-The later sharing/building and creation follow-ups require CI after push.
-Owned API18113/18114 are stopped and their exact fixtures cleaned.
-
-**Invitation creation follow-up:** actual reversed-date, lost-response and stale-
-authority defects are repaired through the same existing service-only transaction.
-Creation/audit are atomic, current authority is rechecked under locks, and retained
-proof retries return the same invitation without another notification attempt.
-140 backend/61 rendered tests, full SQL contract/rollback retry, types/scoped lint,
-application-function lint (zero errors) and13 HTTP/SQL cases pass. Actual Chrome
-recovers and copies the saved invitation after503 with one row and identical proof
-hashes. See [creation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-creation-boundaries).
-No new table, file or second migration. The following retained-recovery checkpoint
-extends the mounted-modal repair; older callers without a proof retain their limit.
-Owned API18115 and Next18110 are active under the existing private lease.
-
-**Retained invitation recovery:** the existing modal now saves its encrypted
-original before POST in the existing recovery database, scoped to origin/account/
-unit. Reopening restores fields without POST; explicit retry recovers the same
-link. Done cannot erase another tab's newer original. The existing property response
-supplies the authenticated actor, and POST rejects actor mismatch.70 rendered/83
-route tests, types/scoped lint,9 real browser IndexedDB/WebCrypto checks and actual
-browser reload/retry/copy/acknowledgement plus HTTP actor rejection pass. See
-[retained recovery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-retained-recovery).
-CI34836085491 at pushed c334ea664 failed because its generated SQL test wrapper was
-stale. The corrected existing wrapper passes actual pgTAP locally and all54
-wrappers synchronize. Always generate/check wrappers after SQL contract edits.
-Later CI is required; the failed run must remain recorded as failed.
-
-**Next:** verify saved invitation → in-app notice recovery after a lost database
-response, reusing existing Notification.idempotency_key and notification service;
-then connect bulk unit controls through existing canonical-address/
-Home-creation implementations. Complete remaining R05 private-attachment/provider acceptance
-through existing implementations, and installed Android recovery/foreground when
-computer control is reliable. The earlier APK installed in the owned AVD, but
-control repeatedly selected the IDE instead of the device. No installed Android
-app flow is accepted from that attempt; the latest tested APK is retained privately.
-The temporary worktree's missing
-Git link and8,536 older tracked files were restored from the verified head without
-replacing existing edits. A fresh private Gradle project cache replaces missing
-local cache metadata; precise repair/source evidence is preserved privately.
-The API still accepts older clients without context. Private lease attachment and
-actual provider delivery remain open; no upload/email capability is claimed from
-the corrected wording or synthetic fixtures.
-Do not build speculative command/renewal tables; the separate renewal draft stays
-paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
-remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
-
-**Current native candidate:** actual HTTP/SQL confirms HTTP 400 responses
-for frozen Homes, unresolved units and invalid dates, HTTP 404 for a missing Home, and HTTP 400
-for the distinct no-landlord case. The existing Android/iOS models incorrectly
-treated every HTTP 400/404 as mail fallback and every HTTP 409 as a saved lease. Android's new
-baseline regression failed; the focused candidate suite now passes. Both existing
-models now distinguish the known responses and keep other failures in the form.
-The existing detail screens also did not bind submission errors; they now reuse
-their existing error banner. Android's three detail snapshots pass, with the normal
-and validation-error goldens unchanged; only the new submission-error variant has
-a new test PNG. SwiftLint/SwiftFormat pass for the changed Swift files.
-
-All 32 focused iOS tests pass, including a screenshot/OCR check of the actual error
-banner. Both native error renderings were visually checked. One baseline build
-stopped with exit73 during disk
-exhaustion before tests ran. Removing old disposable Pantopus compiler intermediates
-restored 9.94 GiB free while preserving source, compiled products and evidence. The
-next build found an ignored, stale generated Xcode project omitting existing native
-files; it was backed up and regenerated without changing environment overlays.
-The focused iOS retry passed on a newly created, exclusively owned simulator, now
-shut down and deleted; its `native-error-runtime-lease.json` is released. Compiled
-products and result bundles are retained. Check available disk space before another
-heavy native build, and run only one at a time. No physical device was involved.
-Local acceptance is source-bound under `native-errors-r1`; this native candidate
-at `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947), with one unchanged Seeder skip. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
-
-**Verification limits:** browser evidence uses actual components, SDK, HTTP and
-SQL with synthetic authentication in an isolated renderer. Installed iOS lease checks now use the real login UI and wizard with synthetic
-auth/shell and actual tenant routes/SQL. Android installed lease/foreground
-acceptance and provider identity/delivery remain open.
-Accepted native Leave Home source is unchanged and its evidence is reused. Actual
-provider delivery, combined populated adoption and hosted rollout remain open.
-The owned native API18109 is stopped/cleaned and the iOS test device is shut down.
-Next18110 and invitation API18115 are active under the private lease; the owned
-Android AVD and Android Studio are stopped. The temporary
-Android Studio AVD registration was removed; private AVD data and shared SDK remain.
-Prior native fixtures are exactly cleaned; the active invitation fixture needs
-its own exact cleanup after acceptance. Source, compiled products and result bundles are copied outside the
-temporary worktree. The schema-only lease DB and REST18089 remain reserved to
-`/private/tmp/pantopus-lease-transaction-r1` for resume; inspect its current private
-runtime lease before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production
-activation occurred. Owner checkout edits and unrelated worktrees are preserved.
-
-**Other verified Git state:** Home integration [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32)
-is draft at `7f2a5e6d6afe18c69c646320aa13e70a2f81b999`, with all16 checks passing
-[CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
-It includes accepted #35 reviewer history, #36 private queue/presentation and #37
-current invitation-issuer authority repairs. Preserve their source-specific native
-and SQL acceptance; detailed chronology is in linked reports. Draft
-[PR #34](https://github.com/WangPantopus/skinny-pantopus/pull/34) was conflicting
-against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`; paid/provider journeys
-remain incomplete. Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
-Recheck remote state before integration. Earlier failed CI and the corrected
-masked local TypeScript failure remain recorded in the verification report.
-
-**Device cleanup requested by the user:** six completed iOS test simulators and
-two inactive Android AVDs were removed, plus a tiny unregistered AVD folder. Free
-space increased by about 6.5GiB at measurement. The owner's running iPhone17,
-iOS Bill Acceptance and Android Home Recurrence Acceptance remain, along with
-shared runtime/SDK images and saved products/evidence. The finished lease-context
-simulator lease is released. Use the retained devices for the next relevant work.
+**Other PRs:** draft [PR32](https://github.com/WangPantopus/skinny-pantopus/pull/32)
+was7f2a5e6d6 with16 checks passing and includes35/36/37. Draft
+[PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34) was conflicting against
+master at e9ef2decbb; paid/provider acceptance remains incomplete. Master was
+6a1013784d. These are recorded context, not current integration authorization or
+fresh remote inspection. The user authorized continued repairs; preserve unrelated
+work and verify current state before integration.
 
 ## Accepted native history
 

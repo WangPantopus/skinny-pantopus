@@ -1378,3 +1378,34 @@ when the database response is lost before notification dispatch. Inspect/reuse t
 existing Notification.idempotency_key and notification service before changing it.
 Bulk unit tools, private attachments, installed Android/native links, provider
 acceptance, combined adoption and hosted rollout remain open; R05 remains open.
+
+
+### Existing lease invitation notification recovery
+
+The next actual HTTP/service/SQL baseline deliberately lost the database reply
+before notification dispatch. One invitation committed; initial503 and repeated
+successful retries still produced zero in-app notices. This differs from earlier
+post-service503 tests, which had already attempted a notice.
+
+The existing Notification table already has idempotency_key and a unique index.
+The existing notification service now accepts an optional stable event key and
+quietly stops on its duplicate insert, before badge/socket/push emission. Pending
+lease-invitation retries reuse lease-invite:<invitation ID>; accepted invitations
+skip obsolete notices. Other notification callers keep their prior behavior.
+No new table, column, migration, product/test file or delivery subsystem was added.
+
+All186 selected landlord and notification preference/context tests pass. Actual
+HTTP/Joi/service/SQL plus the real Notification table verify original503 → replay:
+one invitation, one notice, followed by four concurrent retries with the same
+single notice. After marking it read and enabling push, another retry preserves
+both its identity and read state with zero push attempts. Synthetic auth and
+intercepted badge/push isolate the fixture; provider delivery is not accepted.
+The initial fixture-loader recursion was corrected privately before the baseline
+ran and changed no app source. Source-bound evidence is in lease-invitation-notice-r1.
+
+This is retry recovery, not a promise of eventual provider delivery: an invitation
+whose process stops still needs recovery, and push after a committed notice remains
+best effort. Older unkeyed historical notices are not retroactively deduplicated;
+no record cleanup is inferred. The current lease-creation transaction/branch is
+unmerged. Next: existing bulk-unit controls and canonical Home/address creation;
+private lease attachments and remaining native/provider/adoption criteria stay open.

@@ -296,8 +296,9 @@ class LandlordAuthorityService {
       p_validity_days: INVITE_EXPIRY_DAYS });
     if (!result.success) return result;
     const invite = result.invite;
-    if (!result.replayed && invite.invitee_user_id) {
+    if (invite.status === 'pending' && invite.invitee_user_id) {
       await this._notifyLeaseDecision({ userId: invite.invitee_user_id, type: 'lease_invite',
+        idempotencyKey: `lease-invite:${invite.id}`,
         title: "You've been invited to a home",
         body: `You have been invited to live at ${result.home?.name || 'a verified home'}. Review the invitation using the account it was sent to.`,
         icon: '🏠', link: `/invite/lease/${token}`, metadata: { home_id: homeId, invite_id: invite.id } });

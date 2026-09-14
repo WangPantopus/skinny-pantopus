@@ -348,11 +348,18 @@ describe('inviteTenant transaction adapter', () => {
     expect((await create(undefined, null)).success).toBe(false); expect((await create('bad-proof')).success).toBe(false);
     expect(rpc).not.toHaveBeenCalled();
   });
-  test('only a newly committed invite notifies; replay sends no second notice', async () => {
-    await create(); expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'tenant-1', type: 'lease_invite' }));
+  test('a pending invitation replay retries notification with the same existing event key', async () => {
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'tenant-1', type: 'lease_invite', idempotencyKey: 'lease-invite:invite-1' }));
     const original = rpc.getMockImplementation();
     rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.replayed = true; return reply; });
-    await create(); expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledTimes(2);
+    expect(notificationService.createNotification.mock.calls[1][0].idempotencyKey).toBe('lease-invite:invite-1');
+  });
+  test('an accepted invitation replay cannot send an obsolete pending invitation notice', async () => {
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.replayed = true; reply.data.invite.status = 'accepted'; return reply; });
+    expect((await create()).success).toBe(true);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
   test('RPC failure stays uncertain without a token', async () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: 'timeout' } });
