@@ -190,7 +190,19 @@ function LandlordExistsState({
       });
       onRequested();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to submit request');
+      // A reply can be lost after saving. Read the existing own-request status
+      // before offering another submission, and retain edits if it is unavailable
+      // or represents a different pending request.
+      try {
+        const saved = (await api.tenant.getTenantHomeStatus(homeId)).lease.lease;
+        if (saved && ['pending', 'active'].includes(saved.state)
+          && (saved.metadata?.message || '') === message.trim()
+          && (saved.state === 'active' || !startDate || saved.start_at.slice(0, 10) === startDate)) {
+          onRequested();
+          return;
+        }
+      } catch { /* Keep the existing form and its edits for retry. */ }
+      setError(extractApiError(err, 'Failed to submit request'));
     } finally {
       setLoading(false);
     }

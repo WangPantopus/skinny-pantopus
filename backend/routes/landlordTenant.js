@@ -512,7 +512,8 @@ router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
     if (leaseError) throw leaseError;
     const denied = lease?.state === 'canceled' && (lease.metadata?.landlord_decision?.intent?.action === 'deny'
       || Object.hasOwn(lease.metadata || {}, 'denial_reason'));
-    const state = !lease || (lease.state === 'canceled' && !denied) ? 'none' : denied ? 'denied' : lease.state;
+    const expired = lease?.state === 'active' && lease.end_at && Date.parse(lease.end_at) <= Date.now();
+    const state = !lease || (lease.state === 'canceled' && !denied) ? 'none' : denied ? 'denied' : expired ? 'ended' : lease.state;
     const ownLease = lease && state !== 'none' ? {
       id: lease.id, home_id: lease.home_id, state, source: lease.source,
       start_at: lease.start_at, end_at: lease.end_at, created_at: lease.created_at,
@@ -553,102 +554,12 @@ router.post(
       const userId = req.user.id;
       const { home_id, start_at, end_at, message } = req.body;
 
-      // Verify home exists
-      const { data: home } = await supabaseAdmin
-        .from('Home')
-        .select('id, name, home_type')
-        .eq('id', home_id)
-        .maybeSingle();
-
-      if (!home) {
-        return res.status(404).json({ error: 'Home not found' });
-      }
-
-      if (home.home_type === 'building') {
-        return res.status(400).json({ error: 'Cannot request lease on a building — use a unit' });
-      }
-
-      // Check that a landlord authority exists for this home
-      const { data: authority } = await supabaseAdmin
-        .from('HomeAuthority')
-        .select('id, subject_type, subject_id')
-        .eq('home_id', home_id)
-        .eq('status', 'verified')
-        .limit(1)
-        .maybeSingle();
-
-      if (!authority) {
-        return res.status(400).json({ error: 'This property has no verified landlord. Cannot submit a lease request.' });
-      }
-
-      // Check for existing pending request
-      const { data: existing } = await supabaseAdmin
-        .from('HomeLease')
-        .select('id')
-        .eq('home_id', home_id)
-        .eq('primary_resident_user_id', userId)
-        .eq('state', 'pending')
-        .maybeSingle();
-
-      if (existing) {
-        return res.status(409).json({ error: 'You already have a pending request for this home' });
-      }
-
-      // Check for existing active lease
-      const { data: activeLease } = await supabaseAdmin
-        .from('HomeLease')
-        .select('id')
-        .eq('home_id', home_id)
-        .eq('primary_resident_user_id', userId)
-        .eq('state', 'active')
-        .maybeSingle();
-
-      if (activeLease) {
-        return res.status(409).json({ error: 'You already have an active lease at this home' });
-      }
-
-      // Create pending lease
-      const { data: lease, error: leaseErr } = await supabaseAdmin
-        .from('HomeLease')
-        .insert({
-          home_id,
-          primary_resident_user_id: userId,
-          start_at: start_at || new Date().toISOString(),
-          end_at: end_at || null,
-          state: 'pending',
-          source: 'tenant_request',
-          metadata: { message: message || null },
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (leaseErr) throw leaseErr;
-
-      // Notify the landlord
-      try {
-        const notificationService = require('../services/notificationService');
-        if (authority.subject_type === 'user') {
-          notificationService.createNotification({
-            userId: authority.subject_id,
-            type: 'tenant_request',
-            title: 'New tenant request',
-            body: `A tenant has requested to live at ${home.name || 'your property'}.`,
-            icon: '📋',
-            link: `/landlord/properties/${home_id}/requests`,
-            metadata: { home_id, lease_id: lease.id },
-          });
-        }
-      } catch (notifErr) {
-        logger.warn('Tenant request notification failed (non-fatal)', { error: notifErr.message });
-      }
-
-      await writeAuditLog(home_id, userId, 'TENANT_REQUEST_SUBMITTED', 'HomeLease', lease.id, {
-        source: 'tenant_request',
-        message: message || null,
-      });
-
+      const dates = {};
+      if (start_at !== undefined) dates.start_at = start_at;
+      if (end_at !== undefined) dates.end_at = end_at;
+      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null);
+      if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+      const lease = result.lease;
       res.status(201).json({ lease });
     } catch (err) {
       logger.error('POST /tenant/request-approval failed', { error: err.message });

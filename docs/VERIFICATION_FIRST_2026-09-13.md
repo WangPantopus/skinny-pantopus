@@ -507,3 +507,62 @@ native lease-verification consumers and stale-response/account boundaries. R05
 remains open; these results do not close an entire acceptance row. The new private
 source binding and evidence are under the existing lease-transaction archive's
 `tenant-status-r1` directory; the end/legacy checkpoint is preserved separately.
+
+
+### Existing request submission and response-loss follow-up
+
+Source `08e0b617700ed8cbabc291c7d9837101b77cd518` failed
+[CI34797859243](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34797859243)
+in the pre-existing Verification Center Jest suite. Its API mock omitted the
+tenant-status method entirely and threw, while its assertions expected successful
+ordinary verification. The fixture now explicitly returns a successful no-landlord,
+no-lease result; all existing behavior assertions are retained. The failed run
+remains failed evidence. The current 37 rendered checks pass, including that
+22-case suite and 15 landlord/tenant checks.
+
+An actual HTTP/SQL barrier held both old request inserts after their preflight
+checks. Both identical requests returned 201 and created two pending leases.
+The existing request route now uses the same service-only lease transaction and
+Home lock for validation, duplicate detection, insertion and audit. The candidate
+barrier produces one 201, one 409, one pending lease and one notification attempt.
+The transaction also checks current landlord authority, frozen/unresolved-unit
+boundaries and valid dates. It grants no membership. Existing historical duplicate
+records are preserved for review, not silently deleted or guessed into a lease.
+The same unmerged migration gains optional trailing Home/message arguments;
+existing decision callers remain compatible, and no table or second migration
+was added. Only the exclusively owned schema-only DB had its old private function
+signature replaced for testing; no deployed schema/history was changed.
+
+The actual request form also stayed in a generic error after a reply was lost
+following a successful insert, and retry returned 409. It now reads the existing
+own-status endpoint after a failed response and recognizes a matching saved
+pending/active request. Actual Chrome/HTTP/SQL confirms one saved request/audit
+and transition to the existing pending view without another submission. When
+status is unavailable or the saved intent differs, the form keeps its edits and
+shows the real error. Rendered checks verify both response-loss recovery and
+retained message/date after failed recovery.
+
+An expired active lease previously selected the approved view, leaving no current
+request control. Its status now projects the existing ended state based on the
+saved end date without rewriting history. An actual browser/HTTP/SQL journey
+selects the existing request form, creates one new pending request, and preserves
+the expired historical lease. Existing layout, markup, classes and navigation
+remain intact.
+
+Current checks pass: 126 backend tests; 37 relevant rendered web tests; fresh
+standalone web TypeScript; application SQL lint and the expanded SQL contract,
+including final request-audit rollback. Scoped web lint has zero errors and two
+existing `any` warnings in the older Verification Center test fixture. All 54
+SQL wrappers verify. After the optional RPC arguments changed, the 12 actual
+HTTP/SQL admission checks and five end/move-out checks pass again; their fixture
+cleanup leaves only reference tables populated. This compatibility check does
+not replace source-specific installed/native or provider acceptance.
+
+Current request source still requires CI after push. Next: stale read/action
+results across Home/account/background changes and the legacy request API's lack
+of a durable client command ID. Saved-status recovery proves response loss for
+an existing record; it does not claim cancellation of an unseen submission or
+retirement of every queued original. Reconcile those boundaries using existing
+controllers and records before extending anything. R05, installed lease-verification
+consumers, provider delivery and combined populated adoption remain open. Evidence
+is versioned in the existing lease-transaction archive under `request-submission-r1`.

@@ -960,134 +960,29 @@ describe('GET /landlord/properties/:homeId/requests', () => {
 // ============================================================
 
 describe('POST /tenant/request-approval', () => {
-  test('creates pending lease and returns 201', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      body: {
-        home_id: 'home-1',
-        start_at: '2026-04-01T00:00:00.000Z',
-        message: 'Looking to rent this unit',
-      },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(201);
-    expect(res._json.lease).toBeDefined();
-    expect(res._json.lease.state).toBe('pending');
-    expect(res._json.lease.source).toBe('tenant_request');
+  const saved = { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'test-user-id',
+    state: 'pending', source: 'tenant_request', metadata: { message: 'Please approve me' } };
+  test('forwards own request and returns only the saved lease after the atomic decision', async () => {
+    decisionReply({ success: true, lease: saved, authority: { subject_type: 'user', subject_id: 'landlord-1' } });
+    const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1', start_at: null, message: 'Please approve me' } }), res);
+    expect(res._status).toBe(201); expect(res._json).toEqual({ lease: saved });
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'request', p_home_id: 'home-1', p_actor_id: 'test-user-id', p_dates: { start_at: null }, p_message: 'Please approve me',
+    }));
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'landlord-1', type: 'tenant_request' }));
+    expect(writeAuditLog).not.toHaveBeenCalled();
   });
-
-  test('returns 404 when home not found', async () => {
-    const req = mockReq({
-      body: { home_id: 'nonexistent' },
+  test.each([[404, 'Home not found'], [400, 'This property has no verified landlord'], [409, 'You already have a pending request for this home']])(
+    'preserves transaction error status %i without notifying', async (status, error) => {
+      decisionReply({ success: false, status, error });
+      const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1' } }), res);
+      expect(res._status).toBe(status); expect(res._json).toEqual({ error });
+      expect(notificationService.createNotification).not.toHaveBeenCalled();
     });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(404);
-  });
-
-  test('returns 400 when home is a building', async () => {
-    seedHome({ home_type: 'building' });
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(400);
-    expect(res._json.error).toContain('building');
-  });
-
-  test('returns 400 when no verified landlord authority exists', async () => {
-    seedHome();
-    // No authority seeded
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(400);
-    expect(res._json.error).toContain('no verified landlord');
-  });
-
-  test('returns 409 when tenant already has pending request', async () => {
-    seedHome();
-    seedAuthority();
-    seedTable('HomeLease', [{
-      id: 'lease-existing',
-      home_id: 'home-1',
-      primary_resident_user_id: 'test-user-id',
-      state: 'pending',
-    }]);
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(409);
-  });
-
-  test('returns 409 when tenant already has active lease', async () => {
-    seedHome();
-    seedAuthority();
-    seedTable('HomeLease', [{
-      id: 'lease-active',
-      home_id: 'home-1',
-      primary_resident_user_id: 'test-user-id',
-      state: 'active',
-    }]);
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(409);
-  });
-
-  test('sends notification to landlord and creates lease successfully', async () => {
-    seedHome();
-    seedAuthority({ subject_type: 'user', subject_id: 'landlord-1' });
-
-    const req = mockReq({
-      body: { home_id: 'home-1', message: 'Please approve me' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    // Verify the lease was created (notification is in try/catch and non-fatal)
-    expect(res._status).toBe(201);
-    expect(res._json.lease).toBeDefined();
-    expect(res._json.lease.state).toBe('pending');
-    expect(res._json.lease.source).toBe('tenant_request');
-    expect(res._json.lease.metadata.message).toBe('Please approve me');
-  });
-
-  test('writes audit log', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'test-user-id', 'TENANT_REQUEST_SUBMITTED', 'HomeLease',
-      expect.any(String),
-      expect.objectContaining({ source: 'tenant_request' }),
-    );
+  test('does not report malformed transaction success as saved', async () => {
+    decisionReply({ success: true });
+    const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1' } }), res);
+    expect(res._status).toBe(400); expect(res._json.error).toMatch(/Unable to complete/);
   });
 });
 
@@ -1211,6 +1106,12 @@ describe('existing tenant status projection', () => {
     seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled', metadata: { tenant_cancellation: { actor_id: 'test-user-id' } } });
     res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
     expect(res._json.lease).toEqual({ state: 'none', lease: null });
+  });
+  test('expired lease selects the existing ended/request state without rewriting history', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'active', end_at: '2000-01-01T00:00:00Z' });
+    const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease.state).toBe('ended');
+    expect(getTable('HomeLease')[0].state).toBe('active');
   });
   test('does not turn a failed database read into no landlord or no lease', async () => {
     const db = require('../../config/supabaseAdmin');

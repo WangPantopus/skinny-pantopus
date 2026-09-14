@@ -27,9 +27,9 @@ BEGIN
 END $$;
 DO $$ BEGIN
  PERFORM pg_temp.check_lease(NOT has_function_privilege('authenticated',
-  'public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer)','execute')
-  AND NOT has_function_privilege('anon','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer)','execute')
-  AND has_function_privilege('service_role','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer)','execute'),
+  'public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute')
+  AND NOT has_function_privilege('anon','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute')
+  AND has_function_privilege('service_role','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute'),
   'Only the service may decide a lease');
 END $$;
 SET LOCAL ROLE service_role;
@@ -293,6 +293,39 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- Request creation uses existing records and the same serialized Home scope.
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000012';a uuid:='f3190000-0000-4000-8000-000000000001';
+ t uuid:='f3190000-0000-4000-8000-000000000002';au uuid:='f3190000-0000-4000-8000-000000000024';r jsonb;l uuid;dates jsonb;
+BEGIN
+ UPDATE public."HomeAuthority" SET status='revoked' WHERE id=au;
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h)->>'success'='false','Revoked landlord cannot receive new tenant request');
+ UPDATE public."HomeAuthority" SET status='verified' WHERE id=au;
+ UPDATE public."Home" SET security_state='frozen' WHERE id=h;
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h)->>'success'='false','Frozen home cannot accept new tenant request');
+ UPDATE public."Home" SET security_state='normal' WHERE id=h;
+ FOR dates IN SELECT value FROM jsonb_array_elements('[{"start_at":"infinity"},{"start_at":"bad"},{"start_at":"2027-10-02","end_at":"2027-10-01"}]') LOOP
+   PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h,p_dates:=dates)->>'success'='false','Invalid request date must not create a pending lease');
+ END LOOP;
+ r:=public.decide_home_lease('request',t,p_home_id:=h,p_dates:='{"start_at":"2027-10-01","end_at":null}',p_message:=' Request message ');
+ l:=(r->'lease'->>'id')::uuid;
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'state'='pending'
+   AND r->'lease'->'metadata'->>'message'='Request message'
+   AND NOT EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=h)
+   AND EXISTS(SELECT FROM public."HomeAuditLog" WHERE target_id=l AND action='TENANT_REQUEST_SUBMITTED'),
+   'Request commits pending record and audit without admitting membership');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h)->>'status'='409',
+   'Existing pending request prevents another insert');
+ PERFORM public.decide_home_lease('cancel',t,l);
+ r:=public.decide_home_lease('request',t,p_home_id:=h);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'id'<>l::text,'A new request after completed cancellation has a distinct lease');
+ l:=(r->'lease'->>'id')::uuid;PERFORM public.decide_home_lease('approve',a,l,au);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h)->>'status'='409','Existing active lease prevents another pending request');
+ PERFORM public.decide_home_lease('end',a,l,au);DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+END $$;
+RESET ROLE;
+
 -- Withdrawal is a decision on the same existing pending request. It grants no
 -- membership, and its completed receipt survives a lost response.
 SET LOCAL ROLE service_role;
@@ -350,12 +383,18 @@ DROP TRIGGER contract_lease_end_fault ON public."HomeAuditLog";
 -- Fail the final audit write. Every preceding lease/resident/occupancy/invite
 -- mutation must roll back, and the same request must work after recovery.
 CREATE FUNCTION pg_temp.fail_lease_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED','LEASE_REQUEST_CANCELED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
+BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED','LEASE_REQUEST_CANCELED','TENANT_REQUEST_SUBMITTED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER contract_lease_audit_failure BEFORE INSERT ON public."HomeAuditLog"
  FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_lease_audit();
 SET LOCAL ROLE service_role;
 DO $$ DECLARE l uuid; before_occ jsonb; after_occ jsonb; r jsonb;
 BEGIN
+ BEGIN
+   PERFORM public.decide_home_lease('request','f3190000-0000-4000-8000-000000000002',p_home_id:='f3190000-0000-4000-8000-000000000011');
+   RAISE EXCEPTION 'Expected request audit fault was not reached';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract audit failure' THEN RAISE; END IF; END;
+ PERFORM pg_temp.check_lease(NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id='f3190000-0000-4000-8000-000000000011' AND state='pending'),
+   'Request audit fault rolls back the new pending lease');
  l:=pg_temp.pending_lease();
  UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id='f3190000-0000-4000-8000-000000000010';
  SELECT to_jsonb(o) INTO before_occ FROM public."HomeOccupancy" o WHERE home_id='f3190000-0000-4000-8000-000000000010';

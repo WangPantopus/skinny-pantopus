@@ -468,6 +468,21 @@ class LandlordAuthorityService {
     return result;
   }
 
+  async requestLease(homeId, actorId, dates = {}, message = null) {
+    const result = await this._decideLease({ p_action: 'request', p_actor_id: actorId,
+      p_home_id: homeId, p_dates: dates, p_message: message });
+    if (!result.success || result.replayed) return result;
+    if (result.authority?.subject_type === 'user') {
+      await this._notifyLeaseDecision({ userId: result.authority.subject_id,
+        type: 'tenant_request', title: 'New tenant request',
+        body: 'A tenant has requested lease approval for your property.', icon: '📋',
+        link: `/app/landlord/properties/${homeId}?tab=requests`,
+        metadata: { home_id: homeId, lease_id: result.lease.id },
+      });
+    }
+    return result;
+  }
+
   async cancelLeaseRequest(leaseId, actorId) {
     return this._decideLease({ p_action: 'cancel', p_actor_id: actorId, p_lease_id: leaseId });
   }

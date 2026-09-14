@@ -52,27 +52,34 @@ and later admission composition also passes four actual HTTP/SQL groups. Both
 native Leave Home screens already use the accepted removal controller; relevant
 native source is unchanged and its evidence is reused.
 
-**Current follow-up: connect the existing tenant status and cancellation flow.**
-Actual browser/HTTP verification found missing status/cancel routes behind the
-existing controls. The route module now projects only the actor's own lease and
-basic landlord availability; cancellation extends the same unmerged transaction
-and existing records. Six actual tenant browser/HTTP/SQL groups, two additional
-SQL cancellation/approval races, 128 backend tests, 13 rendered web tests, fresh
-TypeScript and application SQL lint pass. Existing error/retry views handle failed
-reads, denial reasons match saved data, and future approvals no longer promise
-full Home access. No table, additional migration or replacement screen was added.
-See [the source-specific evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-status-and-cancellation-follow-up).
-This follow-up requires CI against its pushed head; #38 remains draft.
+**Current follow-up: existing tenant status, cancellation and request recovery.**
+The status/cancel controls now reach the existing records without exposing other
+residents or raw metadata. An actual two-request race then reproduced two pending
+leases; request creation now shares the same lease transaction/Home lock and
+produces one saved request. The existing form recovers a lost successful reply by
+reading its matching saved status, retains edits if status is unavailable, and
+uses the existing request state after an expired lease. No table, second migration,
+replacement screen or design change was added.
 
-**Next: verify existing request submission and uncertain-reply recovery, then
-remaining native lease-verification consumers and stale-response/account
-boundaries.** The actual components/SDK/HTTP/SQL run in an isolated renderer;
-full AppShell/login and installed-native lease verification are not claimed.
-Provider delivery, combined populated adoption and hosted rollout remain open.
-R05 remains open and proposed renewal tables stay paused. The schema-only lease
-database and REST are exclusively leased to `/private/tmp/pantopus-lease-transaction-r1`;
-fixtures are cleaned after every check. Inspect the private runtime lease before
-reuse and preserve other runtimes.
+Current local checks: 126 backend tests, 37 relevant rendered web tests, fresh
+TypeScript, application SQL lint/rollback contract, two-request HTTP/SQL barrier,
+actual request-recovery and expired-lease browser journeys, and compatibility
+rechecks of the 12 admission/five end HTTP/SQL cases pass. The prior tenant CI
+`08e0b6177` failed an old verification test fixture that omitted the tenant API;
+it now supplies a successful no-landlord/no-lease result with all behavior
+assertions retained. This follow-up requires CI against its pushed head; #38
+remains draft. See [the request evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-request-submission-and-response-loss-follow-up).
+
+**Next: stale read/action results across Home/account/background changes, and
+the legacy request API's lack of a durable client command ID.** Reuse existing
+controllers and records; saved-status response-loss recovery does not establish
+cancellation of an unseen request or retirement of every queued original.
+The actual components/SDK/HTTP/SQL run in an isolated renderer; full AppShell/login
+and installed-native lease verification are not claimed. Provider delivery,
+combined populated adoption and hosted rollout remain open. R05 stays open and
+proposed renewal tables stay paused. The schema-only lease database, REST18089
+and private Next18110 are exclusively leased to `/private/tmp/pantopus-lease-transaction-r1`;
+fixtures are cleaned after checks. Inspect its private lease before reuse.
 
 The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
 issuer's current verified authority before writes. Baseline SQL granted access

@@ -123,3 +123,32 @@ test('approved tenant view displays the reviewed calendar date without promising
   expect(screen.getByText('Lease Approved')).toBeTruthy();
   expect(screen.queryByText(/You now have full access/)).toBeNull();
 });
+
+
+test('request form recovers its own saved intent after a lost reply', async () => {
+  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
+    .mockResolvedValue({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'pending',
+      lease: { id: 'lease-1', state: 'pending', start_at: '2026-10-01', created_at: '2026-09-01', metadata: { message: null } } } });
+  jest.mocked(post).mockRejectedValueOnce({ message: 'Connection interrupted' });
+  render(<LandlordVerificationFlow homeId="home-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request Approval' }));
+  expect(await screen.findByText('Waiting for approval')).toBeTruthy();
+  expect(post).toHaveBeenCalledTimes(1);
+});
+
+test('request form retains its edits when a lost reply cannot be resolved', async () => {
+  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
+    .mockRejectedValue({ message: 'Status unavailable' });
+  jest.mocked(post).mockRejectedValueOnce({ message: 'Connection interrupted' });
+  const { container } = render(<LandlordVerificationFlow homeId="home-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a message or move-in date (optional)' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep my message' } });
+  const date = container.querySelector('input[type=date]') as HTMLInputElement;
+  fireEvent.change(date, { target: { value: '2099-10-01' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Request Approval' }));
+  expect(await screen.findByText('Connection interrupted')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Request Approval' })).toBeTruthy();
+  expect(screen.getByRole('textbox')).toHaveValue('Keep my message');
+  expect(date.value).toBe('2099-10-01');
+  expect(post).toHaveBeenCalledTimes(1);
+});
