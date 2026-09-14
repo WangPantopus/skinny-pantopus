@@ -1,158 +1,11 @@
--- Recoverable Home onboarding. Reserve original intent before provider work;
--- fence delayed workers and retain outcome identities after Home deletion.
--- Backwards compatible: yes. Additive service-only commands do not rewrite
--- existing Homes, duplicate addresses, grants or historical migration ledgers.
+-- Backwards compatible: yes. Existing individual Home commands are unchanged.
+-- Forward-only update of the existing Home-create function for the building's
+-- unit tools. No table or relationship is created. Original migration bytes stay
+-- immutable so databases with prior history receive the same final function.
+BEGIN;
 SET LOCAL lock_timeout = '5s';
 
-CREATE TABLE public."HomeCreateCommand" (
-  actor_user_id uuid NOT NULL,
-  request_id uuid NOT NULL,
-  intent_hash text CHECK(intent_hash ~ '^[a-f0-9]{64}$'),
-  state text NOT NULL CHECK(state IN ('pending','completed','rejected','cancelled')),
-  lease_id uuid,
-  lease_expires_at timestamptz,
-  home_id uuid,
-  ownership_claim_id uuid,
-  creator_role text CHECK(creator_role IN ('owner','renter','household','property_manager')),
-  access_secret_ids uuid[] NOT NULL DEFAULT '{}',
-  error_code text,
-  error_status integer,
-  conflict_home_id uuid,
-  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  PRIMARY KEY(actor_user_id,request_id),
-  CHECK((state='completed')=(home_id IS NOT NULL)),
-  CHECK((state='completed')=(creator_role IS NOT NULL)),
-  CHECK((lease_id IS NULL)=(lease_expires_at IS NULL)),
-  CHECK(lease_id IS NULL OR state='pending'),
-  CHECK(intent_hash IS NOT NULL OR state='cancelled'),
-  CHECK((error_code IS NULL)=(error_status IS NULL)),
-  CHECK((state='rejected')=(error_code IS NOT NULL AND error_status IS NOT NULL)),
-  CHECK(conflict_home_id IS NULL OR (state='rejected' AND error_code='HOME_ALREADY_EXISTS')),
-  CHECK(error_status IS NULL OR error_status IN (400,403,404,409,422)),
-  CHECK(error_code IS NULL OR error_code ~ '^[A-Z][A-Z0-9_]{1,79}$')
-);
--- Deliberately no Home/claim/access-record FK: deletion must not erase the
--- original outcome or turn a retry into another creation. No request body,
--- address, access code or provider result is retained in this table.
-ALTER TABLE public."HomeCreateCommand" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public."HomeCreateCommand" FROM PUBLIC,anon,authenticated;
-GRANT ALL ON TABLE public."HomeCreateCommand" TO service_role;
-
-CREATE FUNCTION public.home_create_command_projection(c public."HomeCreateCommand")
-RETURNS jsonb LANGUAGE sql STABLE SET search_path=public,pg_temp AS $$
-  SELECT jsonb_build_object('ok',true,'state',c.state,
-    'command',jsonb_build_object('actor_id',c.actor_user_id,'request_id',c.request_id,
-      'created_at',c.created_at,'updated_at',c.updated_at),
-    'home_id',c.home_id,'ownership_claim_id',c.ownership_claim_id,
-    'role',c.creator_role,
-    'access_secret_ids',to_jsonb(c.access_secret_ids),
-    'code',c.error_code,'status',c.error_status,'conflict_home_id',c.conflict_home_id);
-$$;
-
-CREATE FUNCTION public.begin_home_create_command(p_actor_id uuid,p_request_id uuid,p_intent jsonb)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE c public."HomeCreateCommand"%ROWTYPE; v_hash text; v_now timestamptz;
-BEGIN
-  IF p_actor_id IS NULL OR p_request_id IS NULL OR jsonb_typeof(p_intent) IS DISTINCT FROM 'object' THEN
-    RETURN '{"ok":false,"code":"HOME_CREATE_INVALID","status":400}'::jsonb; END IF;
-  v_hash:=encode(sha256(convert_to(p_intent::text,'UTF8')),'hex');
-  PERFORM pg_advisory_xact_lock(hashtextextended('home-create-actor:'||p_actor_id::text,0));
-  PERFORM 1 FROM public."User" WHERE id=p_actor_id FOR SHARE;
-  IF NOT FOUND THEN RETURN '{"ok":false,"code":"HOME_CREATE_ACCOUNT_UNAVAILABLE","status":403}'::jsonb; END IF;
-  SELECT * INTO c FROM public."HomeCreateCommand" WHERE actor_user_id=p_actor_id AND request_id=p_request_id FOR UPDATE;
-  IF FOUND THEN
-    -- Cancellation may arrive before a delayed POST has reserved its intent.
-    IF c.intent_hash IS NOT NULL AND c.intent_hash<>v_hash THEN
-      RETURN '{"ok":false,"code":"HOME_CREATE_INTENT_CONFLICT","status":409}'::jsonb; END IF;
-    IF c.state<>'pending' THEN RETURN public.home_create_command_projection(c); END IF;
-    IF c.lease_expires_at>clock_timestamp() THEN
-      RETURN public.home_create_command_projection(c)||'{"working":true}'::jsonb; END IF;
-  ELSE
-    INSERT INTO public."HomeCreateCommand"(actor_user_id,request_id,intent_hash,state)
-      VALUES(p_actor_id,p_request_id,v_hash,'pending') RETURNING * INTO c;
-  END IF;
-  v_now:=clock_timestamp();
-  UPDATE public."HomeCreateCommand" SET lease_id=gen_random_uuid(),
-    lease_expires_at=v_now+interval '120 seconds',updated_at=v_now
-    WHERE actor_user_id=p_actor_id AND request_id=p_request_id RETURNING * INTO c;
-  -- The lease stays between backend and database. API clients only receive
-  -- the safe command projection and can retry the same immutable intent.
-  RETURN public.home_create_command_projection(c)||jsonb_build_object('worker_lease_id',c.lease_id);
-END $$;
-
-CREATE FUNCTION public.get_home_create_command(p_actor_id uuid,p_request_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE c public."HomeCreateCommand"%ROWTYPE;
-BEGIN
-  IF p_actor_id IS NULL OR p_request_id IS NULL THEN
-    RETURN '{"ok":false,"code":"HOME_CREATE_INVALID","status":400}'::jsonb; END IF;
-  PERFORM 1 FROM public."User" WHERE id=p_actor_id FOR SHARE;
-  IF NOT FOUND THEN RETURN '{"ok":false,"code":"HOME_CREATE_ACCOUNT_UNAVAILABLE","status":403}'::jsonb; END IF;
-  SELECT * INTO c FROM public."HomeCreateCommand" WHERE actor_user_id=p_actor_id AND request_id=p_request_id;
-  IF NOT FOUND THEN RETURN '{"ok":false,"code":"HOME_CREATE_COMMAND_NOT_FOUND","status":404}'::jsonb; END IF;
-  RETURN public.home_create_command_projection(c);
-END $$;
-
-CREATE FUNCTION public.cancel_home_create_command(p_actor_id uuid,p_request_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE c public."HomeCreateCommand"%ROWTYPE;
-BEGIN
-  IF p_actor_id IS NULL OR p_request_id IS NULL THEN
-    RETURN '{"ok":false,"code":"HOME_CREATE_INVALID","status":400}'::jsonb; END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended('home-create-actor:'||p_actor_id::text,0));
-  PERFORM 1 FROM public."User" WHERE id=p_actor_id FOR SHARE;
-  IF NOT FOUND THEN RETURN '{"ok":false,"code":"HOME_CREATE_ACCOUNT_UNAVAILABLE","status":403}'::jsonb; END IF;
-  SELECT * INTO c FROM public."HomeCreateCommand" WHERE actor_user_id=p_actor_id AND request_id=p_request_id FOR UPDATE;
-  IF NOT FOUND THEN
-    INSERT INTO public."HomeCreateCommand"(actor_user_id,request_id,state)
-      VALUES(p_actor_id,p_request_id,'cancelled') RETURNING * INTO c;
-  ELSIF c.state='pending' THEN
-    UPDATE public."HomeCreateCommand" SET state='cancelled',lease_id=NULL,
-      lease_expires_at=NULL,updated_at=clock_timestamp()
-      WHERE actor_user_id=p_actor_id AND request_id=p_request_id RETURNING * INTO c;
-  END IF;
-  -- A committed outcome wins a race with Cancel; do not claim it was undone.
-  RETURN public.home_create_command_projection(c);
-END $$;
-
-CREATE FUNCTION public.finish_home_create_attempt(p_actor_id uuid,p_request_id uuid,p_lease_id uuid,
-  p_code text DEFAULT NULL,p_status integer DEFAULT NULL,p_conflict_home_id uuid DEFAULT NULL)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE c public."HomeCreateCommand"%ROWTYPE;
-BEGIN
-  IF p_actor_id IS NULL OR p_request_id IS NULL OR p_lease_id IS NULL
-    OR ((p_code IS NULL)<>(p_status IS NULL))
-    OR (p_code IS NOT NULL AND (p_code !~ '^[A-Z][A-Z0-9_]{1,79}$' OR p_status NOT IN (400,403,404,409,422)))
-    OR (p_conflict_home_id IS NOT NULL AND p_code IS DISTINCT FROM 'HOME_ALREADY_EXISTS') THEN
-    RETURN '{"ok":false,"code":"HOME_CREATE_INVALID","status":400}'::jsonb; END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended('home-create-actor:'||p_actor_id::text,0));
-  SELECT * INTO c FROM public."HomeCreateCommand" WHERE actor_user_id=p_actor_id AND request_id=p_request_id FOR UPDATE;
-  IF NOT FOUND THEN RETURN '{"ok":false,"code":"HOME_CREATE_COMMAND_NOT_FOUND","status":404}'::jsonb; END IF;
-  IF c.state<>'pending' OR c.lease_id IS DISTINCT FROM p_lease_id OR c.lease_expires_at<=clock_timestamp() THEN
-    RETURN public.home_create_command_projection(c)||'{"worker_retired":true}'::jsonb; END IF;
-  UPDATE public."HomeCreateCommand" SET state=CASE WHEN p_code IS NULL THEN 'pending' ELSE 'rejected' END,
-    lease_id=NULL,lease_expires_at=NULL,error_code=p_code,error_status=p_status,
-    conflict_home_id=p_conflict_home_id,updated_at=clock_timestamp()
-    WHERE actor_user_id=p_actor_id AND request_id=p_request_id RETURNING * INTO c;
-  -- A transient provider/database failure releases work for an exact retry.
-  -- Only an authoritative rejection permits editing into a new command.
-  RETURN public.home_create_command_projection(c);
-END $$;
-
-REVOKE ALL ON FUNCTION public.home_create_command_projection(public."HomeCreateCommand"),
-  public.begin_home_create_command(uuid,uuid,jsonb),public.get_home_create_command(uuid,uuid),
-  public.cancel_home_create_command(uuid,uuid),public.finish_home_create_attempt(uuid,uuid,uuid,text,integer,uuid)
-  FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.home_create_command_projection(public."HomeCreateCommand"),
-  public.begin_home_create_command(uuid,uuid,jsonb),public.get_home_create_command(uuid,uuid),
-  public.cancel_home_create_command(uuid,uuid),public.finish_home_create_attempt(uuid,uuid,uuid,text,integer,uuid)
-  TO service_role;
-
--- The only application Home insert is POST /homes. It delegates the complete
--- setup here; provider work happens outside this short transaction. Historical
--- duplicate Homes remain untouched and are treated as an admission conflict.
-CREATE FUNCTION public.commit_home_create_command(p_actor_id uuid,p_request_id uuid,p_lease_id uuid,
+CREATE OR REPLACE FUNCTION public.commit_home_create_command(p_actor_id uuid,p_request_id uuid,p_lease_id uuid,
   p_intent jsonb,p_home jsonb,p_canonical_address jsonb,p_templates jsonb,p_step_up jsonb DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE
@@ -163,6 +16,7 @@ DECLARE
   v_conflict uuid; v_parent uuid; v_claim uuid; v_secret jsonb; v_secret_result jsonb;
   v_secrets uuid[]:=ARRAY[]::uuid[]; v_code text; v_error_status text; v_now timestamptz;
   v_risk integer:=5; v_count integer; v_rejections integer; v_step public."AddressVerificationAttempt"%ROWTYPE;
+  v_bulk_parent public."Home"%ROWTYPE; v_bulk_allowed boolean;
 BEGIN
   IF p_actor_id IS NULL OR p_request_id IS NULL OR p_lease_id IS NULL
     OR jsonb_typeof(p_intent) IS DISTINCT FROM 'object'
@@ -198,6 +52,42 @@ BEGIN
     OR coalesce(h.address2,'')<>coalesce(a.address_line2_norm,'') OR h.city IS DISTINCT FROM a.city_norm
     OR h.state IS DISTINCT FROM a.state OR h.zipcode IS DISTINCT FROM a.postal_code THEN
     RAISE EXCEPTION 'Invalid prepared Home identity' USING ERRCODE='22023'; END IF;
+  IF p_intent ? 'bulk_parent_home_id' THEN
+    -- Unit labels are not ownership evidence. Recheck the selected building's
+    -- current authority before its private unit setup, under the existing locks.
+    IF jsonb_typeof(p_intent->'bulk_parent_home_id') IS DISTINCT FROM 'string'
+      OR (p_intent->>'bulk_parent_home_id') !~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+      OR p_intent->>'role' IS DISTINCT FROM 'property_manager' OR h.home_type IS DISTINCT FROM 'apartment'
+      OR nullif(btrim(h.address2),'') IS NULL THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    IF NOT public.lock_home_invitation_scope((p_intent->>'bulk_parent_home_id')::uuid) THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    SELECT * INTO v_bulk_parent FROM public."Home" WHERE id=(p_intent->>'bulk_parent_home_id')::uuid;
+    IF v_bulk_parent.home_status IS DISTINCT FROM 'active' OR v_bulk_parent.security_state IS DISTINCT FROM 'normal'
+      OR v_bulk_parent.home_type IS DISTINCT FROM 'multi_unit' OR nullif(btrim(v_bulk_parent.address2),'') IS NOT NULL
+      OR v_bulk_parent.address_id IS NULL OR lower(btrim(v_bulk_parent.address)) IS DISTINCT FROM lower(btrim(h.address))
+      OR lower(btrim(v_bulk_parent.city)) IS DISTINCT FROM lower(btrim(h.city)) OR lower(btrim(v_bulk_parent.state)) IS DISTINCT FROM lower(btrim(h.state))
+      OR v_bulk_parent.zipcode IS DISTINCT FROM h.zipcode OR lower(coalesce(v_bulk_parent.country,'US'))<>lower(coalesce(h.country,'US')) THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+    PERFORM id FROM public."HomeAuthority" WHERE home_id=v_bulk_parent.id ORDER BY id FOR UPDATE;
+    v_bulk_allowed:=EXISTS(SELECT FROM public."HomeAuthority" WHERE home_id=v_bulk_parent.id AND status='verified'
+      AND subject_type='user' AND subject_id=p_actor_id);
+    IF NOT v_bulk_allowed THEN
+      PERFORM s.id FROM public."BusinessSeat" s JOIN public."SeatBinding" b ON b.seat_id=s.id
+        WHERE b.user_id=p_actor_id AND s.is_active AND EXISTS(SELECT FROM public."HomeAuthority" au
+          WHERE au.home_id=v_bulk_parent.id AND au.status='verified' AND au.subject_type='business' AND au.subject_id=s.business_user_id)
+        ORDER BY s.id FOR UPDATE OF s,b;
+      v_bulk_allowed:=FOUND;
+      IF NOT v_bulk_allowed THEN
+        PERFORM id FROM public."BusinessTeam" t WHERE t.user_id=p_actor_id AND t.is_active
+          AND EXISTS(SELECT FROM public."HomeAuthority" au WHERE au.home_id=v_bulk_parent.id AND au.status='verified'
+            AND au.subject_type='business' AND au.subject_id=t.business_user_id) ORDER BY id FOR UPDATE;
+        v_bulk_allowed:=FOUND;
+      END IF;
+    END IF;
+    IF NOT v_bulk_allowed THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
+  END IF;
   SELECT id INTO v_conflict FROM public."Home" WHERE home_status='active' AND (
     address_hash=h.address_hash OR address_id=h.address_id OR (
       lower(btrim(address))=lower(btrim(h.address)) AND lower(btrim(coalesce(address2,'')))=lower(btrim(coalesce(h.address2,'')))
@@ -250,6 +140,8 @@ BEGIN
         AND lower(btrim(state))=lower(btrim(h.state)) AND zipcode=h.zipcode
         AND lower(coalesce(country,'US'))=lower(coalesce(h.country,'US')) ORDER BY created_at,id LIMIT 1;
     END IF;
+    IF v_bulk_parent.id IS NOT NULL AND v_parent IS DISTINCT FROM v_bulk_parent.id THEN
+      RETURN public.finish_home_create_attempt(p_actor_id,p_request_id,p_lease_id,'HOME_CREATE_PARENT_UNAVAILABLE',403); END IF;
     INSERT INTO public."Home"(address,address2,city,state,zipcode,country,address_hash,address_id,owner_id,
       name,home_type,bedrooms,bathrooms,sq_ft,lot_sq_ft,year_built,move_in_date,is_owner,description,
       entry_instructions,parking_instructions,visibility,amenities,niche_data,created_by_user_id,tenure_mode,
@@ -316,5 +208,4 @@ BEGIN
   RETURN public.home_create_command_projection(c)||'{"committed_now":true}'::jsonb;
 END $$;
 
-REVOKE ALL ON FUNCTION public.commit_home_create_command(uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.commit_home_create_command(uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb) TO service_role;
+COMMIT;

@@ -1417,9 +1417,14 @@ The existing UnitsTab Import and Generate controls and SDK methods both reached
 missing routes (actual HTTP404 and browser failure). The repair on
 `codex/landlord-unit-tools`, based on lease checkpoint `c51740fce`, connects those
 controls to the existing Home router and shared Home-create command execution.
-Home remains the unit registry. No new screen, tracked file, table, migration or
-SQL function signature is introduced; the existing unmerged Home-create commit
-function gains the selected-parent check.
+Home remains the unit registry. No new screen, table or SQL function signature is introduced. One forward
+migration updates the existing Home-create commit function with the selected-parent
+check; the original migration remains unchanged. CI34843214305 caught an initial
+edit of migration history. The forward file contains exactly the locally accepted
+function body and follows the existing immutable-history gate. The corrected
+migration gate passes against the actual PR base. A rollback-only populated
+rehearsal preserves all row values across374 public/auth/storage/ledger tables,
+plus the function OID, signature, owner, grants and configuration.
 
 Each label uses the existing live/cached canonical-address checks and provisional
 property-manager setup. The server-selected unit path obtains its address through

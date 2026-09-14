@@ -11,7 +11,7 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/landlord-unit-tools`, starting from the accepted local lease checkpoint
-`c51740fce`. Its unit-tool repair connects the existing controls through shared Home creation;
+`c51740fce`. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -53,14 +53,17 @@ failed the generated SQL wrapper synchronization gate; other nonaggregate jobs
 passed except the unchanged Seeder skip. The existing wrapper was regenerated
 and passes actual pgTAP. Do not relabel that failed run green. After any contract
 edit run the existing wrapper sync and --check; all54 currently synchronize.
-The unit branch has its own candidate verification; recheck its PR/CI before
+PR39 initial CI34843214305 failed the immutable-migration gate. The original
+migration is now restored and the unchanged function update is in a forward file.
+Its corrected CI remains pending; recheck its PR/CI before
 integration. Last complete green source40866ab85 passed15 applicable checks/one
 unchanged Seeder skip in [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732).
 
 **Next:** finish CI/review of existing unit tools, then trace the existing private
 lease attachment/storage path before extending it. The unit repair reuses Home,
 canonical validation, protected HomeCreateCommand recovery and existing encrypted
-browser storage. It adds no table, migration or replacement screen. Confirmed
+browser storage. It adds one forward migration updating the existing function, with no table or
+replacement screen. The original migration stays immutable. Confirmed
 parent authority never becomes verified unit authority. Import and Generate now
 report partial progress and retry the same original after Close/reload. Afterwards
 finish R05 native invitation links, installed Android/provider criteria and the
