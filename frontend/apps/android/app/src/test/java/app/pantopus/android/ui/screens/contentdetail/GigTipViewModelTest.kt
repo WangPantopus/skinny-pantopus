@@ -3,7 +3,6 @@
 package app.pantopus.android.ui.screens.contentdetail
 
 import androidx.lifecycle.SavedStateHandle
-import app.cash.turbine.test
 import app.pantopus.android.core.notifications.GigActiveNotifier
 import app.pantopus.android.data.api.models.gigs.GigBidsResponse
 import app.pantopus.android.data.api.models.gigs.GigDetailResponse
@@ -13,11 +12,8 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentDto
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionsResponse
 import app.pantopus.android.data.api.models.offers.MyBidsResponse
-import app.pantopus.android.data.api.models.payments.TipRefreshStatusResponse
-import app.pantopus.android.data.api.models.payments.TipResponse
 import app.pantopus.android.data.api.models.reviews.MyPendingReviewsResponse
 import app.pantopus.android.data.api.models.users.UserDto
-import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.files.FilesRepository
@@ -30,7 +26,6 @@ import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
 import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
-import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -135,6 +130,7 @@ class GigTipViewModelTest {
             refundFactory = mockk(relaxed = true),
             authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
             stopFactory = mockk(relaxed = true),
+            tipStore = mockk(relaxed = true),
         )
     }
 
@@ -165,65 +161,6 @@ class GigTipViewModelTest {
             assertTrue(vm.canTip())
             val content = (vm.state.value as ContentDetailUiState.Loaded).content
             assertEquals("Send a tip", content.dock.primary.label)
-        }
-
-    // MARK: - Send tip
-
-    // tip.affordance → tip.amount → tip.paymentSheet
-    @Test
-    fun send_tip_emits_present_event() =
-        runTest {
-            coEvery { paymentsRepo.tip(any()) } returns
-                NetworkResult.Success(
-                    TipResponse(success = true, clientSecret = "pi_tip", paymentId = "pay-tip-1", customer = "cus", ephemeralKey = "ek"),
-                )
-            val vm = vmWithLoadedTip()
-            vm.load()
-            vm.events.test {
-                vm.sendTip(1000)
-                val event = awaitItem()
-                assertTrue(event is GigTipEvent.PresentTipSheet)
-                assertEquals("pi_tip", (event as GigTipEvent.PresentTipSheet).params.clientSecret)
-                cancelAndIgnoreRemainingEvents()
-            }
-            assertEquals(TipStatus.Sending, vm.tipStatus.value)
-            coVerify { paymentsRepo.tip(match { it.gigId == "g1" && it.amount == 1000 }) }
-        }
-
-    // tip.success — completed sheet reconciles + refreshes
-    @Test
-    fun tip_outcome_paid_reconciles_and_succeeds() =
-        runTest {
-            coEvery { paymentsRepo.tip(any()) } returns
-                NetworkResult.Success(TipResponse(success = true, clientSecret = "pi_tip", paymentId = "pay-tip-1"))
-            coEvery { paymentsRepo.tipRefreshStatus("pay-tip-1") } returns
-                NetworkResult.Success(TipRefreshStatusResponse(paymentStatus = "captured"))
-            val vm = vmWithLoadedTip()
-            vm.load()
-            vm.sendTip(1000)
-            vm.onTipOutcome(CheckoutOutcome.Paid)
-            assertEquals(TipStatus.Succeeded, vm.tipStatus.value)
-            coVerify { paymentsRepo.tipRefreshStatus("pay-tip-1") }
-        }
-
-    @Test
-    fun tip_outcome_declined_fails() =
-        runTest {
-            val vm = vmWithLoadedTip()
-            vm.load()
-            vm.onTipOutcome(CheckoutOutcome.Declined("Your card was declined."))
-            assertTrue(vm.tipStatus.value is TipStatus.Failed)
-        }
-
-    @Test
-    fun send_tip_api_failure_marks_failed() =
-        runTest {
-            coEvery { paymentsRepo.tip(any()) } returns
-                NetworkResult.Failure(NetworkError.Server(400, "Maximum 3 tips per gig reached"))
-            val vm = vmWithLoadedTip()
-            vm.load()
-            vm.sendTip(1000)
-            assertTrue(vm.tipStatus.value is TipStatus.Failed)
         }
 
     @Test fun assignedPayerAndBusinessManagerCanOpenExactServerPayment() =

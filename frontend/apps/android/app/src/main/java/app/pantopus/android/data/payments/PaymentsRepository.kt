@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.payments.PaymentMethodAckResponse
 import app.pantopus.android.data.api.models.payments.PaymentMethodsResponse
 import app.pantopus.android.data.api.models.payments.PaymentsEarningsResponse
 import app.pantopus.android.data.api.models.payments.SpendingSummaryResponse
+import app.pantopus.android.data.api.models.payments.TipPreview
 import app.pantopus.android.data.api.models.payments.TipRefreshStatusResponse
 import app.pantopus.android.data.api.models.payments.TipRequest
 import app.pantopus.android.data.api.models.payments.TipResponse
@@ -59,6 +60,10 @@ class PaymentsRepository
         /** `POST /api/payments/intent` — PaymentSheet params for a checkout (Block 3B). */
         suspend fun createPaymentIntent(request: CreatePaymentIntentRequest): NetworkResult<PaymentIntentSheetParamsDto> =
             safeApiCall { api.createIntent(request) }
+
+        suspend fun tipPreview(gigId: String): NetworkResult<TipPreview> = safeApiCall { api.tipPreview(gigId) }
+
+        suspend fun tipOriginal(requestId: String): NetworkResult<TipResponse> = safeApiCall { api.tipOriginal(requestId) }
 
         /** `POST /api/payments/tip` — tip the worker on a completed gig (Block 3D). */
         suspend fun tip(request: TipRequest): NetworkResult<TipResponse> = safeApiCall { api.tip(request) }

@@ -149,6 +149,7 @@ class GigDetailSaveViewModelTest {
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -277,6 +278,7 @@ class GigDetailSaveViewModelTest {
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
         vm.load()
         return vm
@@ -366,6 +368,7 @@ class GigDetailSaveViewModelTest {
                     refundFactory = mockk(relaxed = true),
                     authorizationFactory = authorizationFactory(),
                     stopFactory = mockk(relaxed = true),
+                    tipStore = mockk(relaxed = true),
                 )
             vm.load()
             assertTrue(vm.canInstantAccept())
@@ -446,6 +449,7 @@ class GigDetailSaveViewModelTest {
                 refundFactory = mockk(relaxed = true),
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
         vm.load()
         return vm

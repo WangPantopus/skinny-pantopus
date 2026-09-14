@@ -98,36 +98,102 @@ data class PaymentIntentSheetParamsDto(
     val isSetupIntent: Boolean? = null,
 )
 
-/**
- * Body for `POST /api/payments/tip` (Block 3D). The poster tips the worker on a
- * completed gig; `amount` is integer cents (min 50).
- */
+/** Nonsecret terms are frozen before the original command is sent. */
 @JsonClass(generateAdapter = true)
-data class TipRequest(
+data class TipTerms(
     val gigId: String,
-    val amount: Int,
+    val payerId: String,
+    val payeeId: String?,
+    val ownerConfirmedAt: String?,
 )
 
-/** `POST /api/payments/tip` response — mobile PaymentSheet params + paymentId. */
+@JsonClass(generateAdapter = true)
+data class TipOriginal(
+    val requestId: String,
+    val paymentId: String,
+    val gigId: String,
+    val payerId: String,
+    val payeeId: String,
+    val amountCents: Int,
+    val currency: String,
+    val terms: TipTerms,
+    val paymentMethodId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class TipPreview(
+    val actorId: String,
+    val sessionScope: String,
+    val terms: TipTerms,
+    val eligible: Boolean,
+    val unavailableReason: String?,
+    val activeRequestId: String?,
+    val legacyPaymentId: String?,
+    val minimumAmountCents: Int,
+    val maximumAmountCents: Int,
+    val remainingTipSlots: Int,
+)
+
+/** Check/cancel preserve the original UUID, amount, method and terms. */
+@JsonClass(generateAdapter = true)
+data class TipRequest(
+    val requestId: String,
+    val gigId: String,
+    val amount: Int,
+    val paymentMethodId: String?,
+    val expectedActorId: String,
+    val expectedSessionScope: String,
+    val expectedTerms: TipTerms,
+    val mode: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class TipReceipt(
+    val requestId: String,
+    val paymentId: String,
+    val gigId: String,
+    val payerId: String,
+    val payeeId: String,
+    val amountCents: Int,
+    val currency: String,
+    val status: String,
+    val paymentIntentId: String?,
+    val chargeId: String?,
+    val amountChargedCents: Int,
+)
+
+/** SDK credentials are transient; this type is never retained in recovery storage. */
+@JsonClass(generateAdapter = true)
+data class TipCheckout(
+    val paymentIntentId: String,
+    val clientSecret: String,
+    val customer: String,
+    val ephemeralKey: String?,
+    val publishableKey: String?,
+) {
+    fun sheetParams(): PaymentIntentSheetParamsDto =
+        PaymentIntentSheetParamsDto(clientSecret, paymentIntentId, customer, ephemeralKey, publishableKey, false)
+
+    fun sameIntent(other: TipCheckout): Boolean =
+        paymentIntentId == other.paymentIntentId && customer == other.customer && clientSecret == other.clientSecret
+}
+
 @JsonClass(generateAdapter = true)
 data class TipResponse(
-    val success: Boolean = false,
-    val clientSecret: String? = null,
-    val paymentId: String? = null,
-    val paymentIntentId: String? = null,
-    val customer: String? = null,
-    val ephemeralKey: String? = null,
-    val publishableKey: String? = null,
+    val actorId: String,
+    val sessionScope: String,
+    val request: TipOriginal,
+    val status: String,
+    val paymentStatus: String,
+    val providerStatus: String?,
+    val paymentIntentId: String?,
+    val canRetry: Boolean,
+    val canCancel: Boolean,
+    val receipt: TipReceipt?,
+    val checkout: TipCheckout? = null,
 ) {
-    /** Adapt to the shared PaymentSheet params used by the checkout flow. */
-    fun sheetParams(): PaymentIntentSheetParamsDto =
-        PaymentIntentSheetParamsDto(
-            clientSecret = clientSecret,
-            paymentIntentId = paymentIntentId,
-            customer = customer,
-            ephemeralKey = ephemeralKey,
-            publishableKey = publishableKey,
-        )
+    val terminal: Boolean get() = status == "succeeded" || status == "canceled"
+    val changedAfterCapture: Boolean get() = paymentStatus in setOf("refund_pending", "refunded_partial", "refunded_full", "disputed")
 }
 
 /** `POST /api/payments/tip/{paymentId}/refresh-status` response. */
@@ -138,3 +204,125 @@ data class TipRefreshStatusResponse(
     val changed: Boolean? = null,
     val stripeStatus: String? = null,
 )
+
+/** Validate API and retained originals before any SDK use, command or cleanup. */
+@Suppress("TooManyFunctions") // Keep original, receipt and checkout validation together in the existing payment contract.
+object TipValidation {
+    const val MIN_CENTS = 50
+    const val MAX_CENTS = 99_999_999
+    private const val MAX_TIPS = 3
+    private val uuid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
+    private val sessionProof = Regex("^[a-f0-9]{64}$")
+    private val captured =
+        setOf(
+            "captured_hold",
+            "transfer_scheduled",
+            "transfer_pending",
+            "transferred",
+            "refund_pending",
+            "refunded_partial",
+            "refunded_full",
+            "disputed",
+        )
+    private val statuses = setOf("pending", "requires_action", "needs_review", "succeeded", "canceled")
+    private val confirmable = setOf("requires_payment_method", "requires_confirmation", "requires_action")
+
+    fun identifier(value: String?): Boolean = value != null && uuid.matches(value)
+
+    fun provider(
+        value: String?,
+        prefix: String,
+    ): Boolean = value != null && Regex("^${prefix}_[A-Za-z0-9]+$").matches(value)
+
+    fun instant(value: String?): java.time.Instant? = value?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+
+    fun scope(
+        actorId: String,
+        sessionScope: String,
+        actor: String,
+        session: String?,
+    ): Boolean = actorId == actor && sessionProof.matches(sessionScope) && (session == null || session == sessionScope)
+
+    fun terms(
+        value: TipTerms,
+        gig: String,
+        actor: String,
+        ready: Boolean,
+    ): Boolean =
+        value.gigId == gig && value.payerId == actor && identifier(gig) && identifier(actor) &&
+            (identifier(value.payeeId) || !ready && value.payeeId == null) &&
+            (instant(value.ownerConfirmedAt) != null || !ready && value.ownerConfirmedAt == null)
+
+    fun original(
+        value: TipOriginal,
+        gig: String,
+        actor: String,
+    ): Boolean =
+        identifier(value.requestId) && value.paymentId == value.requestId && value.gigId == gig && value.payerId == actor &&
+            identifier(value.payeeId) && value.payeeId != actor && value.amountCents in MIN_CENTS..MAX_CENTS && value.currency == "usd" &&
+            terms(value.terms, gig, actor, true) && value.terms.payeeId == value.payeeId &&
+            (value.paymentMethodId == null || provider(value.paymentMethodId, "pm"))
+
+    fun preview(
+        value: TipPreview,
+        gig: String,
+        actor: String,
+        session: String?,
+    ): Boolean =
+        scope(value.actorId, value.sessionScope, actor, session) && terms(value.terms, gig, actor, value.eligible) &&
+            (value.activeRequestId == null || identifier(value.activeRequestId)) &&
+            (value.legacyPaymentId == null || identifier(value.legacyPaymentId)) &&
+            (value.activeRequestId == null || value.legacyPaymentId == null) &&
+            value.minimumAmountCents == MIN_CENTS && value.maximumAmountCents == MAX_CENTS && value.remainingTipSlots in 0..MAX_TIPS &&
+            (
+                !value.eligible || value.activeRequestId == null && value.legacyPaymentId == null && value.unavailableReason == null &&
+                    value.remainingTipSlots > 0
+            )
+
+    fun progress(
+        value: TipResponse,
+        gig: String,
+        actor: String,
+        requestId: String,
+        session: String?,
+        expected: TipOriginal? = null,
+    ): Boolean {
+        val identityValid =
+            scope(value.actorId, value.sessionScope, actor, session) && original(value.request, gig, actor) &&
+                value.request.requestId == requestId && (expected == null || expected == value.request)
+        val stateValid = value.status in statuses && (value.paymentIntentId == null || provider(value.paymentIntentId, "pi"))
+        return identityValid && stateValid && receipt(value) && checkout(value)
+    }
+
+    private fun receipt(value: TipResponse): Boolean {
+        if (!value.terminal) return value.receipt == null
+        val receipt = value.receipt ?: return false
+        val original = value.request
+        val same =
+            receipt.requestId == original.requestId && receipt.paymentId == original.paymentId && receipt.gigId == original.gigId &&
+                receipt.payerId == original.payerId && receipt.payeeId == original.payeeId && receipt.amountCents == original.amountCents &&
+                receipt.currency == "usd" && receipt.status == value.status && receipt.paymentIntentId == value.paymentIntentId
+        val final =
+            !value.canRetry && !value.canCancel && value.checkout == null &&
+                (receipt.chargeId == null || provider(receipt.chargeId, "ch"))
+        return same && final && receiptOutcome(value, receipt)
+    }
+
+    private fun receiptOutcome(
+        value: TipResponse,
+        receipt: TipReceipt,
+    ): Boolean =
+        if (value.status == "succeeded") {
+            receipt.amountChargedCents == value.request.amountCents && provider(value.paymentIntentId, "pi") &&
+                provider(receipt.chargeId, "ch") && value.paymentStatus in captured
+        } else {
+            receipt.amountChargedCents == 0 && value.paymentStatus == "canceled"
+        }
+
+    private fun checkout(value: TipResponse): Boolean {
+        val checkout = value.checkout ?: return true
+        return value.status in setOf("pending", "requires_action") && value.providerStatus in confirmable &&
+            checkout.paymentIntentId == value.paymentIntentId && provider(checkout.paymentIntentId, "pi") &&
+            checkout.clientSecret.startsWith("${checkout.paymentIntentId}_secret_") && provider(checkout.customer, "cus")
+    }
+}

@@ -24,8 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +65,10 @@ fun GigDetailScreen(
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val tipStatus by viewModel.tipStatus.collectAsStateWithLifecycle()
+    val tipScope = rememberCoroutineScope()
+    val tipRecovery = remember(viewModel, tipScope) { viewModel.createTipRecovery(tipScope) }
+    val tipStatus by tipRecovery.status.collectAsStateWithLifecycle()
+    val tipState by tipRecovery.state.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     val cancelPreview by viewModel.cancelPreview.collectAsStateWithLifecycle()
     val stopState by viewModel.taskStop.state.collectAsStateWithLifecycle()
@@ -82,11 +87,33 @@ fun GigDetailScreen(
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Block 3D — Stripe PaymentSheet for tipping (created in composition).
-    val paymentSheet =
-        rememberPaymentSheet { result ->
-            viewModel.onTipOutcome(StripePaymentSheets.checkoutOutcome(result))
+    tipState.presentation?.let { original ->
+        key(original.token) {
+            val tipPaymentSheet =
+                rememberPaymentSheet { result ->
+                    tipRecovery.onOutcome(original.token, StripePaymentSheets.checkoutOutcome(result))
+                }
+            LaunchedEffect(original.token) {
+                val params = tipRecovery.claimSheet(original.token) ?: return@LaunchedEffect
+                showTipSheet = false
+                tipPaymentSheet.presentWithPaymentIntent(
+                    paymentIntentClientSecret = params.clientSecret.orEmpty(),
+                    configuration =
+                        StripePaymentSheets.paymentConfiguration(
+                            context,
+                            params.customer,
+                            params.ephemeralKey,
+                            params.publishableKey,
+                        ),
+                )
+            }
         }
+    }
+    LaunchedEffect(tipRecovery) { tipRecovery.prepare(retainedOnly = true) }
+    LaunchedEffect(tipState.invalidated) { if (tipState.invalidated) showTipSheet = false }
+    DisposableEffect(tipRecovery) {
+        onDispose { tipRecovery.retire() }
+    }
 
     // Phase 5 — second PaymentSheet for accept-bid / instant-accept checkouts.
     val lifecyclePaymentSheet =
@@ -107,25 +134,6 @@ fun GigDetailScreen(
     DisposableEffect(Unit) {
         viewModel.joinRealtime()
         onDispose { viewModel.leaveRealtime() }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is GigTipEvent.PresentTipSheet -> {
-                    showTipSheet = false
-                    paymentSheet.presentWithPaymentIntent(
-                        paymentIntentClientSecret = event.params.clientSecret.orEmpty(),
-                        configuration =
-                            StripePaymentSheets.paymentConfiguration(
-                                context = context,
-                                customerId = event.params.customer,
-                                ephemeralKey = event.params.ephemeralKey,
-                                publishableKey = event.params.publishableKey,
-                            ),
-                    )
-                }
-            }
-        }
     }
     LaunchedEffect(Unit) {
         viewModel.lifecycleEvents.collect { event ->
@@ -163,7 +171,12 @@ fun GigDetailScreen(
     }
     // Tip success → toast (PaymentSheet itself surfaces decline / SCA errors).
     LaunchedEffect(tipStatus) {
-        if (tipStatus is TipStatus.Succeeded) toastText = "Tip sent — thank you!"
+        when (val status = tipStatus) {
+            TipStatus.Succeeded -> toastText = "Tip sent — thank you!"
+            TipStatus.Canceled -> toastText = "The original tip is canceled with no charge."
+            is TipStatus.Failed -> toastText = status.message
+            else -> Unit
+        }
     }
 
     val openChat: () -> Unit = { viewModel.openGigChat() }
@@ -253,15 +266,20 @@ fun GigDetailScreen(
 
     LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { toastText = it } }
 
+    // Retained originals keep the existing tip action reachable even if task terms changed.
+    val detailState = tipRecoveryDetailState(state, tipState)
     ContentDetailShell(
-        state = state,
+        state = detailState,
         onBack = onBack,
         onPrimaryAction = {
             val gig = (state as? ContentDetailUiState.Loaded)?.content?.hero
             when {
-                (state as? ContentDetailUiState.Loaded)?.content?.dock?.primary?.enabled != true -> Unit
+                (detailState as? ContentDetailUiState.Loaded)?.content?.dock?.primary?.enabled != true -> Unit
                 // Poster on a completed gig → Send-a-tip sheet (Block 3D).
-                viewModel.canTip() -> showTipSheet = true
+                viewModel.canTip() || tipState.originalAmount != null -> {
+                    showTipSheet = true
+                    tipRecovery.prepare()
+                }
                 // Assigned worker on an in-progress task → Delivery Proof sheet.
                 viewModel.canMarkDelivered() ->
                     deliveryTarget =
@@ -432,12 +450,15 @@ fun GigDetailScreen(
             sheetState = tipSheetState,
         ) {
             TipAmountSheet(
-                sending = tipStatus is TipStatus.Sending,
+                recovery = tipState,
                 onSelect = { cents ->
                     showTipSheet = false
-                    viewModel.sendTip(cents)
+                    tipRecovery.send(cents, viewModel.gigSnapshot())
                 },
-                onCancel = { showTipSheet = false },
+                onCancel = {
+                    showTipSheet = false
+                    if (tipState.canCancel) tipRecovery.cancel()
+                },
             )
         }
     }
@@ -517,20 +538,18 @@ private fun GigSaveToggle(
 
 /** Send-a-tip amount picker (Block 3D). Preset amounts in cents. */
 @Composable
-private fun TipAmountSheet(
-    sending: Boolean,
+internal fun TipAmountSheet(
+    recovery: GigTipState,
     onSelect: (Int) -> Unit,
     onCancel: () -> Unit,
 ) {
+    val sending = recovery.busy || recovery.invalidated
     var customAmount by remember { mutableStateOf("") }
-    val customCents =
-        customAmount
-            .trim()
-            .replace("$", "")
-            .replace(",", "")
-            .toDoubleOrNull()
-            ?.takeIf { it >= 0.5 }
-            ?.let { kotlin.math.round(it * 100).toInt().coerceAtLeast(50) }
+    LaunchedEffect(recovery.originalAmount) {
+        customAmount = recovery.originalAmount?.let { String.format(java.util.Locale.US, "%.2f", it / 100.0) }.orEmpty()
+    }
+    val customCents = recovery.originalAmount ?: tipAmountCents(customAmount)
+    val canSubmit = customCents != null && !sending && (recovery.canChoose || recovery.canContinue)
     Column(
         modifier =
             Modifier
@@ -548,7 +567,7 @@ private fun TipAmountSheet(
         )
         Text(text = "Send a tip", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            text = "100% goes to your helper. Charged to your card via Stripe.",
+            text = recovery.message,
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -565,7 +584,7 @@ private fun TipAmountSheet(
                             .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(Radii.lg))
                             .background(PantopusColors.primary50)
-                            .clickable(enabled = !sending) { onSelect(cents) }
+                            .clickable(enabled = recovery.canChoose && !sending) { onSelect(cents) }
                             .testTag("tip.amount.$cents"),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -608,7 +627,7 @@ private fun TipAmountSheet(
                 BasicTextField(
                     value = customAmount,
                     onValueChange = { customAmount = it },
-                    enabled = !sending,
+                    enabled = recovery.canChoose && !sending,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     textStyle =
@@ -643,24 +662,24 @@ private fun TipAmountSheet(
                     .heightIn(min = 46.dp)
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(
-                        if (customCents == null || sending) {
+                        if (!canSubmit) {
                             PantopusColors.appSurfaceSunken
                         } else {
                             PantopusColors.primary600
                         },
                     )
-                    .clickable(enabled = customCents != null && !sending) {
+                    .clickable(enabled = canSubmit) {
                         customCents?.let(onSelect)
                     }
                     .testTag("tip.amount.customSubmit"),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Send custom tip",
+                text = if (recovery.originalAmount != null) recovery.actionTitle else "Send custom tip",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color =
-                    if (customCents == null || sending) {
+                    if (!canSubmit) {
                         PantopusColors.appTextMuted
                     } else {
                         PantopusColors.appTextInverse
@@ -668,11 +687,11 @@ private fun TipAmountSheet(
             )
         }
         Text(
-            text = "Not now",
+            text = if (recovery.canCancel) "Cancel tip" else "Not now",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appTextSecondary,
-            modifier = Modifier.clickable(onClick = onCancel),
+            modifier = Modifier.clickable(enabled = !sending, onClick = onCancel),
         )
     }
 }

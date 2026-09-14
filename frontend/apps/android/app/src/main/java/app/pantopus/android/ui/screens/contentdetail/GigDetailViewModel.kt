@@ -22,7 +22,6 @@ import app.pantopus.android.data.api.models.gigs.PlaceBidBody
 import app.pantopus.android.data.api.models.gigs.ViewerBidStatus
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
-import app.pantopus.android.data.api.models.payments.TipRequest
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -124,6 +123,7 @@ class GigDetailViewModel
         refundFactory: GigRefundFactory,
         authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
         stopFactory: app.pantopus.android.ui.screens.gigs.stop.GigStopFactory,
+        private val tipStore: app.pantopus.android.data.payments.PendingGigTipStore,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -345,12 +345,6 @@ class GigDetailViewModel
         private val _state = MutableStateFlow<ContentDetailUiState>(ContentDetailUiState.Loading)
         val state: StateFlow<ContentDetailUiState> = _state.asStateFlow()
 
-        private val _tipStatus = MutableStateFlow<TipStatus>(TipStatus.Idle)
-        val tipStatus: StateFlow<TipStatus> = _tipStatus.asStateFlow()
-
-        private val _events = MutableSharedFlow<GigTipEvent>(extraBufferCapacity = 4)
-        val events: SharedFlow<GigTipEvent> = _events.asSharedFlow()
-
         private val _openChatEvents = MutableSharedFlow<GigOpenChatEvent>(extraBufferCapacity = 1)
         val openChatEvents: SharedFlow<GigOpenChatEvent> = _openChatEvents.asSharedFlow()
 
@@ -549,9 +543,6 @@ class GigDetailViewModel
          */
         private val _workerReminderCooldownEndsAt = MutableStateFlow<Long?>(null)
         val workerReminderCooldownEndsAt: StateFlow<Long?> = _workerReminderCooldownEndsAt.asStateFlow()
-
-        /** Payment id of the in-flight tip, used to reconcile after PaymentSheet. */
-        private var pendingTipPaymentId: String? = null
 
         /** Current gig snapshot — null until the first fetch resolves. */
         fun gigSnapshot(): GigDto? = rawGig
@@ -2002,45 +1993,17 @@ class GigDetailViewModel
 
         // MARK: - Tip (Block 3D)
 
-        /** Tap "Send a tip" → create the tip payment, then ask the screen to present PaymentSheet. */
-        fun sendTip(amountCents: Int) {
-            if (!canTip) return
-            _tipStatus.value = TipStatus.Sending
-            viewModelScope.launch {
-                when (val result = paymentsRepo.tip(TipRequest(gigId = gigId, amount = amountCents))) {
-                    is NetworkResult.Success -> {
-                        pendingTipPaymentId = result.data.paymentId
-                        _events.emit(GigTipEvent.PresentTipSheet(result.data.sheetParams()))
-                    }
-                    is NetworkResult.Failure -> {
-                        _tipStatus.value = TipStatus.Failed(result.error.message)
-                    }
-                }
-            }
-        }
-
-        /** Result of presenting the tip PaymentSheet, mapped from Stripe in the screen. */
-        fun onTipOutcome(outcome: CheckoutOutcome) {
-            when (outcome) {
-                CheckoutOutcome.Paid -> {
-                    _tipStatus.value = TipStatus.Succeeded
-                    viewModelScope.launch {
-                        // Best-effort reconcile (mobile PaymentSheet may beat the webhook), then refresh.
-                        pendingTipPaymentId?.let { paymentsRepo.tipRefreshStatus(it) }
-                        pendingTipPaymentId = null
-                        load()
-                    }
-                }
-                CheckoutOutcome.Canceled -> _tipStatus.value = TipStatus.Canceled
-                is CheckoutOutcome.Declined ->
-                    _tipStatus.value = TipStatus.Failed(outcome.message ?: "Your card was declined.")
-            }
-        }
-
-        /** Clear the tip toast once the screen has shown it. */
-        fun clearTipStatus() {
-            _tipStatus.value = TipStatus.Idle
-        }
+        /** Each screen opening owns its recovery callbacks; storage survives navigation. */
+        fun createTipRecovery(scope: kotlinx.coroutines.CoroutineScope) =
+            GigTipRecovery(
+                gigId,
+                paymentsRepo,
+                tipStore,
+                scope,
+                checkoutIdentities::paymentIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities.changes,
+            )
 
         /** Get-or-create the gig chat room, then emit navigation payload. */
         fun openGigChat() {

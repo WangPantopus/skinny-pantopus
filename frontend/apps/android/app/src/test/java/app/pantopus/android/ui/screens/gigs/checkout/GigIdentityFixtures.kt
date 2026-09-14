@@ -9,6 +9,10 @@ import io.mockk.mockk
 /** Coherent synchronous and asynchronous identity seam for existing screen flow tests. */
 fun gigIdentityFixture(identity: () -> Pair<String, String?>? = { "u1" to "test-session" }): GigPaymentIdentitySource =
     mockk {
+        every { changes } returns kotlinx.coroutines.flow.emptyFlow()
+        coEvery { paymentIdentity() } answers {
+            identity()?.let { GigCheckoutIdentity(it.first, it.second, "https://api.example.invalid/") }
+        }
         every { scopeMarker() } answers { identity().toString() }
         coEvery { permitsAnonymousRead() } answers { identity() == null }
         coEvery { checkoutIdentity() } answers {
