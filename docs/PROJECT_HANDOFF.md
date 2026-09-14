@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 14, 2026 during existing landlord-flow verification. This is the
+Updated September 14, 2026 at the user-requested pause after existing landlord-flow verification. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
 the ordered backlog; dated reports preserve source-specific evidence.
 
@@ -11,7 +11,12 @@ the ordered backlog; dated reports preserve source-specific evidence.
 Trace the existing screen, caller, route, service and SQL before changes. An open
 acceptance row does not authorize a rebuild. Reuse unchanged accepted evidence.
 
-**Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
+**Paused at the user’s request.** The checks already running finished and the tested
+source/evidence are saved. Resume only when requested; do not start another work
+item while paused. Latest local foreground checks pass **49 iOS / 48 Android**;
+installed foreground acceptance remains open on both platforms.
+
+**Worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/lease-approval-dates`, draft [PR #38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
 against `codex/home-permission-boundaries`. It repairs demonstrated lease date,
 admission, end/move-out, tenant status/cancellation and request-submission defects.
@@ -108,13 +113,24 @@ full detekt/ktlint checks. No new product/test file, screen or schema was added.
 Installed Android acceptance remains open: the isolated baseline APK installed,
 but computer control did not establish an app session. See [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-saved-request-recovery).
 
-**Next:** complete native background/foreground behavior and installed Android
+**Native foreground checkpoint:** the existing lifecycle hooks now retire pending
+work when backgrounded and reread saved status when resumed, including from Details
+and Sent. A no-request result preserves an unfinished draft; failed reads require
+GET-only status retry before Submit or Done. Delayed reads/POST replies cannot
+replace a newer result. All49 selected iOS tests (42 model/network +7 rendering)
+and48 Android tests (43 model/session +5 unchanged snapshots) pass, with Swift
+lint/format and Android detekt/ktlint. Existing screen designs and schema are
+preserved. The installed iOS candidate was launched, then the user requested a
+pause after normal logout; no installed foreground transition was accepted.
+See [foreground evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-foreground-checkpoint-and-user-requested-pause).
+
+**Next when resumed:** finish installed native foreground and Android recovery
 acceptance, then repair the demonstrated attachment/Home-label/provider-copy
-defects using existing upload and status paths. An iOS foreground patch is being
-checked locally; it is not yet accepted. The temporary worktree's missing Git link
-and8,536 older tracked files were restored from the verified head without replacing
-existing edits. A fresh private Gradle project cache replaces missing local cache
-metadata; precise repair/source evidence is preserved privately. The API still accepts older clients without context. The separate
+defects through existing upload and status paths. The temporary worktree's missing
+Git link and8,536 older tracked files were restored from the verified head without
+replacing existing edits. A fresh private Gradle project cache replaces missing
+local cache metadata; precise repair/source evidence is preserved privately.
+The API still accepts older clients without context. The separate
 submitted page's notification/time estimate and native email claims remain open.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
@@ -148,12 +164,15 @@ at `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Installed iOS lease checks now use the real login UI and wizard with synthetic
 auth/shell and actual tenant routes/SQL. Android installed lease acceptance, native
-foreground refresh and provider identity/delivery remain open.
+installed foreground refresh and provider identity/delivery remain open.
 Accepted native Leave Home source is unchanged and its evidence is reused. Actual
 provider delivery, combined populated adoption and hosted rollout remain open.
-The schema-only lease DB, REST18089 and private Next18110 remain exclusively leased
-to `/private/tmp/pantopus-lease-transaction-r1`; inspect its private runtime lease
-before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production
+The owned native API18109 and private Next18110 are stopped, and both owned native
+test devices are stopped. The native fixture server confirmed exact synthetic-row
+cleanup. Source, compiled products and result bundles are copied outside the
+temporary worktree. The schema-only lease DB and REST18089 remain reserved to
+`/private/tmp/pantopus-lease-transaction-r1` for resume; inspect its paused private
+runtime lease before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production
 activation occurred. Owner checkout edits and unrelated worktrees are preserved.
 
 **Other verified Git state:** Home integration [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32)

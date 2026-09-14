@@ -15,6 +15,8 @@ import SwiftUI
 /// interchangeable to host-stack callers.
 @MainActor
 public struct VerifyLandlordWizardView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var visible = false
     @State private var viewModel: VerifyLandlordWizardViewModel
     private let onClose: @MainActor () -> Void
     private let onOpenPostcardVerification: @MainActor (String) -> Void
@@ -45,9 +47,18 @@ public struct VerifyLandlordWizardView: View {
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }
-        .task { await viewModel.restoreSavedRequest() }
+        .onAppear {
+            visible = true
+            if scenePhase == .active { viewModel.resume() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard visible else { return }
+            if phase == .active { viewModel.resume() } else { viewModel.retirePendingWork() }
+        }
         .onChange(of: viewModel.isCurrentSession) { _, current in if !current { viewModel.sessionChanged() } }
-        .onDisappear { viewModel.retirePendingWork() }
+        .onDisappear { visible = false
+            viewModel.retirePendingWork()
+        }
         .accessibilityIdentifier("verifyLandlordWizard")
     }
 

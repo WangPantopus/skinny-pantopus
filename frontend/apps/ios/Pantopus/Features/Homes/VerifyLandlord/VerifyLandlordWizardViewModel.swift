@@ -105,13 +105,13 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             )
         case .details:
             let live = form.validate()
-            let blocked = (errors != nil && !live.isEmpty) || isSubmitting
+            let blocked = (errors != nil && !live.isEmpty && !statusNeedsRetry) || isSubmitting
             return WizardChrome(
                 title: "Verify landlord",
                 progressLabel: .stepOf(current: 2, total: 3),
                 progressFraction: 2.0 / 3.0,
                 leading: .back,
-                primaryCTALabel: "Submit",
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : "Submit",
                 primaryCTAEnabled: !blocked,
                 secondaryCTA: nil,
                 isSubmitting: isSubmitting,
@@ -124,7 +124,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 progressLabel: .stepOf(current: 3, total: 3),
                 progressFraction: 1.0,
                 leading: .close,
-                primaryCTALabel: "Done",
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : "Done",
                 primaryCTAEnabled: !isSubmitting,
                 secondaryCTA: WizardSecondaryCTA(
                     label: "Review mail verification",
@@ -382,11 +382,12 @@ extension VerifyLandlordWizardViewModel {
             return
         }
         guard !isSubmitting else { return }
+        if statusNeedsRetry { resume()
+            return
+        }
         switch currentStep {
         case .start:
-            if statusNeedsRetry {
-                pendingWork = Task { [weak self] in await self?.restoreSavedRequest() }
-            } else { currentStep = .details }
+            currentStep = .details
         case .details:
             guard !isSubmitting else { return }
             pendingWork?.cancel()
@@ -431,12 +432,26 @@ extension VerifyLandlordWizardViewModel {
         pendingEvent = .dismiss
     }
 
+    /// Own the foreground read so backgrounding can retire it with other work.
+    func resume() {
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard !isSubmitting, pendingEvent == nil else { return }
+        pendingWork?.cancel()
+        let generation = requestGeneration
+        pendingWork = Task { [weak self] in
+            guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+            await restoreSavedRequest()
+        }
+    }
+
     /// Recover the actor's existing request without creating another request.
     func restoreSavedRequest() async {
         guard isCurrentSession else { sessionChanged()
             return
         }
-        guard currentStep != .details, !isSubmitting, !Task.isCancelled else { return }
+        guard !isSubmitting, !Task.isCancelled else { return }
         let generation = requestGeneration
         isLoadingStatus = true
         defer { if requestGeneration == generation { isLoadingStatus = false } }
@@ -461,7 +476,7 @@ extension VerifyLandlordWizardViewModel {
                 submitState = .submitted
             } else {
                 approvalResult = nil
-                currentStep = .start
+                if currentStep != .details { currentStep = .start }
                 submitState = .idle
             }
             statusNeedsRetry = false

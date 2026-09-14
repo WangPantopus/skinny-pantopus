@@ -57,7 +57,7 @@ data class VerifyLandlordUiState(
     val isLoadingStatus: Boolean = false,
     val statusNeedsRetry: Boolean = false,
 ) {
-    val isSubmitting: Boolean get() = submitState is VerifyLandlordSubmitState.Submitting
+    val isSubmitting: Boolean get() = isLoadingStatus || submitState is VerifyLandlordSubmitState.Submitting
 
     val isDirty: Boolean
         get() =
@@ -155,7 +155,7 @@ open class VerifyLandlordWizardViewModel
         fun restoreSavedRequest() {
             if (!isCurrentSession()) return
             val snapshot = _state.value
-            if (snapshot.currentStep == VerifyLandlordStep.Details || snapshot.isSubmitting || snapshot.isLoadingStatus) return
+            if (snapshot.isSubmitting || pendingEvent.value != null) return
             pendingWork =
                 viewModelScope.launch {
                     _state.update { it.copy(isLoadingStatus = true) }
@@ -212,7 +212,16 @@ open class VerifyLandlordWizardViewModel
                 }
             } else if (saved.state in setOf("none", "denied", "ended")) {
                 _state.update {
-                    it.copy(currentStep = VerifyLandlordStep.Start, submitState = VerifyLandlordSubmitState.Idle, approvalResult = null)
+                    it.copy(
+                        currentStep =
+                            if (it.currentStep == VerifyLandlordStep.Details) {
+                                VerifyLandlordStep.Details
+                            } else {
+                                VerifyLandlordStep.Start
+                            },
+                        submitState = VerifyLandlordSubmitState.Idle,
+                        approvalResult = null,
+                    )
                 }
             } else {
                 return false
@@ -249,13 +258,13 @@ open class VerifyLandlordWizardViewModel
 
         override fun onPrimary() {
             if (!isCurrentSession() || _state.value.isLoadingStatus) return
+            if (_state.value.statusNeedsRetry) {
+                restoreSavedRequest()
+                return
+            }
             when (_state.value.currentStep) {
                 VerifyLandlordStep.Start -> {
-                    if (_state.value.statusNeedsRetry) {
-                        restoreSavedRequest()
-                    } else {
-                        _state.update { it.copy(currentStep = VerifyLandlordStep.Details) }
-                    }
+                    _state.update { it.copy(currentStep = VerifyLandlordStep.Details) }
                 }
                 VerifyLandlordStep.Details ->
                     if (!_state.value.isSubmitting) {
@@ -453,13 +462,13 @@ open class VerifyLandlordWizardViewModel
                     )
                 VerifyLandlordStep.Details -> {
                     val live = state.form.validate()
-                    val blocked = (state.errors != null && !live.isEmpty) || state.isSubmitting
+                    val blocked = (state.errors != null && !live.isEmpty && !state.statusNeedsRetry) || state.isSubmitting
                     WizardChrome(
                         title = "Verify landlord",
                         progressLabel = WizardProgressLabel.StepOf(2, TOTAL_STEPS),
                         progressFraction = 2f / TOTAL_STEPS,
                         leading = WizardLeadingControl.Back,
-                        primaryCtaLabel = "Submit",
+                        primaryCtaLabel = if (state.statusNeedsRetry) "Retry status" else "Submit",
                         primaryCtaEnabled = !blocked,
                         secondaryCta = null,
                         isSubmitting = state.isSubmitting,
@@ -473,7 +482,7 @@ open class VerifyLandlordWizardViewModel
                         progressLabel = WizardProgressLabel.StepOf(TOTAL_STEPS, TOTAL_STEPS),
                         progressFraction = 1f,
                         leading = WizardLeadingControl.Close,
-                        primaryCtaLabel = "Done",
+                        primaryCtaLabel = if (state.statusNeedsRetry) "Retry status" else "Done",
                         primaryCtaEnabled = !state.isSubmitting,
                         secondaryCta =
                             WizardSecondaryCta(

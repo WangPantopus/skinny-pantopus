@@ -977,3 +977,47 @@ Checkpoint6dbad11de's prior remote CI is green; this newer recovery source still
 requires its own remote CI. R05 remains open. Next: installed Android acceptance,
 both native foreground/indeterminate-reply behavior, and the confirmed attachment,
 Home-label and provider-copy defects through existing implementations.
+
+
+### Existing native foreground checkpoint and user-requested pause
+
+At the user’s September14 pause request, the foreground checks already running
+were completed. The existing iOS scene-phase and Android lifecycle hooks now
+retire pending requests when the wizard backgrounds and reread status when it
+resumes. Details and Sent use the same status recovery as Start. A no-request
+response preserves an unfinished Details draft. A failed read reuses the existing
+banner and primary button for GET-only status retry before Submit or Done, even
+when an old validation error remains. This changes behavior within existing
+screens; no new product/test file, layout, service, endpoint or schema was added.
+
+All49 selected iOS tests pass:42 model/network and7 existing rendering checks.
+SwiftFormat0.61.1 and SwiftLint0.63.3 pass. All48 Android tests pass:35 wizard-model,
+8 session/foreground and5 unchanged Start/Details snapshots. Full detekt/ktlint
+checks pass. Each platform adds six cases in its existing test file: pending to
+active refresh, draft preservation, failed Details/Sent reads, delivered old
+reads and a committed POST whose retired reply arrives after fresh active status.
+Earlier formatting-only failures remain in the private run records; the completed
+candidate checks have zero failures. Snapshot goldens were not changed.
+
+Installed foreground acceptance remains **open on both platforms**. The compiled
+iOS candidate was installed and launched, and normal Settings logout completed;
+the user requested a pause before the tenant foreground journey. Android installed
+recovery/foreground acceptance also remains open. Model and rendering checks do
+not establish installed lifecycle wiring or provider identity/delivery. Prior
+installed iOS departure/restart/account evidence remains valid for its bound source.
+
+The owned API18109 and web18110 processes were stopped, with no remaining listeners;
+the native fixture server confirmed cleanup of exact owned rows. The owned iOS
+simulator is Shutdown and the Android emulator was already stopped. Their data and
+accepted evidence are retained. The isolated lease DB/REST remain reserved for
+resume. Owner/accepted devices, shared SDK images and unrelated checkout edits were
+preserved. Source bindings, result bundles, compiled iOS product, Android XML results
+and pause records are durably retained under the private `ios-foreground-r1` and
+`android-foreground-r1` audit directories outside `/private/tmp`.
+
+Checkpoint6dbad11de remains the last completed remote CI evidence:15 applicable
+checks passed with one unchanged Seeder skip. This later native recovery/foreground
+checkpoint is saved to draft PR#38 and needs its own CI before integration. R05
+stays open and the inventory remains8 locally closed /72 partial or open /80.
+Resume with installed native acceptance, followed by the documented placeholder
+repairs; no new work item was started after the pause request.

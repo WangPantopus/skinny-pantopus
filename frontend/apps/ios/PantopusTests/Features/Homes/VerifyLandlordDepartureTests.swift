@@ -134,6 +134,7 @@ extension VerifyLandlordWizardViewModelTests {
     private func withRecoveryVM(
         responses: [SequencedURLProtocol.Response],
         identity: @escaping () -> String? = { "synthetic-session" },
+        approvalRequester: VerifyLandlordWizardViewModel.ApprovalRequester? = nil,
         check: (VerifyLandlordWizardViewModel) async -> Void
     ) async {
         SequencedURLProtocol.reset()
@@ -150,7 +151,13 @@ extension VerifyLandlordWizardViewModelTests {
             installMarker: InstallMarker(directory: marker),
             allowSecureEnclave: false
         )
-        let vm = VerifyLandlordWizardViewModel(homeId: "home-1", api: api, sessionIdentity: identity)
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            api: api,
+            submitDelayNanos: 0,
+            sessionIdentity: identity,
+            approvalRequester: approvalRequester
+        )
         await check(vm)
         await auth.awaitBackgroundWork()
     }
@@ -269,5 +276,99 @@ extension VerifyLandlordWizardViewModelTests {
         XCTAssertNil(vm.approvalResult)
         XCTAssertEqual(vm.form, VerifyLandlordForm())
         XCTAssertEqual(vm.currentStep, .start)
+    }
+}
+
+@MainActor
+extension VerifyLandlordWizardViewModelTests {
+    func testForegroundRefreshUpdatesAnExistingPendingConfirmation() async {
+        await withRecoveryVM(responses: [.status(200, body: savedStatus()), .status(200, body: savedStatus("active"))]) { vm in
+            await vm.restoreSavedRequest()
+            XCTAssertEqual(vm.approvalResult?.kind, .alreadyPending)
+            vm.retirePendingWork()
+            vm.resume()
+            await waitFor("foreground observes active lease") { vm.approvalResult?.kind == .alreadyActive }
+            XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.httpMethod == "GET" })
+        }
+    }
+
+    func testForegroundNoRequestPreservesDetailsAndEnteredDraft() async {
+        let none = #"{"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1"},"lease":{"state":"none"}}"#
+        await withRecoveryVM(responses: [.status(200, body: none, delay: 0.1)]) { vm in
+            vm.primaryTapped()
+            vm.setMessageToLandlord("Keep my entered draft")
+            vm.retirePendingWork()
+            vm.resume()
+            await waitFor("foreground status read begins") { vm.isSubmitting }
+            XCTAssertFalse(vm.chrome.primaryCTAEnabled)
+            await waitFor("foreground status read finishes") { !vm.isSubmitting }
+            XCTAssertEqual(vm.currentStep, .details)
+            XCTAssertEqual(vm.form.messageToLandlord, "Keep my entered draft")
+            XCTAssertEqual(vm.chrome.primaryCTALabel, "Submit")
+        }
+    }
+
+    func testForegroundFailureInDetailsOffersReadRetryWithoutPosting() async {
+        await withRecoveryVM(responses: [.status(503, body: "{}"), .status(200, body: savedStatus())]) { vm in
+            vm.primaryTapped()
+            vm.setMessageToLandlord("Keep this draft until the saved request is known")
+            await vm.restoreSavedRequest()
+            XCTAssertEqual(vm.currentStep, .details)
+            XCTAssertEqual(vm.chrome.primaryCTALabel, "Retry status")
+            XCTAssertTrue(vm.chrome.primaryCTAEnabled)
+            vm.primaryTapped()
+            await waitFor("retry recovers the saved request") { vm.currentStep == .sent }
+            XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.httpMethod == "GET" })
+        }
+    }
+
+    func testForegroundFailureOnConfirmationOffersRetryBeforeDone() async {
+        await withRecoveryVM(responses: [
+            .status(200, body: savedStatus()), .status(503, body: "{}"), .status(200, body: savedStatus("active"))
+        ]) { vm in
+            await vm.restoreSavedRequest()
+            await vm.restoreSavedRequest()
+            XCTAssertEqual(vm.chrome.primaryCTALabel, "Retry status")
+            XCTAssertEqual(vm.approvalResult?.kind, .alreadyPending)
+            vm.primaryTapped()
+            await waitFor("confirmation retry observes active lease") { vm.approvalResult?.kind == .alreadyActive }
+            XCTAssertEqual(vm.chrome.primaryCTALabel, "Done")
+            XCTAssertNil(vm.pendingEvent)
+        }
+    }
+
+    func testOldReadDeliveredAfterForegroundCannotReplaceNewerStatus() async {
+        await withRecoveryVM(responses: [
+            .status(200, body: savedStatus(), delay: 0.3), .status(200, body: savedStatus("active"))
+        ]) { vm in
+            let original = Task { await vm.restoreSavedRequest() }
+            await waitFor("old status read starts") { !SequencedURLProtocol.capturedRequests.isEmpty }
+            vm.retirePendingWork()
+            vm.resume()
+            await waitFor("new foreground status is active") { vm.approvalResult?.kind == .alreadyActive }
+            await original.value
+            XCTAssertEqual(vm.approvalResult?.kind, .alreadyActive)
+        }
+    }
+
+    func testForegroundRecoversCommittedRequestBeforeItsRetiredReplyArrives() async {
+        var held: CheckedContinuation<Result<TenantLeaseDTO, any Error>, Never>?
+        await withRecoveryVM(
+            responses: [.status(200, body: savedStatus("active"))],
+            approvalRequester: { _ in await withCheckedContinuation { held = $0 } },
+            check: { vm in
+                vm.form = VerifyLandlordSampleData.populatedForm
+                vm.primaryTapped()
+                let original = Task { await vm.submit() }
+                await waitFor("committed reply is held") { held != nil }
+                vm.retirePendingWork()
+                vm.resume()
+                await waitFor("saved request recovered on foreground") { vm.approvalResult?.kind == .alreadyActive }
+                held?.resume(returning: .success(Self.stubLease))
+                await original.value
+                XCTAssertEqual(vm.approvalResult?.kind, .alreadyActive)
+                XCTAssertEqual(vm.currentStep, .sent)
+            }
+        )
     }
 }
